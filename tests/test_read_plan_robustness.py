@@ -1,4 +1,4 @@
-"""Edge cases in the planned read (PERF-6 review follow-ups).
+"""Edge cases in the planned read.
 
 Planning the read is an *optimization*, so every one of these is the same rule
 stated three ways: it must never change what comes back, never fail on input the
@@ -35,8 +35,8 @@ CORE = {
     "IA_BOTTOM": [130],
 }
 
-#: A real Excel 97–2003 (OLE2) workbook holding CORE's columns, word "NA" first
-#: (DATA-53). Written once with xlwt, which nothing here depends on.
+#: A real Excel 97–2003 (OLE2) workbook holding CORE's columns, word "NA" first.
+#: Written once with xlwt, which nothing here depends on.
 LEGACY_XLS = Path(__file__).parent / "fixtures" / "legacy_words.xls"
 
 
@@ -47,7 +47,7 @@ def _plan(header):
 
 
 class TestZipDecompressionLimits:
-    """DATA-16/S6: the header read must not be a way around the size guard."""
+    """The header read must not be a way around the size guard."""
 
     def test_an_oversized_archive_is_refused(self, tmp_path, monkeypatch):
         path = tmp_path / "big.zip"
@@ -103,10 +103,11 @@ class TestHeterogeneousZipMembers:
 
 
 class TestZippedBinaryMembers:
-    """BUG-84: a zipped workbook or columnar file failed the planned read.
+    """A zipped workbook or columnar file passes the planned read.
 
-    The member's in-memory copy carried no name, so the header pass read the
-    binary as CSV — every wizard upload of ``words.parquet.zip`` died on it.
+    The member's in-memory copy must carry its name, or the header pass reads
+    the binary as CSV — and every wizard upload of ``words.parquet.zip`` dies
+    on it.
     """
 
     @pytest.mark.parametrize(
@@ -142,11 +143,12 @@ class TestEmptyPlan:
 
 
 class TestWordTextIsReadVerbatim:
-    """BUG-53: "None", "NA", "null" and a blank cell are words, not missing.
+    """ "None", "NA", "null" and a blank cell are words, not missing.
 
-    pandas' default NA spellings turned each into NaN at read time, pandas 3's
-    `astype(str)` kept the NaN, and the load then died in a `" ".join` over the
-    trial's text — reported by the wizard as "this column mapping doesn't work".
+    pandas' default NA spellings would turn each into NaN at read time, pandas
+    3's `astype(str)` keeps the NaN, and the load would then die in a
+    `" ".join` over the trial's text — reported by the wizard as "this column
+    mapping doesn't work".
     """
 
     WORDS = ["None", "NA", "null", "", "fox"]
@@ -208,9 +210,9 @@ class TestWordTextIsReadVerbatim:
 
 
 class TestFilesTheReadersUsedToRefuse:
-    """BUG-55: an Excel-named text export, a non-UTF-8 CSV and an empty file.
+    """An Excel-named text export, a non-UTF-8 CSV and an empty file.
 
-    Each used to escape the wizard as a raw traceback over the whole page.
+    None of them may escape the wizard as a raw traceback over the whole page.
     """
 
     def _tsv(self, **extra) -> bytes:
@@ -225,7 +227,7 @@ class TestFilesTheReadersUsedToRefuse:
         assert frame["IA_LABEL"].tolist() == ["Hello"]
 
     def test_a_legacy_workbook_reads(self):
-        """DATA-53: a genuine Excel 97–2003 workbook opens, word text verbatim."""
+        """A genuine Excel 97–2003 workbook opens, word text verbatim."""
         header = read_table_columns(LEGACY_XLS)
         assert header == list(CORE)
         frame = read_table(LEGACY_XLS, plan=_plan(header))
@@ -268,8 +270,8 @@ class TestFilesTheReadersUsedToRefuse:
 
     @pytest.mark.parametrize("name", ["fixations.tsv", "fixations.txt"])
     def test_a_utf16_data_viewer_export_reads(self, tmp_path, name):
-        """Data Viewer writes UTF-16 with a BOM; the Latin-1 fallback used to
-        read it as one garbled column and ``Unnamed: n`` for the rest."""
+        """Data Viewer writes UTF-16 with a BOM; a Latin-1 fallback would read
+        it as one garbled column and ``Unnamed: n`` for the rest."""
         path = tmp_path / name
         body = pd.DataFrame({**CORE, "IA_LABEL": ["Straße"]}).to_csv(
             index=False, sep="\t"
@@ -335,8 +337,8 @@ class TestFilesTheReadersUsedToRefuse:
 
 
 class TestTheDelimiterIsReadOffTheHeader:
-    """DATA-41: a `;`-separated CSV and a tab-separated `.txt` both loaded as
-    one column holding the whole line."""
+    """A `;`-separated CSV and a tab-separated `.txt` are split on their own
+    delimiter, not loaded as one column holding the whole line."""
 
     def test_a_semicolon_csv_with_decimal_commas(self, tmp_path):
         path = tmp_path / "words_euro.csv"

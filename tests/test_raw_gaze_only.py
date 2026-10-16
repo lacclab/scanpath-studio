@@ -1,9 +1,10 @@
-"""VIZ-45 — a dataset recorded as raw gaze alone is a first-class dataset.
+"""A dataset recorded as raw gaze alone is a first-class dataset.
 
-It used to open as a blank plot: the 🔵 Raw gaze layer defaulted off (the only
-data in the dataset hidden), the Illustration disclosure said "derived from raw
-gaze" although nothing is derived, and the chips read "Total reading time (s) =
-0.0 · Number of fixations = 0" — measured zeros for things nobody measured.
+It does not open as a blank plot: the 🔵 Raw gaze layer defaults on (it is the
+only data in the dataset), the Illustration disclosure does not say "derived
+from raw gaze" (nothing is derived), and the chips do not read "Total reading
+time (s) = 0.0 · Number of fixations = 0" — measured zeros for things nobody
+measured.
 
 These tests build the raw-gaze-only fixture from the bundled demo's own raw
 gaze (`sample_data/raw_gaze.csv`, one synthesized trial) and walk it through
@@ -515,7 +516,7 @@ def test_the_bundle_exports_multipart_samples_one_screen_at_a_time(
 ):
     """A samples-only trial takes its screens from its samples, so each screen is
     its own folder and figure rather than both coordinate spaces pooled; a trial
-    with fixations beside it keeps its own screens (BUG-105)."""
+    with fixations beside it keeps its own screens."""
     from scanpath_studio.export import ExportOptions, bulk_export
     from scanpath_studio.synthetic import make_multipart_synthetic_data
     from scanpath_studio.utils import build_combo_options
@@ -606,8 +607,8 @@ class TestScanpathView:
 
         at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
         if demo_first:
-            # The repro: the demo's layer default (off) is already in session
-            # when the raw-gaze dataset is opened.
+            # The demo's layer default (off) is already in session when the
+            # raw-gaze dataset is opened.
             at.run()
         at.session_state["_datasets"] = {
             self.NAME: _stored(
@@ -739,15 +740,14 @@ class TestScanpathView:
 
 
 # -----------------------------------------------------------------------------
-# Review round 2 — list_trials, multipart samples, the layer switched off
+# list_trials, multipart samples, the layer switched off
 # -----------------------------------------------------------------------------
 
 
 def test_list_trials_lists_each_trial_any_table_has_once(raw_gaze):
-    """#412: the union, as the app's picker lists it. A trial whose words are
-    gone is still listed for its fixations (it used to be dropped by the
-    words∩fixations rule), its samples add no second entry, and a trial only
-    the samples have is added."""
+    """The union, as the app's picker lists it. A trial whose words are gone is
+    still listed for its fixations (not dropped by a words∩fixations rule), its
+    samples add no second entry, and a trial only the samples have is added."""
     words, fixations = api.load_scanpath_data(
         *sps.load_sample_data(names="canonical"), names="canonical"
     )
@@ -847,7 +847,7 @@ def test_render_joins_metadata_against_the_samples(raw_gaze, tmp_path, capsys):
 
 
 # -----------------------------------------------------------------------------
-# Review round 3
+# A link is one visit; trials with words and samples but no fixations
 # -----------------------------------------------------------------------------
 
 

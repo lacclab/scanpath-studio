@@ -1,10 +1,9 @@
-"""ENG-23: drift correction (PRE-3) on the deep-link / Share / saved-config surface.
+"""Drift correction on the deep-link / Share / saved-config surface.
 
-ENG-22 added the CLI leg, leaving the URL contract as the last gap: a
-drift-corrected view could not be linked to, shared or saved, so the recipient
-of a link silently got the *uncorrected* figure — and since VIZ-23 the
-correction applies on all three render paths, so the difference is visible
-everywhere, not just on the static plot.
+A drift-corrected view can be linked to, shared and saved, so the recipient of
+a link does not silently get the *uncorrected* figure — and the correction
+applies on all three render paths, so the difference is visible everywhere,
+not just on the static plot.
 
 These tests drive the three code paths that carry the setting: the reader
 (``_apply_url_preset``), the writer (``_build_share_query``), and the saved
@@ -168,7 +167,7 @@ def _config_roundtrip_app():
 
 
 def test_saved_config_round_trips_the_correction():
-    """The 💾 Save & restore JSON carries the correction, not just the link."""
+    """The saved settings file carries the correction, not just the link."""
     at = AppTest.from_function(_config_roundtrip_app)
     at.session_state["_fix"] = _FIX_COLUMNS
     at.run(timeout=30)

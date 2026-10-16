@@ -1,15 +1,15 @@
-"""EXP-19: a share link carries the recording setup and Compare's styles.
+"""A share link carries the recording setup and Compare's styles.
 
-Until EXP-19 the canvas, the base font, the physical monitor geometry and the
-per-scanpath Compare styles travelled in the 💾 saved config alone, and the
-Share panel said so. They ride the link now — but only when they say something
-the recipient's own session would not, so a link to the demo does not restate
-the demo's 2560x1440, and the styles only beside the comparison they describe.
+The canvas, the base font, the physical monitor geometry and the per-scanpath
+Compare styles ride the link as well as the saved config — but only when they
+say something the recipient's own session would not, so a link to the demo does
+not restate the demo's 2560x1440, and the styles only beside the comparison
+they describe.
 
 Two things make that more than a table entry, and both are pinned here: the
 elision (``url_state._link_defaults``), and the source snap in
-``app.seed_canvas_state``, which on a recipient's first run used to overwrite a
-linked canvas with the corpus' own monitor before a widget ever showed it.
+``app.seed_canvas_state``, which on a recipient's first run must not overwrite a
+linked canvas with the corpus' own monitor before a widget ever shows it.
 """
 
 from __future__ import annotations
@@ -67,7 +67,7 @@ STYLES_SENT = {
     "cmp1_box_fill_opacity": 0.4,
     "cmp1_raw_gaze_color": "#1100ee",
     "cmp1_heatmap_colorscale": "Greens",
-    # CMP-24 — B's own filters ride the same group.
+    # B's own filters ride the same group.
     "cmp1_fixclass_short_mode": "Discard",
     "cmp1_fixclass_short_threshold_ms": 90,
     "cmp1_fixclass_long_mode": "Highlight",
@@ -81,8 +81,9 @@ SENT = {**SETUP_SENT, **STYLES_SENT}
 
 
 def test_the_new_params_are_exactly_the_saved_config_only_keys():
-    """Nothing that used to be config-only is left behind, and nothing else
-    got the default-elision treatment by accident."""
+    """The setup and style params are exactly the saved config's keys: none is
+    left behind, and nothing else gets the default-elision treatment by
+    accident."""
     assert set(sk.SETUP_PARAMS.values()) == set(SETUP_SENT)
     assert set(sk.COMPARE_STYLE_PARAMS.values()) == set(STYLES_SENT)
     assert set(sk.COMPARE_STYLE_PARAMS.values()) == (
@@ -359,7 +360,7 @@ def test_a_line_style_is_matched_case_blind():
 
 
 def test_a_linked_legend_label_is_text_not_markup():
-    """BUG-75's rule for the title and caption, applied to the legend label."""
+    """A linked legend label is text, as a linked title and caption are."""
     at = _open_link(cmp_a_label_pattern='<a href="https://x.example">A</a> {trial_id}')
     assert at.session_state["_seeded"]["cmp0_label_pattern"] == "A {trial_id}"
 
@@ -405,9 +406,9 @@ def test_the_source_snap_overwrites_an_unlinked_canvas_and_font():
 
 
 def test_a_linked_canvas_and_font_survive_the_source_snap():
-    """A demo link that carries 1920x1080 used to open at 2560x1440: the canvas
-    was seeded from the link, then snapped to the demo's monitor on the first
-    run, before any widget showed it."""
+    """A demo link that carries 1920x1080 opens at 1920x1080: the canvas seeded
+    from the link is not snapped to the demo's 2560x1440 monitor on the first
+    run, before any widget shows it."""
     at = _seed(
         global_canvas_width=1920,
         global_canvas_height=1080,
@@ -514,7 +515,7 @@ def _boot_link(**params):
 @pytest.mark.parametrize(
     "params",
     [
-        # What an uploaded-dataset link used to carry: no `source=` at all.
+        # A link with no `source=` at all.
         {"canvas_width": "1920", "canvas_height": "1080"},
         # A corpus the recipient has no bundle for — the app stays on the demo.
         {
@@ -601,8 +602,8 @@ def _font_read_app():
 
 
 def test_the_stimulus_font_is_read_only_when_the_snap_can_fire():
-    """PERF: a numeric parse over every word row of a font-declaring corpus,
-    which every run after the first discarded."""
+    """A numeric parse over every word row of a font-declaring corpus runs only
+    when the snap can fire; every run after the first would discard it."""
     at = AppTest.from_function(_font_read_app)
     at.run(timeout=30)
     assert not at.exception, at.exception

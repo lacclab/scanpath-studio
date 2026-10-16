@@ -299,7 +299,7 @@ class TestSaccadeAmplitudePreserved:
 
 
 class TestEyeLinkAmplitudesStayInDegrees:
-    """BUG-25: EyeLink's two amplitude columns are degrees, and are two
+    """EyeLink's two amplitude columns are degrees, and are two
     *different* saccades. Neither may land on the pixel-valued canonical
     ``saccade_amplitude``."""
 
@@ -337,13 +337,13 @@ class TestEyeLinkAmplitudesStayInDegrees:
 
 
 class TestWithinWordLetterScale:
-    """VAL-5: a letter is one *advance* wide, not ``width / len(text)``.
+    """A letter is one *advance* wide, not ``width / len(text)``.
 
     On a tiling corpus each box carries the trailing inter-word space, so
-    ``width / len(text)`` divided a box of ``n + 1`` advances by ``n``
+    ``width / len(text)`` would divide a box of ``n + 1`` advances by ``n``
     characters — every letter ~``(n+1)/n`` too wide, and by a factor that
-    *varied with word length* (BUG-27). BUG-83 keeps that box whole — the space
-    is the word's last cell — so the letter scale stays ``width / (n + 1)``.
+    *varies with word length*. The box is kept whole — the space is the word's
+    last cell — so the letter scale is ``width / (n + 1)``.
     """
 
     @staticmethod
@@ -401,12 +401,12 @@ class TestWithinWordLetterScale:
         assert row["initial_landing_position"] == pytest.approx(3.5)
         # …and the centred distance is measured against the same scale: the
         # glyphs span [1, 5), so the centre is 3.0 and letter 3's middle is
-        # half a letter right of it (BUG-65 — this asserted 3.5 − 2.5).
+        # half a letter right of it.
         assert row["initial_landing_distance"] == pytest.approx(0.5)
 
     def test_the_exact_centre_of_a_word_is_zero(self):
-        """BUG-65: "0 = word centre" is the register's promise — the old
-        ``(n + 1) / 2`` read the exact middle of every word as +0.5."""
+        """The exact middle of a word reads 0, as the computation register
+        defines it — measuring from ``(n + 1) / 2`` would read it as +0.5."""
         advance = 20.0
         layout = self._tiling_layout(advance)
         word = layout.iloc[1]  # "cats": 4 glyphs from x
@@ -417,9 +417,9 @@ class TestWithinWordLetterScale:
         assert row["initial_landing_distance"] == pytest.approx(0.0)
 
     def test_the_last_letter_stays_inside_the_word(self):
-        """The old ``width / n`` scale put the end of a 4-letter word at 5.0 even
-        though the box is 5 advances wide, so a landing on the final glyph read
-        as if it were a letter earlier."""
+        """A ``width / n`` scale would put the end of a 4-letter word at 5.0 even
+        though the box is 5 advances wide, so a landing on the final glyph would
+        read as if it were a letter earlier."""
         advance = 20.0
         layout = self._tiling_layout(advance)
         word = layout.iloc[1]
@@ -433,10 +433,10 @@ class TestWithinWordLetterScale:
     def test_right_to_left_counts_from_where_the_glyphs_end(self):
         """The RTL origin is `x + n × advance`, not the padded box edge.
 
-        Those are one whole advance apart on a tiling layout, so the first pass
-        at BUG-27 fixed the scale and left RTL reading a letter late — and
-        disagreeing with `aggregation.landing_positions`, which measures across
-        the glyph run on both sides. Caught by the surface-parity reviewer.
+        Those are one whole advance apart on a tiling layout, so counting from
+        the box edge would read RTL a letter late — and disagree with
+        `aggregation.landing_positions`, which measures across the glyph run on
+        both sides.
         """
         from scanpath_studio import aggregation
 
@@ -452,14 +452,13 @@ class TestWithinWordLetterScale:
         row = out[out["word_id"] == word["word_id"]].iloc[0]
         assert row["initial_landing_position"] == pytest.approx(3.5)
         # …and the fraction agrees, as it does for LTR: 2.5 advances into a box
-        # of five cells (four glyphs + the trailing space, BUG-83).
+        # of five cells (four glyphs + the trailing space).
         fraction = aggregation.landing_positions(out, fix)
         assert fraction[0] == pytest.approx(2.5 / 5.0)
 
     def test_the_landing_fraction_agrees_with_the_letter_position(self):
         """``aggregation.landing_positions`` and ``initial_landing_position`` are
-        the same quantity in different units — the inconsistency VAL-5 found was
-        that they were not."""
+        the same quantity in different units, so they must agree."""
         from scanpath_studio import aggregation
 
         advance = 20.0
@@ -470,22 +469,22 @@ class TestWithinWordLetterScale:
         fraction = aggregation.landing_positions(measured, fix)
         assert len(fraction) == 1
         # Letter 3.5 is 2.5 advances in, over the box's five cells — four glyphs
-        # and the trailing space the experiment put in it (BUG-83).
+        # and the trailing space the experiment put in it.
         row = measured[measured["word_id"] == word["word_id"]].iloc[0]
         assert row["initial_landing_position"] == pytest.approx(3.5)
         assert fraction[0] == pytest.approx(2.5 / 5.0)
         assert fraction[0] == pytest.approx((row["initial_landing_position"] - 1) / 5)
 
     def test_a_landing_on_the_trailing_space_reads_letter_n_plus_one(self):
-        """BUG-83: the space after a word is the last cell of its box, so a first
+        """The space after a word is the last cell of its box, so a first
         fixation there belongs to the word and reads between ``n + 1`` and
         ``n + 2`` — unclipped, not folded onto the last letter. Its centred
-        distance is still from the *glyphs'* centre (BUG-65)."""
+        distance is still from the *glyphs'* centre."""
         advance = 20.0
         layout = self._tiling_layout(advance)
         word = layout.iloc[1]  # "cats": glyphs x … x + 80, space x + 80 … x + 100
-        # Three quarters of the way across the space — BUG-11's shifted boundary
-        # (half-way) gave this fixation to "sat".
+        # Three quarters of the way across the space — a boundary shifted half-way
+        # into the space would give this fixation to "sat".
         fix = _make_fixations([(float(word["x"]) + 4.75 * advance, 70, 200, 0)])
         out = compute_per_word_measures(fix, layout)
         row = out[out["word_id"] == word["word_id"]].iloc[0]
@@ -513,12 +512,12 @@ def _row(out: pd.DataFrame, word_id: int) -> pd.Series:
 
 
 class TestEyeLinkDefinitions:
-    """BUG-61/62/64/66: the computed measures mean what EyeLink's IA_* columns
-    mean, because an imported value takes precedence over a computed one and the
-    two must not disagree about what a column *is*. Validated on the bundled
-    OneStop demo (its IA report came from these fixations): FFD, first run,
-    total time, skip and regression-in agree on all 1780 fixated words, RPD on
-    1779 and regression-out on 1774."""
+    """The computed measures mean what EyeLink's IA_* columns mean, because an
+    imported value takes precedence over a computed one and the two must not
+    disagree about what a column *is*. Validated on the bundled OneStop demo
+    (its IA report came from these fixations): FFD, first run, total time, skip
+    and regression-in agree on all 1780 fixated words, RPD on 1779 and
+    regression-out on 1774."""
 
     def test_go_past_counts_a_first_visit_made_during_the_regression(
         self, four_word_layout
@@ -566,9 +565,9 @@ class TestEyeLinkDefinitions:
 
 
 class TestImportedMeasuresOnUnfixatedWords:
-    """BUG-63: an IA report may store 0 rather than a blank for a word nobody
-    fixated — the bundled OneStop one does, for all 1191 such words — and a 0
-    wins the imported-over-computed precedence, so every mean counted skipped
+    """An IA report may store 0 rather than a blank for a word nobody fixated —
+    the bundled OneStop one does, for all 1191 such words — and a 0 would win
+    the imported-over-computed precedence, so every mean would count skipped
     words as 0-ms fixations."""
 
     def test_an_imported_zero_on_an_unfixated_word_becomes_nan(self, four_word_layout):

@@ -5,9 +5,10 @@ Subcommands:
     scanpath-studio run [args…]     # same, forwarding extra args to streamlit
     scanpath-studio render …        # headless: render one trial to a file
 
-Anything that isn't a known subcommand is forwarded to ``streamlit run`` so
-pre-existing invocations like ``scanpath-studio --server.port 8502`` keep
-working.
+``scanpath-studio --help`` lists every command. An argument starting with
+``-`` (or a ``.py`` path) is forwarded to ``streamlit run``, so invocations
+like ``scanpath-studio --server.port 8502`` work; an unknown command word is
+an error.
 """
 
 from __future__ import annotations
@@ -72,7 +73,7 @@ def _spell_color(argv: list[str]) -> list[str]:
 
 
 class _ShortErrorParser(argparse.ArgumentParser):
-    """#374 F21: a parser whose error is three lines at most — the error, a
+    """A parser whose error is three lines at most — the error, a
     "did you mean" for a misspelled flag, and where every option is listed —
     instead of the usage block (``render``'s alone runs to ~125 lines). The
     "did you mean" is our own difflib pass, so it works on 3.11–3.13 too."""
@@ -131,7 +132,7 @@ def _drift_algorithm(value: str) -> str:
 
 
 def _palette_name(value: str) -> str:
-    """``--palette``: a short name (``print``) or the app's (#374)."""
+    """``--palette``: a short name (``print``) or the app's."""
     from .api import resolve_palette
 
     try:
@@ -141,11 +142,11 @@ def _palette_name(value: str) -> str:
 
 
 def _colorscale_name(value: str) -> str:
-    """Validate ``--heatmap-colorscale`` / ``--fixation-colorscale`` (EXP-13).
+    """Validate ``--heatmap-colorscale`` / ``--fixation-colorscale``.
 
     An argparse ``type=`` like :func:`_drift_algorithm`: a name Plotly doesn't
-    know otherwise surfaced as a ``PlotlyError`` traceback from deep inside the
-    builder, after the data had already loaded."""
+    know would otherwise surface as a ``PlotlyError`` traceback from deep inside
+    the builder, after the data had already loaded."""
     import difflib
 
     from plotly.colors import get_colorscale, named_colorscales
@@ -178,7 +179,7 @@ def _fill_color(value: str) -> str:
     return str(value).strip()
 
 
-#: The API keyword each schema flag stands for (EXP-13; the raw-gaze one EXP-20).
+#: The API keyword each schema flag stands for.
 _SCHEMA_FLAGS = {
     "word_schema": "--word-schema",
     "fix_schema": "--fix-schema",
@@ -214,7 +215,7 @@ def _add_schema_flags(group) -> None:
 
 
 def _parse_schema_arg(value: str | None, flag: str) -> dict | None:
-    """``--word-schema`` / ``--fix-schema`` → the mapping dict (EXP-13).
+    """``--word-schema`` / ``--fix-schema`` → the mapping dict.
 
     Inline JSON when it starts with ``{``, a path to a ``.json`` file otherwise,
     so a mapping too long for a shell line can live next to the data."""
@@ -256,7 +257,7 @@ def _parse_schema_arg(value: str | None, flag: str) -> dict | None:
 
 
 def _load_error_message(exc: Exception, *, schema_flags: bool = True) -> str:
-    """A load failure as the command line should say it (EXP-13).
+    """A load failure as the command line should say it.
 
     A :class:`api.SchemaError` ends with the API's "pass ``word_schema={…}``"
     hint, which a shell user has no way to act on; this swaps it for the
@@ -266,7 +267,7 @@ def _load_error_message(exc: Exception, *, schema_flags: bool = True) -> str:
     from .data import StimulusJoinError, UnplacedFixationsError
 
     if isinstance(exc, UnplacedFixationsError):
-        # #412: the fix is the fixations' mapping — X and Y, on this command line.
+        # The fix is the fixations' mapping — X and Y, on this command line.
         message = str(exc).replace("`", "'")
         if not schema_flags:
             return message
@@ -276,7 +277,7 @@ def _load_error_message(exc: Exception, *, schema_flags: bool = True) -> str:
             '"x" and "y" naming its columns.'
         )
     if isinstance(exc, StimulusJoinError):
-        # DATA-49: the fix is a mapping, and here a mapping is a flag.
+        # The fix is a mapping, and here a mapping is a flag.
         message = str(exc).replace("`", "'")
         if not schema_flags:
             return message
@@ -306,7 +307,7 @@ def _load_error_message(exc: Exception, *, schema_flags: bool = True) -> str:
 
 
 def _theme_cli_flags() -> list[str]:
-    """The branded theme as ``--theme.*`` CLI flags (BUG-6).
+    """The branded theme as ``--theme.*`` CLI flags.
 
     Streamlit resolves ``.streamlit/config.toml`` relative to the launch
     directory, so ``python -m scanpath_studio`` from outside ``app/`` (or a
@@ -325,12 +326,12 @@ def _max_upload_cli_flags(extra_args) -> list[str]:
 
     Same reason as the theme above: ``.streamlit/config.toml`` is resolved
     against the *launch* directory, so a pip-installed ``scanpath-studio`` run
-    from anywhere but the repo root never saw the bundled
-    ``server.maxUploadSize`` and rejected any table over 200 MB — which is a
+    from anywhere but the repo root would never see the bundled
+    ``server.maxUploadSize`` and would reject any table over 200 MB — which is a
     normal size for a real fixation report. An explicit ``--server.*`` flag from
     the caller still wins.
 
-    ENG-68: a deployment's own ``SCANPATH_MAX_UPLOAD_MB``, when lower, is
+    A deployment's own ``SCANPATH_MAX_UPLOAD_MB``, when lower, is
     passed to the server as well, so the cap the upload boxes show is one the
     server enforces rather than only the browser.
     """
@@ -342,7 +343,7 @@ def _max_upload_cli_flags(extra_args) -> list[str]:
     return [f"--server.maxUploadSize={limit}"]
 
 
-#: Where ``scanpath-studio`` listens unless told otherwise (ENG-55).
+#: Where ``scanpath-studio`` listens unless told otherwise.
 LOOPBACK_ADDRESS = "127.0.0.1"
 
 
@@ -368,13 +369,12 @@ def _configured_server_address() -> str | None:
 
 
 def _bind_cli_flags(extra_args) -> list[str]:
-    """Bind to loopback unless the caller chose an address (ENG-55).
+    """Bind to loopback unless the caller chose an address.
 
     Streamlit's own default is every interface (``0.0.0.0``), and the app has
-    no login: a local run on a campus or café network served the loaded corpus
-    — and the on-device recovery cache — to anyone who could reach the port.
-    The desktop launcher already bound loopback (S1); every other launch now
-    does too. An address the user set anywhere Streamlit reads one — a
+    no login: a local run on a campus or café network would serve the loaded
+    corpus — and the on-device recovery cache — to anyone who could reach the
+    port. The desktop launcher binds loopback too. An address the user set anywhere Streamlit reads one — a
     ``--server.address`` flag, ``STREAMLIT_SERVER_ADDRESS``, or a
     ``config.toml`` — wins, so serving on a network stays one flag away."""
     if any(str(arg).startswith("--server.address") for arg in extra_args):
@@ -409,7 +409,7 @@ def launch_app(extra_args: list[str]) -> None:
     """Launch the Streamlit app via ``streamlit run``, forwarding extra args."""
     from streamlit.web import cli as stcli
 
-    # ENG-30: `--no-persist` is ours, not Streamlit's — consume it here (it would
+    # `--no-persist` is ours, not Streamlit's — consume it here (it would
     # otherwise reach `streamlit run` as an unknown flag) and set the env var the
     # app reads, so one launch runs without the on-device recovery cache.
     if "--no-persist" in extra_args:
@@ -418,13 +418,13 @@ def launch_app(extra_args: list[str]) -> None:
         extra_args = [arg for arg in extra_args if arg != "--no-persist"]
         os.environ[PERSIST_ENV_VAR] = "0"
 
-    # UX-184: `--download-dir DIR` (or `=DIR`) is ours too — where ⬇ Download
+    # `--download-dir DIR` (or `=DIR`) is ours too — where ⬇ Download
     # saves the public corpora when the Data Management page's Download folder is blank.
     extra_args = _consume_download_dir(extra_args)
 
     # Inject the branded theme unless the caller passes their own ``--theme.*``
     # (explicit flags win), so the app looks the same regardless of where it was
-    # launched from (BUG-6).
+    # launched from.
     theme_args = (
         []
         if any(str(arg).startswith("--theme") for arg in extra_args)
@@ -433,14 +433,14 @@ def launch_app(extra_args: list[str]) -> None:
     # Streamlit's usage stats default to ON, and `.streamlit/config.toml` is
     # resolved against the *launch* directory — which for a pip-installed
     # `scanpath-studio` is wherever the user happened to be. Opt out explicitly,
-    # same override rule as the theme: an explicit flag from the caller wins
-    # (DATA-12). The desktop launcher already passes this.
+    # same override rule as the theme: an explicit flag from the caller wins.
+    # The desktop launcher passes this too.
     stats_args = (
         []
         if any(str(arg).startswith("--browser.gatherUsageStats") for arg in extra_args)
         else ["--browser.gatherUsageStats=false"]
     )
-    # UX-183: Streamlit's toolbar resolves to "developer" on localhost, which
+    # Streamlit's toolbar resolves to "developer" on localhost, which
     # puts a Deploy button (to Streamlit Community Cloud) in the header. The
     # "viewer" toolbar drops it and the other developer-only items but keeps
     # the ⋮ menu with its System / Light / Dark switch. Same override
@@ -540,9 +540,9 @@ def _render_parser() -> argparse.ArgumentParser:
         "with texts b0–b5 and p0–p5.",
     )
 
-    # DATA-55: the harmonised benchmark corpora are held back from the beta, the
-    # same way DATA-54 holds back MultiplEYE's flags below: they still parse and
-    # work, but `--help` (and the generated CLI reference) doesn't list them.
+    # The harmonised benchmark corpora are experimental, like MultiplEYE's
+    # flags below: without SCANPATH_EXPERIMENTAL they still parse and work, but
+    # `--help` (and the generated CLI reference) doesn't list them.
     def benchmark_help(text: str) -> str:
         return text if benchmark_corpora_enabled() else argparse.SUPPRESS
 
@@ -605,8 +605,8 @@ def _render_parser() -> argparse.ArgumentParser:
         "'lacclab' (a local lab-processed export; no download).",
     )
 
-    # DATA-54: MultiplEYE is held back from the beta. Its flags still parse and
-    # work, so a script that already uses them keeps running (PRE-22's rule), but
+    # MultiplEYE is experimental. Without SCANPATH_EXPERIMENTAL its flags still
+    # parse and work, so a script that already uses them keeps running, but
     # `--help` — and the docs' reference, generated from it — don't list them.
     def mpe_help(text: str) -> str:
         return text if multipleye_enabled() else argparse.SUPPRESS
@@ -740,7 +740,7 @@ def _render_parser() -> argparse.ArgumentParser:
         "and the text; add --word-boxes, --heatmap or --fixation-index, or "
         "hide a layer with its --no-* flag)"
     )
-    # #374 F21: every layer switch defaults to None — "not given" — so only a
+    # Every layer switch defaults to None — "not given" — so only a
     # flag on the line overrides the API's default (the app's Scanpath design).
     viz.add_argument(
         "--word-boxes",
@@ -1012,12 +1012,12 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="TEXT",
         help='The Illustration label\'s text (default: "Illustration · <reasons>").',
     )
-    # PRE-3: vertical drift correction. The algorithm list below is spelled out
+    # Vertical drift correction. The algorithm list below is spelled out
     # for `--help`; `alignment.ALGORITHMS` stays the source of truth (the flag
     # validates against it via _drift_algorithm, and a test pins the two lists
     # together).
     #
-    # PRE-21: the flags are not *added* while the feature is gated off, so
+    # The flags are not *added* while the feature is gated off, so
     # `--help` doesn't advertise something that would then refuse, and passing
     # one is an ordinary argparse "unrecognized arguments" error. `args` still
     # carries the attributes below via `set_defaults`, so no downstream branch
@@ -1175,9 +1175,9 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="PX",
         help="Size of the coordinate grid's labels, 6–36 px (default: 18).",
     )
-    # VIZ-4: overlay an image stimulus (a screenshot of the reading screen) under
-    # the scanpath. The API already supports background_image*; these expose it on
-    # the CLI. Works with --animate too.
+    # Overlay an image stimulus (a screenshot of the reading screen) under the
+    # scanpath: the API's background_image* options on the CLI. Works with
+    # --animate too.
     viz.add_argument(
         "--stimulus-image",
         metavar="PATH",
@@ -1206,7 +1206,7 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Stimulus-image opacity 0.1–1.0 (default: 1.0 = opaque). Lower it to "
         "dim a busy image so the fixations / saccades / word boxes read over it.",
     )
-    # #420 — the trial's own page, which `--image-root` (or a dataset that
+    # The trial's own page, which `--image-root` (or a dataset that
     # ships its pages, like --sample) put on its rows as `image_path`.
     viz.add_argument(
         "--show-stimulus-image",
@@ -1216,9 +1216,9 @@ def _render_parser() -> argparse.ArgumentParser:
         "its pages, like --sample), placed at its image_x / image_y. "
         "--stimulus-image PATH wins.",
     )
-    # EXP-20 — a flag for every figure option `render` could not say before, so
-    # the command the Share subtab prints (`code_snippet._CLI_EMITTERS`) draws
-    # the figure rather than naming what it left out. Each is spelled after its
+    # A flag for every remaining figure option, so the command the Share subtab
+    # prints (`code_snippet._CLI_EMITTERS`) draws the figure rather than naming
+    # what it left out. Each is spelled after its
     # figure option and takes that option's own value; `_DIRECT_OPTION_FLAGS` /
     # `_SWITCH_OPTION_FLAGS` below hand them to the builder.
     viz.add_argument(
@@ -1442,9 +1442,9 @@ def _render_parser() -> argparse.ArgumentParser:
         "(default: a third of its height upright, 0.6 of its width lying down).",
     )
     # v0.33.0's shared colour-bar flags, kept so a script written for it still
-    # runs (round 9) but not listed: `--colorbars` asked for what is now the
-    # default, and each `--colorbar-*` sets both bars unless the bar's own flag
-    # is given too (`_apply_shared_colorbar_flags`).
+    # runs but not listed: `--colorbars` asks for the default, and each
+    # `--colorbar-*` sets both bars unless the bar's own flag is given too
+    # (`_apply_shared_colorbar_flags`).
     viz.add_argument(
         "--colorbars",
         dest="shared_colorbars",
@@ -1563,7 +1563,7 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="X",
         help="Raster pixel-density multiplier (PNG/SVG/PDF; default: 2.0).",
     )
-    # #374 F28 — the app's Export → Current figure Width + DPI.
+    # The app's Export → Current figure Width + DPI.
     print_width = viz.add_mutually_exclusive_group()
     print_width.add_argument(
         "--width-mm",
@@ -1668,7 +1668,7 @@ def _render_parser() -> argparse.ArgumentParser:
         "360). A trial too long for that many at --anim-grid-step-ms gets a "
         "wider step instead.",
     )
-    # EXP-7: the same reproduction snippet the app's 🔗 Share subtab shows,
+    # The same reproduction snippet the app's 🔗 Share subtab shows,
     # for the invocation you just typed. Chiefly a *translation*: "I have this
     # render command, give me the Python for my notebook."
     viz.add_argument(
@@ -1687,7 +1687,7 @@ def _render_parser() -> argparse.ArgumentParser:
         "value instead of only the non-defaults.",
     )
 
-    # CMP-9 — compare mode's CLI surface. B comes either from the dataset
+    # Compare mode's CLI surface. B comes either from the dataset
     # already loaded (--compare-with alone) or from a second pair of tables.
     # Deliberately files-only for the second dataset: twinning every source flag
     # (--compare-potec, --compare-onestop + its regime/part/variant, …) would
@@ -1727,7 +1727,7 @@ def _render_parser() -> argparse.ArgumentParser:
         help="On an overlay, whose word boxes and text to draw (default: both). "
         "Two datasets' word boxes coincide only when the text is identical.",
     )
-    # EXP-8 §1. Named `-a` / `-b` after the `style_a` / `style_b` pair rather
+    # Named `-a` / `-b` after the `style_a` / `style_b` pair rather
     # than `--label`, which would read as a sibling of `--no-labels` (the word
     # labels on the stimulus) and mean something else entirely.
     cmp_group.add_argument(
@@ -1752,7 +1752,7 @@ def _render_parser() -> argparse.ArgumentParser:
         "on by default, as in the app). Applies to the --animate co-animation "
         "too.",
     )
-    # EXP-20. Named after `compare_scanpaths`'s `style_a` / `style_b`, like the
+    # Named after `compare_scanpaths`'s `style_a` / `style_b`, like the
     # `--label-a` / `--label-b` pair above.
     for side, which in (("a", "FIRST"), ("b", "SECOND")):
         cmp_group.add_argument(
@@ -1773,7 +1773,7 @@ def _render_parser() -> argparse.ArgumentParser:
             "--animate uses them too, except box_color, box_fill_color, the box "
             "opacities and raw_gaze_color.",
         )
-    # CMP-24: scanpath B's own filters — the app's "· B" blocks under 🧹 Filter.
+    # Scanpath B's own filters — the app's "· B" blocks under 🧹 Filter.
     # A's are the ordinary --fixation-flag / --saccade-classes /
     # --fix-index-range, which on their own filter both scanpaths.
     cmp_group.add_argument(
@@ -1854,13 +1854,13 @@ def _render_parser() -> argparse.ArgumentParser:
         "data when omitted. An overlay, or an --animate co-animation, compares "
         "this against --canvas.",
     )
-    # BUG-85 removed --monitor-mm / --viewing-distance and their --compare-*
-    # twins: they were recorded on the setup snapshots and read by nothing —
-    # CMP-11 is a gate on pixels, not a rescaling, so no figure used them.
+    # There is no --monitor-mm / --viewing-distance (or --compare-* twin): the
+    # cross-dataset overlay gate compares pixels and rescales nothing, so no
+    # figure would read them.
     return parser
 
 
-#: EXP-20 — flags whose value *is* the figure option's value, each named after
+#: Flags whose value *is* the figure option's value, each named after
 #: the option (`--fixation-opacity` → `fixation_opacity`), so they reach the
 #: builder unchanged whenever given.
 _DIRECT_OPTION_FLAGS = (
@@ -1882,7 +1882,7 @@ _DIRECT_OPTION_FLAGS = (
     "fixation_colorbar_tickfont_size",
     "heatmap_colorbar_tickangle",
     "heatmap_colorbar_tickfont_size",
-    # #422.
+    # Figure design settings.
     "fixation_colorbar_thickness",
     "fixation_colorbar_length",
     "heatmap_colorbar_thickness",
@@ -2073,8 +2073,8 @@ def _trial_text_ids(*frames) -> pd.DataFrame | None:
 
 
 def _listed(table: pd.DataFrame, column_names: dict) -> pd.DataFrame:
-    """A trial or screen listing with its ids under the dataset's own names
-    (DATA-66) — what ``--list-trials`` / ``--list-parts`` print."""
+    """A trial or screen listing with its ids under the dataset's own names —
+    what ``--list-trials`` / ``--list-parts`` print."""
     if not column_names:
         return table
     return _cn.as_written(table, _cn.across_tables(column_names).identity())
@@ -2088,8 +2088,7 @@ def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
     both readings on one clock in one coordinate space — an overlay — so the API
     refuses two different screens on exactly the terms `compare_scanpaths`
     refuses ``layout="overlay"``, reading a screen the flags don't state off its
-    data (CMP-21). This used to check only when ``--compare-canvas`` was given,
-    and co-animated without looking otherwise.
+    data.
     """
     from .data import respell_reading, trial_keys
     from .utils import extract_trial
@@ -2124,7 +2123,7 @@ def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
 
 
 def _inferred_screen_hint(args, canvas: tuple | None) -> str:
-    """The flag that states a screen a refusal only read off the data (CMP-21).
+    """The flag that states a screen a refusal only read off the data.
 
     `setups_comparable` says the readings were *recorded* on different screens,
     but a screen no flag gives is the extent of that trial's data — rarely the
@@ -2184,7 +2183,7 @@ def _print_combined_rows(report) -> None:
 
 
 def _format_trial_key(key) -> str:
-    """One trial-metadata report key as text (DATA-29).
+    """One trial-metadata report key as text.
 
     A table keyed by reader *and* trial reports ``(participant, trial)`` pairs
     while one keyed by trial alone reports bare ids, so the two shapes are
@@ -2207,7 +2206,7 @@ def _parse_canvas(value: str | None, flag: str = "--canvas") -> tuple | None:
     return (w, h)
 
 
-#: Figure options whose flag is not spelled after them (#374).
+#: Figure options whose flag is not spelled after them.
 _OPTION_FLAG_NAMES = {
     "background_image": "--stimulus-image",
     "background_image_size": "--stimulus-image-size",
@@ -2227,7 +2226,7 @@ _OPTION_FLAG_NAMES = {
 
 def _flags_for(keys, overrides: dict) -> list[str]:
     """The ``render`` flags that set figure options ``keys`` — the names a
-    warning should use, since those are what the user typed (#374)."""
+    warning should use, since those are what the user typed."""
     by_dest: dict[str, list] = {}
     for action in _render_parser()._actions:
         by_dest.setdefault(action.dest, []).append(action)
@@ -2249,13 +2248,14 @@ def _flags_for(keys, overrides: dict) -> list[str]:
 
 
 def _require_image(path: str, flag: str) -> None:
-    """#374: a mistyped image path drew the figure without its stimulus."""
+    """Refuse a missing image file: a mistyped path would draw the figure
+    without its stimulus."""
     if not str(path).startswith("data:") and not Path(path).is_file():
         raise SystemExit(f"{flag}: image not found: {path}. Nothing was written.")
 
 
 def _parse_saccade_classes_arg(value: str, flag: str) -> list[str]:
-    """A ``--saccade-classes``-style list → the classes in canonical order (VIZ-31)."""
+    """A ``--saccade-classes``-style list → the classes in canonical order."""
     names = [p.strip() for p in value.split(",") if p.strip()]
     unknown = [n for n in names if n not in SACCADE_CLASS_ORDER]
     if unknown or not names:
@@ -2267,7 +2267,7 @@ def _parse_saccade_classes_arg(value: str, flag: str) -> list[str]:
 
 
 def _parse_fix_index_range(value: str | None) -> tuple | None:
-    """``"1:40"`` → ``(1, 40)`` — VIZ-7's fixation-index window (both inclusive)."""
+    """``"1:40"`` → ``(1, 40)`` — the fixation-index window (both inclusive)."""
     if not value:
         return None
     try:
@@ -2291,7 +2291,7 @@ _CRITICAL_SPAN_STYLES = {
     "none": "None",
 }
 
-#: PRE-2 category → whether it takes a `threshold_ms`. `oob` and `blink` are
+#: Fixation-flag category → whether it takes a `threshold_ms`. `oob` and `blink` are
 #: classified from geometry / the recording, not from a duration.
 _FIXCLASS_CATEGORIES = {"short": True, "long": True, "oob": False, "blink": False}
 
@@ -2370,7 +2370,7 @@ def _snippet_source_from_args(args) -> SnippetSource:
     The inverse of the ``--sample`` / ``--words`` / ``--potec`` / … group, so
     ``--print-code python`` hands back a loader call that reads the same corpus
     this invocation just read — and, with ``--image-root``, matches the same
-    stimulus pages to its rows (#420)."""
+    stimulus pages to its rows."""
     source = _snippet_data_source(args)
     image_root = getattr(args, "image_root", None)
     if image_root:
@@ -2439,7 +2439,7 @@ def _snippet_data_source(args) -> SnippetSource:
                 options[option] = schema
         return cs.SnippetSource(kind=cs.SOURCE_FILES, label="files", options=options)
     if args.raw_gaze and not args.sample:
-        # VIZ-45: --raw-gaze as the only input — the samples are the dataset.
+        # --raw-gaze as the only input — the samples are the dataset.
         return cs.SnippetSource(
             kind=cs.SOURCE_RAW_GAZE,
             label="raw gaze",
@@ -2451,7 +2451,7 @@ def _snippet_data_source(args) -> SnippetSource:
 def _print_reproduction_code(
     api, args, overrides: dict, canvas, participant, trial, *, raw_gaze: bool = False
 ):
-    """EXP-7: print the snippet that rebuilds the figure this invocation renders.
+    """Print the snippet that rebuilds the figure this invocation renders.
 
     Built from ``overrides`` — the very dict handed to the builder a few lines
     below — merged onto the kind's effective defaults, so the printed recipe is
@@ -2469,15 +2469,15 @@ def _print_reproduction_code(
         else "static"
     )
     settings = {**api.figure_options(kind), **api._expand_palette(dict(overrides))}
-    # EXP-20: `plot_scanpath` turns the raw-gaze layer on for the frame it is
-    # handed, so the flag never reaches `overrides`; the snippet reads it here.
-    # VIZ-48: `compare_scanpaths` too — whose samples may all be B's.
+    # `plot_scanpath` turns the raw-gaze layer on for the frame it is handed, so
+    # the flag never reaches `overrides`; the snippet reads it here. So does
+    # `compare_scanpaths` — whose samples may all be B's.
     draws_b = kind == "comparison" and bool(args.compare_raw_gaze)
     if (raw_gaze or draws_b) and kind in {"static", "comparison"}:
         settings["show_raw_gaze"] = args.show_raw_gaze is not False
     # These two are passed to `animate_scanpath` beside the overrides rather
-    # than through them, so they never reached `settings` — a straight silent
-    # drop of two real `figure_options("animation")` keys.
+    # than through them, so they never reach `settings` on their own — without
+    # this, a silent drop of two real `figure_options("animation")` keys.
     if kind == "animation":
         for name, value in (
             ("anim_grid_step_ms", args.anim_grid_step_ms),
@@ -2485,9 +2485,10 @@ def _print_reproduction_code(
         ):
             if value is not None:
                 settings[name] = value
-        # EXP-20: the co-animation's B-side keywords ride `anim_kwargs`, not
-        # `overrides`, for the same reason — so a printed recipe for `--animate
-        # --compare-with … --label-a …` quietly lost its labels and stimulus.
+        # The co-animation's B-side keywords ride `anim_kwargs`, not
+        # `overrides`, for the same reason — without this a printed recipe for
+        # `--animate --compare-with … --label-a …` would lose its labels and
+        # stimulus.
         if args.compare_with is not None:
             settings["compare_stimulus"] = args.compare_stimulus
             labels = _compare_labels(args)
@@ -2504,18 +2505,18 @@ def _print_reproduction_code(
             layout=args.compare_layout,
             compare_stimulus=args.compare_stimulus,
             labels=_compare_labels(args),
-            # CMP-8: B came from a second corpus exactly when its own frames
+            # B came from a second corpus exactly when its own frames
             # were given, so B's ids are that corpus's — the same caveat the
             # app's Share panel raises.
             dataset=(str(args.compare_dataset_name or "Dataset B") if second else ""),
-            # EXP-21: the tables and screen this invocation read B from, so the
+            # The tables and screen this invocation read B from, so the
             # printed recipe loads the same B rather than placeholders.
             canvas=_parse_canvas(args.compare_canvas, "--compare-canvas")
             if second
             else None,
             words=tuple(args.compare_words or ()) if second else (),
             fixations=tuple(args.compare_fixations or ()) if second else (),
-            # VIZ-48: B's own samples, drawn only when this run loads them.
+            # B's own samples, drawn only when this run loads them.
             raw_gaze=(
                 tuple(args.compare_raw_gaze)
                 if second and args.compare_raw_gaze
@@ -2578,7 +2579,7 @@ def _print_reproduction_code(
         )
     source = _snippet_source_from_args(args)
     if args.raw_gaze:
-        # EXP-20: the raw-gaze table is part of the data half — the snippet's
+        # The raw-gaze table is part of the data half — the snippet's
         # loader reads it beside the corpus, under the same mapping.
         extra = {"raw_gaze": list(args.raw_gaze)}
         schema = _parse_schema_arg(args.raw_gaze_schema, "--raw-gaze-schema")
@@ -2609,7 +2610,7 @@ def _print_reproduction_code(
 
 
 def _parse_xy(value: str | None, flag: str = "--stimulus-image-origin") -> tuple | None:
-    """Parse an ``X,Y`` origin (VIZ-4 --stimulus-image-origin) to floats."""
+    """Parse an ``X,Y`` origin (--stimulus-image-origin) to floats."""
     if not value:
         return None
     try:
@@ -2638,7 +2639,7 @@ def _load_multipleye_render(
     ``participant`` is the session label, resolved case-insensitively (the review
     app passes it lowercased, e.g. ``001_zh_ch_1_et2``; export ids are uppercase).
 
-    ``trial`` selection (DATA-24: a trial is one *reading of a stimulus*, and its
+    ``trial`` selection (a trial is one *reading of a stimulus*, and its
     pages / question screens are screens inside it, picked with ``--screen``):
       * a literal trial id — the stimulus, ``Lit_Alchemist_4`` — is used as-is;
       * an integer N (the review app's trial number) selects the stimulus whose
@@ -2743,7 +2744,7 @@ def _apply_shared_colorbar_flags(args: argparse.Namespace) -> None:
 
 def _save_kwargs(args) -> dict:
     """`api.save_figure`'s size keywords from the render flags; the print
-    width only when one was given (#374, F28)."""
+    width only when one was given."""
     kwargs = {"scale": args.scale, "width": args.width, "height": args.height}
     if args.width_mm is not None:
         kwargs["width_mm"] = args.width_mm
@@ -2765,12 +2766,12 @@ def _parse_screen_list(value: str | None) -> tuple[str, ...] | None:
 
 
 def render(argv: list[str]) -> None:
-    # Bound, not inlined: DATA-27's --eyegenbench branch calls
+    # Bound, not inlined: the --eyegenbench branch calls
     # `parser.error(...)` further down to reject a missing --eyegenbench-dataset.
     parser = _render_parser()
     args = parser.parse_args(argv)
     _apply_shared_colorbar_flags(args)
-    # #374 F28: a print width sizes a PNG; say so before the data loads.
+    # A print width sizes a PNG; say so before the data loads.
     printed = args.width_mm is not None or args.width_in is not None
     if args.dpi is not None and not printed:
         parser.error("--dpi is the resolution of --width-mm / --width-in; add one.")
@@ -2786,14 +2787,14 @@ def render(argv: list[str]) -> None:
         bool(args.onestop),
         bool(args.source),
     ]
-    # VIZ-45: your own tables are words and/or fixations — or raw gaze alone,
-    # for a dataset recorded as samples only. Beside any other input,
-    # --raw-gaze stays what it always was: a layer drawn over that input.
+    # Your own tables are words and/or fixations — or raw gaze alone, for a
+    # dataset recorded as samples only. Beside any other input, --raw-gaze is
+    # a layer drawn over that input.
     own_tables = bool(args.words or args.fixations) or (
         bool(args.raw_gaze) and not any(corpus_inputs)
     )
     if sum([*corpus_inputs, own_tables]) != 1:
-        # Only the inputs `--help` lists: the DATA-54/55 held-back sources still
+        # Only the inputs `--help` lists: the experimental sources still
         # count towards the guard, but the message doesn't advertise them.
         inputs = ["--sample", "--authoring PATH", "--potec DIR"]
         if benchmark_corpora_enabled():
@@ -2810,7 +2811,7 @@ def render(argv: list[str]) -> None:
         raise SystemExit("Missing -o/--output (or use --list-trials/--list-parts).")
     if args.trial_parts_manifest and not (args.words or args.fixations):
         raise SystemExit("--trial-parts-manifest requires --words and/or --fixations.")
-    # EXP-13: a mapping describes one of *your* tables, so it needs that table.
+    # A mapping describes one of *your* tables, so it needs that table.
     if args.word_schema is not None and not args.words:
         raise SystemExit("--word-schema maps the --words table; pass --words too.")
     if args.fix_schema is not None and not args.fixations:
@@ -2819,7 +2820,7 @@ def render(argv: list[str]) -> None:
         )
     word_schema = _parse_schema_arg(args.word_schema, "--word-schema")
     fix_schema = _parse_schema_arg(args.fix_schema, "--fix-schema")
-    # EXP-20: raw gaze is a third table, from a file or — for the demo — the
+    # Raw gaze is a third table, from a file or — for the demo — the
     # bundled one. Checked before the load, like the two schemas above.
     if args.sample_raw_gaze and not args.sample:
         raise SystemExit(
@@ -2844,7 +2845,7 @@ def render(argv: list[str]) -> None:
             "--raw-gaze-schema maps the --raw-gaze table; pass --raw-gaze too."
         )
     raw_gaze_schema = _parse_schema_arg(args.raw_gaze_schema, "--raw-gaze-schema")
-    # EXP-20: these describe the second scanpath of a comparison, so on their
+    # These describe the second scanpath of a comparison, so on their
     # own there is nothing for them to style — refused, like a lone --label-a.
     compare_only = [
         flag
@@ -2869,8 +2870,8 @@ def render(argv: list[str]) -> None:
         )
     # A comparison is one figure of two readings; --all-screens writes one figure
     # per child screen of a multipart trial. There is no defined pairing between
-    # the two, and without this guard the compare branch left `figures` unbound
-    # and the run died on an UnboundLocalError instead of saying so.
+    # the two, and without this guard the compare branch would leave `figures`
+    # unbound and die on an UnboundLocalError instead of saying so.
     # --screens is --all-screens cut to the screens named.
     chosen_screens = _parse_screen_list(args.screens)
     if chosen_screens is not None:
@@ -2892,10 +2893,9 @@ def render(argv: list[str]) -> None:
         raise SystemExit(
             "--label-a and --label-b go together: name both scanpaths, or neither."
         )
-    # ENG-53: each panel of a split layout draws its own reading's stimulus, so
-    # there is no shared set of word boxes to pick from — the builder ignores
-    # the choice there. Say so, rather than letting the docs' old "side by side,
-    # showing only B's word boxes" example quietly draw both.
+    # Each panel of a split layout draws its own reading's stimulus, so there is
+    # no shared set of word boxes to pick from — the builder ignores the choice
+    # there. Say so, rather than quietly drawing both.
     if (
         args.compare_with is not None
         and not args.animate
@@ -2924,7 +2924,7 @@ def render(argv: list[str]) -> None:
             "MP4, use the app's Export, or "
             "scanpath_studio.animation_export.export_animation in Python."
         )
-    # PRE-3: the connectors draw *between* the original and corrected y, so on
+    # The connectors draw *between* the original and corrected y, so on
     # their own there is nothing to connect. Warn rather than fail — the render
     # is still valid, just uncorrected.
     if args.drift_connectors and not args.drift_correction:
@@ -2936,7 +2936,7 @@ def render(argv: list[str]) -> None:
 
     from . import api
 
-    # DATA-66: `render` works in the internal names, which the metadata joins,
+    # `render` works in the internal names, which the metadata joins,
     # the trial checks and every option below are written against, and keeps
     # each loader's map of the dataset's own names (`ScanpathData.column_names`)
     # for what it prints, writes and draws.
@@ -2991,8 +2991,7 @@ def render(argv: list[str]) -> None:
             # `eyegenbench_monitor` answers None for a corpus whose manifest
             # only carries the invented default screen, so `render` falls back
             # to the data's own extents there — the same call the app's picker
-            # entry makes (I3). Before this the CLI drew those corpora at
-            # 1920x1080 while the app drew them at data extents.
+            # entry makes, so the CLI and the app draw those corpora alike.
             canvas = canvas or eyegenbench_monitor(
                 args.eyegenbench, args.eyegenbench_dataset
             )
@@ -3040,11 +3039,11 @@ def render(argv: list[str]) -> None:
                 )
             except (OSError, json.JSONDecodeError) as exc:
                 raise SystemExit(f"Could not read trial-parts manifest: {exc}") from exc
-        # EXP-13: the one input branch that had no guard, so a missing file or
-        # an unrecognised column ended the run in a traceback — whose hint
-        # named a `word_schema=` argument the command line could not pass.
+        # Guarded like every other input branch: otherwise a missing file or an
+        # unrecognised column ends the run in a traceback whose hint names a
+        # `word_schema=` argument the command line cannot pass.
         if not (args.words or args.fixations):
-            # VIZ-45: raw gaze alone. The two frames are the empty canonical
+            # Raw gaze alone. The two frames are the empty canonical
             # ones `load_scanpath_data` returns for a table it is not given;
             # the samples are loaded below with every other raw-gaze input.
             from .data import empty_fixations_frame, empty_words_frame
@@ -3069,7 +3068,7 @@ def render(argv: list[str]) -> None:
             column_names = dict(data.column_names)
 
     if args.image_root and not (args.words or args.fixations):
-        # #420: --sample and the corpora take the folder the way a script
+        # --sample and the corpora take the folder the way a script
         # does, through `attach_stimulus_images` (frames stay canonical here).
         try:
             words, fixations = api.attach_stimulus_images(
@@ -3078,9 +3077,8 @@ def render(argv: list[str]) -> None:
         except ValueError as exc:
             raise SystemExit(str(exc)) from exc
 
-    # EXP-20: raw gaze is a third table. Loaded before the metadata joins and
-    # --list-trials, so a raw-gaze-only input joins and lists its own trials
-    # (VIZ-45).
+    # Raw gaze is a third table. Loaded before the metadata joins and
+    # --list-trials, so a raw-gaze-only input joins and lists its own trials.
     raw_gaze = None
     if args.raw_gaze or args.sample_raw_gaze:
         try:
@@ -3091,12 +3089,12 @@ def render(argv: list[str]) -> None:
             )
         except (ValueError, OSError) as exc:
             raise SystemExit("--raw-gaze: " + _load_error_message(exc)) from exc
-        # DATA-66: its own names kept beside it, the frame itself canonical.
+        # Its own names kept beside it, the frame itself canonical.
         if (found := _cn.frame_names(raw_gaze)) is not None:
             column_names[found[0]] = found[1]
         raw_gaze = _cn.to_canonical_frame(raw_gaze)
 
-    # VIZ-45: what the metadata tables are joined against — the samples, when
+    # What the metadata tables are joined against — the samples, when
     # they are the only table, or every join would report "0 matched".
     join_frame = (
         raw_gaze
@@ -3104,7 +3102,7 @@ def render(argv: list[str]) -> None:
         else fixations
     )
 
-    # DATA-20: attaching a participant table headlessly is worth doing for the
+    # Attaching a participant table headlessly is worth doing for the
     # join report alone — a mistyped id column or a cohort file from the wrong
     # study is exactly what you want to hear about before rendering 300 figures.
     if args.participant_metadata:
@@ -3130,7 +3128,7 @@ def render(argv: list[str]) -> None:
                 print(f"  {len(ids)} {label}: {', '.join(ids)}", file=sys.stderr)
         _print_combined_rows(report)
 
-    # DATA-29: the same, one grain down. A trial table's report is worth more
+    # The same, one grain down. A trial table's report is worth more
     # than the participant one, not less: getting the *key* wrong is silent
     # (a table keyed by trial alone still joins, it just means something else),
     # and "0 matched" here is the one thing that says so out loud.
@@ -3225,9 +3223,8 @@ def render(argv: list[str]) -> None:
                         texts, on=["participant_id", "trial_id"], how="left"
                     )
                     combos = _metadata.project_texts(attached_texts, combos)
-        # #374 F21: the text id too — the id the app shows a trial by. #412:
-        # from whichever table has the trial, since every table's trials are
-        # listed.
+        # The text id too — the id the app shows a trial by — from whichever
+        # table has the trial, since every table's trials are listed.
         texts = _trial_text_ids(fixations, words, raw_gaze)
         if "text_id" not in combos.columns and texts is not None:
             combos = combos.merge(texts, on=["participant_id", "trial_id"], how="left")
@@ -3237,7 +3234,7 @@ def render(argv: list[str]) -> None:
             "its participant and text.",
             file=sys.stderr,
         )
-        # DATA-66: the ids under the dataset's own names.
+        # The ids under the dataset's own names.
         print(_listed(combos, column_names).to_string(index=False))
         return
     if args.list_parts:
@@ -3253,8 +3250,8 @@ def render(argv: list[str]) -> None:
     try:
         # A given -p/-t must match exactly (mistyped ids are errors, never
         # silently swapped for another trial); only genuinely unspecified
-        # parts default to the first available combo, like the app. VIZ-45:
-        # a trial only the raw gaze has is one of them.
+        # parts default to the first available combo, like the app. A trial
+        # only the raw gaze has is one of them.
         participant, trial = api._resolve_trial(
             words,
             fixations,
@@ -3273,7 +3270,7 @@ def render(argv: list[str]) -> None:
         ).any()
     )
     if trial_fixations_missing:
-        # VIZ-45: say it in the command's own terms before the API says it in
+        # Say it in the command's own terms before the API says it in
         # Python's. Both modes are made of fixations, and none are detected
         # from the samples. Decided for this trial, not the dataset.
         for flag, given in (
@@ -3303,10 +3300,10 @@ def render(argv: list[str]) -> None:
             "show_heatmap",
             "show_saccade_arrows",
         )
-        # Only a flag on the line overrides the API's default (#374, F21).
+        # Only a flag on the line overrides the API's default.
         if getattr(args, key) is not None
     }
-    # VIZ-45: only when given — `plot_scanpath` turns the layer on for the
+    # Only when given — `plot_scanpath` turns the layer on for the
     # frame it is handed, and an override is the one thing that says off.
     if args.show_raw_gaze is False:
         overrides["show_raw_gaze"] = False
@@ -3325,15 +3322,15 @@ def render(argv: list[str]) -> None:
             for field in args.fixation_hover_fields.split(",")
             if field.strip()
         ]
-    # VIZ-18: the palette rides along as an override; api._expand_palette turns
+    # The palette rides along as an override; api._expand_palette turns
     # it into colour kwargs and lets any explicit --*-color below win.
     if args.palette:
         overrides["palette"] = args.palette
     if args.color_by:
         overrides["color_by"] = args.color_by
-    if args.fixation_color:  # VIZ-17 flat fixation colour
+    if args.fixation_color:  # flat fixation colour
         overrides["fixation_color"] = args.fixation_color
-    if args.fixation_symbol:  # VIZ-15 marker shape
+    if args.fixation_symbol:  # marker shape
         overrides["fixation_symbol"] = args.fixation_symbol
     if args.heatmap_metric:
         overrides["heatmap_metric"] = args.heatmap_metric
@@ -3358,14 +3355,14 @@ def render(argv: list[str]) -> None:
         overrides["saccade_style"] = args.saccade_style
     if args.saccade_width is not None:
         overrides["saccade_width"] = args.saccade_width
-    # VIZ-8: colour saccades by reading type. Either flag turns the mode on; each
+    # Colour saccades by reading type. Either flag turns the mode on; each
     # CLASS=COLOR pair overrides one class colour; --no-saccade-type-legend hides
     # the colour key.
-    # VIZ-19: --saccade-color-by-direction is the two-way fold; the full five-way
+    # --saccade-color-by-direction is the two-way fold; the full five-way
     # split wins if both are given (it's the more specific request).
     if args.saccade_color_by_direction:
         overrides["saccade_color_mode"] = "Forward / regression"
-    # EXP-20: a class colour beside --saccade-color-by-direction recolours the
+    # A class colour beside --saccade-color-by-direction recolours the
     # two-way split rather than overriding the mode the user asked for, so the
     # fold's own colours have a flag too.
     if args.saccade_color_by_type or (
@@ -3411,14 +3408,14 @@ def render(argv: list[str]) -> None:
         overrides["fixation_flags"] = _parse_fixation_flags(args.fixation_flags)
     if args.legend_layout:
         overrides["legend_layout"] = _parse_legend_layout(args.legend_layout)
-    # VIZ-31: the reading-class filter. Independent of the colour mode above —
+    # The reading-class filter. Independent of the colour mode above —
     # "only the regressions, in one colour" is as valid as "all of them, coloured
     # by type" — so it is its own flag rather than a mode.
     if args.saccade_classes:
         overrides["saccade_classes"] = _parse_saccade_classes_arg(
             args.saccade_classes, "--saccade-classes"
         )
-    # VIZ-9: linear-reading mode.
+    # Linear-reading mode.
     if args.saccade_arcs:
         overrides["saccade_render_mode"] = "Arc"
     if args.snap_fixations:
@@ -3440,13 +3437,13 @@ def render(argv: list[str]) -> None:
             fixation_snap_to_line=True,
             fixation_opacity=1.0,
         )
-        # BUG-85 review: an explicit flag wins over the preset, as it does over
-        # `plot_scanpath(illustration=True, …)` — the preset used to overwrite
-        # `--color-by`, `--no-labels` and the rest set above. A layer switch is
-        # in `overrides` only when its flag was given.
+        # An explicit flag wins over the preset, as it does over
+        # `plot_scanpath(illustration=True, …)`, so the preset must not
+        # overwrite `--color-by`, `--no-labels` and the rest set above. A layer
+        # switch is in `overrides` only when its flag was given.
         stated = {key for key in preset if key in overrides}
         overrides.update({k: v for k, v in preset.items() if k not in stated})
-    # VIZ-4: image stimulus background. make_scanpath_figure only draws the image
+    # Image stimulus background. make_scanpath_figure only draws the image
     # when a size is known, so default to the PNG's own pixel size, then the
     # canvas.
     if args.stimulus_image:
@@ -3465,14 +3462,14 @@ def render(argv: list[str]) -> None:
     if args.stimulus_image_opacity is not None:
         overrides["background_image_opacity"] = args.stimulus_image_opacity
     if args.image_root and not (args.show_stimulus_image or args.stimulus_image):
-        # #420: the folder only fills `image_path`; drawing it is its own flag,
+        # The folder only fills `image_path`; drawing it is its own flag,
         # as in the API, so a printed command names both.
         print(
             "Note: --image-root matches each trial's stimulus page; add "
             "--show-stimulus-image to draw it.",
             file=sys.stderr,
         )
-    # EXP-20: the rest of the figure options. After `--illustration` on purpose,
+    # The rest of the figure options. After `--illustration` on purpose,
     # so an explicit flag wins over the preset — the order `plot_scanpath`'s own
     # `illustration=True` applies them in.
     for key in _DIRECT_OPTION_FLAGS:
@@ -3485,7 +3482,7 @@ def render(argv: list[str]) -> None:
         if getattr(args, key) == flipped:
             overrides[key] = flipped
     if args.crop_margin is not None:
-        # #422: a margin is only drawn around a cropped view.
+        # A margin is only drawn around a cropped view.
         overrides["fit_to_monitor"] = False
     if args.marker_duration_range:
         overrides["marker_duration_range"] = tuple(args.marker_duration_range)
@@ -3504,7 +3501,7 @@ def render(argv: list[str]) -> None:
             style = _parse_style_spec(getattr(args, f"style_{side}"), f"--style-{side}")
             if style:
                 overrides[f"style_{side}"] = style
-        # CMP-24: B's own filters. A comparison reads them off B's style; the
+        # B's own filters. A comparison reads them off B's style; the
         # co-animation takes B's flags as a setting and draws every class.
         b_flags = (
             _parse_fixation_flags(args.compare_fixation_flags)
@@ -3554,7 +3551,7 @@ def render(argv: list[str]) -> None:
         font_family=args.font_family or FONT_FAMILY,
         title=args.title or "",
         caption=args.caption or "",
-        # DATA-66: the figure's text and the column flags in the dataset's own
+        # The figure's text and the column flags in the dataset's own
         # names — the frames themselves stay canonical.
         column_names=column_names or None,
     )
@@ -3570,16 +3567,14 @@ def render(argv: list[str]) -> None:
         )
     try:
         if args.animate:
-            # EXP-10: which options the replay takes is `figure_options
-            # ("animation")` — the set `animate_scanpath` validates against and
-            # the snippet serializer diffs against. A hand-kept list here drifted
-            # from it twice over: `--fixation-symbol` / `--fixation-color` /
-            # `--palette` were dropped without a word, and `--color-by` /
-            # `--marker-size-range` / `--fixation-colorscale` were refused as
-            # unsupported though the builder honours them — so an animation
-            # snippet copied from the app drew a different figure. `palette` is
-            # not an option but `animate_scanpath` expands it, keeping only the
-            # colours the replay can draw.
+            # Which options the replay takes is `figure_options("animation")` —
+            # the set `animate_scanpath` validates against and the snippet
+            # serializer diffs against — never a hand-kept list here, which
+            # would drift from it (dropping flags the builder honours without a
+            # word, or refusing them), so an animation snippet copied from the
+            # app would draw a different figure. `palette` is not an option but
+            # `animate_scanpath` expands it, keeping only the colours the replay
+            # can draw.
             animation_options = api.figure_options("animation")
             anim_kwargs = {
                 key: value
@@ -3594,7 +3589,7 @@ def render(argv: list[str]) -> None:
                 for key, value in overrides.items()
                 if key not in anim_kwargs and value != static_defaults.get(key)
             ]
-            # PRE-3 drift correction is a plot_scanpath-only parameter (the
+            # Drift correction is a plot_scanpath-only parameter (the
             # animation builder has no line-snapping path), so name it here too.
             if args.drift_correction:
                 ignored.append("drift_correction")
@@ -3611,7 +3606,7 @@ def render(argv: list[str]) -> None:
                     f"{', '.join(_flags_for(ignored, overrides))}",
                     file=sys.stderr,
                 )
-            # CMP-9/CMP-11: `--animate --compare-with` is the *dual* co-animation
+            # `--animate --compare-with` is the *dual* co-animation
             # the app renders when both modes are on — both readings on one clock.
             # That is an overlay, so it needs one coordinate space, and it is gated
             # on the same `setups_comparable` predicate the static overlay uses.
@@ -3620,15 +3615,14 @@ def render(argv: list[str]) -> None:
                     _compare_animation_frames(api, args, words, fixations, canvas)
                 )
                 anim_kwargs["compare_stimulus"] = args.compare_stimulus
-                # EXP-8 §1. `animate_scanpath` names the co-animation's two
-                # trace labels `label_a` / `label_b` where `compare_scanpaths`
-                # takes one `labels=` pair, but to the user they are the same
-                # thing, so one flag pair serves both. They had no flag at all
-                # before, and an animation snippet reported them unsupported.
+                # `animate_scanpath` names the co-animation's two trace labels
+                # `label_a` / `label_b` where `compare_scanpaths` takes one
+                # `labels=` pair, but to the user they are the same thing, so
+                # one flag pair serves both.
                 labels = _compare_labels(args)
                 if labels is not None:
                     anim_kwargs["label_a"], anim_kwargs["label_b"] = labels
-                # CMP-24: B's own window.
+                # B's own window.
                 if args.compare_fix_index_range:
                     anim_kwargs["fix_index_range_b"] = _parse_fix_index_range(
                         args.compare_fix_index_range
@@ -3636,7 +3630,8 @@ def render(argv: list[str]) -> None:
             animation_options = dict(
                 playback_speed=args.playback_speed,
                 autoplay=args.autoplay,
-                # VIZ-7's window replays too — same parameter, same semantics.
+                # The fixation-index window replays too — same parameter, same
+                # semantics.
                 fix_index_range=_parse_fix_index_range(args.fix_index_range),
                 illustration_label=args.illustration_label,
                 anim_grid_step_ms=args.anim_grid_step_ms,
@@ -3669,9 +3664,9 @@ def render(argv: list[str]) -> None:
                         **animation_options,
                     )
                 except IncomparableScreensError as exc:
-                    # CMP-21: the API's way out is Python. BUG-85: dropping
-                    # --animate alone lands on the default overlay, refused on
-                    # the same terms — so this names the layout flag too.
+                    # The API's way out is Python. Dropping --animate alone lands
+                    # on the default overlay, refused on the same terms — so
+                    # this names the layout flag too.
                     raise SystemExit(
                         f"{exc.reason} An animated comparison replays both "
                         "scanpaths on one clock in one coordinate space, so it "
@@ -3683,7 +3678,7 @@ def render(argv: list[str]) -> None:
             # `is not None`, not truthiness: `--compare-with ""` is a malformed
             # request, and falling through here would silently render an ordinary
             # single-trial figure for someone who asked for a comparison.
-            # CMP-9. Compare owns the whole figure, so it is a peer of the
+            # Compare owns the whole figure, so it is a peer of the
             # animate/static branches rather than an option on one of them: the
             # comparison builder takes neither `--animate`'s playback settings
             # nor the static path's per-layer extras.
@@ -3734,24 +3729,24 @@ def render(argv: list[str]) -> None:
                         _parse_canvas(args.compare_canvas, "--compare-canvas")
                     ),
                     drift_correction=args.drift_correction,
-                    # EXP-11: a builder parameter, like the drift correction
-                    # beside it, so it has to be named here — it is not in
-                    # `overrides`. Left out, a windowed comparison drew both
-                    # whole trials while the `--print-code` recipe said otherwise.
+                    # A builder parameter, like the drift correction beside it,
+                    # so it has to be named here — it is not in `overrides`.
+                    # Left out, a windowed comparison would draw both whole
+                    # trials while the `--print-code` recipe said otherwise.
                     fix_index_range=_parse_fix_index_range(args.fix_index_range),
-                    # CMP-24: B's own window, when given.
+                    # B's own window, when given.
                     fix_index_range_b=_parse_fix_index_range(
                         args.compare_fix_index_range
                     ),
-                    # VIZ-48: each reading's samples under its scanpath.
+                    # Each reading's samples under its scanpath.
                     raw_gaze=raw_gaze,
                     raw_gaze_b=raw_gaze_b,
                     **overrides,
                     **common,  # carries canvas_size / fonts / title / caption
                 )
             except IncomparableScreensError as exc:
-                # BUG-85: the API's way out is Python (`layout='side_by_side'`),
-                # which this used to print verbatim to someone at a shell.
+                # The API's way out is Python (`layout='side_by_side'`), which
+                # means nothing at a shell, so name the flag instead.
                 raise SystemExit(
                     f"{exc.reason} So no overlay was drawn; pass --compare-layout "
                     "side-by-side (or stacked) to compare them in separate panels, "
@@ -3763,7 +3758,7 @@ def render(argv: list[str]) -> None:
                 raw_gaze=raw_gaze,
                 drift_correction=args.drift_correction,
                 drift_connectors=args.drift_connectors,
-                # VIZ-7's fixation-index window is a `plot_scanpath` parameter
+                # The fixation-index window is a `plot_scanpath` parameter
                 # rather than a figure keyword, so it is named here alongside
                 # drift correction rather than folded into `overrides`.
                 fix_index_range=_parse_fix_index_range(args.fix_index_range),
@@ -3817,7 +3812,7 @@ def render(argv: list[str]) -> None:
             )
             return
         out = api.save_figure(fig, args.output, **_save_kwargs(args))
-        # VIZ-5: also drop a per-layer breakdown next to the output.
+        # Also drop a per-layer breakdown next to the output.
         layer_paths = None
         if args.separable_layers:
             suffix = os.path.splitext(args.output)[1].lower().lstrip(".")
@@ -3850,7 +3845,7 @@ def render(argv: list[str]) -> None:
 
 def _analyze_parser() -> argparse.ArgumentParser:
     """The `analyze` parser — its own function so the docs' CLI reference is
-    generated from it rather than restated (ENG-79)."""
+    generated from it rather than restated."""
     parser = _ShortErrorParser(
         prog="scanpath-studio analyze",
         description="Write fixation, saccade, word, sentence, trial, participant, "
@@ -3913,7 +3908,7 @@ def _analyze_parser() -> argparse.ArgumentParser:
 
 
 def analyze(argv: list[str]) -> None:
-    """Preprocess data and export the complete EXP-3 analysis family."""
+    """Preprocess data and export the complete analysis family."""
     args = _analyze_parser().parse_args(argv)
     word_schema = _parse_schema_arg(args.word_schema, "--word-schema")
     fix_schema = _parse_schema_arg(args.fix_schema, "--fix-schema")
@@ -3957,8 +3952,8 @@ def analyze(argv: list[str]) -> None:
     tables = api.analysis_tables(
         words, fixations, pixels_per_degree=args.pixels_per_degree
     )
-    # EXP-16: with preprocessing off `preprocess_data` returns an empty report,
-    # and writing it over the family's own one left `cleaning_qa.csv` a single
+    # With preprocessing off `preprocess_data` returns an empty report, and
+    # writing it over the family's own one would leave `cleaning_qa.csv` a single
     # newline that `pd.read_csv` refuses. The family's report is the per-trial
     # "nothing excluded, policy Off" table the export bundle writes, so it
     # stands unless preprocessing actually ran.
@@ -3969,7 +3964,7 @@ def analyze(argv: list[str]) -> None:
 
     destination = Path(args.output_dir)
     destination.mkdir(parents=True, exist_ok=True)
-    # DATA-66: the tables come back under the dataset's own names (the loader's
+    # The tables come back under the dataset's own names (the loader's
     # default); `columns.json` maps the two that are the dataset's own tables
     # back to the internal names, as an export bundle's does.
     written: dict[str, list] = {}
@@ -4003,7 +3998,7 @@ def analyze(argv: list[str]) -> None:
     )
     print(f"Wrote {len(tables)} tables + {extras} to {destination}")
     if "word_measures" not in tables:
-        # AN-32 / EXP-23: measures are the dataset's own; none are computed.
+        # Measures are the dataset's own; none are computed.
         print(
             "No word_measures.csv: the words table brings no reading measures, "
             "and none are computed. EyeLink IA_* columns are found on their own; "
@@ -4069,13 +4064,13 @@ def _corpus_parser() -> argparse.ArgumentParser:
 
 
 def corpus(argv: list[str]) -> None:
-    """Render a styled corpus figure from a tidy CSV (AN-29)."""
+    """Render a styled corpus figure from a tidy CSV."""
     args = _corpus_parser().parse_args(argv)
     from . import api
 
-    # EXP-13: each of these ended in a traceback — a missing or unparseable
-    # --input, a table without the columns --kind reads, an output extension
-    # save_figure doesn't write.
+    # Each of these would otherwise end in a traceback — a missing or
+    # unparseable --input, a table without the columns --kind reads, an output
+    # extension save_figure doesn't write.
     try:
         data = pd.read_csv(args.input)
     except (OSError, ValueError) as exc:
@@ -4115,14 +4110,14 @@ def _cache_parser() -> argparse.ArgumentParser:
 
 
 def _count(n: int, noun: str) -> str:
-    """``"1 setting"``, ``"205 settings"``, ``"no settings"`` (#374, F38)."""
+    """``"1 setting"``, ``"205 settings"``, ``"no settings"``."""
     if not n:
         return f"no {noun}s"
     return f"{n:,} {noun}" + ("" if n == 1 else "s")
 
 
 def cache(argv: list[str]) -> None:
-    """Inspect or clear the on-device recovery cache (ENG-30).
+    """Inspect or clear the on-device recovery cache.
 
     The terminal counterpart of the app's 🗂️ Data Management → *Saved on this computer*
     section, so the storage a local run creates can be found, measured and deleted without
@@ -4186,7 +4181,7 @@ def cache(argv: list[str]) -> None:
     print(
         f"         {rows} · {_count(status['annotations'], 'annotated trial')} · "
         f"{_count(status['designs'], 'saved design')} · "
-        # DATA-38 — the attached metadata tables, the panel's own count.
+        # The attached metadata tables, the panel's own count.
         f"{_count(status.get('metadata', 0), 'metadata table')} · "
         f"{_count(status['settings'], 'setting')}"
     )
@@ -4228,7 +4223,7 @@ def _version_parser() -> argparse.ArgumentParser:
 
 
 def version(argv: list[str]) -> None:
-    """Print which build this is, and with ``--check`` whether a newer release is out (#139).
+    """Print which build this is, and with ``--check`` whether a newer release is out.
 
     The terminal counterpart of Help → About and ``api.check_for_updates``.
     Exits 1 only when the check itself could not be made.
@@ -4448,7 +4443,7 @@ _COMMANDS = ("run", "render", "analyze", "corpus", "check", "cache", "version")
 
 
 def _commands() -> tuple[str, ...]:
-    """The commands this build offers: `analyze` is held back with the other
+    """The commands this build offers: `analyze` is experimental, like the other
     computed measures (`constants.computed_measures_enabled`)."""
     from .constants import computed_measures_enabled
 
@@ -4470,14 +4465,14 @@ def _help_text() -> str:
 
 
 def _refuse_unknown_command(word: str) -> None:
-    """ENG-54: a mistyped subcommand is an error, not a Streamlit argument.
+    """A mistyped subcommand is an error, not a Streamlit argument.
 
     Everything unrecognized is forwarded to ``streamlit run`` so bare Streamlit
-    flags keep working — but a bare *word* was forwarded too, so
-    ``scanpath-studio rendr --sample`` reached Streamlit as a script argument
-    and died on "No such option: --sample" (or, with no flags, quietly launched
-    the app). Only a word is refused: a leading ``-`` is a Streamlit flag, and a
-    ``.py`` path is left to Streamlit as before."""
+    flags keep working — but a forwarded bare *word*, as in ``scanpath-studio
+    rendr --sample``, would reach Streamlit as a script argument and die on "No
+    such option: --sample" (or, with no flags, quietly launch the app). Only a
+    word is refused: a leading ``-`` is a Streamlit flag, and a ``.py`` path is
+    left to Streamlit."""
     import difflib
 
     close = difflib.get_close_matches(word, _commands(), n=1, cutoff=0.6)
@@ -4494,10 +4489,11 @@ _LAUNCH_FLAGS = ("--no-persist", "--download-dir")
 
 
 def _refuse_misplaced_options(argv: list[str]) -> None:
-    """#374 F21: ``scanpath-studio --sample render …`` (or a ``render`` flag
-    with no command) used to reach Streamlit and die on "No such option:
-    --sample". Say where the options go instead. A Streamlit flag
-    (``--server.port``) or one of ours is left alone."""
+    """Say where the options go when they come before the command.
+
+    ``scanpath-studio --sample render …`` (or a ``render`` flag with no command)
+    would otherwise reach Streamlit and die on "No such option: --sample". A
+    Streamlit flag (``--server.port``) or one of ours is left alone."""
     command = next((word for word in argv if word in _commands()), None)
     if command is None:
         flag = argv[0].split("=")[0]
@@ -4543,7 +4539,7 @@ def main(argv: list[str] | None = None) -> None:
 
         if not computed_measures_enabled():
             raise SystemExit(
-                "scanpath-studio: `analyze` is not available in this release: the "
+                "scanpath-studio: `analyze` is experimental and off by default: the "
                 "tables it writes are computed by Scanpath Studio and have not "
                 f"been validated yet. Set {EXPERIMENTAL_ENV_VAR}=1 to use it anyway."
             )

@@ -1,14 +1,14 @@
 """Render the corpus-level analysis figure (fig_corpus) for the manuscript.
 
 A three-panel montage from the *Per text* view of Corpus Analysis, run on the
-full OneStop corpus (ordinary reading regime) rather than the 3-reader demo, so
-the cohort views are populated:
+full OneStop corpus (ordinary reading regime) rather than the two-reader demo,
+so the cohort views are populated:
 
-  A  word x reader heatmap of total dwell time (AN-2)
-  B  cohort word profile with a spread band (AN-3)
-  C  per-word skipping and regression-in rates (AN-6)
+  A  word x reader heatmap of total dwell time
+  B  cohort word profile with a spread band
+  C  per-word skipping and regression-in rates
 
-Run from the app repo:  cd app && uv run python paper/paper_fig_corpus.py
+Run from the repo root:  uv run python paper/paper_fig_corpus.py
 
 Needs the full OneStop reports under ``ONESTOP_ROOT`` (see datasets.download_onestop).
 """
@@ -29,7 +29,7 @@ def _figures_dir() -> Path:
 
     Defaults to ``paper/figures/`` inside the software repo so an archived
     release is self-contained; set ``PAPER_FIGURES_DIR`` to write straight into
-    the manuscript tree (e.g. ``PAPER_FIGURES_DIR=../../overleaf/figures``).
+    the manuscript tree (e.g. ``PAPER_FIGURES_DIR=../overleaf/figures``).
     """
     env = os.environ.get("PAPER_FIGURES_DIR")
     out = Path(env) if env else Path(__file__).resolve().parent / "figures"

@@ -3,7 +3,7 @@
 The word labels are drawn in the dataset's font. Asked beside the screen, the
 physical size and the text size, on the add wizard and on ✏️ Edit dataset alike
 (one step, `wizard._wizard_setup_step`). "I don't know" is an answer — a generic
-monospace, as before — so the question never holds up *Add dataset*.
+monospace — so the question never holds up *Add dataset*.
 """
 
 from __future__ import annotations
@@ -99,7 +99,7 @@ def test_the_font_does_not_depend_on_the_text_size_answer():
     assert at.session_state["global_scale_text_to_boxes"] is True
 
 
-# --- #422: one vocabulary for the Recording setup and 📄 Stimulus → Text -------
+# --- one vocabulary for the Recording setup and 📄 Stimulus → Text -------------
 
 
 class TestSharedFontVocabulary:

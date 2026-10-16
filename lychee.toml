@@ -1,4 +1,4 @@
-# External-link check for the docs (ENG-79) — run weekly by
+# External-link check for the docs — run weekly by
 # .github/workflows/links.yml, or locally with `lychee --config lychee.toml
 # 'docs/**/*.md' README.md CONTRIBUTING.md`.
 

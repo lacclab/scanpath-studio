@@ -1,10 +1,10 @@
-"""EXP-22 — title / caption patterns can name a table's fields as ``{table.field}``.
+"""Title / caption patterns can name a table's fields as ``{table.field}``.
 
 The metadata tables' fields (``{trials.font_size}``) and each data table's saved
 fields that hold one value per trial (``{fixations.condition}``) join the
 pattern vocabulary under their table's name, so two tables' ``font_size`` stay
-apart. The plain field names are exactly what they were, and the *Available
-fields* list shows the new names under a heading per table, after them.
+apart. The plain field names keep working, and the *Available fields* list
+shows the table-qualified names under a heading per table, after them.
 """
 
 from __future__ import annotations

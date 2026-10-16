@@ -1,11 +1,10 @@
-"""CMP-11: when may two datasets' readings share one set of pixel coordinates?
+"""When may two datasets' readings share one set of pixel coordinates?
 
 The overlay layout pools both trials into ONE `_compute_axis_ranges`. Across two
-monitors that is the union of two unrelated pixel spaces, so CMP-8 blocked the
-layout for every cross-dataset pair. `setups_comparable` is what unblocks the
-case the block was always too coarse for: two corpora recorded on the same
-screen, where the pixels already mean the same thing and nothing needs
-rescaling.
+monitors that is the union of two unrelated pixel spaces, so a cross-dataset
+pair is not overlaid unless `setups_comparable` allows it: two corpora recorded
+on the same screen, where the pixels already mean the same thing and nothing
+needs rescaling.
 
 The interesting assertions here are the two deliberate *omissions* — physical
 geometry is not consulted, and `ASSUMED` provenance is not a match — because
@@ -71,9 +70,9 @@ def test_differing_canvas_is_not_comparable_and_names_both_screens():
 def test_assumed_screen_is_allowed_but_cautioned():
     """A matching canvas nobody recorded warns; it does not refuse.
 
-    Settled 2026-08-12 on the case that motivated it: two OneStop regimes, both
-    2560x1440, both ASSUMED because the corpus records no screen. Refusing there
-    blocked exactly the comparison the feature exists for. The app cannot prove
+    The motivating case: two OneStop regimes, both 2560x1440, both ASSUMED
+    because the corpus records no screen. Refusing there would block exactly
+    the comparison the feature exists for. The app cannot prove
     the two displays matched, but the user usually can — so the overlay is drawn
     and the caveat travels with it.
     """
@@ -140,10 +139,10 @@ def test_reason_is_a_complete_sentence():
 
 
 def test_a_refusal_leaves_what_happens_next_to_the_surface():
-    """BUG-85: the reason ended "so they are shown side by side instead" — the
-    app's fallback — while `compare_scanpaths` and `render` raise, so two of
-    the three surfaces quoting it stated something that had not happened. The
-    predicate says why the pair cannot overlay; each caller says what it does."""
+    """The predicate says why the pair cannot overlay; each caller says what it
+    does. Ending the reason with the app's fallback ("so they are shown side by
+    side instead") would be false on two of the three surfaces quoting it,
+    since `compare_scanpaths` and `render` raise."""
     _, reason = setups_comparable(_snapshot(2560, 1440), _snapshot(1680, 1050))
     assert "side by side" not in reason
     assert "instead" not in reason
@@ -152,19 +151,18 @@ def test_a_refusal_leaves_what_happens_next_to_the_surface():
 def test_a_public_corpus_reports_its_declared_monitor_not_its_data_extents(
     tmp_path, monkeypatch
 ):
-    """Regression: the gate refused exactly the pairs CMP-11 exists to allow.
+    """The gate allows the public-corpus pairs it exists to allow.
 
-    `app.resolve_source_monitor` recognised a public corpus only via
-    `PUBLIC_DATASETS_CHOICE`, but `data_source_choice` holds the registry
-    *label* (DATA-9's flat picker) and `compare_source` names B by label too.
-    So a public corpus fell through to `compute_canvas_size` and reported its
-    rounded data extents as an ESTIMATED canvas. Cosmetic before CMP-11 (only
-    the split panels' `canvas_b` read it); load-bearing once `setups_comparable`
+    `app.resolve_source_monitor` must recognise a public corpus by its registry
+    *label*, not only via `PUBLIC_DATASETS_CHOICE`: `data_source_choice` holds
+    the label (the flat picker) and `compare_source` names B by label too.
+    Otherwise a public corpus falls through to `compute_canvas_size` and reports
+    its rounded data extents as an ESTIMATED canvas — and `setups_comparable`
     gates the overlay on the canvas.
 
-    Reads `public_dataset_registry()`, not the static dict (M14): since DATA-27
-    a *prepared benchmark corpus* is a peer entry reached by its own label, and
-    the dict answers for the three built-ins only — so the static read left the
+    Reads `public_dataset_registry()`, not the static dict: a *prepared
+    benchmark corpus* is a peer entry reached by its own label, and the dict
+    answers for the three built-ins only — so a static read would leave the
     entries most likely to break this uncovered. The bundle is written here
     because the suite deliberately pins discovery at an empty directory, so a
     benchmark entry exists only for a test that builds one.

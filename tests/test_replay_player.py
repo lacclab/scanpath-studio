@@ -1,9 +1,9 @@
-"""BUG-93: the animated replay runs on the wall clock, not on Plotly's frame queue.
+"""The animated replay runs on the wall clock, not on Plotly's frame queue.
 
 Plotly's own ▶ Play holds every frame until the first display tick *after* its
 duration and starts the next frame's clock from there, so each hold rounds up to
 whole ticks and the rounding piles up: on a 60 Hz screen a 40 ms frame (Fine, ×1)
-lasts 50 ms, and a 20.8 s reading replayed in 26 s. The HTML surfaces therefore
+lasts 50 ms, and a 20.8 s reading replays in 26 s. The HTML surfaces therefore
 carry `plots.animation_player_post_script`, which shows whichever frame the
 elapsed wall time has reached. These tests run that script under node against a
 fake Plotly on a simulated 60 Hz display (`fixtures/replay_player_harness.js`)
@@ -124,7 +124,7 @@ class TestRealTime:
         log = _run(fig, [["run_until", span * 1.5]], tmp_path)
         first = _first_shown(log)
         # Every frame is shown, in order, within one display tick of the moment
-        # its reading time is reached. Plotly's own queue showed frame k at
+        # its reading time is reached. Plotly's own queue shows frame k at
         # k × 50 ms here — 25 % late, and later with every frame.
         assert sorted(first) == list(range(len(times)))
         for k, at in first.items():
@@ -148,7 +148,7 @@ class TestRealTime:
     def test_a_replay_faster_than_the_screen_skips_frames(self, tmp_path):
         # ×8 on a 40 ms grid is a frame every 5 ms — three per display tick. The
         # screen can't show them all, so the clock skips ahead rather than fall
-        # behind (Plotly's queue showed all of them and took 5× too long).
+        # behind (Plotly's queue shows all of them and takes 5× too long).
         fig = _replay(speed=8.0)
         log = _run(fig, [["run_until", _times(fig)[-1] / 8 + 1000]], tmp_path)
         assert len(log["shown"]) < len(fig.frames)

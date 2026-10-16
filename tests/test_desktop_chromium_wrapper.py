@@ -2,8 +2,9 @@
 
 On macOS and Linux, choreographer starts the browser that renders image exports
 as ``sys.executable _unix_pipe_chromium_wrapper.py <browser> …``. In the desktop
-bundle ``sys.executable`` is the launcher, which used to start a second copy of
-the app instead — and the GIF/PDF export then waited forever.
+bundle ``sys.executable`` is the launcher, so it has to act as that wrapper:
+started as a second copy of the app instead, the GIF/PDF export would wait
+forever.
 """
 
 from __future__ import annotations

@@ -12,11 +12,11 @@ Storing a researcher's tables on their disk is invisible by nature, so the cache
 is also *inspectable*: :func:`cache_status` reports what is stored, where, how
 big it is and when it was written without importing Streamlit, and it backs the
 in-app 🗂️ Data → *Saved on this computer* section
-(``app._render_saved_here_section``, UX-179), the ``scanpath-studio cache`` CLI
+(``app._render_saved_here_section``), the ``scanpath-studio cache`` CLI
 subcommand and ``api.cache_status``. The stored files are deleted from outside
 the app — ``scanpath-studio cache --clear`` / ``api.clear_cache``, both
-:func:`clear_local_state`. Saving is paused for a session by BUG-71's breaker
-and when a manifest exists but cannot be read (:func:`persistence_paused`,
+:func:`clear_local_state`. Saving is paused for a session by the crash-loop
+breaker and when a manifest exists but cannot be read (:func:`persistence_paused`,
 :func:`cache_failure`); opting out is a launch choice
 (``run --no-persist`` / ``SCANPATH_STUDIO_PERSIST=0``).
 
@@ -26,7 +26,7 @@ the annotations and the metadata tables restore regardless — and its manifest
 entry and files are written back unchanged by every save until the user retries
 it (:func:`retry_failed_datasets`) or removes it (:func:`discard_failed_dataset`).
 
-A save is all or nothing (#412). The manifest is the only file it replaces:
+A save is all or nothing. The manifest is the only file it replaces:
 a dataset whose frames changed, and metadata tables that changed, are written
 to files of their own under fresh names, and the manifest that names them is
 swapped in last. Until that swap the previous manifest names only the previous
@@ -103,7 +103,7 @@ _PAUSED_KEY = "_local_persistence_paused"
 _LAST_FINGERPRINT_KEY = "_local_persistence_fingerprint"
 _LAST_DATASET_IDENTITY_KEY = "_local_persistence_dataset_identity"
 _LAST_DATASET_ENTRIES_KEY = "_local_persistence_dataset_entries"
-#: BUG-71 — the crash-loop breaker. Written beside the manifest just before a
+#: The crash-loop breaker. Written beside the manifest just before a
 #: restore is applied, removed once a run that applied one reaches
 #: `save_local_state` (the epilogue, i.e. the run rendered). Finding it at the
 #: start of a session means the last session to restore this cache never got
@@ -123,30 +123,31 @@ _FAILED_DATASETS_KEY = "_local_persistence_failed_datasets"
 #: an absent or cleared cache saves normally.
 _CACHE_FAILURE_KEY = "_local_persistence_cache_failure"
 #: The metadata tables' file, when the manifest points at it and it would not
-#: read (round 10): ``{"pointer": …, "reason": …}``. Held back like a dataset —
+#: read: ``{"pointer": …, "reason": …}``. Held back like a dataset —
 #: every save keeps the pointer and leaves the file as it is — until
 #: :func:`retry_failed_metadata` reads it or :func:`discard_failed_metadata`
 #: removes it.
 _FAILED_METADATA_KEY = "_local_persistence_failed_metadata"
 _FRAME_KEYS = ("words", "fixations", "raw_gaze")
-#: DATA-38 — the attached metadata tables live beside the manifest, not in it,
-#: and are rewritten only when their content changes: the manifest is rewritten
-#: on every durable settings change (a layer toggle, a trial switch), and a
-#: trial table can run to tens of thousands of rows. #412: each write is a new
-#: ``metadata-<token>.json`` that the manifest's pointer names; this is the one
-#: name every cache written before that used, and a pointer to it still reads.
+#: The attached metadata tables live beside the manifest, not in it, and are
+#: rewritten only when their content changes: the manifest is rewritten on
+#: every durable settings change (a layer toggle, a trial switch), and a trial
+#: table can run to tens of thousands of rows. Each write is a new
+#: ``metadata-<token>.json`` that the manifest's pointer names; this fixed name
+#: is the one older caches used, and a pointer to it still reads.
 METADATA_FILE = "metadata.json"
 _LAST_METADATA_SIGNATURE_KEY = "_local_persistence_metadata_signature"
-#: DATA-47 — the manifest pointer written with that file, reused while nothing
-#: changed (it lists every dataset's tables, which the signature does not).
+#: The manifest pointer written with that file, reused while nothing changed
+#: (it lists every dataset's tables, which the signature does not).
 _LAST_METADATA_POINTER_KEY = "_local_persistence_metadata_pointer"
-#: #412 — the cache files the manifest this session last wrote or restored
-#: names, as paths relative to the cache folder. What the next save's manifest
-#: no longer names is this session's to remove at once (see `_remove_unreferenced`).
+#: The cache files the manifest this session last wrote or restored names, as
+#: paths relative to the cache folder. What the next save's manifest no longer
+#: names is this session's to remove at once (see `_remove_unreferenced`).
 _LAST_REFERENCED_KEY = "_local_persistence_referenced"
 #: The files this module writes, and so may remove: a dataset's frames — a
-#: random token per write, or before #412 a slug of its name — and the metadata
-#: sidecar, ``metadata.json`` before #412 and ``metadata-<token>.json`` since.
+#: random token per write (an older cache's are named by a slug of the dataset
+#: name) — and the metadata sidecar, ``metadata-<token>.json`` (an older
+#: cache's is ``metadata.json``).
 _FRAME_FILE_RE = re.compile(r"^[0-9a-f]+-(?:words|fixations|raw_gaze)\.parquet$")
 _METADATA_FILE_RE = re.compile(r"^metadata(?:-[0-9a-f]+)?\.json$")
 #: An unnamed file this session did not retire itself is removed only by the
@@ -170,13 +171,13 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     "single_animate",
     "wizard_filter_fields",
     "_composite_trial_columns",
-    # VIZ-39 — the saved design library. It is the user's own work, not a
-    # setting derived from a dataset, so it belongs in the cache for the same
-    # reason annotations do: closing the app must not be how you lose it.
+    # The saved design library. It is the user's own work, not a setting
+    # derived from a dataset, so it belongs in the cache for the same reason
+    # annotations do: closing the app must not be how you lose it.
     DESIGN_PRESETS,
-    # BUG-72 — Compare mode and the replay speed: `single_animate` was already
-    # here, so a restart kept Animate but dropped Compare, its layout, whose
-    # stimulus an overlay draws, and each scanpath's styling.
+    # Compare mode and the replay speed, beside `single_animate`: a restart
+    # keeps Compare, its layout, whose stimulus an overlay draws, and each
+    # scanpath's styling, as it keeps Animate.
     SINGLE_COMPARE_TOGGLE,
     SINGLE_COMPARE_LAYOUT,
     SINGLE_COMPARE_STIMULUS,
@@ -191,21 +192,21 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     SINGLE_COMPARE_SCREEN_ID,
     *compare_state_keys(0),
     *compare_state_keys(1),
-    # UX-174 r2 — the descriptions the user wrote: their own words, like the
-    # design library. A plain session key so editing one never touches the
-    # stored frames (see `constants.DATASET_DESCRIPTIONS_KEY`).
+    # The descriptions the user wrote: their own words, like the design
+    # library. A plain session key so editing one never touches the stored
+    # frames (see `constants.DATASET_DESCRIPTIONS_KEY`).
     DATASET_DESCRIPTIONS_KEY,
-    # #417 — each dataset's stimulus-image folder and pattern, kept the same
-    # way and for the same reason. A local path in a local cache.
+    # Each dataset's stimulus-image folder and pattern, kept the same way and
+    # for the same reason. A local path in a local cache.
     DATASET_STIMULUS_IMAGES_KEY,
-    # VIZ-45 — which dataset the raw-gaze layer's default was last decided for,
-    # and what it overwrote. Without them a relaunch onto a raw-gaze-only
-    # dataset decides again and turns back on a layer the user switched off.
+    # Which dataset the raw-gaze layer's default was last decided for, and
+    # what it overwrote. Without them a relaunch onto a raw-gaze-only dataset
+    # decides again and turns back on a layer the user switched off.
     RAW_GAZE_SEEDED_FOR_KEY,
     RAW_GAZE_SNAP_RESTORE_KEY,
-    # UX-184 — the folder the user chose for corpus downloads. A preference,
-    # like the design library: a restart must not send the next download back
-    # to the default folder.
+    # The folder the user chose for corpus downloads. A preference, like the
+    # design library: a restart must not send the next download back to the
+    # default folder.
     DOWNLOAD_DIR_KEY,
     # The recording setup the user saved for a built-in or public dataset, and
     # which one the `global_*` keys hold now with what they held before — all
@@ -261,11 +262,11 @@ def persistence_enabled(url: str = "", environ: dict | None = None) -> bool:
     ``streamlit run``, which listens on every interface, does not persist unless
     opted in.
 
-    ENG-56: this used to ask whether ``url`` was a loopback URL, and the app
-    passes ``st.context.url`` — which Streamlit copies from the browser's own
-    message. So any machine that could reach the port could claim to be at
+    Inside a server, ``url`` is never consulted: the app passes
+    ``st.context.url``, which Streamlit copies from the browser's own message,
+    so any machine that could reach the port could claim to be at
     ``http://localhost/`` and have the owner's cached datasets restored into its
-    session. The URL is still consulted **outside** a Streamlit server (the
+    session. The URL is consulted only **outside** a Streamlit server (the
     ``cache`` CLI, the API, tests), where no browser supplies it and the caller
     is describing where the app would be served.
     """
@@ -308,7 +309,7 @@ def _json_safe(value: Any) -> Any:
 
 
 def _metadata_signature(session: MutableMapping[str, Any]) -> list:
-    """DATA-38 — the attached metadata tables' content fingerprint.
+    """The attached metadata tables' content fingerprint.
 
     Imported here rather than at module level: `metadata` pulls in `data`, and
     with it Streamlit, which :func:`cache_status` (the CLI's `cache` subcommand)
@@ -352,7 +353,7 @@ def _state_fingerprint(
         for key, value in session.items()
         if key in _SESSION_KEYS or str(key).startswith(COLUMN_MAPPING_PREFIX)
     }
-    # DATA-48: the live store by content, every other dataset's by revision.
+    # Annotations: the live store by content, every other dataset's by revision.
     annotations = annotations_mod.store_signature(session)
     encoded = json.dumps(
         [
@@ -361,8 +362,8 @@ def _state_fingerprint(
             annotations,
             metadata_signature,
             sorted(_failed(session)),
-            # Round 10: resolving held-back metadata tables changes what the
-            # manifest says, so it is a change worth saving.
+            # Resolving held-back metadata tables changes what the manifest
+            # says, so it is a change worth saving.
             failed_metadata(session),
         ],
         ensure_ascii=False,
@@ -412,7 +413,7 @@ def _atomic_text(source: str, destination: Path) -> None:
 
 
 def _new_token() -> str:
-    """A fresh name for one write's files (#412): never one a manifest names."""
+    """A fresh name for one write's files: never one a manifest names."""
     return secrets.token_hex(8)
 
 
@@ -454,7 +455,7 @@ def _manifest_for(
     identity is the one that entry was written for and the files it names are
     still there; any other is written afresh. Per dataset, so adding one never
     rewrites the others. The existence check is a ``stat`` per frame: another
-    session sharing the folder may have removed them since (#412).
+    session sharing the folder may have removed them since.
     """
     cached_entries = session.get(_LAST_DATASET_ENTRIES_KEY)
     last_entries = cached_entries if isinstance(cached_entries, dict) else {}
@@ -475,12 +476,12 @@ def _manifest_for(
             and _entry_files_present(root, entry)
         ):
             if not entry.get("rows") and isinstance(payload, dict):
-                # A manifest written before ``rows`` existed is still
-                # restorable, and restoring seeds these entries verbatim — so
-                # without this backfill an upgraded install would reuse row-less
-                # entries forever and the panel would read "1 dataset · 0 rows ·
-                # 812 MB". Reuse means the live frames ARE the ones on disk, so
-                # counting them is accurate and free (len is O(1)).
+                # An older manifest's entries carry no ``rows``, and restoring
+                # seeds these entries verbatim — so without this backfill a
+                # reused entry would stay row-less forever and the panel would
+                # read "1 dataset · 0 rows · 812 MB". Reuse means the live
+                # frames ARE the ones on disk, so counting them is accurate
+                # and free (len is O(1)).
                 entry = {
                     **entry,
                     "rows": {
@@ -512,7 +513,7 @@ def _manifest_for(
         "schema": SCHEMA_VERSION,
         "datasets": datasets,
         "session": values,
-        # DATA-48: `{"datasets": {name: [records]}}` — each dataset's own.
+        # `{"datasets": {name: [records]}}` — each dataset's own.
         "annotations": annotations_mod.cache_payload(session),
     }
 
@@ -523,16 +524,15 @@ def _save_metadata(
     signature: list,
     written: list[Path],
 ) -> tuple[dict | None, dict]:
-    """DATA-38 — write the attached tables to a new sidecar if they changed.
+    """Write the attached tables to a new sidecar if they changed.
 
     Returns the manifest's pointer to them (``None`` when nothing is attached)
     and the bookkeeping to keep once a manifest naming it is in place —
     ``{key: value}``, ``None`` meaning "forget". The tables are `metadata`'s
-    JSON payloads; the pointer is optional, so a manifest without it (every
-    one written before DATA-38) still restores, and the schema version does
-    not move.
+    JSON payloads; the pointer is optional, so a manifest without it still
+    restores, and the schema version does not move.
 
-    #412: a change is written to a new ``metadata-<token>.json`` (listed in
+    A change is written to a new ``metadata-<token>.json`` (listed in
     ``written``), never over the file the current manifest names, and nothing
     is deleted here — the old file goes once the new manifest is in place.
     """
@@ -540,7 +540,7 @@ def _save_metadata(
 
     held = session.get(_FAILED_METADATA_KEY)
     if isinstance(held, dict):
-        # Round 10: the stored tables did not read back. Writing this session's
+        # The stored tables did not read back. Writing this session's
         # (often none) would replace or delete them, so the file and the
         # manifest's pointer stay as they are until a retry or a discard.
         pointer = held.get("pointer")
@@ -555,7 +555,7 @@ def _save_metadata(
         and not _metadata_file_problem(root, pointer)
     ):
         return pointer, {}
-    # DATA-47: one entry per dataset, `{"datasets": {name: {grain: …}}}`.
+    # One entry per dataset, `{"datasets": {name: {grain: …}}}`.
     datasets = metadata_mod.dataset_payloads(session)
     if not datasets:
         return None, forget
@@ -581,7 +581,7 @@ def _save_metadata(
 def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
     """Save local datasets and durable session preferences, all or nothing.
 
-    #412: what changed is written to new files, and the manifest naming them
+    What changed is written to new files, and the manifest naming them
     replaces the old one in a single atomic rename — the save's only
     replacement. A failure before it leaves the old manifest and every file it
     names as they were (the new files are removed again), so the next launch
@@ -611,7 +611,7 @@ def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
             )
             if metadata:
                 manifest["metadata"] = metadata
-            # DATA-32: the dataset table's remembered counts ride along with the
+            # The dataset table's remembered counts ride along with the
             # datasets they describe — one small dict, and it is what stops a
             # restored session recounting every corpus it has ever opened.
             # Written here rather than inside `_manifest_for` because it is
@@ -657,7 +657,7 @@ def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
 
 
 def _manifest_references(root: Path, manifest: Any) -> set[str]:
-    """The cache files ``manifest`` names, relative to ``root`` (#412).
+    """The cache files ``manifest`` names, relative to ``root``.
 
     Tolerant of any shape, since a manifest on disk can hold anything: what
     does not name a file inside the cache folder names nothing to keep.
@@ -702,7 +702,7 @@ def _plain_frame_file(relative: Any) -> str | None:
 
 
 def _entry_files_present(root: Path, entry: dict) -> bool:
-    """Whether every frame a reused entry names is still on disk (#412)."""
+    """Whether every frame a reused entry names is still on disk."""
     frames = entry.get("frames")
     if not isinstance(frames, dict):
         return False
@@ -723,7 +723,7 @@ def _owned(relative: str) -> bool:
 def _remove_unreferenced(
     root: Path, referenced: set[str], retired: set[str], *, sweep: bool
 ) -> None:
-    """Remove the cache files the manifest just written does not name (#412).
+    """Remove the cache files the manifest just written does not name.
 
     Run after the swap, never before: until then the old manifest is the
     cache. What this session's previous manifest named (``retired``) goes at
@@ -762,7 +762,7 @@ def restore_state(
     Returns whether a manifest was found and applied — the *mechanism*. Whether
     that is worth telling the user about is a different question, answered by
     :func:`restored_summary` / :func:`restored_from_cache` and asked by
-    :func:`restore_local_state`; see UX-136 there.
+    :func:`restore_local_state`; see there.
     """
     if session.get(_RESTORED_KEY):
         return False
@@ -779,10 +779,11 @@ def _restore_manifest(
     if not path.exists():
         return False
     try:
-        # BUG-71: read and check the manifest's *shape* before touching the
-        # session. It is a file on disk, so any JSON value can be in it —
-        # `[]`, `null`, a dataset entry that is a string — and each of those
-        # used to escape as an AttributeError on every launch.
+        # Read and check the manifest's *shape* before touching the session.
+        # It is a file on disk, so any JSON value can be in it — `[]`, `null`,
+        # a dataset entry that is a string — and each of those must fail here,
+        # as an unreadable cache, not escape as an AttributeError on every
+        # launch.
         manifest = _as_mapping(json.loads(path.read_text(encoding="utf-8")))
         schema = int(manifest.get("schema", 0))
         if schema != SCHEMA_VERSION:
@@ -802,7 +803,7 @@ def _restore_manifest(
         session[_PAUSED_KEY] = True
         _LOGGER.warning("Could not read the recovery cache at %s: %s", root, exc)
         return False
-    # #412: what the manifest on disk names, so the save that replaces it
+    # What the manifest on disk names, so the save that replaces it
     # removes what the new one no longer does.
     session[_LAST_REFERENCED_KEY] = sorted(_manifest_references(root, manifest))
 
@@ -851,10 +852,9 @@ def _restore_manifest(
     for key, value in stored_session.items():
         if key not in skip:
             session.setdefault(key, value)
-    # DATA-48 — per dataset, `{"datasets": {name: [records]}}`. A
-    # manifest from before that holds one flat list naming no dataset;
-    # `restore_payload` hands it to the dataset this session opens on
-    # (the one the manifest had selected), once — see its docstring. A
+    # Per dataset, `{"datasets": {name: [records]}}`. An older manifest
+    # holds one flat list naming no dataset; `restore_payload` files it
+    # under the datasets it belongs to, once — see its docstring. A
     # held-back dataset's annotations restore too: they are filed under
     # its name and written back with it.
     try:
@@ -864,9 +864,9 @@ def _restore_manifest(
     except (ValueError, TypeError, KeyError, AttributeError) as exc:
         _LOGGER.warning("Could not restore the cached annotations: %s", exc)
         summary["annotations"] = 0
-    # DATA-38 — the attached metadata tables. Counted, because a user
-    # recognises their participant table coming back (UX-136's test for
-    # what is worth announcing), unlike a restored canvas width.
+    # The attached metadata tables. Counted, because a user recognises
+    # their participant table coming back (the test for what is worth
+    # announcing, see `restore_local_state`), unlike a restored canvas width.
     summary["metadata"] = _restore_metadata(session, root, manifest.get("metadata"))
     # A clean restore can reuse the Parquet files on the first rendered
     # settings change. Pre-existing in-memory datasets still need a save.
@@ -875,8 +875,7 @@ def _restore_manifest(
         session[_LAST_DATASET_ENTRIES_KEY] = stored_entries
     counts = manifest.get("dataset_counts")
     if isinstance(counts, dict):
-        # DATA-32 — a manifest written before this existed simply has
-        # none, and the table recounts what it can, as it always did.
+        # An older manifest has none, and the table recounts what it can.
         session[DATASET_COUNTS_STORE_KEY] = dict(counts)
     # Separate from _RESTORED_KEY, which only records that a restore was
     # *attempted* this session. The app reads this one to tell the user
@@ -1014,10 +1013,11 @@ def discard_failed_dataset(session, name: str, root: Path | None = None) -> bool
     with _STATE_LOCK:
         entry = record.get("entry")
         frames = entry.get("frames") if isinstance(entry, dict) else None
-        # Only the files its entry names. Not guessed from its name: since #412
-        # a rename keeps a dataset's files where they are, so the files named
-        # after this one's slug may be another's now. A file an entry too
-        # damaged to name it leaves behind goes with the next save's sweep.
+        # Only the files its entry names, never guessed from its name: a
+        # rename keeps a dataset's files where they are, so files named after
+        # this name's slug (an older cache's naming) may be another's now. A
+        # file an entry too damaged to name it leaves behind goes with the next
+        # save's sweep.
         paths = set()
         for relative in frames.values() if isinstance(frames, dict) else ():
             try:
@@ -1043,7 +1043,7 @@ def retry_cache_restore(session, url: str) -> bool:
 
 
 def _as_mapping(value: Any) -> dict:
-    """``value`` if it is a JSON object, else ``ValueError`` (BUG-71)."""
+    """``value`` if it is a JSON object, else ``ValueError``."""
     if not isinstance(value, dict):
         raise ValueError(
             f"expected an object in the manifest, got {type(value).__name__}"
@@ -1052,14 +1052,14 @@ def _as_mapping(value: Any) -> dict:
 
 
 def _restorable_session(stored: Any) -> dict:
-    """The manifest's ``session`` block, cut down to what is safe to seed (BUG-71).
+    """The manifest's ``session`` block, cut down to what is safe to seed.
 
     Only keys this module writes are restored — the durable settings and the
     column mapping — so a hand-edited or foreign manifest cannot seed arbitrary
     session state. Each value is held to its widget's rules by
     ``url_state.sanitize_session_value`` (clamped into range, or dropped): a
     restored value is seeded before its widget renders, exactly like a deep link,
-    so an opacity of 7 or a colour of ``"zzz"`` stopped the app on every launch.
+    so an opacity of 7 or a colour of ``"zzz"`` would stop the app on every launch.
     Dropping it costs the user that one setting. Imported here, not at the top,
     because ``url_state`` pulls in Streamlit and the cache CLI must not.
     """
@@ -1073,7 +1073,7 @@ def _restorable_session(stored: Any) -> dict:
         ):
             continue
         if key == DATASET_DESCRIPTIONS_KEY:
-            # UX-174 r2 — ``{dataset: sentence}``; anything else is dropped.
+            # ``{dataset: sentence}``; anything else is dropped.
             if isinstance(value, dict):
                 clean[key] = {
                     str(name): str(text)
@@ -1082,8 +1082,8 @@ def _restorable_session(stored: Any) -> dict:
                 }
             continue
         if key == DATASET_STIMULUS_IMAGES_KEY:
-            # #417 — ``{dataset: {"folder", "pattern"}}``; an entry naming no
-            # folder is dropped.
+            # ``{dataset: {"folder", "pattern"}}``; an entry naming no folder
+            # is dropped.
             if isinstance(value, dict):
                 from .data import stimulus_image_source
 
@@ -1094,7 +1094,7 @@ def _restorable_session(stored: Any) -> dict:
                 }
             continue
         if key == DOWNLOAD_DIR_KEY:
-            # UX-184 — a path seeds a text box: only a string may.
+            # A path seeds a text box: only a string may.
             if isinstance(value, str):
                 clean[key] = value
             continue
@@ -1167,13 +1167,13 @@ def _restorable_session(stored: Any) -> dict:
 
 
 def _restore_metadata(session: MutableMapping[str, Any], root: Path, pointer) -> int:
-    """DATA-38 — re-attach the tables :func:`_save_metadata` wrote; how many.
+    """Re-attach the tables :func:`_save_metadata` wrote; how many.
 
-    DATA-47: they come back into the per-dataset store, each dataset's own, and
-    reach the session keys when that dataset is selected. Its own error
-    boundary: a missing or unreadable sidecar costs the tables, never the
-    datasets and settings the rest of the manifest restores — and it is held
-    back (:func:`failed_metadata`), so no save replaces it (round 10).
+    They come back into the per-dataset store, each dataset's own, and reach
+    the session keys when that dataset is selected. Its own error boundary: a
+    missing or unreadable sidecar costs the tables, never the datasets and
+    settings the rest of the manifest restores — and it is held back
+    (:func:`failed_metadata`), so no save replaces it.
     """
     if not isinstance(pointer, dict) or not pointer.get("file"):
         return 0
@@ -1193,8 +1193,8 @@ def _restore_metadata(session: MutableMapping[str, Any], root: Path, pointer) ->
 
 def _metadata_path(root: Path, pointer: Any) -> Path:
     """Where a manifest's metadata pointer leads — only ever inside the cache
-    folder, directly (``metadata.json`` before #412, ``metadata-<token>.json``
-    since)."""
+    folder, directly (``metadata-<token>.json``, or an older cache's
+    ``metadata.json``)."""
     name = str(_as_mapping(pointer).get("file") or "")
     path = (root / name).resolve()
     if not name or path.parent != root.resolve():
@@ -1270,7 +1270,8 @@ def discard_failed_metadata(session, root: Path | None = None) -> bool:
 
 
 def _metadata_files(root: Path) -> list[Path]:
-    """Every metadata sidecar in ``root``: the pre-#412 one and the versioned."""
+    """Every metadata sidecar in ``root``: an older cache's fixed name and the
+    token-named ones."""
     if not root.is_dir():
         return []
     return sorted(
@@ -1305,11 +1306,11 @@ def rename_cached_dataset(
     new: str,
     root: Path | None = None,
 ) -> bool:
-    """Follow a dataset rename (DATA-23) through the cache instead of rewriting it.
+    """Follow a dataset rename through the cache instead of rewriting it.
 
-    A dataset's Parquet files are not named after the dataset (#412 — a token
-    per write; a cache from before that names them after the old name's slug,
-    and keeps those names), so a rename moves no file: re-keying
+    A dataset's Parquet files are not named after the dataset (a token per
+    write; an older cache names them after the old name's slug, and keeps
+    those names), so a rename moves no file: re-keying
     ``manifest.json`` — one atomic replacement — and this session's reuse
     bookkeeping keeps the next :func:`save_state` on the cheap reuse path, which
     rewrites the manifest only and leaves no orphan behind.
@@ -1367,12 +1368,11 @@ def restore_local_state(
 ) -> bool:
     """Restore this machine's cached session, once, and say whether to announce it.
 
-    UX-136: the return value is **not** "a manifest was applied" — that is
-    :func:`restore_state`'s answer, and the app used to toast "Recovered your
-    last session from this computer" on it. Every rerun writes the cache, so a
-    session that has only ever changed view settings still leaves a manifest
-    behind, and restoring one announced a recovery that the user could not see
-    anywhere — worst of all immediately after they had cleared the cache by
+    The return value is **not** "a manifest was applied" — that is
+    :func:`restore_state`'s answer. Every rerun writes the cache, so a session
+    that has only ever changed view settings still leaves a manifest behind,
+    and announcing its restore would claim a recovery that the user could not
+    see anywhere — worst of all immediately after they had cleared the cache by
     hand, where it reads as "clearing it did nothing". So the announcement is
     gated on something a user would *recognise* coming back: a dataset they
     added, an annotation they wrote, a design they saved. Settings still restore;
@@ -1387,7 +1387,7 @@ def restore_local_state(
     root = state_directory()
     marker = root / RESTORE_MARKER_NAME
     if marker.is_file():
-        # BUG-71: the last session that applied this cache never finished a run,
+        # The last session that applied this cache never finished a run,
         # and a restore that breaks the app breaks it before the Data page can
         # offer a reset — so every launch would break again. Open
         # without it, once. The files stay, and saving is paused so this
@@ -1421,10 +1421,10 @@ def local_state_restored(session) -> bool:
     """Whether this session has had its one restore attempt already.
 
     Set by :func:`restore_local_state` on its first call whatever the outcome —
-    restored, nothing cached, persistence off, or skipped (BUG-71) — and every
-    later call returns at once. The app opens the restore card only before it
-    (UX-166): a card around a call that does nothing cost each run a timer
-    thread and a task for nothing.
+    restored, nothing cached, persistence off, or skipped by the crash-loop
+    breaker — and every later call returns at once. The app opens the restore
+    card only before it: a card around a call that does nothing would cost each
+    run a timer thread and a task for nothing.
     """
     return bool(session.get(_RESTORED_KEY))
 
@@ -1447,7 +1447,7 @@ def consume_restore_skipped(session) -> bool:
     """Whether this session opened without its cache because the last one broke.
 
     One-shot, so the app says it once: the notice belongs to the launch, not to
-    every rerun after it. See :func:`restore_local_state` (BUG-71).
+    every rerun after it. See :func:`restore_local_state`.
     """
     return bool(session.pop(_RESTORE_SKIPPED_KEY, False))
 
@@ -1458,8 +1458,8 @@ def restored_summary(session) -> dict:
     ``{"datasets": n, "annotations": n, "designs": n, "metadata": n}`` — what
     the *Saved on this computer* section counts, and what a user would recognise as
     their last session (``metadata`` is the number of attached participant /
-    trial / text tables, DATA-38). View settings are deliberately absent: they restore, but
-    silently (UX-136 — see :func:`restore_state`). Empty when no restore
+    trial / text tables). View settings are deliberately absent: they restore, but
+    silently (see :func:`restore_local_state`). Empty when no restore
     happened, and after :func:`clear_local_state`.
     """
     summary = session.get(_RESTORED_PAYLOAD_KEY)
@@ -1467,7 +1467,7 @@ def restored_summary(session) -> dict:
 
 
 def session_was_restored(session) -> bool:
-    """Whether this session applied a saved manifest at all (#374 F32).
+    """Whether this session applied a saved manifest at all.
 
     Wider than :func:`restored_from_cache`: settings alone count, since they
     still say the app was used here before. The welcome tour reads it."""
@@ -1477,8 +1477,8 @@ def session_was_restored(session) -> bool:
 def restored_from_cache(session) -> bool:
     """Whether this session got back something the user would recognise.
 
-    Not "was a manifest read" — see :func:`restore_state` for why the two came
-    apart.
+    Not "was a manifest read" — see :func:`restore_local_state` for why the
+    two differ.
     """
     return any(restored_summary(session).values())
 
@@ -1486,7 +1486,7 @@ def restored_from_cache(session) -> bool:
 def persistence_paused(session) -> bool:
     """Whether saving is paused for this session.
 
-    Set by :func:`restore_local_state`'s BUG-71 breaker, after a launch that
+    Set by :func:`restore_local_state`'s crash-loop breaker, after a launch that
     never finished opening with the cache, and by a manifest that exists but
     cannot be read (:func:`cache_failure`): this session then leaves the stored
     copy untouched, and a reload — or :func:`retry_cache_restore` — tries it
@@ -1521,8 +1521,8 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
             _LAST_METADATA_SIGNATURE_KEY,
             _LAST_METADATA_POINTER_KEY,
             _LAST_REFERENCED_KEY,
-            # DATA-32: the remembered counts are part of what "forget this
-            # session" means — the ask named clearing the cache explicitly.
+            # The remembered counts are part of what "forget this session"
+            # means.
             DATASET_COUNTS_STORE_KEY,
             # Nothing is left to protect or to retry: a cleared cache saves
             # normally, like one that never existed.
@@ -1538,7 +1538,7 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
 def clear_saved_work(session) -> bool:
     """Delete what is saved on this computer and start over.
 
-    The Data page's *Clear what is saved…* (#374 F33). Deleting the files alone
+    The Data page's *Clear what is saved…*. Deleting the files alone
     would be undone within a click, because every run ends in
     ``save_local_state`` and this tab still holds the datasets, annotations and
     settings. So the session is emptied too: the next run is a first visit (the
@@ -1581,9 +1581,9 @@ def cache_status(
     ``scanpath-studio cache`` subcommand and ``api.cache_status``. Reading is
     best-effort — a partial or corrupt manifest reports ``readable=False``
     rather than raising, exactly as ``restore_state`` refuses to break the app
-    over one. ``rows`` is ``None`` (not ``0``) when a stored dataset predates
-    the manifest's ``rows`` field: "0 rows · 812 MB on disk" would be a lie,
-    "size only" is the truth. The next save backfills it.
+    over one. ``rows`` is ``None`` (not ``0``) when a stored dataset's entry
+    has no ``rows`` field (an older manifest): "0 rows · 812 MB on disk" would
+    be a lie, "size only" is the truth. The next save backfills it.
     """
     env = os.environ if environ is None else environ
     override = str(env.get(PERSIST_ENV_VAR, "")).strip().lower()
@@ -1612,7 +1612,7 @@ def cache_status(
         "saved_at": None,
         # Stored datasets the app cannot restore: ``[{"name", "reason"}]``.
         "damaged": [],
-        # Why the stored metadata tables cannot restore, or "" (round 10).
+        # Why the stored metadata tables cannot restore, or "".
         "damaged_metadata": "",
     }
     if not directory.is_dir():
@@ -1707,7 +1707,7 @@ def _entry_problem(root: Path, entry: Any) -> str:
 
 
 def save_local_state(session, url: str) -> bool:
-    # BUG-71: reaching the epilogue means this run rendered, so a restore it
+    # Reaching the epilogue means this run rendered, so a restore it
     # applied is not the kind that breaks the app — before any early return, since
     # a paused save still ran to here.
     _finish_restore(session)

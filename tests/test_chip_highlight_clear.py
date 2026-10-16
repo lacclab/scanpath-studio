@@ -1,7 +1,6 @@
 """The chips popover's ✕ puts a chip's color back to the default gray.
 
-Picking the default gray back was the only way before, and the color picker
-gives no way to land on that exact gray.
+The color picker gives no way to land on that exact gray.
 """
 
 from __future__ import annotations

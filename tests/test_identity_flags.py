@@ -1,10 +1,10 @@
-"""UX-176 — the identity pickers show auto-detection like every other field.
+"""The identity pickers show auto-detection like every other field.
 
 Trial, Participant and Text ID are multiselects (several columns can compose an
-id), so they never reached the selects' amber tint and ✨ confirm button: an
-auto-detected id read exactly like one somebody had checked. Now it is amber
-with a ✨ button until it is confirmed or changed, on the add screen and in
-the ✏️ Edit dataset grid alike.
+id), not selects, so they need their own path to the selects' amber tint and ✨
+confirm button — without it an auto-detected id reads exactly like one somebody
+has checked. An auto-detected id is amber with a ✨ button until it is confirmed
+or changed, on the add screen and in the ✏️ Edit dataset grid alike.
 """
 
 from __future__ import annotations

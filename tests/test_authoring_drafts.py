@@ -1,9 +1,9 @@
 """Editing the authored text keeps the hand-placed fixations, and a destructive
 edit can be undone one step.
 
-Changing the stimulus used to replace every authored fixation with one default
-fixation per word. Now the fixations stay — id, X/Y, order and duration — and
-only a target word the edit changed is flagged. Regeneration is an explicit
+Changing the stimulus keeps the fixations — id, X/Y, order and duration —
+rather than replacing them with one default fixation per word, and only a
+target word the edit changed is flagged. Regeneration is an explicit
 action, and the draft it (or a deletion, a move, a restored file) replaced is
 one click away. The editable draft also downloads as an authoring file that
 loads back on the screen and through the API.

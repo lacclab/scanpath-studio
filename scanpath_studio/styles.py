@@ -28,12 +28,10 @@ def get_app_css() -> str:
        logical inset that flips to the *other* end — the fill looks
        nowhere near the thumb it is supposed to lead up to. Rather than only
        patching the slider, force ltr globally: anything else BaseWeb draws
-       with a logical property would drift the same way, silently.
-       Bug reported with a Hebrew-locale browser (screenshot: thumb correct,
-       fill anchored to the wrong end). */
+       with a logical property would drift the same way, silently. */
     html, body, [data-testid="stApp"] {
         direction: ltr !important;
-        /* UX-129: the page itself must never grow a side-to-side scrollbar —
+        /* The page itself must never grow a side-to-side scrollbar —
            whatever pushes past the viewport (a too-wide row, a tooltip that
            escapes its column) should be clipped, not turned into a reason to
            scroll the whole app sideways. Elements that legitimately need
@@ -41,7 +39,7 @@ def get_app_css() -> str:
            narrower `overflow-x: auto` and are unaffected by clipping here. */
         overflow-x: hidden;
     }
-    /* UX-99: the page's side gutters. Streamlit's wide layout reserves ~5rem
+    /* The page's side gutters. Streamlit's wide layout reserves ~5rem
        either side, which on this app is ~10rem of nothing beside the widest
        things it draws — the scanpath canvas plus its rail, the Corpus tables,
        the dataset table. Trimmed to a gutter that still keeps text off the
@@ -66,10 +64,9 @@ def get_app_css() -> str:
     div[data-testid="stPlotlyChart"] {margin: 0 !important; padding: 0 !important; line-height: 0 !important;}
     div[data-testid="stPlotlyChart"] > div {margin: 0 !important; padding: 0 !important;}
     div[data-testid="stPlotlyChart"] iframe {display: block !important; margin: 0 !important; padding: 0 !important;}
-    /* UX-188: an inline iframe sits on the text baseline, leaving a descender's
-       gap under it that its overflow:auto container turned into a scrollbar
-       with nothing to scroll (8px under the plot, 25px under each script-only
-       embed). */
+    /* An inline iframe sits on the text baseline, leaving a descender's
+       gap under it that its overflow:auto container would turn into a
+       scrollbar with nothing to scroll. */
     iframe[data-testid="stIFrame"] {display: block;}
     .stPlotlyChart {margin: 0 !important; padding: 0 !important;}
     /* Target parent containers */
@@ -102,32 +99,13 @@ def get_app_css() -> str:
     [data-stale="true"] {
         opacity: 1 !important;
     }
-    /* Navigation (Scanpath ⇄ Corpus Analysis) is Streamlit's own top nav —
+    /* Navigation between the views is Streamlit's own top nav —
        `st.navigation(position="top")`, rendered into the header strip. It needs
        no CSS from us: it is platform chrome, it costs no page height, and
-       styling it would just make it look less like the rest of Streamlit. The
-       old right-aligned `.st-key-header_buttons` rule went with the single
-       toggle button it aligned. */
-    /* === The top menu bar ====================================================
-       Replaced the left sidebar: every group that used to be an
-       `st.sidebar` section is a popover in this one row (see menu.py).
-
-       UX-38 got it down to two triggers (❓ Help · 💾 Session, plus 🐛 Debug),
-       at which point a whole page row for two buttons was the wrong trade — so
-       it now shares the **title row**, right-aligned over where the Scanpath
-       view's control rail begins. That is plain `st.columns`, not CSS: there is
-       no supported way to put widgets in Streamlit's own header strip, and
-       positioning them into it means `position: fixed` against an internal test
-       id whose width depends on which toolbar buttons that deployment shows.
-
-       So all this rule does now is stop the buttons stretching to fill their
-       column; the alignment is the container's own `horizontal_alignment`.
-
-       (UX-8's sidebar collapse/expand styling lived here. It is gone with the
-       sidebar: there is no longer any chrome to collapse.) */
+       styling it would just make it look less like the rest of Streamlit. */
 
     /* === The Data page, off-screen ===========================================
-       DATA-26. The setup widgets — the loaders' directory input and ⬇ Download
+       The setup widgets — the loaders' directory input and ⬇ Download
        button, the source options, the column-mapping selectboxes — *drive*
        `prepare_data` on every rerun, and Streamlit drops the key of a widget
        that did not render. So `app.main` builds the page every run and switches
@@ -139,7 +117,7 @@ def get_app_css() -> str:
        spotlight target has to measure zero rather than sit off to one side. */
     .st-key-data_setup_page_offscreen { display: none !important; }
 
-    /* DATA-35 — the Data page's two screens: the overview (the dataset table +
+    /* The Data page's two screens: the overview (the dataset table +
        what's in the open dataset) and the ✏️ Edit dataset screen. Same
        mechanism and same reason as the page above, one level in: the editor is
        *made* of the widgets that drive `prepare_data`, so it renders every run
@@ -147,7 +125,7 @@ def get_app_css() -> str:
     .st-key-data_overview_offscreen { display: none !important; }
     .st-key-data_dataset_editor_offscreen { display: none !important; }
 
-    /* UX-174 — 📂 Available datasets as a focused table, built from keyed
+    /* 📂 Available datasets as a focused table, built from keyed
        containers (`app.render_dataset_table`): `dsrow_head` + one
        `dsrow_<slug>` line per dataset (`dsrow_current_<slug>` for the open
        one), each cell a fixed-width `dsc_<column>_<slug>` / `dsh_<column>` box
@@ -157,7 +135,7 @@ def get_app_css() -> str:
         overflow-x: auto;
         gap: 0 !important;
     }
-    /* The page title sits straight above the table (UX-177): give the header
+    /* The page title sits straight above the table: give the header
        row a little air so the title does not read as part of it. */
     .st-key-dataset_table {
         margin-top: 0.75rem;
@@ -203,7 +181,7 @@ def get_app_css() -> str:
             linear-gradient(var(--sps-accent-soft), var(--sps-accent-soft)),
             var(--sps-page-bg);
     }
-    /* UX-174 r2 — the whole row opens its dataset. Its first child is the
+    /* The whole row opens its dataset. Its first child is the
        row's own button, stretched over the row; every cell is drawn above it
        and lets a click fall through to it, except the one holding Remove. The
        button's label ("Open <name>") is for screen readers — the name is
@@ -323,52 +301,50 @@ def get_app_css() -> str:
         }
     }
 
-    /* UX-53 — the 🗂️ Data page was "too much space and text, and text too
-       small". Scoped to the page's own key so the plot rail and the analysis
-       views keep the metrics they were tuned against (#UX-51 sized the rail
-       deliberately, and a global type change would move it).
+    /* The 🗂️ Data page: denser, with larger small type. Scoped to the
+       page's own key so the plot rail and the analysis views keep the metrics
+       they were tuned against (the rail is sized deliberately, and a global
+       type change would move it).
 
        Two levers, both conservative: close the vertical gap Streamlit puts
        between every block, and lift the *smallest* type — captions carry most
-       of this page's prose, and they were the part that read as too small. */
+       of this page's prose. */
     .st-key-data_setup_page [data-testid="stVerticalBlock"] { gap: 0.55rem; }
     .st-key-data_setup_page [data-testid="stCaptionContainer"],
     .st-key-data_setup_page [data-testid="stCaptionContainer"] p {
         font-size: 0.86rem;
         line-height: 1.45;
     }
-    /* The dividers between the page's four stages were doing the spacing job
-       twice — a rule plus a margin either side of it. */
+    /* The dividers between the page's stages would otherwise do the
+       spacing job twice — a rule plus a margin either side of it. */
     .st-key-data_setup_page hr { margin: 0.7rem 0; }
     .st-key-data_setup_page [data-testid="stExpander"] { margin-bottom: 0.35rem; }
 
     div[data-testid="stPopover"] button { border-radius: 999px; }
     div[data-testid="stPopover"] button p { white-space: nowrap; }
-    /* BUG-89 — a click on a popover's ▾ must land on the button, not the
+    /* A click on a popover's ▾ must land on the button, not the
        chevron glyph. Opening swaps that glyph (expand_more → expand_less), so
        the span the pointer hit is detached by the time the click bubbles to
        `document`. There Streamlit's own outside-click handler ignores the
        opening click only within 50 ms of it; if the popover takes longer to
        render (the rail's big ones often do), the detached target fails its
        "inside the trigger?" test and the popover closes itself 2 ms after
-       opening. The next click then closes an already-closed popover, which is
-       why it took 2–3 clicks. With the glyph transparent to the pointer the
-       target is always an element that survives the re-render. The chevron is
-       the one `aria-hidden` child of the trigger; its label and icon keep
-       their nodes. */
+       opening, so it takes 2–3 clicks to open. With the glyph transparent to
+       the pointer the target is always an element that survives the
+       re-render. The chevron is the one `aria-hidden` child of the trigger;
+       its label and icon keep their nodes. */
     [data-testid="stPopoverButton"] [aria-hidden="true"],
     [data-testid="stPopoverButton"] [aria-hidden="true"] * {
         pointer-events: none;
     }
-    /* BUG-108: a mode or rail-section trigger is named ("Fixation settings")
-       so a screen reader can tell them apart, but only its chevron is drawn
-       (UX-80 r2): the label stays in the accessibility tree, clipped to
-       nothing, as `.sps-sr-only` does.
-       UX-200 named the other icon-only popovers the same way: the + menu,
-       the table previews, the chip-field editor and the ⇅ sorts, each keyed
-       `iconpop_*` (the + menu kept its own key). A plain label, so the
-       popover's dialog, which takes the label as its `aria-label`, is named
-       the same. */
+    /* A mode or rail-section trigger is named ("Fixation settings")
+       so a screen reader can tell them apart, but only its chevron is drawn:
+       the label stays in the accessibility tree, clipped to nothing, as
+       `.sps-sr-only` does.
+       The other icon-only popovers are named the same way: the + menu (under
+       its own key), the table previews, the chip-field editor and the ⇅ sorts,
+       each keyed `iconpop_*`. A plain label, so the popover's dialog, which
+       takes the label as its `aria-label`, is named the same. */
     .st-key-add_dataset_menu [data-testid="stPopoverButton"]
         [data-testid="stMarkdownContainer"],
     [class*="st-key-iconpop_"] [data-testid="stPopoverButton"]
@@ -387,7 +363,7 @@ def get_app_css() -> str:
         content: "⇅";
         content: "⇅" / "";
     }
-    /* UX-200: an icon-only *button* names itself with `constants.spoken`, an
+    /* An icon-only *button* names itself with `constants.spoken`, an
        `<em>` in its label clipped the same way, so the glyph or icon stays
        all that is drawn. No button label uses emphasis for anything else
        (`tests/test_popover_names.py`). */
@@ -408,11 +384,10 @@ def get_app_css() -> str:
     }
     div[data-testid="stPopoverBody"] p { line-height: 1.45; }
 
-    /* === Streamlit's spinners (UX-165) ======================================
-       The cache_data spinners and st.spinner — calm and inline now. They used
-       to be a pulsing blue banner; the long waits have loading cards
-       (loading.py) since UX-165, and what is left is short enough that a
-       banner shouted louder than the wait deserved. */
+    /* === Streamlit's spinners ================================================
+       The cache_data spinners and st.spinner, calm and inline: the long waits
+       have loading cards (loading.py), and what is left is short enough that a
+       banner would shout louder than the wait deserves. */
     div[data-testid="stSpinner"] {
         width: fit-content;
         padding: 0.35rem 0.75rem !important;
@@ -423,7 +398,7 @@ def get_app_css() -> str:
     }
     div[data-testid="stSpinner"] p { font-size: 0.9rem; margin: 0; }
 
-    /* === UX-165 · loading states =============================================
+    /* === Loading states ======================================================
        One card for every long wait (loading.py): hidden for its first
        loading.DELAY_S, then revealed by a timer thread writing `.sps-reveal`
        into it. A region card sits over a size box that holds its area at the
@@ -557,7 +532,7 @@ def get_app_css() -> str:
     .sps-sk-chart { height: 22rem; }
     .sps-sk-table { display: flex; flex-direction: column; gap: 0.4rem; }
     .sps-sk-table .sps-sk-row { height: 2rem; }
-    /* UX-167 — the Scanpath plot area is a stage: its first child (the loading
+    /* The Scanpath plot area is a stage: its first child (the loading
        card) and its second (the figure) share one cell, so a card can open over
        a figure already on screen without moving it. Notes written after the
        figure flow into the rows below. */
@@ -587,11 +562,11 @@ def get_app_css() -> str:
         --sps-accent-soft: rgba(31, 119, 180, 0.10);
         --sps-accent-border: rgba(31, 119, 180, 0.22);
         --sps-border: rgba(128, 128, 128, 0.22);
-        /* UX-174 r2 — a row under the pointer (the dataset table). */
+        /* A row under the pointer (the dataset table). */
         --sps-hover-soft: rgba(128, 128, 128, 0.08);
         --sps-code-fg: #15639c;
         --sps-shadow-hover: 0 6px 18px rgba(31, 119, 180, 0.16);
-        /* UX-145 — the page background, for the few surfaces that must be
+        /* The page background, for the few surfaces that must be
            opaque (a sticky bar content scrolls under). Streamlit exposes no
            CSS variable for it on the main page, and prefers-color-scheme is
            the OS preference, not the theme picked in ⋮ → Settings. But
@@ -609,10 +584,8 @@ def get_app_css() -> str:
         .stApp { --sps-code-fg: #8fc7f5; }
     }
 
-    /* UX-7 empty-state panels — "no trials match" and "this corpus isn't here
-       yet". Both used to be a warning banner + a caption + a body paragraph +
-       a button: four blocks, three background colors, one message. They are now
-       a single amber-tinted card, so the diagnosis visibly belongs to the
+    /* Empty-state panels — "no trials match" and "this corpus isn't here
+       yet": a single amber-tinted card, so the diagnosis visibly belongs to the
        headline above it. Amber (not red) on purpose: nothing is broken, the user
        just has to choose something. */
     .st-key-empty_state_panel,
@@ -635,8 +608,8 @@ def get_app_css() -> str:
         font-size: 0.8rem;
     }
 
-    /* Page title: a restrained brand-blue gradient + tighter tracking. One <h1>
-       exists (st.title in the header), so this scopes cleanly to it. */
+    /* A page-level <h1>: a restrained brand-blue gradient + tighter
+       tracking. */
     [data-testid="stHeading"] h1 {
         background: linear-gradient(95deg, #1f77b4 0%, #4a9fd4 70%);
         -webkit-background-clip: text;
@@ -663,7 +636,7 @@ def get_app_css() -> str:
 
     /* Inline code chips (Trial / Participant / Text ids, etc.) -> clean pill
        badges. `:not(pre code)` leaves multi-line code blocks (e.g. the BibTeX in
-       the About popover) alone. */
+       the About dialog) alone. */
     [data-testid="stMarkdownContainer"] code:not(pre code) {
         background: var(--sps-accent-soft);
         border: 1px solid var(--sps-accent-border);
@@ -675,8 +648,7 @@ def get_app_css() -> str:
 
     /* Expander / bordered-container cards: rounder corners + a subtle hover lift.
        Covers the in-page expanders (Annotations, Trial metadata, Export) and the
-       rail's grouped layer sections. The former sidebar group cards are gone —
-       those groups are menu popovers now. */
+       rail's expanders. */
     [data-testid="stExpander"] details {
         border: 1px solid var(--sps-border);
         border-radius: 10px;
@@ -703,23 +675,23 @@ def get_app_css() -> str:
     }
 
     /* === Scanpath screen: condition chips + control rail ====================
-       The viz controls moved out of the sidebar into a rail beside the plot, so
-       the trial's key experiment conditions ride above the plot as a compact
-       chip table and the rail reads as a tidy inspector panel. */
-    /* UX-190 / UX-195 — the chips as a table, in place of the wrapping chip
-       strip (UX-11): one column per field and one row per reading — Compare's
-       A above B, with a value they share written in both rows, quieter, so
-       what differs stands out. A header label, and a text value at its
-       spaces, wrap only once the table would otherwise be wider than its
-       column; past that the table scrolls sideways (with a scrollbar that
-       stays drawn) rather than push the plot down. The selectors are long on purpose — they must
-       beat the table styles Streamlit's markdown gives every table. */
+       The viz controls sit in a rail beside the plot, the trial's key
+       experiment conditions ride above the plot as a compact chip table, and
+       the rail reads as a tidy inspector panel. */
+    /* The chips as a table: one column per field and one row per
+       reading — Compare's A above B, with a value they share written in both
+       rows, quieter, so what differs stands out. A header label, and a text
+       value at its spaces, wrap only once the table would otherwise be wider
+       than its column; past that the table scrolls sideways (with a scrollbar
+       that stays drawn) rather than push the plot down. The selectors are long
+       on purpose — they must beat the table styles Streamlit's markdown gives
+       every table. */
     .sps-chip-table-wrap {
         overflow-x: auto;
         margin: 0.1rem 0 0.5rem;
     }
     /* macOS hides an overlay scrollbar until you scroll, so a table wider than
-       its column read as clipped columns, not as one to scroll. Styling the
+       its column would read as clipped columns, not as one to scroll. Styling the
        scrollbar keeps it drawn whenever the table overflows. */
     .sps-chip-table-wrap::-webkit-scrollbar,
     .st-key-dataset_table_grid::-webkit-scrollbar {
@@ -742,7 +714,7 @@ def get_app_css() -> str:
             scrollbar-width: thin;
         }
     }
-    /* #374 F11 — and an edge shadow on the side that has more, so a cut
+    /* …and an edge shadow on the side that has more, so a cut
        column reads as "scroll" even where scrollbars are hidden. The two
        `local` covers scroll with the content and hide each shadow at its
        end; the two `scroll` shadows stay at the edges. */
@@ -757,7 +729,7 @@ def get_app_css() -> str:
     /* The table spans its column, like the trial rows above it, rather than
        ending a third of the way across a wide window; the browser shares the
        extra width out between the columns. Its text is the selectors' size,
-       and its headers their labels' (2026-10-07). */
+       and its headers their labels'. */
     .sps-chip-table-wrap table.sps-chip-table {
         width: 100%;
         margin: 0;
@@ -767,9 +739,9 @@ def get_app_css() -> str:
         line-height: 1.45;
         color: inherit;
     }
-    /* #422: values in the app's regular weight (400), like the trial picker
-       above them — at 500 they read bolder than every other value on the
-       page. A value both rows share still steps back, by its colour. */
+    /* Values in the app's regular weight (400), like the trial picker
+       above them — at 500 they would read bolder than every other value on
+       the page. A value both rows share still steps back, by its colour. */
     .sps-chip-table-wrap table.sps-chip-table th,
     .sps-chip-table-wrap table.sps-chip-table td {
         padding: 0.28rem 0.55rem;
@@ -790,9 +762,9 @@ def get_app_css() -> str:
         line-height: 1.25;
         color: color-mix(in srgb, currentColor 62%, transparent);
     }
-    /* Values never wrap: each reading is one line (2026-10-07), so a long
-       trial id ("l37_1129 · 2_2_1_Adv") no longer doubles its row's height.
-       A table too wide for its column scrolls sideways instead. */
+    /* Values never wrap: each reading is one line, so a long trial id
+       ("l37_1129 · 2_2_1_Adv") does not double its row's height. A table too
+       wide for its column scrolls sideways instead. */
     .sps-ct-tint {
         white-space: nowrap;
         display: inline-block;
@@ -822,7 +794,7 @@ def get_app_css() -> str:
         border-radius: 50%;
         vertical-align: 0.02em;
     }
-    /* UX-42: Data source and Filter by share a row but are separate tasks (and
+    /* Data source and Filter by share a row but are separate tasks (and
        separate tour targets). A quiet rule makes that boundary legible; the
        inset keeps the Filter-by label from sitting directly against it. */
     .st-key-tour_grp_narrow_by {
@@ -830,7 +802,7 @@ def get_app_css() -> str:
         border-left: 1px solid var(--sps-border);
         padding-left: 0.7rem;
     }
-    /* UX-68 — the Animate / Compare split buttons. Python puts the mode toggle
+    /* The Animate / Compare split buttons. Python puts the mode toggle
        and its ▾ settings trigger on one row (`tabs.render_single_trial_tab`);
        these rules are what make the two read as ONE control rather than as a
        switch that happens to have a button parked beside it.
@@ -838,10 +810,9 @@ def get_app_css() -> str:
        The outline goes on the row, not on either half, because the halves are
        different kinds of thing: Streamlit's toggle is a bare switch + label with
        no chrome of its own, and only the popover trigger arrives as a bordered
-       button. So the row draws the border and the radius, `overflow: hidden`
-       clips the button's square corners back to it, and the button gives up
-       everything that would read as a second control — its own border, its
-       radius, its background — keeping only a 1px left edge as the divider
+       button. So the row draws the border and the radius, and the button gives
+       up everything that would read as a second control — its own border, its
+       radius, its background — leaving a 1px edge on its slot as the divider
        between the halves. That divider is the whole visual claim: one control,
        two things you can press.
 
@@ -873,15 +844,15 @@ def get_app_css() -> str:
         display: flex;
         align-items: center;
     }
-    /* ENG-43: Streamlit 1.62's native `wrap=False` now owns the one-line
-       contract. CSS only allocates the flexible and fixed halves. */
+    /* Streamlit's native `wrap=False` owns the one-line contract; CSS
+       only allocates the flexible and fixed halves. */
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         > div:not(:has([data-testid="stPopover"])) {
         min-width: 0;
         flex: 1 1 auto;
         padding-right: 0.35rem;
     }
-    /* UX-153 — a rail row with no switch (Filters & highlights, 📐 Figure & canvas) is
+    /* A rail row with no switch (Filters & highlights, 📐 Figure & canvas) is
        one control, so its name opens the popover. The ▾ trigger's click target
        is stretched over the whole row by an `::after` overlay, which keeps the
        row's look, and the popover still anchors on the ▾ itself. The row is
@@ -924,9 +895,9 @@ def get_app_css() -> str:
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    /* #374 F19 — the picker and rail-switch names are bold here, not as `**`
+    /* The picker and rail-switch names are bold here, not as `**`
        in the label string: Streamlit reads a label verbatim as the widget's
-       accessible name, so the markdown was announced. */
+       accessible name, so the markdown would be announced. */
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stCheckbox"] [data-testid="stWidgetLabel"] p,
     .st-key-data_source_picker [data-testid="stWidgetLabel"] p,
@@ -935,7 +906,7 @@ def get_app_css() -> str:
     .st-key-cmp_dataset [data-testid="stWidgetLabel"] p {
         font-weight: 600;
     }
-    /* UX-153 — every toggle in these rows takes `wrap=True`, which switches
+    /* Every toggle in these rows takes `wrap=True`, which switches
        off Streamlit's truncate mode (and the native `title=` tooltip it
        stamps), and with it the `min-width: 0` chain that let the label
        shrink to an ellipsis. Both are put back here. The `p *` arm is for a
@@ -956,36 +927,36 @@ def get_app_css() -> str:
         min-width: 0;
         max-width: 100%;
     }
-    /* UX-102 — and the same `p` must give up its bottom margin, or the row
+    /* …and the same `p` must give up its bottom margin, or the row
        grows a scrollbar. Streamlit 1.62 gives every `wrap=False` horizontal
        container `overflow-x: auto`, and CSS then promotes `overflow-y` from
        `visible` to `auto` along with it: each row is a scroll box, so anything
        that overhangs it by a pixel shows a scrollbar on hover. A markdown `p`
        carries `margin-bottom: 1rem` that Streamlit cancels with a matching
        negative margin on `stMarkdownContainer` — which fixes the layout but not
-       `scrollHeight`, and the margin still counts there. So exactly the three
-       name-only sections (📄 Stimulus · Filters & highlights · 📐 Figure & canvas, the ones
-       drawn with a name instead of a switch) scrolled 8px and lost 11px of
-       width to the scrollbar's gutter, while the five with a toggle did not.
-       Zeroing both margins is the fix rather than `overflow: visible`, because
-       it removes the overhang instead of hiding it — the row keeps the
-       horizontal clipping Streamlit put there. Nothing moves: the label is
-       centerd by the flex row either way. */
+       `scrollHeight`, and the margin still counts there. So the name-only
+       sections (📄 Stimulus · Filters & highlights · 📐 Figure & canvas, the ones
+       drawn with a name instead of a switch) would scroll 8px and lose 11px of
+       width to the scrollbar's gutter.
+       Zeroing both margins rather than setting `overflow: visible` removes the
+       overhang instead of hiding it — the row keeps the horizontal clipping
+       Streamlit put there. Nothing moves: the label is centred by the flex row
+       either way. */
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stMarkdownContainer"],
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stMarkdownContainer"] p {
         margin-bottom: 0;
     }
-    /* #422 — a switch's `help` is hover text on the switch itself: on
+    /* A switch's `help` is hover text on the switch itself: on
        Animate, what it greys; on a greyed layer, why. Streamlit draws `help`
-       as a `?` button after the label, which UX-80/UX-103 cleared off these
-       rows (and which "Word boxes" has no room for). So the tooltip's hover
-       target is stretched over the whole switch — the <label>, already
-       `position: relative` — and the `?` is not drawn. A click still flips
-       the switch: the target is a plain span inside the <label>, while the
-       `?` button, interactive content that would swallow the click, takes no
-       pointer events. It stays focusable, and shows while it has focus. */
+       as a `?` button after the label, which these rows do not show (and which
+       "Word boxes" has no room for). So the tooltip's hover target is stretched
+       over the whole switch — the <label>, already `position: relative` — and
+       the `?` is not drawn. A click still flips the switch: the target is a
+       plain span inside the <label>, while the `?` button, interactive content
+       that would swallow the click, takes no pointer events. It stays
+       focusable, and shows while it has focus. */
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stCheckbox"] [data-testid="stWidgetLabel"]
         > span:has(> [data-testid="stTooltipIcon"]),
@@ -1018,12 +989,12 @@ def get_app_css() -> str:
        full-height because it is a flex child of the row. `:has()` picks it out
        without depending on `stLayoutWrapper` being the wrapper's name. */
     /* The corner rounding is on the slot rather than clipped off the row with
-       `overflow: hidden`, and the row is left free to WRAP. Both were tried the
-       other way and both are traps: the switch will not shrink below about
-       131px (its own min-content), so on a 142px rail a non-wrapping row put the
-       ▾ 38px past the right edge, where `overflow: hidden` deleted it — a
-       control that silently cannot be reached. Wrapping costs a rounded box with
-       the ▾ tucked under the switch, which reads more like a card than a split
+       `overflow: hidden`, and the row is left free to WRAP. The other way round,
+       both are traps: the switch will not shrink below about 131px (its own
+       min-content), so on a 142px rail a non-wrapping row puts the ▾ 38px past
+       the right edge, where `overflow: hidden` deletes it — a control that
+       silently cannot be reached. Wrapping costs a rounded box with the ▾
+       tucked under the switch, which reads more like a card than a split
        button; that is the right way to lose. */
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         > div:has([data-testid="stPopover"]) {
@@ -1031,7 +1002,7 @@ def get_app_css() -> str:
         align-items: center;
         justify-content: stretch;
         /* 2.6rem, not 2.8: at a 1280px window the rail's longest layer name,
-           "Word boxes", missed by 2px (round 9) — the ▾ needs no more. */
+           "Word boxes", misses by 2px — the ▾ needs no more. */
         flex: 0 0 2.6rem;
         min-width: 2.6rem;
         border-left: 1px solid var(--sps-border);
@@ -1067,10 +1038,10 @@ def get_app_css() -> str:
         background: transparent !important;
         box-shadow: none !important;
     }
-    /* UX-200: `box-shadow: none` above also took Streamlit's focus ring, so a
-       keyboard user tabbing along the rail lost track of which ▾ was focused.
-       An outline instead, inset because the row is a scroll box (UX-102) that
-       would clip one drawn outside the button, in the accent the dataset
+    /* `box-shadow: none` above also removes Streamlit's focus ring, which
+       a keyboard user tabbing along the rail needs to see which ▾ is focused.
+       An outline instead, inset because the row is a scroll box (see above)
+       that would clip one drawn outside the button, in the accent the dataset
        table's rows already focus with. */
     [data-testid="stHorizontalBlock"][class*="st-key-split_mode_"]
         [data-testid="stPopover"] button:focus-visible {
@@ -1086,17 +1057,17 @@ def get_app_css() -> str:
         > div:has([data-testid="stPopover"] button:hover:enabled) {
         background: var(--sps-accent-soft);
     }
-    /* UX-27 / CMP-10 — ONE button shape for the control rows stacked above the
+    /* ONE button shape for the control rows stacked above the
        plot. They are built in three different functions across two modules
        (the Narrow-by/More row and the chip strip's Details/✏️ in tabs.py, the
        comparison picker's ◀ ▶ ⇅ in tabs.py, and the main trial picker's ◀ ▶ ⇅
        in utils.py), each with its own `st.columns` and its own width unit, so
-       they used to render at different heights and two different shapes —
+       left alone they render at different heights and in two different shapes —
        square icon buttons beside pill-shaped labeled ones.
        Rather than hand-tuning each call site, every trigger in the block goes in
        a container keyed `railbtn_*` and takes its geometry from here.
 
-       The shape is the chip pill (it was already tuned to sit against the chip
+       The shape is the chip pill (it is tuned to sit against the chip
        strip, and it is the smallest of the three, so adopting it shrinks the
        cluster rather than growing it). `min-width` is what squares up the
        icon-only buttons: without it ◀, ▶ and ⇅ each collapse to their own glyph
@@ -1113,12 +1084,12 @@ def get_app_css() -> str:
     /* Right-pack every cluster, at one spacing. Each row ends in a trailing
        column that already stops at the container's right edge, but a Streamlit
        vertical block is a flex COLUMN of full-width children, so a content-width
-       button sat at the LEFT of its slot: the three rows' ends were ragged by up
-       to 43px, and once the right-most three were flushed the *second* control
-       in each row (◀ ▶, "Summary stats") was still adrift — one full column gutter in
-       from its neighbour, at a different offset per row.
+       button sits at the LEFT of its slot and the rows' ends go ragged; and
+       flushing only the right-most control leaves the *second* control in each
+       row (◀ ▶, "Summary stats") adrift — one full column gutter in from its
+       neighbour, at a different offset per row.
 
-       So a row's trailing controls now share ONE `railbtn_*` container and this
+       So a row's trailing controls share ONE `railbtn_*` container and this
        rule makes every such container a right-packed flex row. "More" alone,
        both ◀ ▶ ⇅ picker clusters, and the chip row's ✏️ therefore all end on the
        same edge with the same 3px between neighbours, whatever each row's own
@@ -1143,14 +1114,14 @@ def get_app_css() -> str:
         width: auto !important;
     }
     [class*="st-key-railbtn_"] > div + div { margin-left: 3px !important; }
-    /* UX-181: the floors under the `SELECTOR_ROW_GRID` tracks
+    /* The floors under the `SELECTOR_ROW_GRID` tracks
        (`SELECTOR_ROW_FLOORS_REM`). A row of this grid is a column row whose
        last column holds a `railbtn_*` cluster directly (◀ ▶ ⇅ 🔎 on the trial
        rows, ◀ ▶ on the screen navigator, ✏️ on the chip strip). The nested
        `_step` / `_sort` containers don't count.
        - Every column gets `min-width: 0` first. Otherwise a column's automatic
-         minimum is its content, and A's dataset cell (dropdown + "+") stopped
-         at a different width than B's, so the two rows drifted apart.
+         minimum is its content, and A's dataset cell (dropdown + "+") would stop
+         at a different width than B's, so the two rows drift apart.
        - Then each track gets the same floor on every row: the dataset track on
          any row of three or four columns, the trial track on four-column rows
          only (on a three-column row the second column is trial + scrubber
@@ -1162,12 +1133,12 @@ def get_app_css() -> str:
          floor (`SELECTOR_ROW_WRAP_REM`). Narrower than that — the
          plot-controls rail open beside a small window — it wraps: the tracks
          that no longer fit (the screen picker with ⇅ 🔎 ✏️, then ◀ ▶) move to
-         a line of their own under the rest. It used to be held on one line at
-         any width, and then ran past its column into the rail, over
-         *Animate*. The test is a container query on the row's own wrapper, not
-         the window: the rail takes a share of the window, and a flex wrap
-         alone would break the line before shrinking the scrubber. A's row and
-         B's have the same floors, so they wrap at the same width.
+         a line of their own under the rest. Held on one line at any width, it
+         would run past its column into the rail, over *Animate*. The test is a
+         container query on the row's own wrapper, not the window: the rail
+         takes a share of the window, and a flex wrap alone would break the line
+         before shrinking the scrubber. A's row and B's have the same floors, so
+         they wrap at the same width.
        On the column rules, `:where()` keeps the row match at zero specificity,
        so each floor outranks the `min-width: 0`. The `flex-wrap` rules keep
        their specificity, since they have to outrank Streamlit's own. */
@@ -1259,11 +1230,11 @@ def get_app_css() -> str:
         width: auto !important;
         min-width: 0 !important;
     }
-    /* UX-181: a slider's end labels stay on one line. The trial scrubber's
-       labels are `1/24 · <trial id>`, and a long id used to wrap onto a second
-       line under the slider, where the chip strip below covered it. Each label
-       takes at most half the bar and ellipsises past that. The thumb's own
-       value above the track still shows the full id, and so does the
+    /* A slider's end labels stay on one line. The trial scrubber's
+       labels are `1/24 · <trial id>`, and a long id would otherwise wrap onto a
+       second line under the slider, where the chip strip below covers it. Each
+       label takes at most half the bar and ellipsises past that. The thumb's
+       own value above the track still shows the full id, and so does the
        dropdown. */
     [data-testid="stSliderTickBar"] > [data-testid="stMarkdownContainer"] {
         min-width: 0;
@@ -1274,7 +1245,7 @@ def get_app_css() -> str:
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    /* UX-9: the number box paired with each slider (`<key>__num`, `__num_lo`,
+    /* The number box paired with each slider (`<key>__num`, `__num_lo`,
        `__num_hi`) exists for typing an *exact* value — the slider beside it
        already handles stepping. It holds a number, not a sentence, so drop the
        +/- buttons, cap its width and tighten its padding: it sits on the same
@@ -1294,27 +1265,25 @@ def get_app_css() -> str:
         font-variant-numeric: tabular-nums;
     }
 
-    /* UX-51 — the rail's `label | field` rows. Every control in the rail and in
-       its ⚙️/🧹 popovers used to stack its title ABOVE its field, so one style
-       panel ran well past a screen. The title now sits in a column to the LEFT
-       of the field. The split itself is built in Python (controls._labeled, one
+    /* The rail's `label | field` rows: the title sits in a column to the
+       LEFT of its field rather than above it, which keeps a style panel within
+       a screen. The split itself is built in Python (controls._labeled, one
        `st.columns` per row) precisely so it does not depend on Streamlit's own
        label DOM; all this rule set owns is how the title TEXT behaves inside the
        column we made for it.
        It must never wrap — a two-line title would push its own field down and
-       undo the compaction — so it truncates instead, and hands the full text to
-       the browser's native hover title. That title is also where the `?` tooltip
-       went: the help text is appended to it, which buys back the icon's width on
-       every row. Scoped to our own class name, so it cannot reach any other
-       widget label in the app. */
-    /* UX-53: a wizard topic heading. It replaced a per-topic expander, so it has
-       to read as a divider *and* cost about one line — hence the rule above it
-       rather than padding around it. Not an `<h4>`: the Data page keeps its four
-       stage headings as the only h3/h4s (#UX-52). */
+       undo the compaction — so it truncates instead, and the full text, with the
+       help appended, shows in the row's hover tooltip (`.sps-fhelp`, below),
+       which buys back the `?` icon's width on every row. Scoped to our own class
+       name, so it cannot reach any other widget label in the app. */
+    /* A wizard topic heading. It has to read as a divider *and* cost
+       about one line — hence the rule above it rather than padding around it.
+       Not an `<h4>`: the Data page keeps its stage headings as the only
+       h3/h4s. */
     .sps-wiz-section {
-        /* UX-90: the bottom margin was 0.15rem, which Streamlit's own negative
-           block gap ate entirely — the heading and the first control's label
-           overlapped. A heading has to clear what it names. */
+        /* A smaller bottom margin is eaten entirely by Streamlit's own
+           negative block gap, and the heading overlaps the first control's label.
+           A heading has to clear what it names. */
         margin: 0.85rem 0 0.6rem;
         padding-top: 0.55rem;
         border-top: 1px solid rgba(128, 128, 128, 0.22);
@@ -1328,21 +1297,21 @@ def get_app_css() -> str:
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        /* Match the widget labels this replaced (see the VIZ-2 block below). */
+        /* Match Streamlit's widget labels (see the small-text block below). */
         font-size: 0.92rem;
         line-height: 1.4;
     }
-    /* A row whose title carries help. The dotted underline is the only remaining
-       hint that there is something to hover, now that the `?` icon is folded
-       into the title itself. */
-    /* UX-158 — a row's caption inside a titled group of rows (`controls._sub_row`):
+    /* A row whose title carries help. The dotted underline is the only hint
+       that there is something to hover: the `?` icon is folded into the title
+       itself. */
+    /* A row's caption inside a titled group of rows (`controls._sub_row`):
        the group's title leads the first row, and each row's own caption is
        quieter so the title still reads as the heading of the run. */
     .sps-fsub {
         font-size: 0.85rem;
         opacity: 0.72;
     }
-    /* UX-158/159 — a rail popover's rows (`controls._popover_rows`), a little
+    /* A rail popover's rows (`controls._popover_rows`), a little
        further apart than the app-wide gap:0 (the later rule wins the tie). */
     div[class*="st-key-rail_rows_"] { gap: 0.5rem !important; }
     .sps-flabel-help {
@@ -1351,7 +1320,7 @@ def get_app_css() -> str:
         text-underline-offset: 3px;
         cursor: help;
     }
-    /* UX-113 — a title that should stand out among plainer field titles on the
+    /* A title that should stand out among plainer field titles on the
        same screen (the upload wizard's own table titles: Fixations, Words/IA,
        Raw gaze, Participant/Trial metadata). Bolder and a touch larger than
        the ordinary `.sps-flabel`, short of a full heading. */
@@ -1359,17 +1328,17 @@ def get_app_css() -> str:
         font-weight: 700;
         font-size: 1.05rem;
     }
-    /* UX-129 — the wizard's "Metadata" sub-heading (over the Participants /
-       Trials / Texts rows) shares `.sps-flabel-emph` with the Fixations /
-       AOI / Raw gaze table titles above it, which made it read as a fourth
-       table name rather than the section label for the three below it.
+    /* The wizard's "Metadata" sub-heading (over the Participants /
+       Trials / Texts rows). On `.sps-flabel-emph` alone, like the Fixations /
+       AOI / Raw gaze table titles above it, it would read as a fourth table
+       name rather than the section label for the three below it.
        Confined to the left (name) column in wizard.py and centered within
        it here, rather than the full row — this heading belongs with the
        titles underneath it, not the wide mapping side. Bolder and a size up
        from `.sps-flabel-emph` itself (not down) and in the app's accent
        color: it introduces three titles at once, so it reads as *more*
        prominent than any one of them, not less. The tooltip re-centers with
-       it so it still opens under the (now centered) text. */
+       it so it still opens under the centered text. */
        A prefix match, not the exact class: the ✏️ Edit dataset screen draws the
        same three rows under the same heading (`wiz_map_meta_heading_edit` — a
        key may be used once per run, and the offscreen editor is built even
@@ -1388,8 +1357,8 @@ def get_app_css() -> str:
         left: 50%;
         transform: translateX(-50%);
     }
-    /* …and the tooltip it opens. Deliberately NOT the browser's native `title=`
-       (UX-51 shipped that first): a native tooltip waits about a second, which
+    /* …and the tooltip it opens. Deliberately NOT the browser's native `title=`:
+       a native tooltip waits about a second, which
        reads as broken when every row in a dense form keeps its description
        there. This one opens in 120 ms — the same feel as the `?` icons
        Streamlit draws elsewhere, which sit on Base Web's 200 ms default.
@@ -1402,12 +1371,12 @@ def get_app_css() -> str:
         display: block;
         max-width: 100%;
     }
-    /* BUG-91: the box exists only while it is shown. It used to sit there at
-       `opacity: 0` all the time, and an absolutely-positioned box still counts
-       towards its scroll container's overflow — so a long tooltip on a popover's
-       last rows let the popover scroll down into empty space. `content: none`
-       removes the box outright; the fade is an animation that starts once it is
-       created, not an opacity transition on a box that is always there. */
+    /* The box exists only while it is shown: an absolutely-positioned
+       box at `opacity: 0` still counts towards its scroll container's
+       overflow, so a long tooltip on a popover's last rows would let the
+       popover scroll down into empty space. `content: none` removes the box
+       outright; the fade is an animation that starts once it is created, not
+       an opacity transition on a box that is always there. */
     .sps-fhelp::after {
         content: none;
         position: absolute;
@@ -1437,17 +1406,17 @@ def get_app_css() -> str:
         from { opacity: 0; }
         to { opacity: 1; }
     }
-    /* #422 — above the title instead, where the box that clips it (a rail
+    /* Above the title instead, where the box that clips it (a rail
        popover, the page) has no room below: `app._FIELD_TIP_PLACEMENT_SCRIPT`
-       sets the class on hover. Opened below there, a popover's last rows made
-       it scroll while the tip showed, and a scrollbar that takes room shook
-       the whole popover. */
+       sets the class on hover. Opened below there, a popover's last rows would
+       make it scroll while the tip shows, and a scrollbar that takes room
+       shakes the whole popover. */
     .sps-fhelp.sps-tip-up::after {
         top: auto;
         bottom: calc(100% + 0.3rem);
     }
 
-    /* UX-53 round 3 — the wizard's descriptive prose is hover-only, so it reuses
+    /* The wizard's descriptive prose is hover-only, so it reuses
        the tooltip above. Two adjustments for this context: the carrier is a
        heading or a short chip rather than a full-width field label, so it hugs
        its text instead of filling the row; and it needs a visible cue that
@@ -1464,13 +1433,13 @@ def get_app_css() -> str:
         cursor: help;
     }
     .sps-wiz-note {
-        margin: 0.1rem 0 0.5rem;  /* UX-90 */
+        margin: 0.1rem 0 0.5rem;
         font-size: 0.86rem;
         opacity: 0.85;
     }
     .sps-wiz-note a { text-decoration: none; }
 
-    /* UX-53 round 8 — a wizard part's headline. The two parts are linear, so
+    /* A wizard part's headline. The parts are linear, so
        this labels rather than navigates: one line, a numbered chip, and a rule
        to separate it from the part above. Heavier than `.sps-wiz-section` (its
        topics sit *inside* a part) and lighter than a real heading, since the
@@ -1479,7 +1448,7 @@ def get_app_css() -> str:
         display: flex;
         align-items: center;
         gap: 0.45rem;
-        margin: 1rem 0 0.6rem;  /* UX-90 — same collision as the section rule */
+        margin: 1rem 0 0.6rem;  /* the same collision as `.sps-wiz-section`'s margin */
         padding-top: 0.6rem;
         border-top: 2px solid rgba(128, 128, 128, 0.28);
         font-weight: 700;
@@ -1497,7 +1466,7 @@ def get_app_css() -> str:
         font-size: 0.8rem;
         font-weight: 700;
     }
-    /* UX-113 — `_FOOTER_ROW_W`'s compact desktop ratio (1.4 : 1.4 : 8 rest,
+    /* `_FOOTER_ROW_W`'s compact desktop ratio (1.4 : 1.4 : 8 rest,
        matching the ✕ Cancel width elsewhere) gives each button column too few
        pixels to keep "Download setup file" / "Add dataset" on one line, at any width
        (not only a mobile one — the ratio itself is the problem). Streamlit
@@ -1533,7 +1502,7 @@ def get_app_css() -> str:
         min-width: 0 !important;
         padding: 0 !important;
     }
-    /* UX-113 — real breathing room around the footer's own divider, on both
+    /* Real breathing room around the footer's own divider, on both
        sides: Streamlit's default `st.divider()` margin reads as barely more
        than the mapping blocks' own tight `.sps-wiz-blockgap` hairline, which
        undersells that this line is the boundary before the page's one commit,
@@ -1546,7 +1515,7 @@ def get_app_css() -> str:
     /* The dataset name leads the wizard and names the whole thing, so it is set
        larger than an ordinary field rather than looking like the first of them.
        Its label is the part's own title, so the box gets the room under that
-       title a label would have taken — it sat pressed against it. */
+       title a label would have taken, rather than sitting pressed against it. */
     .st-key-wiz_name_box { margin-top: 1rem; }
     .st-key-wiz_name_box input {
         font-size: 1.05rem;
@@ -1556,19 +1525,19 @@ def get_app_css() -> str:
     }
     .st-key-wiz_name_box label p { font-weight: 700; }
 
-    /* UX-119 — a wizard table upload's "👁️ Preview" trigger + its row/column
+    /* A wizard table upload's "👁️ Preview" trigger + its row/column
        count caption pack together with no gap, the same trick `railbtn_*`
        uses: turn the container into a packed flex ROW and let the trigger
        hug its own content instead of Streamlit's default one-child-per-row,
-       full-width stacking. `st.columns` was tried first and rejected — a
-       ratio-based column reserves its ratio's share of the row regardless of
-       its content's own `width="content"` sizing, which is what left a gap
-       between an icon-sized button and the caption a whole column over.
-       UX-123: this container is now also the narrow `wiz_map_upload_*` name
-       column (UX-122), so the count caption — the last child, whether or not
-       the trigger rendered before it — wraps onto its own line(s) instead of
-       overflowing: `flex: 1 1 auto; min-width: 0` lets it shrink below its
-       one-line width, which is what lets it wrap at all. */
+       full-width stacking. Not `st.columns`: a ratio-based column reserves
+       its ratio's share of the row regardless of its content's own
+       `width="content"` sizing, which leaves a gap between an icon-sized
+       button and the caption a whole column over.
+       This container is also the narrow `wiz_map_upload_*` name column, so
+       the count caption — the last child, whether or not the trigger rendered
+       before it — wraps onto its own line(s) instead of overflowing:
+       `flex: 1 1 auto; min-width: 0` lets it shrink below its one-line width,
+       which is what lets it wrap at all. */
     [class*="st-key-wiz_upload_stats_"] {
         flex-direction: row;
         flex-wrap: wrap;
@@ -1590,40 +1559,32 @@ def get_app_css() -> str:
         margin-left: 0.35rem !important;
     }
 
-    /* UX-122 — each Fixations/AOI/Raw gaze row's own uploader sits where the
-       row's plain name label used to; a thin rule (not the full column gap
-       either side of it) marks it off from the field-mapping pickers that
-       follow. UX-125: `st.columns(vertical_alignment="center")` centers the
-       *column*, not the stack of title/uploader/caption inside it against
-       the block's full height — and that column is only row 1's own height,
-       shorter than the uploader itself, so centering it was a no-op. The
-       uploader now floats free of row 1 entirely: `wiz_map_block_*`
-       (`fix_block`/`words_block`/raw gaze's own `s3`, wrapping row 1 + row 2
-       + the keep-picker) is the positioning parent, and the upload column is
-       an absolutely-positioned overlay spanning and centering against that
-       *whole* block — row 1's own first cell stays reserved (unchanged
-       width, so the pickers beside it don't move) but empty, since its
-       content now lives in the overlay instead. The border-right rides
-       along for the full block height as a side effect, reading as one
-       continuous divider rather than just row 1's own short one. */
-    /* UX-127: before any file is uploaded, row 1's remaining cells (the
-       picker columns — nothing to map yet) are empty, and the uploader that
-       used to hold row 1's own height now lives in an absolutely-positioned
-       overlay (see below) that contributes nothing to normal flow. Left
-       alone the block collapsed to a few px of padding, and the overlay's
-       `overflow: hidden` then clipped the title + Browse-files button down
-       to that same sliver — the "looks awful when closed" bug. A min-height
-       covering the title + collapsed dropzone (measured ~54px) keeps the
-       block, and so the overlay it sizes itself against, tall enough to
-       show the uploader whole even with nothing uploaded yet — measured at
-       ~92px (title + the collapsed-instructions dropzone), rounded up with
-       a little breathing room.
-       UX-129: 104px -> 128px — the overlay centers its content
-       (`justify-content: center`) against the *whole* block height, and the
-       title + collapsed dropzone measure ~96px on their own, so 104px left
-       only ~2px above the title and ~6px below the button: close enough to
-       read as the title being cut off at the top of its block, not merely
-       "close to the edge". 128px leaves a real ~16px on each side. */
+    /* Each Fixations/AOI/Raw gaze row's own uploader sits in the row's
+       name column; a thin rule (not the full column gap either side of it)
+       marks it off from the field-mapping pickers that follow.
+       `st.columns(vertical_alignment="center")` would center the *column*, not
+       the stack of title/uploader/caption inside it against the block's full
+       height — and that column is only row 1's own height, shorter than the
+       uploader itself. So the uploader floats free of row 1 entirely:
+       `wiz_map_block_*` (`fix_block`/`words_block`/raw gaze's own `s3`,
+       wrapping row 1 + row 2 + the keep-picker) is the positioning parent, and
+       the upload column is an absolutely-positioned overlay spanning and
+       centering against that *whole* block — row 1's own first cell stays
+       reserved (so the pickers beside it don't move) but empty, since its
+       content lives in the overlay. The border-right rides along for the full
+       block height, reading as one continuous divider rather than just row
+       1's own short one. */
+    /* Before any file is uploaded, row 1's remaining cells (the
+       picker columns — nothing to map yet) are empty, and the uploader lives
+       in an absolutely-positioned overlay (see below) that contributes nothing
+       to normal flow. Left alone the block would collapse to a few px of
+       padding, and the overlay's `overflow: hidden` would clip the title +
+       Browse-files button down to that same sliver. The min-height keeps the
+       block, and so the overlay it sizes itself against, tall enough to show
+       the uploader whole even with nothing uploaded yet: the overlay centers
+       its content (`justify-content: center`) against the *whole* block
+       height, and the title + collapsed dropzone measure ~96px on their own,
+       so 128px leaves ~16px on each side. */
     [class*="st-key-wiz_map_block_"] {
         position: relative;
         min-height: 128px;
@@ -1633,44 +1594,41 @@ def get_app_css() -> str:
         top: 0;
         bottom: 0;
         left: 0;
-        /* UX-127: widened from 9% to match `_MAP_ROW_W`/`_META_ROW_W`'s own
-           widened first cell in wizard.py (0.09 -> 0.135) — the Browse-files
-           button didn't fit at 9%. */
+        /* A little narrower than the row's first cell (`_MAP_ROW_W` in
+           wizard.py), which leaves the divider room on the picker side, and wide
+           enough for the Browse-files button. */
         width: 13.5%;
         border-right: 1px solid rgba(128, 128, 128, 0.3);
-        /* UX-129: 0.5rem -> 0.65rem, paired with wizard.py's `_MAP_ROW_W`
-           (and its row-2/meta siblings) widening from 0.135 to 0.155 — that
-           gives the divider room on the picker side, this gives it room on
-           the upload side, so the line no longer reads as glued to either
-           the Browse-files button or the first mapping field. */
+        /* Room for the divider on the upload side, so the line reads as
+           glued to neither the Browse-files button nor the first mapping field. */
         padding-right: 0.65rem;
         display: flex;
         flex-direction: column;
         justify-content: center;
         overflow: hidden;
     }
-    /* UX-129 — the title's own `.sps-fhelp` tooltip (the row's `emphasis=True`
+    /* The title's own `.sps-fhelp` tooltip (the row's `emphasis=True`
        title, e.g. "Fixations") lives inside this same `overflow: hidden` box,
-       so its `::after` popup got clipped to the ~13.5%-wide column the
+       so its `::after` popup would be clipped to the ~13.5%-wide column the
        moment it tried to render past that edge — cut off mid-sentence
        instead of floating over the mapping fields like every other tooltip
        on the page. `overflow: hidden` still has to stay the *default* here
        (it is what keeps the native dropzone/Browse-files button from
-       spilling into the mapping columns at this width — see UX-127 above),
+       spilling into the mapping columns at this width — see above),
        so this only lifts it while the tooltip itself is open, via `:has()`,
        rather than removing it outright. */
     [class*="st-key-wiz_map_upload_"]:has(.sps-fhelp:hover),
     [class*="st-key-wiz_map_upload_"]:has(.sps-fhelp:focus-within) {
         overflow: visible;
     }
-    /* UX-147 — a metadata row (Participants / Trials / Texts, on ➕ Add and
+    /* A metadata row (Participants / Trials / Texts, on ➕ Add and
        ✏️ Edit alike) is one row, so its upload column needs no overlay to
        span the block: it is the row's own first column. Left absolute, the
-       column was only as tall as the id + keep pickers beside it, and an
-       attached file (chip + preview + row counts) outgrew it — centering then
-       pushed the title above the top edge, where `overflow: hidden` cut it
-       off. In normal flow the row grows to fit instead. `overflow-x: clip`
-       keeps UX-127's guard against the dropzone spilling sideways without
+       column would be only as tall as the id + keep pickers beside it, and an
+       attached file (chip + preview + row counts) outgrows that — centering
+       then pushes the title above the top edge, where `overflow: hidden` cuts
+       it off. In normal flow the row grows to fit instead. `overflow-x: clip`
+       keeps the guard against the dropzone spilling sideways without
        clipping vertically (`hidden` on one axis would force the other to
        scroll); the column stretches so the divider still runs the row's full
        height. */
@@ -1684,14 +1642,14 @@ def get_app_css() -> str:
     [data-testid="stColumn"]:has([class*="st-key-wiz_map_upload_meta_"]) {
         align-self: stretch;
     }
-    /* UX-124 — the "5GB per file • CSV, TSV, …" line `st.file_uploader`
+    /* The "5GB per file • CSV, TSV, …" line `st.file_uploader`
        prints under its own dropzone doesn't fit this width; the same
-       information now reaches the title's hover tooltip instead (appended to
+       information reaches the title's hover tooltip instead (appended to
        `help_text` in wizard.py). */
     [class*="st-key-wiz_map_upload_"] [data-testid="stFileUploaderDropzoneInstructions"] {
         display: none;
     }
-    /* 2026-10-09 — before a file is in, the Fixations / Words / Raw gaze
+    /* Before a file is in, the Fixations / Words / Raw gaze
        uploader is a real drop target the height of its row, not a lone
        button: its row is otherwise empty, and a small box is easy to miss.
        It shrinks back to the button once a file is there. */
@@ -1712,10 +1670,10 @@ def get_app_css() -> str:
         font-size: 0.78rem;
         opacity: 0.7;
     }
-    /* UX-124 — the uploaded-file chip is sized for a full-width column; in
-       this ~9%-wide one it clipped outright rather than shrinking (its
+    /* The uploaded-file chip is sized for a full-width column; in
+       this narrow one it would be clipped outright rather than shrink (its
        `stFileChips` wrapper has its own `overflow: hidden`, so the chip's
-       natural ~140px width just got cut, delete button and all). Shrink the
+       natural ~140px width gets cut, delete button and all). Shrink the
        icon and the delete button, tighten the chip's own padding, and let it
        use the column's full width instead of a fixed one — the filename
        stays truncated with an ellipsis (`stFileChipName` already carries the
@@ -1752,15 +1710,14 @@ def get_app_css() -> str:
         height: 10px !important;
     }
 
-    /* UX-62 r2 — the header wordmark. `st.logo`'s only sizing control is
+    /* The header wordmark. `st.logo`'s only sizing control is
        small/medium/large, and even `large` leaves it small beside the nav, in a
        link that carries its own padding. So the height is set here instead, and
-       the wrapper's spacing zeroed — "get rid of the white margins around it".
+       the wrapper's spacing zeroed.
 
-       The other half of that margin was baked into the PNG (36 px either side,
-       24% of the canvas) and was cropped out of the file itself; CSS cannot
-       reach inside an image. Sized in `rem` so it tracks the browser's text
-       size rather than pinning to one display. */
+       The PNG itself is cropped tight: CSS cannot reach a margin inside an
+       image. Sized in `rem` so it tracks the browser's text size rather than
+       pinning to one display. */
     [data-testid="stLogo"] {
         height: 2.75rem !important;
         max-height: none !important;
@@ -1779,7 +1736,7 @@ def get_app_css() -> str:
        with a taller mark it leaves a gap the nav then starts after. */
     [data-testid="stLogoSpacer"] { display: none !important; }
 
-    /* UX-66 — the add-dataset screen's one permanent row: title, guide, docs
+    /* The add-dataset screen's one permanent row: title, guide, docs
        link, cancel. It stays put while the page scrolls.
 
        `top` clears Streamlit's own header strip, which occupies the top of the
@@ -1792,9 +1749,10 @@ def get_app_css() -> str:
 
        The sticky element is the bar's `stLayoutWrapper`, not the keyed block
        itself: a sticky box only travels inside its parent, and the wrapper is
-       exactly the bar's height, so a sticky *bar* scrolled away with the page. */
-    /* DATA-35 — the ✏️ Edit dataset screen wears the add-dataset screen's bar,
-       because the ask was that the two look the same. Same rule, two keys. */
+       exactly the bar's height, so a sticky *bar* would scroll away with the
+       page. */
+    /* The ✏️ Edit dataset screen wears the add-dataset screen's bar, so
+       the two look the same. Same rule, two keys. */
     [data-testid="stLayoutWrapper"]:has(> .st-key-dataset_editor_bar),
     [data-testid="stLayoutWrapper"]:has(> .st-key-wiz_sticky_bar) {
         position: sticky;
@@ -1816,15 +1774,15 @@ def get_app_css() -> str:
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    /* "get rid of all white spaces and margins at the top and bottom" — the
-       page's own padding, and the gap Streamlit leaves under the last block. */
+    /* No white space at the top and bottom: the page's own padding, and
+       the gap Streamlit leaves under the last block. */
     .st-key-data_setup_page > div:first-child { margin-top: 0 !important; }
     .st-key-data_setup_page > div:last-child { margin-bottom: 0 !important; }
 
-    /* UX-55 — a sub-group heading inside a wizard section (AOI features, Raw
-       gaze features). Lighter and tighter than the bold markdown it replaced:
-       the section above it already carries the weight, and these only need to
-       separate one table's fields from the next. */
+    /* A sub-group heading inside a wizard section (AOI features, Raw
+       gaze features). Lighter and tighter than bold markdown: the section
+       above it already carries the weight, and these only need to separate
+       one table's fields from the next. */
     .sps-wiz-subhead {
         margin: 0.5rem 0 0.1rem;
         padding-top: 0.35rem;
@@ -1834,7 +1792,7 @@ def get_app_css() -> str:
         opacity: 0.85;
     }
 
-    /* UX-57 — the Word box heading. It labels a group (a format radio plus a
+    /* The Word box heading. It labels a group (a format radio plus a
        row of four coordinates), so it is set like the other group headings
        rather than like a field label, and its description is on hover. */
     .sps-box-title {
@@ -1843,11 +1801,11 @@ def get_app_css() -> str:
         margin: 0.2rem 0 0.15rem;
     }
 
-    /* UX-53 r15 — the table name at the head of an identity row. It labels the
+    /* The table name at the head of an identity row. It labels the
        line once so the three field titles beside it need not each repeat it,
        and it sits on the titles' baseline rather than the controls'. */
     .sps-id-row-name {
-        padding-bottom: 0.3rem;  /* UX-90 — clear of the fields it names */
+        padding-bottom: 0.3rem;  /* clear of the fields it names */
         font-weight: 700;
         font-size: 0.9rem;
         opacity: 0.85;
@@ -1855,14 +1813,14 @@ def get_app_css() -> str:
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    /* UX-55 r2 — the same name column on the geometry rows, sitting on the
+    /* The same name column on the geometry rows, sitting on the
        selects' baseline (their own titles are stacked above them). */
     .sps-geo-row-name { padding-bottom: 0.45rem; }
 
-    /* UX-92 — the ✨ flag is a button while its row is amber (pressing it is
+    /* The ✨ flag is a button while its row is amber (pressing it is
        the "I chose this" that a same-value re-pick cannot report). It has to
-       keep reading as the icon it replaced: no chrome, no button box, no width
-       of its own — only the pointer and a lift on hover say it is pressable. */
+       keep reading as an icon: no chrome, no button box, no width of its own —
+       only the pointer and a lift on hover say it is pressable. */
     [class*="st-key-"][class*="_cell_confirm"] button {
         min-height: 0;
         padding: 0;
@@ -1876,21 +1834,21 @@ def get_app_css() -> str:
     }
     [class*="st-key-"][class*="_cell_confirm"] button p { font-size: 0.95rem; }
 
-    /* UX-89 — the hairline between the Fixations block and the AOI block (and,
-       since UX-113, every other block boundary in stage 3: filename-derive vs.
+    /* The hairline between the Fixations block and the AOI block, and
+       every other block boundary in the mapping part (filename-derive vs.
        Fixations, Raw gaze vs. whatever sits above it). The mapping is grouped
-       by *table* now (each table's identity row and its feature row together),
+       by *table* (each table's identity row and its feature row together),
        so the only thing separating two blocks is this: one line, deliberately
        fainter and far tighter than `st.divider`, whose margins would
-       reintroduce the vertical cost the page keeps fighting. UX-113 gave it
-       more room underneath, so the line reads as a clear break between blocks
-       rather than sitting glued to the one below it. */
+       reintroduce the vertical cost the page keeps fighting. The room
+       underneath makes the line read as a clear break between blocks rather
+       than sitting glued to the one below it. */
     .sps-wiz-blockgap {
         border-top: 1px solid var(--sps-line, rgba(128, 128, 128, 0.22));
         margin: 0.55rem 0 1rem;
     }
 
-    /* AN-32 — the Corpus Analysis page with no reading measures to show: its
+    /* The Corpus Analysis page with no reading measures to show: its
        sections, drawn as a grayed tab strip so what it offers stays visible. */
     .sps-corpus-off {
         display: flex;
@@ -1903,7 +1861,7 @@ def get_app_css() -> str:
         user-select: none;
     }
 
-    /* UX-113 — the filename-derive row's Apply button: a gentle tint of the
+    /* The filename-derive row's Apply button: a gentle tint of the
        app's own accent (the same tokens the code chips and tab hover use),
        not the loud filled `primary` blue reserved for the page's one commit
        (✅ Add dataset). */
@@ -1918,26 +1876,25 @@ def get_app_css() -> str:
         color: var(--sps-accent);
     }
 
-    /* UX-72 — the two halves of the rail's Filters & highlights section. A rule and a
-       small label: enough to group, cheap in height. (UX-74 briefly used this
-       for every section's contents and was reverted — the sections read better
-       with their `⚙️ …` popovers.) */
+    /* A block heading inside a rail popover (the two halves of Filters &
+       highlights, the groups of 📐 Figure & canvas). A rule and a small label:
+       enough to group, cheap in height. */
     .sps-rail-subhead {
-        /* UX-191: above the rows' 0.9rem labels, so a block's title outranks
+        /* Above the rows' 0.9rem labels, so a block's title outranks
            its own fields instead of reading as a footnote to them. */
         font-size: 0.95rem;
         font-weight: 700;
         letter-spacing: 0.01em;
         opacity: 0.8;
         /* More room above than below, so the label still reads as belonging to
-           the block under it — but 0.15rem below put "🖥️ Screen & framing"
-           almost on the baseline of the "Show full monitor" switch, which made
-           the two look like one control. */
+           the block under it — but with much less below, "🖥️ Screen & framing"
+           sits almost on the baseline of the "Show full monitor" switch, and the
+           two look like one control. */
         margin: 0.8rem 0 0.45rem;
         padding-top: 0.4rem;
         border-top: 1px solid rgba(128, 128, 128, 0.28);
     }
-    /* #422 — the block that opens a popover (Screen & framing in Figure &
+    /* The block that opens a popover (Screen & framing in Figure &
        canvas, Fixations in Filters & highlights) needs no rule above it: the
        popover's own edge is the boundary. `_rail_subsection(first=True)` marks
        it, since the popover body is drawn apart from the rail row's keyed
@@ -1948,10 +1905,10 @@ def get_app_css() -> str:
         margin-top: 0.1rem;
     }
 
-    /* UX-71 — see `mapping_menu_css()` below: the option list is widened only
+    /* See `mapping_menu_css()` below: the option list is widened only
        on the two mapping surfaces, so this global sheet leaves dropdowns alone. */
 
-    /* UX-138 — `constants.icon_html`: a Material Symbols glyph inside raw HTML,
+    /* `constants.icon_html`: a Material Symbols glyph inside raw HTML,
        where a `:material/…:` shortcode is inert. Same font Streamlit loads for
        its own icons; the span's text is the ligature (the icon's name). */
     .sps-icon {
@@ -1968,10 +1925,10 @@ def get_app_css() -> str:
         vertical-align: -0.2em;
         user-select: none;
     }
-    /* UX-53 round 4 — the auto-detection flag beside a mapping row is the ✨ and
-       nothing else; which column was detected is on its tooltip. The old inline
-       sentence ("✨ auto-detected `CURRENT_FIX_INDEX`") ran wider than the
-       select it annotated, on every row. */
+    /* The auto-detection flag beside a mapping row is the ✨ and
+       nothing else; which column was detected is on its tooltip. An inline
+       sentence ("✨ auto-detected `CURRENT_FIX_INDEX`") would run wider than
+       the select it annotates, on every row. */
     .sps-map-flag {
         display: inline-block;
         font-size: 0.85rem;
@@ -2023,21 +1980,20 @@ def get_app_css() -> str:
     }
 
     /* Control rail: set off from the plot by one hairline on its left edge, on
-       the page's own background — UX-151 retired the tinted, bordered card,
-       whose fill put a second surface behind rows that already carry their own
-       outline. A hair more breathing room between the stacked toggles than the
-       app-wide gap:0 rule. UX-173 keeps the controls in page flow, beside both
-       the plot and its subtabs, so every control can use the space below the
-       figure without a nested scrollbar. */
+       the page's own background — not a tinted, bordered card, whose fill would
+       put a second surface behind rows that already carry their own outline. A
+       hair more breathing room between the stacked toggles than the app-wide
+       gap:0 rule. The controls stay in page flow, beside both the plot and its
+       subtabs, so every control can use the space below the figure without a
+       nested scrollbar. */
     .st-key-scanpath_rail {
         border-left: 1px solid var(--sps-border);
         padding: 0.1rem 0.35rem 1.5rem 1rem;
         box-sizing: border-box;
-        /* UX-29: lets the Quick-view rule below query the rail's own rendered
+        /* Lets the Quick-view rule below query the rail's own rendered
            width, not the viewport's — the rail is a fraction of the row, so its
            width changes with the window without necessarily crossing a viewport
-           breakpoint. (It used to swing with the sidebar opening and closing
-           too; that is gone, but querying the rail is still the right test.) */
+           breakpoint. */
         container-type: inline-size;
         container-name: sps-rail;
     }
@@ -2046,14 +2002,13 @@ def get_app_css() -> str:
     /* Section dividers default to 32px top+bottom margin — far too airy for the
        narrow rail. Tighten them so the sections sit close together. */
     .st-key-scanpath_rail hr { margin: 0.5rem 0 !important; }
-    /* #422 — the palette divider sits midway between the Palette box and the
-       Fixations card, ~0.55rem from each, instead of a rem below the box and
-       half that above the card. Its own margins are zeroed — the rule's, and
-       its markdown wrapper's (Streamlit's -1rem that cancels a paragraph's
-       margin, which with the rule's margins made the space lopsided) — so the
-       rail's gap and the app-wide 0.25rem under each block set the space
-       above it; the 0.2rem below makes up for the layer rows sitting a little
-       closer than other blocks do. */
+    /* The palette divider sits midway between the Palette box and the
+       Fixations card, ~0.55rem from each. Its own margins are zeroed — the
+       rule's, and its markdown wrapper's (Streamlit's -1rem that cancels a
+       paragraph's margin, which with the rule's margins would make the space
+       lopsided) — so the rail's gap and the app-wide 0.25rem under each block
+       set the space above it; the 0.2rem below makes up for the layer rows
+       sitting a little closer than other blocks do. */
     .st-key-scanpath_rail .st-key-palette_layers_divider > div,
     .st-key-scanpath_rail .st-key-palette_layers_divider
         [data-testid="stMarkdownContainer"],
@@ -2074,7 +2029,7 @@ def get_app_css() -> str:
         padding-top: 0.25rem;
         padding-bottom: 0.25rem;
     }
-    /* #422: the presets' height, not 3rem — one line of label needs no more. */
+    /* The presets' height — one line of label needs no more. */
     .st-key-scanpath_rail .st-key-reset_viz_settings_btn button {
         min-height: 2.6rem;
     }
@@ -2088,14 +2043,14 @@ def get_app_css() -> str:
         width: 100%;
         justify-content: flex-start;
     }
-    /* VIZ-31 layer groups (👁️ Scanpath / 📄 Stimulus / 🔥 Overlays / 🖥️ Canvas &
-       text / 📐 Figure & canvas). Streamlit gives the expander label
-       `word-break: break-word`, which in a rail this narrow snaps the header
-       mid-word ("Scanpa\nth") — the same defect the nowrap rule above prevents
-       for toggle labels. Break at spaces only, and give the label the row's
-       spare width (the chevron is a fixed-size flex sibling, so the label needs
-       `min-width: 0` to be allowed to use it). Trimmed side padding buys back
-       ~16px, which is what keeps these headers on one line at real rail widths. */
+    /* The rail's expanders (e.g. 🎨 My designs). Streamlit gives the
+       expander label `word-break: break-word`, which in a rail this narrow
+       snaps the header mid-word — the same defect the nowrap rule above
+       prevents for toggle labels. Break at spaces only, and give the label the
+       row's spare width (the chevron is a fixed-size flex sibling, so the label
+       needs `min-width: 0` to be allowed to use it). Trimmed side padding buys
+       back ~16px, which is what keeps these headers on one line at real rail
+       widths. */
     .st-key-scanpath_rail [data-testid="stExpander"] summary {
         padding-left: 0.35rem;
         padding-right: 0.35rem;
@@ -2106,11 +2061,10 @@ def get_app_css() -> str:
         flex: 1 1 auto;
         min-width: 0;
     }
-    /* A group's contents are inset 16px per side by default. Nesting the layer
-       toggles one level deeper means that inset now comes out of an already
-       narrow column — enough to clip the full-width popover triggers ("⚙️
-       Fixation styl…") against the card edge. Give it back most of the width;
-       the group's own border still reads as the grouping. */
+    /* An expander's contents are inset 16px per side by default, which
+       comes out of an already narrow column — enough to clip full-width popover
+       triggers against the card edge. Give it back most of the width; the
+       expander's own border still reads as the grouping. */
     .st-key-scanpath_rail [data-testid="stExpanderDetails"] {
         padding-left: 0.4rem;
         padding-right: 0.4rem;
@@ -2134,7 +2088,7 @@ def get_app_css() -> str:
         padding-top: 0.45rem;
         margin-bottom: 0.05rem;
     }
-    /* #422 — the grid's two rows are as far apart as its two columns
+    /* The grid's two rows are as far apart as its two columns
        (`gap="small"`, 0.4rem), not twice that: the rail's 0.3rem gap plus the
        app-wide 0.25rem under each block, twice over. The key sits on the
        vertical block itself, so the rule names it, not a child of it. */
@@ -2146,7 +2100,7 @@ def get_app_css() -> str:
         [data-testid="stVerticalBlock"] > div {
         margin-bottom: 0 !important;
     }
-    /* VIZ-39 — 🎨 My designs. 💾 Save is drawn *into* the expander's own title
+    /* 🎨 My designs. 💾 Save is drawn *into* the expander's own title
        bar: `design_shell` is the positioning context, and the header row's
        right-hand side is empty (the chevron sits left), so the list underneath
        keeps the full width of the rail instead of losing a fifth of it to one
@@ -2154,7 +2108,7 @@ def get_app_css() -> str:
     .st-key-scanpath_rail .st-key-design_shell {
         position: relative;
     }
-    /* #422 — one inset, 0.6rem, on every side of the open list, and the title
+    /* One inset, 0.6rem, on every side of the open list, and the title
        row on the same lines: the chevron's glyph starts 0.6rem in (the summary's
        0.35rem padding plus the glyph's own side bearing), so the cards and the
        Export / Import row start under it, and 💾 ends where they end. */
@@ -2172,7 +2126,7 @@ def get_app_css() -> str:
         height: 1.9rem;
         padding: 0 0.4rem;
     }
-    /* Keep the title itself clear of the button it now shares a line with. */
+    /* Keep the title itself clear of the button it shares a line with. */
     .st-key-scanpath_rail .st-key-design_shell summary {
         padding-right: 3.4rem;
     }
@@ -2210,7 +2164,7 @@ def get_app_css() -> str:
         padding: 0.1rem 0.3rem;
         justify-content: center;
     }
-    /* #422: a design's name starts at the card's left edge, as a list's names
+    /* A design's name starts at the card's left edge, as a list's names
        do, rather than floating mid-cell beside its two icons. */
     .st-key-scanpath_rail [class*="st-key-design_apply_"] button,
     .st-key-scanpath_rail [class*="st-key-design_apply_"] button > div {
@@ -2249,12 +2203,10 @@ def get_app_css() -> str:
         min-height: 0;
     }
     /* The 2×2 Quick-view grid keeps full labels at ordinary rail widths and
-       falls back to icons only at the narrowest size. UX-138: the label's own
-       Material icon is what stays — the text collapses around it — so the
-       fallback no longer re-draws each glyph from a `content:` rule.
-       UX-194: the rail is a fifth of the row, and these queries measure its
-       *content* box — 191px on a 1280px laptop — so the old 320px cut-off hid
-       the names on any window narrower than ~1800px. The full-size label
+       falls back to icons only at the narrowest size: the label's own
+       Material icon is what stays — the text collapses around it.
+       The rail is a fifth of the row, and these queries measure its
+       *content* box — 191px on a 1280px laptop. The full-size label
        needs ~240px ("✎ Illustration", the longest, is 84px at 14px plus 12px
        padding a side); under that the buttons tighten (padding, gap, a point
        smaller: 75px), which holds one line down to ~175px. The icon fallback
@@ -2295,18 +2247,16 @@ def get_app_css() -> str:
             font-size: 1.1rem;
         }
     }
-    /* BUG-24: the rail's heading row holds nothing but the heading. UX-44 put a
-       compact Reset pill beside it in a second column, which did not fit — the
-       rail is ~150px wide inside at ordinary desktop widths — so a container
-       query stacked the two below 240px. That rule set `flex-direction: column`
-       without clearing Streamlit's `flex-wrap: wrap`, making the header a
-       column-WRAPPING flex container: the Reset column wrapped into a second
-       track ~100px to the RIGHT of the rail, which the rail's `overflow-y: auto`
-       (`overflow-x` computes to `auto` with it) then clipped. Reset was
-       invisible at every width but a zoomed-out one. It now sits at the foot of
-       the rail (`plot_reset_footer`), full width like every other trigger there,
-       so neither the two-column header nor the query that patched it remains.
-       Keep the heading a single element: a second column here is what broke. */
+    /* The rail's heading row holds nothing but the heading; Reset sits
+       at the foot of the rail (`plot_reset_footer`), full width like every
+       other trigger there. Keep the heading a single element: a second column
+       beside it does not fit — the rail is ~150px wide inside at ordinary
+       desktop widths — and stacking the two with a container query
+       (`flex-direction: column` without clearing Streamlit's
+       `flex-wrap: wrap`) makes the header a column-WRAPPING flex container,
+       whose second track lands ~100px to the RIGHT of the rail, where the
+       rail's `overflow-y: auto` (`overflow-x` computes to `auto` with it)
+       clips it. */
     .st-key-plot_reset_footer { margin-top: 0.15rem; }
 
     /* ── Accessibility (WCAG AA) ──────────────────────────────────────────
@@ -2329,16 +2279,16 @@ def get_app_css() -> str:
         opacity: 0.72 !important;
     }
 
-    /* Section headers now use proper heading levels so screen-reader users get
+    /* Section headers use proper heading levels so screen-reader users get
        a valid outline (no h1→h5 jump): the rail/export sections are <h2>, their
-       sub-sections <h3>. Pin the visual size back to the original compact look
-       (by Streamlit's stable text-derived ids) so the layout is unchanged.
-       BUG-88: the rail's heading is pinned by its container key instead. The
-       text-derived id folds an icon's name into it, so UX-138's Material icon
-       turned the id `plot-controls` into `tune-plot-controls` — the pin stopped
-       matching and the heading fell back to Streamlit's 36px h2, which the
-       narrow rail wraps onto two lines. A heading that carries an icon has to
-       be pinned by a key. */
+       sub-sections <h3>. Their visual size is pinned to a compact look (by
+       Streamlit's stable text-derived ids).
+       The rail's heading is pinned by its container key instead. The
+       text-derived id folds an icon's name into it — a Material icon turns
+       `plot-controls` into `tune-plot-controls` — so an id pin stops matching
+       and the heading falls back to Streamlit's 36px h2, which the narrow rail
+       wraps onto two lines. A heading that carries an icon has to be pinned by
+       a key. */
     .st-key-plot_controls_header h2, #scope, #figures, #also-include {
         font-size: 20px !important; line-height: 24px !important;
         font-weight: 600 !important; padding: 6px 0 16px !important;
@@ -2355,7 +2305,7 @@ def get_app_css() -> str:
         font-weight: 600 !important; padding: 8px 0 16px !important;
     }
 
-    /* ── VIZ-2: nudge the smallest UI text up a little for readability ──────
+    /* ── Nudge the smallest UI text up a little for readability ────────────
        A gentle, uniform lift on the smallest *native* Streamlit text — captions,
        widget labels, radio / checkbox / toggle option labels, and help tooltips
        (the app's tiniest fonts). Kept modest (~+5-10%) and scoped to small text
@@ -2375,26 +2325,27 @@ def get_app_css() -> str:
     div[data-testid="stTooltipContent"] p {
         font-size: 0.92rem !important;
     }
-    /* BUG-48 — a `help=` tooltip must never intercept a click. Streamlit's
+    /* A `help=` tooltip must never intercept a click. Streamlit's
        tooltip is a portalled panel whose open state lives in React, so it can
        outlive the hover that opened it; being an ordinary positioned element it
-       then ate the next click that landed on whatever it covered, which is the
-       likeliest reason a rail's ▾ sometimes did nothing on the first press.
+       would then eat the next click that landed on whatever it covered (a
+       rail's ▾ doing nothing on the first press, say).
        Safe because no `help=` in this app contains a link — every tooltip is
        read, never clicked. */
     div[data-testid="stTooltipContent"] {
         pointer-events: none;
     }
-    /* BUG-86 — …and it is shown only while *its own* trigger is under the
+    /* …and it is shown only while *its own* trigger is under the
        pointer or holds *keyboard* focus. Streamlit 1.64's trigger will not
        close on pointer-leave while focus is inside it, clicking a button puts
        focus there, and it can leave several panels in the page at once (some
        stuck half-closed) — so every button or popover with `help=` that was
-       clicked (the ◀ ▶ ⇅ funnel row, the rail's ▾, the presets) kept its panel
-       floating after the pointer moved on. `:hover` and `:focus-visible` are
-       the browser's own bookkeeping, right even when no event reached React,
-       and `:focus-visible` is what tells a keyboard user's focus, which should
-       keep its tooltip, from the focus a click leaves behind, which should not.
+       clicked (the ◀ ▶ ⇅ funnel row, the rail's ▾, the presets) would keep its
+       panel floating after the pointer moved on. `:hover` and `:focus-visible`
+       are the browser's own bookkeeping, right even when no event reached
+       React, and `:focus-visible` is what tells a keyboard user's focus, which
+       should keep its tooltip, from the focus a click leaves behind, which
+       should not.
        Two selectors, because CSS cannot relate a portalled panel to the
        trigger that owns it:
        · once `app._TOOLTIP_OWNER_SCRIPT` is running (its flag on `<html>`),
@@ -2405,12 +2356,9 @@ def get_app_css() -> str:
        · `body:not(:has(…))` hides every panel while no trigger at all is, the
          floor if that script cannot run.
        The hide is immediate: a delayed one (for a fade that Streamlit's own
-       entrance animation, holding opacity at 1, never let run) flashed a stale
-       panel for 100 ms. This replaced BUG-48/51's JavaScript sweeper, which
-       waited for a Base Web `[data-baseweb="tooltip"]` layer that Streamlit no
-       longer renders and so never closed anything;
-       `tests/test_tooltip_visibility.py` fails if the DOM named here leaves
-       Streamlit's bundle. */
+       entrance animation, holding opacity at 1, never lets run) flashes a stale
+       panel for 100 ms. `tests/test_tooltip_visibility.py` fails if the DOM
+       named here leaves Streamlit's bundle. */
     html[data-sps-tooltip-owners] [role="tooltip"]:not([data-sps-tooltip-owned]) :is([data-testid="stTooltipContent"], [data-testid="stTooltipErrorContent"]),
     body:not(:has(
         [data-testid="stTooltipHoverTarget"]:hover,
@@ -2421,19 +2369,18 @@ def get_app_css() -> str:
         visibility: hidden;
     }
 
-    /* ── UX-19: width breakpoints ────────────────────────────────────────────
-       Every layout decision above was fixed-width — the only @media rule in this
-       file was `prefers-color-scheme` — so on an ordinary laptop (a 13" screen,
-       or a half-width window on a big display) the controls, chips and plot
-       column crowded or overlapped. These target ≥1280px down to ~1024px.
+    /* ── Width breakpoints ───────────────────────────────────────────────────
+       The layout decisions above are fixed-width, so on an ordinary laptop (a
+       13" screen, or a half-width window on a big display) the controls, chips
+       and plot column would crowd or overlap. These target ≥1280px down to
+       ~1024px.
 
        The scanpath plot itself needs nothing here: `tabs._render_true_scale_chart`
        renders at the figure's exact pixel size and CSS-scales the whole block
        *uniformly* to the column, capped at 1×. It only ever shrinks, and a
        uniform transform can't distort — so the true-to-scale guarantee holds at
-       every width by construction. What actually broke is chrome: the chip strip
-       (fixed by UX-11's wrapping strip), the rail's no-wrap labels, the header
-       nav, and the page's generous side padding. */
+       every width by construction. What needs adjusting is chrome: the rail's
+       no-wrap labels, the header nav, and the page's generous side padding. */
 
     /* First: reclaim the page's horizontal padding, which is the cheapest way to
        give the plot + rail split more room before anything has to reflow. */
@@ -2449,13 +2396,12 @@ def get_app_css() -> str:
         }
     }
 
-    /* #374 F11 — the rail keeps a floor of 260px; the figure takes the rest
+    /* The rail keeps a floor of 260px; the figure takes the rest
        (it scales uniformly, so a narrower plot column costs nothing but
-       size). At a ⅕ share the rail fell to ~170px at 1024px, and its one-line
-       rows (UX-153) cut every name to "An…", "Fi…". Only side by side: below
-       640px Streamlit stacks the columns, and the rail is full width anyway.
-       This replaces a ≤1200px rule that let rail labels wrap, which never
-       took effect on the switch rows — UX-153 keeps those on one line. */
+       size). At a ⅕ share the rail would fall to ~170px at 1024px, and its
+       one-line rows would cut every name to "An…", "Fi…". Only side by side:
+       below 640px Streamlit stacks the columns, and the rail is full width
+       anyway. */
     @media (min-width: 640px) {
         [data-testid="stHorizontalBlock"]:has(
             > [data-testid="stColumn"] > [data-testid="stVerticalBlock"]
@@ -2495,7 +2441,7 @@ def get_app_css() -> str:
             word-break: normal;
             overflow-wrap: normal;
         }
-        /* The typed boxes beside each slider (UX-9) give up width first — the
+        /* The typed boxes beside each slider give up width first — the
            slider is the primary control. */
         div[class*="st-key-"][class*="__num"] [data-testid="stNumberInputContainer"] {
             max-width: 4rem;
@@ -2512,8 +2458,8 @@ def get_app_css() -> str:
         .st-key-scanpath_rail [data-testid="stWidgetLabel"] p { overflow-wrap: anywhere; }
         /* A figure that somehow can't scale down far enough scrolls rather than
            being squeezed out of true scale (the one guarantee that must hold). */
-        /* Match both iframe titles: Streamlit titles these "st.iframe" now,
-           "components.html" on historical builds. */
+        /* Match both iframe titles: "st.iframe", and "components.html" on
+           older Streamlit builds. */
         [data-testid="stElementContainer"]:has(iframe[title*="components.html"]),
         [data-testid="stElementContainer"]:has(iframe[title*="st.iframe"]) {
             overflow-x: auto;
@@ -2569,7 +2515,7 @@ def widen_menu(widget_key: str, labels) -> None:
 
 
 def selector_track_floor(index: int) -> str:
-    """The CSS `min-width` of one `SELECTOR_ROW_GRID` track (UX-181).
+    """The CSS `min-width` of one `SELECTOR_ROW_GRID` track.
 
     Shared by the app's rule and the loading skeleton's grid, so the skeleton
     draws the row the page is about to show.
@@ -2584,22 +2530,20 @@ def selector_track_floor(index: int) -> str:
 
 
 def mapping_menu_css() -> str:
-    """UX-71 r3 — the option-list widening, for the mapping screens only.
+    """The option-list widening, for the mapping screens only.
 
     A mapping row packs four or five selects across, so the *control* is narrow
     by design and its dropdown inherits that width — and a clipped option is
     ambiguous, not just ugly, since two columns routinely share a visible prefix
     (``CURRENT_FIX_INTEREST_AREA_ID`` vs ``…_INDEX``).
 
-    Two earlier attempts (UX-53 r14, UX-71 r1) failed for a reason neither
-    recorded: they styled ``div[data-baseweb="popover"]``, and **Streamlit no
-    longer renders a selectbox with BaseWeb**. It is a `react-aria` ComboBox
-    whose list is portalled to ``<body>`` inside a popover div carrying the
-    trigger's width as an *inline* style, next to a ``--trigger-width`` variable.
-    Every rule aimed at the old markup matched nothing, which is why "wrap the
-    option text" changed nothing on screen.
+    **Streamlit does not render a selectbox with BaseWeb**, so a rule on
+    ``div[data-baseweb="popover"]`` matches nothing. It is a `react-aria`
+    ComboBox whose list is portalled to ``<body>`` inside a popover div carrying
+    the trigger's width as an *inline* style, next to a ``--trigger-width``
+    variable.
 
-    Wrapping is also the wrong lever now: the list is **virtualized** (fixed row
+    Wrapping is the wrong lever: the list is **virtualized** (fixed row
     heights, absolutely positioned rows), so a two-line option would overlap its
     neighbour — and for the same reason ``width: max-content`` collapses back to
     the container's own width. The list has to be given a width, and it is
@@ -2621,11 +2565,11 @@ def mapping_menu_css() -> str:
         max-width: 92vw !important;
     }
     div:has(> [role="listbox"]) [role="option"] {
-        /* The row is as wide as the menu now, so the label has the room it
+        /* The row is as wide as the menu, so the label has the room it
            needs; keep it on one line so the virtualizer's row height holds. */
         white-space: nowrap;
     }
-    /* #374 F13 — a mapped column's chip wraps instead of being cut to a stub
+    /* A mapped column's chip wraps instead of being cut to a stub
        ("T…", "RECORDI…"): the mapping cells are a seventh of the row, less
        with the setup guide open, and the chip is the user's one check that the
        detection is right. Hovering still shows the full name (`title`). */

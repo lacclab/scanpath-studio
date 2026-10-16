@@ -1,4 +1,4 @@
-"""The Interpolated / Duration-mass heatmap's smoothing grid (review round 8)."""
+"""The Interpolated / Duration-mass heatmap's smoothing grid."""
 
 from __future__ import annotations
 
@@ -89,7 +89,7 @@ class TestGaussianBlurShape:
         assert np.unravel_index(np.argmax(out), out.shape) == impulse
 
     def test_ordinary_grid_matches_same_mode_convolution(self):
-        """Where the kernel fits, the result is the old ``mode="same"`` blur."""
+        """Where the kernel fits, the result is a plain ``mode="same"`` blur."""
         rng = np.random.default_rng(0)
         grid = rng.random((80, 240))
         expected = grid.copy()

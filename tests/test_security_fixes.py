@@ -1,13 +1,12 @@
-"""Regression tests for the security-audit fixes tracked as DATA-16.
+"""Regression tests for security fixes.
 
-Each class pins one finding of the security audit (0.25.0; kept in the git
-history, off the docs site since ENG-80) so the fix can't quietly regress:
+Each class pins one security property so it can't quietly regress:
 
-* **S3** — a share link carries the selected participant and trial; lower-level
-  callers can still omit either identifier when constructing a URL directly.
-* **S7** — stimulus text reaches ``unsafe_allow_html=True`` HTML-escaped.
-* **S10** — the debug-log handler is installed once per *process*, not once per
-  session, so handlers can't accumulate on the process-wide root logger.
+* a share link carries the selected participant and trial; lower-level callers
+  can still omit either identifier when constructing a URL directly.
+* stimulus text reaches ``unsafe_allow_html=True`` HTML-escaped.
+* the debug-log handler is installed once per *process*, not once per session,
+  so handlers can't accumulate on the process-wide root logger.
 """
 
 from __future__ import annotations
@@ -57,7 +56,7 @@ def _combos() -> pd.DataFrame:
 
 
 class TestShareLinkIdentity:
-    """S3 — the UI's canonical link identifies its selected trial."""
+    """The UI's canonical link identifies its selected trial."""
 
     def test_default_still_carries_both_ids(self, fake_st):
         fake_st.session_state = {
@@ -115,7 +114,7 @@ class TestShareLinkIdentity:
 
 
 class TestStimulusTextIsEscaped:
-    """S7 — corpus text interpolated into raw HTML is escaped first."""
+    """Corpus text interpolated into raw HTML is escaped first."""
 
     def test_span_text_is_escaped(self):
         html_out = tabs_module._span_summary_html(
@@ -155,7 +154,7 @@ class TestStimulusTextIsEscaped:
 
 
 class TestDataInspectionDownloadHelperIsGone:
-    """S11 — the unreachable download helper (and its latent leak) is deleted."""
+    """The unreachable download helper (and its latent leak) stays deleted."""
 
     def test_helpers_are_removed(self):
         for name in (
@@ -173,7 +172,7 @@ class TestDataInspectionDownloadHelperIsGone:
 
 
 class TestLogCaptureIsProcessGlobal:
-    """S10 — installing twice must not stack handlers on the root logger."""
+    """Installing twice must not stack handlers on the root logger."""
 
     @pytest.fixture(autouse=True)
     def _clean_root_logger(self):
@@ -205,16 +204,16 @@ class TestLogCaptureIsProcessGlobal:
         assert len(self._capture_handlers()) == 1
 
     def test_many_sessions_still_add_one_handler(self):
-        # Each simulated session used to add its own handler because the guard
-        # lived in (per-session) session state while the logger is per-process.
+        # A guard in (per-session) session state would let each simulated
+        # session add its own handler, since the logger is per-process.
         for _ in range(5):
             debug_log_module.install_log_capture()
         assert len(self._capture_handlers()) == 1
 
     def test_guard_does_not_read_session_state(self):
-        """The flag must not live in session state — that is the whole bug.
+        """The flag must not live in session state, which is per-session.
 
-        Checked on the compiled code (not the source) so the finding can still
+        Checked on the compiled code (not the source) so the hazard can still
         be *described* in the docstring.
         """
         names = debug_log_module.install_log_capture.__code__.co_names

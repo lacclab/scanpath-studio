@@ -1,13 +1,13 @@
 """Manuscript screenshots of the running application.
 
 The other scripts here render figures headlessly through the public API. This
-one is the exception the README used to note: the interface figures can only
-come from the app itself, so it drives a real browser over a running server and
-saves what a user would see.
+one is the exception: the interface figures can only come from the app itself,
+so it drives a real browser over a running server and saves what a user would
+see.
 
 Run the app first (its port is the one this script talks to)::
 
-    cd app && uv run streamlit run streamlit_app.py --server.port 8599
+    uv run streamlit run streamlit_app.py --server.port 8599
 
 then, from the same directory::
 
@@ -212,8 +212,9 @@ def deep_link(page: Page, params: dict) -> None:
 def reset_viz(page: Page) -> None:
     """Press ♻️ Reset visualization, so a run never inherits the last one's view.
 
-    The fixation-index window in particular has no URL param (VIZ-7), so a
-    window left behind by an earlier run would silently subset every figure.
+    The fixation-index window in particular is not named in this script's
+    links, so a window left behind by an earlier run would silently subset
+    every figure.
     """
     btns = visible(page.locator('button:has-text("Reset visualization")'))
     if not btns:
@@ -442,8 +443,8 @@ def capture(page: Page) -> None:
         page,
         {
             **DEMO_TRIAL,
-            # VIZ-9's linear-reading schematic: fixations snapped to their line
-            # (keeping their own x, #422), saccades arced over the text.
+            # The linear-reading schematic: fixations snapped to their line
+            # (keeping their own x), saccades arced over the text.
             "snap_fixations": 1,
             "saccade_render_mode": "Arc",
             "show_order": 1,

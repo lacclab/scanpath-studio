@@ -75,7 +75,7 @@ def _fix_frame(n: int) -> pd.DataFrame:
 
 
 def test_slice_fix_range_windows_by_order_index():
-    # VIZ-7: keep only fixations whose 1-based order index is in [start, end].
+    # Keep only fixations whose 1-based order index is in [start, end].
     sliced = _slice_fix_range(_fix_frame(10), (3, 6))
     assert list(sliced["order_in_trial"]) == [3, 4, 5, 6]
 
@@ -89,7 +89,7 @@ def test_slice_fix_range_none_is_identity():
     assert _slice_fix_range(no_order, (1, 2)) is no_order
 
 
-# --- ENG-8: generation-column selection + collection -------------------------
+# --- Generation-column selection + collection --------------------------------
 
 
 def _gen_fixations(text_col: str = "text_id") -> pd.DataFrame:
@@ -246,9 +246,9 @@ def test_the_grid_keeps_by_line_colouring_off_when_the_rail_says_line(
     normalized_words_df, normalized_fixations_df
 ):
     """The grid switches by-line colouring off (`color_by_line: False`), but
-    BUG-85 taught the builders to read the rail's own `color_by="line"` as
-    colour-by-line too — so with the rail on "line", every panel grew per-line
-    legend entries unless the grid neutralises the value as well."""
+    the builders also read the rail's own `color_by="line"` as colour-by-line —
+    so with the rail on "line", every panel would grow per-line legend entries
+    unless the grid neutralises the value as well."""
     from scanpath_studio.plots import FigureSettings, make_scanpath_figure
 
     settings = _comparison_panel_settings({"color_by": "line", "color_by_line": True})
@@ -263,7 +263,7 @@ def test_the_grid_keeps_by_line_colouring_off_when_the_rail_says_line(
 
 
 def test_match_offers_same_text_first_then_conditions_once():
-    """#374 F18: the two readings-of-interest lead, ids are not conditions, and
+    """The two readings-of-interest lead, ids are not conditions, and
     no field is offered twice."""
     from scanpath_studio.column_names import ColumnNames
     from scanpath_studio.tabs import (
@@ -296,10 +296,10 @@ def test_same_text_shows_other_participants_only():
     assert set(gens) == {("p2", "t2"), ("p3", "t3")}
 
 
-# --- #412: two readings whose ids join to the same label ---------------------
+# --- Two readings whose ids join to the same label ---------------------------
 
 #: `(p1, "t1 · t2")` and `("p1 · t1", "t2")` both read `p1 · t1 · t2` once
-#: joined, and the collector used to key on that label; `p9` sorts after both.
+#: joined, so the collector must not key on that label; `p9` sorts after both.
 _LOOKALIKE_READINGS = [
     ("p0", "base"),
     ("p1", "t1 · t2"),
@@ -403,7 +403,7 @@ def _lookalike_comparisons_app() -> None:
 
 
 def test_lookalike_readings_get_a_panel_each_on_a_page_of_two(monkeypatch):
-    """#412 acceptance: both readings are drawn, each in its own panel, when
+    """Both readings are drawn, each in its own panel, when
     a page holds two — and the similarity table names all three apart."""
     from streamlit.testing.v1 import AppTest
 
@@ -421,7 +421,7 @@ def test_lookalike_readings_get_a_panel_each_on_a_page_of_two(monkeypatch):
     assert len(set(trials)) == len(trials) == 3, trials
 
 
-# --- #422: the grid pages through every match --------------------------------
+# --- The grid pages through every match --------------------------------------
 
 
 def _panel_captions_shown(at) -> list[str]:
@@ -486,7 +486,7 @@ def test_either_pager_moves_both(monkeypatch):
     assert state == {"multi_gen_page": 3, "multi_gen_page_end": 3}
 
 
-# --- #422: the chips above the plot, for the selected trial and its matches --
+# --- The chips above the plot, for the selected trial and its matches --------
 
 
 def test_matches_are_in_number_order():

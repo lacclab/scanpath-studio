@@ -1,11 +1,11 @@
-"""Desktop-bundle entry point (ENG-15).
+"""Desktop-bundle entry point.
 
 PyInstaller freezes this script (see ``scanpath_studio.spec``) into the
 standalone Scanpath Studio app: it starts the Streamlit server on a free
 localhost port with the branded theme, then — once the server answers its
 health check — opens it in its own window through Chrome / Edge / Brave /
 Chromium's app mode, or in a tab of the default browser when none is
-installed (ENG-85).
+installed.
 
 Environment overrides (used by the smoke test, handy for debugging):
     SCANPATH_DESKTOP_PORT         fixed port instead of a free one
@@ -16,14 +16,14 @@ Environment overrides (used by the smoke test, handy for debugging):
     SCANPATH_DESKTOP_NO_LOG_FILE  set to 1/true/yes to keep output on stdout
                                   instead of redirecting it to the log file
     SCANPATH_DESKTOP_IDLE_EXIT_S  seconds with no browser session before the
-                                  server quits itself (0 disables; ENG-21)
+                                  server quits itself (0 disables)
 
 ``--selfcheck`` runs a headless sanity pass inside the frozen process (find
 the plotly.min.js the app serves, load the bundled sample, build a figure,
 render HTML) and exits — it catches missing hidden imports or data files
 without needing a browser.
 
-``--update`` is About's *Update & restart*, headless (#385): check GitHub
+``--update`` is About's *Update & restart*, headless: check GitHub
 (or ``SCANPATH_UPDATE_FEED``, a local JSON release CI uses), download,
 verify, stage and self-test the new version, then hand the swap to a
 detached helper and exit. The helper relaunches the app; the relaunched
@@ -51,14 +51,14 @@ from pathlib import Path
 # boot budget rather than giving up while the server is still coming up.
 HEALTH_TIMEOUT_S = 180.0
 
-# ENG-21, macOS .app only. Launch Services wires stdout/stderr to /dev/null and
+# macOS .app only. Launch Services wires stdout/stderr to /dev/null and
 # gives the process no controlling terminal, so the log has to go to a file —
 # ~/Library/Logs/<App Name>/ is the Apple convention, and Console.app reads it
 # for free.
 LOG_DIR = "~/Library/Logs/Scanpath Studio"
 LOG_NAME = "scanpath-studio.log"
-# Truncate rather than grow without bound: this file is append-per-launch and
-# nothing rotates it.
+# Rotate past this size rather than grow without bound: the file is appended to
+# once per launch and nothing else rotates it.
 LOG_MAX_BYTES = 5 * 1024 * 1024
 
 # A .app has no Cocoa run loop, so it cannot answer Cmd-Q or Dock → Quit (those
@@ -393,7 +393,7 @@ def _open_browser_when_ready(port: int) -> None:
             f"still starting, open {url} yourself."
         )
         return
-    # ENG-85: its own window, like a desktop app, when a browser that can do it
+    # Its own window, like a desktop app, when a browser that can do it
     # is installed; a tab in the default browser otherwise.
     if _browser_mode() == "app":
         browser = _find_app_browser()
@@ -435,15 +435,15 @@ def selfcheck() -> int:
     from scanpath_studio import api
     from scanpath_studio.html_embed import PLOTLYJS_FILENAME, plotlyjs_dir
 
-    # ENG-64: the app serves the frozen plotly package's own plotly.min.js to
+    # The app serves the frozen plotly package's own plotly.min.js to
     # every figure — without it the figure draws blank, whatever the network.
     plotlyjs = plotlyjs_dir() / PLOTLYJS_FILENAME
     if not plotlyjs.is_file():
         print(f"selfcheck FAILED: {plotlyjs} is missing from the bundle")
         return 1
 
-    # #394: the update check and download (and dataset downloads, #391)
-    # verify GitHub against the OS's own certificate store. truststore reaches
+    # The update check and download (and dataset downloads) verify GitHub
+    # against the OS's own certificate store. truststore reaches
     # the OS only during a handshake, so the smoke test, which has a network,
     # names a server to shake hands with; the staged copy's selfcheck during
     # an update names none and skips this.
@@ -459,7 +459,7 @@ def selfcheck() -> int:
     if combos.empty:
         print("selfcheck FAILED: bundled sample yielded no trials")
         return 1
-    # (participant, trial), named as the dataset names them (DATA-66).
+    # (participant, trial), named as the dataset names them.
     participant, trial = combos.iloc[0]
     fig = api.plot_scanpath(
         words,
@@ -481,7 +481,7 @@ def selfcheck() -> int:
 
 
 def update() -> int:
-    """``--update``: About's *Update & restart*, headless (#385); an exit code."""
+    """``--update``: About's *Update & restart*, headless; an exit code."""
     from scanpath_studio import desktop_update, updates
 
     feed = os.environ.get(desktop_update.FEED_ENV, "").strip()
@@ -510,7 +510,7 @@ def update() -> int:
 
 
 def _note_update_start() -> None:
-    """Tell a waiting update helper that this launch is the new version (#385)."""
+    """Tell a waiting update helper that this launch is the new version."""
     try:
         from scanpath_studio import desktop_update
 
@@ -520,7 +520,7 @@ def _note_update_start() -> None:
 
 
 def _confirm_boot_when_ready(port: int) -> None:
-    """Once the server answers, confirm a pending update (#385) — even with no
+    """Once the server answers, confirm a pending update — even with no
     browser to open, so a headless relaunch confirms too."""
     if not _wait_for_server(f"http://127.0.0.1:{port}/_stcore/health"):
         return
@@ -542,8 +542,8 @@ def _chromium_pipe_wrapper_cli() -> list[str] | None:
     On macOS and Linux, choreographer (Kaleido's browser driver) starts the
     browser as ``sys.executable _unix_pipe_chromium_wrapper.py <browser> …``.
     Frozen, ``sys.executable`` is this launcher, so without this every image
-    export started a second Scanpath Studio instead of a browser, and the
-    export waited forever for a browser that never came.
+    export would start a second Scanpath Studio instead of a browser, and the
+    export would wait forever for a browser that never came.
     """
     if len(sys.argv) > 2 and Path(sys.argv[1]).name == _CHROMIUM_PIPE_WRAPPER:
         return sys.argv[2:]
@@ -615,7 +615,7 @@ def main() -> None:
 
     print(f"Scanpath Studio starting on http://127.0.0.1:{port}")
     if sys.platform == "win32":
-        # ENG-90: the console is all a Windows user sees during the scan
+        # The console is all a Windows user sees during the scan
         # HEALTH_TIMEOUT_S waits out, so say that the wait is expected.
         print(
             "This can take a few minutes, especially the first time while "
@@ -631,8 +631,8 @@ def main() -> None:
 
     from scanpath_studio.cli import launch_app
 
-    # launch_app resolves the packaged app.py, injects the branded theme
-    # (BUG-6), and hands off to `streamlit run` — one launch path shared with
+    # launch_app resolves the packaged app.py, injects the branded theme,
+    # and hands off to `streamlit run` — one launch path shared with
     # `scanpath-studio run`, so fixes there reach the frozen app too.
     launch_app(
         [
@@ -647,12 +647,12 @@ def main() -> None:
             # Loopback only. Streamlit's server.address default is unset and
             # falls back to 0.0.0.0, so without this the desktop bundle serves
             # the user's loaded corpus to every host on the LAN — and the app
-            # has no authentication of any kind (DATA-13 S1).
+            # has no authentication of any kind.
             "--server.address=127.0.0.1",
             # No hot reload in a frozen app; the watcher only costs threads.
             "--server.fileWatcherType=none",
             "--browser.gatherUsageStats=false",
-            # No Deploy button (UX-183) — see cli.launch_app.
+            # No Deploy button — see cli.launch_app.
             "--client.toolbarMode=viewer",
         ]
     )

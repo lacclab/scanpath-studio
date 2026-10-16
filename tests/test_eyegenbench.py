@@ -12,7 +12,7 @@ def write_bundle(tmp_path):
     """Write a minimal two-word, two-fixation EyeGenBench bundle; return its root.
 
     A plain function beside the fixture so another test module can build the
-    same bundle without importing a fixture (DATA-55's gate tests)."""
+    same bundle without importing a fixture (the experimental gate's tests)."""
     root = tmp_path / "EyeGenBench"
     ds = root / "PoTeC"
     ds.mkdir(parents=True)
@@ -127,8 +127,8 @@ def test_raw_frames_returns_both_tables(bundle):
 
 
 def test_reading_a_corpus_reports_before_its_first_table(bundle, monkeypatch):
-    """UX-166: "0 of 2 tables" before the first read, so a gated card is armed
-    from the start — then one report per table, as before."""
+    """The load reports "0 of 2 tables" before the first read, so a gated card
+    is armed from the start — then one report per table."""
     calls = []
     real_report = progress.report
 
@@ -176,7 +176,7 @@ def test_missing_bundle_says_what_to_run(tmp_path):
 
 
 def test_load_eyegenbench_resolves_from_the_package_root_but_is_not_advertised():
-    """The benchmark corpora are held back, so their loaders stay importable
+    """The benchmark corpora are experimental, so their loaders stay importable
     but out of `__all__` (and so out of `dir()`)."""
     import scanpath_studio
 
@@ -220,7 +220,7 @@ def test_cli_rejects_eyegenbench_combined_with_sample(bundle):
 
     # `render`'s "exactly one input" guard is a plain `raise SystemExit(msg)`
     # (not routed through argparse's `parser.error`), so -- like the sibling
-    # check at tests/test_cli.py:564 -- the message lives on the exception,
+    # check in tests/test_cli.py -- the message lives on the exception,
     # not on stderr.
     with pytest.raises(SystemExit, match="exactly one input"):
         cli.main(["render", "--sample", "--eyegenbench", str(bundle)])
@@ -235,22 +235,21 @@ def test_cli_requires_a_dataset_name_with_eyegenbench(bundle, capsys):
 
 
 def test_registry_lists_each_prepared_corpus_as_its_own_entry(bundle, monkeypatch):
-    """Task 11R: a prepared corpus is a top-level entry, not a nested choice."""
+    """A prepared corpus is a top-level entry, not a nested choice."""
     from scanpath_studio import app
 
     add_benchmark_corpora(monkeypatch, bundle)
     registry = app.public_dataset_registry()
     label = app.benchmark_corpus_label("PoTeC")
     assert label in registry
-    # "EyeGenBench" is provenance — the pipeline that harmonises these corpora,
-    # and one being extracted into its own repository. It belongs in the
-    # description, never in an entry label.
+    # "EyeGenBench" is provenance — the pipeline that harmonises these corpora.
+    # It belongs in the description, never in an entry label.
     assert "EyeGenBench" not in label
     entry = registry[label]
     # PoTeC ships natively here too, so this copy says which one it is — by the
     # property that differs, not by the vendor's name.
     assert entry["short"] == "PoTeC (harmonised benchmark)"
-    assert entry["language"] == "German"  # 'de' → a display name (R35)
+    assert entry["language"] == "German"  # 'de' → a display name
     assert entry["monitor"] == (1680, 1050)
     assert entry["benchmark_dataset"] == "PoTeC"
     assert callable(entry["loader"])
@@ -260,10 +259,10 @@ def test_registry_lists_each_prepared_corpus_as_its_own_entry(bundle, monkeypatc
 
 
 def test_a_bundle_on_disk_is_not_discovered(bundle, monkeypatch):
-    """DATA-55: a corpus is listed only because someone added it, never because
+    """A corpus is listed only because someone added it, never because
     a bundle sits at the default location — and there is no "set up" entry
     listing whatever a typed folder holds. The suite runs with
-    ``SCANPATH_EXPERIMENTAL=1``, so this is not the beta gate answering."""
+    ``SCANPATH_EXPERIMENTAL=1``, so this is not the experimental gate answering."""
     from scanpath_studio import app, compare_source, constants
 
     for module in (constants, app, compare_source):
@@ -273,8 +272,8 @@ def test_a_bundle_on_disk_is_not_discovered(bundle, monkeypatch):
 
 
 def test_an_added_manifest_entry_with_no_name_is_skipped(bundle, monkeypatch):
-    """M7: a nameless entry must not take the registry — and so every picker —
-    down; `entry_name` is the one rule for skipping it (N5)."""
+    """A nameless entry must not take the registry — and so every picker —
+    down; `entry_name` is the one rule for skipping it."""
     from scanpath_studio import app
 
     (bundle / "manifest.json").write_text(
@@ -285,7 +284,7 @@ def test_an_added_manifest_entry_with_no_name_is_skipped(bundle, monkeypatch):
 
 
 def test_geometry_badge_never_claims_uniformly_real_geometry():
-    """R34: `geometry_source` is the best tier *any* paragraph reached, so a
+    """`geometry_source` is the best tier *any* paragraph reached, so a
     corpus with one measured text in a thousand is scalar-"real". The scalar
     keeps that meaning (the per-word column refines it, and changing it would
     ripple into the manifest contract, the CLI and the API) — the *rendering* is
@@ -322,7 +321,7 @@ def test_geometry_badge_never_claims_uniformly_real_geometry():
 
 
 def test_language_codes_render_as_display_names():
-    """R35: the manifest's `language` is an ISO code, and the picker shows it."""
+    """The manifest's `language` is an ISO code, and the picker shows it."""
     from scanpath_studio.constants import language_display
 
     # Verified against the real prepared bundle's manifest.
@@ -340,12 +339,12 @@ def test_language_codes_render_as_display_names():
 def test_a_harmonised_label_reaches_the_benchmark_loader_not_the_native_corpus(
     bundle, monkeypatch
 ):
-    """I4: `compare_source` must dispatch on the entry, never on the label text.
+    """`compare_source` must dispatch on the entry, never on the label text.
 
     PoTeC ships both natively and harmonised, so the harmonised entry's label
     *contains* `_POTEC_LABEL_HINT` — a plain substring test that would send it
     to `datasets.load_potec`, i.e. to a different corpus in a different
-    directory, with no error anywhere. Today the `benchmark_dataset` branch sits
+    directory, with no error anywhere. The `benchmark_dataset` branch sits
     above the hints at all three sites; this pins the ordering, because the
     failure it prevents is silent (compare scanpath B would simply be someone
     else's data) and would leave the suite green.
@@ -375,7 +374,8 @@ def test_a_harmonised_label_reaches_the_benchmark_loader_not_the_native_corpus(
 
 
 def test_the_two_potec_entries_get_distinguishable_unready_hints(bundle, monkeypatch):
-    """M12: "Open PoTeC…" named an entry the user couldn't pick out of two."""
+    """Each PoTeC entry's hint says which one: "Open PoTeC…" alone would name
+    an entry the user couldn't pick out of two."""
     from scanpath_studio import app, compare_source
 
     add_benchmark_corpora(monkeypatch, bundle)
@@ -385,14 +385,14 @@ def test_the_two_potec_entries_get_distinguishable_unready_hints(bundle, monkeyp
 
 
 def test_a_nameless_manifest_row_before_a_valid_one_does_not_crash(bundle, monkeypatch):
-    """I2: the crash M7 named is reachable from every surface, not just the app.
+    """A nameless manifest row crashes no surface, not just the app.
 
-    A row with no `name` used to raise `KeyError` out of `_find_entry` — outside
-    the `(FileNotFoundError, ValueError, OSError)` triple every caller guards
-    with. The earlier fixture put the nameless row *alone* in the manifest,
-    which is the one arrangement that cannot reach the raise: discovery filters
-    it out and nothing then looks a name up. Ordered before a valid row, it took
-    down the compare-B enumeration and the app with it.
+    A row with no `name` must not raise `KeyError` out of `_find_entry` —
+    outside the `(FileNotFoundError, ValueError, OSError)` triple every caller
+    guards with. The nameless row goes *before* a valid one: alone in the
+    manifest it cannot reach the raise (discovery filters it out and nothing
+    then looks a name up), while ahead of a valid row it would take down the
+    compare-B enumeration and the app with it.
     """
     from scanpath_studio import app, compare_source
 
@@ -414,20 +414,20 @@ def test_a_nameless_manifest_row_before_a_valid_one_does_not_crash(bundle, monke
     # The registry drops the unusable row and keeps the usable one…
     assert label in app.public_dataset_registry()
     # …and the compare-B enumeration, which probes *every* registry entry on
-    # every rerun Compare is on, is where the escaping KeyError took the app
-    # down.
+    # every rerun Compare is on, is where an escaping KeyError would take the
+    # app down.
     compare_source._public_ready_cached.clear()
     ready = {name: ok for name, ok, _why in compare_source.secondary_dataset_options()}
     assert ready[label] is True
 
 
 def test_an_invented_default_screen_is_declined_by_both_surfaces(bundle, monkeypatch):
-    """I3: one rule for "does this corpus document a screen?".
+    """One rule for "does this corpus document a screen?".
 
     `monitor_source: "default"` is the pipeline's generic 1920x1080 guess for a
     corpus that documents nothing. The app declines it (the canvas then falls
-    back to data extents, which is honest); the CLI used to accept it, so the
-    same corpus rendered at two different scales depending on the surface.
+    back to data extents, which is honest), and so does the CLI, so one corpus
+    never renders at two different scales depending on the surface.
     """
     from scanpath_studio import app
 
@@ -448,7 +448,8 @@ def test_an_invented_default_screen_is_declined_by_both_surfaces(bundle, monkeyp
 
 
 def test_the_description_qualifies_partial_geometry_like_the_badge_does():
-    """M8/M11: the caption beside the badge must not re-make the claim R34 bans."""
+    """The caption beside the badge must not claim uniformly measured boxes
+    either."""
     from scanpath_studio import app
 
     mixed = {
@@ -460,7 +461,7 @@ def test_the_description_qualifies_partial_geometry_like_the_badge_does():
     description = app._benchmark_description(mixed, harmonised_overlap=False)
     assert "Screen geometry: real —" in description
     assert "measured word boxes for 9 of 12 texts" in description
-    # Nothing is "above" anything in a searchable picker (M10).
+    # Nothing is "above" anything in a searchable picker.
     overlap = app._benchmark_description(mixed, harmonised_overlap=True)
     assert "entry above" not in overlap
     assert "this app's own Provo entry" in overlap
@@ -469,19 +470,18 @@ def test_the_description_qualifies_partial_geometry_like_the_badge_does():
     assert "Screen geometry: real." in app._benchmark_description(
         full, harmonised_overlap=False
     )
-    # M11: with `n_texts` absent, prefer the vaguer claim to the confident one.
+    # With `n_texts` absent, prefer the vaguer claim to the confident one.
     unknown_total = {"geometry_source": "real", "paragraphs_without_real_boxes": 3}
     assert "some but not all" in app.geometry_badge(unknown_total)
 
 
 def test_the_cli_and_the_picker_resolve_the_same_screen(bundle, tmp_path, monkeypatch):
-    """I3 where the two surfaces meet (N6).
+    """The screen rule where the two surfaces meet.
 
     `declared_monitor` exists so one corpus cannot render at the manifest's
     invented 1920x1080 through `cli render --eyegenbench` while the app renders
-    it at data extents. Only the app half was pinned, so a CLI regression — the
-    shape this bug had for a whole task — would not have failed anything. This
-    drives the real `render` command and compares the canvas it passes to the
+    it at data extents. Pinning the app half alone would let a CLI regression
+    pass, so this drives the real `render` command and compares the canvas it passes to the
     figure builder against the registry entry the picker builds from the same
     manifest row.
     """
@@ -543,13 +543,13 @@ def test_the_cli_and_the_picker_resolve_the_same_screen(bundle, tmp_path, monkey
 
 
 def test_a_malformed_count_does_not_take_the_picker_down(bundle, monkeypatch):
-    """N1: the registry build reads manifest counts, so they must not raise.
+    """The registry build reads manifest counts, so they must not raise.
 
     `_benchmark_description` runs for every discovered corpus while the picker
     builds its option list, and it reads `paragraphs_without_real_boxes` and
     `n_texts`. A bare `int()` on a hand-edited manifest (`"n_texts": "many"`)
-    raised `ValueError` straight out of the enumeration — the same crash class
-    as the nameless row, on the same path, reintroduced one level up.
+    would raise `ValueError` straight out of the enumeration — the same crash
+    class as the nameless row, on the same path, one level up.
     """
     from scanpath_studio import app
 
@@ -570,7 +570,7 @@ def test_a_malformed_count_does_not_take_the_picker_down(bundle, monkeypatch):
     # printing garbage…
     assert "many" not in entry["size"] and "text" not in entry["size"]
     # …and the geometry claim degrades to the vaguer honest wording, never to
-    # the confident "measured word boxes." R34 forbids.
+    # the confident "measured word boxes."
     assert "some but not all texts" in entry["description"]
     assert "some but not all texts" in app.geometry_badge(
         {

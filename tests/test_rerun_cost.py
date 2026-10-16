@@ -1,23 +1,23 @@
-"""PERF-8: three per-rerun scans whose results were thrown away.
+"""Three per-rerun scans whose results would be thrown away.
 
 Streamlit reruns the whole script on every widget touch, so anything that walks
 the *unfiltered* frames on the way past is paid for on every click — even from a
-view that never looks at the answer. Three of them, all found by the same
-reading of `app.main`:
+view that never looks at the answer. Three such scans in `app.main` are skipped:
 
 * `resolve_source_monitor`'s last-resort branch estimates a canvas from data
   extents. It is reached only by a source that declares no monitor, and what it
   returns then feeds `seed_canvas_state`'s `defaults` — a `setdefault`. After
-  the first run the key exists, so every later rerun scanned both frames for a
-  number it discarded.
-* The 🗂️ Data page's stimulus-folder caption stat'd every row of both frames to
-  count matches, undoing `data.resolve_stimulus_image_paths`' own dedup.
-* `_slice_fix_range` boolean-masked a copy of the trial's fixations even when
-  the window was the untouched default — which *is* the trial's full range, so
-  the mask selected everything.
+  the first run the key exists, so a later rerun would scan both frames for a
+  number it discards.
+* The 🗂️ Data page's stimulus-folder caption counts matches without stat'ing
+  every row of both frames, keeping `data.resolve_stimulus_image_paths`' own
+  dedup.
+* `_slice_fix_range` does not boolean-mask a copy of the trial's fixations when
+  the window is the untouched default — which *is* the trial's full range, so
+  the mask would select everything.
 
-`tabs._compare_setups` withheld the same corpus scan from B's side under CMP-11;
-this is A's side and the two others found beside it.
+`tabs._compare_setups` withholds the same corpus scan from B's side; this is
+A's side and the two others beside it.
 """
 
 from __future__ import annotations
@@ -163,7 +163,7 @@ class TestWithholdingTheFramesIsHonest:
 
 
 class TestTheImageCaptionCountsPathsNotRows:
-    """#417: *Stimulus images*' "Found an image … for N rows" comes from the
+    """*Stimulus images*' "Found an image … for N rows" comes from the
     match itself — one probe per distinct placeholder value, never per row."""
 
     def test_a_thousand_rows_of_two_texts_probe_two_paths(self, tmp_path, monkeypatch):
@@ -220,10 +220,10 @@ class TestTheUntouchedSliderDoesNotMask:
     """End to end: the default window reaches `_slice_fix_range` as ``None``.
 
     The gate lives at the call site rather than in the helper, because the
-    trial's full range is already computed there for VIZ-40's Share writer — and
-    a length-based shortcut would be wrong on a multipart trial, where
+    trial's full range is already computed there for the Share writer — and a
+    length-based shortcut would be wrong on a multipart trial, where
     ``order_in_trial`` is parent-global and a later screen runs 509-578 rather
-    than starting at 1 (BUG-47).
+    than starting at 1.
     """
 
     @staticmethod
@@ -264,13 +264,13 @@ class TestTheUntouchedSliderDoesNotMask:
 
 
 class TestTheCombosRowIsMaskedOnceAtMost:
-    """PERF-7: four call sites wanted A's `combos` row; each masked for it.
+    """A's `combos` row is masked for at most once per run, and only on demand.
 
-    ~3.9 ms per mask on a full-OneStop-grain `combos` (~60k rows), on every
+    A mask costs ~3.9 ms on a full-OneStop-grain `combos` (~60k rows), on every
     widget toggle — including rail toggles that otherwise hit
     `_cached_scanpath_figure` and draw nothing new. The row's only consumer is
-    EXP-5's title/caption pattern, which is unset by default and whose renderer
-    early-returns before reading it, so the fix is a *thunk* rather than one
+    the title/caption pattern, which is unset by default and whose renderer
+    early-returns before reading it, so the row is a *thunk* rather than one
     hoisted mask: the default path does no scan at all.
     """
 
@@ -290,7 +290,7 @@ class TestTheCombosRowIsMaskedOnceAtMost:
         calls = self._masks(monkeypatch)
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_CHOICE
-        # EXP-5's switches. Off by default — which is exactly why a thunk beats
+        # The title and caption switches. Off by default — which is exactly why a thunk beats
         # a hoisted mask: on the default path nothing ever asks.
         at.session_state["global_show_title"] = bool(state)
         at.session_state["global_show_caption"] = bool(state)

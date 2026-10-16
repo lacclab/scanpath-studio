@@ -1,4 +1,4 @@
-"""What the docs build generates instead of restating (ENG-77, ENG-78, ENG-79).
+"""What the docs build generates instead of restating.
 
 The pages call these from ``exec="true"`` fences (markdown-exec), and
 ``scripts/mkdocs_hooks.py`` puts this folder on ``sys.path`` for them. Each
@@ -157,8 +157,9 @@ def _parsers() -> dict:
     }
 
 
-#: A tracker id as the CLI's help strings cite them — ``(VIZ-8)``, a leading
-#: ``VIZ-7:`` or ``PRE-2 `` — which a reader of the reference has no use for.
+#: A tracker-style id as a CLI help string may cite one — ``(ABC-8)``, a
+#: leading ``ABC-7:`` or ``ABC-2 `` — which a reader of the reference has no
+#: use for.
 _ID = r"[A-Z]{2,5}-\d+"
 _ID_PARENTHETICAL = re.compile(rf"\s*\((?:{_ID}(?:,\s*)?)+\)")
 _ID_LEAD = re.compile(rf"^{_ID}:?\s+")
@@ -570,7 +571,7 @@ def _default_cell(value) -> str:
     return f"`{text}`"
 
 
-#: Options a snippet never writes as a flag but `render` still sets (#374):
+#: Options a snippet never writes as a flag but `render` still sets:
 #: the raw-gaze layer follows the table `--raw-gaze` loads.
 _UNEMITTED_FLAGS = {"show_raw_gaze": ["--raw-gaze", "--no-raw-gaze"]}
 
@@ -614,7 +615,7 @@ def figure_options_reference() -> str:
     out = []
     for topic, names in OPTION_TOPICS.items():
         if topic == "Drift correction" and not drift_correction_enabled():
-            # Set by a held-back feature: the published site leaves it out.
+            # Set by an experimental feature: the published site leaves it out.
             continue
         out += [
             f"## {topic}",
@@ -661,7 +662,7 @@ def figure_options_reference() -> str:
 #: The app's own figure config (`tabs._render_true_scale_chart`): Plotly's zoom
 #: re-lays-out the axes and leaves markers and text at their pixel sizes, which
 #: is exactly what the true-scale embed exists to avoid. No "Share chart…"
-#: upload to Plotly Cloud, as in the app (`constants.PLOTLY_CONFIG`, BUG-101).
+#: upload to Plotly Cloud, as in the app (`constants.PLOTLY_CONFIG`).
 _PLOT_CONFIG = {
     "showSendToCloud": False,
     "displaylogo": False,
@@ -705,7 +706,7 @@ def embed(
     ``legend`` is ``[(label, colour), …]``, drawn as swatches under the figure.
     ``preview`` disables interaction for gallery thumbnails; replays loop while visible.
     A replay also carries the app's player, so its ▶ Play keeps real time, and
-    its frames packed, as the app's page does (PERF-17).
+    its frames packed, as the app's page does.
     """
     from plotly.io.json import to_json_plotly
 
@@ -713,9 +714,9 @@ def embed(
 
     width = int(fig.layout.width or 900)
     height = int(fig.layout.height or 600)
-    # BUG-93: a replay keeps time on the app's own wall-clock player, not on
+    # A replay keeps time on the app's own wall-clock player, not on
     # Plotly's frame queue; figures.js runs it once the plot is drawn — and the
-    # script rebuilds the frames the spec leaves out (PERF-17). It waits for ▶
+    # script rebuilds the frames the spec leaves out. It waits for ▶
     # on detail pages; gallery previews instead loop while visible.
     page = replay_page(fig)
     if page is None:
@@ -732,8 +733,8 @@ def embed(
     spec["config"] = {**_PLOT_CONFIG, "staticPlot": True} if preview else _PLOT_CONFIG
     # An attribute, not a `<script type="application/json">`: Material's instant
     # navigation re-creates every inline script in the new page from its text
-    # alone, dropping the type, so the JSON ran as JavaScript and the figure was
-    # gone after a click from another page or a heading link.
+    # alone, dropping the type, so the JSON would run as JavaScript and the
+    # figure would be gone after a click from another page or a heading link.
     payload = html.escape(json.dumps(spec, separators=(",", ":")))
     # A <div>, not a <figure>: Material sizes figures to fit their content, and
     # the plot's content is positioned absolutely, so a figure collapses to 0.

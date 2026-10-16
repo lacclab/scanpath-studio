@@ -1,4 +1,4 @@
-"""AN-34 — a JSON recipe beside every Corpus Analysis table download.
+"""A JSON recipe beside every Corpus Analysis table download.
 
 The builder is pure and tested as units; one ``AppTest`` flow pins that the
 recipe is offered beside the CSV and records the page's trial filters.

@@ -82,8 +82,8 @@ DATASETS = [
 ]
 
 
-# Licence + citation per corpus, so attribution travels into export bundles
-# (spec §8). Populate from the "Data license" column of the UZH dataset review
+# Licence + citation per corpus, so attribution travels into export bundles.
+# Populate from the "Data license" column of the UZH dataset review
 # table (https://pub.cl.uzh.ch/projects/eyetracker/datasets.html -- the values
 # are in the page's inline `const DATA` array, alongside a `const BIBTEX` map
 # for the citations). Leave a corpus out rather than guessing: the default
@@ -135,8 +135,8 @@ def _canonical_name(dataset: str) -> str:
     return str(dataset)
 
 
-# The exact suffix R17 writes for the 2nd+ reading of a repeated paragraph
-# (see `_disambiguate_repeated_readings` below) -- anchored to the end of the
+# The exact suffix `_disambiguate_repeated_readings` (below) writes for the
+# 2nd+ reading of a repeated paragraph -- anchored to the end of the
 # string so a genuine paragraph id that merely contains something similar is
 # never stripped.
 _REPEATED_READING_SUFFIX = re.compile(r"__r\d+$")
@@ -145,7 +145,7 @@ _REPEATED_READING_SUFFIX = re.compile(r"__r\d+$")
 def _disambiguate_repeated_readings(
     fix_df: pd.DataFrame, words: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame, int]:
-    """Give each reading its own ``unique_paragraph_id`` (R17).
+    """Give each reading its own ``unique_paragraph_id``.
 
     EyeGenBench keys `place_fixations`'s join on `unique_paragraph_id`, which
     is correct for the stimulus-word broadcast but loses repeated readings: a
@@ -209,7 +209,7 @@ def _disambiguate_repeated_readings(
 
 
 def _resolve_monitor(spec, report: dict, words: pd.DataFrame) -> tuple[list, str]:
-    """The manifest ``monitor`` + ``monitor_source`` (R26).
+    """The manifest ``monitor`` + ``monitor_source``.
 
     A published `DISPLAY_SPECS` entry is itself a measurement -- start there
     (``monitor_source="published"``). With no published spec (``spec is
@@ -395,13 +395,13 @@ def build_bundle(dataset, fix_df, text_df, participant_df, raw_fix_df, out_root)
     words, report = resolve_geometry(dataset, text_df, raw_fix_df)
     fix_df = _attach_recorded_fixation_y(dataset, fix_df, raw_fix_df)
 
-    # R16: EyeGenBench's own (finer-grained, per-reading) trial id must not be
+    # EyeGenBench's own (finer-grained, per-reading) trial id must not be
     # emitted as `unique_trial_id` -- `data.normalize_fixations` hardcodes
     # that exact name to `trial_id`, overriding EYEGENBENCH_FIX_SCHEMA and
     # breaking the stimulus-word broadcast join.
     fix_df = fix_df.rename(columns={"unique_trial_id": "eyegenbench_trial_id"})
 
-    # R17: give each repeated reading of a paragraph its own paragraph key,
+    # Give each repeated reading of a paragraph its own paragraph key,
     # and duplicate that paragraph's word rows under each new key, before
     # placing fixations.
     fix_df, words, repeated_readings = _disambiguate_repeated_readings(fix_df, words)
@@ -411,7 +411,7 @@ def build_bundle(dataset, fix_df, text_df, participant_df, raw_fix_df, out_root)
     recorded_y = fixations["fixation_y_source"].eq("recorded")
     recorded_fraction = float(recorded_y.mean()) if len(fixations) else 0.0
 
-    # R11: stamp fixations with their *paragraph's* geometry tier, not a
+    # Stamp fixations with their *paragraph's* geometry tier, not a
     # single dataset-level value -- carry the per-paragraph `geometry_source`
     # already on `words` across the join explicitly, since `place_fixations`
     # does not bring it along.
@@ -426,7 +426,7 @@ def build_bundle(dataset, fix_df, text_df, participant_df, raw_fix_df, out_root)
     directory = Path(out_root) / name
     directory.mkdir(parents=True, exist_ok=True)
     words.to_parquet(directory / "words.parquet", index=False)
-    # place_fixations only ever adds x/y (R24) -- the words-side box columns
+    # place_fixations only ever adds x/y -- the words-side box columns
     # never land here. Some corpora's fix_df already carries its own
     # start_x/start_y/end_x/end_y as passthrough (see place_fixations); those
     # DO reach this file, but unregistered in data.FIX_OPTIONAL_FIELDS, so
@@ -445,15 +445,15 @@ def build_bundle(dataset, fix_df, text_df, participant_df, raw_fix_df, out_root)
         "name": name,
         "language": ", ".join(languages),
         "monitor": monitor,
-        # R26: which of the three rules above produced `monitor`, so the
+        # Which of the three rules above produced `monitor`, so the
         # claim is auditable rather than implied.
         "monitor_source": monitor_source,
         # Count what was actually written, not the input frames -- a reader
         # whose every fixation was dropped by place_fixations' inner join
         # must not still be counted as present in the bundle.
         "n_readers": int(fixations["unique_participant_id"].nunique()),
-        # R27: n_texts must count DISTINCT TEXTS, not reading instances -- R17
-        # gives a repeated reading its own `__r<n>` paragraph key so it keeps
+        # n_texts must count DISTINCT TEXTS, not reading instances -- a
+        # repeated reading gets its own `__r<n>` paragraph key so it keeps
         # its own geometry, but that key is not a new text. Strip the exact
         # suffix before counting; `repeated_readings` already carries the
         # reading count, so conflating the two would double-report it as more
@@ -466,15 +466,15 @@ def build_bundle(dataset, fix_df, text_df, participant_df, raw_fix_df, out_root)
         ),
         "n_fixations": len(fixations),
         "recorded_fixation_y_fraction": round(recorded_fraction, 4),
-        # Spec §8: attribution travels with the data into export bundles.
+        # Attribution travels with the data into export bundles.
         "license": info.get("license", "unknown - consult the corpus"),
         "citation": info.get("citation", ""),
-        # R17: how many readings were disambiguated by a repeated-reading
+        # How many readings were disambiguated by a repeated-reading
         # suffix, so the docs page can be honest about partial coverage.
         "repeated_readings": repeated_readings,
         **report,
     }
-    # R25: `monospaced` describes the *reconstructed*-layout spec, which was
+    # `monospaced` describes the *reconstructed*-layout spec, which was
     # never built for a real-geometry corpus -- PoTeC's real boxes are
     # plainly proportional ("Ein" is 49px, "zylindrischen" is 197px) even
     # though its DisplaySpec says monospaced=True. Omit rather than mislead.
@@ -488,7 +488,7 @@ def write_manifest(out_root: Path, entries: list) -> None:
 
     Writes atomically (temp file + ``os.replace``) so a run interrupted
     mid-write can never truncate a manifest that already has good entries in
-    it -- the whole point of writing one dataset at a time (R21) is defeated
+    it -- the whole point of writing one dataset at a time is defeated
     if the write itself isn't crash-safe.
     """
     path = Path(out_root) / MANIFEST_NAME
@@ -511,7 +511,7 @@ def write_manifest(out_root: Path, entries: list) -> None:
         raise
 
 
-# R22: EyeGenBench's own `download_from_github` clones over `git@github.com:`,
+# EyeGenBench's own `download_from_github` clones over `git@github.com:`,
 # which fails wherever GitHub SSH keys aren't set up -- and EyeGenBench
 # swallows git's exit 128 ("Permission denied (publickey)") as "skipping
 # clone", so the failure only surfaces much later as a baffling missing-file
@@ -600,7 +600,7 @@ def main(argv=None) -> int:
             check_free_space(eyegenbench_root)
             fix, text, parts, raw = run_prepare_data(name, eyegenbench_root)
             entry = build_bundle(name, fix, text, parts, raw, out_root)
-            # R2/manifest contract: a skipped or failed dataset must not get a
+            # Manifest contract: a skipped or failed dataset must not get a
             # manifest entry -- write_manifest only ever sees a dataset whose
             # three Parquet files are already on disk, so a run interrupted
             # halfway still passes eyegenbench_present.

@@ -159,7 +159,7 @@ def load_authored_scanpath(
 TableLike = pd.DataFrame | str | Path
 TablesLike = TableLike | list["TableLike"]
 
-# The headless rendering is the app's default *Scanpath* design (#374, F21):
+# The headless rendering is the app's default *Scanpath* design:
 # fixations, saccades and the text, with word boxes, the heatmap and fixation
 # numbers off (controls._VIZ_WIDGET_DEFAULTS), so a bare `plot_scanpath` /
 # `render` draws the figure the app opens on. Turn a layer on with its keyword
@@ -174,7 +174,7 @@ _FIGURE_CONTEXT_FIELDS = frozenset(
     {"canvas_width", "canvas_height", "base_font_size", "font_family"}
 )
 _STATIC_FIGURE_PARAMS = frozenset(STATIC_FIGURE_OPTIONS) - _FIGURE_CONTEXT_FIELDS
-#: CMP-9. `layout`, `compare_stimulus`, `trial_labels` and `canvas_b` are named
+#: `layout`, `compare_stimulus`, `trial_labels` and `canvas_b` are named
 #: parameters of `compare_scanpaths`, so they are not also loose keywords.
 _COMPARISON_FIGURE_PARAMS = frozenset(COMPARISON_FIGURE_OPTIONS) - (
     _FIGURE_CONTEXT_FIELDS | {"layout", "compare_stimulus", "trial_labels", "canvas_b"}
@@ -256,7 +256,7 @@ _CANONICAL_OPTION_NAMES = {
     "show_stimulus_image",
     "word_hover_fields",
     "fixation_hover_fields",
-    # #422 — design choices that used to be fixed.
+    # Figure design settings.
     "fixation_colorbar_thickness",
     "fixation_colorbar_length",
     "heatmap_colorbar_thickness",
@@ -285,7 +285,7 @@ CANONICAL_FIGURE_DEFAULTS: dict = FigureSettings.defaults(
     fixation_opacity=0.7,
     background_color=DEFAULT_BACKGROUND_COLOR,
     fit_to_monitor=True,
-    # #374 F26: the A/B legend is on, as in the app.
+    # The A/B legend is on, as in the app.
     show_legend=True,
     word_hover_fields=["text", "word_id", "line_idx", "total_fixation_duration_ms"],
     fixation_hover_fields=["order_in_trial", "duration_ms", "word_id"],
@@ -296,10 +296,10 @@ def _as_dataframe(
     table: TablesLike, label: str, *, plan_for=None, kind: str | None = None
 ) -> pd.DataFrame:
     if isinstance(table, pd.DataFrame):
-        # DATA-66: a frame this API returned under the dataset's own names goes
-        # back to the internal names it was normalized under, so loading it
-        # again is the round-trip it was before (a converted width sits beside
-        # a renamed left edge, which no detection would pair up).
+        # A frame this API returned under the dataset's own names goes back to
+        # the internal names it was normalized under, so loading it again
+        # round-trips (a converted width sits beside a renamed left edge, which
+        # no detection would pair up).
         return _cn.to_canonical_frame(table)
     items = _data.expand_table_inputs(table)
     for item in items:
@@ -307,7 +307,7 @@ def _as_dataframe(
             raise FileNotFoundError(
                 f"{label} table not found: {item} (looked in {Path.cwd()})"
             )
-    # #374 F3: a zip holding both EyeLink reports gives each table its own.
+    # A zip holding both EyeLink reports gives each table its own.
     return _data.read_tables(items, plan_for=plan_for, kind=kind)
 
 
@@ -479,9 +479,7 @@ def _check_mapped_columns(kind: str, frame: pd.DataFrame, schema: dict) -> None:
 
     Only reachable with a caller-supplied schema — auto-detection only ever
     picks columns that exist. Without this check a mistyped mapping raises a
-    bare ``KeyError: '<column>'`` from inside ``normalize_*``. (It could also be
-    silently ignored until BUG-58: ``normalize_words`` used to prefer a literal
-    ``unique_trial_id`` column over the mapped trial id; the mapping wins now.)"""
+    bare ``KeyError: '<column>'`` from inside ``normalize_*``."""
     spec = _SCHEMA_SPECS[kind]
     present = {str(c) for c in frame.columns}
     missing = [(key, col) for key, col in _schema_columns(schema) if col not in present]
@@ -518,7 +516,7 @@ def _known_schema_keys(kind: str, frame: pd.DataFrame) -> set:
 
 
 def _unknown_schema_keys(kind: str, frame: pd.DataFrame, schema: dict) -> list:
-    """The keys of ``schema`` that name no field (#374: ``x_pos`` for ``x``)."""
+    """The keys of ``schema`` that name no field (``x_pos`` for ``x``)."""
     known = _known_schema_keys(kind, frame)
     return [key for key in schema if key not in known]
 
@@ -670,7 +668,7 @@ def propose_schema(table: TablesLike, kind: str = "words") -> dict:
 _NORMALIZED_ID_COLUMNS = ("participant_id", "trial_id")
 
 
-#: DATA-66: the column vocabularies a loader can return frames in.
+#: The column vocabularies a loader can return frames in.
 NAMES_SOURCE = "source"
 NAMES_CANONICAL = "canonical"
 
@@ -717,7 +715,7 @@ def _check_names_choice(names: str) -> None:
 def _named_in(
     frame, label: str, *, optional: bool = False
 ) -> tuple[pd.DataFrame, ColumnNames | None]:
-    """DATA-66: ``(canonical frame, its map)`` for a frame handed to the API.
+    """``(canonical frame, its map)`` for a frame handed to the API.
 
     A frame :func:`load_scanpath_data` returned under the dataset's own names
     carries its map (`column_names.attach`); it is renamed back here, and the
@@ -790,7 +788,7 @@ def _require_normalized(frame, label: str) -> pd.DataFrame:
             "Call words, fixations = load_scanpath_data(words=…, fixations=…) "
             "first — it reads paths/globs and normalizes column names."
         )
-    # DATA-66: a frame under the dataset's own names is processed canonically.
+    # A frame under the dataset's own names is processed canonically.
     frame = _cn.to_canonical_frame(frame)
     missing = [col for col in _NORMALIZED_ID_COLUMNS if col not in frame.columns]
     if missing:
@@ -895,8 +893,8 @@ def load_scanpath_data(
         raise ValueError("Provide at least one of words= or fixations=.")
     if image_root is not None:
         _require_image_folder(image_root)
-    # DATA-66: a frame this API already named is loaded under its internal
-    # names; its own map then renames the new one back to the user's.
+    # A frame this API already named is loaded under its internal names; its
+    # own map then renames the new one back to the user's.
     prior = {
         table: found[1]
         for table, frame in (("words", words), ("fixations", fixations))
@@ -904,7 +902,7 @@ def load_scanpath_data(
     }
 
     if words is not None:
-        # BUG-53: a word spelled "None" or "NA" is a word, not a missing cell.
+        # A word spelled "None" or "NA" is a word, not a missing cell.
         words_df = _as_dataframe(
             words,
             "words",
@@ -971,7 +969,7 @@ def load_scanpath_data(
         fixations_norm = _data.resolve_stimulus_image_paths(
             fixations_norm, image_root, image_pattern
         )
-    # DATA-66: what each column was called in these files — from the schemas
+    # What each column was called in these files — from the schemas
     # and raw columns normalization read, with the columns the fixups rewrote
     # marked converted.
     maps = {
@@ -996,7 +994,8 @@ def load_scanpath_data(
 
 
 def _require_image_folder(image_root: str | Path) -> None:
-    """#420: a mistyped folder matched nothing and drew no page, without a word."""
+    """Refuse a folder that is not there: a mistyped one would match nothing and
+    draw no page, without a word."""
     folder = Path(image_root).expanduser()
     if not folder.is_dir():
         raise ValueError(
@@ -1438,7 +1437,7 @@ def _health_findings(words, fixations, raw_gaze) -> list:
     findings = _check(*(frame for frame, _names in named.values()))
 
     def _in_own_names(finding):
-        # DATA-66: name the columns and example fields as the frames did.
+        # Name the columns and example fields as the frames did.
         names = named[finding.table][1]
         if names is None:
             return finding
@@ -1455,15 +1454,15 @@ def _health_findings(words, fixations, raw_gaze) -> list:
 
 
 def _require_computed_measures(name: str) -> None:
-    """Refuse a held-back computation, naming the switch that enables it.
+    """Refuse an experimental computation, naming the switch that enables it.
 
     These values are computed by Scanpath Studio rather than read from the
-    dataset, and each needs checking by hand before it is released. A script
-    gets an error rather than an unchecked number.
+    dataset, and none is validated by hand yet. A script gets an error rather
+    than an unchecked number.
     """
     if not computed_measures_enabled():
         raise ValueError(
-            f"{name} is not available in this release: its values are computed "
+            f"{name} is experimental and off by default: its values are computed "
             "by Scanpath Studio and have not been validated yet. Set "
             f"{EXPERIMENTAL_ENV_VAR}=1 to use it anyway."
         )
@@ -1619,7 +1618,7 @@ def analysis_tables(
     }
     if not _data.brought_reading_measures(words):
         del tables["word_measures"]
-    # DATA-66: in the names the frames carried — the two tables that are the
+    # In the names the frames carried — the two tables that are the
     # dataset's own under their whole map, the derived ones by their ids only
     # (the export bundle's rule, `export._ARTIFACT_TABLE`).
     names = _call_names(fixations=fix_names, words=word_names)
@@ -1648,7 +1647,7 @@ def alignment_sensitivity(
     """
     if not drift_correction_enabled():
         raise ValueError(
-            "alignment_sensitivity is not available in this release (vertical "
+            "alignment_sensitivity is experimental and off by default (vertical "
             "drift correction is not fully integrated yet). Set "
             f"{EXPERIMENTAL_ENV_VAR}=1 to enable it."
         )
@@ -1666,14 +1665,14 @@ def alignment_sensitivity(
 
 
 #: The columns each corpus-figure kind reads; ``"<value>"`` stands for
-#: ``value_col``. EXP-13: without the check a table lacking one surfaced as a
+#: ``value_col``. Without the check a table lacking one would surface as a
 #: bare ``KeyError: 'value'`` from inside the builder.
 _CORPUS_COLUMNS = {
     "profile": ("word_id", "<value>"),
     "distribution": ("<value>",),
-    # EXP-16: the builder draws its "no data" placeholder for a table with no
-    # `diff` — right for the app's empty states, but headlessly it meant a
-    # figure with nothing on it and an exit code of 0.
+    # The builder draws its "no data" placeholder for a table with no `diff` —
+    # right for the app's empty states, but headless it would mean a figure
+    # with nothing on it and an exit code of 0.
     "difference": ("word_id", "diff"),
 }
 
@@ -1916,7 +1915,7 @@ def _resolve_trial(
     is unknown, a few valid values and the closest spellings. An underspecified
     selection matching several trials raises too, unless ``default_first`` picks
     the first match (the CLI's behavior, mirroring the app's default selection)
-    — but never for a trial id that several participants share (#412): the
+    — but never for a trial id that several participants share: the
     app's picker and its links refuse to guess the reader, so the CLI does too.
     ``raw_gaze`` makes the trials only its samples cover selectable.
     """
@@ -2044,7 +2043,7 @@ def _select_part(
         and raw_gaze is not None
         and SCREEN_ID in raw_gaze.columns
     ):
-        # VIZ-45: a trial recorded as raw gaze alone takes its screens from the
+        # A trial recorded as raw gaze alone takes its screens from the
         # samples, so one screen's coordinate space is drawn at a time — as for
         # words and fixations — rather than every screen stacked into one.
         catalog = part_catalog(_data.filter_raw_gaze(raw_gaze, [pid], [tid]))
@@ -2127,8 +2126,8 @@ _SPELLINGS = (("grey", "gray"), ("colour", "color"))
 
 
 def _spelling_variants(text: str) -> list[str]:
-    """``text`` as written, all-US and all-UK (#374: the palette names moved to
-    US spelling, and both spellings must keep naming the same palette)."""
+    """``text`` as written, all-US and all-UK: the palette names are shown in US
+    spelling, and both spellings name the same palette."""
     import re
 
     out = [text]
@@ -2162,8 +2161,8 @@ def resolve_palette(value: object) -> str:
 
 
 def _check_colorscales(overrides: dict) -> None:
-    """#374: a name Plotly doesn't know raised its own lower-cased
-    ``PlotlyError`` from inside the builder; name the option instead."""
+    """Name the option when Plotly doesn't know a color scale, rather than let
+    Plotly raise its own lower-cased ``PlotlyError`` from inside the builder."""
     from plotly.colors import get_colorscale
     from plotly.exceptions import PlotlyError
 
@@ -2258,9 +2257,10 @@ def _reject_unknown_options(overrides: dict, valid, func_name: str) -> None:
 
 
 #: Figure options whose value names a column → (the table it is read from, its
-#: CLI flag, the values that are not columns, what to do instead). EXP-17: the
-#: builders look the column up and draw *nothing* when it is missing, so a
-#: misspelling rendered a flat-coloured / unmarked figure without a word.
+#: CLI flag, the values that are not columns, what to do instead). The
+#: builders look the column up and draw *nothing* when it is missing, so
+#: without this check a misspelling would render a flat-coloured / unmarked
+#: figure without a word.
 _COLUMN_OPTIONS = {
     "color_by": (
         "fixations",
@@ -2279,7 +2279,7 @@ _COLUMN_OPTIONS = {
 }
 
 
-#: DATA-66: the figure options whose value names one column, and those naming a
+#: The figure options whose value names one column, and those naming a
 #: list of them — each takes the dataset's own name as well as the internal one.
 _ONE_COLUMN_OPTIONS = (
     "color_by",
@@ -2308,8 +2308,8 @@ def _canonical_options(
     map's.
 
     ``heatmap_metric`` is checked here too: the heatmap weights by the fixation
-    duration or counts fixations, and any other value used to count silently —
-    which, once the dataset's own names are accepted, a misspelled name would."""
+    duration or counts fixations, and any other value — a misspelled column
+    name, say — would silently count."""
     out = dict(overrides)
 
     def canonical(option: str, value) -> str:
@@ -2433,7 +2433,7 @@ def figure_options(kind: str = "static", *, choices: bool = False) -> dict:
         params = _ANIMATION_FIGURE_PARAMS
         defaults = FigureSettings.defaults(params) | _animation_defaults()
     elif kind == "comparison":
-        # CMP-9: `compare_scanpaths` validates against this set, and its TypeError
+        # `compare_scanpaths` validates against this set, and its TypeError
         # points the caller here — so it has to be answerable.
         params = _COMPARISON_FIGURE_PARAMS
         defaults = FigureSettings.defaults(params) | {
@@ -2487,13 +2487,13 @@ def _apply_drift_correction(
     """
     if method is None or str(method).lower() == "off":
         return trial_fixations
-    # PRE-21: raise rather than ignore. A share link degrades silently because a
+    # Raise rather than ignore. A share link degrades silently because a
     # human can see the figure and the rail; a script cannot, so quietly
     # returning uncorrected fixations under a stated `drift_correction=` would
     # be a wrong result with no signal. Name the env var so it is one step to fix.
     if not drift_correction_enabled():
         raise ValueError(
-            "drift_correction is not available in this release (vertical "
+            "drift_correction is experimental and off by default (vertical "
             f"drift correction is not fully integrated yet). Set "
             f"{EXPERIMENTAL_ENV_VAR}=1 to enable it, or pass drift_correction=None."
         )
@@ -2521,8 +2521,9 @@ def _apply_drift_correction(
 
 
 def _check_canvas_size(canvas_size) -> None:
-    """#374: ``canvas_size="1920x1080"`` was read character by character into a
-    1 x 9 px canvas and drew an empty figure."""
+    """Require a ``(width, height)`` pair: a string such as ``"1920x1080"`` would
+    be read character by character into a 1 x 9 px canvas and draw an empty
+    figure."""
     if canvas_size is None:
         return
     try:
@@ -2689,7 +2690,7 @@ def plot_scanpath(
         if canvas_size is None:
             canvas_size = _recorded_screen(words, fixations)
         if canvas_size is None:
-            # VIZ-45: a trial with no fixations is sized from its samples, as the
+            # A trial with no fixations is sized from its samples, as the
             # app sizes a raw-gaze-only dataset's canvas.
             canvas_size = _data.compute_canvas_size(
                 trial_words,
@@ -2933,7 +2934,8 @@ def animate_scanpath(
             full_fix_range = (int(full_order.min()), int(full_order.max()))
     trial_fixations = _apply_fix_index_range(trial_fixations, fix_index_range, pid, tid)
     # A's screen: a stated `setup`, else `canvas_size`, else read off the data —
-    # the order `compare_scanpaths` resolves it in, and what CMP-21's gate reads.
+    # the order `compare_scanpaths` resolves it in, and what the screen gate
+    # below reads.
     setup_a = _compare_setup(
         setup, canvas_size, trial_words, trial_fixations, side="setup"
     )
@@ -3011,11 +3013,11 @@ def animate_scanpath(
 
         reasons = illustration_reasons(
             {**animation_overrides, "playback_speed": playback_speed},
-            # The replay draws neither the snap nor the arcs (#422).
+            # The replay draws neither the snap nor the arcs.
             static=False,
             fix_index_range=fix_index_range,
             full_fixation_range=full_fix_range,
-            # CMP-24: B's own flags and window, when it co-animates.
+            # B's own flags and window, when it co-animates.
             fixation_flags_b=animation_overrides.get("fixation_flags_b")
             if fixations_b is not None
             else None,
@@ -3098,8 +3100,8 @@ def _second_reading(
     def one_reading(frame: pd.DataFrame | None, label: str) -> pd.DataFrame | None:
         # `extract_part` masks afresh, as `_select_trial` slices A. Not
         # `utils.extract_trial`: its position cache is keyed by the frame's
-        # identity, so an in-place edit between two calls handed back somebody
-        # else's rows.
+        # identity, so an in-place edit between two calls would hand back
+        # somebody else's rows.
         if frame is None or frame.empty:
             return frame
         return extract_part(_require_normalized(frame, label), pid_b, tid_b)
@@ -3293,7 +3295,7 @@ def render_parent_trial(
         raw_gaze=_cn.to_canonical_frame(raw_gaze),
     )
     # Read here under the internal names; the renderers take the frames as
-    # given and name their figures as they were named (DATA-66).
+    # given and name their figures as they were named.
     catalog = _cn.to_canonical_frame(
         list_parts(words, fixations, pid, tid, raw_gaze=raw_gaze)
     )
@@ -3558,7 +3560,7 @@ def compare_scanpaths(
     )
 
     cross_dataset = words_b is not None or fixations_b is not None
-    # DATA-66: A's names name the figure's text and its options; every frame,
+    # A's names name the figure's text and its options; every frame,
     # A's or B's, is processed under the internal names.
     carried = {
         table: found[1]
@@ -3593,8 +3595,9 @@ def compare_scanpaths(
     pid_a, tid_a = _data.respell_reading(*trial_a, _data.trial_keys(fixations))
     pid_b, tid_b = _data.respell_reading(*trial_b, _data.trial_keys(fixations_b))
     # One screen per side, each resolved in its own frames — the same contract
-    # as `plot_scanpath`'s `screen`. Extracting whole parent trials pooled every
-    # page of a multipart reading into one scanpath, saccades across pages and all.
+    # as `plot_scanpath`'s `screen`. Extracting whole parent trials would pool
+    # every page of a multipart reading into one scanpath, saccades across pages
+    # and all.
     trial_words_a, trial_fix_a, pid_a, tid_a, _screen_a = _select_part(
         words, fixations, str(pid_a), str(tid_a), screen
     )
@@ -3662,7 +3665,7 @@ def compare_scanpaths(
     if resolved_layout == "overlay" and gate:
         comparable, note = setups_comparable(setup_a, resolved_setup_b)
         if not comparable:
-            # BUG-85: the reason says why; this says what happened here and how
+            # The reason says why; this says what happened here and how
             # to ask for the split in Python. `render` rewords it in its flags.
             hint = (
                 _inferred_screen_hint(
@@ -3703,10 +3706,10 @@ def compare_scanpaths(
         tid_b,
     )
     if drift_correction:
-        # PRE-21: same contract as plot_scanpath — raise, don't silently skip.
+        # Same contract as plot_scanpath — raise, don't silently skip.
         if not drift_correction_enabled():
             raise ValueError(
-                "drift_correction is not available in this release. Set "
+                "drift_correction is experimental and off by default. Set "
                 f"{EXPERIMENTAL_ENV_VAR}=1 to enable it, or pass "
                 "drift_correction=None."
             )
@@ -3716,7 +3719,7 @@ def compare_scanpaths(
         trial_fix_b, _ = correct(trial_fix_b, trial_words_b, drift_correction)
 
     if not cross_dataset and (pid_a, tid_a) == (pid_b, tid_b):
-        # CMP-22: a trial compared with itself — rename B's copy apart, or the
+        # A trial compared with itself — rename B's copy apart, or the
         # figure's (participant, trial) slice hands each side both copies.
         # The renamed id is for slicing only, so B's default legend name is
         # resolved here from the real one.
@@ -3848,12 +3851,11 @@ def save_figure(
             "dpi is the resolution of a print width: pass width_mm or width_in too."
         )
     if suffix == ".html":
-        # BUG-93: an animation replays on the wall-clock player, which also
-        # autoplays it at the configured speed when asked (VIZ-10). Plotly's own
-        # `auto_play` stays off — it ignores the frame duration. PERF-17: the
-        # frames are written packed and rebuilt by the page's own script, so a
-        # long replay writes a fraction of the bytes. Static figures write
-        # unchanged.
+        # An animation replays on the wall-clock player, which also autoplays
+        # it at the configured speed when asked. Plotly's own `auto_play` stays
+        # off — it ignores the frame duration. The frames are written packed
+        # and rebuilt by the page's own script, so a long replay writes a
+        # fraction of the bytes. Static figures are written as they are.
         page = replay_page(fig)
         if page is not None:
             figure_dict, script = page
@@ -3916,9 +3918,9 @@ def save_figure_layers(
         ``{layer: Path}`` for each file written.
     """
     directory = Path(directory)
-    # ENG-54: a failed render (most often Kaleido with no Chrome) used to leave
-    # an empty `<output>_layers/` behind, which reads as "exported, but lost".
-    # Whatever this call created is removed again if nothing was written to it.
+    # A failed render (most often Kaleido with no Chrome) must not leave an
+    # empty `<output>_layers/` behind, which reads as "exported, but lost":
+    # whatever this call created is removed again if nothing was written to it.
     created = [path for path in (directory, *directory.parents) if not path.exists()]
     directory.mkdir(parents=True, exist_ok=True)
     written: dict = {}
@@ -4064,9 +4066,9 @@ def figure_code(
         "figure_code",
     )
     if canvas_size is None:
-        # EXP-14: `render` snaps these sources to their recorded screen while
+        # `render` snaps these sources to their recorded screen while
         # `plot_scanpath` estimates one from the data, so leaving the canvas
-        # unnamed made the two flavours of one recipe disagree.
+        # unnamed would make the two flavours of one recipe disagree.
         canvas_size = _snippet.source_canvas(source)
     state = _snippet.FigureState(
         kind=kind,

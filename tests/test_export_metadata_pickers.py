@@ -1,11 +1,11 @@
-"""DATA-20 §10 / DATA-29: which metadata fields ride along in the export bundle.
+"""Which metadata fields ride along in the export bundle.
 
 Three near-identical pickers, one per grain, each with the same two contracts:
 
 * **Every field selected returns `None`** — "no restriction" — so a bundle
-  exported without touching the control is byte-identical to one made before the
-  control existed. Returning the full tuple instead would work, but it makes the
-  export options differ from a pre-DATA-20 export for no reason.
+  exported without touching the control is byte-identical to one made with no
+  metadata control at all. Returning the full tuple instead would work, but it
+  makes the export options differ for no reason.
 * **The persisted selection is pruned against *this* table's fields.** Attaching
   a second table leaves a selection naming only the first one's columns;
   Streamlit filters invalid values out silently and the widget yields `[]`, and
@@ -98,7 +98,7 @@ class TestEveryGrainPicker:
     def test_all_fields_selected_means_no_restriction(
         self, session, picker, state_key, build, suffix
     ):
-        """Byte-identical to a bundle made before the control existed."""
+        """Byte-identical to a bundle made with no metadata control."""
         session[state_key] = build()
         assert picker("bulk") is None
 
@@ -127,8 +127,8 @@ class TestEveryGrainPicker:
     def test_a_stale_selection_is_pruned_not_read_as_an_omission(
         self, session, picker, state_key, build, suffix
     ):
-        """The bug this guards: a leftover key naming another table's columns
-        yields `[]`, and `()` means "leave the table out of the bundle"."""
+        """A leftover key naming another table's columns yields `[]`, and `()`
+        means "leave the table out of the bundle"."""
         session[state_key] = build()
         session[f"bulk{suffix}"] = ["a_column_from_another_study"]
 

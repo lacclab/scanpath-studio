@@ -6,7 +6,7 @@ itself — stepping through trials, switching on the heatmap, replaying a readin
 comparing two readers, and opening Corpus Analysis — so the first thing a README
 reader sees is what using the tool looks like. Writes
 ``docs/assets/app_demo.gif`` for the README and, from the same recording, the
-docs home page's ``app_demo.mp4`` and its ``app_demo_poster.webp`` (ENG-78)::
+docs home page's ``app_demo.mp4`` and its ``app_demo_poster.webp``::
 
     uv run --with playwright python scripts/record_app_demo.py
 
@@ -114,8 +114,8 @@ class Pointer:
 
     The drawn pointer lives in the top document and moves when this says so,
     not on mouse events: over the figure's iframe the page receives none, so an
-    event-driven pointer stuck at the iframe's edge while a second copy, drawn
-    inside the iframe, followed the mouse.
+    event-driven pointer would stick at the iframe's edge while a second copy,
+    drawn inside the iframe, followed the mouse.
     """
 
     def __init__(self, page: Page) -> None:
@@ -150,8 +150,8 @@ class Screencast:
 
     Playwright's own video is VP8 encoded in real time, and its noise shimmers
     across the parts of the page that don't change. A GIF stores only the pixels
-    that change from one frame to the next, so that shimmer cost as much as the
-    content, and more the busier the machine was. These frames are PNG: a region
+    that change from one frame to the next, so that shimmer would cost as much
+    as the content, and more the busier the machine. These frames are PNG: a region
     that doesn't change stays identical, and costs nothing.
     """
 

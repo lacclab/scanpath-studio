@@ -91,15 +91,15 @@ COLORBAR_LEN_FRACTION = 0.33
 class FigureSettings:
     """Immutable rendering settings shared by every scanpath figure builder.
 
-    The app, headless API, CLI, and exporters used to forward parallel keyword
-    lists into three builders with 45–69 parameters each.  This object is the
-    single rendering contract instead.  Builder-specific fields live together
-    deliberately: switching between static, animated, and comparison views must
-    preserve the common visual choices without another translation layer.
+    The app, headless API, CLI, and exporters all hand the three builders this
+    one rendering contract rather than parallel keyword lists.  Builder-specific
+    fields live together deliberately: switching between static, animated, and
+    comparison views must preserve the common visual choices without another
+    translation layer.
 
     ``canvas_width``, ``canvas_height``, and ``base_font_size`` are the only
     context-dependent required values.  Everything else has the builder's
-    behavior-preserving default and may be changed with :meth:`with_overrides`.
+    default and may be changed with :meth:`with_overrides`.
     """
 
     canvas_width: int
@@ -128,7 +128,7 @@ class FigureSettings:
     show_saccade_arrows: bool = False
     heatmap_style: str = "Word boxes"
     heatmap_norm: str = "Linear"
-    #: #422 — the heatmap's opacity; ``None`` keeps each style's own
+    #: The heatmap's opacity; ``None`` keeps each style's own
     #: (`heatmap_style_opacity`).
     heatmap_opacity: float | None = None
     #: The Interpolated heatmap's Gaussian σ in px; ``None`` picks it from the
@@ -146,7 +146,7 @@ class FigureSettings:
     duration_size_legend: bool = True
     #: Where each legend sits, as ``{kind: {"position", "arrangement", "size"}}``
     #: for the kinds in ``LEGEND_KINDS``. A kind left out, or set to "auto"
-    #: throughout, is drawn where it always was; whether it is drawn at all is
+    #: throughout, is drawn in its default place; whether it is drawn at all is
     #: still its own layer's switch. See :func:`normalize_legend_layout`.
     legend_layout: dict | None = None
     order_font_size: int | None = 10
@@ -157,7 +157,7 @@ class FigureSettings:
     fixation_colorbar_orientation: str = "Vertical"
     fixation_colorbar_tickangle: int = 0
     fixation_colorbar_tickfont_size: int = 12
-    #: #422 — the bar's thickness in px, and its length as a fraction of the
+    #: The bar's thickness in px, and its length as a fraction of the
     #: plot's side (``None``: a third of the height upright, 0.6 of the width
     #: lying down).
     fixation_colorbar_thickness: int = DEFAULT_COLORBAR_THICKNESS
@@ -181,10 +181,10 @@ class FigureSettings:
     saccade_color: str = SACCADE_COLOR
     saccade_style: str = "solid"
     saccade_width: float = DEFAULT_SACCADE_WIDTH
-    #: #422 — the saccade lines' and direction arrows' opacity, one value for
+    #: The saccade lines' and direction arrows' opacity, one value for
     #: the whole figure (both scanpaths in Compare and the co-animation).
     saccade_opacity: float = 1.0
-    #: #422 — the direction arrowheads' size, in px.
+    #: The direction arrowheads' size, in px.
     saccade_arrow_size: float = DEFAULT_SACCADE_ARROW_SIZE
     saccade_color_mode: str = "Uniform"
     saccade_class_colors: dict | None = None
@@ -197,14 +197,14 @@ class FigureSettings:
     show_highlight_legend: bool = True
     saccade_classes: Iterable[str] | None = None
     saccade_render_mode: str = "Straight"
-    #: #422 — move each fixation vertically onto its text line (it keeps its
+    #: Move each fixation vertically onto its text line (it keeps its
     #: x), ``fixation_snap_position`` line heights from the line's middle.
     #: The static figure only, and only while ``show_fixations`` is on.
     fixation_snap_to_line: bool = False
     fixation_snap_position: float = DEFAULT_SNAP_POSITION
     hollow_fixations: bool = False
     fixation_opacity: float = 1.0
-    #: #422 — the outline round each filled fixation marker (0 draws none). A
+    #: The outline round each filled fixation marker (0 draws none). A
     #: hollow marker's ring and a comparison's metric-coloured ring are their
     #: scanpath's colour, so they keep their own.
     fixation_outline_width: float = DEFAULT_FIXATION_OUTLINE_WIDTH
@@ -216,7 +216,7 @@ class FigureSettings:
     background_color: str | None = None
     color_by_line: bool = False
     fixation_flags: dict | None = None
-    #: CMP-24: scanpath B's own flags in a co-animation (Animate + Compare);
+    #: Scanpath B's own flags in a co-animation (Animate + Compare);
     #: ``None`` gives B the same ``fixation_flags`` as A.
     fixation_flags_b: dict | None = None
     span_border_color: str = "#000000"
@@ -226,24 +226,24 @@ class FigureSettings:
     background_image_size: tuple[float, float] | None = None
     background_image_origin: tuple[float, float] | None = None
     background_image_opacity: float = 1.0
-    #: #420 — draw each reading's own stimulus page: the ``image_path`` on its
-    #: rows, at its ``image_x`` / ``image_y`` (`reading_stimulus_image`). Fills
-    #: only an empty ``background_image`` (and a split comparison's
+    #: Draw each reading's own stimulus page: the ``image_path`` on its rows,
+    #: at its ``image_x`` / ``image_y`` (`reading_stimulus_image`). Fills only
+    #: an empty ``background_image`` (and a split comparison's
     #: ``background_image_b``); an image given explicitly wins. The app places
-    #: the page itself, behind ENG-57's rule on what its server may read, and
-    #: never sets this.
+    #: the page itself, behind its rule on what its server may read, and never
+    #: sets this.
     show_stimulus_image: bool = False
     fit_to_monitor: bool = False
-    #: #422 — the margin, in screen px, around the data when the view is
+    #: The margin, in screen px, around the data when the view is
     #: cropped to it (``fit_to_monitor`` off). ``None`` is the automatic one:
     #: 5% of the data's extent on each axis, at least ``CANVAS_PAD_MIN_PX``.
     crop_margin: float | None = None
-    #: #422 — the static figure's border round the plot area.
+    #: The static figure's border round the plot area.
     show_plot_frame: bool = True
     plot_frame_color: str = DEFAULT_PLOT_FRAME_COLOR
     show_coordinate_grid: bool = False
     coordinate_grid_spacing: float | None = None
-    #: #422 — the grid's tick labels, in px.
+    #: The grid's tick labels, in px.
     coordinate_grid_font_size: int = DEFAULT_GRID_FONT_SIZE
     word_heatmap_col: str | None = None
     word_heatmap_title: str | None = None
@@ -255,7 +255,7 @@ class FigureSettings:
     illustration_reasons: Sequence[str] | None = None
     #: The Illustration label's text; empty writes "Illustration · <reasons>".
     illustration_text: str = ""
-    #: #422 — how the export title and caption are written
+    #: How the export title and caption are written
     #: (`export.annotate_figure`); they draw only when a title / caption is set.
     title_font_size: int = DEFAULT_TITLE_FONT_SIZE
     caption_font_size: int = DEFAULT_CAPTION_FONT_SIZE
@@ -271,24 +271,23 @@ class FigureSettings:
     layout: str = "overlay"
     style_a: dict | None = None
     style_b: dict | None = None
-    # CMP-8 §4 — scanpath B's own screen, honoured *only* by
-    # `_make_split_comparison_figure` (side-by-side / stacked). `None` means "the
-    # same screen as A", which is every same-dataset comparison and so leaves
-    # every existing figure byte-identical. Overlay never needs these: CMP-11
-    # lets a cross-dataset pair overlay only when both screens are equal, so
-    # there is no second canvas for it to reconcile.
+    # Scanpath B's own screen, honoured *only* by `_make_split_comparison_figure`
+    # (side-by-side / stacked). `None` means "the same screen as A", which is
+    # every same-dataset comparison. Overlay never needs these: a cross-dataset
+    # pair may overlay only when both screens are equal, so there is no second
+    # canvas for it to reconcile.
     canvas_b: tuple[int, int] | None = None
     background_image_b: str | None = None
     background_image_size_b: tuple[float, float] | None = None
     background_image_origin_b: tuple[float, float] | None = None
-    # CMP-11 — which reading supplies the stimulus layer (word boxes + labels)
-    # on an OVERLAY: "both" (the default, and byte-identical to pre-CMP-11),
-    # "a", or "b". Two datasets' AOIs coincide only when the text is identical,
-    # so an overlay across corpora can otherwise stack two offset sets of
-    # rectangles. Split layouts ignore it — each panel owns its own stimulus,
-    # and hiding one panel's boxes would just leave a blank half.
+    # Which reading supplies the stimulus layer (word boxes + labels) on an
+    # OVERLAY: "both" (the default), "a", or "b". Two datasets' AOIs coincide
+    # only when the text is identical, so an overlay across corpora can
+    # otherwise stack two offset sets of rectangles. Split layouts ignore it —
+    # each panel owns its own stimulus, and hiding one panel's boxes would just
+    # leave a blank half.
     compare_stimulus: str = "both"
-    # DATA-66 — the dataset's own names for the columns the figure's text names
+    # The dataset's own names for the columns the figure's text names
     # (hover rows, colour-bar and legend titles, non-spatial axis titles),
     # canonical column → label. Built by the caller (`tabs`); not a figure
     # option, so no option set, link or `render` flag carries it.
@@ -397,7 +396,7 @@ def normalize_option_value(name: str, value: object) -> object:
     raise ValueError(f"Unknown {name} {value!r}; choose one of {', '.join(choices)}.")
 
 
-#: The palettes' short names (#374): no spaces or brackets, so a shell needs
+#: The palettes' short names: no spaces or brackets, so a shell needs
 #: no quotes — `render --palette print`. The app's own names work too.
 PALETTE_SLUGS = {
     "default": "Default (colourblind-safe)",
@@ -407,7 +406,7 @@ PALETTE_SLUGS = {
 _PALETTE_ALIASES = {
     "colourblindsafe": "Default (colourblind-safe)",
     "colorblindsafe": "Default (colourblind-safe)",
-    # #374: the names the app shows (US spelling, `PALETTE_LABELS`).
+    # The names the app shows (US spelling, `PALETTE_LABELS`).
     "defaultcolorblindsafe": "Default (colourblind-safe)",
     "greyscale": "Print / greyscale",
     "grayscale": "Print / greyscale",
@@ -570,7 +569,7 @@ def _compute_axis_ranges(
 
     Cropped, the data is padded by ``crop_margin`` screen px on every side, or
     — ``None``, the default — by 5% of its extent on each axis, at least
-    ``CANVAS_PAD_MIN_PX`` (#422 made the margin a setting).
+    ``CANVAS_PAD_MIN_PX``.
     """
     x_candidates: list = []
     y_candidates: list = []
@@ -720,7 +719,7 @@ _GRID_TICK_FONT_PX = DEFAULT_GRID_FONT_SIZE  # legible after true-scale downscal
 
 def _grid_reserves(show: bool, font_px: float = _GRID_TICK_FONT_PX) -> tuple[int, int]:
     """The (left, bottom) margin the coordinate grid's tick labels take: the
-    default's, grown in step with a larger tick font (#422)."""
+    default's, grown in step with a larger tick font."""
     if not show:
         return 0, 0
     grow = max(1.0, float(font_px) / _GRID_TICK_FONT_PX)
@@ -829,14 +828,12 @@ def _fit_display_size(
     return max(w, 100), max(h, 100)
 
 
-#: The two colour bars' settings (fixations', heatmap's) and their defaults —
-#: the one list the app's settings dicts and saved config copy them by.
-#: #422 — the title/caption styling: `export.annotate_figure` reads it, never a
+#: The title/caption styling: `export.annotate_figure` reads it, never a
 #: builder, so a figure cache keys no rebuild on it.
 TEXT_STYLE_FIELDS = ("title_font_size", "caption_font_size", "caption_color")
 
-#: #422 — the design choices that used to be fixed, outside the colour bars'
-#: (which `COLORBAR_DEFAULTS` carries).
+#: The figure's other design settings, outside the colour bars' (which
+#: `COLORBAR_DEFAULTS` carries).
 DESIGN_CHOICE_FIELDS = (
     "heatmap_opacity",
     "saccade_arrow_size",
@@ -850,6 +847,8 @@ DESIGN_CHOICE_FIELDS = (
     "caption_color",
 )
 
+#: The two colour bars' settings (fixations', heatmap's) and their defaults —
+#: the one list the app's settings dicts and saved config copy them by.
 COLORBAR_DEFAULTS: dict = {
     f.name: f.default
     for f in fields(FigureSettings)
@@ -860,9 +859,8 @@ COLORBAR_DEFAULTS: dict = {
 # right-side colorbar or a top legend. Without this, Plotly's automargin shrinks
 # the scaleanchor'd plot domain to fit them — and because the word labels are
 # sized for the full fitted_w x fitted_h plot region, a shrunken plot leaves the
-# text overflowing the boxes (the "colorbar / discrete colour legend shrinks the
-# plot and breaks the aspect ratio" bug). Mirroring the _CONTROLS_MARGIN_PX trick
-# the animation uses for its transport controls, we instead grow the figure by
+# text overflowing the boxes. Mirroring the _CONTROLS_MARGIN_PX trick the
+# animation uses for its transport controls, we instead grow the figure by
 # the reserve and pin it as an explicit margin, so the plot region stays exactly
 # fitted_w x fitted_h whether or not a colorbar/legend is shown.
 _COLORBAR_RESERVE_PX = 160
@@ -870,13 +868,13 @@ _LEGEND_RESERVE_PX = 60
 # Top reserve for the overlay-comparison figure's title + A/B legend (same idea
 # as _LEGEND_RESERVE_PX, but the title needs a touch more room).
 _OVERLAY_TOP_PX = 64
-#: UX-172: the Compare A/B legend is the only thing naming the two readings, so
+#: The Compare A/B legend is the only thing naming the two readings, so
 #: it reads larger than the figure's body text (overlay, split and co-animation).
 _COMPARE_LEGEND_FONT_SCALE = 1.3
 
 
 def _compare_legend_font(base_font_size, font_family=None) -> dict:
-    """The A/B legend's font in every Compare figure (UX-172)."""
+    """The A/B legend's font in every Compare figure."""
     font = {"size": round(float(base_font_size or 16) * _COMPARE_LEGEND_FONT_SCALE)}
     if font_family:
         font["family"] = font_family
@@ -939,8 +937,7 @@ def _colorbar_dict(
 ) -> dict:
     """A styled Plotly colorbar dict (vertical right / horizontal below), with
     rotatable, sizable tick labels and a slim bar. ``thickness`` is in px;
-    ``length`` a fraction of the plot's side, ``None`` the orientation's own
-    (#422)."""
+    ``length`` a fraction of the plot's side, ``None`` the orientation's own."""
     horizontal = orientation == "Horizontal"
     cb = dict(
         title=dict(
@@ -990,10 +987,10 @@ def _colorbar_owners(fig: go.Figure) -> list:
 
 
 def _arrange_colorbars(fig: go.Figure) -> None:
-    """Give each of several colour bars its own place (round-7 review, finding 16).
+    """Give each of several colour bars its own place.
 
     `_colorbar_dict` puts every bar of one orientation at one spot, so a
-    heatmap's scale and the fixations' were drawn over each other. With two or
+    heatmap's scale and the fixations' would be drawn over each other. With two or
     more pointing the same way, vertical bars stand side by side to the right
     of the plot and horizontal ones stack below it, the figure growing by the
     room they take — the plot region, and so the true-to-scale text, keep
@@ -1101,8 +1098,8 @@ def _line_pitch(words: pd.DataFrame) -> float | None:
     The true-to-scale font budget is a fraction of the *line pitch* (the gap
     between consecutive baselines), not the box height: some corpora (MultiplEYE)
     draw AOI boxes tight around the glyph (height ≈ font), while the line slot is
-    much taller. OneStop's boxes tile the lines (height == pitch), so this returns
-    the same value there and leaves OneStop sizing unchanged. Falls back to the
+    much taller. OneStop's boxes tile the lines (height == pitch), so there the
+    two are the same. Falls back to the
     median box height when there's only one line or geometry is missing.
     """
     if words.empty or "y" not in words.columns or "height" not in words.columns:
@@ -1129,7 +1126,7 @@ def _width_fit_font(words: pd.DataFrame) -> float | None:
     word, which is correct even for a CJK word boxed beside a half-width Latin URL
     (a single global aspect would size the line from the narrowest run). The
     tightest words bind, so we take a low quantile (robust to one odd box). For an
-    all-Latin corpus this reduces exactly to the old ``(box_width / n) / aspect``.
+    all-Latin corpus this reduces exactly to ``(box_width / n) / aspect``.
     Returns None when there's no text/width to measure.
     """
     if "width" not in words.columns or "text" not in words.columns:
@@ -1138,8 +1135,8 @@ def _width_fit_font(words: pd.DataFrame) -> float | None:
     widths = pd.to_numeric(words["width"], errors="coerce")
     ems = []
     for text, width in zip(words["text"], widths):
-        # Skip a NaN label (Arrow `str` keeps it a float, not "nan") or NaN width —
-        # matches the old vectorized path, where both dropped out before the quantile.
+        # Skip a NaN label (Arrow `str` keeps it a float, not "nan") or NaN width:
+        # neither belongs in the quantile.
         if pd.isna(text) or not np.isfinite(width):
             continue
         units = sum(
@@ -1230,12 +1227,13 @@ def _padded_monospace_layout(words: pd.DataFrame) -> tuple[float, float] | None:
 
 
 def _word_label_x(words: pd.DataFrame) -> np.ndarray:
-    """Where each word label is centred: its box's middle (BUG-97) — except a
-    line's first word in a padded monospace layout.
+    """Where each word label is centred: its box's middle — except a line's
+    first word in a padded monospace layout.
 
     There the box carries only the right half of the padding (the line starts
     at the text), so the word sat flush with the box's left edge in the
-    experiment; centring it in the box shifted it right by a quarter of the gap.
+    experiment; centring it in the box would shift it right by a quarter of the
+    gap.
     Such a word is centred on its own letters instead, starting at ``x``.
     Right-to-left words and every other layout keep the box's middle.
     """
@@ -1301,7 +1299,7 @@ def _word_label_font_px(
       from the data, see :func:`_line_pitch`) — *not* the raw box height, which is
       only equal to the pitch when the boxes tile the lines. For OneStop the boxes
       tile the lines (pitch == height) and ``line_spacing == 3`` (one blank line
-      above + below), so the budget is height / 3 as before; for corpora whose AOI
+      above + below), so the budget is height / 3; for corpora whose AOI
       boxes hug the glyph (MultiplEYE), the pitch is the right, larger budget. The
       size is *also* capped so the longest words still fit their box width (see
       :func:`_width_fit_font`), which keeps the font from colliding; the smaller of
@@ -1310,7 +1308,7 @@ def _word_label_font_px(
       gap to each neighbour (:func:`_padded_monospace_font`): then the font is
       read off the boxes exactly,
       and neither the line-spacing guess nor the fit's safety margin applies —
-      each shrank such text by its own few percent.
+      each would shrink such text by its own few percent.
     - otherwise / no usable boxes: ``manual_font_px`` is treated as the real
       monitor font size and scaled the same way.
     """
@@ -1353,7 +1351,7 @@ def _resolve_marker_colors(
     - Categorical color_data is mapped to a discrete palette so the picker has
       visible effect; the returned legend is a list of (category, hex) pairs the
       caller can render as legend-only scatter traces.
-    - No color_data (VIZ-17's uniform default, or a `color_by` column that isn't
+    - No color_data (the uniform default, or a `color_by` column that isn't
       in the frame) paints every marker ``uniform_color``.
     """
     if color_data is None:
@@ -1483,7 +1481,7 @@ _HOLLOW_GLYPHS = {"♥": "♡"}
 def _glyph_scatter_traces(
     x, y, marker: dict, glyph: str, **top: Any
 ) -> list[go.Scatter]:
-    """Draw a fixation ``marker`` dict as text glyphs (VIZ-15's ♥), bottom first.
+    """Draw a fixation ``marker`` dict as text glyphs (the ♥), bottom first.
 
     Plotly's marker-symbol enum has no heart, so every builder draws one as
     text, from the marker dict it would otherwise have used, keeping what that
@@ -1535,7 +1533,7 @@ def _glyph_layers(marker: dict, glyph: str, n: int) -> list[dict]:
         elif color is not None and not isinstance(color, str):
             color = list(color)
         outline = line.get("color")
-        # A glyph skips the default hairline (either spelling, #422) and an
+        # A glyph skips the default hairline (either spelling) and an
         # outline whose width is 0; any other outline is a ring behind it.
         if (
             isinstance(outline, str)
@@ -1624,7 +1622,7 @@ def _glyph_colorbar_trace(marker: dict, values) -> go.Scatter | None:
 def _marker_symbol(symbol: str | None) -> str:
     """A ``marker.symbol`` Plotly will accept.
 
-    The VIZ-15 glyph shapes (♥) aren't in Plotly's symbol enum — the static
+    The glyph shapes (♥) aren't in Plotly's symbol enum — the static
     figure draws them as text instead — so anywhere that *must* hand Plotly a
     marker symbol falls back to the default rather than raising.
     """
@@ -1662,9 +1660,9 @@ def _compute_marker_sizes(
     onto ``size_range`` through that curve, the same for every figure: a
     duration at or below the lower bound gets the smallest marker, at or above
     the upper bound the largest, so a fixation's size never depends on the
-    other fixations drawn beside it. ``"relative"`` is the original scale —
-    linear between this set's own shortest and longest durations — which is
-    why it is only comparable within one figure.
+    other fixations drawn beside it. ``"relative"`` is linear between this
+    set's own shortest and longest durations, which is why it is only
+    comparable within one figure.
     """
     durations = pd.to_numeric(durations, errors="coerce").fillna(0)
     min_size, max_size = size_range
@@ -1695,7 +1693,7 @@ def _duration_key_references(duration_range) -> list[tuple[float, str]]:
     The lower bound (labelled ``≤``, because everything below it clamps) plus
     the round values 100/200/400/800/1600 ms that fall strictly between the
     bounds — at most three of those, so the key stays compact. The upper
-    bound's circle, the largest, is left out: it dwarfed the rest of the key.
+    bound's circle, the largest, is left out: it would dwarf the rest of the key.
     It is drawn only when nothing falls between the bounds, so the key always
     shows two sizes."""
     lo, hi = _duration_bounds(duration_range)
@@ -1749,10 +1747,9 @@ def _stack_bottom_right(fig: go.Figure) -> None:
 #
 # Each legend *kind* can be moved to a spot of its own, sized, and laid out as a
 # stack or a row, on top of its own layer's show/hide switch. A kind left on
-# "auto" throughout is drawn exactly where it always was: every figure built
-# before this setting existed is unchanged. A kind moved anywhere gets its own
-# Plotly legend (``legend2`` …), and a spot outside the plot grows the figure on
-# that side, so the equal-aspect plot region — and the true-to-scale text with
+# "auto" throughout is drawn in its default place. A kind moved anywhere gets its
+# own Plotly legend (``legend2`` …), and a spot outside the plot grows the figure
+# on that side, so the equal-aspect plot region — and the true-to-scale text with
 # it — keeps its size (the same rule as `_decoration_margins`).
 
 #: The size key's own spot when left on "auto": inside, bottom-right.
@@ -2052,11 +2049,11 @@ def _content_top_inset(fig: go.Figure) -> float:
     """How far, in px, the topmost thing drawn sits below the plot's top edge.
 
     The plot region reaches past the text (the screen, or a margin of padding
-    round the text), so a legend placed on the plot's edge floated well above
-    the text. Legends above the plot sit on this line instead: the top of the
-    highest word box, label, fixation or saccade — a marker's or a label's top,
-    not its centre, or a legend's background washed out the top of the highest
-    fixation. 0 for a figure of several panels, without a fixed y range, or
+    round the text), so a legend placed on the plot's edge would float well
+    above the text. Legends above the plot sit on this line instead: the top of
+    the highest word box, label, fixation or saccade — a marker's or a label's
+    top, not its centre, or a legend's background would wash out the top of the
+    highest fixation. 0 for a figure of several panels, without a fixed y range, or
     whose content reaches the edge.
     """
     if getattr(fig, "_grid_ref", None) is not None:
@@ -2223,7 +2220,7 @@ def _size_key_layout(layout: Mapping | None) -> dict:
     position = spec["position"]
     position = _SIZE_KEY_AUTO_POSITION if position == "auto" else position
     if spec["arrangement"] == "auto":
-        # A row, as it always drew — except down the side of the plot.
+        # A row — except down the side of the plot.
         stacked = _spot_parts(position)[0] in ("left", "right")
     else:
         stacked = spec["arrangement"] == "stacked"
@@ -2289,7 +2286,7 @@ def _add_duration_size_key(
         fig, placement["position"], w, h, clear=clear
     )
     # Collected and added in one assignment: each `add_shape` re-validates every
-    # shape already on the figure — the word boxes and heatmap rects (#422).
+    # shape already on the figure — the word boxes and heatmap rects.
     circles = []
     for (_, label), size, (cx, cy), (lx, ly, align) in zip(
         refs, sizes, centres, labels
@@ -2311,7 +2308,7 @@ def _add_duration_size_key(
                 line=dict(color="#555555", width=1),
                 fillcolor="rgba(120,120,120,0.35)",
                 layer="above",
-                # Rides the fixations layer of a separable export (VIZ-5).
+                # Rides the fixations layer of a separable export.
                 name=_shape_layer_tag("fixations"),
             )
         )
@@ -2369,7 +2366,7 @@ def _size_key_anchor(
 _SIZE_KEY_LINE_GAP_PX = 3.0
 
 
-# VIZ-9 "linear reading" mode: draw saccades as upward arcs instead of straight
+# "Linear reading" mode: draw saccades as upward arcs instead of straight
 # connectors. The apex rises by _ARCH_FRAC of the saccade's horizontal span; each
 # arc is sampled into _ARCH_SAMPLES points so it stays smooth in the true-scale
 # embed. `arch_frac=None` (the default everywhere) keeps the straight connectors.
@@ -2383,7 +2380,7 @@ def _arch_control_point(
     """Control point of the quadratic Bézier arch drawn between two fixations.
 
     Single source of truth for the arch geometry: ``_arch_points`` samples the
-    curve it defines and ``_arch_point_and_tangent`` (the arrowheads, BUG-9)
+    curve it defines and ``_arch_point_and_tangent`` (the arrowheads)
     evaluates the same curve, so the marker can never drift off the drawn line.
     Screen y grows downward, so the control point sits *above* the chord."""
     return (x0 + x1) / 2.0, min(y0, y1) - frac * abs(x1 - x0)
@@ -2405,7 +2402,7 @@ def _arch_points(
 
 
 def _arch_apex_y(x0: float, y0: float, x1: float, y1: float, frac: float) -> float:
-    """Topmost (smallest) ``y`` reached by the drawn arch — its true apex (BUG-13).
+    """Topmost (smallest) ``y`` reached by the drawn arch — its true apex.
 
     Minimises ``y(t)`` over the SAME quadratic ``_arch_points`` samples and
     ``_arch_point_and_tangent`` evaluates, instead of reading off one sampled
@@ -2415,9 +2412,9 @@ def _arch_apex_y(x0: float, y0: float, x1: float, y1: float, frac: float) -> flo
     endpoints (``cy <= min(y0, y1)``), so ``d >= 0`` and ``t*`` always lands in
     ``[0, 1]``.
 
-    For a level saccade the peak is at ``t = 0.5`` (the old estimate), but as the
-    endpoints diverge in ``y`` it slides toward the higher one and rises well
-    above the ``t = 0.5`` point — which is why a wide, steeply-sloped arc used to
+    For a level saccade the peak is at ``t = 0.5``, but as the endpoints diverge
+    in ``y`` it slides toward the higher one and rises well above the ``t = 0.5``
+    point — so an apex read off ``t = 0.5`` would let a wide, steeply-sloped arc
     clip against the top of the view.
     """
     _, cy = _arch_control_point(x0, y0, x1, y1, frac)
@@ -2455,7 +2452,7 @@ def _saccade_segments(
 ) -> tuple[list, list]:
     """Return concatenated x/y arrays separated by None for a single saccade trace.
 
-    ``arch_frac`` (VIZ-9) draws each segment as an upward arc instead of a straight
+    ``arch_frac`` draws each segment as an upward arc instead of a straight
     line."""
     if len(fix_df) < 2:
         return [], []
@@ -2478,14 +2475,13 @@ def _saccade_segments_by_class(
     classes: pd.Series,
     arch_frac: float | None = None,
 ) -> dict:
-    """Group saccade segments by reading class → ``{class: (xs, ys)}`` (VIZ-8).
+    """Group saccade segments by reading class → ``{class: (xs, ys)}``.
 
     Each segment (fixation i → i+1) takes the class of its *departing* fixation
     (``classes[i]``), so it matches ``measures.classify_saccades``. Segments with
     no class (``None``/NaN — the last fixation, or an unclassifiable one) fall
     into ``"other"`` so they still draw. Each class's arrays are None-separated,
-    ready for one Scatter trace per class. ``arch_frac`` (VIZ-9) arcs each
-    segment."""
+    ready for one Scatter trace per class. ``arch_frac`` arcs each segment."""
     if len(fix_df) < 2:
         return {}
     ordered = fix_df.sort_values("timestamp_ms")
@@ -2506,7 +2502,7 @@ def _saccade_segments_by_class(
 
 #: The column a snapped copy of the fixations carries its line in, so "color
 #: by line" reads the line a fixation is drawn on rather than guessing it again
-#: from a y the snap may have put on the edge between two lines (#422).
+#: from a y the snap may have put on the edge between two lines.
 _SNAP_LINE_COLUMN = "_snap_line"
 
 
@@ -2517,7 +2513,7 @@ def _snap_fixations_to_lines(
     position: float = DEFAULT_SNAP_POSITION,
 ) -> pd.DataFrame:
     """A copy of ``fixations`` with each fixation moved up or down onto its
-    text line, keeping its own x (#422, after VIZ-9's snap above the word).
+    text line, keeping its own x.
 
     A fixation's line is its word's: the data's own ``word_id`` when the
     fixations carry one, else the box it lands in (`assign_fixations_to_words`).
@@ -2526,7 +2522,7 @@ def _snap_fixations_to_lines(
     clustered by height (`measures.cluster_word_lines`), each spanning the mean
     top to the mean bottom of its boxes. ``position`` places the fixation on
     that span, in line heights from its middle: 0 centers it, −0.5 is the top
-    edge (the default, where the old snap drew it), +0.5 the bottom edge.
+    edge (the default), +0.5 the bottom edge.
 
     Render-only: the heatmaps, the axis ranges and every measure keep the
     recorded positions. A fixation with no line to go to (boxes with no
@@ -2558,7 +2554,7 @@ def _snap_fixations_to_lines(
     line = pd.Series(np.nan, index=out.index, dtype=float)
     if "word_id" in words.columns:
         # Boxes with no id are no target: a NaN key would match every fixation
-        # on no word (#412).
+        # on no word.
         known = words["word_id"].notna()
         line_of_word = dict(
             zip(
@@ -2590,7 +2586,7 @@ def _snap_fixations_to_lines(
 # direction arrow — their heading is sub-pixel noise (refixations on one word).
 _ARROW_MIN_LEN_FRAC = 0.005
 
-# Bézier parameter at which the arrowhead sits on an arched saccade (BUG-9).
+# Bézier parameter at which the arrowhead sits on an arched saccade.
 _ARROW_ARCH_T = 0.5
 
 
@@ -2607,8 +2603,8 @@ def _arch_point_and_tangent(
     Note the quadratic's identity at ``t=0.5``: B'(0.5) == P1 - P0, i.e. the
     tangent at the parameter midpoint is parallel to the chord regardless of the
     control point. So arcing a saccade moves the arrowhead *up onto* the curve
-    (the visible defect) without rotating it — which is exactly right, the curve
-    really is chord-parallel there."""
+    without rotating it — which is exactly right, the curve really is
+    chord-parallel there."""
     cx, cy = _arch_control_point(x0, y0, x1, y1, frac)
     u = 1.0 - t
     px = u * u * x0 + 2 * u * t * cx + t * t * x1
@@ -2630,7 +2626,7 @@ def _saccade_arrow_rows(
     for micro/degenerate saccades, so the arrays are shorter than the saccade
     count and the position alone doesn't say which saccade an arrow belongs to —
     ``segment_index[j]`` is the index of the departing fixation, which is what
-    lets the animated replay reveal each arrow with its own saccade (VIZ-23).
+    lets the animated replay reveal each arrow with its own saccade.
     """
     if len(fix_df) < 2:
         return [], [], [], []
@@ -2687,8 +2683,8 @@ def _saccade_arrow_markers(
     clockwise from "up") and account for the reversed y-axis — data y grows
     downward on screen — so they read correctly on the plot.
 
-    ``arch_frac`` (BUG-9) must be the same value the segment builders got: in Arc
-    mode (VIZ-9) the marker moves to the *arch's* midpoint and takes the arc's
+    ``arch_frac`` must be the same value the segment builders got: in Arc
+    mode the marker moves to the *arch's* midpoint and takes the arc's
     tangent there, instead of floating below the curve at the straight chord's
     midpoint. ``None`` (the default everywhere) keeps the straight-chord
     placement.
@@ -2735,10 +2731,10 @@ def build_word_boxes(
 ) -> list:
     """Rectangles for the word interest areas.
 
-    Drawn from ``measures.word_box_bounds`` — the experiment's own rectangles
-    (BUG-83) — so what's on screen is exactly what ``assign_fixations_to_words``
-    assigns against. On a tiling corpus each outline therefore runs on across
-    the space after its word, and the word *label* is centred in it (BUG-97).
+    Drawn from ``measures.word_box_bounds`` — the experiment's own rectangles —
+    so what's on screen is exactly what ``assign_fixations_to_words`` assigns
+    against. On a tiling corpus each outline therefore runs on across the space
+    after its word, and the word *label* is centred in it.
     ``color`` is the outline, drawn at ``line_opacity`` (0 = no outline); the
     fill is ``fill_color`` at ``fill_opacity`` (0 = no fill). Each is its own
     alpha, so one never fades the other. A fully opaque outline keeps ``color``
@@ -2760,7 +2756,7 @@ def build_word_boxes(
                 y1=y1,
                 line=dict(color=color, width=1),
                 fillcolor=fill,
-                # VIZ-5: tag the layer so split_scanpath_layers can separate the
+                # Tag the layer so split_scanpath_layers can separate the
                 # word boxes from the (visually similar) heatmap rects.
                 name=_shape_layer_tag("word_boxes"),
             )
@@ -2827,14 +2823,14 @@ def build_critical_span_overlay(
                 line=dict(color=color, width=_CRITICAL_FRAME_WIDTH),
                 fillcolor="rgba(0,0,0,0)",
                 layer="above",
-                # VIZ-5: the critical-span outline rides the word-boxes layer.
+                # The critical-span outline rides the word-boxes layer.
                 name=_shape_layer_tag("word_boxes"),
             )
         )
     return shapes
 
 
-# --- VIZ-5: separable-layer export ------------------------------------------
+# --- Separable-layer export -------------------------------------------------
 # The scanpath figure is a single flattened image, but publication workflows want
 # to restyle each layer in Illustrator / Inkscape. `split_scanpath_layers` returns
 # one figure per layer, each a copy of the full figure with only that layer's
@@ -2878,8 +2874,8 @@ def _trace_layer(trace) -> str:
     ``Raw gaze``, and any heatmap trace (``… heatmap …``). Every *other* trace the
     scanpath figure draws is a fixation-marker variant with a data-dependent name
     (``Fixations``, per-line ``line: …``, categorical colour-legend entries, the
-    PRE-2 flag overlays, the PRE-3 ``drift`` connectors), so they all fall through
-    to ``fixations`` — robust to those names changing."""
+    fixation-flag overlays, the drift-correction ``drift`` connectors), so they
+    all fall through to ``fixations`` — robust to those names changing."""
     name = trace.name or ""
     low = name.lower()
     if name == "words":
@@ -2903,7 +2899,7 @@ def split_scanpath_layers(fig: go.Figure) -> dict[str, go.Figure]:
     with (a) only that layer's traces/shapes/images kept and (b) a transparent
     paper/plot background, so stacking the exported files in a vector editor
     reproduces the combined figure exactly (identical axis ranges + size ⇒ perfect
-    registration). See VIZ-5."""
+    registration)."""
     # Which layers are present, and each trace's layer (computed once).
     trace_layers = [_trace_layer(tr) for tr in fig.data]
     shape_layers = [_shape_layer(sh) for sh in (fig.layout.shapes or ())]
@@ -2923,7 +2919,7 @@ def split_scanpath_layers(fig: go.Figure) -> dict[str, go.Figure]:
         g.layout.images = fig.layout.images if layer == "stimulus_image" else ()
         # The duration size key's ms labels belong with its circles, which ride
         # the fixations layer; every other annotation (title text, the
-        # Illustration stamp) stays on each layer as before.
+        # Illustration stamp) stays on each layer.
         if layer != "fixations":
             g.layout.annotations = tuple(
                 a for a in (g.layout.annotations or ()) if a.name != _SIZE_KEY_NAME
@@ -2942,7 +2938,7 @@ _HOVER_MEASURE_LABELS: dict[str, str] = {
     "n_fixations": "Fixations",
 }
 
-#: DATA-66: `FigureSettings.column_labels` for the build in progress. The three
+#: `FigureSettings.column_labels` for the build in progress. The three
 #: builders set it (`_labelled_columns`) and the helpers that write a column's
 #: name into the figure read it (`_column_title`, `_hover_label`), so the dozen
 #: helpers in between keep their signatures. Empty outside a build.
@@ -2966,12 +2962,12 @@ def _humanize_column(column: str, *, unit: bool = True) -> str:
     ``participant_id`` → "Participant ID".
 
     ``unit=False`` drops the unit, for a hover row that writes it after the
-    value — which used to read "… Duration Ms: 200 ms"."""
+    value, rather than read "… Duration Ms: 200 ms"."""
     from .column_names import _CANONICAL_LABELS, canonical_label
 
     text = str(column)
     if text in _CANONICAL_LABELS:
-        # #374: the app's own columns read as the rail names them.
+        # The app's own columns read as the rail names them.
         label = canonical_label(text)
         return label if unit else label.removesuffix(" (ms)")
     in_ms = text.endswith("_ms")
@@ -2983,14 +2979,14 @@ def _humanize_column(column: str, *, unit: bool = True) -> str:
 
 
 def _column_name(column: str) -> str:
-    """A column's name in a legend entry: the dataset's own (DATA-66), else the
-    column's own, as the legend has always written it."""
+    """A column's name in a legend entry: the dataset's own, else the
+    column's own."""
     labels = _COLUMN_LABELS.get() or {}
     return labels.get(column, str(column))
 
 
 def _column_title(column: str) -> str:
-    """A column's name in a figure's titles: the dataset's own (DATA-66), else
+    """A column's name in a figure's titles: the dataset's own, else
     the column humanized."""
     labels = _COLUMN_LABELS.get() or {}
     return labels[column] if column in labels else _humanize_column(column)
@@ -3009,7 +3005,7 @@ def _table_label(field: str, table: str | None) -> str | None:
 def _hover_label(field: str, table: str | None = None) -> str:
     """Readable label for an arbitrary hover column.
 
-    The dataset's own name when the build has one (DATA-66), as ``table``
+    The dataset's own name when the build has one, as ``table``
     names it; else a short label for the app's own columns, else the column
     humanized without its unit (the row writes the unit after the value)."""
     own = _table_label(field, table)
@@ -3033,13 +3029,13 @@ def _plotly_literal(value: str) -> str:
     """``value`` as Plotly text that draws its own characters.
 
     Plotly reads a text or hover string as its pseudo-HTML, so a stimulus
-    token ``<b>bold</b>`` drew bold and ``x<br>y`` broke the line (round-8
-    review, finding 6). Escaping ``&``, ``<`` and ``>`` — the entities Plotly
-    decodes back — keeps the dataset's characters on screen, and ``%{`` is
-    written ``&#37;{`` so a name placed in a hover template is not read as a
-    template field (round 9). Applied once, to data values and user text only,
-    at the figure boundary: the tables, exports and the app's own markup (a
-    hover's ``<br>``) are left as they are."""
+    token ``<b>bold</b>`` would draw bold and ``x<br>y`` would break the line.
+    Escaping ``&``, ``<`` and ``>`` — the entities Plotly decodes back — keeps
+    the dataset's characters on screen, and ``%{`` is written ``&#37;{`` so a
+    name placed in a hover template is not read as a template field. Applied
+    once, to data values and user text only, at the figure boundary: the
+    tables, exports and the app's own markup (a hover's ``<br>``) are left as
+    they are."""
     return html.escape(value, quote=False).replace("%{", "&#37;{")
 
 
@@ -3078,7 +3074,7 @@ def _fixation_order_labels(ordered: pd.DataFrame) -> list[str]:
     return [str(j + 1) for j in range(n)]
 
 
-#: #374 F7: the fixation hover's lead line is written from these, in this
+#: The fixation hover's lead line is written from these, in this
 #: order, as "Fixation 41 · 336 ms · on “Droppings!” (word 27)".
 _FIXATION_HEAD_FIELDS = ("order_in_trial", "duration_ms", "word_id")
 
@@ -3094,7 +3090,7 @@ def _hover_number(value) -> str:
 def _fixation_hover_head(
     frame: pd.DataFrame, head: Sequence[str], words: pd.DataFrame | None
 ) -> pd.Series:
-    """The fixation hover's lead line, one string per row (#374 F7).
+    """The fixation hover's lead line, one string per row.
 
     The word a fixation landed on is named by its text when the trial's word
     table has it (and its word ids are unique); a fixation on no word reads
@@ -3149,8 +3145,8 @@ def _fixation_hover_head(
 
 
 def _hover_cell(value):
-    """One hover value as shown: a missing one is "—" (Plotly printed
-    ``null``), a fraction is cut to four significant digits (#374)."""
+    """One hover value as shown: a missing one is "—" (Plotly would print
+    ``null``), a fraction is cut to four significant digits."""
     if value is None:
         return "—"
     try:
@@ -3177,11 +3173,11 @@ def _hover_payload(
     fixation: bool = False,
     words: pd.DataFrame | None = None,
 ) -> tuple[np.ndarray | None, str]:
-    """Plotly customdata + template for a user-selected field list (VIZ-26);
-    ``table`` says whose names label the rows (DATA-66).
+    """Plotly customdata + template for a user-selected field list;
+    ``table`` says whose names label the rows.
 
     ``fixation=True`` writes the fixation number, duration and word as one
-    plain lead line (#374 F7), the word by its text from ``words``; any other
+    plain lead line, the word by its text from ``words``; any other
     chosen field follows as a ``Label: value`` row."""
     valid = [
         field
@@ -3211,14 +3207,14 @@ def _hover_payload(
     return customdata, "<br>".join(rows) + "<extra></extra>"
 
 
-#: The highlight key's annotation (#374 F6), so it is drawn once a figure.
+#: The highlight key's annotation, so it is drawn once a figure.
 _HIGHLIGHT_KEY_NAME = "highlight_key"
 
 
 def _add_highlight_key(
     fig: go.Figure, column: str, color: str, *, border: bool = False
 ) -> None:
-    """Name the highlighted words on the figure itself (#374 F6): a swatch in
+    """Name the highlighted words on the figure itself: a swatch in
     the highlight's colour and "Highlighted: is_in_aspan (answer span)", in
     the plot's bottom-left corner. Drawn once however many panels mark words."""
     if any(a.name == _HIGHLIGHT_KEY_NAME for a in fig.layout.annotations or ()):
@@ -3314,8 +3310,8 @@ def _add_word_label_trace(
                 words, word_hover_fields, line_display=line_display, table="words"
             )
         else:
-            # Legacy API/deep-link behaviour: the three fixed identity lines plus
-            # the old single optional measure.
+            # No field list (the API's default, and old deep links): the three
+            # fixed identity lines plus the single optional measure.
             customdata_parts: list[pd.Series] = [
                 _plotly_literal_values(words["word_id"]),
                 line_display,
@@ -3344,10 +3340,10 @@ def _add_word_label_trace(
             _add_highlight_key(fig, highlight_column, highlight_text_color)
     else:
         label_color = text_color
-    # BUG-97 — the label is centred in its word's box, as the data defines it
+    # The label is centred in its word's box, as the data defines it
     # (`_word_label_x`: a padded layout's line-start word sits flush left, as it
-    # was shown). BUG-30 centred it on the glyph run instead, which on a tiling
-    # corpus (the box carries the following space) drew every word flush left.
+    # was shown). Never centre it on the glyph run instead: on a tiling corpus
+    # (the box carries the following space) that draws every word flush left.
     # Centred text needs no LTR/RTL anchor; the Unicode direction isolates stay —
     # they are about *shaping* mixed Hebrew/Arabic + punctuation, not placement.
     from .preprocessing import detect_right_to_left
@@ -3358,7 +3354,7 @@ def _add_word_label_trace(
     else:
         rtl = rtl.fillna(False).astype(bool)
     label_x = _word_label_x(words)
-    # The word drawn as its own characters (finding 6 — not as Plotly markup),
+    # The word drawn as its own characters (not as Plotly markup),
     # escaped before the direction isolates wrap it; the hover's `%{text}`
     # reads this same string, so it shows the word literally too.
     label_text = [
@@ -3486,10 +3482,10 @@ def reading_stimulus_image(
     at ``(0, 0)``.
 
     ``allow`` vets the path before anything opens it, returning the one to read
-    or ``None``: the app passes ENG-57's rule on what its server may read
+    or ``None``: the app passes its rule on what its server may read
     (`tabs._servable_image_path`). The headless surfaces read the caller's own
     disk and pass none. One function for the app and for every builder's
-    ``show_stimulus_image`` (#420), so the two cannot place a page apart.
+    ``show_stimulus_image``, so the two cannot place a page apart.
     """
     path = _first_present(words, "image_path", numeric=False) or _first_present(
         fixations, "image_path", numeric=False
@@ -3499,8 +3495,8 @@ def reading_stimulus_image(
     size = _png_pixel_size(path) if path and Path(path).exists() else None
     if size is None:
         return None
-    # Round 11: coalesce on presence, not truthiness — 0 is a real origin, and
-    # `or` replaced the words' (0, 0) with the fixations' own value.
+    # Coalesce on presence, not truthiness — 0 is a real origin, and `or`
+    # would replace the words' (0, 0) with the fixations' own value.
     origin = tuple(
         next(
             (
@@ -3550,7 +3546,7 @@ def _with_stimulus_pages(
     page: tuple[pd.DataFrame | None, pd.DataFrame | None],
     page_b: tuple[pd.DataFrame | None, pd.DataFrame | None] | None = None,
 ) -> FigureSettings:
-    """``settings`` with ``show_stimulus_image`` resolved (#420): ``page``'s
+    """``settings`` with ``show_stimulus_image`` resolved: ``page``'s
     reading fills ``background_image*`` and ``page_b``'s the split comparison's
     ``background_image*_b``, each only where the caller left it empty.
 
@@ -3588,7 +3584,7 @@ def _background_image_spec(
     background_image_origin: tuple[float, float] | None,
     background_image_opacity: float = 1.0,
 ) -> dict | None:
-    """The ``layout.image`` dict for the stimulus-page background (VIZ-4).
+    """The ``layout.image`` dict for the stimulus-page background.
 
     The rendered page sits at data coordinates ``(origin_x, origin_y)`` →
     ``(+image_w, +image_h)`` UNDER every other layer; the coords are where the
@@ -3674,16 +3670,16 @@ def _add_saccade_layer(
 ) -> bool:
     """Add one scanpath's saccade lines (+ optional direction arrowheads) to ``fig``.
 
-    ``opacity`` (#422) is the lines' and the arrowheads' alike; ``arrow_size``
+    ``opacity`` is the lines' and the arrowheads' alike; ``arrow_size``
     the arrowheads' size in px.
 
     Connects consecutive fixations in time order. When ``saccade_classes`` is
     given (the per-fixation reading class from ``measures.classify_saccades``)
-    the segments are grouped by class; with ``color_by_class`` (VIZ-8 "By type")
+    the segments are grouped by class; with ``color_by_class`` ("By type")
     each group becomes its own sub-trace in its colour from ``class_colors``
-    plus a small legend, and ``two_way`` (VIZ-19) first folds the five classes
+    plus a small legend, and ``two_way`` first folds the five classes
     down to forward vs. regression. Otherwise a single uniform-``color`` trace is
-    drawn. ``visible_classes`` (VIZ-31) is the reading-class **filter**: segments
+    drawn. ``visible_classes`` is the reading-class **filter**: segments
     whose class isn't listed are not drawn at all — so it needs the
     classification even in uniform-colour mode, which is why ``color_by_class``
     exists separately. Filtering happens on the *unfolded* classes, before the
@@ -3691,8 +3687,8 @@ def _add_saccade_layer(
     colour mode. It is read literally: an **empty** ``visible_classes`` draws no
     saccades. (The rail never sends one — ``controls._collect_viz_settings``
     reads a cleared multiselect as "no filter", since hiding the layer outright
-    is what its toggle is for.) ``render_mode="Arc"`` (VIZ-9) draws each saccade as an upward
-    arch instead of a straight connector. The arrowheads are a separate,
+    is what its toggle is for.) ``render_mode="Arc"`` draws each saccade as an
+    upward arch instead of a straight connector. The arrowheads are a separate,
     independently-toggled trace drawn before the fixation markers so the dots sit
     on top (uniform ``color`` either way — they encode direction, the line colour
     encodes type), and they honour the same filter. The caller gates this on
@@ -3720,7 +3716,7 @@ def _add_saccade_layer(
         # reading classes) still get their intended colour instead of falling
         # back to the uniform line colour.
         palette = {**SACCADE_CLASS_COLORS, **(class_colors or {})}
-        # VIZ-19: the two-way mode is the five-way one with the classes folded
+        # The two-way mode is the five-way one with the classes folded
         # into forward/regression buckets, so everything below — segments,
         # colours, legend — is shared. "Forward" takes the forward class's
         # colour, which is what the picker shows for it.
@@ -3754,7 +3750,7 @@ def _add_saccade_layer(
                     ),
                     opacity=opacity,
                     hoverinfo="skip",
-                    # VIZ-8: the colour key is optional — hide it (but keep the
+                    # The colour key is optional — hide it (but keep the
                     # coloured sub-traces) when class_legend is off.
                     showlegend=class_legend,
                     legendgroup="saccade_type",
@@ -3795,7 +3791,7 @@ def _add_saccade_layer(
                 )
             )
     if show_arrows:
-        # BUG-9: same arch_frac as the segments above, so the arrowheads sit on
+        # Same arch_frac as the segments above, so the arrowheads sit on
         # the drawn line (arched or straight) instead of on the chord.
         amx, amy, aang, aseg = _saccade_arrow_rows(
             fixations, x_field, y_field, arch_frac
@@ -3841,10 +3837,10 @@ def _add_raw_gaze_layer(
 
     Returns ``True`` if a trace was added, so the caller can mark the legend
     active (it reserves margin for the legend). Self-gates on ``show_raw_gaze``
-    and a non-empty frame. **UX-86**: ``raw_gaze_color`` is the flat colour
-    used when the data carries no ``timestamp_ms`` — when it does, fixations
-    stay time-mapped (Viridis) since that is the more informative default and
-    a flat colour would throw it away. Samples imported without a clock carry
+    and a non-empty frame. ``raw_gaze_color`` is the flat colour used when the
+    data carries no ``timestamp_ms`` — when it does, the samples stay
+    time-mapped (Viridis) since that is the more informative default and a
+    flat colour would throw it away. Samples imported without a clock carry
     ``sample_index`` instead: coloured by that order, with the legend titled
     *Sample order* and the hover saying ``sample n`` — never milliseconds.
     """
@@ -3894,9 +3890,9 @@ def _add_raw_gaze_layer(
     return True
 
 
-# PRE-2 fixation classification (viz-only): SHORT / LONG / OUT-OF-BOUNDS, each
-# Off / Highlight / Discard. Thresholds come from the caller's flags dict; these
-# are the fallbacks the app's own controls default to.
+# Fixation classification (viz-only): SHORT / LONG / OUT-OF-BOUNDS /
+# BLINK-ADJACENT, each Off / Highlight / Discard. Thresholds come from the
+# caller's flags dict; these are the fallbacks the app's own controls default to.
 _FIX_FLAG_SHORT_MS = 80.0
 _FIX_FLAG_LONG_MS = 800.0
 _FIX_FLAG_CATEGORIES = ("short", "long", "oob", "blink")
@@ -3915,12 +3911,12 @@ def _fixation_flag_masks(
     *,
     spatial_axes: bool = True,
 ) -> dict[str, pd.Series]:
-    """Boolean mask per PRE-2 fixation-flag category, over ``fixations``' index.
+    """Boolean mask per fixation-flag category, over ``fixations``' index.
 
-    ``{"short": …, "long": …, "oob": …}``, or ``{}`` when nothing is flagged.
-    Out-of-bounds needs word boxes on spatial axes — without them no fixation
-    counts as out of bounds. Shared by the static figure and the animated replay
-    so the two classify identically (VIZ-23).
+    ``{"short": …, "long": …, "oob": …, "blink": …}``, or ``{}`` when nothing
+    is flagged. Out-of-bounds needs word boxes on spatial axes — without them
+    no fixation counts as out of bounds. Shared by the static figure and the
+    animated replay so the two classify identically.
     """
     if not flags or fixations.empty:
         return {}
@@ -3951,7 +3947,7 @@ def _discard_flagged_fixations(
     *,
     spatial_axes: bool = True,
 ) -> pd.DataFrame:
-    """Drop the fixations whose PRE-2 flag mode is *Discard* (viz-only).
+    """Drop the fixations whose flag mode is *Discard* (viz-only).
 
     Changes only what is DRAWN — the returned frame feeds the markers, the
     fixation-index labels and the marker-size scaling; reading measures and
@@ -4022,7 +4018,7 @@ def _render_scanpath_figure(
     text_color = settings.text_color
     highlight_text_color = settings.highlight_text_color
     background_color = settings.background_color
-    # BUG-85: `color_by="line"` is the rail's own spelling of this (its "line"
+    # `color_by="line"` is the rail's own spelling of this (its "line"
     # option, a share link's `color_by=line`), so it colours by line from the
     # API and CLI too rather than falling through to a missing column.
     color_by_line = settings.color_by_line or settings.color_by == "line"
@@ -4086,7 +4082,7 @@ def _render_scanpath_figure(
         y_range = [canvas_height, 0]
         x_min_data = x_max_data = y_min_data = y_max_data = None
 
-    # #422 Snap to line (VIZ-9's "linear reading" mode): move each fixation up or
+    # Snap to line (part of the "linear reading" mode): move each fixation up or
     # down onto its text line, so the saccade layer AND the fixation markers
     # below draw from the snapped positions. Off by default, and only while the
     # fixations are drawn: it is a Fixations setting, greyed with that layer, so
@@ -4107,11 +4103,11 @@ def _render_scanpath_figure(
             fixations, words, y_field, settings.fixation_snap_position
         )
 
-    # VIZ-9 arc mode: the saccade arches rise ABOVE the fixations, so reserve
+    # Arc mode: the saccade arches rise ABOVE the fixations, so reserve
     # headroom at the top of the view (smaller y — the axis is inverted) or a wide
     # top-line saccade's apex gets clipped. Computed from the exact Bézier apex of
     # each segment so it's tight; only in Arc mode, so the default view is
-    # unchanged. The apexes come from ``render_fix`` — the coordinates the
+    # left alone. The apexes come from ``render_fix`` — the coordinates the
     # connectors are actually drawn from — because Snap to line lifts their
     # endpoints (to a line's top edge, by default), so an arc over the recorded
     # positions would under-reserve and clip the snapped curve.
@@ -4133,15 +4129,15 @@ def _render_scanpath_figure(
             x0, y0, x1, y1 = fxv[i], fyv[i], fxv[i + 1], fyv[i + 1]
             if not np.isfinite((x0, y0, x1, y1)).all():
                 continue
-            # BUG-13: the curve's true peak, not its t=0.5 point — for endpoints
+            # The curve's true peak, not its t=0.5 point — for endpoints
             # that differ in y the parabola crests higher than the midpoint
-            # sample, and a wide top-line arc then clipped.
+            # sample, and a wide top-line arc would then clip.
             apex = min(apex, _arch_apex_y(x0, y0, x1, y1, _ARCH_FRAC))
         if np.isfinite(apex):
             margin = 0.02 * abs(y_range[0] - y_range[1])
             y_range = [y_range[0], min(y_range[1], apex - margin)]
 
-    # Stimulus-page background image (MultiplEYE / VIZ-4) — see
+    # Stimulus-page background image — see
     # `_background_image_spec` for the placement contract.
     if spatial_axes:
         _add_background_image(
@@ -4182,9 +4178,9 @@ def _render_scanpath_figure(
     highlight_text = has_highlight and critical_span_style == "Mark text"
 
     # Every layout shape the figure draws, in drawing order, set on the figure
-    # once at the end (#422): each `update_layout(shapes=…)` / `add_shape` on a
-    # figure that has shapes re-validates all of them, so adding the boxes, the
-    # heatmap and the frame one after another cost a second on a 150-word page.
+    # once at the end: each `update_layout(shapes=…)` / `add_shape` on a figure
+    # that has shapes re-validates all of them, so adding the boxes, the heatmap
+    # and the frame one after another would cost a second on a 150-word page.
     layout_shapes: list = []
     if spatial_axes and not words.empty:
         # Word-box grid (the "Bounding boxes" layer) and the "Mark border" span
@@ -4298,7 +4294,7 @@ def _render_scanpath_figure(
     elif spatial_axes and show_heatmap and not words.empty:
         # Words-only dataset (no fixation report): fall back to the words
         # frame's own pre-aggregated reading measures for the box heatmap. The
-        # corpus "word difficulty on the stimulus" view (AN-4) passes an explicit
+        # corpus "word difficulty on the stimulus" view passes an explicit
         # ``word_heatmap_col`` + title so it can tint by any aggregate or rate.
         if word_heatmap_col is not None and word_heatmap_col in words.columns:
             heatmap_rendered = True
@@ -4338,14 +4334,14 @@ def _render_scanpath_figure(
     # Saccade lines + optional direction arrowheads (drawn before the fixation
     # markers so the dots sit on top).
     if spatial_axes and show_saccades and len(fixations) > 1:
-        # VIZ-8: "By type" colours each saccade by its reading class. The class is
+        # "By type" colours each saccade by its reading class. The class is
         # geometry-derived per trial (like color-by-line above), so compute it
         # here from the trial's fixations + words — reuse a precomputed
         # `saccade_class` column if the pipeline already added one. Classify on the
         # RAW fixations (word_id is unchanged by the snap).
-        # VIZ-19: "Forward / regression" is the same classification folded into
+        # "Forward / regression" is the same classification folded into
         # two buckets, so both non-uniform modes take this path.
-        # VIZ-31: the same classification also backs the reading-class *filter*
+        # The same classification also backs the reading-class *filter*
         # (`saccade_classes` = the classes to draw, ``None`` meaning all), so
         # classify whenever either the colour mode or the filter needs it. A
         # filter naming every class is a no-op and takes the cheaper raw path.
@@ -4387,7 +4383,7 @@ def _render_scanpath_figure(
         ):
             legend_active = True
 
-    # Drift connectors (PRE-3): one faint grey vertical segment per fixation from
+    # Drift connectors: one faint grey vertical segment per fixation from
     # its original y (`connector_y`) to its drift-corrected y (the already-snapped
     # `fixations["y"]`). A SINGLE Scatter with None separators (scales with the
     # true-scale embed), drawn before the fixation markers so the dots sit on top.
@@ -4427,10 +4423,11 @@ def _render_scanpath_figure(
         # ``render_fix`` == fixations unless Snap to line is on, in which case
         # the markers, order labels and colour-by-line use the snapped y.
         ordered = render_fix.sort_values("timestamp_ms")
-        # Fixation classification (PRE-2, viz-only): SHORT / LONG / OUT-OF-BOUNDS,
-        # each Off / Highlight / Discard. Apply Discard here — drop those rows from
-        # `ordered` so they vanish from the markers, fixation-index labels and
-        # marker-size scaling (the saccade layer above still bridges across them).
+        # Fixation classification (viz-only): SHORT / LONG / OUT-OF-BOUNDS /
+        # BLINK-ADJACENT, each Off / Highlight / Discard. Apply Discard here —
+        # drop those rows from `ordered` so they vanish from the markers,
+        # fixation-index labels and marker-size scaling (the saccade layer above
+        # still bridges across them).
         # This changes only what's DRAWN; reading measures and exports are untouched.
         flags = fixation_flags or {}
         if flags:
@@ -4441,7 +4438,7 @@ def _render_scanpath_figure(
         # tinted by the text line it lands on (lines inferred from word
         # geometry). Rendered as discrete categories so the legend reads
         # "line: Line 1", "line: Line 2", …  A snapped fixation is tinted by the
-        # line it was snapped to (#422).
+        # line it was snapped to.
         if color_by_line and spatial_axes and not words.empty:
             from .measures import assign_fixation_lines
 
@@ -4456,7 +4453,7 @@ def _render_scanpath_figure(
             color_label = "line"
             is_numeric_color = False
         elif color_by == UNIFORM_COLOR_FIELD:
-            # VIZ-17: no variable mapped to hue — size already encodes duration.
+            # No variable mapped to hue — size already encodes duration.
             color_data = None
             color_label = color_by
             is_numeric_color = False
@@ -4490,16 +4487,16 @@ def _render_scanpath_figure(
             else None,
             cmin=fixation_color_range[0] if fixation_color_range else None,
             cmax=fixation_color_range[1] if fixation_color_range else None,
-            # #422: the outline's width (0 = none) and colour.
+            # The outline's width (0 = none) and colour.
             line=dict(
                 color=settings.fixation_outline_color,
                 width=settings.fixation_outline_width,
             ),
         )
-        # Marker alpha (VIZ-6): lower it so overlapping fixations show through.
+        # Marker alpha: lower it so overlapping fixations show through.
         # Always set it (even at 1.0) so the slider is authoritative — Plotly's
         # variable-size scatter markers otherwise render at a ~0.7 default, so an
-        # unset 1.0 looked translucent ("opacity at 1 wasn't really 1").
+        # unset 1.0 would look translucent.
         marker["opacity"] = float(
             fixation_opacity if fixation_opacity is not None else 1.0
         )
@@ -4515,7 +4512,7 @@ def _render_scanpath_figure(
         )
         glyph = FIXATION_GLYPH_SYMBOLS.get(fixation_symbol or "")
         if glyph:
-            # VIZ-15: a shape Plotly's marker enum doesn't carry (♥), drawn as
+            # A shape Plotly's marker enum doesn't carry (♥), drawn as
             # text from the same marker dict (`_glyph_scatter_traces`); the
             # fixation-index labels move to their own trace since one Scatter has
             # only one text field, and a numeric colour bar to its own.
@@ -4584,7 +4581,7 @@ def _render_scanpath_figure(
                     marker=dict(
                         size=10,
                         color=color,
-                        # #422: the markers' own outline.
+                        # The markers' own outline.
                         line=dict(
                             color=settings.fixation_outline_color,
                             width=settings.fixation_outline_width,
@@ -4610,10 +4607,10 @@ def _render_scanpath_figure(
                 )
             )
 
-        # Highlight overlays (PRE-2): mark SHORT / LONG / OUT-OF-BOUNDS fixations
-        # in the chosen marker + colour, on top of the regular markers. Masks are
-        # recomputed on the (post-discard) `ordered`; out-of-bounds needs word
-        # boxes + spatial axes, short/long are duration-based and apply anywhere.
+        # Highlight overlays: mark the flagged fixations in the chosen marker +
+        # colour, on top of the regular markers. Masks are recomputed on the
+        # (post-discard) `ordered`; out-of-bounds needs word boxes + spatial
+        # axes, short/long are duration-based and apply anywhere.
         if flags:
             _overlay = _fixation_flag_masks(
                 ordered, words, flags, spatial_axes=spatial_axes
@@ -4690,7 +4687,7 @@ def _render_scanpath_figure(
                 y1=y_range[0],
                 line=dict(color=settings.plot_frame_color, width=1),
                 fillcolor="rgba(0,0,0,0)",
-                # VIZ-5: the plot border is its own layer (a registration guide).
+                # The plot border is its own layer (a registration guide).
                 name=_shape_layer_tag("frame"),
             )
         )
@@ -4753,8 +4750,8 @@ def add_illustration_label(
         xanchor="right",
         yanchor="bottom",
         text=_plotly_literal(str(text).strip())
-        # #374: a label the user switched on with nothing detected says
-        # "Illustration" alone; "· manual label" told a reader nothing.
+        # A label the user switched on with nothing detected says
+        # "Illustration" alone; "· manual label" would tell a reader nothing.
         or (
             "Illustration"
             if reasons == [MANUAL_LABEL_REASON]
@@ -4774,7 +4771,7 @@ def add_illustration_label(
     return fig
 
 
-# VIZ-3: alternative heatmap normalization. The colour of a heatmap cell maps
+# Alternative heatmap normalization. The colour of a heatmap cell maps
 # LINEARLY between its z-range endpoints, so a few very-hot words (dwell times are
 # heavy-tailed) can wash out the rest. "Log" instead maps colour to log1p(value),
 # compressing the top of the range so mid-range words stay distinguishable. The
@@ -4784,7 +4781,7 @@ _HEATMAP_NORMS = ("Linear", "Log")
 
 
 def _apply_heatmap_norm(values, norm: str):
-    """Transform heatmap values for the chosen normalization (VIZ-3).
+    """Transform heatmap values for the chosen normalization.
 
     ``Log`` returns ``log1p(max(value, 0))`` (heavy-tail compression); anything
     else is the identity. Accepts a scalar or an array; returns the same shape."""
@@ -4796,7 +4793,7 @@ def _apply_heatmap_norm(values, norm: str):
 
 #: The duration-weighted word-box heatmap's colour-bar title: a box maps the
 #: *summed* duration of its fixations, which a fixation-duration colour bar
-#: beside it must not be mistaken for (round-7 review, findings 11 and 16).
+#: beside it must not be mistaken for.
 _WORD_DWELL_TITLE = "Dwell time per word (ms)"
 
 
@@ -4805,8 +4802,8 @@ def _heatmap_title(base: str, norm: str) -> str:
     return f"{base} (log)" if norm == "Log" else base
 
 
-#: Each heatmap style's own opacity, kept while ``heatmap_opacity`` is unset
-#: (#422). "Density" is the Word boxes style drawn without word boxes.
+#: Each heatmap style's own opacity, kept while ``heatmap_opacity`` is unset.
+#: "Density" is the Word boxes style drawn without word boxes.
 HEATMAP_STYLE_OPACITY = {"Word boxes": 0.5, "Density": 0.35, "Interpolated": 0.45}
 
 
@@ -4833,9 +4830,9 @@ def _add_word_level_heatmap(
     """Tint each word box by the fixations in it; returns the tint rects for
     the caller to put on the figure (`_draw_word_value_heatmap`)."""
     # Pull the fixation coordinates (and optional weights) into numpy arrays once,
-    # then test box membership per word against the arrays. Same O(words × fix)
-    # work as before but without rebuilding pandas Series each iteration, and with
-    # O(fix) memory (no full words × fix matrix).
+    # then test box membership per word against the arrays: O(words × fix) work
+    # without rebuilding pandas Series each iteration, and O(fix) memory (no
+    # full words × fix matrix).
     fx = pd.to_numeric(fixations[x_field], errors="coerce").to_numpy(dtype=float)
     fy = pd.to_numeric(fixations[y_field], errors="coerce").to_numpy(dtype=float)
     w_arr = (
@@ -4843,7 +4840,7 @@ def _add_word_level_heatmap(
         if weights is not None
         else None
     )
-    # Bin against the experiment's boxes (BUG-83) with the assignment's own
+    # Bin against the experiment's boxes with the assignment's own
     # containment rule — the same boundary it uses and the heatmap then draws,
     # and half-open, so a fixation on a shared edge counts towards one word.
     from .measures import word_box_bounds, word_box_contains
@@ -4924,13 +4921,13 @@ def _draw_word_value_heatmap(
 
     The rects are returned, not added: the builder sets every layout shape on
     the figure in one assignment, since each addition re-validates every shape
-    already there (#422)."""
+    already there."""
     from plotly.colors import sample_colorscale
 
     from .measures import word_box_bounds
 
     # Nonzero test on the RAW values (a word with no dwell stays uncoloured); the
-    # colour position then maps through the chosen normalization (VIZ-3). Boxes
+    # colour position then maps through the chosen normalization. Boxes
     # come from word_box_bounds so the tinted rects sit exactly on the outlines
     # build_word_boxes draws.
     boxes = zip(*word_box_bounds(words))
@@ -4967,7 +4964,7 @@ def _draw_word_value_heatmap(
                 fillcolor=color,
                 opacity=heatmap_style_opacity("Word boxes", opacity),
                 layer="below",
-                # VIZ-5: word-box heatmap rects belong to the heatmap layer.
+                # Word-box heatmap rects belong to the heatmap layer.
                 name=_shape_layer_tag("heatmap"),
             )
         )
@@ -4989,7 +4986,7 @@ def _draw_word_value_heatmap(
                 ),
                 showlegend=False,
                 hoverinfo="skip",
-                # VIZ-5: the word-box heatmap's colorbar-carrier rides the heatmap
+                # The word-box heatmap's colorbar-carrier rides the heatmap
                 # layer (name contains "heatmap" → classified there).
                 name="heatmap colorbar",
             )
@@ -5017,7 +5014,7 @@ def _add_density_heatmap(
 ) -> None:
     # A 40×40 count/duration grid drawn as a go.Heatmap (rather than
     # go.Histogram2d) so the colour mapping can go through _apply_heatmap_norm
-    # (VIZ-3) — Plotly's Histogram2d bins internally and can't be log-scaled.
+    # — Plotly's Histogram2d bins internally and can't be log-scaled.
     xs = pd.to_numeric(fixations[x_field], errors="coerce")
     ys = pd.to_numeric(fixations[y_field], errors="coerce")
     valid = xs.notna() & ys.notna()
@@ -5101,8 +5098,8 @@ def _blur_axis(grid: np.ndarray, sigma: float, axis: int) -> np.ndarray:
     """Zero-padded Gaussian blur along one axis; the output keeps ``grid``'s shape.
 
     ``np.convolve(mode="same")`` returns the *kernel's* length when the kernel
-    is longer than the axis, which shifted the density off its coordinates on a
-    short grid. Padding by the kernel radius and taking the ``valid`` part pins
+    is longer than the axis, which would shift the density off its coordinates
+    on a short grid. Padding by the kernel radius and taking the ``valid`` part pins
     the length. Taps further out than the axis is long only ever meet the zero
     padding, so they are never built: the result is identical and the cost is
     bounded by the axis length, not by sigma.
@@ -5241,7 +5238,7 @@ def _add_interpolated_heatmap(
         return
     # Near-zero cells -> NaN so Plotly renders them transparent (only populated
     # regions get tinted, keeping the text readable). The remaining density maps
-    # through the chosen normalization (VIZ-3; log1p(0)=0 keeps the floor at 0).
+    # through the chosen normalization (log1p(0)=0 keeps the floor at 0).
     z = np.where(blurred < peak * _INTERP_FLOOR_FRAC, np.nan, blurred)
     z = _apply_heatmap_norm(z, heatmap_norm)
 
@@ -5276,9 +5273,9 @@ def _add_interpolated_heatmap(
 # Floor on the ▶ Play button's own per-frame duration: ~one 60 fps display frame.
 # That duration only drives Plotly's frame queue, which is what a figure plays on
 # where the wall-clock player isn't embedded (`fig.show()`); every HTML surface
-# replays on `animation_player_post_script` instead (BUG-93).
+# replays on `animation_player_post_script` instead.
 _ANIM_MIN_FRAME_MS = 16
-# VIZ-11: animation frames sit on a UNIFORM time grid (one every
+# Animation frames sit on a UNIFORM time grid (one every
 # _ANIM_GRID_STEP_MS of reading) rather than one per fixation onset, so the
 # slider scrubs linearly through seconds regardless of how fixations cluster or
 # how many scanpaths overlay. The grid coarsens past _ANIM_MAX_FRAMES so a long
@@ -5287,13 +5284,13 @@ _ANIM_MIN_FRAME_MS = 16
 _ANIM_GRID_STEP_MS = 100.0
 _ANIM_MAX_FRAMES = 360
 
-# Vertical space (px) reserved BELOW the animation plot for the transport
+# Vertical space (px) reserved ABOVE the animation plot for the transport
 # controls (play / pause / restart buttons + the time slider with its "Elapsed"
 # readout). The figure is grown by this much (plus a small safety buffer) and
-# the controls are placed in the bottom margin, so Plotly's automargin never has
+# the controls are placed in the top margin, so Plotly's automargin never has
 # to shrink the equal-aspect plot to fit them — which would make the word boxes
-# smaller than the true-to-scale label font computed for fitted_h (the
-# text-too-large bug). Keeps the animation plot the SAME size as the static one.
+# smaller than the true-to-scale label font computed for fitted_h. Keeps the
+# animation plot the SAME size as the static one.
 _CONTROLS_MARGIN_PX = 116
 _CONTROLS_SAFETY_PX = 24
 
@@ -5374,12 +5371,12 @@ def _anim_frame_duration_ms(frame_step_ms: float, playback_speed: float) -> int:
 
     Floored at ``_ANIM_MIN_FRAME_MS``. The only part of a replay the speed
     changes besides ``layout.meta`` — which is what lets `set_replay_clock`
-    re-time a built replay (PERF-15)."""
+    re-time a built replay."""
     return int(max(frame_step_ms / max(playback_speed, 1e-6), _ANIM_MIN_FRAME_MS))
 
 
 def _anim_timeline(specs, *, grid_step_ms=None, max_frames=None):
-    """Uniform time-grid frame timeline across all scanpaths (VIZ-11).
+    """Uniform time-grid frame timeline across all scanpaths.
 
     Returns ``(frame_times, frame_step_ms, reading_span_ms)``. Frames are
     emitted on a **uniform time grid** — one every ``step`` ms, where ``step`` is
@@ -5391,12 +5388,12 @@ def _anim_timeline(specs, *, grid_step_ms=None, max_frames=None):
     duration is :func:`_anim_frame_duration_ms` of the step, used only where the
     wall-clock player isn't embedded, and the player shows frame k once
     ``frame_times[k] / playback_speed`` has elapsed, so a replay takes
-    ``reading_span_ms / playback_speed`` (BUG-93). Frame *content* is
-    unchanged — every fixation whose onset ≤ t shows at time t. All readings are
+    ``reading_span_ms / playback_speed``. The speed never changes frame
+    *content*: every fixation whose onset ≤ t shows at time t. All readings are
     rebased to t=0; ``reading_span_ms`` is the longest reading's span. Returns an
     empty grid when there is nothing to animate.
 
-    Both knobs are user-facing (VIZ-11 follow-up): they trade smoothness against
+    Both knobs are user-facing: they trade smoothness against
     frame count, which is what the GIF/MP4 export size and render time are made
     of. Defaults are ``_ANIM_GRID_STEP_MS`` / ``_ANIM_MAX_FRAMES``.
     """
@@ -5405,10 +5402,9 @@ def _anim_timeline(specs, *, grid_step_ms=None, max_frames=None):
     reading_span_ms = max((s["end"] for s in specs), default=0.0)
     if not specs or reading_span_ms <= 0:
         return [], 0.0, reading_span_ms
-    # #422: the cap counts every frame, the one at t=0 included, so a limit of
-    # 120 gives at most 120 frames (it used to give 121): `cap` frames span
-    # `cap - 1` steps. Two frames — the start and the end — is the least a
-    # replay can have.
+    # The cap counts every frame, the one at t=0 included, so a limit of 120
+    # gives at most 120 frames: `cap` frames span `cap - 1` steps. Two frames —
+    # the start and the end — is the least a replay can have.
     step = max(step_pref, reading_span_ms / max(cap - 1, 1))
     # The steps it takes to reach the end; the tolerance keeps a span that is a
     # whole number of steps, give or take float rounding, from gaining a step.
@@ -5475,7 +5471,7 @@ def animation_playback_ms(
     Returns ``(reading_span_ms, playback_ms)``. ``playback_ms`` is what the replay
     takes: the wall-clock player (:func:`animation_player_post_script`) reaches the
     last frame once ``reading_span_ms / playback_speed`` has elapsed, so that is
-    the time the side panel quotes and a GIF/MP4 lasts (BUG-93). Both 0 when there
+    the time the side panel quotes and a GIF/MP4 lasts. Both 0 when there
     are no fixations.
     """
     summary = animation_timeline_summary(
@@ -5489,18 +5485,16 @@ def animation_timeline_summary(
 ) -> dict:
     """What the chosen frame grid actually produces, without building the figure.
 
-    VIZ-11 follow-up: the grid step and the frame cap are user controls, so the UI
-    has to show their consequence — frame count, the effective step, and whether
-    the cap *coarsened* the requested step. Silently coarsening is the thing that
-    made the old hard-coded behaviour opaque.
+    The grid step and the frame cap are user controls, so the UI has to show
+    their consequence — frame count, the effective step, and whether the cap
+    *coarsened* the requested step, which must never happen silently.
 
     Returns ``{"n_frames", "step_ms", "requested_step_ms", "max_frames",
     "coarsened", "frame_duration_ms", "reading_span_ms", "playback_ms",
     "recorded_clock"}`` — ``max_frames`` being the limit in force, so a caller
     can name it. ``recorded_clock`` is ``True`` only when every scanpath plays
     on its recorded onsets; otherwise ``reading_span_ms`` is (at least partly)
-    summed fixation time, which the side panel must not call a trial duration
-    (#422).
+    summed fixation time, which the side panel must not call a trial duration.
     """
     requested = float(grid_step_ms if grid_step_ms else _ANIM_GRID_STEP_MS)
     specs = _scanpath_anim_specs(
@@ -5532,14 +5526,14 @@ def _recorded_clock(specs) -> bool | None:
     return flags.pop() if len(flags) == 1 else None
 
 
-# BUG-93 — the replay's clock. Plotly's own ▶ Play steps a frame on the first
+# The replay's clock. Plotly's own ▶ Play steps a frame on the first
 # display tick *after* its duration and restarts the next frame's clock from
 # there, so every hold rounds up to whole ticks and the rounding accumulates: on
-# a 60 Hz screen a 40 ms frame lasts 50 ms, and a 20.8 s reading replayed in 26 s.
+# a 60 Hz screen a 40 ms frame lasts 50 ms, and a 20.8 s reading replays in 26 s.
 # No duration can fix that from here — the tick is the viewer's. So every HTML
 # surface (`tabs._true_scale_plot_html`, `tabs._animation_html`,
 # `api.save_figure`) embeds a small player that shows whichever frame the wall
-# clock has reached, reading the frame times, the speed and VIZ-10's autoplay
+# clock has reached, reading the frame times, the speed and the autoplay
 # intent off `fig.layout.meta`, where `make_scanpath_animation` stamps them.
 _AUTOPLAY_META_FLAG = "scanpath_autoplay"
 _REPLAY_META_TIMES = "scanpath_frame_times_ms"
@@ -5648,7 +5642,7 @@ def animation_player_post_script(fig) -> str | None:
     Pass it to ``fig.to_html(post_script=…)`` / ``write_html(post_script=…)``
     (with ``auto_play=False``) for any figure :func:`make_scanpath_animation`
     built — or its ``to_dict()``; ``None`` — for a static figure, or a replay
-    with no frames — is what those calls take for "no script" (BUG-93).
+    with no frames — is what those calls take for "no script".
 
     The player keeps the replay on the wall clock: at every display tick it
     shows the last frame whose reading time ``elapsed × playback_speed`` has
@@ -5657,12 +5651,12 @@ def animation_player_post_script(fig) -> str | None:
     tab pauses it. It takes the ▶ Play button over (the button's own command is
     switched off with ``execute: false``, Plotly's hook for exactly this, and the
     click still arrives as ``plotly_buttonclicked``); Pause, Restart and the time
-    slider keep their own commands, and any of them stops the clock. VIZ-10's
-    autoplay starts it on load, from the first frame.
+    slider keep their own commands, and any of them stops the clock. Autoplay
+    starts it on load, from the first frame.
 
     It **polls** for Plotly and the figure's frames before starting. Two things
-    made a one-shot kick-off silently never fire (VIZ-10), both confirmed
-    against a live Plotly build: frames live on ``gd._transitionData._frames``,
+    would make a one-shot kick-off silently never fire, both confirmed against
+    a live Plotly build: frames live on ``gd._transitionData._frames``,
     **not** ``gd.frames`` (``undefined``), and the library can arrive late (CDN
     latency, the true-scale iframe mount) and attaches its frames only after
     ``newPlot`` resolves. Polling every 50 ms (capped at ~10 s) covers all of it,
@@ -5681,9 +5675,9 @@ def animation_player_post_script(fig) -> str | None:
     return _REPLAY_PLAYER_JS
 
 
-# PERF-17 — the replay's frames, as its HTML page carries them. Every frame
+# The replay's frames, as its HTML page carries them. Every frame
 # restates every animated trace at full length (see `_revealed_xy`), ~33 KB a
-# frame however little changed, so a 2,001-frame replay was a 66 MB page. The
+# frame however little changed, so a 2,001-frame replay would be a 66 MB page. The
 # page instead carries frame 0 whole and, for each later frame, only what changed
 # since the one before; this decoder rebuilds the exact frame list in the browser
 # and hands it to `Plotly.addFrames`, ahead of the player (which already polls for
@@ -5810,7 +5804,7 @@ def _frame_delta(prev, cur):
 
 
 def pack_replay_frames(frames: Sequence[Mapping]) -> list[dict]:
-    """Delta-encode a replay's frames for `_REPLAY_FRAMES_JS` (PERF-17).
+    """Delta-encode a replay's frames for `_REPLAY_FRAMES_JS`.
 
     ``frames`` are the figure's ``to_dict()["frames"]`` (or the same as plain
     JSON values). Each packed frame keeps its own keys (``name``, ``traces``, …)
@@ -5842,12 +5836,12 @@ def pack_replay_frames(frames: Sequence[Mapping]) -> list[dict]:
 def replay_page(fig) -> tuple[dict, str] | None:
     """A replay as its HTML page carries it: ``(figure dict, post_script)``.
 
-    PERF-17: the dict is the figure without its ``frames``, and the script
-    rebuilds them in the browser from :func:`pack_replay_frames`' deltas, then
-    runs :func:`animation_player_post_script`'s player — a 2,001-frame replay's
-    page falls from 66 MB to under 1 MB. Serialize the dict with
-    ``to_html(…, validate=False, post_script=script)``; ``auto_play`` no longer
-    matters, since plotly.py sees no frames. ``fig`` may be a figure or its
+    The dict is the figure without its ``frames``, and the script rebuilds them
+    in the browser from :func:`pack_replay_frames`' deltas, then runs
+    :func:`animation_player_post_script`'s player — a 2,001-frame replay's page
+    is under 1 MB rather than 66 MB. Serialize the dict with
+    ``to_html(…, validate=False, post_script=script)``; ``auto_play`` does not
+    matter, since plotly.py sees no frames. ``fig`` may be a figure or its
     ``to_dict()``, which is not modified. ``None`` for a figure with no player (a
     static figure, or a replay with no frames): serialize that one as it is.
 
@@ -5884,7 +5878,7 @@ def _packable(frame: Mapping) -> bool:
 
 
 def _packed_frames_script(frames: Sequence[Mapping]) -> str:
-    """`_REPLAY_FRAMES_JS` carrying ``frames``, packed (PERF-17)."""
+    """`_REPLAY_FRAMES_JS` carrying ``frames``, packed."""
     from plotly.io.json import to_json_plotly
 
     packed = to_json_plotly(pack_replay_frames(frames))
@@ -5900,7 +5894,7 @@ def animation_clip_frame_ms(fig) -> float | None:
 
     The replay takes ``reading span / playback_speed`` — its last frame's
     reading time over the speed stamped on ``layout.meta`` — and a clip spreads
-    that evenly over the frames (BUG-93). ``None`` for a figure
+    that evenly over the frames. ``None`` for a figure
     :func:`make_scanpath_animation` didn't build."""
     meta = getattr(fig.layout, "meta", None)
     if not isinstance(meta, dict):
@@ -5926,8 +5920,8 @@ def set_replay_clock(
 ) -> None:
     """Re-time a replay in place: a new playback speed and autoplay, same frames.
 
-    PERF-15: the frames depend on neither (BUG-93), only ▶ Play's own frame
-    duration and the clock on ``layout.meta`` do, so the app builds a replay once
+    The frames depend on neither; only ▶ Play's own frame duration and the
+    clock on ``layout.meta`` do, so the app builds a replay once
     and stamps these onto the copy each cache hit returns. ``frame_step_ms`` is
     the exact grid step :func:`build_scanpath_replay` returned with the figure —
     the rounded frame times on ``layout.meta`` could truncate Play's duration to
@@ -5953,7 +5947,7 @@ def _animation_play_buttons(frame_duration):
 
     Each carries a ``name`` the replay player looks for: on every HTML surface
     :func:`animation_player_post_script` takes ▶ Play over and runs the frames on
-    the wall clock (BUG-93), so Play's own ``frame_duration`` drives only a
+    the wall clock, so Play's own ``frame_duration`` drives only a
     figure shown without it (``fig.show()``).
 
     Frames step with ``redraw=False``: every animated trace is full length with
@@ -5961,7 +5955,7 @@ def _animation_play_buttons(frame_duration):
     advancing a frame only changes point positions — Plotly updates just those
     few traces instead of redrawing the whole figure (the static word boxes +
     labels) every frame. A full redraw of the scanpath figure costs ~50 ms, which
-    on a long trial dwarfed the per-frame budget. Transitions are 0 so frames snap
+    on a long trial dwarfs the per-frame budget. Transitions are 0 so frames snap
     into place (no tweening), and the constant array length means a new
     fixation/number appears on its mark instead of gliding in from the corner.
     """
@@ -5977,7 +5971,7 @@ def _animation_play_buttons(frame_duration):
             xanchor="left",
             yanchor="bottom",
             pad=dict(b=12, l=8),
-            # #374 F23: the app's font, not the figure's (often a monospace
+            # The app's font, not the figure's (often a monospace
             # stimulus font), so the buttons read as the app's own.
             font=dict(family=_REPLAY_UI_FONT),
             buttons=[
@@ -6025,14 +6019,14 @@ def _animation_play_buttons(frame_duration):
     ]
 
 
-# The replay readout's name for its clock (#422): a trial's own time only when
+# The replay readout's name for its clock: a trial's own time only when
 # the data recorded the onsets — fixations laid end to end add up to the
 # fixation time, and a mix of the two is just "time".
 _REPLAY_CLOCK_PREFIX = {True: "Trial time ", False: "Fixation time ", None: "Time "}
 
 
 def _animation_time_slider(frame_times, total_ms, recorded_clock=True):
-    """Linear time-scrubber slider (VIZ-11).
+    """Linear time-scrubber slider.
 
     Frame times sit on a uniform grid, so the handle moves linearly through
     reading time. Each step's label is **"elapsed / total s"** (e.g. "1.2 /
@@ -6056,8 +6050,8 @@ def _animation_time_slider(frame_times, total_ms, recorded_clock=True):
             font=dict(color="rgba(0,0,0,0)"),
             currentvalue=dict(
                 font=dict(size=14, color="#444", family=_REPLAY_UI_FONT),
-                # #374 F23/F8: the trial's own clock, first fixation onward —
-                # or, without onsets, the fixation time (#422).
+                # The trial's own clock, first fixation onward —
+                # or, without onsets, the fixation time.
                 prefix=_REPLAY_CLOCK_PREFIX[recorded_clock],
                 visible=True,
                 xanchor="right",
@@ -6097,16 +6091,17 @@ def _render_scanpath_animation(
     """Frame-by-frame scanpath replay on a real reading-time clock.
 
     Returns the figure and the exact grid step its frames sit on, which
-    :func:`set_replay_clock` needs to re-time it (PERF-15).
+    :func:`set_replay_clock` needs to re-time it.
 
     Pass ``fixations_b`` (and optionally ``words_b``) to overlay a SECOND
     scanpath animated on the same clock. Every scanpath is rebased to its first
     fixation's ``timestamp_ms``, so they share *real reading time* including the
-    saccade/blink gaps between fixations; a frame is emitted at every fixation
-    onset across all scanpaths, and the shorter reading finishes first and holds
-    while the longer keeps going. The wall-clock player every HTML surface embeds
-    (:func:`animation_player_post_script`) shows each frame once its reading time
-    over ``playback_speed`` has elapsed, so the whole replay takes
+    saccade/blink gaps between fixations; the frames sit on one uniform time
+    grid across all scanpaths (:func:`_anim_timeline`), and the shorter reading
+    finishes first and holds while the longer keeps going. The wall-clock player
+    every HTML surface embeds (:func:`animation_player_post_script`) shows each
+    frame once its reading time over ``playback_speed`` has elapsed, so the
+    whole replay takes
     ``reading_span / playback_speed`` — exactly what
     :func:`animation_playback_ms` reports (and the side panel quotes).
 
@@ -6117,8 +6112,8 @@ def _render_scanpath_animation(
     order numbers are tinted per-scanpath, and an optional A/B legend
     (``show_legend``) names them; word boxes/labels come from
     ``words`` (scanpath A), so the overlay is meaningful for two readings of the
-    same text. With one scanpath the behaviour matches the classic single replay
-    (order numbers honour ``order_font_color``, no legend).
+    same text. With one scanpath it is the single replay (order numbers honour
+    ``order_font_color``, no legend).
 
     The single replay honours the same fixation-colouring options as
     :func:`make_scanpath_figure`: ``color_by`` (numeric → ``fixation_colorscale``
@@ -6130,20 +6125,20 @@ def _render_scanpath_animation(
     shared by both readings) or one shared category→colour mapping fills the
     markers, and each reading's flat A/B colour becomes its marker outline.
 
-    VIZ-23 brought the remaining word-label, arrow and flag options across from
-    the static figure, each defaulting to the replay's previous behaviour:
+    The static figure's word-label, arrow and flag options apply here too:
 
     - the word labels take ``text_color`` / ``highlight_column`` /
       ``highlight_text_color`` / ``word_hover_measure`` (``highlight_column`` is
       the *text*-marking channel — there is no border-overlay style here);
     - ``show_saccade_arrows`` adds the direction arrowheads, each revealed with
       the saccade it belongs to rather than all at frame zero;
-    - ``fixation_flags`` applies the PRE-2 short/long/out-of-bounds
-      classification: *Discard* drops those fixations from the replay entirely,
-      *Highlight* overlays them in their flag marker as the replay reaches them.
+    - ``fixation_flags`` applies the fixation-flag classification
+      (:func:`_fixation_flag_masks`): *Discard* drops those fixations from the
+      replay entirely, *Highlight* overlays them in their flag marker as the
+      replay reaches them.
 
     ``layout.meta`` carries the replay's clock (each frame's reading time and the
-    speed) and, with ``autoplay`` (default on, VIZ-10), the intent to start on
+    speed) and, with ``autoplay`` (default on), the intent to start on
     load *at the configured playback speed*; the player reads both. The figure
     itself is always built paused — autoplay is the embedder's to start.
     """
@@ -6161,7 +6156,7 @@ def _render_scanpath_animation(
     order_font_size = settings.order_font_size
     order_font_color = settings.order_font_color
     color_by = settings.color_by
-    # BUG-85: as in `make_scanpath_figure` — "line" is colour-by-line.
+    # As in `make_scanpath_figure` — "line" is colour-by-line.
     color_by_line = settings.color_by_line or color_by == "line"
     fixation_colorscale = settings.fixation_colorscale
     fixation_color_range = settings.fixation_color_range
@@ -6188,7 +6183,7 @@ def _render_scanpath_animation(
     word_hover_fields = settings.word_hover_fields
     fixation_hover_fields = settings.fixation_hover_fields
     background_color = settings.background_color
-    # Drawn as written: a label is a name, not Plotly markup (round 9).
+    # Drawn as written: a label is a name, not Plotly markup.
     label_a = _plotly_literal(settings.label_a)
     label_b = _plotly_literal(settings.label_b)
     show_legend = settings.show_legend
@@ -6232,11 +6227,11 @@ def _render_scanpath_animation(
         scale_text_to_boxes=scale_text_to_boxes,
     )
 
-    # CMP-11: which reading's stimulus the replay draws. The replay has only ever
-    # had ONE stimulus layer, so "both" keeps meaning A's here rather than
-    # stacking a second identical set of rectangles onto every existing
-    # same-dataset co-animation. "b" is the one that matters: a cross-dataset
-    # co-animation would otherwise run B's trace over A's text.
+    # Which reading's stimulus the replay draws. The replay has ONE stimulus
+    # layer, so "both" means A's here rather than stacking a second identical
+    # set of rectangles onto a same-dataset co-animation. "b" is the one that
+    # matters: a cross-dataset co-animation would otherwise run B's trace over
+    # A's text.
     stimulus_words = words
     if (
         _compare_stimulus_sides(settings.compare_stimulus) == (False, True)
@@ -6268,7 +6263,7 @@ def _render_scanpath_animation(
             word_hover_fields=word_hover_fields,
         )
 
-    # PRE-2 fixation flags (VIZ-23), mirroring the static figure: *Discard* drops
+    # Fixation flags, mirroring the static figure: *Discard* drops
     # the flagged rows before the specs are built, so they vanish from the trail,
     # the saccade polyline, the index labels and the marker-size scaling. Applied
     # AFTER the axis ranges above, exactly as in `make_scanpath_figure` — the view
@@ -6280,7 +6275,7 @@ def _render_scanpath_animation(
         words,
         words_b if (words_b is not None and not words_b.empty) else words,
     ]
-    # CMP-24: B carries its own flags when it was given any — as
+    # B carries its own flags when it was given any — as
     # `fixation_flags_b`, or (the comparison's spelling) on its `style_b`.
     if fixation_flags_b is None and isinstance(settings.style_b, dict):
         fixation_flags_b = settings.style_b.get("fixation_flags")
@@ -6336,23 +6331,23 @@ def _render_scanpath_animation(
         # A lone scanpath always wears the canonical single-replay colour,
         # whether it arrived as `fixations` or (degenerately) only as
         # `fixations_b`, so the trail never silently renders in the B colour.
-        # VIZ-17/18: honour the caller's uniform fixation colour when one is
+        # Honour the caller's uniform fixation colour when one is
         # given, so the replay matches the static figure (and the palette).
         specs[0]["color"] = fixation_color or COMPARISON_PALETTE[0]
 
     # Metric colouring, mirroring the static figure's fixation trace (the dual
     # overlay's, mirroring the comparison figure's, comes first). Numeric
-    # metrics map through
-    # `fixation_colorscale` with cmin/cmax pinned to the WHOLE trial (or the
-    # caller's range) up front — otherwise the scale would renormalise to the
-    # partial trail on every frame and colours would drift during playback.
+    # metrics map through `fixation_colorscale` with cmin/cmax pinned to the
+    # WHOLE trial (or the caller's range) up front — otherwise the scale would
+    # renormalise to the partial trail on every frame and colours would drift
+    # during playback.
     for s in specs:
         s["marker_colors"] = None
         s["marker_extra"] = {}
         s["marker_line"] = None
     category_legend: list = []
     color_label = color_by or ""
-    # VIZ-17: the uniform sentinel means "no variable mapped to hue" — leave the
+    # The uniform sentinel means "no variable mapped to hue" — leave the
     # trail on its flat colour rather than looking for a column by that name.
     if color_by == UNIFORM_COLOR_FIELD:
         color_by, color_label = None, ""
@@ -6431,7 +6426,7 @@ def _render_scanpath_animation(
                     float(color_data.min()),
                     float(color_data.max()),
                 )
-                # VIZ-23: the same styled colorbar the static figure builds, so
+                # The same styled colorbar the static figure builds, so
                 # orientation / tick angle / tick size apply here too.
                 colorbar = None
                 if show_colorbars:
@@ -6474,7 +6469,7 @@ def _render_scanpath_animation(
             **s["marker_extra"],
         )
         # Always set the alpha (even 1.0) so the control overrides Plotly's ~0.7
-        # default for variable-size scatter markers (VIZ-6).
+        # default for variable-size scatter markers.
         marker["opacity"] = float(s["opacity"] if s["opacity"] is not None else 1.0)
         if s["hollow"]:
             marker = _make_hollow(marker)
@@ -6485,8 +6480,8 @@ def _render_scanpath_animation(
     def _trail_style(s) -> tuple[dict, list[dict] | None]:
         """The trail's marker dict and, for a glyph shape, its text layers —
         stated once per scanpath and reused by every frame, which only moves
-        positions. Building them per frame re-sampled the colorscale (glyph and
-        hollow markers) for every fixation on each of ~360 frames."""
+        positions. Building them per frame would re-sample the colorscale (glyph
+        and hollow markers) for every fixation on each of ~360 frames."""
         if "trail_style" not in s:
             marker = _trail_marker(s)
             layers = _glyph_layers(marker, glyph, s["n_total"]) if glyph else None
@@ -6521,8 +6516,8 @@ def _render_scanpath_animation(
     # rewriting `text`. Constant length + position-only changes are what let the
     # Play button animate with `redraw=False` (see `_animation_play_buttons`):
     # Plotly then re-renders only these few traces per frame instead of redrawing
-    # the static word boxes + labels every time — the redraw cost that made a
-    # long replay run far slower than its quoted time. It also keeps the trail's
+    # the static word boxes + labels every time — a redraw cost that would make
+    # a long replay run far slower than its quoted time. It also keeps the trail's
     # fixation number in `text` (hover only); the visible order numbers live in a
     # separate text trace (below).
     # Scanpath legend entries of their own (dual + legend only): see the trail.
@@ -6565,7 +6560,7 @@ def _render_scanpath_animation(
             base_x,
             base_y,
             # A/B legend on the dual overlay only — off by default, honours the
-            # compare-legend toggle (CMP-2). The single-replay colour-by legend
+            # compare-legend toggle. The single-replay colour-by legend
             # below is separate and unaffected. Under shared category colours
             # the swatch would show a category, and a glyph has no swatch, so a
             # separate entry (below) names the scanpath instead.
@@ -6615,7 +6610,7 @@ def _render_scanpath_animation(
                     line=dict(
                         color=s["sac_color"], width=s["sac_width"], dash=s["sac_dash"]
                     ),
-                    # #422: on the base trace only — a frame restates the
+                    # On the base trace only — a frame restates the
                     # line's x/y and style, never its opacity, so it holds.
                     # Named like the static figure's, which is how the app's
                     # cached replay finds it to stamp the opacity on afterwards
@@ -6629,7 +6624,7 @@ def _render_scanpath_animation(
             )
         else:
             s["idx_sac"] = None
-        # Saccade direction arrowheads (VIZ-23). Same marker as the static
+        # Saccade direction arrowheads. Same marker as the static
         # figure's, but each arrow is revealed with its own saccade (its position
         # un-masks when `_revealed_saccade_xy` draws that segment) rather than the
         # whole set standing there from frame zero. Angles are stated once at full
@@ -6680,7 +6675,7 @@ def _render_scanpath_animation(
                 hoverinfo="skip",
             )
         )
-        # PRE-2 *Highlight* overlays (VIZ-23): one trace per flagged category, in
+        # *Highlight* overlays: one trace per flagged category, in
         # that category's marker + colour, drawn over the trail. Full-length like
         # every animated trace — fixations that aren't flagged are masked out
         # permanently, the rest un-mask as the replay reaches them.
@@ -6773,14 +6768,14 @@ def _render_scanpath_animation(
     )
 
     # Frames are plain dicts, validated once, by the `fig.frames` assignment
-    # below. Built from `go.Scatter`/`go.Frame` they were validated (and deep-
-    # copied) three times over — each trace, each frame, then the figure —
+    # below. Built from `go.Scatter`/`go.Frame` they would be validated (and
+    # deep-copied) three times over — each trace, each frame, then the figure —
     # which on a long replay is most of the build: every frame restates the
     # trail's full-length sizes and colours (see `_trail_marker`).
     frames = []
     n_frames = len(frame_times)
     for k, t in enumerate(frame_times):
-        # UX-169: the card's "120 of 360 frames" — and a cancel checkpoint, so an
+        # The loading card's "120 of 360 frames" — and a cancel checkpoint, so an
         # abandoned build stops within a frame. A no-op outside a card.
         progress.report(k + 1, n_frames, unit="frames")
         traces_in_frame = []
@@ -6906,10 +6901,10 @@ def _render_scanpath_animation(
     # Plotly's automargin reserves space for those controls — otherwise the
     # equal-aspect (`scaleanchor`) plot would shrink to fit the leftover height,
     # making the word boxes smaller than the true-to-scale label font computed
-    # for fitted_h (text-too-large bug). _CONTROLS_MARGIN_PX is that reserve.
+    # for fitted_h. _CONTROLS_MARGIN_PX is that reserve.
     # A single-replay numeric colorbar gets the same treatment on the right
     # (the dual-overlay legend overlays the plot, so it needs no reserve).
-    # A HORIZONTAL colorbar (VIZ-23) stays below the plot, so it takes bottom
+    # A HORIZONTAL colorbar stays below the plot, so it takes bottom
     # reserve rather than right — the same trade `_decoration_margins` makes for
     # the static figure.
     anim_colorbar = bool(specs and specs[0].get("marker_extra", {}).get("showscale"))
@@ -6951,9 +6946,9 @@ def _render_scanpath_animation(
         constrain="domain",
         # The figure is _CONTROLS_SAFETY_PX taller than the plot, and a
         # constrained domain is centred by default — so the paper's bottom
-        # edge, where the highlight note and the size key anchor, sat half
-        # that below the plot's border and they straddled it. Pinned to the
-        # bottom, the slack goes under the transport controls instead.
+        # edge, where the highlight note and the size key anchor, would sit
+        # half that below the plot's border and they would straddle it. Pinned
+        # to the bottom, the slack goes under the transport controls instead.
         constraintoward="bottom",
         scaleanchor="x",
         scaleratio=1,
@@ -6993,8 +6988,8 @@ def _render_scanpath_animation(
         sliders=sliders,
         updatemenus=updatemenus,
     )
-    # The PRE-2 highlight overlays carry legend entries too, so they get the same
-    # floating key as the A/B and colour-category legends.
+    # The fixation-flag highlight overlays carry legend entries too, so they get
+    # the same floating key as the A/B and colour-category legends.
     flag_legend = any(s.get("flag_overlays") for s in specs)
     if dual or category_legend or flag_legend:
         layout["legend"] = dict(
@@ -7010,8 +7005,8 @@ def _render_scanpath_animation(
         if dual:
             layout["legend"]["font"] = _compare_legend_font(base_font_size, font_family)
     fig.update_layout(**layout)
-    # BUG-93: the replay's clock — each frame's reading time and the speed — for
-    # the wall-clock player every HTML surface embeds, plus VIZ-10's autoplay
+    # The replay's clock — each frame's reading time and the speed — for
+    # the wall-clock player every HTML surface embeds, plus the autoplay
     # intent, which that player reads on load (Plotly's own `auto_play` ignores
     # the frame duration). No frames → no times, so no player and no autoplay.
     fig.layout.meta = _replay_clock_meta(
@@ -7054,7 +7049,7 @@ def _comparison_scanpath_style(
 ) -> dict:
     """Resolve the per-scanpath style for a comparison trace.
 
-    Defaults reproduce the classic two-flat-colour look (``COMPARISON_PALETTE``);
+    Defaults are the two flat colours of ``COMPARISON_PALETTE``;
     ``override`` (from the rail's per-scanpath styling panel) wins per key.
     """
     base = {
@@ -7069,7 +7064,7 @@ def _comparison_scanpath_style(
     if override:
         # Drop falsy values (None / "") so a blank colour can't override the
         # palette default and reach Plotly as a dark/None marker colour. The
-        # per-scanpath filters (CMP-24) are the exception: an empty one is a
+        # per-scanpath filters are the exception: an empty one is a
         # real answer — "no filter on this scanpath" — not a missing colour.
         base.update(
             {
@@ -7085,7 +7080,7 @@ def _comparison_scanpath_style(
     return base
 
 
-#: CMP-24: the style keys that carry a scanpath's own *filters* rather than its
+#: The style keys that carry a scanpath's own *filters* rather than its
 #: look. A comparison draws each reading under its own — the figure-level
 #: ``fixation_flags`` / ``saccade_classes`` apply to a scanpath whose style names
 #: none, so one setting filters both and a style entry overrides it per side.
@@ -7097,15 +7092,15 @@ COMPARE_BOX_OPACITY_STYLE_KEYS = frozenset({"box_line_opacity", "box_fill_opacit
 
 
 def _visible_saccade_classes(classes: Iterable[str] | None) -> set[str] | None:
-    """The saccade classes to draw, ``None`` meaning all (VIZ-31's rule: an empty
-    or complete list is no filter)."""
+    """The saccade classes to draw, ``None`` meaning all (an empty or complete
+    list is no filter)."""
     if not classes or set(classes) >= set(SACCADE_CLASS_ORDER):
         return None
     return set(classes)
 
 
 def _comparison_filters(style: dict, settings: FigureSettings) -> dict:
-    """One scanpath's filters (CMP-24): its style's own, else the figure's."""
+    """One scanpath's filters: its style's own, else the figure's."""
     return dict(
         fixation_flags=style.get("fixation_flags", settings.fixation_flags),
         saccade_classes=style.get("saccade_classes", settings.saccade_classes),
@@ -7115,7 +7110,7 @@ def _comparison_filters(style: dict, settings: FigureSettings) -> dict:
 def _arrow_class_mask(
     fixations: pd.DataFrame, saccade_classes: pd.Series, keep: set, aseg: list
 ) -> list[bool]:
-    """Which arrowheads belong to a visible saccade class (VIZ-31).
+    """Which arrowheads belong to a visible saccade class.
 
     An arrowhead belongs to the saccade leaving fixation ``aseg[j]`` in time
     order, which is exactly how ``_saccade_segments_by_class`` keys a segment —
@@ -7162,11 +7157,12 @@ def _add_comparison_raw_gaze_trace(
     row: int | None = None,
     col: int | None = None,
 ) -> None:
-    """One reading's raw-gaze samples in a comparison figure (VIZ-48).
+    """One reading's raw-gaze samples in a comparison figure.
 
     Drawn in that scanpath's own colour (its style's ``raw_gaze_color``, else
-    its fixation colour) rather than the single-trial figure's time scale: two clouds on one Viridis ramp could not be told apart in an
-    overlay, and the A/B colour is the cue every other comparison layer keeps.
+    its fixation colour) rather than the single-trial figure's time scale: two
+    clouds on one Viridis ramp could not be told apart in an overlay, and the
+    A/B colour is the cue every other comparison layer keeps.
     Size and opacity are the 🔵 Raw gaze settings, as on the single figure. The
     trace joins its scanpath's legend group, so toggling A in the legend hides
     A's samples with it.
@@ -7242,7 +7238,7 @@ def _add_comparison_fixation_trace(
     so the per-scanpath saccade colour/line-style/line-width and hollow markers
     all apply, and the shared ``show_saccades`` / ``show_saccade_arrows`` /
     ``show_order`` toggles take effect, as does the shared ``saccade_opacity``
-    (#422 — one for both scanpaths, lines and arrows alike).
+    (one for both scanpaths, lines and arrows alike).
 
     Fixation colour: by default each scanpath uses its flat per-scanpath colour
     (the A/B cue). When ``color_by`` names a numeric column, the marker **fill** is
@@ -7256,19 +7252,19 @@ def _add_comparison_fixation_trace(
     (:func:`_shared_category_colors`, for a categorical column or colour-by-line).
     It is drawn the same way: category fill, per-scanpath outline.
 
-    ``fixation_symbol`` (VIZ-15/23) sets the marker shape — shape is the channel
+    ``fixation_symbol`` sets the marker shape — shape is the channel
     that survives a greyscale print, which is exactly what comparison figures get
     used for. A glyph shape (♥) is drawn as text, as on the static figure
     (:func:`_glyph_scatter_traces`), its A/B outline a larger glyph beneath.
 
-    ``show_fixations=False`` (CMP-7) drops the marker trace, and with it the
+    ``show_fixations=False`` drops the marker trace, and with it the
     fixation-index labels that ride on it as marker text — the same thing the
     toggle does on the static figure. The saccade and arrow layers are
     independent and keep their own toggles, so a lines-only comparison is still
     reachable. This is what makes a comparison *heatmap* readable: the whole
     point of the split word boxes is lost under two full sets of markers.
 
-    CMP-24: ``fixation_flags`` and ``saccade_classes`` are *this* scanpath's
+    ``fixation_flags`` and ``saccade_classes`` are *this* scanpath's
     filters, applied as the static figure applies them — *Discard* drops markers
     and their index labels (the saccades still bridge across them), *Highlight*
     overlays its marker, and hidden saccade classes lose their line and arrow.
@@ -7306,7 +7302,7 @@ def _add_comparison_fixation_trace(
             fig.add_trace(trace)
 
     # Comparison figures always draw straight connectors (no Arc mode here); bind
-    # it once so the segments and the arrowheads can never disagree (BUG-9).
+    # it once so the segments and the arrowheads can never disagree.
     arch_frac: float | None = None
     if show_saccades and len(trial_fix) > 1:
         if class_series is not None:
@@ -7403,7 +7399,7 @@ def _add_comparison_fixation_trace(
             cmin=color_range[0] if color_range else None,
             cmax=color_range[1] if color_range else None,
             showscale=bool(show_colorbar),
-            # VIZ-23: the same styled colorbar the static figure builds, so the
+            # The same styled colorbar the static figure builds, so the
             # orientation / tick-angle / tick-size controls reach Compare too.
             colorbar=_colorbar_dict(_column_title(color_by), **(colorbar_style or {}))
             if show_colorbar
@@ -7426,7 +7422,7 @@ def _add_comparison_fixation_trace(
             color=fix_color,
             line=dict(color=outline_color, width=outline_width),
         )
-    # Per-scanpath marker alpha (VIZ-6): always set it (even 1.0) so the control
+    # Per-scanpath marker alpha: always set it (even 1.0) so the control
     # overrides Plotly's ~0.7 default for variable-size scatter markers.
     opacity = style.get("opacity", 1.0)
     marker["opacity"] = float(opacity if opacity is not None else 1.0)
@@ -7436,10 +7432,9 @@ def _add_comparison_fixation_trace(
     order_font["color"] = fix_color
     if order_font_size is not None:
         order_font["size"] = order_font_size
-    # VIZ-26 hover fields (the "Hover fields" multiselect under 👁️ Fixations)
-    # reach the comparison figure too — it used to hard-code Order/Time/Duration
-    # regardless of that setting, which is what made the control look inert
-    # while comparing. Same fallback list the static + animation builders use
+    # The hover fields (the "Hover fields" multiselect under 👁️ Fixations)
+    # reach the comparison figure too, so the control is not inert while
+    # comparing. Same fallback list the static + animation builders use
     # when nothing is explicitly chosen, so the three render paths agree.
     hover_fields = (
         ["order_in_trial", "duration_ms", "word_id"]
@@ -7455,7 +7450,7 @@ def _add_comparison_fixation_trace(
     # either case a separate entry names the scanpath.
     own_entry = category_colors is not None or bool(glyph)
     if glyph:
-        # VIZ-15: ♥ as text, as on the static figure (`_glyph_scatter_traces`);
+        # ♥ as text, as on the static figure (`_glyph_scatter_traces`);
         # the index labels and a numeric colour bar get traces of their own.
         for trace in _glyph_scatter_traces(
             trial_fix["x"],
@@ -7564,7 +7559,7 @@ def _comparison_metric_colorbar(
     """Whether a comparison figure will actually draw a metric colorbar.
 
     Same test :func:`_add_comparison_fixation_trace` makes per trace, hoisted so
-    the layout can reserve room for a horizontal bar below the plot (VIZ-23).
+    the layout can reserve room for a horizontal bar below the plot.
     """
     return bool(
         show_colorbars
@@ -7576,14 +7571,14 @@ def _comparison_metric_colorbar(
 
 
 def _word_id_keys(values: pd.Series) -> pd.Series:
-    """Word ids as join keys that mean the same thing on both frames (CMP-7).
+    """Word ids as join keys that mean the same thing on both frames.
 
     The words table and the fixations table routinely disagree on dtype: word
     boxes carry an integer ``word_id`` while a fixation's is a float, because it
     is NaN wherever the fixation landed outside every box. A plain ``str()`` then
     yields ``"7"`` on one side and ``"7.0"`` on the other, so a keyed join
-    silently matches nothing — which is exactly how the comparison heatmap came
-    out empty. Whole numbers lose the decimal tail here; anything non-numeric
+    silently matches nothing, leaving the comparison heatmap empty. Whole
+    numbers lose the decimal tail here; anything non-numeric
     keeps its stripped string, so datasets with string word ids still join.
     """
     numeric = pd.to_numeric(values, errors="coerce")
@@ -7601,7 +7596,7 @@ def _comparison_word_heatmap_data(
     heatmap_range: tuple[float, float] | None,
     heatmap_norm: str,
 ) -> tuple[list[dict[str, float]], float, float, str]:
-    """Per-trial word values and one shared transformed colour range (CMP-7)."""
+    """Per-trial word values and one shared transformed colour range."""
     value_maps: list[dict[str, float]] = []
     all_values: list[float] = []
     duration_weighted = metric == "duration_ms"
@@ -7770,13 +7765,12 @@ def _make_split_comparison_figure(
 
     Each panel computes its **own** axis ranges from its trial's words +
     fixations, which is what lets the two panels sit in different coordinate
-    spaces at all (CMP-8).
+    spaces at all.
 
-    The stimulus-image background (VIZ-4) is added to both panels. It used to be
-    the *same* image on the grounds that "the two readings are of the same
-    text" — no longer true once B may come from another corpus, so B's panel
-    takes ``background_image_b`` (and its size/origin) when given and falls back
-    to A's otherwise, which is every same-dataset comparison.
+    The stimulus-image background is added to both panels. B may come from
+    another corpus, so B's panel takes ``background_image_b`` (and its
+    size/origin) when given; otherwise it shows A's page on a same-dataset
+    comparison (``canvas_b`` unset) and none across datasets.
 
     Likewise ``canvas_b``: B's screen, defaulting to A's. It feeds B's axis
     ranges *and* its label-fitting pair, so B's reading text stays true-to-scale
@@ -7848,13 +7842,13 @@ def _make_split_comparison_figure(
         length=colorbar_length,
     )
     is_stacked = orientation == "stacked"
-    # Per-panel canvas: B falls back to A's, so a same-dataset comparison is
-    # byte-identical to the pre-CMP-8 figure.
+    # Per-panel canvas: B falls back to A's, which is every same-dataset
+    # comparison.
     canvas_b = settings.canvas_b or (canvas_width, canvas_height)
     panel_canvas = [(canvas_width, canvas_height), (int(canvas_b[0]), int(canvas_b[1]))]
     # Each panel's share of its screen, for the preliminary fit that picks the
     # figure's size. The word labels are *not* sized from it: they are sized
-    # from the subplot space each panel finally gets (round-8 review, finding 5).
+    # from the subplot space each panel finally gets.
     panel_widths = [w if is_stacked else w // 2 for w, _ in panel_canvas]
     # B's stimulus page. Inheriting A's is right for a same-dataset pair (two
     # readings of the same text) and *wrong* across datasets — a PoTeC panel with
@@ -7979,14 +7973,14 @@ def _make_split_comparison_figure(
     )
     category_label = "line" if (color_by_line or color_by == "line") else color_by
 
-    # #374 F26: each panel always says which scanpath it is, "A · …" / "B · …",
-    # legend or not — so the top band is reserved for the titles too (BUG-90:
-    # without it the upper title was clipped off the canvas).
+    # Each panel always says which scanpath it is, "A · …" / "B · …", legend or
+    # not — so the top band is reserved for the titles too (without it the
+    # upper title is clipped off the canvas).
     subplot_titles = [
         f"{side} · {spec['display_name']}" for side, spec in zip("AB", trial_specs)
     ]
 
-    # Each panel's own axis ranges, from its trial's words + fixations (CMP-8).
+    # Each panel's own axis ranges, from its trial's words + fixations.
     panel_ranges = []
     for idx, spec in enumerate(trial_specs):
         panel_cw, panel_ch = panel_canvas[idx]
@@ -8008,10 +8002,9 @@ def _make_split_comparison_figure(
     ]
 
     # The figure's size, chosen before anything is sized against it. Two panels
-    # that share a screen reuse the last panel's fit — which keeps every
-    # same-dataset figure the size it always was. Two *different* screens can't
-    # be reconciled that way: the panels then get the widest / tallest fit of the
-    # pair, so neither is clipped. (Which is also why the caption in
+    # that share a screen reuse the last panel's fit. Two *different* screens
+    # can't be reconciled that way: the panels then get the widest / tallest fit
+    # of the pair, so neither is clipped. (Which is also why the caption in
     # `tabs._render_comparison_figure` says sizes are not comparable across
     # panels — each panel is true-to-scale on its own monitor.)
     if settings.canvas_b is None:
@@ -8025,8 +8018,8 @@ def _make_split_comparison_figure(
     else:  # side-by-side
         total_width = panel_w * 2
         total_height = panel_h
-    # A colour bar gets its own reserved band — below the panels when horizontal
-    # (VIZ-23), to their right when vertical — so the figure grows by it rather
+    # A colour bar gets its own reserved band — below the panels when horizontal,
+    # to their right when vertical — so the figure grows by it rather
     # than Plotly's automargin shrinking the panels under text already sized for
     # them (the single-trial figure's `_decoration_margins` rule).
     reserves = _colorbar_reserves(
@@ -8044,8 +8037,7 @@ def _make_split_comparison_figure(
     grid_left, grid_bottom = _grid_reserves(
         show_coordinate_grid, settings.coordinate_grid_font_size
     )
-    # The t band was the (now-removed) title; keep a slim band only for the
-    # optional legend.
+    # A slim top band, for the panels' titles and the optional legend.
     top_px = _compare_legend_font(base_font_size)["size"] + 14
     figure_width = total_width + grid_left + right_px
     figure_height = total_height + bottom_px + grid_bottom
@@ -8105,9 +8097,9 @@ def _make_split_comparison_figure(
         x_range, y_range = panel_ranges[idx]
         panel_scale, panel_display_w, panel_display_h = panel_displays[idx]
 
-        # Stimulus-page background image (VIZ-4/23), one per panel, UNDER every
-        # trace — `row`/`col` bind it to this panel's axes. B may carry its own
-        # (CMP-8); it falls back to A's when it doesn't.
+        # Stimulus-page background image, one per panel, UNDER every trace —
+        # `row`/`col` bind it to this panel's axes. B may carry its own; on a
+        # same-dataset pair it falls back to A's (see `panel_images` above).
         panel_image, panel_image_size, panel_image_origin = panel_images[idx]
         _add_background_image(
             fig,
@@ -8294,7 +8286,7 @@ def _make_split_comparison_figure(
 
 
 def _compare_stimulus_sides(value: str | None) -> tuple[bool, bool]:
-    """``compare_stimulus`` → ``(draw A's stimulus, draw B's)`` (CMP-11).
+    """``compare_stimulus`` → ``(draw A's stimulus, draw B's)``.
 
     Tolerant of an unrecognised value on purpose: this reads a share-link param
     and a saved config, and drawing both sets of boxes is the honest fallback —
@@ -8320,7 +8312,7 @@ def _render_comparison_figure(
     """Two scanpaths on one canvas — overlaid, side by side, or stacked.
 
     The shared settings contract keeps marker shape, highlighted text, stimulus
-    image, and colorbar styling consistent across all three layouts (VIZ-23).
+    image, and colorbar styling consistent across all three layouts.
     """
     canvas_width = settings.canvas_width
     canvas_height = settings.canvas_height
@@ -8425,7 +8417,7 @@ def _render_comparison_figure(
         length=colorbar_length,
     )
     overrides = (style_a, style_b)
-    # Stimulus-page background image (VIZ-4/23), UNDER both scanpaths.
+    # Stimulus-page background image, UNDER both scanpaths.
     _add_background_image(
         fig,
         background_image,
@@ -8499,7 +8491,7 @@ def _render_comparison_figure(
         else ([], 0.0, 1.0, "")
     )
     # Every layout shape, in drawing order, set once at the end — as the static
-    # figure does (#422): each addition re-validates every shape already there.
+    # figure does: each addition re-validates every shape already there.
     layout_shapes: list = []
 
     if show_heatmap:
@@ -8654,14 +8646,13 @@ def _render_comparison_figure(
         )
 
     # fitted_w / fitted_h were computed up front (so the label scale matched).
-    # The title + top A/B legend get reserved space above the plot so they don't
-    # shrink the equal-aspect plot region (same fix as make_scanpath_figure). With
-    # the legend hidden (CMP-2 default) a slimmer band still fits the title.
-    # The top band is now only needed for the optional A/B legend (the "Overlay
-    # comparison" title was removed); reclaim it fully when the legend is hidden.
+    # The optional top A/B legend gets reserved space above the plot so it
+    # doesn't shrink the equal-aspect plot region (same fix as
+    # make_scanpath_figure); with the legend hidden (the default) there is no
+    # top band.
     top_px = _OVERLAY_TOP_PX if legend_on else 0
-    # A horizontal colorbar (VIZ-23) sits below the plot, so reserve a band for
-    # it; a vertical one keeps today's layout (it hangs off the right edge).
+    # A horizontal colorbar sits below the plot, so reserve a band for it; a
+    # vertical one hangs off the right edge with no reserve of its own.
     bottom_px = (
         _COLORBAR_BOTTOM_PX
         if _colorbar_reserves(
@@ -8753,11 +8744,12 @@ def make_metric_convergence_figure(
     y_range: tuple[float, float] = (0.0, 1.02),
     highlight_x_range: tuple[float, float] | None = None,
 ) -> go.Figure:
-    """Line chart of a metric (one line per model) over a cumulative x axis.
+    """Line chart of a metric (one line per series) over a cumulative x axis.
 
-    ``series`` maps a model name to ``(xs, ys)``. Used by the Multiple Comparison
-    tab to show how each model's NLD vs. the real scanpath evolves as more of the
-    reading is included — either by cumulative fixation index or by elapsed time.
+    ``series`` maps a name to ``(xs, ys)``. Used by the Comparisons subtab to
+    show how each matching reading's NLD vs. the selected scanpath evolves as
+    more of the reading is included — either by cumulative fixation index or by
+    elapsed time.
     Optionally shades ``highlight_x_range`` (e.g. the selected fixation window).
     """
     fig = go.Figure()
@@ -8808,8 +8800,8 @@ def make_metric_convergence_figure(
 
 def gap_runs(xs) -> list[slice]:
     """Split ``xs`` (sorted) into runs with no gap: a new run starts where two
-    whole-number ``xs`` are more than 1 apart — a trial the filters left out
-    (#374 F35). Non-integer ``xs`` are one run."""
+    whole-number ``xs`` are more than 1 apart — a trial the filters left out.
+    Non-integer ``xs`` are one run."""
     xs = list(xs)
     try:
         whole = all(float(x).is_integer() for x in xs)
@@ -8855,7 +8847,7 @@ def make_trend_figure(
     ``df`` has columns ``[x_col, "value", "sem"]`` (see
     ``aggregation.metric_by_trial_index``). Used by the Per reader and Groups
     subtabs for the trial-index trend. ``x_label`` titles the x axis — the
-    caller's name for what ``x_col`` holds (AN-9's frame calls it ``x``, which
+    caller's name for what ``x_col`` holds (a frame may call it ``x``, which
     is no title); without one, ``x_col`` humanized. ``break_gaps`` stops the
     line and band at a missing whole-number ``x`` (a filtered-out trial).
     """
@@ -8925,7 +8917,7 @@ def make_trend_figure(
 
 
 # =============================================================================
-# Analysis section figures (AN-1 … AN-22)
+# Analysis section figures
 # =============================================================================
 #
 # Builders for the question-oriented Corpus Analysis subtabs. Each takes a tidy
@@ -8937,9 +8929,9 @@ _DIVERGING_COLORSCALE = "RdBu"
 
 
 def _hex_to_rgba(color: str, alpha: float) -> str:
-    """``#rrggbb`` → ``rgba(r,g,b,alpha)`` for translucent spread bands. Passes
-    through non-hex colours (already ``rgb(...)`` / named) by wrapping opacity in
-    is impossible, so it returns a sensible grey fallback for those."""
+    """``#rrggbb`` → ``rgba(r,g,b,alpha)`` for translucent spread bands. A
+    non-hex colour (``rgb(...)`` / named) cannot take the alpha this way, so it
+    returns a grey fallback for those."""
     c = str(color).lstrip("#")
     if len(c) == 6:
         try:
@@ -8973,7 +8965,7 @@ def make_small_multiples_figure(
     max_panels: int = 12,
     panel_height: int = 110,
 ) -> go.Figure:
-    """Stacked per-reader word profiles — one panel per participant (AN-1).
+    """Stacked per-reader word profiles — one panel per participant.
 
     ``per_reader`` is tidy ``[participant_id, word_id, value]`` (see
     ``aggregation.per_reader_word_measure``); panels share the X (reading order).
@@ -9077,13 +9069,13 @@ def make_word_matrix_heatmap(
     height: int | None = None,
     row_label: str | None = None,
 ) -> go.Figure:
-    """Word × {reader|group} heatmap (AN-2, AN-22).
+    """Word × {reader|group} heatmap.
 
     ``df`` is long ``[row_col, word_id, value_col]``; rows become Y, ``word_id``
     X, ``value_col`` the color. ``row_order`` pins the row order (e.g. Group A
     above Group B). Bright columns = universally hard words; bright rows = a
     uniformly slow reader. ``row_label`` names the rows (the dataset's own name
-    for ``row_col``, DATA-66); without one, ``row_col`` humanized.
+    for ``row_col``); without one, ``row_col`` humanized.
     """
     if row_label is None:
         row_label = _humanize_column(row_col)
@@ -9138,7 +9130,7 @@ def make_word_profile_figure(
     height: int = 380,
     aggregate: str = "mean",
 ) -> go.Figure:
-    """Cohort word profile(s): mean line + shaded spread band (AN-3 / AN-15).
+    """Cohort word profile(s): mean line + shaded spread band.
 
     ``profiles`` maps a label → ``[word_id, value, lo, hi]`` (see
     ``aggregation.cohort_word_profile``). One entry draws the "average reader of
@@ -9226,7 +9218,7 @@ def make_feature_scatter_figure(
     font_family: str,
     height: int = 400,
 ) -> go.Figure:
-    """Per-word measure vs a bundled linguistic feature (AN-5).
+    """Per-word measure vs a bundled linguistic feature.
 
     Numeric feature → scatter + OLS trend line (with Pearson r in the title);
     categorical feature (POS) → one box per category.
@@ -9325,7 +9317,7 @@ def make_word_rate_figure(
     font_family: str,
     height: int = 360,
 ) -> go.Figure:
-    """Skip / regression-in rate per word — lollipop bars (AN-6)."""
+    """Skip / regression-in rate per word — lollipop bars."""
     if df is None or df.empty:
         return _no_data_figure(
             "Skip / regression-in rate per word",
@@ -9381,7 +9373,7 @@ def make_distribution_figure(
     colors: Sequence[str] | None = None,
     height: int = 380,
 ) -> go.Figure:
-    """Overlaid metric distributions — one violin/box per group (AN-7/14/18)."""
+    """Overlaid metric distributions — one violin/box per group."""
     arrays = [
         (str(name), np.asarray(arr, dtype="float64"))
         for name, arr in (groups or {}).items()
@@ -9446,7 +9438,7 @@ def make_density_scatter_figure(
     font_family: str,
     height: int = 420,
 ) -> go.Figure:
-    """2D density of two per-fixation measures — the oculomotor scatter (AN-10)."""
+    """2D density of two per-fixation measures — the oculomotor scatter."""
     if df is None or df.empty or not {x_col, y_col} <= set(df.columns):
         return _no_data_figure(
             f"{y_label} vs {x_label}",
@@ -9491,7 +9483,7 @@ def make_progression_figure(
     font_family: str,
     height: int = 380,
 ) -> go.Figure:
-    """Progressive vs regressive saccade counts per trial + regression share (AN-11)."""
+    """Progressive vs regressive saccade counts per trial + regression share."""
     from plotly.subplots import make_subplots
 
     if df is None or df.empty:
@@ -9562,7 +9554,7 @@ def make_paired_bars_figure(
     height: int = 380,
     aggregate: str = "mean",
 ) -> go.Figure:
-    """Side-by-side group bars per measure (AN-20), no error bars (#374).
+    """Side-by-side group bars per measure, no error bars.
 
     ``df`` is ``[measure, group, value, …]`` (see
     ``aggregation.paired_group_summary``); ``aggregate`` names what ``value``
@@ -9626,10 +9618,10 @@ def make_landing_curve_figure(
     as_fraction: bool = True,
     height: int = 360,
 ) -> go.Figure:
-    """Preferred-viewing-location curve — landing-position histogram (AN-12).
+    """Preferred-viewing-location curve — landing-position histogram.
 
     ``values`` come from ``aggregation.landing_positions``: fractions of the
-    experiment's word box, unclipped (BUG-83), so a landing assigned from beside
+    experiment's word box, unclipped, so a landing assigned from beside
     the box shows as a bar outside 0–1 instead of a spike on the edge.
     """
     arr = np.asarray(values, dtype="float64")
@@ -9682,7 +9674,7 @@ def make_difference_profile_figure(
     colors: Sequence[str] | None = None,
     height: int = 380,
 ) -> go.Figure:
-    """Per-word A−B difference profile, diverging color + zero line (AN-19)."""
+    """Per-word A−B difference profile, diverging color + zero line."""
     if df is None or df.empty or "diff" not in df.columns:
         return _no_data_figure(
             f"{measure_label} difference by word",
@@ -9748,7 +9740,8 @@ def _resolve_figure_settings(
     *,
     legacy_defaults: Mapping[str, Any] | None = None,
 ) -> FigureSettings:
-    """Resolve a settings object while preserving old builder-only defaults."""
+    """Resolve a settings object; with none given, the builder's own defaults
+    (``legacy_defaults``) apply under the overrides."""
     if settings is None and legacy_defaults:
         return FigureSettings.from_mapping({**legacy_defaults, **overrides})
     return FigureSettings.from_mapping(settings, **dict(overrides))
@@ -9767,26 +9760,26 @@ STATIC_FIGURE_OPTIONS = _setting_names(
         "layout",
         "style_a",
         "style_b",
-        # CMP-8 §4 — B-side geometry, read only by the split comparison layouts.
+        # B-side geometry, read only by the split comparison layouts.
         "canvas_b",
         "background_image_b",
         "background_image_size_b",
         "background_image_origin_b",
-        # CMP-11 — the static builder draws one trial, so it has no "whose
-        # stimulus?" question to answer. The *animation* builder does read it (a
-        # dual co-animation takes `words_b`), so it is NOT excluded there.
+        # The static builder draws one trial, so it has no "whose stimulus?"
+        # question to answer. The *animation* builder does read it (a dual
+        # co-animation takes `words_b`), so it is NOT excluded there.
         "compare_stimulus",
-        # CMP-24 — B's flags in a co-animation; one trial has no B.
+        # B's flags in a co-animation; one trial has no B.
         "fixation_flags_b",
-        # DATA-66 — names, not an option: read by `_labelled_columns`.
+        # Names, not an option: read by `_labelled_columns`.
         "column_labels",
     }
 )
-#: What `make_comparison_figure` accepts (CMP-9). Only the animation-only fields
-#: are excluded — this is a typo-catcher for `api.compare_scanpaths`, not a
+#: What `make_comparison_figure` accepts. Only the animation-only fields are
+#: excluded — this is a typo-catcher for `api.compare_scanpaths`, not a
 #: semantic filter, so it still admits settings the comparison builders ignore.
-#: Which settings actually reach a comparison figure is the table in
-#: `scanpath_studio/CLAUDE.md` → *Which viz settings apply in which render path*.
+#: Which settings actually reach a comparison figure is the table in AGENTS.md
+#: → *Which viz settings apply in which render path*.
 COMPARISON_FIGURE_OPTIONS = _setting_names(
     {
         "playback_speed",
@@ -9795,9 +9788,9 @@ COMPARISON_FIGURE_OPTIONS = _setting_names(
         "autoplay",
         "anim_grid_step_ms",
         "anim_max_frames",
-        # CMP-24 — a comparison reads B's filters off `style_b` instead.
+        # A comparison reads B's filters off `style_b` instead.
         "fixation_flags_b",
-        # DATA-66 — names, not an option: read by `_labelled_columns`.
+        # Names, not an option: read by `_labelled_columns`.
         "column_labels",
     }
 )
@@ -9822,7 +9815,7 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "saccade_render_mode",
         "fixation_snap_to_line",
         "fixation_snap_position",
-        # #422 — the replay draws no heatmap.
+        # The replay draws no heatmap.
         "heatmap_opacity",
         "span_border_color",
         "word_heatmap_col",
@@ -9832,12 +9825,12 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "illustration_reasons",
         "trial_labels",
         "layout",
-        # CMP-8 §4 — B-side geometry, read only by the split comparison layouts.
+        # B-side geometry, read only by the split comparison layouts.
         "canvas_b",
         "background_image_b",
         "background_image_size_b",
         "background_image_origin_b",
-        # DATA-66 — names, not an option: read by `_labelled_columns`.
+        # Names, not an option: read by `_labelled_columns`.
         "column_labels",
     }
 )
@@ -9915,8 +9908,8 @@ def build_scanpath_replay(
     """:func:`make_scanpath_animation`, returning the grid step with the figure.
 
     ``(figure, frame_step_ms)``: pass the step to :func:`set_replay_clock` to
-    re-time the replay at another speed or autoplay without rebuilding a frame
-    (PERF-15)."""
+    re-time the replay at another speed or autoplay without rebuilding a
+    frame."""
     resolved = _resolve_figure_settings(
         settings,
         overrides,
@@ -10032,7 +10025,7 @@ def make_comparison_figure(
 ) -> go.Figure:
     """Build a two-scanpath comparison from the shared rendering settings.
 
-    ``raw_gaze`` (VIZ-48) holds either reading's samples, keyed like ``words``
+    ``raw_gaze`` holds either reading's samples, keyed like ``words``
     and ``fixations``; with ``show_raw_gaze`` each reading's are drawn under its
     scanpath, in its colour.
 

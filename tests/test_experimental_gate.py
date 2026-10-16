@@ -1,10 +1,10 @@
-"""PRE-21: the default build hides drift correction and NLD similarity.
+"""The default build hides drift correction and NLD similarity.
 
-Both features work and both stay in the codebase — this is a *visibility* gate
-ahead of publication, because shipping a half-wired control invites users to
-lean on it. The rest of the suite runs with ``SCANPATH_EXPERIMENTAL=1`` (see
-``tests/conftest.py``) so their coverage is unchanged; this file is the other
-half: what a user of the default build must **not** be offered.
+Both features work and both stay in the codebase — this is a *visibility* gate,
+because shipping a half-wired control invites users to lean on it. The rest of
+the suite runs with ``SCANPATH_EXPERIMENTAL=1`` (see ``tests/conftest.py``) so
+it keeps its coverage; this file is the other half: what a user of the default
+build must **not** be offered.
 
 Every gate reads the env var at call time, which is what lets one process assert
 both builds.
@@ -61,7 +61,7 @@ class TestTheRenderContractResolvesToOff:
         st.session_state["global_align_connectors"] = True
         settings = controls.viz_settings_from_state(pd.DataFrame(), 14)
         # Resolved once, here, rather than each consumer gating separately —
-        # which is what makes an old link degrade silently and consistently.
+        # which is what makes a link naming it degrade silently and consistently.
         assert settings["align_algorithm"] == "Off"
         assert settings["align_connectors"] is False
         st.session_state.clear()
@@ -73,7 +73,7 @@ class TestTheHeadlessSurfacesRefuseRatherThanIgnore:
     ``drift_correction=`` would be a wrong result with no signal."""
 
     def test_plot_scanpath_raises(self, normalized_words_df, normalized_fixations_df):
-        with pytest.raises(ValueError, match="not available in this release"):
+        with pytest.raises(ValueError, match="experimental and off by default"):
             api.plot_scanpath(
                 normalized_words_df,
                 normalized_fixations_df,
@@ -108,7 +108,7 @@ class TestTheHeadlessSurfacesRefuseRatherThanIgnore:
     def test_alignment_sensitivity_raises(
         self, normalized_words_df, normalized_fixations_df
     ):
-        with pytest.raises(ValueError, match="not available in this release"):
+        with pytest.raises(ValueError, match="experimental and off by default"):
             api.alignment_sensitivity(normalized_words_df, normalized_fixations_df)
 
 
@@ -148,7 +148,7 @@ class TestTheDeepLinkIsIgnoredSilently:
         at.query_params["align_algorithm"] = "warp"
         at.run(timeout=90)
         assert not at.exception, at.exception
-        # Silently, per the settled call — no "unavailable in this build" warning.
+        # Silently — no "unavailable in this build" warning.
         state = at.session_state
         assert (
             "global_align_algorithm" not in state
@@ -226,7 +226,8 @@ class TestTheExportManifestDoesNotAdvertiseIt:
 
 def test_the_modules_themselves_are_untouched():
     """A gate, not a deletion: both stay importable and working, which is what
-    keeps them reachable for us and keeps the rest of the suite honest."""
+    keeps them reachable for development and keeps the rest of the suite
+    honest."""
     from scanpath_studio import alignment, similarity
 
     assert alignment.ALGORITHMS
@@ -236,13 +237,10 @@ def test_the_modules_themselves_are_untouched():
 
 
 class TestPreprocessingGate:
-    """PRE-22 — preprocessing is held back from the app, not from the package.
+    """Preprocessing is hidden from the app unless the experimental flag is set.
 
-    The distinction is the whole item: a released feature (0.28.0 shipped it
-    across app, API, CLI and export) is withdrawn from *this release's UI* and
-    picked up in the next one. So the app must not render it, and the API and
-    CLI must keep working — a hidden button and a broken function call are
-    different promises to a user.
+    The code stays in the package. The app must not render the panel, and a
+    stored setting must not run the pipeline while it is hidden.
     """
 
     def test_it_is_hidden_by_default(self, monkeypatch):
@@ -269,7 +267,7 @@ class TestPreprocessingGate:
         settings = app._preprocessing_settings()
         assert settings["enabled"] is False
         assert settings["short_policy"] == "Off"
-        # …and the stored answers survive for the release that shows it again.
+        # …and the stored answers survive, for when it is shown again.
         assert st.session_state["global_preproc_enabled"] is True
 
     def test_the_tutorial_drops_its_preprocessing_step(self, monkeypatch):
@@ -285,7 +283,7 @@ class TestPreprocessingGate:
         assert not any(step.gate == "preprocessing" for step in without_step)
 
     def test_the_data_page_shows_no_preprocessing_section(self):
-        """The whole point of the item: the app must not offer it."""
+        """The app must not offer it."""
         from tests.conftest import pin_data_view
 
         at = AppTest.from_file(APP_SCRIPT)
@@ -293,10 +291,10 @@ class TestPreprocessingGate:
         pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, at.exception
-        # UX-135 made every ✏️ Edit dataset section a numbered `.sps-wiz-part`
-        # headline, so this can no longer look for an `st.subheader` — nothing
-        # in the app emits one with that text any more, which would make the
-        # assertion pass whether or not the gate regressed.
+        # Every ✏️ Edit dataset section is a numbered `.sps-wiz-part` headline,
+        # so this looks there rather than for an `st.subheader` — nothing in the
+        # app emits one with that text, which would make that assertion pass
+        # whether or not the gate regressed.
         parts = " ".join(
             str(m.value)
             for m in at.markdown
@@ -304,7 +302,7 @@ class TestPreprocessingGate:
         )
         assert "Preprocessing" not in parts, parts
         assert "Preprocessing" not in " ".join(s.value for s in at.subheader)
-        # UX-126: with the experimental flag off (this whole file's default),
+        # With the experimental flag off (this whole file's default),
         # the 🧮 Derived analysis tables section — Cleaning QA included — is
         # withheld too, so there's nothing preprocessing-specific left to
         # single out here. See TestDerivedAnalysisTablesGate for that gate.
@@ -313,11 +311,11 @@ class TestPreprocessingGate:
 
 
 class TestDerivedAnalysisTablesGate:
-    """UX-126 — the Data page's 🧮 Derived analysis tables section (Sentences /
-    Saccades / Trials / Readers / Characters / Cleaning QA) is held back this
-    release, the same way PRE-22 holds back preprocessing: the builders stay in
-    the codebase for a later revival, but the app must neither render the
-    section nor run the aggregation pipeline that backs it.
+    """The Data page's 🧮 Derived analysis tables section (Sentences /
+    Saccades / Trials / Readers / Characters / Cleaning QA) is behind the
+    experimental flag, like preprocessing: the builders stay in the codebase,
+    but the app must neither render the section nor run the aggregation
+    pipeline that backs it.
     """
 
     def test_it_is_hidden_by_default(self, monkeypatch):
@@ -368,11 +366,10 @@ class TestDerivedAnalysisTablesGate:
 
 
 class TestMultiplEYEUploadGate:
-    """UX-114 — the wizard's "Dataset format" choice + the MultiplEYE upload
-    branch it dispatches to are held back this release, the same way PRE-22
-    holds back the preprocessing panel: the code stays for a later revival
-    (most of what it did by hand is now what the generalized Generic wizard
-    can do too), but a default build offers no format *question* at all.
+    """The wizard's "Dataset format" choice + the MultiplEYE upload branch it
+    dispatches to are behind the experimental flag, like the preprocessing
+    panel: the code stays (most of what it does by hand the Generic wizard can
+    do too), but a default build offers no format *question* at all.
     """
 
     def test_it_is_hidden_by_default(self, monkeypatch):
@@ -429,7 +426,7 @@ class TestMultiplEYEUploadGate:
 
     def test_the_multipleye_upload_functions_are_untouched(self):
         """A gate, not a deletion — the upload-parsing code stays importable
-        and working, reachable directly and ready for a later revival."""
+        and working, reachable directly."""
         from scanpath_studio import datasets
 
         assert callable(datasets.multipleye_frames_from_uploads)
@@ -437,10 +434,9 @@ class TestMultiplEYEUploadGate:
 
 
 class TestTheBetaHidesMultiplEYE:
-    """DATA-54: MultiplEYE's data is not openly available yet, so the beta does
-    not offer it. Gated in `app.public_dataset_registry`, the one place the
-    picker, the 🗂️ Data page, Compare and share links all read. (DATA-54 also
-    hid the benchmark "set up" entry; DATA-55 removed it.)"""
+    """MultiplEYE's data is not openly available yet, so the default build
+    does not offer it. Gated in `app.public_dataset_registry`, the one place the
+    picker, the 🗂️ Data page, Compare and share links all read."""
 
     def test_it_is_not_offered(self):
         from scanpath_studio import app
@@ -504,10 +500,10 @@ class TestTheBetaHidesMultiplEYE:
 
 
 class TestTheBetaHidesTheHarmonisedBenchmarkCorpora:
-    """DATA-55: the corpora are unfinished (the picker marks each one WIP), so
-    the beta offers none of them — even one a user has added. (The app no longer
-    discovers them at all; `tests/test_eyegenbench.py` pins that half, with the
-    flag on.) Same gate, same place: `app.public_dataset_registry`."""
+    """The corpora are unfinished (the picker marks each one WIP), so the
+    default build offers none of them — even one a user has added. (The app
+    does not discover them at all; `tests/test_eyegenbench.py` pins that half,
+    with the flag on.) Same gate, same place: `app.public_dataset_registry`."""
 
     @pytest.fixture(autouse=True)
     def bundle(self, tmp_path, monkeypatch):
@@ -585,8 +581,8 @@ class TestTheBetaHidesTheHarmonisedBenchmarkCorpora:
         assert (args.eyegenbench, args.eyegenbench_dataset) == ("x", "PoTeC")
 
     def test_the_missing_input_message_names_only_offered_inputs(self, monkeypatch):
-        """The guard still counts the held-back inputs; its message stops
-        advertising them — MultiplEYE's ``--source`` included (DATA-54)."""
+        """The guard still counts the hidden inputs; its message does not
+        advertise them — MultiplEYE's ``--source`` included."""
         from scanpath_studio import cli
 
         with pytest.raises(SystemExit, match="exactly one input") as hidden:
@@ -624,8 +620,8 @@ class TestTheBetaHidesTheHarmonisedBenchmarkCorpora:
 
 
 class TestPerSentenceGate:
-    """AN-33: Per sentence derives its numbers from the fixations, unlike the
-    rest of Corpus Analysis (AN-32), so it is held back."""
+    """Per sentence derives its numbers from the fixations, unlike the rest of
+    Corpus Analysis, so it is behind the experimental flag."""
 
     def test_it_is_hidden_by_default(self):
         assert not constants.sentence_analysis_enabled()
@@ -659,9 +655,9 @@ class TestPerSentenceGate:
 
 
 class TestComputedMeasuresGate:
-    """The numbers the app works out itself are held back until checked by
-    hand: the API refuses them, the CLI does not offer `analyze`, and Corpus
-    Analysis drops the views built on them."""
+    """The numbers the app works out itself are not yet verified by hand, so
+    they sit behind the experimental flag: the API refuses them, the CLI does
+    not offer `analyze`, and Corpus Analysis drops the views built on them."""
 
     @pytest.mark.parametrize(
         "name",

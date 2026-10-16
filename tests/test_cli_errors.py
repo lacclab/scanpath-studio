@@ -1,5 +1,5 @@
-"""#374 F21 — the CLI's errors are short and say what to do, its flags take
-the app's names, and its default figure is the app's Scanpath design."""
+"""The CLI's errors are short and say what to do, its flags take the app's
+names, and its default figure is the app's Scanpath design."""
 
 from __future__ import annotations
 

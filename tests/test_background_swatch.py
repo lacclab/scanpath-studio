@@ -1,9 +1,8 @@
-"""#422 — the background's colour box just works.
+"""The background's colour box shows the colour in use, and a pick applies.
 
-It used to be the *Custom…* colour's own picker, greyed until *Custom…* was
-picked in the selectbox beside it. It now shows the colour in use, and a colour
-picked in it is applied: the wire keys (`global_bg_choice` / `global_bg_custom`)
-keep their meaning, so links, settings files, the CLI and the API are unchanged.
+It is not greyed until *Custom…* is picked in the selectbox beside it. The
+wire keys (`global_bg_choice` / `global_bg_custom`) keep their meaning, so
+links, settings files, the CLI and the API read them the same way.
 """
 
 from __future__ import annotations
@@ -110,7 +109,7 @@ def _shadow_app():
 
 
 def test_a_shadow_moves_to_a_fresh_key_only_when_its_value_moves():
-    """#374 F9: a value changed elsewhere gets a widget the browser never saw,
+    """A value changed elsewhere gets a widget the browser never saw,
     so no stale value can come back as a pick; an unchanged one keeps its key."""
     at = AppTest.from_function(_shadow_app).run(timeout=30)
     at.run(timeout=30)
@@ -124,13 +123,13 @@ def test_a_shadow_moves_to_a_fresh_key_only_when_its_value_moves():
 
 
 class TestTheShadowsCarryTheirOwnDefault:
-    """The background turned black on a dataset switch. The swatch was created
-    in a closed popover with its colour set through session state, which a
-    widget the browser has not mounted never receives — so the browser mounted
-    it at a colour picker's built-in ``#000000`` and sent that back on the next
-    rerun as a pick, selecting the Black background. A shadow widget now
-    carries the value as its *own* default, which the element itself holds, so
-    it mounts right however late it is opened. The same holds for the Compare
+    """A dataset switch must not turn the background black. A swatch created
+    in a closed popover with its colour set through session state never
+    receives that colour — a widget the browser has not mounted does not — so
+    the browser would mount it at a colour picker's built-in ``#000000`` and
+    send that back on the next rerun as a pick, selecting the Black background.
+    A shadow widget carries the value as its *own* default, which the element
+    itself holds, so it mounts right however late it is opened. The same holds for the Compare
     colour and opacity shadows and the font picker."""
 
     def test_the_swatch_default_is_the_background_in_use(self):

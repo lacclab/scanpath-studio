@@ -1,4 +1,4 @@
-"""A pinned colour range is the user's endpoints (round-7 review, findings 10-12).
+"""A pinned colour range is the user's endpoints.
 
 With *Auto* off, the rail's colour ranges pin one mapping across trials. These
 tests drive the real rail (`controls.render_plot_controls`) over a small
@@ -24,7 +24,7 @@ CANVAS = (800, 600)
 
 def _frames():
     """Two words; four fixations of 100/200/300/300 ms → 300 and 600 ms of
-    dwell, the review's example."""
+    dwell."""
     words = pd.DataFrame(
         {
             "participant_id": ["p"] * 2,
@@ -160,7 +160,7 @@ def _config(viz: dict) -> dict:
 
 
 class TestAPinnedRangeSurvivesANarrowerPool:
-    """Finding 10: filtering out the trial with the extreme value must not move
+    """Filtering out the trial with the extreme value must not move
     a pinned mapping — the same duration keeps the same colour."""
 
     def test_the_fixation_colour_range(self):
@@ -214,9 +214,9 @@ WORD_HEAT = {
 
 
 class TestTheWordHeatmapRangeIsInDwell:
-    """Finding 11: a word box maps its summed dwell, so the range's bounds are
-    per-word dwell — 300 and 600 ms here — not the 100-300 ms of the single
-    fixations, which pinned both words to one colour."""
+    """A word box maps its summed dwell, so the range's bounds are per-word
+    dwell — 300 and 600 ms here — not the 100-300 ms of the single fixations,
+    which would pin both words to one colour."""
 
     def test_unticking_auto_pins_the_dwell_span_and_keeps_the_words_apart(self):
         at = _rail(**WORD_HEAT)
@@ -289,8 +289,9 @@ class TestHeatmapValueBounds:
 
 
 class TestASmoothedHeatmapOffersNoRange:
-    """Finding 12: Interpolated scales its density to its own peak, so the range is greyed for them — kept, not cleared — and the
-    code snippet does not present it as pinning anything."""
+    """Interpolated scales its density to its own peak, so the range is greyed
+    for it — kept, not cleared — and the code snippet does not present it as
+    pinning anything."""
 
     @pytest.mark.parametrize("style", ["Interpolated"])
     def test_the_range_is_greyed_and_kept(self, style):

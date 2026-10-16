@@ -1,11 +1,11 @@
 """A composite id keeps different source tuples apart.
 
-Joining the parts with a bare ``_`` made ``("block_A", "B")`` and
+Joining the parts with a bare ``_`` would make ``("block_A", "B")`` and
 ``("block", "A_B")`` the same trial, ``block_A_B``. ``data.compose_id`` escapes
 a ``_`` or backslash inside a part, so the two stay distinct, while parts with
-neither — almost every id — compose exactly as before. Ids saved under the old
-spelling (a stored dataset, an annotations file, a link) still find their trial
-when the old spelling is unambiguous.
+neither — almost every id — compose as a plain ``_`` join. Ids saved under the
+unescaped spelling by older versions (a stored dataset, an annotations file, a
+link) still find their trial when that spelling is unambiguous.
 """
 
 from __future__ import annotations
@@ -137,9 +137,9 @@ def test_trial_metadata_joins_the_composed_ids():
 def test_old_spellings_find_their_trial_when_unambiguous():
     current = ["x\\_1_2", "p_q"]
     assert composite_respelling_map(["x_1_2"], current) == {"x_1_2": "x\\_1_2"}
-    # and the reverse: a table composed today against ids stored before
+    # and the reverse: a table composed with the escape against unescaped ids
     assert composite_respelling_map(["x\\_1_2"], ["x_1_2"]) == {"x\\_1_2": "x_1_2"}
-    # an old id the two readings shared stays unresolved — it named both
+    # an unescaped id the two readings shared stays unresolved — it named both
     both = trial_id_series(_source(), ["session", "item"])
     assert composite_respelling_map(["block_A_B"], both) == {}
     # an id that is already right is left alone
@@ -148,8 +148,8 @@ def test_old_spellings_find_their_trial_when_unambiguous():
 
 def test_a_restored_dataset_joins_a_table_composed_today():
     """Stored frames keep the ids they were saved with; a trial table attached
-    to them now composes the new spelling and still matches."""
-    keys = {("r1", "lab_A_7")}  # stored before the escape
+    to them composes the escaped spelling and still matches."""
+    keys = {("r1", "lab_A_7")}  # stored unescaped
     table = pd.DataFrame({"lab": ["lab_A"], "n": ["7"], "level": [3]})
     built = md.build_trial_metadata(table, ["lab", "n"], keys=keys)
     assert built.report.matched == ("lab_A_7",)
@@ -168,7 +168,7 @@ def test_harmonize_matches_an_old_and_a_new_spelling():
     fix_n = normalize_fixations(
         fixations, api.propose_schema(fixations, "fixations") | schema
     )
-    # the words half stored before the escape (a recovery-cache dataset)
+    # the words half stored unescaped (an older recovery-cache dataset)
     words_n = words_n.assign(trial_id="block_A_B")
     words_h, fix_h = harmonize_frames(words_n, fix_n)
     assert set(words_h["trial_id"]) == set(fix_h["trial_id"])

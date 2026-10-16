@@ -1,4 +1,4 @@
-"""Structural smoke tests for the Corpus Analysis figure builders (AN-1 … AN-22).
+"""Structural smoke tests for the Corpus Analysis figure builders.
 
 One test per figure the Corpus Analysis view can draw, each built from the
 bundled OneStop demo through the real ``aggregation.py`` helper that feeds it in
@@ -112,7 +112,7 @@ class TestTrendFigures:
         assert fig.layout.yaxis.title.text == "Fixation duration (ms)"
 
     def test_the_trend_breaks_at_a_filtered_out_trial(self):
-        """#374 F35: no segment, and no band, crosses a missing trial."""
+        """No segment, and no band, crosses a missing trial."""
         df = pd.DataFrame(
             {
                 "trial_index": [1, 2, 5, 6],
@@ -137,7 +137,7 @@ class TestTrendFigures:
         assert plots.break_at_gaps([0.5, 3.5], [1, 2]) == ([0.5, 3.5], [1, 2])
 
     def test_the_trial_order_axis_names_its_column(self, demo):
-        """#374 F35: the demo carries two index columns that disagree."""
+        """The demo carries two index columns that disagree, so the axis names one."""
         from scanpath_studio.data import trial_order_label
 
         assert trial_order_label(demo.fixations) == "Trial order (trial_index)"
@@ -147,7 +147,7 @@ class TestTrendFigures:
         assert trial_order_label(no_index) == "Trial order (by fixation time)"
 
     def test_per_participant_lines_overlay_the_trend(self, demo):
-        """The Groups subtab's "Per-reader behind" overlay (AN-17)."""
+        """The Groups subtab's "Per-reader behind" overlay."""
         fx = demo.fixations.assign(trial_index=derive_trial_index(demo.fixations))
         fig = plots.make_trend_figure(
             metric_by_trial_index(fx, "duration_ms"),
@@ -313,7 +313,7 @@ class TestPerTextFigures:
         assert [t.name for t in fig.data] == ["Skip rate"]
 
     def test_word_difficulty_on_stimulus(self, demo):
-        """AN-4: the aggregated frame tints the true-scale stimulus."""
+        """The aggregated frame tints the true-scale stimulus."""
         agg_words = word_box_aggregate(demo.words, demo.text_col, demo.text_id, _TFD)
         assert not agg_words.empty
         fig = plots.make_scanpath_figure(
@@ -409,11 +409,11 @@ class TestPerReaderFigures:
 
     def test_landing_curve(self, demo):
         # `demo` skips `harmonize_frames`, so its fixation ids are still the raw
-        # 1-based ones (BUG-8) and point at the *next* word — which the old clip
-        # onto [0, 1] hid. Correct them the way every real load does.
+        # 1-based ones and point at the *next* word. Correct them the way every
+        # real load does.
         fixations = correct_word_id_offset(demo.words, demo.fixations)
         vals = landing_positions(demo.words, fixations, participant_id=demo.participant)
-        # Unclipped (BUG-83): the fractions are over the experiment's box, so
+        # Unclipped: the fractions are over the experiment's box, so
         # nearly all sit inside [0, 1] on their own, and none is folded onto 1.0.
         assert vals.size and ((vals >= 0) & (vals <= 1)).mean() > 0.99
         assert (vals == 1.0).mean() < 0.01

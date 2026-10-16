@@ -109,8 +109,8 @@ def test_load_scanpath_data_bad_schema():
 
 
 # --------------------------------------------------------------------------
-# ENG-18: an un-inferrable table has to say WHICH canonical field failed, which
-# column names were tried, and what to pass instead.
+# An un-inferrable table has to say WHICH canonical field failed, which column
+# names were tried, and what to pass instead.
 # --------------------------------------------------------------------------
 
 
@@ -128,9 +128,9 @@ def test_words_schema_error_names_field_candidates_and_columns():
     assert "Word ID (word_schema key 'word_id')" in message
     # The either/or box requirement names which keys each convention still needs.
     # `start_x` is a literal `left` candidate (exact pass) *and*, since it is
-    # the only column carrying the whole token "x", the DATA-25 second pass
-    # also hands it to `x` — one column resolving two canonical fields, same
-    # as `top_left_x` already could. So only y/width/height and
+    # the only column carrying the whole token "x", the whole-token second
+    # pass also hands it to `x` — one column resolving two canonical fields,
+    # as `top_left_x` can. So only y/width/height and
     # right/top/bottom are left missing from either convention.
     assert (
         "need either (x, y, width, height) or (left, right, top, bottom) — "
@@ -146,7 +146,7 @@ def test_words_schema_error_names_field_candidates_and_columns():
         in message
     )
     # A copy-pasteable override that keeps the columns already resolved — the
-    # x/y/width/height convention is suggested since it now has fewer gaps.
+    # x/y/width/height convention is suggested since it has fewer gaps.
     assert (
         "word_schema={'trial': '<column>', 'word_id': '<column>', "
         "'x': 'start_x', 'y': '<column>', 'width': '<column>', "
@@ -186,11 +186,11 @@ def test_schema_error_truncates_a_wide_table():
 
 
 def test_words_schema_rejects_a_column_the_table_does_not_have():
-    """A typo'd explicit mapping used to be *silently ignored*: normalize_words
-    prefers a literal `unique_trial_id` column over the mapped one, so the frame
-    came back keyed on a column the caller never named."""
+    """A typo'd explicit mapping is an error naming the closest column, never
+    *silently ignored* — even when the table has a literal `unique_trial_id`
+    column to fall back on."""
     words_raw, fix_raw = data_module.load_sample_data()
-    assert "unique_trial_id" in words_raw.columns  # the column that masked it
+    assert "unique_trial_id" in words_raw.columns  # a column a fallback could key on
     schema = api.propose_schema(words_raw, "words")
     schema["trial"] = "TRIAL_LABEL"  # a plausible-looking EyeLink name that isn't there
     with pytest.raises(ValueError) as excinfo:
@@ -206,7 +206,7 @@ def test_words_schema_rejects_a_column_the_table_does_not_have():
 
 
 def test_fixations_schema_rejects_mapped_columns_and_reports_every_one():
-    """Two bad keys → both named (this path used to be a bare KeyError)."""
+    """Two bad keys → both named, not a bare KeyError."""
     _, fix_raw = data_module.load_sample_data()
     schema = api.propose_schema(fix_raw, "fixations")
     schema["x"] = "GAZE_X"
@@ -271,11 +271,11 @@ def test_propose_schema_is_the_documented_repair_path():
     """The mapping the error points at actually loads the renamed table."""
     words_raw, fix_raw = data_module.load_sample_data()
     # Renamed to something with no candidate token at all (not "aoi_number" —
-    # DATA-25's second pass would now auto-detect that one via the whole
-    # token "aoi", which is itself a WORD_ID_CANDIDATES entry; see
+    # the whole-token second pass would auto-detect that one via the token
+    # "aoi", which is itself a WORD_ID_CANDIDATES entry; see
     # TestPickColumnPrefixSuffixSecondPass in test_data.py).
     renamed = words_raw.rename(columns={"IA_ID": "internal_id"})
-    # `IA_ID` was the only Word/IA ID candidate present, so detection now fails…
+    # `IA_ID` was the only Word/IA ID candidate present, so detection fails…
     with pytest.raises(ValueError, match="missing Word/IA ID"):
         sps.load_scanpath_data(words=renamed, fixations=fix_raw, names="canonical")
 
@@ -351,13 +351,13 @@ def test_plot_scanpath_overrides(sample):
         heatmap_metric="counts",
     )
     assert isinstance(fig, go.Figure)
-    # Word boxes drawn: one shape per word on top of the default's (#374 F21:
-    # the default is the app's Scanpath design, which has none).
+    # Word boxes drawn: one shape per word on top of the default's (the
+    # default is the app's Scanpath design, which has none).
     assert len(fig.layout.shapes) > len(default_fig.layout.shapes or ())
 
 
 def test_plot_scanpath_saccade_color_by_type(sample):
-    # VIZ-8: headless "By type" mode splits the saccades into legended class
+    # Headless "By type" mode splits the saccades into legended class
     # sub-traces (the classification runs inside make_scanpath_figure, so no
     # pipeline pre-enrichment is needed).
     words, fixations = sample
@@ -371,7 +371,7 @@ def test_plot_scanpath_saccade_color_by_type(sample):
 
 
 def test_plot_scanpath_heatmap_log_norm(sample):
-    # VIZ-3: log normalization remaps the word-box heatmap tints vs linear.
+    # Log normalization remaps the word-box heatmap tints vs linear.
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
 
@@ -393,7 +393,7 @@ def test_plot_scanpath_heatmap_log_norm(sample):
 
 
 def test_plot_scanpath_snap_fixations(sample):
-    # #422: snapping moves the fixation markers onto their lines (fewer distinct
+    # Snapping moves the fixation markers onto their lines (fewer distinct
     # y — one per text line — than the raw gaze scatter), and only up or down.
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
@@ -422,8 +422,8 @@ def test_plot_scanpath_snap_fixations(sample):
 
 
 def test_plot_scanpath_axis_field_override(sample):
-    # Regression: x_field/y_field used to collide with the explicitly passed
-    # kwargs and raise "got multiple values for keyword argument".
+    # x_field/y_field must not collide with the explicitly passed kwargs and
+    # raise "got multiple values for keyword argument".
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
     _, trial_fixations = data_module.filter_data(
@@ -439,8 +439,8 @@ def test_plot_scanpath_axis_field_override(sample):
 
 
 def test_plot_scanpath_filters_raw_gaze(sample):
-    # Regression: raw_gaze used to be forwarded unfiltered, overlaying gaze
-    # points from every other trial on the single-trial figure.
+    # raw_gaze is filtered to the trial: forwarded unfiltered, it would overlay
+    # gaze points from every other trial on the single-trial figure.
     words, fixations = sample
     combos = sps.list_trials(words, fixations)
     pid, tid = combos.iloc[0]
@@ -460,7 +460,7 @@ def test_plot_scanpath_filters_raw_gaze(sample):
 
 
 def test_plot_scanpath_fix_index_range_windows_the_trial(sample):
-    """VIZ-7 headless: draw only fixations start..end (1-based, inclusive)."""
+    """Headless: draw only fixations start..end (1-based, inclusive)."""
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
     _, trial_fixations = data_module.filter_data(
@@ -520,9 +520,9 @@ def test_plot_scanpath_rejects_unnormalized_raw_gaze(sample):
 
 
 def test_animate_scanpath_rejects_static_only_options(sample):
-    # Regression: static-only keys used to surface as an opaque TypeError.
-    # (color_by no longer qualifies — the replay honours it like the static
-    # figure; the heatmap overlay is still static-only.)
+    # Static-only keys raise a clear ValueError, not an opaque TypeError.
+    # (color_by is not one — the replay honours it like the static figure;
+    # the heatmap overlay is static-only.)
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
     with pytest.raises(ValueError, match="does not support"):
@@ -646,8 +646,8 @@ def test_figure_settings_validate_and_override_without_mutating():
 
 def test_the_animation_builder_takes_the_two_scanpath_options():
     """The co-animation's overlay extras are animation-only options. (The docs'
-    option table is generated from `figure_options()` since ENG-79, so it needs
-    no test of its own; see tests/test_docs_support.py.)"""
+    option table is generated from `figure_options()`, so it needs no test of
+    its own; see tests/test_docs_support.py.)"""
     static = set(api.figure_options())
     animation = set(api.figure_options("animation"))
     assert {"words_b", "fixations_b", "label_a", "label_b", "show_legend"} <= (
@@ -681,7 +681,7 @@ def _app_figure_defaults(words, fixations, monkeypatch):
     dict standing in for ``st.session_state``."""
     monkeypatch.setattr(streamlit, "session_state", {})
     # The sample is the bundled demo, the one dataset the app seeds a highlight
-    # on (#374 F6).
+    # on.
     streamlit.session_state["data_source_choice"] = constants.DEMO_CHOICE
     controls._seed_viz_state(fixations, 16, words)
     viz = controls._collect_viz_settings(fixations, words)
@@ -700,8 +700,8 @@ def _app_figure_defaults(words, fixations, monkeypatch):
 def test_headless_defaults_match_the_app_for_every_non_layer_option(
     sample, monkeypatch
 ):
-    """ENG-18 drift audit, exhaustively: a bare `plot_scanpath` must render what
-    the app renders, except for the layers it deliberately turns on."""
+    """Exhaustively: a bare `plot_scanpath` renders what the app renders,
+    option for option, layers included."""
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
     trial_words, trial_fixations = data_module.filter_data(
@@ -736,13 +736,13 @@ def test_headless_defaults_match_the_app_for_every_non_layer_option(
         for key in api._STATIC_FIGURE_PARAMS - equivalent
         if effective(app_settings, key) != effective(headless, key)
     }
-    # #374 F21: no difference at all — the headless default is the app's
-    # Scanpath design, layers included.
+    # No difference at all — the headless default is the app's Scanpath
+    # design, layers included.
     assert differing == set()
 
 
 def test_the_demo_is_drawn_on_its_recorded_screen():
-    """#374 F21: `plot_scanpath` on `load_sample_data()` frames uses the demo's
+    """`plot_scanpath` on `load_sample_data()` frames uses the demo's
     2560×1440 screen, as `render --sample` does, not an estimate."""
     words, fixations = sps.load_sample_data()
     pid, tid = sps.list_trials(words, fixations).iloc[0]
@@ -789,7 +789,7 @@ def test_animation_shares_the_static_defaults(sample):
 
 
 def test_plot_scanpath_drift_correction_snaps_to_line_centers(sample):
-    # PRE-3 parity: the API applies the same correction as the app's control.
+    # Parity: the API applies the same drift correction as the app's control.
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
     trial_words, _ = data_module.filter_data(
@@ -850,8 +850,8 @@ def test_animate_scanpath_returns_frames(sample):
 
 
 def test_animate_scanpath_autoplay_saves_the_player(sample, tmp_path):
-    # BUG-93: the saved HTML replays on the wall-clock player, and VIZ-10's
-    # autoplay (on by default) is the flag that player reads on load.
+    # The saved HTML replays on the wall-clock player, and autoplay (on by
+    # default) is the flag that player reads on load.
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
     fig = sps.animate_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
@@ -863,8 +863,8 @@ def test_animate_scanpath_autoplay_saves_the_player(sample, tmp_path):
 
 
 def test_animate_scanpath_no_autoplay_saves_paused(sample, tmp_path):
-    # VIZ-10: autoplay=False → the HTML opens paused; the player is still there,
-    # because ▶ Play needs its clock either way (BUG-93).
+    # autoplay=False → the HTML opens paused; the player is still there,
+    # because ▶ Play needs its clock either way.
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
     fig = sps.animate_scanpath(
@@ -940,7 +940,7 @@ def test_analysis_tables_exposes_complete_family(sample):
 
 
 def test_analysis_tables_computes_no_reading_measures(sample):
-    """EXP-23 (AN-32): `word_measures` is the words table as it came — the
+    """`word_measures` is the words table as it came — the
     measures the dataset brought — and a words table with none leaves it out."""
     from scanpath_studio.data import READING_MEASURE_COLUMNS
 
@@ -975,7 +975,7 @@ def test_save_figure_forwards_size(tmp_path, monkeypatch):
 
 
 def test_save_figure_layers_one_file_per_layer(sample, tmp_path, monkeypatch):
-    # VIZ-5: split into per-layer files named <layer>.<fmt>. Stub save_figure to
+    # Split into per-layer files named <layer>.<fmt>. Stub save_figure to
     # avoid Kaleido/Chrome — we're checking the split + naming, not the render.
     from pathlib import Path
 
@@ -999,25 +999,26 @@ def test_save_figure_layers_one_file_per_layer(sample, tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# EXP-17 — an option naming a column that isn't there raises
+# An option naming a column that isn't there raises
 # ---------------------------------------------------------------------------
-_EXP17_TRIAL = ("l37_1129", "l37_1129_2_1_1_Ele_r0")
+_DEMO_TRIAL = ("l37_1129", "l37_1129_2_1_1_Ele_r0")
 
 
 @pytest.mark.parametrize("builder", ["plot_scanpath", "animate_scanpath"])
 def test_a_misspelled_color_by_column_raises_with_the_closest(builder):
     """The builder looks the column up and draws a flat colour when it is not
-    there, so `color_by="duraton_ms"` rendered without a word."""
+    there, so without this check `color_by="duraton_ms"` would render without
+    a word."""
     words, fixations = api.load_sample_data(names="canonical")
     with pytest.raises(ValueError, match="duraton_ms.*Closest: 'duration_ms'"):
-        getattr(api, builder)(words, fixations, *_EXP17_TRIAL, color_by="duraton_ms")
+        getattr(api, builder)(words, fixations, *_DEMO_TRIAL, color_by="duraton_ms")
 
 
 def test_a_misspelled_highlight_column_raises():
     words, fixations = api.load_sample_data(names="canonical")
     with pytest.raises(ValueError, match="highlight_column='is_in_aspn'.*is_in_aspan"):
         api.plot_scanpath(
-            words, fixations, *_EXP17_TRIAL, highlight_column="is_in_aspn"
+            words, fixations, *_DEMO_TRIAL, highlight_column="is_in_aspn"
         )
 
 
@@ -1027,7 +1028,7 @@ def test_a_comparison_checks_the_column_across_both_readings():
         api.compare_scanpaths(
             words,
             fixations,
-            _EXP17_TRIAL,
+            _DEMO_TRIAL,
             ("l7_1090", "l7_1090_2_1_1_Ele_r0"),
             color_by="nosuch",
         )
@@ -1039,33 +1040,32 @@ def test_the_synthetic_color_by_values_and_the_default_span_are_accepted():
     that is missing is an error."""
     words, fixations = api.load_sample_data(names="canonical")
     for value in ("(uniform)", "line", "duration_ms"):
-        api.plot_scanpath(words, fixations, *_EXP17_TRIAL, color_by=value)
-    api.plot_scanpath(words.drop(columns=["is_in_aspan"]), fixations, *_EXP17_TRIAL)
-    api.plot_scanpath(words, fixations, *_EXP17_TRIAL, highlight_column=None)
+        api.plot_scanpath(words, fixations, *_DEMO_TRIAL, color_by=value)
+    api.plot_scanpath(words.drop(columns=["is_in_aspan"]), fixations, *_DEMO_TRIAL)
+    api.plot_scanpath(words, fixations, *_DEMO_TRIAL, highlight_column=None)
 
 
 @pytest.mark.parametrize("builder", ["plot_scanpath", "animate_scanpath"])
 def test_color_by_line_draws_what_color_by_line_true_draws(builder):
-    """BUG-85: `"line"` is the app's own spelling of colouring by text line —
-    the *Color fixations by* select offers it and a share link carries
-    `color_by=line` — and the API accepted it (the EXP-17 message even
-    recommended it), but only `color_by_line=True` reached the builders' line
-    branch, so `color_by="line"` drew one flat colour."""
+    """`"line"` is the app's own spelling of colouring by text line — the
+    *Color fixations by* select offers it and a share link carries
+    `color_by=line` — so `color_by="line"` reaches the builders' line branch,
+    like `color_by_line=True`, rather than drawing one flat colour."""
     words, fixations = api.load_sample_data(names="canonical")
     build = getattr(api, builder)
-    by_value = build(words, fixations, *_EXP17_TRIAL, color_by="line")
-    by_flag = build(words, fixations, *_EXP17_TRIAL, color_by_line=True)
+    by_value = build(words, fixations, *_DEMO_TRIAL, color_by="line")
+    by_flag = build(words, fixations, *_DEMO_TRIAL, color_by_line=True)
     names = [trace.name for trace in by_value.data]
     assert names == [trace.name for trace in by_flag.data]
     assert "Line 1" in names
 
 
 # ---------------------------------------------------------------------------
-# ENG-54 — what the docs say is importable from the package root is
+# What the docs say is importable from the package root is
 # ---------------------------------------------------------------------------
 def test_every_documented_api_function_is_importable_from_the_root():
     """docs/api.md: "All functions below are importable from `scanpath_studio`"
-    — `eyegenbench_datasets` was listed there and was not."""
+    — so every function it lists must be."""
     import re
     from pathlib import Path
 
@@ -1092,7 +1092,7 @@ def test_the_headless_helpers_are_root_exports(name):
 
 def test_a_failed_layer_export_leaves_no_empty_folder(tmp_path, monkeypatch):
     """With no Chrome, Kaleido fails on the first layer — and the folder the
-    call had just created stayed behind, empty."""
+    call had just created must not stay behind, empty."""
     words, fixations = api.load_sample_data(names="canonical")
     fig = api.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
 
@@ -1119,7 +1119,7 @@ def test_a_failed_layer_export_leaves_no_empty_folder(tmp_path, monkeypatch):
     ],
 )
 def test_a_palette_is_found_in_either_spelling(spelling):
-    """#374: the palette names moved to US spelling; old names keep working."""
+    """The palette names use US spelling; the British spellings still resolve."""
     from scanpath_studio.api import resolve_palette
     from scanpath_studio.constants import PALETTES
 

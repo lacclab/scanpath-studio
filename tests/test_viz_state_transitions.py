@@ -54,7 +54,7 @@ def test_illustration_to_scanpath_restores_named_view_defaults(monkeypatch):
 
 @pytest.mark.parametrize("preset", ["scanpath", "heatmap", "illustration"])
 def test_compare_on_and_off_keeps_the_preset(monkeypatch, preset):
-    """#374 F25: Compare is a mode, not a design setting — switching it on or
+    """Compare is a mode, not a design setting — switching it on or
     off leaves the preset highlighted."""
     store = _viz_store()
     store["single_compare_toggle"] = False
@@ -66,7 +66,7 @@ def test_compare_on_and_off_keeps_the_preset(monkeypatch, preset):
     assert controls._active_quick_view() == preset
     store["single_compare_toggle"] = False
     assert controls._active_quick_view() == preset
-    # Back on the preset, a later edit drifts from it as before.
+    # Back on the preset, a later edit still drifts from it.
     store["global_fixation_opacity"] = 0.33
     assert controls._active_quick_view() == "custom"
 
@@ -223,7 +223,7 @@ def test_full_monitor_changes_only_framing_state_and_cache_input(monkeypatch):
     assert dict(key_off)["fit_to_monitor"] is False
 
 
-# --- VIZ-44: narrowing the trial pool is not a design edit -------------------
+# --- narrowing the trial pool is not a design edit ---------------------------
 
 
 def test_mirror_keys_and_late_defaults_are_not_drift():
@@ -242,8 +242,8 @@ def test_mirror_keys_and_late_defaults_are_not_drift():
     }
     assert not controls._design_drifted(applied, late)
     assert controls._design_drifted(applied, {**late, "global_fixation_opacity": 0.4})
-    # A key with no default (an explicit colour range, VIZ-46) appearing is a
-    # choice the user made.
+    # A key with no default (an explicit colour range) appearing is a choice
+    # the user made.
     assert controls._design_drifted(
         applied, {**applied, "global_heatmap_color_range": (0.0, 10.0)}
     )
@@ -278,18 +278,17 @@ class TestTrialFiltersKeepTheDesign:
     def test_a_trial_filter_leaves_the_preset_alone(self, booted_app):
         at = booted_app
         hover = list(at.session_state["global_fixation_hover_fields"])
-        # A trial with no fixations used to wipe the user's hover picks; the
-        # unit test above covers that since DATA-43 dropped the demo's one
-        # such reader, so this narrows by the two readers it still has.
+        # A trial with no fixations must not wipe the user's hover picks; the
+        # unit test above covers that, since the demo has no such reader, so
+        # this narrows by the demo's two readers.
         for participant in (["l37_1129"], ["l7_1090"], []):
             box = next(m for m in at.multiselect if m.key == "filter_participants")
             box.set_value(participant)
             self._run(at)
             assert at.session_state["_quick_view_selection"] == "scanpath", participant
         assert list(at.session_state["global_fixation_hover_fields"]) == hover
-        # The issue's repro was Correct → only the correct answers; every
-        # trial the demo keeps is answered correctly (DATA-43), so that filter
-        # no longer draws. A condition filter with two values stands in.
+        # Every trial the demo keeps is answered correctly, so a Correct
+        # filter does not draw; a condition filter with two values stands in.
         for pick_first in (True, False):
             level = next(
                 m for m in at.multiselect if m.key == "filter_difficulty_level"
@@ -307,7 +306,7 @@ class TestTrialFiltersKeepTheDesign:
 
 
 def test_the_heatmap_preset_turns_the_highlight_off(monkeypatch):
-    """#374 F16: the Heatmap design is the word colours and nothing else, so a
+    """The Heatmap design is the word colours and nothing else, so a
     highlighted span is switched off with the other layers."""
     store = _viz_store()
     store["global_critical_span_style"] = "Mark text"
@@ -322,9 +321,9 @@ def test_the_heatmap_preset_turns_the_highlight_off(monkeypatch):
 
 @pytest.mark.timeout(180)
 def test_animate_says_why_layers_are_greyed():
-    """#422 (in place of #374 F23's caption under the Animate row): the reason
-    is the switches' hover text — Animate says what it greys, and each greyed
-    switch says why, only while it is greyed."""
+    """Why layers are greyed is the switches' hover text, not a caption under
+    the Animate row — Animate says what it greys, and each greyed switch says
+    why, only while it is greyed."""
     at = AppTest.from_file(APP_SCRIPT, default_timeout=90)
     at.run()
     assert "Heatmap and Raw gaze switches are greyed" in (

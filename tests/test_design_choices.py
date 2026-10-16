@@ -1,10 +1,10 @@
-"""#422: seven design choices the figure used to make for the user.
+"""Seven design choices the user makes about the figure.
 
 Heatmap opacity, the title's and caption's text, the plot frame, the saccade
 arrowheads, the fixation markers' outline, the coordinate grid's labels and
-each colour bar's thickness and length. Each default is the value it always
-drew with, so an untouched figure is unchanged; the link, the settings file,
-the CLI and the snippet carry them through the shared contract tests
+each colour bar's thickness and length. Each default is the value the figure
+draws with when nothing is set; the link, the settings file, the CLI and the
+snippet carry them through the shared contract tests
 (`test_session_key_contract`, `test_render_every_option`).
 """
 
@@ -64,7 +64,7 @@ def test_each_heatmap_style_keeps_its_own_opacity_until_one_is_set():
 
 
 def test_a_comparison_heatmap_matches_the_single_figure():
-    """Its word boxes were 0.55 against the single figure's 0.5."""
+    """Its word boxes take the single figure's 0.5, not an opacity of their own."""
     words, fixations = _frames()
     fig = plots.make_comparison_figure(
         pd.concat([words, words.assign(participant_id="q")]),
@@ -179,7 +179,7 @@ def test_the_title_and_caption_take_their_size_and_colour():
     fig, caption, grown = stamped()
     assert fig.layout.title.font.size == 20
     assert (caption.font.size, caption.font.color) == (13, "#555555")
-    # The bands the defaults always took: 46 px for the title, 22 + 12 for
+    # The bands the defaults take: 46 px for the title, 22 + 12 for
     # one caption line.
     assert grown == 46 + 22 + 12
 

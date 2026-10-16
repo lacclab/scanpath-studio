@@ -1,13 +1,13 @@
 """A column mapping the pipeline *rejects* must not take the whole app down.
 
-`prepare_data` has always had a recovery path for a mapping that is merely
+`prepare_data` has a recovery path for a mapping that is merely
 **incomplete** (a required field unmapped → `problems` → the raw tables plus the
 still-editable Column mapping panels). A mapping that is complete but
 **impossible** — the one-sided `screen_id` below, which `multipart` rejects
-because two coordinate spaces must not be joined — used to escape as a raw
-`ValueError` out of `main()`, so the run died *before* rendering the mapping
-panels, the source picker or the signpost to them. Everything the user could
-have clicked to undo it was on the far side of the exception.
+because two coordinate spaces must not be joined — must take it too: escaping
+as a raw `ValueError` out of `main()` would kill the run *before* it rendered
+the mapping panels, the source picker or the signpost to them, leaving
+everything the user could click to undo it on the far side of the exception.
 """
 
 from __future__ import annotations
@@ -103,13 +103,14 @@ def test_a_wedged_dataset_can_be_abandoned_without_visiting_the_data_page():
 def test_the_data_page_still_reports_the_cache_while_the_app_is_wedged(
     monkeypatch, tmp_path
 ):
-    """*Saved on this computer* survives `main`'s early return (UX-179).
+    """*Saved on this computer* survives `main`'s early return.
 
-    It used to be written in the epilogue, which a dataset that cannot be drawn
-    never reaches — so the panel someone opens when stuck showed its heading
-    with nothing under it. Each early return fills it itself (`_finish_page`).
-    The recovery cache has to be forced on: AppTest has no URL, so persistence
-    reads as a hosted deployment and the section says nothing is stored.
+    A dataset that cannot be drawn never reaches the epilogue, so each early
+    return fills the section itself (`_finish_page`) — or the panel someone
+    opens when stuck would show its heading with nothing under it. The
+    recovery cache has to be forced on: nothing under AppTest reads as
+    loopback, so persistence reads as a hosted deployment and the section says
+    nothing is stored.
     """
     monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
     monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
@@ -187,9 +188,9 @@ def test_the_open_wizard_survives_an_upload_the_pipeline_rejects(one_sided_uploa
 
 
 def test_text_word_ids_with_no_xy_block_the_add(monkeypatch):
-    """#412: fixations with no X/Y are placed by their Word/IA ID, which is read
-    as a number — text ids put every one on the first word's box. Now the add
-    is blocked, saying why, directly above ✅ Add dataset."""
+    """Fixations with no X/Y are placed by their Word/IA ID, which is read as a
+    number — so text ids place none of them, and the add is blocked, saying
+    why, directly above ✅ Add dataset."""
     from scanpath_studio import app
 
     words = _WIZARD_WORDS.drop(columns=["page"]).assign(word_id=["w0", "w1", "w2"])
@@ -262,7 +263,7 @@ def test_the_multipleye_preset_reports_a_rejected_load_instead_of_dying(monkeypa
     assert "_wizard_finalize_payload" not in at.session_state
 
 
-# --- a complete mapping whose numbers don't parse (BUG-54) --------------------
+# --- a complete mapping whose numbers don't parse -----------------------------
 
 
 def test_the_wizard_names_a_numeric_column_that_did_not_parse(monkeypatch):
@@ -285,8 +286,9 @@ def test_the_wizard_names_a_numeric_column_that_did_not_parse(monkeypatch):
 
 
 def test_the_wizard_says_when_the_readers_do_not_line_up(monkeypatch):
-    """BUG-59: the trial-id overlap check passed — both tables have `t0` — while
-    no (participant, trial) pair was in both, so nothing had word boxes."""
+    """The trial-id overlap check passing — both tables have `t0` — is not
+    enough: no (participant, trial) pair is in both, so nothing has word boxes,
+    and the wizard says so."""
     from scanpath_studio import app
 
     words = _WIZARD_WORDS.drop(columns=["page"]).assign(participant_id="r9")
@@ -304,9 +306,9 @@ def test_the_wizard_says_when_the_readers_do_not_line_up(monkeypatch):
 
 
 def test_a_words_table_that_joins_nothing_is_said_on_every_page(monkeypatch):
-    """BUG-32: the words loaded, joined to none of the fixations, and the app
-    drew every trial without its text — silently, because only the empty-*pool*
-    case (all three frames empty) had a message."""
+    """Words that load but join none of the fixations are reported on every
+    page — not only the empty-*pool* case (all three frames empty) — rather
+    than every trial drawing without its text, silently."""
     from scanpath_studio import app
 
     words = _WIZARD_WORDS.drop(columns=["page"]).assign(trial_id="another_trial")

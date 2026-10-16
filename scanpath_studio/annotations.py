@@ -3,17 +3,17 @@
 Annotations are keyed by ``(participant_id, trial_id)`` and live in Streamlit
 session state, so they persist across reruns within a session. There is no
 backend; a local run keeps them in the recovery cache, and to share them 🗂️
-Data → **Annotations** exports and imports a dataset's as JSON (UX-174). The
-Scanpath view's Export bundle can include the same file (UX-179).
+Data → **Annotations** exports and imports a dataset's as JSON. The Scanpath
+view's Export bundle can include the same file.
 
-**DATA-48 — annotations belong to a dataset**, as the metadata tables do since
-DATA-47: :data:`ANNOTATIONS_STATE_KEY` holds the *selected* dataset's store only
-(so every reader — the per-trial editor, the pickers' markers, the ⭐ / tag
-filters, the Data page, the Export bundle — reads it unchanged), and every other
+**Annotations belong to a dataset**, as the metadata tables do:
+:data:`ANNOTATIONS_STATE_KEY` holds the *selected* dataset's store only (so
+every reader — the per-trial editor, the pickers' markers, the ⭐ / tag filters,
+the Data page, the Export bundle — reads it unchanged), and every other
 dataset's waits in :data:`DATASET_STORE_KEY`. :func:`activate_dataset`, called
 by ``app.main`` beside ``metadata.activate_dataset``, swaps them when the
 selection changes. Two datasets that reuse ``(participant, trial)`` ids
-therefore no longer share a star, a tag or a note.
+therefore never share a star, a tag or a note.
 
 The module is split into a *pure* core (``records_to_store`` /
 ``store_to_records`` / ``serialize`` / ``deserialize`` — no Streamlit, unit
@@ -36,9 +36,9 @@ from .session_keys import COMPARE_SOURCE_STATE_KEY
 
 ANNOTATIONS_STATE_KEY = "trial_annotations"
 #: The annotations file (🗂️ Data → Annotations, an Export bundle's
-#: ``annotations.json``). Schema 3 (DATA-48) adds the optional ``dataset`` the
-#: file was exported from — for the reader, not the importer: a file of any
-#: schema imports into the dataset that is open, the only one it can belong to.
+#: ``annotations.json``). Schema 3 adds the optional ``dataset`` the file was
+#: exported from — for the reader, not the importer: a file of any schema
+#: imports into the dataset that is open, the only one it can belong to.
 SCHEMA_VERSION = 3
 
 # Per-trial annotation widgets use this prefix so they can be cleared on import
@@ -124,8 +124,8 @@ def store_to_records(store: dict[Key, Entry]) -> list[dict]:
 def serialize(store: dict[Key, Entry], *, dataset: str | None = None) -> str:
     """Serialize a store to a JSON document string.
 
-    ``dataset`` names the dataset the annotations were made on (DATA-48); the
-    file says so, and :func:`deserialize` does not need it back.
+    ``dataset`` names the dataset the annotations were made on; the file says
+    so, and :func:`deserialize` does not need it back.
     """
     document: dict[str, object] = {"schema": SCHEMA_VERSION}
     if dataset:
@@ -216,7 +216,7 @@ def records_in(store: dict[Key, Entry], trials) -> list[dict]:
 
     ``trials`` is ``(participant_id, trial_id)`` pairs. Keeps what an Export
     bundle writes to the trials it exports, and tells a dataset's annotations
-    on trials it still has from ones it no longer has (DATA-48). A screen
+    on trials it has loaded from ones on trials it has not. A screen
     annotation belongs to its parent trial.
     """
     keep = _trial_set(trials)
@@ -232,14 +232,14 @@ def merge_records(
 
     An imported entry replaces the one already on its key — the file is the
     newer statement about that trial — and a record for a trial the dataset
-    does not have is skipped, as a backup restore skips what does not match
-    (UX-174 r2). Returns ``(applied, skipped)``.
+    does not have is skipped, as a backup restore skips what does not match.
+    Returns ``(applied, skipped)``.
     """
     keep = _trial_set(trials)
     incoming = records_to_store(records)
-    # A file saved before composite ids escaped a `_` inside a part names those
-    # trials by their old spelling; read it the dataset's way when that is
-    # unambiguous (`data.respell_reading`).
+    # An older file may spell a composite trial id without escaping a `_`
+    # inside a part; read it the dataset's way when that is unambiguous
+    # (`data.respell_reading`).
     if any(_trial_of(key) not in keep for key in incoming):
         incoming = {
             (
@@ -276,16 +276,15 @@ def _store() -> dict[Key, Entry]:
 
 
 # ---------------------------------------------------------------------------
-# DATA-48 — the annotations belong to a dataset
+# The annotations belong to a dataset
 #
 # `ANNOTATIONS_STATE_KEY` holds the selected dataset's store; every other
 # dataset's waits in `DATASET_STORE_KEY`, and `activate_dataset` swaps them in
-# and out when the selection changes — DATA-47's design for the metadata
-# tables, taken over rather than reinvented, so the two follow one selection by
-# one set of rules. A dataset component in every key was the alternative; it
-# would have made each of the store's readers (the editor, the pickers'
-# markers, the filters, the Data page, the Export bundle) pass a dataset, where
-# the swap leaves them all reading the one store they already read.
+# and out when the selection changes — the metadata tables' design, so the two
+# follow one selection by one set of rules. A dataset component in every key
+# would make each of the store's readers (the editor, the pickers' markers,
+# the filters, the Data page, the Export bundle) pass a dataset, where the
+# swap leaves them all reading the one store they already read.
 #
 # These functions take the session mapping explicitly, like `metadata`'s, so
 # the swap is testable on a plain dict.
@@ -297,8 +296,9 @@ DATASET_STORE_KEY = "_annotations_by_dataset"
 #: Which dataset :data:`ANNOTATIONS_STATE_KEY`'s store belongs to right now.
 #: Absent until the first :func:`activate_dataset`.
 OWNER_KEY = "_annotations_owner"
-#: Entries that belong to no dataset yet — a pre-DATA-48 recovery cache's that
-#: no upload's trials claimed (:func:`restore_payload`). The first *real*
+#: Entries that belong to no dataset yet — an older recovery cache's (from
+#: before annotations were per dataset) that no upload's trials claimed
+#: (:func:`restore_payload`). The first *real*
 #: dataset activated adopts them; the add wizard's never does, since nothing
 #: of it is cached and they would be lost with it.
 UNASSIGNED_KEY = "_annotations_unassigned"
@@ -311,7 +311,7 @@ STORE_REVISION_KEY = "_annotations_store_revision"
 #: ``metadata.PENDING_DATASET`` (pinned by a test; not imported, since
 #: `metadata` pulls in the data layer). Never cached.
 PENDING_DATASET = "\x00pending"
-#: CMP-8's key prefix for scanpath B's filters (``tabs._COMPARE_FILTER_PREFIX``)
+#: The key prefix for Compare's scanpath B filters (``tabs._COMPARE_FILTER_PREFIX``)
 #: and the picker's "same dataset" answer (``compare_source.THIS_DATASET``).
 #: Pinned equal by a test; not imported, since both modules import this one.
 _COMPARE_PREFIX = "cmp"
@@ -350,7 +350,8 @@ def _reseed_editors_in(session) -> None:
     Their keys carry the trial's ids, not the dataset's: left in place across a
     swap, the editor of a trial the next dataset shares would seed from the last
     dataset's values and write them into the new dataset's store. Nothing typed
-    is lost by it — every editor field saves itself on change (``_save_entry``),
+    is lost by it — every editor field saves itself on change
+    (``_save_entry_callback``),
     and a widget's callback runs before the run that swaps.
     """
     for key in [
@@ -401,8 +402,8 @@ def activate_dataset(session, dataset: str, *, adopt: bool = True) -> bool:
 def adopt_unassigned(session) -> int:
     """Give the :data:`UNASSIGNED_KEY` pool to the dataset on screen; how many.
 
-    The pool holds a pre-DATA-48 cache's entries that no restored upload's
-    trials claimed (:func:`restore_payload`) — so they are on trials of a
+    The pool holds an older cache's entries (from before annotations were per
+    dataset) that no restored upload's trials claimed (:func:`restore_payload`) — so they are on trials of a
     built-in or public corpus, and only such a dataset may adopt them. Never
     an upload (each was asked in the claim pass, and said no), and never the
     add wizard's unnamed dataset, which is not cached. The dataset's own entry
@@ -511,7 +512,7 @@ def store_for(session, dataset: str) -> dict[Key, Entry]:
 
 
 def store_for_prefix(prefix: str = "") -> dict[Key, Entry]:
-    """The store the trial filters under key ``prefix`` narrow by (DATA-48).
+    """The store the trial filters under key ``prefix`` narrow by.
 
     The main pool's filters read the selected dataset's. Compare mode's
     scanpath B (the ``cmp`` prefix) can come from another dataset, and then its
@@ -582,7 +583,7 @@ def unassigned_records(session) -> list[dict]:
 
 
 def cache_payload(session) -> dict:
-    """The recovery cache's ``annotations`` value: ``{"datasets": …}`` (DATA-48)."""
+    """The recovery cache's ``annotations`` value: ``{"datasets": …}``."""
     payload: dict[str, object] = {"datasets": dataset_records(session)}
     unassigned = unassigned_records(session)
     if unassigned:
@@ -620,8 +621,9 @@ def restore_payload(session, payload) -> int:
     A dataset this session already holds annotations for keeps its own — the
     restore's ``setdefault`` rule.
 
-    **The one-time migration.** A manifest written before DATA-48 stored one
-    flat list of records naming no dataset; it is read as ``unassigned``. Each
+    **The one-time migration.** An older manifest, from before annotations were
+    per dataset, stores one flat list of records naming no dataset; it is read
+    as ``unassigned``. Each
     entry goes, first, to every upload whose trials include it — the uploads'
     frames are back in ``_datasets`` by now (``persistence.restore_state``
     restores them first), and an annotation on a trial only one dataset has is
@@ -735,7 +737,7 @@ def known_tags(prefix: str = "", *, trial_level: bool = False) -> list[str]:
     """Preset tags plus any tag used in the dataset's store, sorted.
 
     ``prefix`` picks the dataset as :func:`store_for_prefix` does, so compare
-    mode's scanpath B lists its own dataset's tags (DATA-48).
+    mode's scanpath B lists its own dataset's tags.
 
     ``trial_level`` leaves out tags used only on screen annotations — what the
     trial filters offer, since they read the trial's own entry (:func:`select_keys`)
@@ -757,7 +759,7 @@ def has_screen_annotations(prefix: str = "") -> bool:
 
 
 def current_records() -> list[dict]:
-    """The open dataset's annotations as records — the Export bundle's (UX-179)."""
+    """The open dataset's annotations as records — the Export bundle's."""
     return store_to_records(_store())
 
 
@@ -800,7 +802,7 @@ def _save_entry_callback(
     Widget callbacks run before the app body. Without this the picker reads the
     previous annotation store, then ``render_trial_annotations`` saves the new
     value later in the run — making the star marker appear one click behind the
-    checkbox. And (DATA-48) the run that switches dataset drops the editors'
+    checkbox. And the run that switches dataset drops the editors'
     widget state in ``activate_dataset`` before any editor renders: a tag or a
     note saved only by the render body would be lost with it. Saved here, it is
     already in the outgoing dataset's store when the swap files that away.
@@ -822,11 +824,12 @@ def widget_slug(
 ) -> str:
     """The per-trial editor's widget-key suffix: the store key, unambiguously.
 
-    BUG-110: joining the ids with ``__`` and writing the parent scope as the
-    word ``parent`` gave ``("a__b", "c")`` and ``("a", "b__c")`` — or a trial's
-    parent and its screen named ``parent`` — the same widget keys, so opening
-    the one seeded its editor from the other's values and saved them as its
-    own. A JSON list keeps every id whole and writes the parent as ``null``.
+    A JSON list keeps every id whole and writes the parent as ``null``.
+    Joining the ids with ``__`` and writing the parent scope as the word
+    ``parent`` would give ``("a__b", "c")`` and ``("a", "b__c")`` — or a
+    trial's parent and its screen named ``parent`` — the same widget keys, so
+    opening the one would seed its editor from the other's values and save
+    them as its own.
     """
     ident = [str(participant_id), str(trial_id)]
     ident.append(None if screen_id is None else str(screen_id))
@@ -851,7 +854,7 @@ def render_trial_annotations(
             "radio",
             "Annotation scope",
             options=["Parent trial", "This screen"],
-            # #374: the stored option keeps its name; "parent" is internal.
+            # The stored option keeps its name; "parent" is internal wording.
             format_func=lambda option: (
                 "Whole trial" if option == "Parent trial" else option
             ),
@@ -890,7 +893,7 @@ def render_trial_annotations(
         label += f" · {', '.join(entry['tags'])}"
     container = st.container() if bare else st.expander(label, expanded=False)
     with container:
-        # UX-69: `label | field` rows, so the five stacked controls fit under the
+        # `label | field` rows, so the five stacked controls fit under the
         # plot without scrolling. Unlike the rail (`controls._labeled`'s note),
         # the checkbox is split too: here the label column is the row spine every
         # other field lines up on, and a native checkbox would put its box —
@@ -919,10 +922,10 @@ def render_trial_annotations(
             vertical_alignment="center",
         )
         row_label(label_col, "Tags", tags_help)
-        # ENG-49: built directly in a column, so it does not go through
+        # Built directly in a column, so it does not go through
         # `fields.labeled` and needs its own `wrap` — a trial's tags are the
-        # thing this row exists to show, and 1.63 would otherwise scroll all
-        # but the first one or two out of sight.
+        # thing this row exists to show, and Streamlit 1.63 would otherwise
+        # scroll all but the first one or two out of sight.
         tags = tags_col.multiselect(
             "Tags",
             options=options,
@@ -962,8 +965,8 @@ def render_trial_annotations(
             note=note,
             screen_id=annotation_screen,
         )
-        # UX-76: no shortcut button under this — the caption names where the
-        # whole dataset's annotations are listed instead.
+        # No shortcut button under this — the caption names where the whole
+        # dataset's annotations are listed instead.
         st.caption(
             "Every annotation on this dataset is listed on "
             f"{ICONS['view_data']} **Data Management → Annotations**, to export, import "
@@ -1030,7 +1033,7 @@ def filter_keys(
 
 
 # ---------------------------------------------------------------------------
-# 🗂️ Data → Annotations (UX-174 r2)
+# 🗂️ Data → Annotations
 # ---------------------------------------------------------------------------
 
 #: The dataset tab's widget keys. The nonce is bumped after an import or a
@@ -1078,9 +1081,9 @@ def _import_dataset_annotations(
             int(st.session_state.get(_DATASET_NONCE_KEY, 0)) + 1
         )
         return
-    # DATA-48: into the open dataset, whatever the file names — a file from
-    # before annotations were per dataset names none, and one exported from
-    # another dataset is still the user's call to bring here. The name is said.
+    # Into the open dataset, whatever the file names — an older file names
+    # none, and one exported from another dataset is still the user's choice to
+    # bring here. The name is said.
     applied, skipped = merge_records(_store(), records, trials)
     note = f"Imported {_plural(applied, 'annotation')}."
     source = file_dataset(text)
@@ -1145,7 +1148,7 @@ def _annotations_frame(
     records: list[dict], trials: frozenset, trial_labels=None
 ) -> pd.DataFrame:
     """The Annotations table. ``trial_labels`` maps a trial id to the trial
-    picker's label for it (#374 F5: one trial label everywhere)."""
+    picker's label for it (one trial label everywhere)."""
     shown = trial_labels or {}
     frame = pd.DataFrame(
         {
@@ -1182,10 +1185,10 @@ def render_dataset_annotations(
     and **Delete**, for the rows ticked in the table. Annotations are still made
     per trial, on 🗺️ Scanpath → Annotations; this is where they are seen whole.
 
-    DATA-48: the session store *is* the dataset's now, so the table lists all
-    of it — including any entry on a trial the dataset has not loaded: one made
-    under another selection of a corpus' parts, or one a recovery cache from
-    before annotations were per dataset assigned here (:func:`restore_payload`).
+    The session store *is* the dataset's, so the table lists all of it —
+    including any entry on a trial the dataset has not loaded: one made under
+    another selection of a corpus' parts, or one an older recovery cache (from
+    before annotations were per dataset) assigned here (:func:`restore_payload`).
     Those are flagged rather than hidden, so an entry is never out of reach:
     exported from here, it imports into the dataset it belongs to.
 

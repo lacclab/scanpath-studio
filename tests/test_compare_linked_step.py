@@ -1,4 +1,4 @@
-"""CMP-13: one ◀ ▶ that advances both compared trials.
+"""One ◀ ▶ that advances both compared trials.
 
 The link is "advance both", not "keep them aligned" — the two pools have
 different sizes, so the tests here pin the *increment* semantics (same ±1 on each
@@ -92,7 +92,7 @@ class TestSteppingBWritesAnIdentity:
         }
 
     def test_b_stays_put_at_the_end_of_its_own_list(self):
-        """Settled call (3): no clamping of the *pair* — the side that has run
+        """No clamping of the *pair* — the side that has run
         out simply stops while the other keeps stepping."""
         st.session_state[utils.COMPARE_OPTIONS_SNAPSHOT_KEY] = [
             ("t1", "p1", "t1"),
@@ -162,13 +162,13 @@ class TestTheLinkedStepEndToEnd:
         assert self._compare_identity(at) == expected_b
 
     def test_stepping_the_main_trial_does_not_skip_the_compared_one(self):
-        """The reported bug: B "suddenly skips to a different trial".
+        """B never skips to a different trial while A walks.
 
         B's picker is keyed on a *label*, and the labels are rebuilt relative to
         A (📄 same-text / 👤 same-participant markers are computed against the
-        selected trial). So the moment A moved to another text, B's stored label
-        matched nothing and the picker fell back to the first candidate. B is now
-        remembered by identity and its label re-resolved each run.
+        selected trial). So the moment A moves to another text, a stored label
+        matches nothing and the picker would fall back to the first candidate.
+        B is therefore remembered by identity and its label re-resolved each run.
         """
         at = self._boot_compare()
         before = self._compare_identity(at)
@@ -191,12 +191,12 @@ class TestTheLinkedStepEndToEnd:
         assert relabelled, "B's label never changed — the regression wasn't exercised"
 
     def test_a_users_pick_wins_over_the_remembered_identity(self):
-        """The other half of the same fix: re-resolving must not undo a fresh
-        selection on the next run."""
+        """Re-resolving by identity must not undo a fresh selection on the next
+        run."""
         at = self._boot_compare()
         picker = at.selectbox(key="single_compare_trial")
         before = picker.value
-        # By index: the options are the labels as shown (UX-187), not the values.
+        # By index: the options are the labels as shown, not the values.
         other = next(i for i in range(len(picker.options)) if i != picker.index)
         at = picker.select_index(other).run(timeout=90)
         assert not at.exception, at.exception
@@ -214,15 +214,14 @@ class TestTheLinkedStepEndToEnd:
         assert at.session_state["single_trial_id"] == expected_a
 
     def test_bs_own_arrow_never_silently_reverts_b(self):
-        """The "sometimes only A moves" report.
+        """B's own step moves B on every click; it never snaps back.
 
-        B's own step wrote only the *label* (`single_compare_trial`), never
-        `_COMPARE_IDENTITY_KEY`. The very next run's by-identity reconciliation
-        — which exists so A's move relabelling B's pool (📄/👤 markers) doesn't
-        strand a stale label — then read the *pre-click* identity and silently
-        snapped B back to it, even though A had already moved on. Only visible
-        on the steps that happened to change one of B's markers, which is what
-        made it look intermittent rather than simply broken.
+        B's step has to write `_COMPARE_IDENTITY_KEY`, not only the *label*
+        (`single_compare_trial`). Otherwise the next run's by-identity
+        reconciliation — which exists so A's move relabelling B's pool (📄/👤
+        markers) doesn't strand a stale label — reads the *pre-click* identity
+        and silently snaps B back to it. That shows only on the steps that
+        change one of B's markers, so it looks intermittent rather than broken.
         """
         at = self._boot_compare()
         at.checkbox(key=utils.COMPARE_STEP_LINK_KEY).set_value(True).run(timeout=90)
@@ -242,13 +241,12 @@ class TestTheLinkedStepEndToEnd:
             f"A did not advance on every linked click: {seen_a}"
         )
 
-    # -- CMP-13 follow-up: "still jumps around" ------------------------------
-    # Identity stepping was already correct — B landed on the right trial every
-    # time. What leapt (10/23 → 22/23 in the report) was its *position*: the
-    # default order ranks B's pool relative to A, 📄 same-text first, so A
-    # crossing into another text re-lays the whole track. Linking now pins the
-    # order to Trial ID, which is the only thing that makes "one notch along"
-    # mean anything.
+    # -- B's position under linked stepping ---------------------------------
+    # Stepping by identity lands B on the right trial, but its *position* can
+    # still leap: the default order ranks B's pool relative to A, 📄 same-text
+    # first, so A crossing into another text re-lays the whole track. Linking
+    # pins the order to Trial ID, which is the only thing that makes "one notch
+    # along" mean anything.
 
     @staticmethod
     def _compare_position(at):
@@ -257,7 +255,7 @@ class TestTheLinkedStepEndToEnd:
         return labels.index(at.session_state[utils.COMPARE_TRIAL_KEY])
 
     def test_linked_puts_the_pool_in_data_order(self):
-        """UX-171: the order A walks by default, so both step along one track —
+        """The order A walks by default, so both step along one track —
         the same list as choosing ⇅ *Data order* by hand."""
         at = self._boot_compare()
         at.selectbox(key="single_compare_order").set_value(utils.TRIAL_SORT_DATA_ORDER)
@@ -297,6 +295,6 @@ class TestTheLinkedStepEndToEnd:
             assert not at.exception, at.exception
             after = self._compare_position(at)
             # One notch for the linked step, at most one more for A leaving the
-            # pool and its predecessor rejoining it. The bug was a leap of 12.
+            # pool and its predecessor rejoining it.
             assert abs(after - before) <= 2, f"B's position jumped {before} → {after}"
             before = after

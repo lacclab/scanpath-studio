@@ -20,7 +20,7 @@ they just silently drop the setting. That is why they are pinned here and in
 ``tests/test_session_key_contract.py``: a rename now fails a test instead of a
 user's old link.
 
-Scope is deliberately narrow (ENG-6). This module does **not** try to name all
+Scope is deliberately narrow. This module does **not** try to name all
 ~270 ``session_state`` keys in the app — a key with no external contract is just
 a local variable and can be renamed freely. Only the contract keys live here.
 
@@ -38,7 +38,7 @@ from types import MappingProxyType
 # ---------------------------------------------------------------------------
 # Visualization settings — the `global_*` keys the plot rail's widgets own.
 # Every one of these round-trips through BOTH the share link and the saved
-# config (the recording setup below the divider only since EXP-19).
+# config.
 # ---------------------------------------------------------------------------
 GLOBAL_SHOW_WORDS = "global_show_words"
 # The ⬚ Word boxes section's style: outline + its opacity, fill + its opacity.
@@ -47,7 +47,7 @@ GLOBAL_WORD_BOX_LINE_OPACITY = "global_word_box_line_opacity"
 GLOBAL_WORD_BOX_FILL_COLOR = "global_word_box_fill_color"
 GLOBAL_WORD_BOX_FILL_OPACITY = "global_word_box_fill_opacity"
 GLOBAL_SHOW_LABELS = "global_show_labels"
-# UX-128: the 📄 Stimulus section's master switch.
+# The 📄 Stimulus section's master switch.
 GLOBAL_SHOW_STIMULUS = "global_show_stimulus"
 GLOBAL_SHOW_FIX = "global_show_fix"
 GLOBAL_SHOW_ORDER = "global_show_order"
@@ -57,14 +57,14 @@ GLOBAL_SACCADE_TYPE_LEGEND = "global_saccade_type_legend"
 GLOBAL_SHOW_COLOR_LEGEND = "global_show_color_legend"
 #: The note naming the highlighted words (Figure & canvas → Legends).
 GLOBAL_SHOW_HIGHLIGHT_LEGEND = "global_show_highlight_legend"
-# #422: Snap to line and where on the line (it replaced "Snap above words",
-# `global_fixation_snap_to_word` — see `LEGACY_SESSION_KEYS`).
+# Snap to line and where on the line. The older "Snap above words" key,
+# `global_fixation_snap_to_word`, is still read — see `LEGACY_SESSION_KEYS`.
 GLOBAL_FIXATION_SNAP_TO_LINE = "global_fixation_snap_to_line"
 GLOBAL_FIXATION_SNAP_POSITION = "global_fixation_snap_position"
 GLOBAL_ANIM_AUTOPLAY = "global_anim_autoplay"
 GLOBAL_SHOW_HEATMAP = "global_show_heatmap"
 GLOBAL_SHOW_RAW_GAZE = "global_show_raw_gaze"
-# UX-86: raw gaze's own style.
+# Raw gaze's own style.
 GLOBAL_RAW_GAZE_COLOR = "global_raw_gaze_color"
 GLOBAL_RAW_GAZE_MARKER_SIZE = "global_raw_gaze_marker_size"
 GLOBAL_RAW_GAZE_OPACITY = "global_raw_gaze_opacity"
@@ -87,7 +87,7 @@ GLOBAL_X_FIELD = "global_x_field"
 GLOBAL_Y_FIELD = "global_y_field"
 GLOBAL_SACCADE_STYLE = "global_saccade_style"
 GLOBAL_SACCADE_RENDER_MODE = "global_saccade_render_mode"
-# PRE-3 vertical drift correction (ENG-23 put it on the link + the config).
+# Vertical drift correction.
 GLOBAL_ALIGN_ALGORITHM = "global_align_algorithm"
 GLOBAL_ALIGN_CONNECTORS = "global_align_connectors"
 GLOBAL_ILLUSTRATION_LABEL = "global_illustration_label"
@@ -109,7 +109,7 @@ GLOBAL_SACCADE_CLASS_COLOR_SKIP = "global_saccade_class_color_skip"
 GLOBAL_SACCADE_CLASS_COLOR_REFIXATION = "global_saccade_class_color_refixation"
 GLOBAL_SACCADE_CLASS_COLOR_RETURN_SWEEP = "global_saccade_class_color_return_sweep"
 GLOBAL_SACCADE_CLASS_COLOR_REGRESSION = "global_saccade_class_color_regression"
-# VIZ-31: the saccade reading-class *filter* (which classes are drawn at all),
+# The saccade reading-class *filter* (which classes are drawn at all),
 # a list of class names. Wire format because a "regressions only" figure is
 # exactly the kind of view a link or a saved config exists to reproduce.
 GLOBAL_SACCADE_CLASSES = "global_saccade_classes"
@@ -127,7 +127,7 @@ GLOBAL_ANIM_GRID_STEP_MS = "global_anim_grid_step_ms"
 GLOBAL_ANIM_MAX_FRAMES = "global_anim_max_frames"
 GLOBAL_LINE_SPACING = "global_line_spacing"
 GLOBAL_SACCADE_WIDTH = "global_saccade_width"
-# #422: the saccade lines' and arrows' opacity.
+# The saccade lines' and arrows' opacity.
 GLOBAL_SACCADE_OPACITY = "global_saccade_opacity"
 GLOBAL_FIXATION_OPACITY = "global_fixation_opacity"
 GLOBAL_STIMULUS_IMAGE_OPACITY = "global_stimulus_image_opacity"
@@ -152,23 +152,21 @@ GLOBAL_FIXATION_COLOR_RANGE = "global_fixation_color_range"
 GLOBAL_HEATMAP_COLOR_RANGE = "global_heatmap_color_range"
 GLOBAL_SHOW_STIMULUS_IMAGE = "global_show_stimulus_image"
 GLOBAL_FIT_TO_MONITOR = "global_fit_to_monitor"
-# VIZ-34: optional screen-coordinate grid and its automatic/manual interval.
+# Optional screen-coordinate grid and its automatic/manual interval.
 GLOBAL_SHOW_COORDINATE_GRID = "global_show_coordinate_grid"
 GLOBAL_COORDINATE_GRID_AUTO = "global_coordinate_grid_auto"
 GLOBAL_COORDINATE_GRID_SPACING = "global_coordinate_grid_spacing"
-# #422: Crop to data's margin — automatic, or a number of screen px.
+# Crop to data's margin — automatic, or a number of screen px.
 GLOBAL_CROP_MARGIN_AUTO = "global_crop_margin_auto"
 GLOBAL_CROP_MARGIN_PX = "global_crop_margin_px"
-# EXP-5: title/caption on the figure (moved here from being Export-only).
+# Title/caption on the figure.
 GLOBAL_SHOW_TITLE = "global_show_title"
 GLOBAL_SHOW_CAPTION = "global_show_caption"
 GLOBAL_TITLE_PATTERN = "global_title_pattern"
 GLOBAL_CAPTION_PATTERN = "global_caption_pattern"
-# EXP-18: settings that change the figure and used to travel in the saved config
-# only — colour-bar styling, the span border colour, the PRE-2 fixation flags
-# (one mode/threshold/symbol/colour group per category; `oob` and `blink` have no
-# threshold — geometry and blink tests, not durations) — plus Compare's A/B
-# legend and the replay speed, which travelled in neither.
+# Colour-bar styling, the span border colour, the fixation flags (one
+# mode/threshold/symbol/colour group per category; `oob` and `blink` have no
+# threshold — geometry and blink tests, not durations) and Compare's A/B legend.
 GLOBAL_FIXATION_COLORBAR_ORIENTATION = "global_fixation_colorbar_orientation"
 GLOBAL_FIXATION_COLORBAR_TICKANGLE = "global_fixation_colorbar_tickangle"
 GLOBAL_FIXATION_COLORBAR_TICKFONT_SIZE = "global_fixation_colorbar_tickfont_size"
@@ -176,9 +174,9 @@ GLOBAL_HEATMAP_COLORBAR_ORIENTATION = "global_heatmap_colorbar_orientation"
 GLOBAL_HEATMAP_COLORBAR_TICKANGLE = "global_heatmap_colorbar_tickangle"
 GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE = "global_heatmap_colorbar_tickfont_size"
 GLOBAL_SPAN_BORDER_COLOR = "global_span_border_color"
-# #422: design choices that used to be fixed. Each one's link param is its key
-# without `global_` (`DESIGN_*_PARAMS`), and the settings file keeps them by
-# the same names in its `design` section.
+# The finer design choices. Each one's link param is its key without
+# `global_` (`DESIGN_*_PARAMS`), and the settings file keeps them by the same
+# names in its `design` section.
 GLOBAL_HEATMAP_OPACITY_AUTO = "global_heatmap_opacity_auto"
 GLOBAL_HEATMAP_OPACITY = "global_heatmap_opacity"
 GLOBAL_TITLE_FONT_SIZE = "global_title_font_size"
@@ -246,9 +244,9 @@ GLOBAL_FIXCLASS_BLINK_COLOR = "global_fixclass_blink_color"
 GLOBAL_SHOW_COMPARE_LEGEND = "global_show_compare_legend"
 
 # --- The recording setup ----------------------------------------------------
-# Saved-config-only until EXP-19 put every one of them on the link too — each
-# emitted only when it differs from what the recipient's own session would
-# resolve for the same source (see `URL_OPTIONAL_PARAMS`).
+# On the link, each one is emitted only when it differs from what the
+# recipient's own session would resolve for the same source (see
+# `URL_OPTIONAL_PARAMS`).
 GLOBAL_BASE_FONT_SIZE = "global_base_font_size"
 GLOBAL_CANVAS_WIDTH = "global_canvas_width"
 GLOBAL_CANVAS_HEIGHT = "global_canvas_height"
@@ -258,7 +256,7 @@ GLOBAL_DISPLAY_DPI = "global_display_dpi"
 GLOBAL_STIMULUS_FONT_PT = "global_stimulus_font_pt"
 GLOBAL_USE_STIMULUS_FONT_PT = "global_use_stimulus_font_pt"
 
-# --- Export → Current figure's print size (#374, F28) -------------------------
+# --- Export → Current figure's print size -----------------------------------
 # Not `global_*`: the size a file is written at is not part of a design. On the
 # link and in the settings file, but only while a width is set.
 EXPORT_FIGURE_WIDTH = "export_figure_width"
@@ -269,37 +267,36 @@ EXPORT_FIGURE_DPI = "export_figure_dpi"
 # `_SELECTION_PREFIXES` in url_state is ("single",); these are that prefix's
 # widget keys, seeded before the picker renders.
 SINGLE_SELECT_TRIAL_MODE = "single_select_trial_mode"
-#: The picked reading — ``utils.reading_key(participant, trial)`` since #412. A
-#: trial id alone (a recovery cache from before) still reopens its trial when
-#: one reader has it (`url_state._settle_picker_selection`).
+#: The picked reading — ``utils.reading_key(participant, trial)``. A trial id
+#: alone (an older recovery cache) still reopens its trial when one reader has
+#: it (`url_state._settle_picker_selection`).
 SINGLE_TRIAL_ID = "single_trial_id"
-#: #374 — one-shot: the trial a link or settings file chose, so the per-dataset
+#: One-shot: the trial a link or settings file chose, so the per-dataset
 #: trial memory never takes it for one carried over (`utils.select_trial`).
 SINGLE_TRIAL_CHOSEN = "_single_trial_chosen"
 SINGLE_PARTICIPANT = "single_participant"
 SINGLE_SLIDER = "single_slider"
 SINGLE_ANIMATE = "single_animate"
-#: #373: show the chips above the plot (default on). Hiding keeps the field
+#: Show the chips above the plot (default on). Hiding keeps the field
 #: selection (`trial_chip_fields`), so showing them again restores the row.
 SINGLE_SHOW_CHIPS = "single_show_chips"
-#: The ⚙ Playback replay speed (EXP-18 put it on the link). Mode-local, like
-#: `single_animate`, which is why it is `single_*` rather than `global_*`.
+#: The ⚙ Playback replay speed. Mode-local, like `single_animate`, which is
+#: why it is `single_*` rather than `global_*`.
 SINGLE_PLAYBACK_SPEED = "single_playback_speed"
-#: VIZ-7 — the fixation-index window. Wire format since UX-135 gave it a
-#: `?fix_range=lo,hi` param; the widget itself predates it.
+#: The fixation-index window, on the link as `?fix_range=lo,hi`.
 SINGLE_FIX_RANGE = "single_fix_range"
 #: Turned on by a `?compare=` deep link, exactly as `?tab=animation` turns on
-#: `single_animate` (CMP-8 §7).
+#: `single_animate`.
 SINGLE_COMPARE_TOGGLE = "single_compare_toggle"
 #: How the two scanpaths are arranged — "Overlay" / "Side by side" / "Stacked".
-#: CMP-8 shipped `compare=` and `cmp_source` but *not* this, so a shared
-#: comparison always reopened as Overlay; CMP-11 put it on the wire.
+#: On the wire, or a shared comparison would always reopen as Overlay.
 SINGLE_COMPARE_LAYOUT = "single_compare_layout"
-#: Which reading supplies an overlay's word boxes + text — "Both" / "A" / "B"
-#: (CMP-11). Two datasets' AOIs coincide only when the text is identical.
+#: Which reading supplies an overlay's word boxes + text — "Both" / "A" / "B".
+#: Two datasets' AOIs coincide only when the text is identical.
 SINGLE_COMPARE_STIMULUS = "single_compare_stimulus"
 
-# --- Public-OneStop source options that ride the deep link (DATA-3) ---------
+# --- Public-OneStop source options an older deep link carries --------------
+# Still seeded, never emitted — see `URL_LEGACY_PARAMS`.
 ONESTOP_VARIANT = "onestop_variant"
 ONESTOP_REGIME = "onestop_regime"
 ONESTOP_PARTS = "onestop_parts"
@@ -308,20 +305,20 @@ ONESTOP_PARTS = "onestop_parts"
 DEEPLINK_PARTICIPANT = "_deeplink_participant"
 GLOBAL_ADVANCED = "global_advanced"
 # The per-trial annotation store; owned by annotations.py (pinned equal to it by
-# the contract test). Schema 2–3 configs carried it; since UX-179 (schema 4) it
-# travels in its own file (🗂️ Data → Annotations) and the recovery cache. Since
-# DATA-48 it holds the selected dataset's store only; the others wait under
+# the contract test). Schema 2–3 configs carried it; from schema 4 it travels
+# in its own file (🗂️ Data → Annotations) and the recovery cache. It holds the
+# selected dataset's store only; the others wait under
 # `annotations.DATASET_STORE_KEY`, which is not wire format (never in a link).
 TRIAL_ANNOTATIONS = "trial_annotations"
-# VIZ-39 — the user's saved design library, one of the keys the on-device
-# recovery cache writes to its manifest, so the designs survive closing the
-# app. Schema 2–3 configs carried it under `design_presets`; since UX-179 it
-# has its own Export / Import on the saved-designs menu. Owned by controls.py
+# The user's saved design library, one of the keys the on-device recovery
+# cache writes to its manifest, so the designs survive closing the app.
+# Schema 2–3 configs carried it under `design_presets`; from schema 4 it has
+# its own Export / Import on the saved-designs menu. Owned by controls.py
 # (pinned equal to it by the contract test).
 DESIGN_PRESETS = "_design_presets"
 # The column mapping is seeded key-by-key from a setup file's `column_mapping`
-# section (✏️ Edit dataset → Download setup file) and stored the same way in the recovery
-# cache; the prefix is the contract, the suffixes are data-dependent.
+# section (✏️ Edit dataset → Download setup file) and stored the same way in the
+# recovery cache; the prefix is the contract, the suffixes are data-dependent.
 COLUMN_MAPPING_PREFIX = "col_map_"
 
 # --- Per-scanpath comparison styling (config `compare` list) ----------------
@@ -333,7 +330,7 @@ CMP_SACCADE_WIDTH = "cmp{idx}_saccade_width"
 CMP_MARKER_SIZE_RANGE = "cmp{idx}_marker_size_range"
 CMP_HOLLOW = "cmp{idx}_hollow"
 CMP_OPACITY = "cmp{idx}_opacity"
-# UX-31: the A/B legend label override ("" = the auto "participant · trial").
+# The A/B legend label override ("" = the auto "participant · trial").
 CMP_LABEL_PATTERN = "cmp{idx}_label_pattern"
 # The word-box outline override ("" = the scanpath's own fixation colour).
 CMP_BOX_COLOR = "cmp{idx}_box_color"
@@ -347,7 +344,7 @@ CMP_RAW_GAZE_COLOR = "cmp{idx}_raw_gaze_color"
 # The heatmap colour-scale override ("" = the figure's `global_heatmap_colorscale`).
 CMP_HEATMAP_COLORSCALE = "cmp{idx}_heatmap_colorscale"
 
-# --- CMP-24: scanpath B's own filters in Compare ----------------------------
+# --- Scanpath B's own filters in Compare ------------------------------------
 # A's filters are the rail's ordinary ones (`global_fixclass_*`,
 # `global_saccade_classes`, `single_fix_range`), which is what makes a filter set
 # on one trial still apply once a second is brought in. Only B has keys of its
@@ -361,7 +358,7 @@ CMP_B_FIXCLASS_LONG_THRESHOLD_MS = "cmp1_fixclass_long_threshold_ms"
 CMP_B_FIXCLASS_OOB_MODE = "cmp1_fixclass_oob_mode"
 CMP_B_FIXCLASS_BLINK_MODE = "cmp1_fixclass_blink_mode"
 CMP_B_SACCADE_CLASSES = "cmp1_saccade_classes"
-#: B's fixation-index window — VIZ-7's slider, for the second scanpath.
+#: B's fixation-index window — A's slider, for the second scanpath.
 SINGLE_COMPARE_FIX_RANGE = "single_compare_fix_range"
 #: …on the wire. Optional, like A's `fix_range`: an untouched window is the
 #: trial's own full range, not a setting.
@@ -379,7 +376,7 @@ COMPARE_B_FILTER_STATE_KEYS = frozenset(
     }
 )
 
-#: EXP-19 — the link's spelling of the same styles: ``cmp_a_<field>`` for the
+#: The link's spelling of the same styles: ``cmp_a_<field>`` for the
 #: first scanpath (``cmp0_*``) and ``cmp_b_<field>`` for the second (``cmp1_*``),
 #: ``<field>`` being the saved config's own name for it. The letters rather than
 #: the index because that is what every other surface calls the two scanpaths —
@@ -396,7 +393,7 @@ def _compare_style_params(*fields: str) -> dict[str, str]:
     }
 
 
-#: EXP-19 — where a deep link parks the recording-setup keys it seeded, and the
+#: Where a deep link parks the recording-setup keys it seeded, and the
 #: source it resolved to (`url_state.scope_link_setup`), so that source's own
 #: monitor / typeface snap (`app.seed_canvas_state`) leaves them alone on the
 #: recipient's first run instead of overwriting the sender's values with the
@@ -405,7 +402,7 @@ LINK_SETUP_STATE_KEY = "_link_setup_keys"
 
 # ---------------------------------------------------------------------------
 # URL query-parameter names that are NOT viz settings — the selection half of a
-# deep link, plus one legacy alias kept alive for old links.
+# deep link, plus legacy aliases still read from old links.
 # ---------------------------------------------------------------------------
 PARAM_SOURCE = "source"
 PARAM_PARTICIPANT = "participant"
@@ -415,7 +412,7 @@ PARAM_TAB = "tab"
 PARAM_ONESTOP_VARIANT = "onestop_variant"
 PARAM_ONESTOP_REGIME = "onestop_regime"
 PARAM_ONESTOP_PARTS = "onestop_parts"
-# Legacy inverse of `show_order`, still parsed so pre-Share links keep working.
+# Legacy inverse of `show_order`, still parsed so older links keep working.
 PARAM_HIDE_FIXATION_NUMBERS = "hide_fixation_numbers"
 # The one switch title and caption shared before each got its own; still read
 # (it turns both on or off), never written.
@@ -429,7 +426,7 @@ PARAM_LEGACY_COLORBAR = (
     "colorbar_tickfont_size",
 )
 
-# DATA-27 (Task 12): every public corpus on the deep link.
+# Every public corpus on the deep link.
 #
 # `?source=corpus` says the data source is one entry of
 # `app.public_dataset_registry()` — the built-in public corpora **and** each
@@ -439,11 +436,11 @@ PARAM_LEGACY_COLORBAR = (
 # manifest name, a built-in's registry `short`) — never of its display label,
 # which is copy and will be reworded.
 #
-# OneStop's regimes keep tokens of their own (`onestop_<regime>`, DATA-63) and
-# are emitted in preference to this pair, as `onestop_public` was before them.
+# OneStop's regimes keep tokens of their own (`onestop_<regime>`) and are
+# emitted in preference to this pair.
 PARAM_CORPUS = "corpus"
 
-# #374 F14: a dataset the user added, by its name. Its files can't travel in a
+# A dataset the user added, by its name. Its files can't travel in a
 # link, so the name is what lets the recipient's app open it when it holds a
 # dataset of that name, and say which dataset is missing when it doesn't —
 # rather than apply the view to whatever else is open. Read in `app.main`, like
@@ -453,7 +450,8 @@ PARAM_DATASET = "dataset"
 # Streamlit 1.65 `bind="query-params"` widgets: the widget key IS the URL param,
 # and its value is the option's label verbatim — so neither the key nor the
 # labels (`tabs.CORPUS_SUBTABS`) can be renamed without breaking a bookmarked
-# view — unless the old label stays readable (`tabs.CORPUS_SUBTAB_ALIASES`). Streamlit reads and writes these itself; `_apply_url_preset` and
+# view — unless the old label stays readable (`tabs.CORPUS_SUBTAB_ALIASES`).
+# Streamlit reads and writes these itself; `_apply_url_preset` and
 # `_build_share_query` never see them.
 CORPUS_SUBTAB = "corpus_subtab"
 URL_BOUND_WIDGET_KEYS = frozenset({CORPUS_SUBTAB})
@@ -465,8 +463,8 @@ URL_BOUND_WIDGET_KEYS = frozenset({CORPUS_SUBTAB})
 # theirs to say. `eyegenbench_dir` therefore stays an ordinary session key.
 
 # Where `?source=` lands. Written by `app.main`'s source dispatch — every
-# `?source=` token has resolved to `data_source_choice` there since long before
-# this file existed, and `?source=corpus` adds `public_dataset_choice` (the
+# `?source=` token resolves to `data_source_choice` there, and
+# `?source=corpus` adds `public_dataset_choice` (the
 # corpus behind the picker's collapse of any registry label to
 # `PUBLIC_DATASETS_CHOICE`). Pinned here because a link writes them; they are
 # **not** in `URL_SEEDED_STATE_KEYS`, which is specifically what
@@ -474,7 +472,7 @@ URL_BOUND_WIDGET_KEYS = frozenset({CORPUS_SUBTAB})
 DATA_SOURCE_CHOICE = "data_source_choice"
 PUBLIC_DATASET_CHOICE = "public_dataset_choice"
 
-# DATA-22 §7 surface 2: how the recording setup's three groups came to be known,
+# How the recording setup's three groups came to be known,
 # as `screen:assumed,geom:skipped,text:measured`. Metadata *about* the settings a
 # link already carries — it takes no input and changes no figure, so it stops at
 # the UI / link / saved-config / export surfaces and deliberately never becomes a
@@ -484,36 +482,35 @@ SETUP_PROVENANCE_PARAM = "setup_prov"
 # so it is not in PLOT_CONFIG_STATE_KEYS — it describes the values beside it.
 SETUP_PROVENANCE_STATE_KEY = "_setup_provenance_arrived"
 
-# CMP-8 §7: the comparison's *second* scanpath.
+# The comparison's *second* scanpath.
 #
 # `compare` is `<participant>:<trial>` — B's real ids, never the `dataset · pid`
-# form the compare frames use internally. It is new to the wire format because
-# compare mode had **no** link representation at all before CMP-8 (Animate had
-# `?tab=animation`; Compare had nothing), and a `cmp_source` that named B's
-# corpus without naming B's trial would restore nothing.
+# form the compare frames use internally. It is Compare's link representation
+# (as `?tab=animation` is Animate's), and it names B's trial: a `cmp_source`
+# that named B's corpus without naming B's trial would restore nothing.
 #
 # `cmp_source` is the corpus B came from, using the same vocabulary as `source`
 # — emitted only when that corpus is in `url_state._SHAREABLE_SOURCES`, since an
 # uploaded dataset lives in session state and cannot travel. Absent means "B is
-# in the same dataset as A", which is every pre-CMP-8 comparison.
+# in the same dataset as A".
 COMPARE_PARAM = "compare"
 COMPARE_SOURCE_PARAM = "cmp_source"
 #: B's screen of a multipart trial — `screen=` is A's. Emitted only beside
 #: `compare=`, and seeded into B's own navigator (`single_compare_screen_id`).
 COMPARE_SCREEN_PARAM = "cmp_screen"
-#: CMP-11 — the compare layout and the overlay's stimulus source. Closed
+#: The compare layout and the overlay's stimulus source. Closed
 #: vocabularies, so a bad value raises and the reader's "Ignored bad URL param"
 #: warning fires rather than the widget wedging on an option it has never heard of.
 COMPARE_LAYOUT_PARAM = "cmp_layout"
 COMPARE_STIMULUS_PARAM = "cmp_stimulus"
 #: Widget key holding the picked comparison dataset (`tabs`/`compare_source`).
 COMPARE_SOURCE_STATE_KEY = "cmp_dataset"
-#: CMP-13: scanpath B remembered as ``(participant_id, trial_id)`` — the picker's
+#: Scanpath B remembered as ``(participant_id, trial_id)`` — the picker's
 #: own key holds a label rebuilt relative to A, so this is B's stable name. Kept
 #: in the recovery cache with ``cmp_dataset``, so a refresh keeps B's trial.
 COMPARE_IDENTITY_STATE_KEY = "_compare_selected_identity"
-#: VIZ-40 (UX-135) — VIZ-7's fixation-index window on the wire. Its own constant
-#: because two frozen groupings name it: the encoding group
+#: The fixation-index window on the wire. Its own constant because two
+#: frozen groupings name it: the encoding group
 #: (`SHARE_INT_RANGE_PARAMS`) and `URL_OPTIONAL_PARAMS`, which is what says
 #: a link may legitimately not carry it.
 FIX_RANGE_PARAM = "fix_range"
@@ -569,10 +566,10 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "show_stimulus_image": GLOBAL_SHOW_STIMULUS_IMAGE,
         "fit_to_monitor": GLOBAL_FIT_TO_MONITOR,
         "show_compare_legend": GLOBAL_SHOW_COMPARE_LEGEND,
-        # EXP-19.
+        # Recording setup, then the per-scanpath compare styles.
         "use_stimulus_font_pt": GLOBAL_USE_STIMULUS_FONT_PT,
         **_compare_style_params("hollow"),
-        # #373.
+        # The trial chips above the plot.
         "show_chips": SINGLE_SHOW_CHIPS,
     }
 )
@@ -624,12 +621,12 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "preproc_short_policy": GLOBAL_PREPROC_SHORT_POLICY,
         "title_pattern": GLOBAL_TITLE_PATTERN,
         "caption_pattern": GLOBAL_CAPTION_PATTERN,
-        # CMP-11. Compare-mode settings rather than viz settings, but they ride
+        # Compare-mode settings rather than viz settings, but they ride
         # the same value encoding, and a compare link that restores neither the
         # layout nor the stimulus source restores the wrong figure.
         COMPARE_LAYOUT_PARAM: SINGLE_COMPARE_LAYOUT,
         COMPARE_STIMULUS_PARAM: SINGLE_COMPARE_STIMULUS,
-        # EXP-18.
+        # Colour-bar styling, the span border, the fixation flags.
         "fixation_colorbar_orientation": GLOBAL_FIXATION_COLORBAR_ORIENTATION,
         "heatmap_colorbar_orientation": GLOBAL_HEATMAP_COLORBAR_ORIENTATION,
         "span_border_color": GLOBAL_SPAN_BORDER_COLOR,
@@ -645,7 +642,7 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "fixclass_blink_mode": GLOBAL_FIXCLASS_BLINK_MODE,
         "fixclass_blink_symbol": GLOBAL_FIXCLASS_BLINK_SYMBOL,
         "fixclass_blink_color": GLOBAL_FIXCLASS_BLINK_COLOR,
-        # EXP-19.
+        # Per-scanpath compare styles.
         **_compare_style_params(
             "fix_color",
             "saccade_color",
@@ -656,7 +653,7 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
             "raw_gaze_color",
             "heatmap_colorscale",
         ),
-        # CMP-24.
+        # Scanpath B's own filters.
         "cmp_b_saccade_classes": CMP_B_SACCADE_CLASSES,
         "cmp_b_fixclass_short_mode": CMP_B_FIXCLASS_SHORT_MODE,
         "cmp_b_fixclass_long_mode": CMP_B_FIXCLASS_LONG_MODE,
@@ -673,18 +670,18 @@ SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
         "order_font_size": GLOBAL_ORDER_FONT_SIZE,
         "anim_grid_step_ms": GLOBAL_ANIM_GRID_STEP_MS,
         "anim_max_frames": GLOBAL_ANIM_MAX_FRAMES,
-        # EXP-18.
+        # Colour-bar styling, the fixation-flag thresholds.
         "fixation_colorbar_tickangle": GLOBAL_FIXATION_COLORBAR_TICKANGLE,
         "fixation_colorbar_tickfont_size": GLOBAL_FIXATION_COLORBAR_TICKFONT_SIZE,
         "heatmap_colorbar_tickangle": GLOBAL_HEATMAP_COLORBAR_TICKANGLE,
         "heatmap_colorbar_tickfont_size": GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE,
         "fixclass_short_threshold_ms": GLOBAL_FIXCLASS_SHORT_THRESHOLD_MS,
         "fixclass_long_threshold_ms": GLOBAL_FIXCLASS_LONG_THRESHOLD_MS,
-        # EXP-19.
+        # Recording setup.
         "canvas_width": GLOBAL_CANVAS_WIDTH,
         "canvas_height": GLOBAL_CANVAS_HEIGHT,
         "base_font_size": GLOBAL_BASE_FONT_SIZE,
-        # CMP-24.
+        # Scanpath B's own filter thresholds.
         "cmp_b_fixclass_short_threshold_ms": CMP_B_FIXCLASS_SHORT_THRESHOLD_MS,
         "cmp_b_fixclass_long_threshold_ms": CMP_B_FIXCLASS_LONG_THRESHOLD_MS,
     }
@@ -713,9 +710,9 @@ SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "raw_gaze_opacity": GLOBAL_RAW_GAZE_OPACITY,
         "word_box_line_opacity": GLOBAL_WORD_BOX_LINE_OPACITY,
         "word_box_fill_opacity": GLOBAL_WORD_BOX_FILL_OPACITY,
-        # EXP-18.
+        # The replay speed.
         "playback_speed": SINGLE_PLAYBACK_SPEED,
-        # EXP-19.
+        # Recording setup, then the per-scanpath compare styles.
         "monitor_width_mm": GLOBAL_MONITOR_WIDTH_MM,
         "viewing_distance_mm": GLOBAL_VIEWING_DISTANCE_MM,
         "display_dpi": GLOBAL_DISPLAY_DPI,
@@ -731,14 +728,14 @@ SHARE_INT_RANGE_PARAMS: Mapping[str, str] = MappingProxyType(
     {
         "marker_size_range": GLOBAL_MARKER_SIZE_RANGE,
         "marker_duration_range": GLOBAL_MARKER_DURATION_RANGE,
-        # UX-135 — VIZ-7's fixation-index window. Optional on the wire (see
+        # The fixation-index window. Optional on the wire (see
         # `URL_OPTIONAL_PARAMS`): the slider *defaults* to the trial's own full
         # range, so an untouched one is not a setting and must not be stamped
         # onto every link.
         FIX_RANGE_PARAM: SINGLE_FIX_RANGE,
-        # EXP-19.
+        # Per-scanpath compare styles.
         **_compare_style_params("marker_size_range"),
-        # CMP-24 — B's window; optional on the same terms as A's.
+        # B's window; optional on the same terms as A's.
         COMPARE_FIX_RANGE_PARAM: SINGLE_COMPARE_FIX_RANGE,
     }
 )
@@ -802,8 +799,8 @@ URL_SELECTION_PARAMS = frozenset(
     }
 )
 
-# EXP-19 — the settings that used to travel in the saved config only, by what
-# they describe. Both groups ride the link only when they differ from what the
+# The recording setup, and (below) the per-scanpath compare styles. Both
+# groups ride the link only when they differ from what the
 # recipient's own session would resolve for the same source and trial (so a link
 # does not stamp the demo's 2560x1440 onto itself, and does not override a
 # corpus' declared monitor with a copy of that same monitor), and the compare
@@ -820,7 +817,7 @@ SETUP_PARAMS: Mapping[str, str] = MappingProxyType(
         "use_stimulus_font_pt": GLOBAL_USE_STIMULUS_FONT_PT,
     }
 )
-#: CMP-24 — B's filters travel on the terms of B's styles: only beside a
+#: B's filters travel on the terms of B's styles: only beside a
 #: `compare=`, and only when they differ from a fresh session's.
 COMPARE_B_FILTER_PARAMS: Mapping[str, str] = MappingProxyType(
     {
@@ -833,7 +830,7 @@ COMPARE_B_FILTER_PARAMS: Mapping[str, str] = MappingProxyType(
         "cmp_b_fixclass_blink_mode": CMP_B_FIXCLASS_BLINK_MODE,
     }
 )
-#: #374 F28 — Export → Current figure's print size. On the link only while a
+#: Export → Current figure's print size. On the link only while a
 #: width is set: without one the PNG is drawn at the screen size, the default.
 EXPORT_PARAMS: Mapping[str, str] = MappingProxyType(
     {
@@ -874,10 +871,10 @@ URL_SOURCE_STATE_KEYS = frozenset({DATA_SOURCE_CHOICE, PUBLIC_DATASET_CHOICE})
 # emits. `setup_prov` is absent for a corpus that never declared a recording
 # setup, and an absent badge is the honest outcome there: emitting
 # "assumed,assumed,assumed" would manufacture a claim the sender never made.
-# `corpus` is absent for every source that is not a public corpus, and for the
-# one public corpus that still travels under its own older token. EXP-19's two
-# groups are here because they are emitted only when they differ from the
-# recipient's own defaults — see `SETUP_PARAMS` above.
+# `corpus` is absent for every source that is not a public corpus, and for
+# OneStop's regimes, which travel under tokens of their own. The recording
+# setup and the compare styles are here because they are emitted only when they
+# differ from the recipient's own defaults — see `SETUP_PARAMS` above.
 # Each legend's placement as one param, ``legend_<kind>=SPOT[,ARRANGEMENT][,SIZE]``
 # (`plots.parse_legend_spec`, the spelling `render --legend` takes), written only
 # for a legend moved off Auto — so they are optional, below.
@@ -902,11 +899,12 @@ URL_OPTIONAL_PARAMS = frozenset(
     }
 )
 
-# DATA-63: params the reader still accepts from links written before, and the
-# writer never emits. DATA-3's public OneStop link carried its variant, regime
-# and parts; each regime is now its own dataset with its own `?source=` token,
-# holding every part from the public release, so a link has nothing to add —
-# but `onestop_public` + `onestop_regime` must keep opening the regime it named.
+# Params the reader still accepts from older links, and the writer never
+# emits. An older public-OneStop link (`source=onestop_public`) carried its
+# variant, regime and parts; each regime is its own dataset with its own
+# `?source=` token, holding every part from the public release, so a link has
+# nothing to add — but `onestop_public` + `onestop_regime` must keep opening
+# the regime it named.
 URL_LEGACY_PARAMS = frozenset(
     {
         PARAM_ONESTOP_VARIANT,
@@ -967,7 +965,7 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_FIXCLASS_LONG_THRESHOLD_MS,
         CMP_B_FIXCLASS_SHORT_THRESHOLD_MS,
         CMP_B_FIXCLASS_LONG_THRESHOLD_MS,
-        # EXP-19 — every numeric one of the two new groups.
+        # The recording setup's numeric keys.
         GLOBAL_CANVAS_WIDTH,
         GLOBAL_CANVAS_HEIGHT,
         GLOBAL_BASE_FONT_SIZE,
@@ -975,7 +973,7 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_VIEWING_DISTANCE_MM,
         GLOBAL_DISPLAY_DPI,
         GLOBAL_STIMULUS_FONT_PT,
-        # #374 F28.
+        # Export print size.
         EXPORT_FIGURE_WIDTH,
         EXPORT_FIGURE_DPI,
         *(
@@ -994,8 +992,9 @@ URL_BOUNDED_STATE_KEYS = frozenset(
 
 # Session keys a deep link seeds beyond the viz settings: the trial picker, the
 # public-OneStop source options, and the two side-effect keys (`global_advanced`
-# opens the Advanced expander when a colorscale is linked; `_deeplink_participant`
-# is the one-shot capture the OneStop shard fast-path keys off).
+# is seeded when a colorscale is linked, though no widget reads it;
+# `_deeplink_participant` is the one-shot capture the OneStop shard fast-path
+# keys off).
 URL_SEEDED_STATE_KEYS = frozenset(
     {
         SINGLE_SELECT_TRIAL_MODE,
@@ -1013,13 +1012,13 @@ URL_SEEDED_STATE_KEYS = frozenset(
         ONESTOP_PARTS,
         DEEPLINK_PARTICIPANT,
         GLOBAL_ADVANCED,
-        # EXP-19 — the one-shot "leave these alone" handoff to the source snap.
+        # The one-shot "leave these alone" handoff to the source snap.
         LINK_SETUP_STATE_KEY,
     }
 )
 
 # ---------------------------------------------------------------------------
-# 🔗 Share → File (the settings file) and the Download setup file file
+# 🔗 Share → File (the settings file) and the Download setup file
 # ---------------------------------------------------------------------------
 # The JSON schema version stamped by both writers and understood by the reader.
 # Bumping it in url_state without registering a migration (or without updating
@@ -1051,7 +1050,7 @@ COMPARE_STATE_KEY_TEMPLATES = frozenset(
 # vice versa) means the saved-config format moved.
 PLOT_CONFIG_STATE_KEYS = frozenset(
     {
-        # #422: the `design` section.
+        # The `design` section.
         *DESIGN_TOGGLE_PARAMS.values(),
         *DESIGN_COLOR_PARAMS.values(),
         *DESIGN_INT_PARAMS.values(),
@@ -1176,18 +1175,18 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_FIXCLASS_OOB_MODE,
         GLOBAL_FIXCLASS_OOB_SYMBOL,
         GLOBAL_FIXCLASS_OOB_COLOR,
-        # BUG-72: the fourth category, always written, until now never read back.
+        # The fourth category, blink.
         GLOBAL_FIXCLASS_BLINK_MODE,
         GLOBAL_FIXCLASS_BLINK_SYMBOL,
         GLOBAL_FIXCLASS_BLINK_COLOR,
-        # compare_view (BUG-72) — a `global_*` key, unlike the view's other two.
+        # compare_view — a `global_*` key, unlike the view's other two.
         GLOBAL_SHOW_COMPARE_LEGEND,
         # labels
         GLOBAL_SHOW_TITLE,
         GLOBAL_SHOW_CAPTION,
         GLOBAL_TITLE_PATTERN,
         GLOBAL_CAPTION_PATTERN,
-        # raw_gaze (VIZ-43)
+        # raw_gaze
         GLOBAL_RAW_GAZE_COLOR,
         GLOBAL_RAW_GAZE_MARKER_SIZE,
         GLOBAL_RAW_GAZE_OPACITY,
@@ -1206,15 +1205,15 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
         SINGLE_SELECT_TRIAL_MODE,
         SINGLE_TRIAL_ID,
         SINGLE_TRIAL_CHOSEN,
-        # CMP-11 — the compare view's own two settings, restored from the
+        # The compare view's own two settings, restored from the
         # config's `compare_view` section. They are not `global_*` keys (compare
         # mode owns them, not the rail), which is why they live here rather than
         # in `PLOT_CONFIG_STATE_KEYS`.
         SINGLE_COMPARE_LAYOUT,
         SINGLE_COMPARE_STIMULUS,
-        # BUG-72 — the replay speed, restored from the config's `animation`.
+        # The replay speed, restored from the config's `animation`.
         SINGLE_PLAYBACK_SPEED,
-        # CMP-24 — B's filters, from the config's second `compare` entry.
+        # B's filters, from the config's second `compare` entry.
         *COMPARE_B_FILTER_STATE_KEYS,
         # Schema 6 — the figure mode, and scanpath B by identity: its dataset,
         # its screen, and the one-shot request B's picker resolves (the same
@@ -1224,7 +1223,7 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
         COMPARE_SOURCE_STATE_KEY,
         PENDING_COMPARE_STATE_KEY,
         SINGLE_COMPARE_SCREEN_ID,
-        # #374 F28 — the config's `export` section.
+        # The config's `export` section.
         EXPORT_FIGURE_WIDTH,
         EXPORT_FIGURE_WIDTH_UNIT,
         EXPORT_FIGURE_DPI,
@@ -1258,7 +1257,7 @@ LEGACY_SESSION_KEYS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             GLOBAL_FIXATION_COLORBAR_TICKFONT_SIZE,
             GLOBAL_HEATMAP_COLORBAR_TICKFONT_SIZE,
         ),
-        # #422: "Snap above words" became Snap to line.
+        # "Snap above words", now Snap to line.
         "global_fixation_snap_to_word": (GLOBAL_FIXATION_SNAP_TO_LINE,),
     }
 )

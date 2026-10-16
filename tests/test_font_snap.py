@@ -1,13 +1,13 @@
-"""BUG-50: a corpus' declared typeface must not outlive the corpus.
+"""A corpus' declared typeface must not outlive the corpus.
 
 MultiplEYE stamps the stimulus `FONT_SIZE` + family onto its words, and
 `app.seed_canvas_state` snaps the font controls to them so the reading text
-matches the stimulus exactly. The snap was one-way: it was gated on the *new*
-source declaring a font, so a source that declares none — the demo, OneStop,
-PoTeC, every upload — skipped the block and silently inherited the previous
-corpus' answer. Demo → MultiplEYE → Demo came back with MultiplEYE's px, its CJK
-stack and **scale-to-boxes off**, so the demo's reading text rendered visibly
-smaller with nothing on screen saying why.
+matches the stimulus exactly. A one-way snap — gated on the *new* source
+declaring a font — would let a source that declares none (the demo, OneStop,
+PoTeC, every upload) silently inherit the previous corpus' answer: Demo →
+MultiplEYE → Demo would come back with MultiplEYE's px, its CJK stack and
+**scale-to-boxes off**, so the demo's reading text would render visibly smaller
+with nothing on screen saying why.
 
 The general shape is worth pinning, not just the symptom: a source-switch snap
 writes *session*-scoped state to express a *source*-scoped fact, and that only
@@ -90,7 +90,7 @@ class TestTheRoundTrip:
         assert scale is False
 
     def test_leaving_that_corpus_puts_the_controls_back(self, session):
-        """The bug: this used to come back as (22, CJK, False)."""
+        """Without the restore this comes back as (22, CJK, False)."""
         _seed("Bundled Demo", _WORDS)
         before = _font(session)
 
@@ -164,8 +164,8 @@ class TestWhatMustNotBeTouched:
 
 class TestTheSnapIsWireFormat:
     def test_every_key_the_snap_writes_is_a_saved_setting(self):
-        """Why the leak outlived the session that caused it: all three keys ride
-        the share link and the saved config, so a leaked font was persisted."""
+        """All three keys ride the share link and the saved config, so a leaked
+        font would outlive the session that caused it."""
         from scanpath_studio import session_keys as sk
         from scanpath_studio.app import _FONT_SNAP_KEYS
 

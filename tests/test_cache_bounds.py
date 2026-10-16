@@ -1,4 +1,4 @@
-"""Per-trial caches are bounded (PERF-6).
+"""Per-trial caches are bounded.
 
 ``st.cache_data`` keeps every distinct call it has ever seen. That is right for
 the handful of whole-corpus results the app re-reads on each rerun, and wrong

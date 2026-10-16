@@ -1,5 +1,5 @@
-"""The Add-dataset wizard's shell: part registries, status badges, and the few
-navigation helpers that survive (DATA-22 → UX-135).
+"""The Add-dataset wizard's shell: part registries, status badges, and the
+per-step open-flag helpers.
 
 Knows nothing about columns or dataframes — ``wizard.py`` keeps the part bodies
 and finalize. What lives here is the *chrome*:
@@ -10,16 +10,15 @@ and finalize. What lives here is the *chrome*:
   is nothing to map until a file is read, so no chips, no accordion, no open state.
 - `EDITOR_STEPS` + `numbered()` — the ✏️ Edit dataset screen's parts, renumbered
   over the ones that actually render.
-- `step_panel` — the collapsed *Data & mapping* review panel's per-step block, and
-  the keyed-expander form it had while the wizard was an accordion.
-- `go_to_step` / `reset_accordion` — the accordion-era open-flag helpers,
-  still called by the guide (`tour.py`) and the wizard's reset.
+- `step_panel` — the collapsed *Data & mapping* review panel's per-step block,
+  or a keyed expander (``active=True``).
+- `go_to_step` / `reset_accordion` — the per-step open-flag helpers, called by
+  the guide (`tour.py`) and the wizard's reset.
 
 **The rule those helpers keep.** A step's open flag (``wiz_open_<id>``) is
 written *only* by them and the guide. Nothing inside a step body may touch it:
-the old wizard recomputed ``expanded=`` from whether the step was "done", so the
-first pick in a step collapsed the expander under the user's cursor mid-edit
-(DATA-19).
+recomputing ``expanded=`` from whether the step is "done" collapses the expander
+under the user's cursor at their first pick in it.
 
 **A keyed expander's label and icon must be CONSTANT.** Changing either remounts
 the widget at its default — i.e. collapsed — on the very next run, no matter what
@@ -67,7 +66,7 @@ class StepStatus(Enum):
     """Optional and untouched."""
 
 
-#: Status → its `constants.ICONS` concept (UX-138). A concept rather than the
+#: Status → its `constants.ICONS` concept. A concept rather than the
 #: shortcode, because the badge is drawn two ways: as markdown on the review
 #: panel (:func:`badge`) and inside the part title's raw HTML (:func:`part`),
 #: where a shortcode is inert.
@@ -81,7 +80,7 @@ _BADGES: dict[StepStatus, str] = {
 
 @dataclass(frozen=True)
 class WizardStep:
-    """One accordion step. ``number`` is the 1-based label the user reads."""
+    """One part of the wizard. ``number`` is the 1-based label the user reads."""
 
     id: str
     number: int
@@ -90,28 +89,20 @@ class WizardStep:
     required: bool
 
 
-#: UX-53 folded the original seven steps into two, then UX-113 unfolded them
-#: to five — flat and same-size, not the old per-step expanders. UX-114 folded
-#: "Keep extra fields" back into "Map data fields" (each table's own keep
-#: picker now sits directly under that table's own mapping — a cross-table
-#: pick was a second, confusing decision), leaving four. UX-129 folded "Map
-#: data fields" itself into "Upload data tables" — UX-122/127 had already
-#: moved every table's uploader into its own mapping row, so by this point the
-#: two stages held the same content split across two headings for no reason;
-#: a second numbered heading with nothing under it that the one above didn't
-#: already cover just read as a bare divider. `_part("data")` alone now
-#: covers both, leaving three. Upload always precedes mapping (there is
-#: nothing to map until a file is read), so the three are labelled but not
-#: navigable: no chips, no accordion, no open state. `part()` renders each as
-#: a one-line numbered headline. The dataset name is its own numbered stage
-#: rather than an unlabeled header above everything, and Recording setup is
-#: its own numbered stage rather than a sub-heading nested inside "Upload data
-#: tables" — all three read as one flat sequence.
+#: The add screen's parts, in page order. Every table's uploader sits in its
+#: own mapping row, with that table's *Extra fields to keep* picker directly
+#: under its mapping, so `_part("data")` covers uploading and mapping alike.
+#: Upload always precedes mapping (there is nothing to map until a file is
+#: read), so the parts are labelled but not navigable: no chips, no accordion,
+#: no open state. `part()` renders each as a one-line numbered headline. The
+#: dataset name is its own numbered part rather than an unlabeled header above
+#: everything, and Recording setup is its own rather than a sub-heading nested
+#: inside "Upload data tables" — they read as one flat sequence.
 #:
-#: #417 added a fourth, optional and last: *Stimulus images*, a folder of
-#: screenshots saved with the dataset. Only a local install draws it (a path on
-#: the server means nothing to a visitor), and being last it renumbers nothing
-#: when it is left out.
+#: The fourth, *Stimulus images* (a folder of screenshots saved with the
+#: dataset), is optional and last. Only a local install draws it (a path on the
+#: server means nothing to a visitor), and being last it renumbers nothing when
+#: it is left out.
 STEPS: tuple[WizardStep, ...] = (
     WizardStep("name", 1, "Name & description", "What to call it", True),
     WizardStep("data", 2, "Upload data tables", "The tables you exported", True),
@@ -124,16 +115,14 @@ STEPS: tuple[WizardStep, ...] = (
 STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}
 
 
-#: UX-135 — the ✏️ Edit dataset screen's parts, in page order.
+#: The ✏️ Edit dataset screen's parts, in page order.
 #:
-#: The ask was that the two screens read the same ("make it be as similar as
-#: possible to add dataset page"), so the editor uses this module's `part()`
-#: headline rather than the `st.divider()` + `st.subheader()` + `st.caption()`
-#: stack it grew section by section. The first three ids line up one-for-one with
-#: `STEPS` — naming it (UX-178), its tables and mapping (the same question as
-#: uploading them), and its recording setup (the *same renderer*) — and so does
-#: the fourth, its stimulus images (#417, the same fields). The rest are the
-#: questions that only have an answer once the dataset exists.
+#: The two screens read the same, so the editor draws this module's `part()`
+#: headline too. The first four ids line up one-for-one with `STEPS` — naming
+#: it, its tables and mapping (the same question as uploading them), its
+#: recording setup (the *same renderer*) and its stimulus images (the same
+#: fields). The rest are the questions that only have an answer once the
+#: dataset exists.
 #:
 #: The ids are prefixed ``edit_`` because `part_key` makes them container keys
 #: and a key may be used once per run. The editor's *slots* are reserved on
@@ -143,11 +132,12 @@ STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}
 #: is open.
 #:
 #: ``number`` here is a *placeholder*: two of the six are conditional (stimulus
-#: images need a local filesystem, preprocessing is behind PRE-22's flag), and a
+#: images need a local filesystem, preprocessing is behind the
+#: ``SCANPATH_EXPERIMENTAL`` flag), and a
 #: screen numbered 1 · 2 · 3 · 5 reads as a missing section rather than as a
 #: hidden one. `numbered()` renumbers whatever is actually on screen.
 EDITOR_STEPS: tuple[WizardStep, ...] = (
-    # UX-178 — the add screen's part 1, for a dataset that already has a name:
+    # The add screen's part 1, for a dataset that already has a name:
     # renaming it and its description are here, not in a dialog or on a row.
     WizardStep(
         "edit_name",
@@ -245,22 +235,22 @@ def part(
 ):
     """One linear part of the wizard: a minimal headline, then its body.
 
-    UX-53 r8. The parts run in a fixed order — there is nothing to map before a
-    file is read — so this is a *label*, not navigation: no expander, no chips,
-    no open state, and therefore none of the DATA-19 / DATA-22 collapse
-    machinery. It costs one line, which is the point; the previous shapes spent
-    a header and a click each on a sequence with no choices in it.
+    The parts run in a fixed order — there is nothing to map before a file is
+    read — so this is a *label*, not navigation: no expander, no chips, no open
+    state, and therefore none of the expander's collapse rules (see the module
+    docstring). It costs one line, which is the point: a sequence with no
+    choices in it needs no header and click per part.
 
-    ``trailing`` (UX-113), when given, is called with a column beside the
+    ``trailing``, when given, is called with a column beside the
     title — a control that belongs on the title line rather than in the body — so it
     reads as part of the title line instead of as the first thing in the body.
     Only the title line splits; the returned body container stays full width.
 
-    ``note`` (UX-135) hangs the part's explanation off the title as the same
-    hover tooltip the rest of the wizard's prose uses, instead of a `st.caption`
-    line under it. The add screen's own three titles say everything they need to
-    ("Dataset name"), so only the ✏️ Edit dataset screen passes one — its parts
-    carry judgements a title cannot ("does the Trial ID identify one reading?").
+    ``note`` hangs the part's explanation off the title as the same hover
+    tooltip the rest of the wizard's prose uses, instead of a `st.caption` line
+    under it. The add screen's own titles say everything they need to, so only
+    the ✏️ Edit dataset screen passes one — its parts carry judgements a title
+    cannot ("does the Trial ID identify one reading?").
     """
     box = host.container(key=part_key(step.id))
     mark = f"{icon_html(_badge_concept(status))} " if status else ""
@@ -324,9 +314,9 @@ def step_panel(host, step: WizardStep, status: StepStatus, *, active: bool):
 
     ``active=False`` is the collapsed *Data & mapping* review panel, which is
     itself an expander: Streamlit forbids expander-in-expander, so the step
-    degrades to a bold heading and renders inline into ``host``. That preserves
-    today's review-panel behaviour and the ``wizard_reconfigure`` assertion in
-    ``tests/test_apptest.py``.
+    degrades to a bold heading and renders inline into ``host``. The review
+    panel and the ``wizard_reconfigure`` assertion in ``tests/test_apptest.py``
+    rely on that.
 
     ``status`` is deliberately **not** rendered into the active header. A keyed
     expander whose label or icon changes remounts collapsed on the next run, so a

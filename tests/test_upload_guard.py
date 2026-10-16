@@ -1,4 +1,4 @@
-"""BUG-5: the upload-size guard that protects the memory-limited hosted demo."""
+"""The upload-size guard that protects the memory-limited hosted demo."""
 
 from __future__ import annotations
 
@@ -40,16 +40,16 @@ def test_small_upload_is_under_limit():
 
 
 def test_onestop_repeated_export_would_trip_guard():
-    # The OneStop repeated-reading export that first surfaced BUG-5: ~37 MB
-    # (fixations) and ~29 MB (IA) zipped tables — each over the guard.
+    # A OneStop repeated-reading export: ~37 MB (fixations) and ~29 MB (IA)
+    # zipped tables — each over the guard.
     assert upload_exceeds_limit(_FakeUpload(36_529_375))
     assert upload_exceeds_limit(_FakeUpload(28_875_283))
 
 
-# --- DATA-22 review · the guard is a *hosted-demo* guard ----------------------
+# --- the guard is a *hosted-demo* guard ---------------------------------------
 # It exists because the ~1 GB demo OOM-kills without a traceback. Running
-# locally there is no such ceiling, so the warning was noise and the "Load it
-# anyway" tick was a step between the user and their own data on their own
+# locally there is no such ceiling, so the warning would be noise and the "Load
+# it anyway" tick a step between the user and their own data on their own
 # machine. Same loopback test the wizard's "run locally" tip uses.
 
 

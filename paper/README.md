@@ -10,7 +10,7 @@ pipeline the app uses — rather than a private analysis path.
 Run from the repository root so the package and its environment resolve:
 
 ```bash
-cd app && uv run python paper/paper_figs.py
+uv run python paper/paper_figs.py
 ```
 
 Rendered figures land in `paper/figures/`. To write straight into a manuscript

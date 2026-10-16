@@ -266,7 +266,7 @@ def test_sentence_lookback_and_lookfrom_are_distinct_paths():
 
 
 def test_an_off_text_fixation_is_in_no_sentence_beside_a_word_with_no_id():
-    """#412: the fixation → sentence join matched a fixation on no word to a
+    """The fixation → sentence join must not match a fixation on no word to a
     word with no id (pandas joins NaN to NaN), crediting it to that sentence."""
     words = pd.DataFrame(
         {
@@ -350,8 +350,8 @@ def test_slice_consensus_and_sensitivity_are_available(
 
 
 def test_letter_position_is_exact_and_scoped_to_the_right_reader():
-    """PERF-3 rewrote this lookup from a per-fixation scan of the whole words
-    frame into one pre-built index, so the arithmetic and the scoping are pinned.
+    """The lookup is one pre-built index rather than a per-fixation scan of the
+    whole words frame, so the arithmetic and the scoping are pinned.
 
     Two readers share the word ids but not the geometry, which is what a
     per-reader words table looks like (MultiplEYE ships one). A lookup that
@@ -449,14 +449,14 @@ def test_a_right_to_left_word_counts_letters_from_its_right_edge():
 
 
 def test_text_direction_is_detected_once_per_trial_not_once_per_row():
-    """PRE-6's direction scan must not be quadratic in trial length.
+    """The text-direction scan must not be quadratic in trial length.
 
-    It used to build the trial's whole joined text on *every row* and then scan
-    that string per row, so a W-word trial scanned ~W times more characters than
-    it needed to. On an ordinary upload that was the slowest step of the entire
-    load — and all of it happened *after* the wizard had said "Dataset added",
-    so it read as the app hanging. Counting calls is the honest assertion: a
-    timing threshold would be flaky, and the call count is the actual defect.
+    Building the trial's whole joined text on *every row* and then scanning
+    that string per row would make a W-word trial scan ~W times more characters
+    than it needs to. On an ordinary upload that would be the slowest step of
+    the entire load — and all of it *after* the wizard has said "Dataset added",
+    so it would read as the app hanging. Counting calls is the honest assertion:
+    a timing threshold would be flaky, and the call count is the actual defect.
     """
     from unittest.mock import patch
 

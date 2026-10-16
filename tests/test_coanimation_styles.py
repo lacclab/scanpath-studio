@@ -1,9 +1,9 @@
 """Compare + Animate wears the per-scanpath styles the static comparison does.
 
 The rail's A/B style rows (fixation colour, size range, opacity, and the
-saccade line's colour, dash and width) stayed live while both modes were on,
-but the co-animation drew fixed palette colours and the figure-wide marker and
-saccade settings. These pin every one of those controls to the replay — through
+saccade line's colour, dash and width) stay live while both modes are on, and
+the co-animation draws them, not fixed palette colours or the figure-wide marker
+and saccade settings. These pin every one of those controls to the replay — through
 the builder, the app, the API and the CLI — and the static comparison's styles
 coming back when Animate is turned off.
 """

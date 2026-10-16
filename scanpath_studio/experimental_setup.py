@@ -1,10 +1,10 @@
 """Display geometry and stimulus typography: conversions, and the per-dataset
-setup a corpus was recorded with (DATA-2 · DATA-22 · CMP-8).
+setup a corpus was recorded with.
 
 Deliberately pure — no Streamlit, no pandas. That is what lets the headless API,
-the wizard, the comparison figure and CMP-11's visual-angle mode all share one
-notion of "what screen was this recorded on", and it keeps the type reachable
-from `api.py` without importing `app`.
+the wizard and the comparison figure all share one notion of "what screen was
+this recorded on", and it keeps the type reachable from `api.py` without
+importing `app`.
 
 Two things live here:
 
@@ -13,7 +13,7 @@ Two things live here:
   the three groups carrying a `Provenance` saying *how we know it*.
 
 The provenance is the point. An uploaded corpus that never recorded its monitor
-used to silently inherit a 2560x1440 guess; a snapshot instead records that the
+does not silently inherit a 2560x1440 guess: its snapshot records that the
 screen was ``ASSUMED``, and anything derived from a ``SKIPPED`` group
 (px/degree, pt->px) resolves to ``None`` so a caller hides it rather than
 printing a number computed from a default.
@@ -51,7 +51,7 @@ def font_pt_to_px(font_pt: float, dpi: float) -> float:
     return float(font_pt) * float(dpi) / 72.0
 
 
-# --- #422 · one font vocabulary for the Recording setup and the rail ----------
+# --- One font vocabulary for the Recording setup and the rail -----------------
 # The dataset's typeface is asked on the add / edit screens' *Font* line and
 # adjusted on 📄 Stimulus → Text; both offer these fonts, in this order, and
 # both size text in the same two units over the same ranges.
@@ -74,7 +74,7 @@ STIMULUS_FONTS = {
 }
 #: The choice that draws the generic ``monospace`` (the setup's *Not sure*).
 GENERIC_FONT = "Generic monospace"
-#: The choice that draws a CJK / Hebrew / Arabic-capable Noto Sans stack (PRE-6).
+#: The choice that draws a CJK / Hebrew / Arabic-capable Noto Sans stack.
 MULTILINGUAL_FONT = "Multilingual"
 MULTILINGUAL_FONT_STACK = (
     "'Noto Sans', 'Noto Sans Hebrew', 'Noto Sans Arabic', "
@@ -321,9 +321,9 @@ class SetupSnapshot:
     ) -> SetupSnapshot:
         """Read a snapshot back, degrading rather than raising.
 
-        ``fallback`` is required by the read path on purpose: a stored dataset or
-        a recovery cache written before this key existed has no snapshot at all,
-        and a corpus that cannot state its geometry must still open. Anything
+        ``fallback`` is required by the read path on purpose: an older stored
+        dataset or recovery cache has no snapshot at all, and a corpus that
+        cannot state its geometry must still open. Anything
         unparseable falls back field by field, so one bad number does not
         discard a whole valid setup.
         """
@@ -388,7 +388,7 @@ class IncomparableScreensError(ValueError):
 
     Raised by `api.compare_scanpaths`, which draws nothing rather than switch
     layout behind a script's back, and by `api.animate_scanpath` for a
-    co-animation of two datasets, which is an overlay on one clock (CMP-21).
+    co-animation of two datasets, which is an overlay on one clock.
     ``reason`` is `setups_comparable`'s surface-neutral sentence, so a caller
     can word the way out in its own terms — `render` names ``--compare-layout``
     rather than echo the Python keyword.
@@ -407,12 +407,10 @@ _REAL_SCREEN_PROVENANCE = frozenset({Provenance.MEASURED, Provenance.ESTIMATED})
 
 
 def setups_comparable(a: SetupSnapshot, b: SetupSnapshot) -> tuple[bool, str]:
-    """Whether two datasets' readings can share one set of pixel coordinates (CMP-11).
+    """Whether two datasets' readings can share one set of pixel coordinates.
 
     Compare mode's **overlay** layout pools both trials into one axis range, so
-    it is only meaningful when a pixel means the same thing on both sides. CMP-8
-    handled that by refusing every cross-dataset pair; this is the finer question
-    it was standing in for.
+    it is only meaningful when a pixel means the same thing on both sides.
 
     Returns ``(allowed, note)``:
 
@@ -430,19 +428,19 @@ def setups_comparable(a: SetupSnapshot, b: SetupSnapshot) -> tuple[bool, str]:
     refusal says only *why*: what happens next differs by surface — the app
     falls back to side by side, the API raises :class:`IncomparableScreensError`,
     ``render`` exits naming its own flag — so each caller appends that itself
-    (BUG-85; the reason used to end "so they are shown side by side instead",
-    which was false on two of three).
+    (a reason ending "so they are shown side by side instead" would be false
+    on two of the three).
 
     **Only the canvas is a hard gate.** An unrecorded screen warns rather than
-    refuses — settled 2026-08-12 on the case that motivated it: two OneStop
-    regimes, both 2560x1440, both reporting ``ASSUMED`` because the corpus does
-    not record a screen. Refusing there blocked precisely the comparison the
-    feature exists for. A caution is the honest middle: the app cannot *prove*
-    the two displays matched, but the user usually can, and a matching canvas is
-    real evidence rather than none.
+    refuses. Two OneStop regimes, for instance, are both 2560x1440 and both
+    report ``ASSUMED`` because the corpus does not record a screen; refusing
+    there would block precisely the comparison the feature exists for. A
+    caution is the honest middle: the app cannot *prove* the two displays
+    matched, but the user usually can, and a matching canvas is real evidence
+    rather than none.
 
     **Physical geometry is deliberately not consulted.** Nothing in the overlay
-    path converts to degrees — CMP-11 shipped as a gate, not a rescaling — so
+    path converts to degrees — this is a gate, not a rescaling — so
     ``monitor_width_mm`` and ``viewing_distance_mm`` are never read, and
     requiring them to match would gate the feature on quantities it does not use.
     It would also make it inert: every built-in corpus hard-codes

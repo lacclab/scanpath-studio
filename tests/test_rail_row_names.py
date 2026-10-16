@@ -1,11 +1,10 @@
-"""UX-153: a split row's name is a click target.
+"""A split row's name is a click target.
 
 On a row with a switch the name is the switch's own label, so clicking the word
-flips the switch, as it always did on 🎬 Animate and ⚖️ Compare. Every such
-toggle takes ``wrap=True``: that switches off Streamlit's one-line "truncate"
-label mode, and with it the native ``title=`` tooltip that mode stamps (which
-repeated the label, icon ligature included: "compare Compare"). Avoiding that
-tooltip is why UX-103 had drawn the rail's switches without their names.
+flips the switch, as on 🎬 Animate and ⚖️ Compare. Every such toggle takes
+``wrap=True``: that switches off Streamlit's one-line "truncate" label mode, and
+with it the native ``title=`` tooltip that mode stamps (which repeats the label,
+icon ligature included: "compare Compare").
 
 On a name-only row (🧹 Filter, 📐 Figure & canvas) the name stays markdown,
 and CSS stretches the ▾ trigger's click target over it.
@@ -106,9 +105,8 @@ def test_the_name_only_rows_stretch_the_trigger_over_the_name():
 
 
 def test_the_switch_slot_is_flexible_again():
-    # UX-103 had pinned the switch to its own width because the name was a
-    # separate flexible child; with the name back inside the toggle, that rule
-    # would leave no room for the label.
+    # The name sits inside the toggle, so a rule pinning the switch to its own
+    # width would leave no room for the label.
     css = _css()
     assert (
         '[class*="st-key-split_mode_rail_"] > div:has([data-testid="stCheckbox"])'

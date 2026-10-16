@@ -1,23 +1,21 @@
-"""MkDocs hooks for the docs build (ENG-78, ENG-79).
+"""MkDocs hooks for the docs build.
 
 The pages' generated content — the gallery, printed example output, the CLI
 and figure-option references, the Cite page — is produced by
 ``exec="true"`` fences run by markdown-exec, calling ``scripts/docs_support.py``.
-(It replaced UX-21's hand-rolled fence runner: markdown-exec is also what
-Zensical supports, so the pages do not tie the site to MkDocs.) What is left
-here is the plumbing that plugin cannot do:
+(markdown-exec is also what Zensical supports, so the pages do not tie the site
+to MkDocs.) What is left here is the plumbing that plugin cannot do:
 
 * put ``scripts/`` on ``sys.path`` so a fence can ``import docs_support``;
 * copy the installed plotly's own ``plotly.min.js`` into the built site, which
   ``javascripts/figures.js`` loads on the pages that carry a figure — the site
-  never fetches Plotly from a CDN, as the app itself has not since ENG-64;
-* draw the app's icons (ENG-88). A page names an icon with the shortcode the
+  never fetches Plotly from a CDN, and neither does the app itself;
+* draw the app's icons. A page names an icon with the shortcode the
   app's labels use, ``:material/database:``, and it renders as the same
   Material Symbols glyph, from the font file Streamlit ships — copied into the
   built site, never fetched;
-* check that ``llms.txt`` lists the pages (ENG-92). The llmstxt plugin only
-  sees a page it rebuilt, so a ``--dirty`` build wrote the file as bare section
-  headings — and the site shipped it that way for weeks.
+* check that ``llms.txt`` lists the pages. The llmstxt plugin only sees a page
+  it rebuilt, so a ``--dirty`` build writes the file as bare section headings.
 """
 
 from __future__ import annotations

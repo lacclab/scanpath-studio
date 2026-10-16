@@ -1,13 +1,12 @@
-"""DATA-27 (Task 12): the deep link / Share contract for every public corpus.
+"""The deep link / Share contract for every public corpus.
 
-Before this, `url_state._SHAREABLE_SOURCES` gave a `?source=` token to the
-sources whose *identity is the token* — demo, synthetic, authored, the two local
-env bundles — and every public corpus fell through to "this data source can't be
-rebuilt from a link". PoTeC and MultiplEYE were unshareable, and each prepared
-(harmonised) corpus was born unshareable for the same reason.
-
-One generic token now covers the whole of `app.public_dataset_registry()` —
-built-in corpora and prepared ones alike (R42): `?source=corpus&corpus=<slug>`.
+`url_state._SHAREABLE_SOURCES` gives a `?source=` token to the sources whose
+*identity is the token* — demo, synthetic, authored, the two local env bundles.
+Every public corpus — PoTeC, MultiplEYE, each prepared (harmonised) corpus —
+shares one generic token covering the whole of `app.public_dataset_registry()`,
+built-in corpora and prepared ones alike: `?source=corpus&corpus=<slug>`.
+Without it they would fall through to "this data source can't be rebuilt from a
+link".
 
 The two things these tests exist to pin:
 
@@ -188,7 +187,7 @@ class TestSlugs:
     def test_the_two_potec_entries_have_distinct_slugs_each_resolving_to_itself(
         self, bundle
     ):
-        """The whole test of the slug scheme (R42's warning made concrete).
+        """The whole test of the slug scheme.
 
         Native PoTeC and harmonised PoTeC are two distinct entries whose stable
         identifiers are the *same string*. The disambiguator is the namespace
@@ -270,10 +269,10 @@ class TestAmbiguousSlugsResolveToNeither:
     """Avoiding the known collision is not the same as detecting an unknown one.
 
     The namespace prefix keeps native PoTeC and harmonised PoTeC apart, and that
-    is the only collision today's catalogue has. It gives the scheme no way to
-    *notice* another one — and the resolver iterates the registry with the
+    is the only collision the current catalogue has. It gives the scheme no way
+    to *notice* another one — and the resolver iterates the registry with the
     built-ins first, so an undetected collision would resolve to whichever entry
-    came first: silently, and to the wrong corpus. Refusing to answer costs the
+    comes first: silently, and to the wrong corpus. Refusing to answer costs the
     recipient one link; answering wrongly opens the wrong data.
 
     Each test below asserts the pair resolves to **neither** entry, not merely
@@ -286,7 +285,7 @@ class TestAmbiguousSlugsResolveToNeither:
         """The `harmonised-` prefix is a convention, not a reserved word.
 
         A built-in corpus whose `short` is "Harmonised Foo" slugs exactly like a
-        prepared corpus named "Foo" — the brief named this vector explicitly.
+        prepared corpus named "Foo".
         """
         from scanpath_studio import app
         from scanpath_studio.url_state import corpus_choice_for_slug, corpus_slug
@@ -344,7 +343,7 @@ class TestAmbiguousSlugsResolveToNeither:
         # of them. Asserting a raw display name resolves to `None` would look
         # like a second vector but prove nothing — `"ZuCo 1"` slugifies to
         # `"zuco-1"`, which never matches the registered `"harmonised-zuco-1"`
-        # with or without this guard, so it would pass on unfixed code too.
+        # with or without this guard, so it would pass without the guard too.
         assert corpus_choice_for_slug("harmonised-zuco-1") is None
 
     def test_a_name_with_nothing_sluggable_in_it_is_not_shareable(
@@ -399,7 +398,7 @@ def _share_app():
     from scanpath_studio.url_state import _build_share_query
 
     st.session_state["_share_selection"] = {"participant_id": "p1", "trial_id": "t1"}
-    # DATA-3's three public-OneStop options are set for *every* corpus this
+    # The three public-OneStop options are set for *every* corpus this
     # helper shares, not just OneStop: they are what proves the block that emits
     # them is reached — and, for the other corpora, that it is not.
     st.session_state["onestop_variant"] = "public"
@@ -431,9 +430,9 @@ class TestShareEmitsTheCorpus:
         parsed, caveats = _share(app.benchmark_corpus_label("Provo"))
         assert parsed["source"] == ["corpus"]
         assert parsed["corpus"] == ["harmonised-provo"]
-        # Sharing "you'd need this corpus" beats sharing nothing (today's
-        # behaviour), so the link is emitted *and* the caveat says which corpus
-        # the recipient has to have prepared.
+        # Sharing "you'd need this corpus" beats sharing nothing, so the link
+        # is emitted *and* the caveat says which corpus the recipient has to
+        # have prepared.
         assert any("Provo" in note for note in caveats), caveats
 
     def test_a_builtin_corpus_is_shared_without_a_cannot_rebuild_caveat(self, bundle):
@@ -447,8 +446,8 @@ class TestShareEmitsTheCorpus:
         ["ordinary", "information_seeking", "repeated", "information_seeking_repeated"],
     )
     def test_each_onestop_regime_keeps_a_token_of_its_own(self, bundle, regime):
-        """R42 + DATA-63: a corpus reachable by both tokens emits its own. Each
-        OneStop regime is its own dataset, so it is its own `onestop_<regime>`
+        """A corpus reachable by both tokens emits its own. Each OneStop
+        regime is its own dataset, so it is its own `onestop_<regime>`
         — on the path the **app** takes, where `data_choice` is
         `PUBLIC_DATASETS_CHOICE` and only `public_dataset_choice` names it. The
         helper sets `onestop_regime="repeated"` for every share, so a link that
@@ -627,8 +626,8 @@ class TestRoundTripThroughTheApp:
             "the recipient was not told which corpus the link named: "
             f"{[w.value for w in at.warning]}"
         )
-        # …and names no remedy: the app neither discovers corpora nor, until
-        # DATA-56, adds one, so there is nothing it could tell the user to click.
+        # …and names no remedy: the app neither discovers nor adds corpora, so
+        # there is nothing it could tell the user to click.
         assert "Data directory" not in named[0], named
 
     def test_a_corpus_link_is_not_silent_when_public_datasets_are_off(
@@ -655,8 +654,7 @@ class TestRoundTripThroughTheApp:
         )
 
     def test_an_old_public_onestop_link_opens_the_regime_it_names(self, bundle):
-        """DATA-3's `onestop_public` + `onestop_regime` lands on that regime's
-        dataset (DATA-63)."""
+        """`onestop_public` + `onestop_regime` lands on that regime's dataset."""
         from scanpath_studio.constants import ONESTOP_REGIME_CHOICES
 
         at = AppTest.from_file(APP_SCRIPT)
@@ -681,7 +679,7 @@ class TestRoundTripThroughTheApp:
 
 
 def test_the_corpus_param_and_the_keys_it_writes_are_pinned_as_wire_format():
-    """M9: the new param + the session keys a link writes are in `session_keys`.
+    """The corpus param + the session keys a link writes are in `session_keys`.
 
     They outlive the process — a link sits in a bookmark or a paper — so a
     rename has to fail a test rather than a user's link. The bundle directory is

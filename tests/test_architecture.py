@@ -16,25 +16,25 @@ def _relative_imports(module: str) -> set[str]:
 
 
 def test_core_data_dependencies_are_one_way():
-    """Keep the two cycles removed by ENG-28 from growing back."""
+    """``data`` never imports ``datasets`` and ``measures`` never imports
+    ``preprocessing``: the dependencies run one way, so neither pair can form
+    an import cycle."""
     assert "datasets" not in _relative_imports("data")
     assert "preprocessing" not in _relative_imports("measures")
 
 
 def test_offscreen_page_twins_are_actually_hidden():
-    """BUG-34: every off-screen page copy carries its own `display: none` rule.
+    """Every off-screen page copy carries its own `display: none` rule.
 
     The 🗂️ Data page renders on *every* run and is hidden by key when it is not
     the active view — the widgets inside are gates whose keys Streamlit drops if
     they do not render. That makes the hiding load-bearing and its failure
-    silent: a stylesheet does not raise, so a selector that stops matching just
-    puts a whole page on top of every screen. It happened once already, when
-    #UX-65 retired the Help twin and left the Session selector dangling on a
-    comma, folded into the next rule's selector list.
+    silent: a stylesheet does not raise, so a selector that stops matching —
+    say, one left dangling on a comma and folded into the next rule's selector
+    list — just puts a whole page on top of every screen.
 
-    Data is the only such page left: #UX-65 turned Help into dialog-opening nav
-    entries and #UX-100 turned Session back into a popover, which needs no twin
-    because a popover body executes every run by itself.
+    Data is the only such page: ❓ Help's entries open dialogs, and a popover
+    needs no twin because a popover body executes every run by itself.
     """
     import re
 

@@ -17,11 +17,10 @@ missing, so the release workflow can fall back to a plain message.
 
 ``--max-chars`` bounds the output. GitHub rejects a release body over 125,000
 characters and Slack's ceiling is lower still, and a release that bundles
-months of work overruns both — v0.29.0's section was 172,795 characters, which
-published to PyPI and then failed to create a release. The changelog's two-tier
-shape (ENG-34) is what makes that recoverable: the headline list per group is
-the half written to be pasted somewhere, so it is the half that survives, with
-``--details-url`` pointing at the rest.
+months of work can overrun both — after PyPI has already published. The
+changelog's two-tier shape is what makes that recoverable: the headline list
+per group is the half written to be pasted somewhere, so it is the half that
+survives, with ``--details-url`` pointing at the rest.
 """
 
 from __future__ import annotations
@@ -66,7 +65,7 @@ def extract(
 
 
 #: Where the two-tier changelog splits: everything from here down is the long
-#: half, one paragraph per item (ENG-34). Matched in both output formats, since
+#: half, one paragraph per item. Matched in both output formats, since
 #: the Slack rewrite has already turned ``### Details`` into ``*Details*``.
 _DETAILS = re.compile(r"^(?:### Details|\*Details\*)\s*$", re.MULTILINE)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unreleased changelog entries, one file per item (ENG-86).
+"""Unreleased changelog entries, one file per item.
 
 Usage:
     python scripts/changelog_fragments.py check

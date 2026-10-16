@@ -1,4 +1,4 @@
-"""Bidirectional browser canvas for the VIZ-33 authoring document."""
+"""Bidirectional browser canvas for the authoring document."""
 
 from __future__ import annotations
 

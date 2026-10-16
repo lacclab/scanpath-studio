@@ -4,23 +4,19 @@ EyeGenBench (https://github.com/EyeBench/EyeGenBench) harmonises many public
 eye-tracking-while-reading corpora into one schema, but discards screen
 geometry. `scripts/prepare_eyegenbench.py` runs their pipeline, recovers the
 geometry, and writes the bundle this module reads. See
-`docs/benchmark-corpora.md` and `plans/data-27-eyegenbench-datasets.md`.
+`docs/benchmark-corpora.md`.
 
 The pipeline can *load* 39 corpora; a bundle holds however many the user
 prepared, which is fewer -- some publishers require manual acquisition. Read
 the manifest for what is actually there rather than assuming a count.
 
 Bundle contract for `fixations.parquet`: it must NOT carry a column literally
-named `unique_trial_id`. `data.normalize_fixations` used to key `trial_id` on
-that exact column name whenever it was present, overriding
-`EYEGENBENCH_FIX_SCHEMA`'s `trial` mapping below and breaking the words
-broadcast (paragraph-keyed stimulus-level words vs. reading-keyed fixations
-never matched, silently broadcasting zero word boxes). BUG-58 made the mapping
-authoritative, but the name stays reserved: the normalized frame's own
-`unique_trial_id` is the mapped trial id, so the raw values would not survive
-under it. If the prep script carries EyeGenBench's own finer-grained
-(per-reading) trial identity through at all, it must use the column name
-`eyegenbench_trial_id` instead -- registered as an opaque passthrough in Task 7. It must also give repeated
+named `unique_trial_id`. The normalized frame's own `unique_trial_id` is the
+mapped trial id (`EYEGENBENCH_FIX_SCHEMA`'s `trial` mapping below), so raw
+values under that name would not survive. If the prep script carries
+EyeGenBench's own finer-grained (per-reading) trial identity through at all, it
+must use the column name `eyegenbench_trial_id` instead -- registered as an
+opaque passthrough field in `data.py`. It must also give repeated
 readings of the same paragraph by the same participant distinct
 `unique_paragraph_id` values: this loader keys `trial_id` on that column
 directly and does not disambiguate repeats itself.
@@ -62,15 +58,13 @@ EYEGENBENCH_WORD_SCHEMA = dict(
 )
 
 # `trial` is `unique_paragraph_id`, matching the word schema above -- not
-# EyeGenBench's own (finer-grained, per-reading) `unique_trial_id`. See the
-# module docstring: a raw `unique_trial_id` column used to silently override
-# this mapping and break the stimulus-level words broadcast. Keying on
-# unique_paragraph_id is what makes that broadcast join work; repeated
-# readings of the same paragraph by the same participant are NOT separated
-# here (`data._disambiguate_repeated_readings` no-ops without a raw
-# TRIAL_INDEX column, which EyeGenBench frames don't carry) -- the prep
-# script is responsible for giving each reading its own paragraph key
-# upstream (Task 8, R17).
+# EyeGenBench's own (finer-grained, per-reading) `unique_trial_id`; see the
+# module docstring. Keying on unique_paragraph_id is what makes the
+# stimulus-level words broadcast join work; repeated readings of the same
+# paragraph by the same participant are NOT separated here
+# (`data._disambiguate_repeated_readings` no-ops without a raw TRIAL_INDEX
+# column, which EyeGenBench frames don't carry) -- the prep script is
+# responsible for giving each reading its own paragraph key upstream.
 EYEGENBENCH_FIX_SCHEMA = dict(
     participant="unique_participant_id",
     trial="unique_paragraph_id",
@@ -107,12 +101,13 @@ def entry_name(entry) -> str:
     """A manifest row's dataset name, or ``""`` when it hasn't got one.
 
     A row is data from a file on disk, so it can be malformed. Reading the name
-    as ``entry["name"]`` raised `KeyError` — outside the `(FileNotFoundError,
-    ValueError, OSError)` triple every caller guards with, so **one** nameless
-    row ordered before a valid one took the whole app down through whichever
-    surface looked at the manifest next (M7 / I2). Nameless rows are unusable
-    by definition — nothing can address them — so every reader skips them here
-    rather than each remembering to catch a third exception type.
+    as ``entry["name"]`` would raise `KeyError` — outside the
+    `(FileNotFoundError, ValueError, OSError)` triple every caller guards with,
+    so **one** nameless row ordered before a valid one would take the whole app
+    down through whichever surface looked at the manifest next. Nameless rows
+    are unusable by definition — nothing can address them — so every reader
+    skips them here rather than each remembering to catch a third exception
+    type.
     """
     if not isinstance(entry, dict):
         return ""
@@ -126,8 +121,8 @@ def entry_count(entry, key: str) -> int | None:
     `n_readers`, `n_fixations`, `paragraphs_without_real_boxes`): a manifest is
     data from a file on disk, and a bare ``int(entry.get(key))`` raises
     `ValueError`/`TypeError` on ``"many"``, ``[1]`` or any other shape a hand
-    edit can produce — outside the catch every caller guards with, and now on
-    the path that builds a picker entry for every added corpus (N1).
+    edit can produce — outside the catch every caller guards with, and on the
+    path that builds a picker entry for every added corpus.
 
     ``0`` when the field is absent or blank — *not recorded* is a known
     quantity for a count, and every reader treats it as none. ``None`` when the
@@ -138,7 +133,7 @@ def entry_count(entry, key: str) -> int | None:
     **Never write ``entry_count(...) or 0``.** It collapses `None` into `0` and
     so reads an unreadable count as *nothing missing* — which is precisely how
     a corpus with unknown coverage gets badged a confident "Real", the
-    overclaim R34 exists to prevent. Test the two cases apart (``if count :=
+    overclaim the geometry badge must avoid. Test the two cases apart (``if count :=
     entry_count(...)`` is fine — it drops both, which is right when the value is
     only being formatted), or handle `None` explicitly.
     """
@@ -194,7 +189,7 @@ def eyegenbench_present(root, dataset: str | None = None) -> bool:
 
 
 def declared_monitor(entry) -> tuple[int, int] | None:
-    """A manifest row's screen when the corpus actually documents one (I3).
+    """A manifest row's screen when the corpus actually documents one.
 
     ``monitor_source: "default"`` marks `eyegenbench_geometry.py`'s generic
     guess for a corpus that documents no screen at all -- 1920x1080, invented.
@@ -204,7 +199,7 @@ def declared_monitor(entry) -> tuple[int, int] | None:
 
     **The rule lives here, once.** The app reads it building each corpus'
     registry entry and the CLI reads it resolving ``--eyegenbench``'s canvas;
-    duplicating the condition is how the same corpus came to render at two
+    duplicating the condition would let the same corpus render at two
     different scales depending on which surface asked.
     """
     if not isinstance(entry, dict):
@@ -219,7 +214,7 @@ def declared_monitor(entry) -> tuple[int, int] | None:
 
 
 def eyegenbench_monitor(root, dataset: str) -> tuple[int, int] | None:
-    """The corpus' documented screen in pixels, or ``None`` (I3).
+    """The corpus' documented screen in pixels, or ``None``.
 
     ``None`` when the manifest records no screen for this corpus, or only the
     invented default one -- see `declared_monitor`. A `ValueError` still means
@@ -244,7 +239,7 @@ def _dataset_dir(root, dataset: str) -> Path:
 def eyegenbench_raw_frames(root, *, dataset: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Raw (pre-normalization) ``(words, fixations)`` frames for ``dataset``."""
     directory = _dataset_dir(root, dataset)
-    # UX-166: "0 of 2" first, so a gated card is armed before the first table.
+    # "0 of 2" first, so a gated card is armed before the first table.
     progress.report(0, 2, unit="tables")
     words = pd.read_parquet(directory / "words.parquet")
     progress.report(1, 2, unit="tables")
@@ -271,7 +266,7 @@ def load_eyegenbench(
 
 
 def load_eyegenbench_participants(root, dataset: str) -> pd.DataFrame:
-    """Per-reader metadata -- the DATA-20 participant-metadata table.
+    """Per-reader metadata -- the participant-metadata table.
 
     Never broadcast onto the word/fixation frames.
     """

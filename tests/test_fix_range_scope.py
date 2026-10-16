@@ -2,14 +2,14 @@
 
 A window like "fixations 5-20" rarely means the same thing on a different
 reading, so switching trials clears it by default. The checkbox
-(``single_fix_range_all_trials``) opts into the old sticky behaviour, where the
-window is re-applied to every trial and clamped to its length.
+(``single_fix_range_all_trials``) makes it sticky instead: the window is
+re-applied to every trial and clamped to its length.
 
 These tests drive ``controls._render_fix_range_slider`` directly: the slider
 resolves its own bounds from session state (no ``value=``), so the stored range
 after a run is exactly what the plot would be filtered by.
 
-BUG-47 adds the multipart half: a screen's ``order_in_trial`` values are
+Multipart trials add a second concern: a screen's ``order_in_trial`` values are
 PARENT-GLOBAL, so a later screen runs e.g. 509-578. Both slider bounds therefore
 follow the displayed frame — an untouched window has to equal that frame's own
 full range, or ``illustration.illustration_reasons`` reads the difference as a
@@ -51,7 +51,7 @@ def _slider_app():
 
     spec = st.session_state["_trial_spec"]
     n = spec["n"]
-    # BUG-47: `start` is the frame's first PARENT-GLOBAL fixation index — 1 on a
+    # `start` is the frame's first PARENT-GLOBAL fixation index — 1 on a
     # single-screen trial, and wherever the screen begins on a multipart one.
     start = spec.get("start", 1)
     frame = pd.DataFrame(
@@ -110,7 +110,7 @@ def test_window_follows_every_trial_when_apply_to_all_is_on():
 
 
 def test_an_untouched_window_still_follows_the_trial():
-    """BUG-16 is unchanged: an auto-default expands to each trial regardless."""
+    """An untouched (auto-default) window expands to each trial's full range."""
     at = AppTest.from_function(_slider_app)
     assert _run_on_trial(at, "p1", "t1", 40) == (1, 40)
     assert _run_on_trial(at, "p1", "t2", 25) == (1, 25)
@@ -133,7 +133,7 @@ def test_ambiguous_frame_never_drops_the_window():
     assert controls._fix_range_trial_key(_trial("p1", "t1", 3)) == ("p1", "t1")
 
 
-# --- BUG-47: multipart screens share one parent-global fixation-index axis -----
+# --- Multipart screens share one parent-global fixation-index axis -----------
 
 
 def test_untouched_window_covers_a_later_multipart_screen_whole():
@@ -155,7 +155,7 @@ def test_a_later_screen_is_not_stamped_as_an_illustration():
     """The end of the chain: no "fixation subset" disclosure on screen 2+.
 
     ``tabs`` derives ``full_fixation_range`` from the same displayed frame, so
-    this pins the two index spaces the bug compared against each other.
+    this pins the window and the full range to one index space.
     """
     from scanpath_studio.illustration import illustration_reasons
 
@@ -220,8 +220,8 @@ def test_bounds_follow_the_displayed_frame():
 def test_a_one_fixation_screen_clears_the_window():
     """One fixation can't host a range slider wherever its index happens to be.
 
-    The old ``max_fix < 2`` guard only caught this at the start of a trial; a
-    single-fixation *screen* at index 509 sailed past it into a degenerate
+    A ``max_fix < 2`` guard only catches this at the start of a trial; a
+    single-fixation *screen* at index 509 would sail past it into a degenerate
     one-value slider.
     """
     at = AppTest.from_function(_slider_app)
@@ -236,11 +236,11 @@ def test_a_one_fixation_screen_clears_the_window():
 
 class TestATrialChangeSurvivesAClosedPopover:
     """The window slider sits in the 🧹 Filter popover. Once that has been open,
-    the browser sends the window it last showed back on every rerun, so the
-    reset to a new trial's full range held for one run and then the old window
-    came back — clamped to the new trial, silently hiding most of its fixations.
-    The widgets now move to a fresh key whenever the window changes by itself,
-    so the old widget's value has nowhere to land."""
+    the browser sends the window it last showed back on every rerun, which
+    would bring the old window back one run after the reset to a new trial's
+    full range — clamped to the new trial, silently hiding most of its
+    fixations. The widgets move to a fresh key whenever the window changes by
+    itself, so the old widget's value has nowhere to land."""
 
     @staticmethod
     def _widget_key(at) -> str:

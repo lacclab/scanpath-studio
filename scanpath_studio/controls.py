@@ -142,17 +142,15 @@ from .session_keys import DESIGN_PRESETS as _DESIGN_PRESETS_WIRE_KEY
 NONE_OPTION = "(none)"
 
 
-# --- UX-51: compact `label | field` rows --------------------------------------
-# Every control in the Scanpath rail used to stack its title ABOVE its field, so
-# one ⚙️ Style popover spent well over a screen's height on eight controls. The
-# title now sits in a column to the LEFT of the field: a row is one line instead
-# of two, and a section reads as a compact form rather than a long scroll.
+# --- compact `label | field` rows ---------------------------------------------
+# Every control in the Scanpath rail puts its title in a column to the LEFT of
+# its field rather than above it: a row is one line instead of two, and a
+# section reads as a compact form rather than a long scroll.
 #
 # Built from per-row `st.columns`, not CSS on Streamlit's own widget-label DOM.
 # The split is then ordinary layout — it cannot leak outside the containers we
 # build it in, and it does not ride on internal test ids a Streamlit re-skin can
-# move. (Container-scoped CSS is the fallback if this reads badly when the rail
-# is tight, not the starting point.)
+# move.
 #
 # ONE label width for the whole rail (`_LABEL_W`) rather than a width per row:
 # labels lining up down a section — and across sections — is most of what makes
@@ -163,8 +161,8 @@ NONE_OPTION = "(none)"
 # The widget keeps its real `label` and `help`, and merely hides them
 # (`label_visibility="collapsed"`), so the accessible name, `AppTest` lookups and
 # the wire format are all untouched. What the user sees is the markdown twin in
-# the left column — and the `?` tooltip icon folds INTO it: the help text becomes
-# the label's own hover tooltip, which buys back the icon's width on every row.
+# the left column, with the help text as the label's own hover tooltip rather
+# than a `?` icon, which buys back the icon's width on every row.
 #
 # Controls whose label already sits beside the field — `st.checkbox`,
 # `st.toggle` — keep their native one-line shape; splitting those would only
@@ -174,15 +172,14 @@ NONE_OPTION = "(none)"
 #: popover body (`styles.get_app_css` pins `stPopoverBody`), which is where these
 #: rows live: ~160px of label — about 23 characters at the rail's 0.92rem — while
 #: leaving the field wide enough for a multiselect's chips, or for a slider plus
-#: the UX-9 box you type an exact value into.
+#: the box you type an exact value into.
 #:
-#: UX-69 moved the row itself down into `fields.py`, so the Scanpath subtabs can
-#: share it without importing this module (which imports two of them). The
-#: names below stay as they were — this module's call sites are the row's
-#: heaviest user by far.
+#: The row itself lives in `fields.py`, so the Scanpath subtabs can share it
+#: without importing this module (which imports two of them); this module keeps
+#: its own names for it, being the row's heaviest user by far.
 _LABEL_W = NARROW_LABEL_W
 
-#: UX-158: a popover whose titles are all short can narrow its own label column
+#: A popover whose titles are all short can narrow its own label column
 #: (`_rail_label_width`), so its fields sit closer to their titles. A ContextVar,
 #: not a module global, because Streamlit runs each session's script on its own
 #: thread and a temporarily-rebound global would leak into another session.
@@ -197,16 +194,15 @@ def _label_w() -> float:
     return _LABEL_W if override is None else override
 
 
-#: The rail popovers' label column (UX-158 for 👁️ Fixations, UX-159 for the
-#: rest): with titles kept short, this much of the ~28rem body holds the
-#: longest of them ("Fixation index", "Direction arrows") and brings every
-#: field closer to its title than the rail's default split does.
+#: The rail popovers' label column: with titles kept short, this much of the
+#: ~28rem body holds the longest of them ("Fixation index", "Direction arrows")
+#: and brings every field closer to its title than the rail's default split does.
 _POPOVER_LABEL_W = 0.3
 
 
 @contextmanager
 def _rail_label_width(width: float):
-    """Draw the rows inside with a label column of ``width`` (UX-158)."""
+    """Draw the rows inside with a label column of ``width``."""
     token = _LABEL_W_OVERRIDE.set(width)
     try:
         yield
@@ -216,11 +212,11 @@ def _rail_label_width(width: float):
 
 @contextmanager
 def _popover_rows(slug: str):
-    """Lay a rail popover's rows out the UX-158 way (UX-159).
+    """Lay a rail popover's rows out as a form.
 
     The popover's own label column (`_POPOVER_LABEL_W`) and a keyed container,
-    ``rail_rows_<slug>``, that `styles.py` spaces the rows of apart — the two
-    things that made 👁️ Fixations read as a form, for every popover alike.
+    ``rail_rows_<slug>``, that `styles.py` spaces the rows of apart — the same
+    for every popover.
     """
     with _rail_label_width(_POPOVER_LABEL_W), st.container(key=f"rail_rows_{slug}"):
         yield
@@ -229,15 +225,15 @@ def _popover_rows(slug: str):
 #: Tighter than the 1rem default: these rows are dense and the width is scarce.
 _LABEL_GAP = LABEL_GAP
 
-#: `label | field | note` for one column-mapping row (UX-52 round 3). Its own
-#: triple rather than `_LABEL_W`: the mapping renders full-width on the 🗂️ Data
+#: `label | field | note` for one column-mapping row. Its own triple rather
+#: than `_LABEL_W`: the mapping renders full-width on the 🗂️ Data
 #: page and inside the upload wizard, not in the rail's ~28rem popover, so there
 #: is room for the "✨ auto-detected …" note beside the field instead of under it.
 _MAPPING_ROW_W = (0.24, 0.40, 0.36)
 
-#: `label | ✨` on a grid cell's first line, with the select on its second
-#: (UX-53 r14). Stacking is what makes a packed theme read as two rows — every
-#: field name on one line, every control on the next — instead of as a ragged
+#: `label | ✨` on a grid cell's first line, with the select on its second.
+#: Stacking is what makes a packed theme read as two rows — every field
+#: name on one line, every control on the next — instead of as a ragged
 #: run of label-field pairs. The flag is one glyph and takes only what it needs.
 _GRID_LABEL_W = (0.85, 0.15)
 
@@ -245,20 +241,20 @@ _GRID_LABEL_W = (0.85, 0.15)
 def inline_field_label(
     host, label: str, help_text: str | None = None, *, emphasis: bool = False
 ) -> None:
-    """Render a field title above its control (UX-53 r14).
+    """Render a field title above its control.
 
     The public door onto `_row_label`, for callers that build their own row:
     `wizard._render_identity_field` puts one picker per table across a shared
     row and needs their titles to look like every other mapping title, tooltip
-    included. ``emphasis`` (UX-113) is the bolder/larger `.sps-flabel-emph`
+    included. ``emphasis`` is the bolder/larger `.sps-flabel-emph`
     variant, for a title that should stand out among its neighbours (the
     wizard's own upload/attach table titles).
     """
     _row_label(host, label, help_text, emphasis=emphasis)
 
 
-#: Shown in a select with nothing chosen. UX-53 r10 replaced the `"(none)"`
-#: *option* with a real empty state, so this is placeholder text, not a value
+#: Shown in a select with nothing chosen. The select has a real empty state
+#: rather than a `"(none)"` *option*, so this is placeholder text, not a value
 #: anyone can pick.
 _UNMAPPED_PLACEHOLDER = "Not mapped"
 
@@ -281,7 +277,7 @@ def _labeled(host, kind: str, label: str, **kwargs):
     overrides it.
     """
     kwargs.setdefault("label_width", _label_w())
-    # UX-97: a layer's controls grey out while its layer toggle is off.
+    # A layer's controls grey out while its layer toggle is off.
     kwargs["disabled"], kwargs["help"] = _layer_gate(
         bool(kwargs.get("disabled", False)), kwargs.get("help")
     )
@@ -289,7 +285,7 @@ def _labeled(host, kind: str, label: str, **kwargs):
 
 
 def _rail_names() -> cn.ColumnNames:
-    """DATA-66: the open dataset's names, for the rail's column pickers.
+    """The open dataset's own column names, for the rail's column pickers.
 
     The fixations table's, then the words table's for the word-level fields
     (surprisal, frequency …) carried onto fixations. The pickers' values stay
@@ -298,16 +294,16 @@ def _rail_names() -> cn.ColumnNames:
 
 
 def _slider_row(host, n_boxes: int, lead: float = 0.0) -> list:
-    """Columns for a ``label | slider | box…`` row, label column first (UX-51).
+    """Columns for a ``label | slider | box…`` row, label column first.
 
-    The slider keeps its pre-UX-51 5 : 1.5 proportion against each typed box; the
+    The slider keeps a 5 : 1.5 proportion against each typed box; the
     label takes ``_LABEL_W`` off the top so the row lines up with the plain
     ``label | field`` rows around it. ``vertical_alignment="center"`` is what puts
     the label beside the slider's *track*: a slider prints its current value
     above the track, so a top-aligned label would sit against that number instead
     of against the control.
 
-    ``lead`` (UX-157) inserts a column of that relative weight between the label
+    ``lead`` inserts a column of that relative weight between the label
     and the slider, for a control that belongs on the slider's line — the colour
     range's *Auto* checkbox.
     """
@@ -323,15 +319,15 @@ def _slider_row(host, n_boxes: int, lead: float = 0.0) -> list:
     return host.columns(weights, gap=_LABEL_GAP, vertical_alignment="center")
 
 
-# --- UX-9: sliders you can also type an exact value into ----------------------
+# --- sliders you can also type an exact value into ----------------------------
 # A slider is the right control for "sweep until it looks right", but it can't be
 # set to a precise value — awkward when a figure has to match a spec (marker size
 # 12, opacity 0.65, line width 1.5). These wrappers pair each slider with a
 # number box.
 #
-# The SLIDER keeps the canonical session key, so nothing downstream changes: deep
-# links, Share, Save & restore and `_collect_viz_settings` all still read
-# `global_*` / `cmp*_*` / `single_*` exactly as before. The box owns a shadow
+# The SLIDER owns the canonical session key — the `global_*` / `cmp*_*` /
+# `single_*` key that deep links, Share, saved configs and
+# `_collect_viz_settings` read. The box owns a shadow
 # `{key}__num*` key and writes the canonical one from its `on_change`; the
 # canonical value is mirrored back into the box *before* either widget renders,
 # so a slider drag, a deep link, a restored config and a Quick-view preset all
@@ -339,15 +335,15 @@ def _slider_row(host, n_boxes: int, lead: float = 0.0) -> list:
 
 
 def _shadow_key_missing(*keys: str) -> bool:
-    """True when a number box's shadow key is not in session state (BUG-18).
+    """True when a number box's shadow key is not in session state.
 
     An ``on_change`` callback runs *before* the script that would (re)create the
     widget, and Streamlit drops a widget's key at the end of any run in which it
     did not render. Several of these boxes are conditional — the heatmap
     colour-range pair only renders when the current trial/metric has data — so a
     change queued while a slow rerun was still in flight can reach a callback
-    whose own key no longer exists, and reading it raised ``KeyError`` and took
-    the app down mid-rerun.
+    whose own key no longer exists, where reading it would raise ``KeyError``
+    mid-rerun.
 
     A missing shadow key means there is no user edit left to apply: the canonical
     key still holds the last committed value, and the box re-seeds from it the
@@ -394,23 +390,21 @@ def _numeric_slider(
 ) -> None:
     """A single-value slider plus a number box bound to the same setting.
 
-    ``field_host`` (UX-158) draws the slider and its box into that column, for a
+    ``field_host`` draws the slider and its box into that column, for a
     `_sub_row` whose title and caption the caller has already drawn.
 
     ``number_format`` defaults to ``slider_format``; pass it separately when the
     slider's format carries a unit suffix (``"%.1f px"``), which ``number_input``
     does not accept.
 
-    ``disabled`` greys BOTH halves (VIZ-21) without touching the canonical key —
+    ``disabled`` greys BOTH halves without touching the canonical key —
     a disabled Streamlit widget still owns and keeps its value, so a mode toggle
     never rewrites a deep-linked / restored setting.
 
-    ``label_left`` opts the row into the UX-51 ``label | slider | box`` shape.
-    It is opt-in rather than the default because the sliders in the rail's
-    ⚙️ Playback popover are laid out two-up in half-width columns, where a third
-    column would leave the slider unusable.
+    ``label_left`` opts the row into the ``label | slider | box`` shape; without
+    it (and without ``field_host``) the label sits above a ``slider | box`` pair.
     """
-    disabled, help = _layer_gate(disabled, help)  # UX-97
+    disabled, help = _layer_gate(disabled, help)  # greyed while the layer is off
     num_key = f"{key}__num"
     if value is not None:
         # A shadow (`shadow_widget_key(seed=False)`): both halves take ``value``
@@ -418,7 +412,7 @@ def _numeric_slider(
         # neither is seeded through session state (see `shadow_widget_key`).
         def _from(widget_key: str):
             def call() -> None:
-                if _shadow_key_missing(widget_key):  # BUG-18
+                if _shadow_key_missing(widget_key):
                     return
                 if on_change is not None:
                     on_change(st.session_state[widget_key])
@@ -431,7 +425,7 @@ def _numeric_slider(
             st.session_state[num_key] = st.session_state[key]
 
         def apply_num() -> None:
-            if _shadow_key_missing(num_key):  # BUG-18
+            if _shadow_key_missing(num_key):
                 return
             st.session_state[key] = st.session_state[num_key]
             if on_change is not None:
@@ -515,26 +509,26 @@ def _range_slider(
     slider's span is then the caller's to make room for on the next run, as
     `_render_color_range` does by widening the slider to the stored range.
 
-    ``lead`` (UX-157) is a callable given a column ahead of the slider, to draw
-    a control of its own there. ``field_host`` (UX-158) draws the whole line
+    ``lead`` is a callable given a column ahead of the slider, to draw
+    a control of its own there. ``field_host`` draws the whole line
     into that column, for a `_sub_row` whose title and caption the caller has
     already drawn.
 
     The boxes are deliberately small — they hold a number, not a sentence — so
     the slider still gets most of the row. A min typed above the max is swapped
     rather than rejected. ``disabled`` greys all three without changing the
-    stored range (VIZ-21).
+    stored range.
 
-    ``label_left`` / ``display`` behave as in :func:`_numeric_slider` (UX-51).
+    ``label_left`` / ``display`` behave as in :func:`_numeric_slider`.
     """
-    disabled, help = _layer_gate(disabled, help)  # UX-97
+    disabled, help = _layer_gate(disabled, help)  # greyed while the layer is off
     lo_key, hi_key = f"{key}__num_lo", f"{key}__num_hi"
     current = st.session_state.get(key)
     if isinstance(current, (tuple, list)) and len(current) == 2:
         st.session_state[lo_key], st.session_state[hi_key] = current
 
     def _apply() -> None:
-        if _shadow_key_missing(lo_key, hi_key):  # BUG-18
+        if _shadow_key_missing(lo_key, hi_key):
             return
         lo, hi = st.session_state[lo_key], st.session_state[hi_key]
         st.session_state[key] = (min(lo, hi), max(lo, hi))
@@ -595,7 +589,7 @@ def _range_slider(
         )
 
 
-# VIZ-4: MIME by extension for a user-uploaded stimulus image → a `data:` URI the
+# MIME by extension for a user-uploaded stimulus image → a `data:` URI the
 # figure builders accept as `background_image` (plots._image_to_data_uri passes a
 # `data:` URI straight through).
 _UPLOAD_IMAGE_MIME = {
@@ -611,7 +605,7 @@ def _uploaded_image_data_uri(uploaded) -> str | None:
     """Base64 ``data:`` URI for a Streamlit ``UploadedFile`` image, or ``None``.
 
     Cached in session state keyed by the file's id so a multi-MB screenshot is
-    encoded once, not on every rerun (VIZ-4)."""
+    encoded once, not on every rerun."""
     if uploaded is None:
         return None
     import base64
@@ -629,17 +623,17 @@ def _uploaded_image_data_uri(uploaded) -> str | None:
     return uri
 
 
-# PRE-3: drift-correction picker options — "Off" + each algorithm title-cased.
+# Drift-correction picker options — "Off" + each algorithm title-cased.
 _ALIGN_OPTIONS = ["Off", *(a.title() for a in ALIGN_ALGORITHMS)]
 
 
-# --- VIZ-21/23: which rail controls actually apply in Animate / Compare -------
+# --- which rail controls actually apply in Animate / Compare ------------------
 # One rail feeds the static, animation, and comparison renderers, but some layers
 # do not exist in every mode. Each affected control therefore declares which
 # render paths consume it. Unsupported controls stay visible but disabled so the
 # reason is discoverable, and their stored values survive mode switches, deep
 # links, and restored configs. Keep the authoritative setting → render-path
-# table in `CLAUDE.md` in sync with these gates.
+# table in `AGENTS.md` in sync with these gates.
 
 
 def _mode_gate(
@@ -676,13 +670,11 @@ def _gated_help(base: str | None, reason: str) -> str | None:
     return f"{reason}\n\n{base}" if base else reason
 
 
-# --- UX-97: a layer's settings stay readable while the layer is off ----------
-# Before this, each layer block was gated `if show_<layer>:`, so switching the
-# layer off left its ▾ clickable but empty — the affordance said "there is
-# something here" and the popover said otherwise. The controls now always
-# render; while the layer is off they are greyed, because they change something
-# nothing is drawing. Same rule as `_mode_gate`: disabling never rewrites the
-# stored value, since a disabled Streamlit widget keeps its key.
+# --- a layer's settings stay readable while the layer is off -----------------
+# A layer's controls always render, so its ▾ is never an empty popover; while
+# the layer is off they are greyed, because they change something nothing is
+# drawing. Same rule as `_mode_gate`: disabling never rewrites the stored
+# value, since a disabled Streamlit widget keeps its key.
 _LAYER_OFF_REASON: list[str] = []
 
 
@@ -696,7 +688,7 @@ def _layer_off(
     ("Turn **👁️ Fixations** on…") rather than a bare refusal. Nested use pushes
     onto a stack, so an inner block that greys for its own reason wins.
     ``reason`` replaces that instruction when switching the layer on would not
-    help — VIZ-45's trial with no fixations for the layer to draw.
+    help — a trial with no fixations for the layer to draw.
     ``caption=False`` greys without writing the reason again, where the section
     already said it once.
     """
@@ -723,12 +715,12 @@ def _layer_gate(disabled: bool, help: str | None) -> tuple[bool, str | None]:
     return True, _gated_help(help, _LAYER_OFF_REASON[-1])
 
 
-# Static defaults for the keyed visualization widgets that the plot-config
-# restore (app._restore_plot_config) can set. Seeded into session_state so those
-# widgets render WITHOUT a `value=`/`index=` argument — that keeps their key
-# programmatically settable without Streamlit's "default value but also set via
-# Session State API" warning. Data-dependent defaults (color-by / axis fields /
-# sizing / canvas) are seeded locally where they're computed.
+# Static defaults for the keyed visualization widgets that the settings-file
+# restore (`url_state._restore_plot_config`) can set. Seeded into session_state
+# so those widgets render WITHOUT a `value=`/`index=` argument — that keeps their
+# key programmatically settable without Streamlit's "default value but also set
+# via Session State API" warning. Data-dependent defaults (color-by / axis
+# fields / sizing / canvas) are seeded locally where they're computed.
 _VIZ_WIDGET_DEFAULTS = {
     # First-load layers default to the *core scanpath* only — fixations, saccades
     # and the reading text — so a new user lands on a legible picture instead of
@@ -736,9 +728,8 @@ _VIZ_WIDGET_DEFAULTS = {
     # analytical overlays, off by default and one click (or one design preset) away.
     "global_show_words": False,
     "global_show_labels": True,
-    # UX-128: the 📄 Stimulus section's own master switch — on by default, so
-    # a fresh session's figure is unchanged (Text on, Bounding boxes/Image
-    # off, same as before this toggle existed).
+    # The 📄 Stimulus section's own master switch — on by default, so a fresh
+    # session shows the reading text (the image layer is off by default).
     "global_show_stimulus": True,
     "global_show_fix": True,
     "global_show_order": False,
@@ -747,26 +738,26 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_saccade_color": SACCADE_COLOR,
     "global_saccade_style": "Solid",
     "global_saccade_width": DEFAULT_SACCADE_WIDTH,
-    # #422: the saccade lines' and arrows' opacity — fully opaque, as they were.
+    # The saccade lines' and arrows' opacity — fully opaque by default.
     "global_saccade_opacity": 1.0,
-    # VIZ-8: colour saccades uniformly, or by reading type (forward / skip /
+    # Colour saccades uniformly, or by reading type (forward / skip /
     # refixation / return sweep / regression). "By type" splits the saccade trace
     # into one colour per class with a small legend; the five class colours are
     # each restorable, so seed them here.
     "global_saccade_color_mode": "Uniform",
-    # VIZ-8: show the saccade-type colour key on the plot (default on). Optional,
+    # Show the saccade-type colour key on the plot (default on). Optional,
     # like the other legends.
     "global_saccade_type_legend": True,
     "global_show_color_legend": True,
     "global_show_highlight_legend": True,
     # The fixed duration scale: one mapping of duration to marker size for every
-    # figure (√ by default — area grows with duration). Old configs and links
-    # that predate it are migrated to "relative" so they still draw as saved.
+    # figure (√ by default — area grows with duration). Configs and links saved
+    # without it are read as "relative", so they still draw as saved.
     "global_marker_size_scale": DEFAULT_MARKER_SIZE_SCALE,
     "global_marker_duration_range": DEFAULT_MARKER_DURATION_RANGE,
     "global_duration_size_legend": True,
-    # 📐 Figure & canvas → Legends: where each legend sits (all Auto = as drawn
-    # before the setting existed). Size None = the figure's own text size.
+    # 📐 Figure & canvas → Legends: where each legend sits (Auto = the builder's
+    # own placement). Size None = the figure's own text size.
     **{
         f"global_legend_{kind}_{part}": default
         for kind in LEGEND_KINDS
@@ -781,48 +772,46 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_saccade_class_color_refixation": SACCADE_CLASS_COLORS["refixation"],
     "global_saccade_class_color_return_sweep": SACCADE_CLASS_COLORS["return_sweep"],
     "global_saccade_class_color_regression": SACCADE_CLASS_COLORS["regression"],
-    # VIZ-31: the saccade *filter* — which reading classes are drawn at all. The
+    # The saccade *filter* — which reading classes are drawn at all. The
     # same `measures.classify_saccades` split the colour mode above uses, applied
     # as visibility instead of hue ("show me only the regressions"). Default is
     # every class, which the figure builder treats as "no filter" and short-
     # circuits, so the common case pays nothing.
     "global_saccade_classes": list(SACCADE_CLASS_ORDER),
-    # VIZ-9 "linear reading" mode: draw saccades as upward arcs (`Arc`) instead of
-    # straight connectors, and/or (#422) snap each fixation up or down onto its
+    # "Linear reading" mode: draw saccades as upward arcs (`Arc`) instead of
+    # straight connectors, and/or snap each fixation up or down onto its
     # text line, at a position on it in line heights.
     "global_saccade_render_mode": "Straight",
     "global_fixation_snap_to_line": False,
     "global_fixation_snap_position": DEFAULT_SNAP_POSITION,
     "global_illustration_label": "Auto",
     "global_illustration_text": "",
-    # VIZ-10: autoplay the animated replay on load (default on). The toggle lives
+    # Autoplay the animated replay on load (default on). The toggle lives
     # in the Animate ⚙ Playback popover (tabs.render_single_trial_tab); the replay
     # player starts it at the configured speed (plots.animation_player_post_script).
     "global_anim_autoplay": True,
-    # VIZ-11 follow-up: the animation frame grid, exposed instead of decided for
-    # the user. Step = smoothness; max frames = the ceiling that keeps a long
-    # reading's GIF/MP4 bounded (it coarsens the step, and the popover says so).
-    # Defaults match the old constants, so nothing changes until someone moves them.
+    # The animation frame grid. Step = smoothness; max frames = the ceiling that
+    # keeps a long reading's GIF/MP4 bounded (it coarsens the step, and the popover
+    # says so).
     "global_anim_grid_step_ms": 100,
     "global_anim_max_frames": 360,
-    # VIZ-6: fixation marker alpha. Default 0.7 so overlapping fixations show
+    # Fixation marker alpha. Default 0.7 so overlapping fixations show
     # through (the classic translucent scanpath look); drag to 1.0 for fully
-    # opaque markers. This replaced the old binary `Hollow circles` toggle in the
-    # UI — the `global_hollow_fixations` key is kept (no widget) so saved configs
-    # / deep links that carry it still render hollow.
+    # opaque markers. `global_hollow_fixations` has no widget; it is kept so saved
+    # configs / deep links that carry it still render hollow.
     "global_fixation_opacity": 0.7,
     "global_hollow_fixations": False,
-    # VIZ-17: the flat colour every fixation wears when "Color fixations by" is
+    # The flat colour every fixation wears when "Color fixations by" is
     # "(uniform)" — the default, since marker size already encodes duration.
     "global_fixation_color": DEFAULT_FIXATION_COLOR,
-    # VIZ-15: fixation marker shape. A second encoding channel that, unlike hue,
+    # Fixation marker shape. A second encoding channel that, unlike hue,
     # survives greyscale printing.
     "global_fixation_symbol": DEFAULT_FIXATION_SYMBOL,
-    # VIZ-18: the active colour palette. A preset, not a rendering mode — picking
+    # The active colour palette. A preset, not a rendering mode — picking
     # one writes the individual colour keys below, so every per-element picker
     # still overrides it and every surface carries the resulting colours.
     "global_palette": DEFAULT_PALETTE,
-    # PRE-3: in-place vertical drift-correction. "Off" = raw fixations; otherwise
+    # In-place vertical drift-correction. "Off" = raw fixations; otherwise
     # one of alignment.ALGORITHMS (title-cased in the UI) snaps each fixation to
     # its assigned text line. `align_connectors` draws faint original→corrected
     # connector lines.
@@ -833,24 +822,23 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_heatmap_sigma_auto": True,
     "global_heatmap_sigma_px": DEFAULT_HEATMAP_SIGMA_PX,
     "global_show_raw_gaze": False,
-    # UX-86: raw gaze's own style — previously fixed in `plots._add_raw_gaze_layer`
-    # (#888888, size 4, opacity 0.6) with no control at all.
+    # Raw gaze's own style.
     "global_raw_gaze_color": "#888888",
     "global_raw_gaze_marker_size": 4.0,
     "global_raw_gaze_opacity": 0.6,
-    # ⬚ Word boxes' own style — previously fixed in `plots.build_word_boxes`.
+    # ⬚ Word boxes' own style.
     "global_word_box_color": WORD_BOX_COLOR,
     "global_word_box_line_opacity": WORD_BOX_LINE_OPACITY,
     "global_word_box_fill_color": WORD_BOX_FILL_COLOR,
     "global_word_box_fill_opacity": WORD_BOX_FILL_OPACITY,
     "global_show_stimulus_image": False,
-    # VIZ-4: image-based stimuli. Opacity dims a busy stimulus image so the AOIs /
-    # scanpath read over it (round-trips in Share / Save & restore, since it also
+    # Image-based stimuli. Opacity dims a busy stimulus image so the AOIs /
+    # scanpath read over it (round-trips in Share / the settings file, since it also
     # applies to dataset images). A user-uploaded image (session-only — an uploaded
     # image can't ride a deep link) is stretched to fill the monitor; precise
     # crop placement is available via the CLI / headless API (background_image_*).
     "global_stimulus_image_opacity": 1.0,
-    # VIZ-4: manual image alignment — nudge the image origin (px) and scale its
+    # Manual image alignment — nudge the image origin (px) and scale its
     # size so it lines up with the text boxes / fixations when the data's frame
     # doesn't match the image. Applies to dataset + uploaded images alike.
     "global_stimulus_image_offset_x": 0.0,
@@ -858,7 +846,7 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_stimulus_image_scale": 1.0,
     "global_heatmap_style": "Word boxes",
     "global_heatmap_metric": "duration_ms",
-    # VIZ-3: heatmap colour-scaling. "Linear" maps colour straight to the value;
+    # Heatmap colour-scaling. "Linear" maps colour straight to the value;
     # "Log" maps to log1p(value), compressing heavy-tailed dwell times so a few
     # very-hot words don't wash out the rest.
     "global_heatmap_norm": "Linear",
@@ -867,12 +855,12 @@ _VIZ_WIDGET_DEFAULTS = {
     # Frame the view to the whole presentation monitor (scanpath sits at its true
     # on-screen position) rather than cropping to the data extent. Default on.
     "global_fit_to_monitor": True,
-    # VIZ-34: optional monitor-pixel coordinate grid. Auto chooses a stable
+    # Optional monitor-pixel coordinate grid. Auto chooses a stable
     # 1/2/5×10ⁿ interval from the visible range; the stored manual value remains
     # available while Auto is on so switching back does not lose it.
     "global_show_coordinate_grid": False,
     "global_coordinate_grid_auto": True,
-    # #422: Crop to data's margin — automatic until a number is chosen.
+    # Crop to data's margin — automatic until a number is chosen.
     "global_crop_margin_auto": True,
     "global_crop_margin_px": DEFAULT_CROP_MARGIN_PX,
     "global_coordinate_grid_spacing": 100.0,
@@ -880,12 +868,12 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_order_font_size": 10,
     "global_fixation_colorscale": DEFAULT_FIXATION_COLORSCALE,
     "global_heatmap_colorscale": DEFAULT_HEATMAP_COLORSCALE,
-    # Restorable by the Save & restore config too, so seed here (no inline
+    # Restorable by the settings file too, so seed here (no inline
     # value=/index=) to avoid Streamlit's "default value but also set via
     # Session State API" warning when a restore pre-sets them.
     "global_critical_span_style": "Mark text",
     "global_span_border_color": "#000000",
-    # Fixation classification (viz-only — PRE-2). SHORT / LONG / OUT-OF-BOUNDS
+    # Fixation classification (viz-only). SHORT / LONG / OUT-OF-BOUNDS / BLINK
     # each get a mode (Off | Highlight | Discard); Highlight overlays a marker in
     # the chosen symbol+colour, Discard hides them from the plot only (reading
     # measures and export tables are untouched). Short/long thresholds in ms
@@ -904,23 +892,23 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_fixclass_blink_mode": "Off",
     "global_fixclass_blink_symbol": "diamond-open",
     "global_fixclass_blink_color": "#17becf",
-    # VIZ-7: single-trial fixation-index window (start, end over `order_in_trial`)
+    # Single-trial fixation-index window (start, end over `order_in_trial`)
     # for the main scanpath plot. `None` = full trial; the real bounds depend on
-    # the selected trial's fixation count, so `render_plot_controls` resolves/clamps
-    # the concrete (1, max_fix) range at render time (mirroring `multi_fix_range`).
+    # the selected trial's fixation count, so `_render_fix_range_slider`
+    # resolves/clamps the concrete range at render time.
     "single_fix_range": None,
     # Whether that window survives a trial change. Off = the window belongs to
     # the trial it was drawn on (switching trials shows the whole new trial); on
     # = re-apply it to every trial, clamped to each one's length. Pinned here so
-    # it re-syncs when its popover first mounts on a later run (BUG-15).
+    # it re-syncs when its popover first mounts on a later run.
     "single_fix_range_all_trials": False,
-    # Show the A/B legend on the two-trial comparison overlay (CMP-2). Off by
-    # default — the per-scanpath colours already tell the readings apart.
-    "global_show_compare_legend": True,  # #374 F26: names A and B
-    # VIZ-13: reading measure shown in the word hover tooltip. "Off" (None) hides
+    # Show the A/B legend on a two-trial comparison. On by default: the legend is
+    # what names A and B on the figure.
+    "global_show_compare_legend": True,
+    # Reading measure shown in the word hover tooltip. "Off" (None) hides
     # the measure line; any canonical measure column name shows it.
     "global_word_hover_measure": "total_fixation_duration_ms",
-    # Colour-bar styling (Axes & color bars expander).
+    # Colour-bar styling, one set per bar (fixations, heatmap).
     **{
         f"global_{bar}_colorbar_{name}": default
         for bar in ("fixation", "heatmap")
@@ -928,33 +916,33 @@ _VIZ_WIDGET_DEFAULTS = {
             ("orientation", "Vertical"),
             ("tickangle", 0),
             ("tickfont_size", 12),
-            # #422: the bar's own size; its length is automatic until a
+            # The bar's own size; its length is automatic until a
             # fraction is chosen.
             ("thickness", DEFAULT_COLORBAR_THICKNESS),
             ("length_auto", True),
             ("length", DEFAULT_COLORBAR_LENGTH),
         )
     },
-    # EXP-5: title/caption on the figure (Figure & canvas group). Off by default;
+    # Title/caption on the figure (📐 Figure & canvas). Off by default;
     # the two patterns are only meaningful while the toggle is on — see
     # `_collect_viz_settings`, which reports them empty otherwise.
     "global_show_title": False,
     "global_show_caption": False,
     "global_title_pattern": "",
     "global_caption_pattern": "",
-    # #422: how the title and caption are written.
+    # How the title and caption are written.
     "global_title_font_size": DEFAULT_TITLE_FONT_SIZE,
     "global_caption_font_size": DEFAULT_CAPTION_FONT_SIZE,
     "global_caption_color": DEFAULT_CAPTION_COLOR,
-    # #422: the static figure's border round the plot area.
+    # The static figure's border round the plot area.
     "global_show_plot_frame": True,
     "global_plot_frame_color": DEFAULT_PLOT_FRAME_COLOR,
-    # #422: the coordinate grid's tick labels, in px.
+    # The coordinate grid's tick labels, in px.
     "global_coordinate_grid_font_size": DEFAULT_GRID_FONT_SIZE,
-    # #422: the heatmap's opacity — each style's own until a value is chosen.
+    # The heatmap's opacity — each style's own until a value is chosen.
     "global_heatmap_opacity_auto": True,
     "global_heatmap_opacity": DEFAULT_HEATMAP_OPACITY,
-    # #422: the saccades' arrowheads, and the fixation markers' outline.
+    # The saccades' arrowheads, and the fixation markers' outline.
     "global_saccade_arrow_size": DEFAULT_SACCADE_ARROW_SIZE,
     "global_fixation_outline_width": DEFAULT_FIXATION_OUTLINE_WIDTH,
     "global_fixation_outline_color": DEFAULT_FIXATION_OUTLINE_COLOR,
@@ -973,13 +961,13 @@ _OUT_OF_TEXT_MARKERS = {
     "triangle-down-open": "▽ Triangle (down)",
 }
 
-# Fixation-classification modes (PRE-2): a category can be left alone, marked with
+# Fixation-classification modes: a category can be left alone, marked with
 # an overlay marker, or hidden from the plot (viz-only — never changes measures).
 _FIXCLASS_MODES = ("Off", "Highlight", "Discard")
 
 
-#: PRE-2's four fixation classes: ``(key prefix, row title, help, has a ms
-#: threshold)``. UX-162 shortened the titles to fit one table row each.
+#: The four fixation classes: ``(key prefix, row title, help, has a ms
+#: threshold)``. The titles are short enough to fit one table row each.
 _FIXCLASS_CATEGORIES = (
     ("short", "Short", "Fixations shorter than the ms threshold.", True),
     ("long", "Long", "Fixations longer than the ms threshold.", True),
@@ -996,25 +984,18 @@ _FIXCLASS_CATEGORIES = (
 def _render_fixation_cleaning(
     *, disabled: bool = False, reason: str = "", prefix: str = "global"
 ) -> None:
-    """PRE-2 short / long / out-of-bounds / blink visual filtering controls.
+    """Short / long / out-of-bounds / blink visual filtering controls.
 
-    VIZ-27 gives this its own popover instead of burying data inclusion under
-    marker styling. Viz-only: highlight or discard, with customizable short/long
-    thresholds, all on the spot.
+    Viz-only: highlight or discard, with customizable short/long thresholds.
+    One table row per class — its mode, then the ms threshold (short and long
+    only), then the marker and colour a *Highlight* draws with — under a
+    captioned header. What a mode leaves idle is greyed, not hidden. Every value
+    rides a ``{prefix}_fixclass_<class>_*`` key (seeded in
+    ``_VIZ_WIDGET_DEFAULTS``).
 
-    UX-162: one table row per class — its mode, then the ms threshold (short and
-    long only), then the marker and colour a *Highlight* draws with — under a
-    captioned header, instead of up to four rows each that came and went with the
-    mode. What a mode leaves idle is greyed, not hidden. Every value rides a
-    ``global_fixclass_{prefix}_*`` key (seeded in ``_VIZ_WIDGET_DEFAULTS``).
-
-    ``make_scanpath_figure`` and ``make_scanpath_animation`` both consume
-    ``fixation_flags`` (VIZ-23 — *Discard* drops the rows before the replay's
-    frames are built, *Highlight* overlays them as the trail reaches them); the
-    comparison builders take no flags argument, so the whole block renders
-    disabled (with the reason) in Compare only.
-
-    CMP-24: the comparison builders take the flags now, one set per scanpath.
+    All three builders consume ``fixation_flags``: in the replay *Discard* drops
+    the rows before the frames are built and *Highlight* overlays them as the
+    trail reaches them; the comparison builders take one set per scanpath.
     ``prefix`` is the key namespace — ``global`` for A (and every non-compare
     figure), ``cmp1`` for scanpath B, whose table has only the *Mode* and *ms*
     columns: B chooses which of its fixations are flagged, and a Highlight draws
@@ -1075,7 +1056,7 @@ def _render_fixation_cleaning(
             label_visibility="collapsed",
         )
         # `persist_state` keeps a picker first drawn in a popover from mounting
-        # at its proto default (black) — BUG-15 / ENG-36.
+        # at its proto default (black).
         cols[4].color_picker(
             f"{label} color",
             key=f"global_fixclass_{category}_color",
@@ -1087,10 +1068,10 @@ def _render_fixation_cleaning(
 
 def _collect_fixation_flags(prefix: str = "global") -> dict:
     """Build the ``fixation_flags`` dict the figure builder consumes from the
-    ``global_fixclass_*`` session keys (PRE-2). One entry per category; ``oob`` has
-    no threshold.
+    ``global_fixclass_*`` session keys. One entry per category; ``oob`` and
+    ``blink`` have no threshold.
 
-    CMP-24: ``prefix="cmp1"`` is scanpath B's set — its own modes and thresholds,
+    ``prefix="cmp1"`` is scanpath B's set — its own modes and thresholds,
     A's markers and colours (see ``_render_fixation_cleaning``)."""
     ss = st.session_state
     return {
@@ -1124,7 +1105,7 @@ def _collect_fixation_flags(prefix: str = "global") -> dict:
 
 
 def _fixation_filter_badge(prefix: str = "global") -> str:
-    """Compact VIZ-27 badge summarising active visual filters."""
+    """Compact badge summarising the active fixation filters."""
     active = [
         st.session_state.get(f"{prefix}_fixclass_{name}_mode", "Off")
         for name in ("short", "long", "oob", "blink")
@@ -1140,12 +1121,12 @@ def _fixation_filter_badge(prefix: str = "global") -> str:
 
 
 def _plot_filter_badge() -> str:
-    """UX-72: one badge for the whole Filters & highlights section.
+    """One badge for the whole Filters & highlights section.
 
-    The section folds the fixation and saccade filters together, so its header
-    has to answer "is anything being hidden?" for both — the reason each of them
-    badged its own trigger before (VIZ-27): a thinned figure otherwise reads as
-    missing data. The detail stays on each half's own badge inside.
+    The section holds the fixation and saccade filters together (and, in
+    Compare, scanpath B's), so its header has to answer "is anything being
+    hidden?" for all of them: a thinned figure otherwise reads as missing data.
+    The detail stays on each half's own badge inside.
     """
     comparing = bool(st.session_state.get("_resolved_comparing"))
     b_active = comparing and bool(
@@ -1159,7 +1140,7 @@ def _plot_filter_badge() -> str:
 
 
 def _saccade_filter_badge(key: str = "global_saccade_classes") -> str:
-    """Compact badge summarising the VIZ-31 saccade reading-class filter.
+    """Compact badge summarising the saccade reading-class filter.
 
     Mirrors :func:`_fixation_filter_badge` — an active filter must be visible
     without opening the popover, or a figure missing half its saccades reads as
@@ -1200,11 +1181,9 @@ _QUICK_VIEW_APPLIED_STATE = "_quick_view_applied_state"
 _QUICK_VIEW_DRIFTED_FROM = "_quick_view_drifted_from"
 _CUSTOM_VIEW = "custom"
 
-#: VIZ-39 — the user's own saved designs: ``{name: {global_key: value}}``.
-#: The three built-ins are *code*; these are data, and they are what the
-#: "Quick views" row was standing in for — it offered exactly one unnamed
-#: snapshot ("your most recent custom settings"), which could not be kept,
-#: compared, or come back to.
+#: The user's own saved designs: ``{name: {global_key: value}}``.
+#: The three built-ins are *code*; these are data, which can be kept,
+#: compared and come back to.
 DESIGN_PRESETS_KEY = _DESIGN_PRESETS_WIRE_KEY
 #: Which saved design the ✏️ button has open for editing, if any.
 _DESIGN_EDIT_KEY = "_design_preset_editing"
@@ -1226,7 +1205,7 @@ _DESIGN_SELECTION_PREFIX = "design:"
 
 
 def design_presets() -> dict[str, dict]:
-    """The user's saved designs, newest last. Always a dict (VIZ-39)."""
+    """The user's saved designs, newest last. Always a dict."""
     stored = st.session_state.get(DESIGN_PRESETS_KEY)
     return stored if isinstance(stored, dict) else {}
 
@@ -1304,9 +1283,9 @@ def delete_design_preset(name: str) -> None:
         st.session_state.pop(_DESIGN_EDIT_KEY, None)
 
 
-#: UX-179 — the saved-design file: `{"kind": DESIGNS_FILE_KIND, "designs": {…}}`.
-#: The retired 💾 Session backup was the only portable copy of the library; this
-#: is its own file now, written by *Export* and read by *Import* in My designs.
+#: The saved-design file: `{"kind": DESIGNS_FILE_KIND, "designs": {…}}` — the
+#: portable copy of the library, written by *Export* and read by *Import* in
+#: My designs.
 DESIGNS_FILE_KIND = "scanpath_studio_designs"
 #: 2 — the fixed duration scale. A schema-1 design predates it, so it keeps
 #: the relative marker scale it was drawn with (`keep_legacy_marker_scale`).
@@ -1432,7 +1411,7 @@ def _import_designs() -> None:
 
 
 def _render_design_file_row(host, saved: dict[str, dict]) -> None:
-    """*Export* / *Import* under the design list (UX-179)."""
+    """*Export* / *Import* under the design list."""
     note = st.session_state.pop(_DESIGN_IMPORT_NOTE_KEY, None)
     if note and note.startswith("error:"):
         host.error(note.removeprefix("error:"), icon=ICONS["error"])
@@ -1440,7 +1419,7 @@ def _render_design_file_row(host, saved: dict[str, dict]) -> None:
         host.warning(note.removeprefix("warning:"), icon=ICONS["warning"])
     elif note:
         host.success(note, icon=ICONS["confirm"])
-    # #422: the two share the row's width, so the row ends where the design
+    # The two share the row's width, so the row ends where the design
     # cards above it do instead of leaving a gap on the right.
     row = host.container(horizontal=True, gap="xsmall", key="design_file_row")
     row.download_button(
@@ -1496,7 +1475,7 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
         "global_show_order": False,
         "global_show_words": False,
         "global_show_raw_gaze": False,
-        # #374 F16: the word colours are the whole figure; a highlighted span
+        # The word colours are the whole figure; a highlighted span
         # would read as part of the map.
         "global_critical_span_style": "None",
     },
@@ -1560,9 +1539,9 @@ def _drop_linked_view_params() -> None:
 
     ``url_state._apply_url_preset`` re-applies them at the top of every rerun,
     as ``setdefault`` — so any key the chosen design leaves unset is refilled
-    from the link. Every design leaves some unset; since VIZ-46 an *auto*
-    colour range is one of them (absent means auto), so a design saved on auto
-    came back showing the link's range. Selection/source params are not in
+    from the link. Every design leaves some unset; an *auto* colour range is one
+    of them (absent means auto), so a design saved on auto would come back
+    showing the link's range. Selection/source params are not in
     ``URL_PRESET_PARAMS`` and stay.
     """
     from . import session_keys as _sk
@@ -1600,7 +1579,7 @@ def _apply_view_preset(name: str) -> None:
 
 
 def _hold_view_writes(ss, before: dict) -> None:
-    """#374 F9 for the design presets: hold every value a preset changed.
+    """Hold every value a design preset changed (see `write_through`).
 
     A popover widget the user has opened keeps echoing the value it last
     showed, so a preset's write to it (Saccades ▾ → Arc, Fixations ▾ → Snap,
@@ -1637,7 +1616,7 @@ def _apply_view_preset_state(ss, name: str, saved: dict) -> None:
     if current == _CUSTOM_VIEW:
         ss[_QUICK_VIEW_CUSTOM_STATE] = _capture_quick_view_state()
 
-    # VIZ-39 — one of the user's own saved designs. Same shape as the built-in
+    # One of the user's own saved designs. Same shape as the built-in
     # branch below (clear, then write what the design owns), and deliberately
     # NOT the Custom branch's shape: a saved design is a *record* of settings,
     # so it starts from the widget defaults like a built-in does rather than
@@ -1651,7 +1630,7 @@ def _apply_view_preset_state(ss, name: str, saved: dict) -> None:
                 ss[key] = deepcopy(value)
         # Validated again here: a design can also come from the recovery
         # cache or an older session, and a bad value must cost that setting,
-        # not the rerun (round 11).
+        # not the rerun.
         for key, value in sanitize_design(saved[name])[0].items():
             ss[key] = deepcopy(value)
         ss.pop("_canvas_seeded_for", None)
@@ -1690,7 +1669,7 @@ def _apply_view_preset_state(ss, name: str, saved: dict) -> None:
     ss.pop("_font_seeded_for", None)
     ss.pop("_palette_picked", None)
     ss.pop(_PRE_ILLUSTRATION_STATE, None)
-    # VIZ-45 — the raw-gaze layer is dataset-dependent too. Not for a saved
+    # The raw-gaze layer is dataset-dependent too. Not for a saved
     # design above: that is the user's own record, raw-gaze switch included.
     _forget_raw_gaze_default(ss)
 
@@ -1711,15 +1690,14 @@ def _apply_view_preset_state(ss, name: str, saved: dict) -> None:
 #: `st.file_uploader` refuses to have its key assigned from session state at
 #: all, so snapshotting one and writing it back raises
 #: `StreamlitValueAssignmentNotAllowedError` and takes the whole page down —
-#: which is what happened the moment a Custom view was captured with a stimulus
-#: image attached. The `_upload` suffix is the same convention
-#: `url_state._restore_column_mapping` already excludes by.
+#: e.g. a Custom view captured with a stimulus image attached. The `_upload`
+#: suffix is the same convention `url_state._restore_column_mapping` excludes by.
 def _is_restorable_global(key: object) -> bool:
     name = str(key)
     return name.startswith("global_") and not name.endswith("_upload")
 
 
-#: The fixation-index windows (VIZ-7, CMP-24) — one per scanpath, each a value
+#: The fixation-index windows — one per scanpath, each a value
 #: plus the flag that says it was *chosen* rather than the slider's own
 #: auto-default. They are filters, so a design owns them; see
 #: `_capture_quick_view_state` for how they are recorded.
@@ -1731,12 +1709,10 @@ _FIX_WINDOW_KEYS = frozenset(key for pair in _FIX_WINDOWS for key in pair)
 _FIX_WINDOW_ALL_TRIALS_KEY = "single_fix_range_all_trials"
 
 #: Plot controls that are not `global_*` — the rest of what the rail, the Compare
-#: view and the replay let you set. A design used to snapshot only `global_*`,
-#: so it kept scanpath A's filters and dropped everything beside them: each
-#: scanpath's own styling (`cmp{0,1}_*`), scanpath B's filters
-#: (`cmp1_fixclass_*`, `cmp1_saccade_classes`), whether Compare is on and how it
-#: lays out, the fixation windows and the replay speed. Only the stimulus-image
-#: upload stays out, and that is `_is_restorable_global`'s.
+#: view and the replay let you set: each scanpath's own styling (`cmp{0,1}_*`),
+#: scanpath B's filters (`cmp1_fixclass_*`, `cmp1_saccade_classes`), whether
+#: Compare is on and how it lays out, the fixation windows and the replay speed.
+#: Only the stimulus-image upload stays out, and that is `_is_restorable_global`'s.
 _DESIGN_EXTRA_KEYS = (
     compare_state_keys(0)
     | compare_state_keys(1)
@@ -1758,10 +1734,9 @@ def _is_design_key(key: object) -> bool:
 
 
 def _render_saved_designs(host) -> None:
-    """The user's own designs: save, apply, rename, delete (VIZ-39).
+    """The user's own designs: save, apply, rename, delete.
 
-    Its foot is *Export* / *Import* (UX-179): the library's portable file,
-    which used to ride in the 💾 Session backup.
+    Its foot is *Export* / *Import*: the library's portable file.
 
     The list is an expander, because it grows and the rail is narrow — and
     because it is the *built-ins* above that should stay one click away. The 💾
@@ -1805,9 +1780,8 @@ def _render_saved_designs(host) -> None:
                 args=(name,),
             )
             # Material icons rather than emoji: emoji render at whatever size and
-            # baseline the platform font decides, which is what made these two
-            # sit high and unaligned in their buttons.
-            # UX-200: `spoken` names each icon for screen readers.
+            # baseline the platform font decides, which sits them high and unaligned
+            # in their buttons. `spoken` names each icon for screen readers.
             cells[1].button(
                 spoken(f"Rename design {name}"),
                 icon=ICONS["edit"],
@@ -1848,7 +1822,7 @@ def _render_saved_designs(host) -> None:
 
 
 def _ask_delete_design(name: str) -> None:
-    """🗑️ arms the confirmation instead of deleting (VIZ-39).
+    """🗑️ arms the confirmation instead of deleting.
 
     A design is a handful of choices the user made and cannot get back by
     undoing anything, so it gets the same confirm step ♻️ Reset visualization
@@ -1867,7 +1841,7 @@ def _close_design_delete_dialog() -> None:
 @st.dialog("Delete this design?", on_dismiss=_close_design_delete_dialog)
 @guarded()
 def _design_delete_dialog(name: str) -> None:
-    """Confirm forgetting one saved design — VIZ-39."""
+    """Confirm forgetting one saved design."""
     st.caption(
         f"**{name}** will be deleted. The plot on screen does not change: these "
         "settings stay applied until you pick another design."
@@ -1891,7 +1865,7 @@ def _design_delete_dialog(name: str) -> None:
 #: the dialog, by any way, discards.
 _DESIGN_NEW_NAME_KEY = "design_new_name"
 _DESIGN_REPLACE_TARGET_KEY = "design_replace_target"
-#: The name the 💾 dialog offers (#422), so saving needs no naming at all.
+#: The name the 💾 dialog offers, so saving needs no naming at all.
 _DEFAULT_DESIGN_NAME = "My design {n}"
 
 
@@ -1915,21 +1889,21 @@ def _close_design_save_dialog() -> None:
 
 # `on_dismiss` is what keeps a *flag*-driven dialog honest: ✕ and Esc close the
 # modal in the browser without running a line of the body, so without this the
-# flag stayed armed and the dialog reopened on the very next rerun — clicking a
-# preset, toggling a layer, anything.
+# flag would stay armed and the dialog reopen on the very next rerun — clicking
+# a preset, toggling a layer, anything.
 @st.dialog("Save current design", on_dismiss=_close_design_save_dialog)
 @guarded()
 def _design_save_dialog() -> None:
-    """Name the settings on screen and keep them (VIZ-39).
+    """Name the settings on screen and keep them.
 
     A **form**, so ⏎ is the same as clicking 💾 Save: Streamlit routes Enter to
     the form's *first* submit button, which is why Save is written before Cancel
     and why it is never `disabled` (a disabled first button turns Enter off for
     the whole form — an empty name is caught below instead).
 
-    The name field is **not** ``required`` (#422): in a form, a required field
-    blocks *every* submit button until it has a value — Cancel included, which
-    is how an emptied name left the dialog with no way out but ✕. A blank name
+    The name field is **not** ``required``: in a form, a required field
+    blocks *every* submit button until it has a value — Cancel included, so an
+    emptied name would leave the dialog with no way out but ✕. A blank name
     is refused on Save instead, server-side.
 
     Opened from a pending flag rather than the button's return value, and closed
@@ -1965,7 +1939,7 @@ def _design_save_dialog() -> None:
                 icon=ICONS["warning"],
             )
         else:
-            # Filled with the next free "My design N" (#422): saving needs no
+            # Filled with the next free "My design N": saving needs no
             # name thought up, and typing over it is one select-all away.
             # `setdefault`, so a name being typed survives the radio's rerun.
             st.session_state.setdefault(_DESIGN_NEW_NAME_KEY, next_design_name(saved))
@@ -1998,7 +1972,7 @@ def _design_save_dialog() -> None:
 
 
 def _render_design_rename(row, name: str) -> None:
-    """✏️ turns the card *itself* into the rename field — VIZ-39.
+    """✏️ turns the card *itself* into the rename field.
 
     The box sits exactly where the name was and the two icons keep their slots,
     so nothing moves under the cursor and the list does not grow a panel: the
@@ -2020,9 +1994,9 @@ def _render_design_rename(row, name: str) -> None:
             required=True,
         )
         # Both need an explicit `key`: a submit button's identity is its label,
-        # and these two shared the empty one — the icon is not part of it, so
-        # the second silently collapsed to a 0-height cell without them.
-        # UX-200 named them for screen readers (`spoken`).
+        # and these two share the empty one — the icon is not part of it, so
+        # without keys the second silently collapses to a 0-height cell.
+        # `spoken` names them for screen readers.
         cells[1].form_submit_button(
             spoken("Save the new name"),
             icon=ICONS["confirm"],
@@ -2092,7 +2066,7 @@ def _capture_quick_view_state() -> dict[str, object]:
     return state
 
 
-#: VIZ-44 — `global_*` keys that *mirror* a setting rather than hold one, so
+#: `global_*` keys that *mirror* a setting rather than hold one, so
 #: they are left out of the drift check below. The highlight-span pair is
 #: re-derived from `global_critical_span_style` on every run the Stimulus
 #: popover draws, and each `__num*` key is the typed box beside a slider,
@@ -2105,7 +2079,7 @@ _NUMERIC_TWIN_SUFFIXES = ("__num", "__num_lo", "__num_hi")
 _ABSENT = object()
 
 
-#: #374 F25 — Compare and Animate are ways of *viewing* a design, not part of
+#: Compare and Animate are ways of *viewing* a design, not part of
 #: it: switching one on leaves the design's highlight where it is. (A design
 #: still records whether Compare was on, so applying it restores that.)
 _VIEW_MODE_KEYS = frozenset({SINGLE_COMPARE_TOGGLE, "single_animate"})
@@ -2119,14 +2093,14 @@ def _is_drift_mirror(key: str) -> bool:
 
 
 def _design_drifted(applied: dict, current: dict) -> bool:
-    """Whether the plot settings moved off the design that was applied (VIZ-44).
+    """Whether the plot settings moved off the design that was applied.
 
     Every design key counts — a named view resets *all* of them to the widget
     defaults, so changing any plot control is a departure from it — except the
     mirrors above. A key present on only one side is compared against its
     widget default: a control registered late (its popover opened after the
     baseline was taken) at its default value has not been changed, while a key
-    with no default (an explicit colour range, VIZ-46) appearing *has*.
+    with no default (an explicit colour range) appearing *has*.
     """
     for key in applied.keys() | current.keys():
         if _is_drift_mirror(key) or key in _VIEW_MODE_KEYS:
@@ -2178,9 +2152,9 @@ def _returned_to_design() -> str | None:
 def _link_departs_from(name: str) -> bool:
     """Whether the open deep link sets a design value design ``name`` would not.
 
-    #374 F25: on a link's first run the highlight is inferred from the settings
+    On a link's first run the highlight is inferred from the settings
     the link restored. Matching a design's own few keys is not enough — a link
-    from a view with a hand-changed colour matched Scanpath — so every design
+    from a view with a hand-changed colour would match Scanpath — so every design
     value the link carries is held against what the design would set (its own
     value, else the widget default). Values with no default (the canvas size,
     seeded per dataset) say nothing either way.
@@ -2204,12 +2178,11 @@ def _sync_quick_view_state() -> str:
     """Keep the design-preset highlight in step with manual plot-control edits.
 
     Only a change to a plot setting drops the highlight to 🛠️ Custom; see
-    `_design_drifted` for what is not one (VIZ-44 — narrowing the trial pool
-    used to flip it).
+    `_design_drifted` for what is not one (narrowing the trial pool, for one).
     """
     ss = st.session_state
     selected = ss.get(_QUICK_VIEW_SELECTION_KEY)
-    # #374 F25: another dataset re-seeds its own canvas size, highlight column
+    # Another dataset re-seeds its own canvas size, highlight column
     # and hover fields. That is the design meeting new data, not a departure
     # from it, so a design that was in force stays highlighted: its baseline is
     # retaken on the new dataset (the seeds have run by now).
@@ -2219,7 +2192,7 @@ def _sync_quick_view_state() -> str:
     ):
         ss[_QUICK_VIEW_APPLIED_STATE] = _capture_quick_view_state()
     ss[_QUICK_VIEW_DATASET] = dataset
-    # VIZ-39: a `design:<name>` selection is valid while that design still
+    # A `design:<name>` selection is valid while that design still
     # exists, and from here on is treated exactly like a built-in — including
     # the drift check below, so editing any control drops the highlight.
     if selected_design_name() in design_presets():
@@ -2268,16 +2241,16 @@ def _active_quick_view() -> str | None:
     """Return the quick-view preset whose owned values match current state.
 
     Illustration is deliberately checked before Scanpath: its layer set is a
-    superset of the Scanpath contract, so the old order mislabeled an active
-    Illustration as Scanpath even while arc-and-snap geometry remained live.
+    superset of the Scanpath contract, so checking Scanpath first would mislabel
+    an active Illustration as Scanpath even while arc-and-snap geometry is live.
     """
     return _sync_quick_view_state()
 
 
-# VIZ-18: palette setting name → the session key it writes. A palette is applied
+# Palette setting name → the session key it writes. A palette is applied
 # by writing the *ordinary* colour keys, so nothing downstream has to know
-# palettes exist — the per-element pickers, the deep link, Save & restore, the
-# CLI and the API all keep carrying plain colours.
+# palettes exist — the per-element pickers, the deep link, the settings file,
+# the CLI and the API all keep carrying plain colours.
 _PALETTE_STATE_KEYS = {
     "fixation_color": "global_fixation_color",
     "fixation_colorscale": "global_fixation_colorscale",
@@ -2303,7 +2276,7 @@ def palette_state(name: str) -> dict:
 
 
 def apply_palette(name: str) -> None:
-    """Apply a VIZ-18 palette by writing its colours into ``session_state``.
+    """Apply a palette by writing its colours into ``session_state``.
 
     Runs as a widget ``on_change`` callback — i.e. before the next rerun
     instantiates the colour pickers — so writing their keys here is picked up
@@ -2320,7 +2293,7 @@ def apply_palette(name: str) -> None:
         write_through(key, value)
 
 
-#: #374 F9 — programmatic widget writes the browser may not have taken yet:
+#: Programmatic widget writes the browser may not have taken yet:
 #: ``{key: [value, stale_echo]}``. See `write_through`.
 _PENDING_WRITES_KEY = "_pending_widget_writes"
 _WRITE_FRESH = "\x00fresh"  # written this run: the browser has not answered yet
@@ -2340,12 +2313,12 @@ def _write_match_key(value):
 def write_through(key: str, value) -> None:
     """Write ``value`` to a widget's key so that a closed popover cannot undo it.
 
-    #374 F9. A widget inside an ``st.popover`` is mounted in the browser only
+    A widget inside an ``st.popover`` is mounted in the browser only
     while the popover is open. Once it has been open, the browser remembers the
     value it showed and sends that value back on every rerun; a programmatic
     write made while the popover is closed reaches no mounted widget, so it
-    holds for one run and the next rerun puts the remembered value back (the
-    palette that "stopped sticking" after Fixations ▾ had been opened).
+    holds for one run and the next rerun puts the remembered value back (a
+    palette applied after Fixations ▾ has been opened would not stick).
 
     So the write is also recorded here, and `reassert_pending_writes` repeats
     it at the top of each run while the browser keeps echoing the old value.
@@ -2401,10 +2374,10 @@ def _palette_match_key(value):
 def _active_palette() -> str | None:
     """Which palette the live colour keys match, or ``None`` once customized.
 
-    The VIZ-12 rule applied to VIZ-18: a palette is one-way (it writes the
-    ordinary colour keys and never reads them back), so without this the selector
-    keeps reading "Colourblind-safe" after the user has hand-edited one of its
-    colours — naming a property the figure no longer has.
+    A palette is one-way (it writes the ordinary colour keys and never reads
+    them back), so without this the selector would keep reading
+    "Colourblind-safe" after the user has hand-edited one of its colours —
+    naming a property the figure no longer has.
     """
     ss = st.session_state
     for name in PALETTES:
@@ -2431,12 +2404,12 @@ def _popover_selectbox(label: str, options: list, state_key: str, host=None, **k
     A *keyed* selectbox first painted inside a (closed-until-clicked) popover
     renders its first option rather than the value seeded into session state, and
     commits that wrong value on the next interaction — the same first-open quirk
-    the VIZ-8 class colour pickers hit. Passing an explicit ``index=`` and writing
-    the pick back by hand sidesteps it, which is what lets a VIZ-18 palette (or a
+    the saccade class colour pickers hit. Passing an explicit ``index=`` and
+    writing the pick back by hand sidesteps it, which is what lets a palette (or a
     deep link, or a restored config) set a non-first colorscale and have the
     picker agree with the figure.
 
-    Renders as a UX-51 ``label | field`` row like every other rail control.
+    Renders as a ``label | field`` row like every other rail control.
     """
     current = st.session_state.get(state_key)
     index = options.index(current) if current in options else 0
@@ -2481,11 +2454,11 @@ _BOX_SUBFIELDS: dict[str, list[tuple]] = {
 }
 _ALL_BOX_KEYS = [key for fields in _BOX_SUBFIELDS.values() for key, _ in fields]
 
-#: UX-91 — the word-box row: `Word box * + format radio | four coordinate
+#: The word-box row: `Word box * + format radio | four coordinate
 #: selects`. The head is wide enough for the title and both radio options
 #: without wrapping (a wrapped radio would push the selects beside it out of
 #: line with every other row on the page); the four selects split the rest
-#: evenly, matching the width they had when they were a row of their own.
+#: evenly.
 _BOX_ROW_W = (0.26, 0.185, 0.185, 0.185, 0.185)
 
 
@@ -2501,38 +2474,32 @@ def _default_box_format(proposed: dict[str, str | None]) -> str:
     return BOX_FORMAT_EDGES
 
 
-# UX-52: mapping fields that only a **multipart** dataset needs (one logical
-# trial spread over several screens, DATA-21/DATA-24) plus the per-screen canvas
-# size. All optional, all inert for an ordinary single-screen corpus, and
-# together they were half the rows in the editor — so they fold into an
-# "Advanced" group instead of padding the list everyone reads.
-# UX-113: "block" joins it for the same reason — only a table with sub-screen
-# blocks that each restart their own numbering (e.g. a comprehension
-# question's answer blocks) ever needs it.
+# Mapping fields that only a **multipart** dataset needs (one logical trial
+# spread over several screens), or a table with sub-screen blocks that each
+# restart their own numbering (e.g. a comprehension question's answer blocks).
+# Both optional and inert for an ordinary single-screen corpus, so they sit in
+# an "advanced" group instead of padding the list everyone reads.
 _ADVANCED_MAPPING_KEYS = frozenset({"screen_id", "block"})
-#: AN-32 — the reading measures fold into a group of their own wherever every
-#: field is listed at once (the ⚙️ Configure panel), so thirteen optional
-#: fields never stretch the required ones apart.
+#: The reading measures sit in a group of their own wherever every field is
+#: listed at once (no ``only_keys``), so thirteen optional fields never stretch
+#: the required ones apart.
 _MEASURE_MAPPING_KEYS = frozenset(READING_MEASURE_KEYS)
 
-#: Mapping keys that are **resolved but never rendered** (UX-53 round 3).
+#: Mapping keys that are **resolved but never rendered**.
 #:
 #: `screen_fixation_id` and the two `canvas_*` fields are per-screen bookkeeping
 #: that only a multipart export carries, and when it does carry them the column
-#: names are the canonical ones auto-detection already finds. They were three
-#: more rows on a page whose complaint was length, offering a choice nobody
+#: names are the canonical ones auto-detection already finds — a choice nobody
 #: makes. `_assemble_mapping` still puts them in the schema straight from the
 #: proposal, so multipart datasets keep their per-screen canvas and nothing
-#: downstream sees a narrower schema — what is gone is the widget, not the
-#: field. Anything genuinely unmappable this way is a column-name problem, and
-#: `data.py`'s candidate lists are where that gets fixed.
-#: UX-55 r4 hid `screen_index` ("Screen name") behind this set; UX-88 removed
-#: the field outright, from the specs themselves — it is not offered, not
-#: resolved from a proposal, and not written into any schema. The *column* is
-#: untouched and still load-bearing: `multipart.normalize_screen_identity`
-#: derives it from first appearance, and the public corpora in `datasets.py`
-#: stamp it straight onto the frames — neither goes through a mapping. What is
-#: gone is the idea that anyone should have to think about it.
+#: downstream sees a narrower schema; only the widget is missing. Anything
+#: genuinely unmappable this way is a column-name problem, and `data.py`'s
+#: candidate lists are where that gets fixed.
+#: `screen_index` is not a mapping field at all — not offered, not resolved
+#: from a proposal, and not written into any schema. The *column* is still
+#: load-bearing: `multipart.normalize_screen_identity` derives it from first
+#: appearance, and the public corpora in `datasets.py` stamp it straight onto
+#: the frames — neither goes through a mapping.
 _HIDDEN_MAPPING_KEYS = frozenset(
     {"screen_fixation_id", "canvas_width", "canvas_height"}
 )
@@ -2587,7 +2554,7 @@ WORD_FIELD_SPECS: list[dict] = [
         "The plot's line coloring and hover infer lines from the word boxes' Y "
         "instead, since many exports carry one constant here.",
     },
-    # UX-113: only meaningful alongside "Merge character boxes into word
+    # Only meaningful alongside "Merge character boxes into word
     # boxes" — a table whose rows are grouped into sub-blocks that each
     # restart their own numbering (e.g. a comprehension question's stem /
     # target / distractor answer blocks). Without it, two blocks' word 0
@@ -2620,7 +2587,7 @@ WORD_FIELD_SPECS: list[dict] = [
         "required": True,
         "help": "Bounding box per word/AOI. Edges = left/right/top/bottom (EyeLink IA_*); Origin + size = x/y/width/height.",
     },
-    # AN-32: the reading measures a dataset brings, one optional field each —
+    # The reading measures a dataset brings, one optional field each —
     # the Corpus Analysis page shows these and computes none. Short labels, as
     # they share two lines; the full name and the EyeLink column are the hover.
     *(
@@ -2682,12 +2649,11 @@ FIX_FIELD_SPECS: list[dict] = [
         "help": "When each fixation starts (ms), on one clock for the whole "
         "trial; orders fixations and times the replay. Defaults to row order.",
     },
-    # UX-53 removed *Screen-local timestamp (ms)* from the mapping: it was a
-    # second clock for the same fixations, and the parent-trial timestamp above
-    # already orders every screen. `screen_timestamp_ms` survives as a
-    # passthrough column for the corpora that ship one (datasets.py stamps it),
-    # so nothing downstream loses it — it just stops being a question every
-    # uploader has to answer.
+    # No *Screen-local timestamp* field: it would be a second clock for the same
+    # fixations, and the parent-trial timestamp above already orders every screen.
+    # `screen_timestamp_ms` is a passthrough column for the corpora that ship one
+    # (datasets.py stamps it), so nothing downstream loses it — it just is not a
+    # question every uploader has to answer.
     {
         "key": "fixation_id",
         "label": "Fixation ID",
@@ -2728,11 +2694,12 @@ FIX_FIELD_SPECS: list[dict] = [
         "required": False,
         "help": "Recorded canvas height in pixels; must be constant within a screen.",
     },
-    # pass_index / saccade_type / saccade_amplitude / eye are no longer explicit
+    # pass_index / saccade_type / saccade_amplitude / eye are not explicit
     # mapping fields — they're auto-detected and offered under "fields to keep"
     # (see data.FIX_OPTIONAL_FIELDS), so they don't clutter the wizard and aren't
-    # hardcoded as schema. noise_flag was removed (it silently dropped fixations
-    # with no UI to undo); saccade_amplitude is recomputed from X/Y by measures.
+    # hardcoded as schema; saccade_amplitude is recomputed from X/Y by measures.
+    # There is deliberately no noise-flag field: it would silently drop fixations
+    # with no UI to undo it.
 ]
 
 RAW_GAZE_FIELD_SPECS: list[dict] = [
@@ -2755,11 +2722,10 @@ RAW_GAZE_FIELD_SPECS: list[dict] = [
         "required": False,
         "help": "Which screen of a multi-screen trial this sample is on.",
     },
-    # UX-113: text_id/word_id round out the row to the same six identity
-    # fields Fixations/AOI map (Trial · Screen · Participant · Text · Word/IA
-    # · text-or-id), instead of raw gaze being the one table with no way to
-    # say either. Both optional — a raw-gaze-only dataset with no such column
-    # still works exactly as before (see `data.normalize_raw_gaze`).
+    # text_id/word_id round out the row to the same six identity fields
+    # Fixations/AOI map (Trial · Screen · Participant · Text · Word/IA
+    # · text-or-id). Both optional — a raw-gaze-only dataset with no such
+    # column works without them (see `data.normalize_raw_gaze`).
     {
         "key": "text_id",
         "label": "Text ID",
@@ -2831,7 +2797,7 @@ def _assemble_mapping(
         if only_keys is not None and key not in only_keys:
             continue
         default = proposed.get(key)
-        # Resolved from auto-detection, never offered as a row (UX-53).
+        # Resolved from auto-detection, never offered as a row.
         if key in _HIDDEN_MAPPING_KEYS:
             mapping[key] = default
             continue
@@ -2842,9 +2808,9 @@ def _assemble_mapping(
             # get a column, the rest stay None.
             mapping.update({box_key: None for box_key in _ALL_BOX_KEYS})
             for sub_key, sub_label in _BOX_SUBFIELDS[fmt]:
-                # UX-91: the four coordinates *are* the required Word box, so
-                # each carries the `*` its parent does. The star was on the
-                # group heading alone, which read as one optional-looking row
+                # The four coordinates *are* the required Word box, so
+                # each carries the `*` its parent does. A star on the group
+                # heading alone would read as one optional-looking row
                 # of four beneath a required title.
                 sub_star = " *" if spec.get("required") else ""
                 mapping[sub_key] = pick(sub_key, sub_label + sub_star, None)
@@ -2865,19 +2831,16 @@ def _assemble_mapping(
 #: Set once the user has pressed **✅ Add dataset** on a wizard that still has a
 #: required field unmapped. Until then a blank required field is simply *not
 #: filled in yet* — colouring it red on arrival would paint a fresh upload with
-#: errors before the user has done anything wrong (UX-53).
+#: errors before the user has done anything wrong.
 ADD_ATTEMPTED_KEY = "_wizard_add_attempted"
 
-#: UX-53 round 4 — the field's state is a **tint on the select itself**, not a
-#: dot and a sentence beside it. `● ✨ auto-detected \`CURRENT_FIX_INDEX\`` was
-#: longer than the control it described, on every row. Low-alpha rgba so it
-#: tints whatever the active theme paints underneath rather than assuming a
-#: light background.
-#: UX-67 dropped the green: a mapping the user chose is simply *filled*, and
-#: tinting it made "reviewed" compete for attention with the two states that
-#: actually need acting on. `user` keeps its own name in `_field_state` — it is
-#: still what moves a field **out** of amber once someone picks — it just has no
-#: colour of its own now.
+#: The field's state is a **tint on the select itself**, not a dot and a
+#: sentence beside it, which would be longer than the control it describes.
+#: Low-alpha rgba so it tints whatever the active theme paints underneath
+#: rather than assuming a light background. Only the two states that need
+#: acting on are tinted: a mapping the user chose is simply *filled*. `user`
+#: keeps its own name in `_field_state` — it is what moves a field **out** of
+#: amber once someone picks — but has no colour of its own.
 _FIELD_TINT = {
     "auto": "rgba(234, 179, 8, 0.16)",
     "missing": "rgba(239, 68, 68, 0.20)",
@@ -2897,7 +2860,7 @@ def _mark_field_touched(state_key: str) -> None:
 
     What separates *auto-detected and left alone* from *the user chose this* —
     which are the same value, and different claims. Picking the detected column
-    by hand is an approval, and UX-53 r11 wants it to read as one.
+    by hand is an approval, and should read as one.
     """
     st.session_state.setdefault(TOUCHED_FIELDS_KEY, set()).add(state_key)
 
@@ -2918,12 +2881,11 @@ def _field_state(
     empty *after* an add was attempted (before that, empty is simply not filled
     in yet). ``""`` is the neutral, untinted row.
 
-    Two rules from UX-53 r11, both about who decided:
+    Two rules, both about who decided:
 
     * **Choosing a value is an approval**, even when it is the value detection
-      already proposed — so a touched field goes green rather than staying
-      amber. Amber means "nobody has looked at this yet", which stops being true
-      the moment they pick.
+      already proposed — so a touched field leaves amber. Amber means "nobody
+      has looked at this yet", which stops being true the moment they pick.
     * **Clearing a detected field goes neutral**, not amber: the ✕ is a decision
       that this column is *not* the one, and leaving it amber would keep
       flagging a suggestion the user has just rejected. It stays red only when
@@ -2931,8 +2893,8 @@ def _field_state(
       genuinely blocking.
 
     ``hover`` is the ✨ icon's tooltip, and the only place the detected column
-    name is written: the name is what made the old inline note run past the
-    width of the control it annotated, and it is looked at once.
+    name is written: inline, the name would run past the width of the control
+    it annotates, and it is looked at once.
     """
     unmapped = chosen in (None, NONE_OPTION)
     if unmapped:
@@ -2968,14 +2930,15 @@ def _mapped_columns_key(state_key_prefix: str) -> str:
 
 
 def claim_mapping(state_key_prefix: str, dataset: object) -> None:
-    """Record that ``state_key_prefix``'s keys now describe ``dataset`` (BUG-32).
+    """Record that ``state_key_prefix``'s keys now describe ``dataset``.
 
     For a writer that seeds mapping keys for a table nobody has read yet — the
     wizard starting a fresh dataset, a setup restored into it. The columns are
     left unknown, so that dataset's first sighting counts as the *same* dataset
-    (DATA-24's stale-only rule keeps every pick its table can honour), while any
-    other dataset that meets the keys first — the demo, after ✕ Cancel — drops
-    them. Without it the marker would still name whatever those keys used to
+    (the stale-only rule of :func:`forget_mapping_for_other_table` keeps every
+    pick its table can honour), while any other dataset that meets the keys
+    first — the demo, after ✕ Cancel — drops them. Without it the marker would
+    still name whatever those keys used to
     describe, and the new table would clear exactly what was just restored.
     """
     st.session_state[_mapped_columns_key(state_key_prefix)] = (dataset, None)
@@ -3000,18 +2963,15 @@ def forget_mapping_for_other_table(
     *,
     dataset: object = None,
 ) -> None:
-    """Drop a stored mapping that was made for a *different* table (DATA-24).
+    """Drop a stored mapping that was made for a *different* table.
 
     A mapping widget owns its key once it has rendered, and a key that exists
     beats the ``index=`` computed from auto-detection — that is what makes a
     user's override stick. But the app switches data sources in place, so the
-    same keys outlive the table they describe: opening the bundled demo (no
-    screen columns → *Screen order* = ``(none)``) and then switching to
-    MultiplEYE left *Screen order* on ``(none)`` while the caption beneath it
-    still read "✨ auto-detected `screen_index`", because the proposal had indeed
-    found the column and only the widget was stale. The multipart trial then
-    ordered its screens by name instead of by reading order, and the user had to
-    set a field the app had already detected.
+    same keys outlive the table they describe: a field left at ``(none)`` for
+    one table would stay ``(none)`` on the next even though auto-detection found
+    the column there, and the user would have to set a field the app had already
+    detected.
 
     The discriminator is the **column universe**, not the data: a new file with
     the same headers is the case where keeping the mapping is the whole point,
@@ -3028,15 +2988,15 @@ def forget_mapping_for_other_table(
     ``(none)`` or pointing at a column that is gone — in both cases there is no
     user choice to lose, and auto-detection deserves another go.
 
-    **BUG-32: the column universe alone is not the table.** Two datasets that
+    **The column universe alone is not the table.** Two datasets that
     share an AOI file have identical headers by construction, so under a
-    columns-only signature the second silently inherited every pick made for
-    the first — and nothing was cleared or said, because every pick still named
+    columns-only signature the second would silently inherit every pick made for
+    the first — with nothing cleared or said, because every pick still names
     a real column. ``dataset`` is the caller's identity for the data the
     mapping describes (the source key on the 🗂️ Data page, the add-dataset
     wizard's own), and a change of dataset drops **every** pick, however valid
     it still looks: a choice made for one dataset is not a choice for another.
-    The same-dataset rules above are unchanged, so the wizard growing its own
+    The same-dataset rules above still apply, so the wizard growing its own
     frame keeps what was filled in. A caller seeding keys *for* a dataset whose
     table has not been read yet stamps it first with :func:`claim_mapping`.
     """
@@ -3071,7 +3031,7 @@ def forget_mapping_for_other_table(
         # The box *format* is a property of the table (which four columns it
         # has), not a preference, so it is re-derived from the new proposal.
         st.session_state.pop(key, None)
-        # The approval goes with the answer it approved (UX-53 r11): a field
+        # The approval goes with the answer it approved: a field
         # re-proposed for a different table has not been confirmed by anyone.
         st.session_state.get(TOUCHED_FIELDS_KEY, set()).discard(key)
 
@@ -3109,55 +3069,52 @@ def column_mapping_ui(
     box keys (the four inactive ones set to None) so the returned schema keeps
     its fixed shape.
 
-    ``columns_per_row`` (UX-53 r7) packs several fields onto one line — four
-    fixation fields fit where one used to sit, and a mapping that fits on a
-    screen is one you can check against itself. The default of 1 keeps the
-    🗂️ Data page's editor exactly as it was.
+    ``columns_per_row`` packs several fields onto one line, so a mapping fits
+    on a screen and can be checked against itself. The default of 1 is the
+    🗂️ Data page's editor: one field per row.
 
     ``stack_labels`` picks the row shape: label *above* the control (the wizard)
     or ``label | field`` beside it (the Data page). It defaults to
     ``columns_per_row > 1``, which is right for both of those — but a caller
     that renders **one** field into a cell of a row it built itself still wants
-    the stacked shape, and inferring it from the field count got that wrong
-    (UX-53 r17: the screen fields landed on the identity rows with their titles
-    beside them while every neighbour had its title above).
+    the stacked shape; inferred from the field count, that field's title would
+    sit beside it while every neighbour has its title above.
 
     ``dataset`` names the data this mapping is for, so picks made for one
-    dataset never carry into another with the same headers (BUG-32) — see
+    dataset never carry into another with the same headers — see
     :func:`forget_mapping_for_other_table`.
     """
     forget_mapping_for_other_table(df, state_key_prefix, field_specs, dataset=dataset)
-    # UX-108 — PERF-6 narrows `df` to only the columns a plan decided to
-    # actually *parse* (auto-detect + the optional-field registry + whatever a
-    # `col_map_*` key already names, session-wide); a column nobody has named
-    # yet is never in it, so offering `df.columns` here hid the rest of the
-    # file. Worse, "whatever a `col_map_*` key already names" is swept from
-    # session state with no dataset scoping — re-uploading the same file for a
-    # *second* dataset inherits the first one's picks as the plan's floor, so
-    # the read narrows to exactly what was kept last time and the picker looks
-    # like it is *remembering* which fields to hide. `app._read_uploaded_frame`
-    # stashes the file's real header the moment it reads it, independent of
-    # what the plan actually parsed; every field in the file belongs in this
-    # list regardless. Empty outside an upload context (the 🗂️ Data page's
-    # remap editor has no raw file to ask, and offers only what survived the
-    # original import by design) — fall back to the parsed frame there.
+    # Offer the file's full header, not `df.columns`: the planned read narrows
+    # `df` to only the columns it decided to *parse* (auto-detect + the
+    # optional-field registry + whatever a `col_map_*` key already names,
+    # session-wide), so a column nobody has named yet is never in it. And since
+    # those `col_map_*` keys have no dataset scoping, re-uploading the same file
+    # for a *second* dataset would narrow the read to exactly what was kept last
+    # time, as if the picker *remembered* which fields to hide.
+    # `app._read_uploaded_frame` stashes the file's real header the moment it
+    # reads it, independent of what the plan parsed. Empty outside an upload
+    # context (the 🗂️ Data page's remap editor has no raw file to ask, and offers
+    # only what survived the original import by design) — fall back to the
+    # parsed frame there.
     full_header = st.session_state.get(f"{state_key_prefix}_header")
     options = list(full_header) if full_header else user_columns(df)
 
-    # DATA-66: ✏️ Edit dataset offers the stored *canonical* columns; the caller
+    # ✏️ Edit dataset offers the stored *canonical* columns; the caller
     # passes the dataset's own names for them. The values stay canonical.
     def _option_label(column) -> str:
         return (option_labels or {}).get(column, column)
 
     expanded = bool(expand_on_problem and problems)
-    # UX-53 field colour: which rows *must* be filled, and whether the user has
+    # Field colour: which rows *must* be filled, and whether the user has
     # already tried to add the dataset (before that, empty is not an error).
     required_keys = {spec["key"] for spec in field_specs if spec.get("required")}
-    # UX-90: a `kind="box"` spec is required under its own key ("box"), but what
+    # A `kind="box"` spec is required under its own key ("box"), but what
     # the user actually fills are its four coordinate sub-fields — which are not
-    # in `field_specs` at all, so `_field_state` saw them as optional and they
-    # stayed neutral after a failed add. Only the active format's four ever
-    # render, so naming all eight here is safe and needs no format resolution.
+    # in `field_specs` at all, so without this `_field_state` would see them as
+    # optional and leave them neutral after a failed add. Only the active
+    # format's four ever render, so naming all eight here is safe and needs no
+    # format resolution.
     if any(spec.get("kind") == "box" and spec.get("required") for spec in field_specs):
         required_keys.update(_ALL_BOX_KEYS)
     add_attempted = bool(st.session_state.get(ADD_ATTEMPTED_KEY))
@@ -3166,13 +3123,11 @@ def column_mapping_ui(
     #: as ONE <style> block at the end. Per-row style tags would be one extra
     #: element per field on a page whose whole problem is length.
     tint_cells: dict[str, list[str]] = {}
-    # UX-52 round 2 — "the column mapping can be overwhelming". Two changes:
-    # every row is `label | field` (UX-51's shape, which the user asked for here
-    # too), and the multipart/canvas fields fold into an **Advanced** group.
-    # They are all optional, all meaningless for an ordinary single-screen
-    # dataset, and they were half the rows. The group is skipped when the caller
-    # asks for a subset (`only_keys`) — that is the wizard, which already groups
-    # these fields into its own ordered steps (DATA-22).
+    # Every row is `label | field`, and the multipart fields and the reading
+    # measures sit in groups of their own after the ordinary rows: they are all
+    # optional, and meaningless for most datasets. The groups are skipped when
+    # the caller asks for a subset (`only_keys`) — that is the wizard, which
+    # already groups these fields into its own ordered steps.
     group_advanced = only_keys is None
     hosts: dict[str, object] = {}
 
@@ -3189,7 +3144,7 @@ def column_mapping_ui(
     #: group never continues a row started by the main one.
     grid: dict = {"cols": [], "used": 0, "host": None}
 
-    #: The word box's own row (UX-57). Reserved by `_render_box_format` and
+    #: The word box's own row. Reserved by `_render_box_format` and
     #: drained by the four sub-field picks that follow it — a separate cursor
     #: from `grid`, because the box is *one* top-level spec that expands into
     #: four, so it cannot borrow the group's `columns_per_row` without pulling
@@ -3210,10 +3165,10 @@ def column_mapping_ui(
         """Where one field's control and its ✨ flag render.
 
         Two shapes. **One per row** (the default, and what the 🗂️ Data page's
-        editor uses) is UX-52's `label | field | note` triple: the flag rides
+        editor uses) is the `label | field | note` triple: the flag rides
         beside the control instead of under it, so a row is one line tall.
 
-        **`columns_per_row > 1`** (UX-53 r7) stacks label-over-field inside a
+        **`columns_per_row > 1`** stacks label-over-field inside a
         grid cell instead, because four `label | field` pairs side by side would
         leave nothing but a sliver for each select. The label row reserves its
         own flag column *before* the select renders — the flag depends on the
@@ -3223,7 +3178,7 @@ def column_mapping_ui(
         host = _host_for(field_key)
         if field_key in _ALL_BOX_KEYS and box_grid["used"] < len(box_grid["cells"]):
             # A box sub-field takes the next cell of the row the box reserved,
-            # so the four sit side by side under one heading (UX-57).
+            # so the four sit side by side under one heading.
             cell = box_grid["cells"][box_grid["used"]]
             box_grid["used"] += 1
             head = cell.container()
@@ -3233,7 +3188,7 @@ def column_mapping_ui(
             _row_label(label_col, field_label, help_text)
             return cell, flag_col
         if stacked:
-            # UX-53 r14: label over field. Each cell writes its title first and
+            # Label over field. Each cell writes its title first and
             # its select second, so across the row the titles line up on one
             # line and the controls on the next — and the select gets the cell's
             # full width instead of splitting it with the label, which is what
@@ -3265,14 +3220,14 @@ def column_mapping_ui(
         cell_key = f"{state_key_prefix}_{field_key}_cell"
         field_col = field_col.container(key=cell_key)
         state_key = f"{state_key_prefix}_{field_key}"
-        # UX-53 r10: the value lives in the KEY and `index` is always None, which
+        # The value lives in the KEY and `index` is always None, which
         # is precisely what turns Streamlit's own clear (✕) on — its selectbox
         # sets `clearable=(index is None)`. So the empty state is a real `None`
-        # rather than the old `"(none)"` sentinel option, and the ✕ sits *inside*
+        # rather than a `"(none)"` sentinel option, and the ✕ sits *inside*
         # the control instead of beside it.
         #
         # Absent key -> seed from auto-detection. Present but holding something
-        # this table cannot offer -> blank it: that is a legacy `"(none)"` from a
+        # this table cannot offer -> blank it: that is an old `"(none)"` from a
         # saved config, or a column a new upload does not have, and Streamlit
         # raises on a stored value outside `options`. Present and already None ->
         # left alone, because that is the user having cleared it on purpose.
@@ -3291,22 +3246,22 @@ def column_mapping_ui(
             key=state_key,
             help=help_text,
             label_visibility="collapsed",
-            # DATA-26: the editor lives on the Data page, which executes only
-            # while it is the active view — but the mapping drives `prepare_data`
-            # on every view. Without this, Streamlit drops the key at the end of
-            # any run in which the widget did not render and the mapping reverts
-            # to auto-detection the moment the user clicks over to Scanpath.
+            # The editor lives on the Data page, but the mapping drives
+            # `prepare_data` on every view. Without this, Streamlit drops the key
+            # at the end of any run in which the widget did not render and the
+            # mapping reverts to auto-detection the moment the user clicks over to
+            # Scanpath.
             persist_state="session",
-            # Marks the field as *decided by a person*, which is what separates
-            # green from amber even when the value is identical (UX-53 r11).
+            # Marks the field as *decided by a person*, which is what takes it
+            # out of amber even when the value is identical.
             on_change=_mark_field_touched,
             args=(state_key,),
         )
-        # Surface what auto-detection found for this field (ENG-9), flag when the
-        # user has overridden it, and carry UX-53's colour so the row's state is
-        # readable without parsing the sentence. DATA-24: `(none)` gets its own
-        # wording — it used to fall into the plain branch, so a field detection
-        # had found but the widget was not using read exactly like one it was.
+        # Surface what auto-detection found for this field, flag when the
+        # user has overridden it, and carry the row's colour so its state is
+        # readable without parsing the sentence. `(none)` gets its own
+        # wording, so a field detection found but the widget is not using
+        # does not read like one it is.
         state, hover = _field_state(
             chosen=chosen,
             default=default if default in df.columns else None,
@@ -3316,16 +3271,16 @@ def column_mapping_ui(
             detected_label=detected_label,
         )
         if option_labels and default and hover:
-            # DATA-66: "currently mapped `duration_ms`" names the user's column.
+            # "currently mapped `duration_ms`" names the user's column.
             hover = hover.replace(f"`{default}`", f"`{_option_label(default)}`")
         if state:
             tint_cells.setdefault(state, []).append(cell_key)
-        # UX-92 — the ✨ is a **button** while the row is amber, and pressing it
+        # The ✨ is a **button** while the row is amber, and pressing it
         # is the approval the select cannot report.
         #
         # Re-picking the value a select already holds fires no `on_change`:
         # Streamlit dedupes it in the frontend and does not even rerun (verified
-        # in a browser, not inferred). Since UX-53 r10 the value lives in the
+        # in a browser, not inferred). The value lives in the
         # widget key with `index=None` — which is what makes the ✕ clear work —
         # so the detected column *is* the widget's value, and confirming it by
         # hand is invisible to Python by construction. A one-click confirm in
@@ -3346,9 +3301,9 @@ def column_mapping_ui(
         return None if chosen in (None, NONE_OPTION) else chosen
 
     host = container if container is not None else st.container()
-    # Render inside an expander by default; ``use_expander=False`` renders inline
-    # (the collapsed wizard panel already lives in an expander, and the ⚙️ Configure
-    # menu popover nests no expander either — Streamlit forbids both).
+    # Render inside an expander by default; ``use_expander=False`` renders inline,
+    # for a caller that already sits in an expander (the collapsed wizard panel) —
+    # Streamlit does not nest them.
     section = (
         host.expander(f"Column mapping — {table_label}", expanded=expanded)
         if use_expander
@@ -3365,7 +3320,7 @@ def column_mapping_ui(
             st.warning(
                 "Fix these before the app can use this table: " + "; ".join(problems)
             )
-        # Both hosts are reserved up front, so the Advanced group sits *after*
+        # The hosts are reserved up front, so the two groups sit *after*
         # every ordinary row no matter where its fields fall in the spec order
         # (Streamlit lays containers out in creation order, and
         # `_assemble_mapping` interleaves them).
@@ -3390,8 +3345,8 @@ def column_mapping_ui(
             # corpus does not hide its screen mapping behind a fold.
             def _mapped(key: str) -> bool:
                 # `NONE_OPTION` is the literal string the selectbox holds for
-                # "not mapped" — truthy, so a bare `or` kept the group open
-                # forever once the widgets had rendered once.
+                # "not mapped" — truthy, so a bare `or` would keep the group
+                # open forever once the widgets had rendered once.
                 stored = st.session_state.get(f"{state_key_prefix}_{key}")
                 if stored in (None, NONE_OPTION, ""):
                     stored = None
@@ -3409,10 +3364,10 @@ def column_mapping_ui(
 
         def _render_box_format(spec: dict) -> str:
             """The box's heading, its format radio, and the row its four
-            sub-fields will render into (UX-57).
+            sub-fields will render into.
 
-            The description moves onto the heading's hover, like every other
-            explanation on this page (UX-53), and the row is reserved *here*
+            The description sits on the heading's hover, like every other
+            explanation on this page, and the row is reserved *here*
             because `_assemble_mapping` calls this immediately before picking
             the four sub-fields — so by the time they ask `_row` for a cell,
             there is one waiting.
@@ -3426,11 +3381,10 @@ def column_mapping_ui(
             star = " *" if spec.get("required") else ""
             box_host = hosts["main"]
             title = html.escape(_plain(spec["label"]) + star)
-            # UX-91: title, format radio and the four coordinate selects on
-            # **one** line. They used to stack — heading, radio, then a row of
-            # four — which cost three lines for one field on a page whose whole
-            # complaint is length, and left the radio looking like a heading for
-            # the row beneath rather than the switch that chooses what it holds.
+            # Title, format radio and the four coordinate selects on **one**
+            # line: stacked, they would cost three lines for one field, and the
+            # radio would look like a heading for the row beneath rather than
+            # the switch that chooses what it holds.
             #
             # The row can be sized before the radio returns because every format
             # in `_BOX_SUBFIELDS` has exactly four sub-fields; only their
@@ -3476,21 +3430,21 @@ def column_mapping_ui(
                 st.session_state[state_key] = proposed_default
             else:
                 # A new upload changes the column universe — silently
-                # keeping stale picks would leave the field empty (the
-                # selectboxes self-heal via their index fallback; a
-                # multiselect doesn't). Drop unknown columns and fall
-                # back to the auto-proposal when nothing survives.
+                # keeping stale picks would leave the field empty
+                # (`_selectbox` blanks a stale value itself; a multiselect
+                # would not). Drop unknown columns and fall back to the
+                # auto-proposal when nothing survives.
                 valid = [c for c in stored if c in df.columns]
                 if len(valid) != len(stored):
                     st.session_state[state_key] = valid or proposed_default
             field_col, note_col = _row(spec["key"], label, spec.get("help"))
-            # UX-90: a keyed cell, like `_selectbox`'s, so `_emit_field_tints`
+            # A keyed cell, like `_selectbox`'s, so `_emit_field_tints`
             # has something to colour when this required field is left empty.
             cell_key = f"{state_key_prefix}_{spec['key']}_cell"
             field_col = field_col.container(key=cell_key)
             chosen_cols = field_col.multiselect(
                 label,
-                # UX-108 — the same widened list `_selectbox` uses (`options`,
+                # The same widened list `_selectbox` uses (`options`,
                 # closed over from the outer scope), not `df.columns` again:
                 # Trial ID is the one field every dataset composes, and it is a
                 # `multi: True` field precisely so several raw columns can be
@@ -3501,13 +3455,13 @@ def column_mapping_ui(
                 key=state_key,
                 help=spec.get("help"),
                 label_visibility="collapsed",
-                select_all=False,  # an id is a few columns, never all (#374)
+                select_all=False,  # an id is a few columns, never all
                 persist_state="session",
                 on_change=_mark_field_touched,
                 args=(state_key,),
             )
-            # UX-176: the same amber / ✨-confirm / green / red rule the
-            # selects get (UX-90's red-when-required-and-empty included).
+            # The same amber / ✨-confirm / red rule the selects get
+            # (red when required and empty after an add was attempted).
             state = multi_field_flag(
                 note_col,
                 state_key=state_key,
@@ -3546,14 +3500,14 @@ def multi_field_flag(
     detected_label: str = "auto-detected",
     preview: str = "",
 ) -> str:
-    """The ✨ flag of a *multi-column* picker, and its tint state (UX-176).
+    """The ✨ flag of a *multi-column* picker, and its tint state.
 
-    The identity pickers (Trial / Participant / Text ID) are multiselects, so
-    they never reached `_selectbox`'s amber tint and ✨ confirm button — the
-    auto-detected id read exactly like one somebody had checked. This is the
-    same rule for them: the columns detection proposed, untouched, are amber
-    with a ✨ **button** that approves them; picking goes green; clearing goes
-    neutral (or red once an add is attempted, for a required one). Returns the
+    The identity pickers (Trial / Participant / Text ID) are multiselects, not
+    `_selectbox`es; this gives them the same rule, so an auto-detected id does
+    not read like one somebody has checked: the columns detection proposed,
+    untouched, are amber with a ✨ **button** that approves them; picking clears
+    the amber; clearing goes neutral (or red once an add is attempted, for a
+    required one). Returns the
     `_FIELD_TINT` state for the caller to paint (`mark_cells`). ``preview``
     is the picked columns' value preview (`value_preview_tip`)."""
     joined = " + ".join(chosen) if chosen else None
@@ -3600,7 +3554,7 @@ def _render_field_flag(
 ) -> None:
     """A mapping row's ✨ flag and its value preview, in the slot beside it.
 
-    The ✨ is a **button** while the row is amber (UX-92) and an icon whose
+    The ✨ is a **button** while the row is amber and an icon whose
     tooltip says what detection found otherwise. The preview — a few of the
     mapped column's values and what the app reads them as — is an icon of its
     own with a hover tooltip, like every other note on this form; on an amber
@@ -3609,7 +3563,7 @@ def _render_field_flag(
     """
     if state == "auto":
         host.button(
-            # UX-200: named for screen readers; only the ✨ shows.
+            # Named for screen readers; only the ✨ shows.
             f"{ICONS['auto_detected']} {spoken(confirm_label)}",
             wrap=True,
             key=f"{cell_key}_confirm",
@@ -3638,7 +3592,7 @@ def _render_field_flag(
 
 
 def mark_cells(cells_by_state: dict) -> None:
-    """Paint mapping cells built outside `column_mapping_ui` (UX-176) —
+    """Paint mapping cells built outside `column_mapping_ui` —
     ``{state: [cell_key, …]}``, the same states and `<style>` block."""
     _emit_field_tints(
         {
@@ -3652,18 +3606,17 @@ def mark_cells(cells_by_state: dict) -> None:
 def mark_missing_cells(cell_keys) -> None:
     """Paint the *missing* tint onto keyed cells the mapping UI did not render.
 
-    UX-91. `wizard._render_identity_field` builds its own multiselects — one per
+    `wizard._render_identity_field` builds its own multiselects — one per
     table, laid out by the caller — so they never pass through
-    `column_mapping_ui` and never reached `tint_cells`. Trial ID is required and
-    was the last field that could survive a failed add without going red. This
-    is the same `<style>` block by the same rules; only the collection point
-    differs.
+    `column_mapping_ui` or its `tint_cells`; without this a required Trial ID
+    could survive a failed add without going red. This is the same `<style>`
+    block by the same rules; only the collection point differs.
     """
     _emit_field_tints({"missing": [str(key) for key in cell_keys]})
 
 
 def _emit_field_tints(tint_cells: dict[str, list[str]]) -> None:
-    """One <style> block tinting each mapping cell by its state (UX-53 r4).
+    """One <style> block tinting each mapping cell by its state.
 
     Written after the rows because a cell's state is only known once its widget
     has returned a value. Targets the BaseWeb select *control* rather than the
@@ -3675,18 +3628,17 @@ def _emit_field_tints(tint_cells: dict[str, list[str]]) -> None:
         tint = _FIELD_TINT.get(state)
         if not tint or not keys:
             continue
-        # The painted node, checked against the live DOM (UX-91): a selectbox
+        # The painted node, checked against the live DOM: a selectbox
         # and a multiselect have the *same* shape —
         # `[data-testid="stSelectbox"|"stMultiSelect"] > div > div` is the box
         # carrying the background, and everything above it is transparent.
         # `!important` because the theme paints that node through an emotion
         # class that outranks a plain class selector.
         #
-        # The earlier `[data-baseweb="select"]` selectors are gone: they match
-        # **nothing** in this Streamlit version. Selectboxes tinted anyway,
-        # through the `stSelectbox` fallback beside them, which is why the rule
-        # looked fine — while multiselects (Trial ID, the one required one) had
-        # no matching selector at all and silently never coloured.
+        # Don't target `[data-baseweb="select"]`: it matches **nothing** in this
+        # Streamlit version. A `stSelectbox` fallback beside it would hide that by
+        # tinting selectboxes anyway, while multiselects (Trial ID, the one
+        # required one) silently never coloured.
         selector = ", ".join(
             f".st-key-{key} [data-testid='stSelectbox'] > div > div, "
             f".st-key-{key} [data-testid='stMultiSelect'] > div > div"
@@ -3698,7 +3650,7 @@ def _emit_field_tints(tint_cells: dict[str, list[str]]) -> None:
 
 
 # Field-option helpers — shared by the rail's selectors and the plot-config
-# restore path (`app._restore_plot_config`) so both agree on what's valid for
+# restore path (`url_state._restore_plot_config`) so both agree on what's valid for
 # the current data.
 #: Numeric fixation columns 'Color fixations by' never offers on its own:
 #: identifiers and on-screen geometry, which say *which* fixation or *where* —
@@ -3730,7 +3682,7 @@ def color_field_options(trial_fixations: pd.DataFrame) -> list[str]:
         "eye",
         "saccade_type",
         "saccade_amplitude",
-        # BUG-25: EyeLink's own amplitudes, in degrees, kept distinct from the
+        # EyeLink's own amplitudes, in degrees, kept distinct from the
         # pixel one above (and from each other — outgoing vs incoming saccade).
         "next_saccade_amplitude_deg",
         "prev_saccade_amplitude_deg",
@@ -3759,7 +3711,7 @@ def color_field_options(trial_fixations: pd.DataFrame) -> list[str]:
         and not pd.api.types.is_bool_dtype(trial_fixations[col])
     ]
     fields = fields or ["duration_ms"]
-    # `(uniform)` leads and is the default (VIZ-17): marker *size* already encodes
+    # `(uniform)` leads and is the default: marker *size* already encodes
     # duration, so mapping duration to hue as well spends the colour channel on a
     # variable that's already shown. Colour-by is then an opt-in for a *second*
     # variable. "line" is likewise synthetic (not a real column): colour each
@@ -3770,12 +3722,12 @@ def color_field_options(trial_fixations: pd.DataFrame) -> list[str]:
 def hover_field_options(
     frame: pd.DataFrame | None, *, words: bool = False
 ) -> list[str]:
-    """Scalar columns that can be added to a VIZ-26 hover tooltip.
+    """Scalar columns that can be added to a hover tooltip.
 
     Read off the columns, never the rows: a trial with no fixations still has
-    the dataset's columns, and answering ``[]`` for it made `_seed_viz_state`
-    drop the user's hover picks as stale the moment a filter landed on one
-    (VIZ-44), for good.
+    the dataset's columns, and answering ``[]`` for it would make
+    `_seed_viz_state` drop the user's hover picks as stale, for good, the moment
+    a filter landed on one.
     """
     if frame is None:
         return []
@@ -3873,9 +3825,8 @@ def _explicit_pair(val) -> tuple | None:
     ``_collect_viz_settings``, so the figure and the slider read one value. It
     is deliberately **not** clamped to the loaded data: an explicit range is
     the user's endpoints, and narrowing the trial pool must not change the
-    mapping it pins (round-7 review, finding 10). VIZ-46 clamped it to the
-    pool's span, which re-scaled a pinned figure whenever a filter removed the
-    trial holding its extreme value."""
+    mapping it pins — clamped to the pool's span, a pinned figure would
+    re-scale whenever a filter removed the trial holding its extreme value."""
     if not (isinstance(val, (list, tuple)) and len(val) == 2):
         return None
     try:
@@ -3887,40 +3838,39 @@ def _explicit_pair(val) -> tuple | None:
     return (min(a, b), max(a, b))
 
 
-# --- VIZ-46: a colour range is *auto* until the user sets one -----------------
+# --- a colour range is *auto* until the user sets one -------------------------
 # `api.plot_scanpath` leaves `fixation_color_range` / `heatmap_range` at `None`,
 # and every builder then scales the figure to its own trial (a comparison, to A
-# and B together). The rail used to `setdefault` its slider key to the whole
-# dataset's span the moment the slider rendered, so the app never drew that
-# default: its heatmap sat on the dataset's longest single fixation while the
-# headless one used the trial's own per-word values.
+# and B together).
 #
-# So the canonical `global_*` key now means **explicit**: it is present only
+# The canonical `global_*` key therefore means **explicit**: it is present only
 # when a range was chosen — dragged or typed here, un-ticking *Auto*, or
 # arriving on a Share link / saved config / saved design — and `None` reaches
 # the builders otherwise, i.e. the API's rule, not a copy of it. The slider
 # draws a private *view* key instead, seeded from the canonical value or (auto)
-# the dataset span it is bounded by, so rendering it can no longer pin a number
-# into every link, config and bulk export. Nothing else changes shape: the
-# link's generic range sweep already emits only a key that is present, and the
-# config writer already writes the figure's `None`.
+# the dataset span it is bounded by, so rendering it never pins a number into
+# every link, config and bulk export. (Seeding the canonical key with the
+# dataset's span would put the app's heatmap on the dataset's longest single
+# fixation while the headless one used the trial's own per-word values.) The
+# link's generic range sweep emits only a key that is present, and the config
+# writer writes the figure's `None`.
 _COLOR_RANGE_URL_PARAMS = {
     state_key: param for param, state_key in SHARE_FLOAT_RANGE_PARAMS.items()
 }
 
 
 def _color_range_view_key(state_key: str) -> str:
-    """The private key the rail's slider draws for ``state_key`` (VIZ-46)."""
+    """The private key the rail's slider draws for ``state_key``."""
     return f"_{state_key.removeprefix('global_')}_view"
 
 
 def _color_range_auto_key(state_key: str) -> str:
-    """The private key of ``state_key``'s *Auto* checkbox (VIZ-46)."""
+    """The private key of ``state_key``'s *Auto* checkbox."""
     return f"_{state_key.removeprefix('global_')}_auto"
 
 
 def forget_color_range(state_key: str) -> None:
-    """Put one colour range back to auto — per trial, like the API (VIZ-46).
+    """Put one colour range back to auto — per trial, like the API.
 
     Also drops the link param that may have set it: `url_state._apply_url_preset`
     re-seeds from `st.query_params` at the top of every rerun, so on a page
@@ -3947,8 +3897,8 @@ def heatmap_value_bounds(
 
     A word box is tinted by the *summed* duration of the fixations in it, so
     its range is per-word dwell — which refixations and rereading push well
-    past the longest single fixation the rail used to bound it by (round-7
-    review, finding 11). Summed over the pool's ``word_id`` assignment, the
+    past the longest single fixation. Summed over the pool's ``word_id``
+    assignment, the
     grouping Compare's shared word heatmap uses too; the static heatmap bins by
     box containment, which can differ by a stray fixation, so these are the
     slider's *suggested* bounds and any endpoint can still be typed.
@@ -4049,8 +3999,8 @@ def _cheap_heatmap_bounds(
     """Placeholder bounds for the greyed range while the heatmap is off.
 
     The shortest and longest single fixation — one vectorised pass and no
-    groupby — or ``None`` when there is none (the range is then not drawn,
-    as before). The heatmap's own bounds (:func:`_heatmap_bounds_for_rail`)
+    groupby — or ``None`` when there is none (the range is then not drawn).
+    The heatmap's own bounds (:func:`_heatmap_bounds_for_rail`)
     replace them once it is shown. For ``counts``, 1 to the fixation count.
     """
     if counts:
@@ -4087,28 +4037,28 @@ def _render_color_range(
     field_host=None,
     slider_format: str = "%d",
 ) -> None:
-    """*Auto* checkbox + the ``[lo, hi]``-bounded range slider (VIZ-46).
+    """*Auto* checkbox + the ``[lo, hi]``-bounded range slider.
 
     ``slider_format`` labels the handles, e.g. ``"%d ms"`` for a range in ms;
     the number boxes beside it keep a bare number.
 
-    ``field_host`` (UX-158) draws *Auto*, the slider and its boxes into that
+    ``field_host`` draws *Auto*, the slider and its boxes into that
     column, for a `_sub_row` whose title and caption the caller has already
     drawn.
 
     While the range is auto the slider sits at its full bounds and *Auto* is
     ticked; the figure is scaled to the trial, not to those bounds. Dragging the
     slider or typing a bound makes the range explicit (and un-ticks *Auto*), as
-    does un-ticking *Auto* itself, which pins the bounds on screen — the
-    dataset-wide scale the app used to default to, now one click away. An
-    explicit range is sticky across trials until *Auto* is ticked again.
+    does un-ticking *Auto* itself, which pins the bounds on screen — a
+    dataset-wide scale, one click away. An explicit range is sticky across
+    trials until *Auto* is ticked again.
 
     ``[lo, hi]`` is the span the data suggests. An explicit range is drawn —
     and reaches the figure — exactly as stored, never clamped to it: the
     slider's bounds widen to hold its endpoints when no remaining observation
     reaches them (a filter removed the trial with the extreme value, or the
     range came on a link built on other data), and the number boxes take any
-    endpoint, beyond the observed span too (round-7 review, findings 10–11).
+    endpoint, beyond the observed span too.
     """
     ss = st.session_state
     view_key = _color_range_view_key(state_key)
@@ -4143,9 +4093,9 @@ def _render_color_range(
     )
     auto_disabled, _ = _layer_gate(disabled, None)
 
-    # UX-157: *Auto* sits on the range's own line, between its title and the
-    # slider, instead of a row of its own above it. Its explanation joins the
-    # row title's tooltip: a `?` icon beside it would squeeze "Auto" to "A…".
+    # *Auto* sits on the range's own line, between its title and the
+    # slider. Its explanation joins the row title's tooltip: a `?` icon
+    # beside it would squeeze "Auto" to "A…".
     def _auto(col) -> None:
         col.checkbox(
             "Auto",
@@ -4184,7 +4134,7 @@ def _sub_row(
     caption_help: str | None = None,
     section_share: float = 0.45,
 ):
-    """One row of a titled group of rows; return the column for its field (UX-158).
+    """One row of a titled group of rows; return the column for its field.
 
     The label column is split in two: the group's title (``section``, drawn on
     the group's first row only) and this row's short caption, so a run of
@@ -4221,10 +4171,10 @@ def _check_row(
     args: tuple = (),
     persist_state: str | None = None,
 ):
-    """A ``label | ☑ Show | …`` row; return ``(value, rest)`` (UX-159).
+    """A ``label | ☑ Show | …`` row; return ``(value, rest)``.
 
-    The shape UX-155 gave *Fixation index*: the row's title on the left, a
-    checkbox that says what it does, and the rest of the row (``rest``) for the
+    The row's title on the left, a checkbox that says what it does, and the
+    rest of the row (``rest``) for the
     controls it governs — which the caller greys while it is off rather than
     hiding them. The help goes on the title's tooltip, not the checkbox, so the
     row carries no ``?`` icon. ``persist_state`` is forwarded to the checkbox,
@@ -4326,27 +4276,26 @@ def _sub_caption(host, text: str, help: str | None = None) -> None:
     )
 
 
-#: UX-159: "A" and "B", as the ⚖️ Compare popover's *Label A* / *Label B* and
-#: the figure's A/B legend name them — they were "Scanpath 1" / "Scanpath 2".
+#: "A" and "B", as the ⚖️ Compare popover's *Label A* / *Label B* and the
+#: figure's A/B legend name them.
 _COMPARE_SCANPATHS = ((0, "Scanpath A"), (1, "Scanpath B"))
 
 
 def render_pattern_help(host, fields: dict) -> None:
-    """The one place the ``{field}`` vocabulary is spelled out (UX-31).
+    """The one place the ``{field}`` vocabulary is spelled out.
 
     Three surfaces speak this little language — the figure title/caption, the
-    Compare A/B legend labels, and the bulk-export file-naming pattern — and two
-    of them used to describe it only as "same fields as the other one", so a user
-    who had seen neither had no way to learn that ``{participant_id}`` was even a
-    thing. Rendered as a collapsed expander: it is reference material, not a
+    Compare A/B legend labels, and the bulk-export file-naming pattern — so a
+    user needs one place to learn that ``{participant_id}`` is a thing.
+    Rendered as a collapsed expander: it is reference material, not a
     control, and the rail is narrow.
     """
     if not fields:
         return
     from .export import TABLE_PATTERN_LABELS
 
-    # EXP-22: `{table.field}` names are listed under their table's heading,
-    # after the plain list — which they are kept out of, so it reads as it did.
+    # `{table.field}` names are listed under their table's heading,
+    # after the plain list, which they are kept out of.
     grouped: dict[str, list[str]] = {}
     plain = []
     for name in fields:
@@ -4378,7 +4327,7 @@ def render_pattern_help(host, fields: dict) -> None:
 def _trial_rows(
     frame: pd.DataFrame | None, trial_fixations: pd.DataFrame
 ) -> pd.DataFrame:
-    """``frame``'s rows for the trial ``trial_fixations`` holds (EXP-22).
+    """``frame``'s rows for the trial ``trial_fixations`` holds.
 
     Cached on the frame's fingerprint and the trial: ``frame`` is the filtered
     corpus, and slicing it by string ids is a full scan the rail would otherwise
@@ -4403,7 +4352,7 @@ def _c_trial_rows(_frame: pd.DataFrame, fingerprint, ids: tuple) -> pd.DataFrame
 
 def _selected_metadata_rows(trial_fixations: pd.DataFrame | None) -> dict:
     """The attached metadata tables' rows for the trial ``trial_fixations`` is
-    (EXP-22) — enough to name every field, whichever trial it is."""
+    — enough to name every field, whichever trial it is."""
     from . import metadata as md
 
     ids = {}
@@ -4417,12 +4366,12 @@ def _selected_metadata_rows(trial_fixations: pd.DataFrame | None) -> dict:
 
 
 def current_dataset_name() -> str:
-    """The name the dataset picker shows for the source now loaded (VIZ-36).
+    """The name the dataset picker shows for the source now loaded.
 
-    ``data_source_choice`` is canonical: since DATA-9's flat picker the stored
-    value *is* the entry's label — the user's own name for an upload, the
-    registry label for a public corpus — and DATA-23's rename re-keys it, so a
-    renamed dataset carries the new name without anything else to update.
+    ``data_source_choice`` is canonical: the stored value *is* the entry's
+    label — the user's own name for an upload, the registry label for a public
+    corpus — and renaming a dataset re-keys it, so a renamed dataset carries the
+    new name without anything else to update.
 
     Returns ``""`` rather than a placeholder when there is no session (headless
     render, import time): ``{dataset_name}`` then renders empty, which is the
@@ -4455,20 +4404,20 @@ def render_pattern_input(
     which placeholder is wrong (see ``export.pattern_error``).
 
     ``placeholder`` is what an *empty* box falls back to, printed greyed inside
-    the box itself (UX-31). These boxes default to empty — the fallback used to
-    be stated only in the `help` tooltip, so the one thing you need to know
-    before typing (what you get if you don't) needed a hover to find.
+    the box itself. These boxes default to empty, so what you get if you type
+    nothing is the one thing you need to know before typing — it should not
+    need a hover to find.
 
     Pass it **only** where an empty box really does produce that string. The
     Compare A/B labels qualify (empty → the auto ``participant · trial``); the
     figure title/caption do not (empty → no title at all), and a placeholder
     there would promise the opposite of what happens.
 
-    ``label_left`` opts into the UX-51 ``label | field`` row (the rail's
+    ``label_left`` opts into the ``label | field`` row (the rail's
     Title/Caption boxes). The error and the preview still span the full width
     below the row — they are the box's *output*, not a second field.
 
-    ``disabled`` greys the box without touching its key (UX-68, the Compare
+    ``disabled`` greys the box without touching its key (the Compare
     settings menu while Compare is off) — the same "your value is kept" contract
     as :func:`_numeric_slider`. The error and preview still render, because they
     describe the pattern that *is* stored, not one being typed.
@@ -4512,16 +4461,14 @@ def _pin(key: str, default) -> None:
 
     This is the *first value* half of the widget-state contract. The other half
     — keeping that value alive through runs where the widget doesn't render, and
-    pushing it to the browser when the widget finally mounts — used to be a
-    matching ``rewrite=True`` re-assertion here (BUG-15: Streamlit only sent a
-    value down on the run it was written programmatically, so a control whose
-    popover first opened on a *later* run mounted at its proto default — nothing
-    pressed on a segmented control, black on a colour picker). Streamlit 1.61
-    owns that natively: every widget on these keys passes
-    ``persist_state="session"``, which preserves the value while unmounted and
-    marks it as changed on remount so the frontend adopts it (ENG-36). Keep the
-    kwarg when adding a widget on a ``global_*`` / ``single_*`` / ``cmp{idx}_*``
-    key — it is what makes this a plain ``setdefault`` again.
+    pushing it to the browser when the widget finally mounts — is Streamlit's:
+    every widget on these keys passes ``persist_state="session"``, which
+    preserves the value while unmounted and marks it as changed on remount so
+    the frontend adopts it. Without it, a control whose popover first opens on a
+    *later* run mounts at its proto default — nothing pressed on a segmented
+    control, black on a colour picker. Keep the kwarg when adding a widget on a
+    ``global_*`` / ``single_*`` / ``cmp{idx}_*`` key — it is what makes this a
+    plain ``setdefault``.
 
     Safe only because no viz widget passes ``value=``/``index=`` (see
     ``_seed_viz_state``); adding one would fight the stored value *and* log
@@ -4547,7 +4494,7 @@ def _pin(key: str, default) -> None:
 def compare_style_defaults() -> dict:
     """Every per-scanpath comparison styling key → the value a session seeds.
 
-    One table for the seeding below and for EXP-19's share link, which leaves a
+    One table for the seeding below and for the share link, which leaves a
     style off the link while it still equals this (`url_state._link_defaults`).
     ``cmp{idx}_label_pattern`` is not seeded — its absence *is* the auto label —
     so it is listed here as the empty string it reads as; ``cmp{idx}_box_color``
@@ -4565,11 +4512,10 @@ def compare_style_defaults() -> dict:
                 f"cmp{idx}_saccade_style": "Solid",
                 f"cmp{idx}_saccade_width": DEFAULT_SACCADE_WIDTH,
                 f"cmp{idx}_marker_size_range": DEFAULT_MARKER_SIZE_RANGE,
-                # VIZ-6: per-scanpath marker alpha (replaces the per-scanpath
-                # hollow checkbox). Default 0.7 matches the single-trial default
-                # so overlapping fixations show through. `cmp{idx}_hollow` kept
-                # seeded for saved-config / deep-link backward compatibility (no
-                # widget renders it anymore).
+                # Per-scanpath marker alpha. Default 0.7 matches the single-trial
+                # default so overlapping fixations show through. `cmp{idx}_hollow`
+                # stays seeded for saved-config / deep-link backward compatibility
+                # (no widget renders it).
                 f"cmp{idx}_opacity": COMPARE_FIXATION_OPACITY,
                 f"cmp{idx}_hollow": False,
                 f"cmp{idx}_label_pattern": "",
@@ -4587,7 +4533,7 @@ def compare_style_defaults() -> dict:
                 f"cmp{idx}_heatmap_colorscale": "",
             }
         )
-    # CMP-24 — scanpath B's own filters (A's are the rail's ordinary ones).
+    # Scanpath B's own filters (A's are the rail's ordinary ones).
     defaults.update(
         {
             "cmp1_saccade_classes": list(SACCADE_CLASS_ORDER),
@@ -4605,7 +4551,7 @@ def _seed_compare_styles() -> None:
 
     Seeding is all that is needed: the widgets themselves carry
     ``persist_state="session"``, which keeps the value alive through the runs
-    where the popover isn't open (ENG-36)."""
+    where the popover isn't open."""
     for key, default in compare_style_defaults().items():
         if not key.endswith(
             (
@@ -4627,7 +4573,7 @@ def _render_compare_fix_styles(*, uniform: bool = True) -> None:
     Compare, is scanpath A's (its colour, size and opacity rows write A's
     ``cmp0_*`` keys).
 
-    UX-159: the scanpath's name as the group title and a caption per row
+    The scanpath's name as the group title and a caption per row
     (`_sub_row`). The widgets keep the prefixed label as their accessible name;
     only the visible text is shortened. With a colour-by column the markers are
     filled by it, so the scanpath's colour is captioned as their *Outline*."""
@@ -4698,7 +4644,7 @@ def _compare_opacity_slider(idx: int) -> None:
     )
 
 
-#: UX-159: the per-scanpath groups' titles ("Scanpath A") are longer than a
+#: The per-scanpath groups' titles ("Scanpath A") are longer than a
 #: popover group title usually is, so their title row takes more of the label
 #: column. Only that row: the group's other captions keep the usual share, so
 #: "Opacity" is not cut to "Opa…".
@@ -4821,7 +4767,7 @@ def _render_heatmap_blur_row(
     st.session_state[view_key] = round(float(shown), 1)
 
     def _apply() -> None:
-        if _shadow_key_missing(view_key):  # BUG-18
+        if _shadow_key_missing(view_key):
             return
         st.session_state["global_heatmap_sigma_px"] = float(st.session_state[view_key])
 
@@ -4895,7 +4841,7 @@ def _render_colorbar_rows(bar: str, *, disabled: bool, reason: str | None) -> No
         help=size_help,
         field_host=_sub_row("Size", caption_help=_layer_gate(False, size_help)[1]),
     )
-    # #422: the bar's own size, which used to be fixed — its thickness in px,
+    # The bar's own size — its thickness in px,
     # and its length as a fraction of the plot's side (Auto: a third of the
     # height upright, 0.6 of the width lying down).
     thickness_help = _gated_help("How thick the bar is, in px. Default 14.", reason)
@@ -4941,7 +4887,7 @@ def _render_colorbar_rows(bar: str, *, disabled: bool, reason: str | None) -> No
 
 
 def _render_marker_outline_row(comparing: bool) -> None:
-    """``Outline | width px | colour`` (#422) under 👁️ Fixations."""
+    """``Outline | width px | colour`` under 👁️ Fixations."""
     outline_help = (
         "The ring round each filled marker: its width in px (0 draws none) and "
         "color. Hollow markers are outlined in their own color."
@@ -5000,7 +4946,7 @@ def _box_opacity(
 _LINE_OPACITY_HELP = "Outline opacity; 0 hides it."
 _FILL_OPACITY_HELP = "How strongly the fill shows; 0 draws outlines only."
 
-#: #422: the fill is drawn at its own opacity, 0.05 by default — a tint, under
+#: The fill is drawn at its own opacity, 0.05 by default — a tint, under
 #: which a picked colour barely shows. So picking a fill colour while the
 #: opacity is below `_FILL_SHOWS_FROM` raises it to `_FILL_PICKED_OPACITY`,
 #: still light enough for the text, fixations and image to read through.
@@ -5018,7 +4964,7 @@ def _show_picked_fill(key: str = "global_word_box_fill_opacity") -> None:
     ``key`` is the opacity the fill is drawn at — in Compare, the scanpath's
     own ``cmp{idx}_box_fill_opacity``, which follows the figure's while unset.
     Through `write_through`: the opacity slider sits in the same popover, and
-    a pick can be committed as that popover closes (#374 F9)."""
+    a pick can be committed as that popover closes."""
     try:
         opacity = float(
             st.session_state.get(key)
@@ -5056,7 +5002,7 @@ def _compare_follow_color_picker(
     pick_key = shadow_widget_key(f"{key}_pick", shown, seed=False)
 
     def _apply() -> None:
-        if _shadow_key_missing(pick_key):  # BUG-18
+        if _shadow_key_missing(pick_key):
             return
         picked = st.session_state[pick_key]
         st.session_state[key] = "" if picked.lower() == follow.lower() else picked
@@ -5304,14 +5250,14 @@ def _collect_compare_styles() -> tuple[dict, dict]:
                 ),
             )
         )
-    # CMP-24: B draws under its own filters. A's style names none, so the
+    # B draws under its own filters. A's style names none, so the
     # builders give A the figure's — the rail's ordinary filters.
     styles[1].update(compare_b_filters())
     return styles[0], styles[1]
 
 
 def _ordered_saccade_classes(key: str) -> list[str]:
-    """A saccade-class multiselect's value in ``SACCADE_CLASS_ORDER`` (VIZ-31) —
+    """A saccade-class multiselect's value in ``SACCADE_CLASS_ORDER`` —
     a cleared one reads as every class, i.e. no filter."""
     chosen = set(st.session_state.get(key) or SACCADE_CLASS_ORDER)
     return [cls_name for cls_name in SACCADE_CLASS_ORDER if cls_name in chosen]
@@ -5319,7 +5265,7 @@ def _ordered_saccade_classes(key: str) -> list[str]:
 
 def compare_b_filters() -> dict:
     """Scanpath B's filters, as the comparison builders read them off its style
-    (CMP-24) — ``plots.COMPARE_FILTER_STYLE_KEYS``."""
+    — ``plots.COMPARE_FILTER_STYLE_KEYS``."""
     return dict(
         fixation_flags=_collect_fixation_flags("cmp1"),
         saccade_classes=_ordered_saccade_classes("cmp1_saccade_classes"),
@@ -5327,7 +5273,7 @@ def compare_b_filters() -> dict:
 
 
 def render_compare_filters(host, compare_fixations: pd.DataFrame | None) -> None:
-    """Scanpath B's half of the Filters & highlights section (CMP-24).
+    """Scanpath B's half of the Filters & highlights section.
 
     Rendered into the slot ``render_plot_controls`` reserved under A's filters —
     after the rail, because B is picked (and its fixations loaded) below it. The
@@ -5387,9 +5333,9 @@ def _fix_range_bounds(fixations: pd.DataFrame | None) -> tuple[int, int]:
     Both bounds come from the *displayed* frame, which is what makes the slider
     correct on a multipart trial: ``order_in_trial`` there is the PARENT-GLOBAL
     index, so a later screen runs e.g. 509-578, not 1-70. Assuming a floor of 1
-    (BUG-47) both put indices the screen does not contain inside the slider's
-    reach and left the untouched default ``(1, max)`` unequal to the frame's own
-    range, which stamped every screen after the first with the Illustration
+    would both put indices the screen does not contain inside the slider's
+    reach and leave the untouched default ``(1, max)`` unequal to the frame's
+    own range, stamping every screen after the first with the Illustration
     "fixation subset" disclosure.
     """
     if (
@@ -5414,7 +5360,7 @@ def _fix_range_trial_key(fixations: pd.DataFrame | None) -> tuple | None:
     if fixations is None or fixations.empty:
         return None
     parts = []
-    # BUG-47: a multipart trial's screens are separate readings sharing one
+    # A multipart trial's screens are separate readings sharing one
     # parent-global index axis, so "fixations 5-20" means as little across two
     # screens as it does across two trials -- the screen is part of the identity.
     for col in ("participant_id", "trial_id", "screen_id"):
@@ -5434,29 +5380,29 @@ def _render_fix_range_slider(
     trial_state_key: str = "_fix_range_trial",
     all_trials_key: str | None = "single_fix_range_all_trials",
 ) -> None:
-    """Render the VIZ-7 fixation-index window slider (``single_fix_range``).
+    """Render the fixation-index window slider (``single_fix_range``).
 
     The slider value persists across trial changes (which shift the bounds), so
     it is seeded/clamped via session_state *only* (no ``value=`` arg) to stay
     inside ``[min_fix, max_fix]`` — a stored out-of-range value would otherwise
-    raise. **Both** bounds come from the displayed frame (BUG-47): on a multipart
+    raise. **Both** bounds come from the displayed frame: on a multipart
     trial ``order_in_trial`` is parent-global, so a later screen runs 509-578 and
     a hard-coded floor of 1 would offer indices that screen does not hold and
     leave the untouched default unequal to the frame's full range — which the
     Illustration policy reads as a deliberate "fixation subset".
     This is the single fixation-index control for the app; the Comparisons subtab
-    deliberately has none of its own (ENG-8). A frame with fewer than two
+    deliberately has none of its own. A frame with fewer than two
     fixations can't host a range slider (a one-value slider throws in the
     browser), so the window is cleared to ``None`` (the full, unsliced trial).
 
     **Scope.** A window is per-trial by default: picking another trial shows all
     of that trial's fixations again, because a range like "fixations 5–20" rarely
     means the same thing on a different reading. A multipart trial's *screens*
-    count as different readings here too (BUG-47). The *Apply to all trials*
+    count as different readings here too. The *All trials*
     checkbox opts into the sticky behaviour (the window is re-applied to every
     trial, clamped to each one's length).
 
-    The checkbox is deliberately **UI-only** state (cf. ``share_identity_mode``),
+    The checkbox is deliberately **UI-only** state,
     because what it governs — what happens to the window when you select a
     *different* trial — has no referent on the other three surfaces: a share link,
     a ``render`` invocation and an ``api.plot_scanpath`` call each address one
@@ -5464,19 +5410,19 @@ def _render_fix_range_slider(
     rather than sticky state. If it is ever persisted into a saved config it must
     be added to ``session_keys.PLOT_CONFIG_STATE_KEYS``.
 
-    ``single_fix_range`` itself now reaches all four surfaces (VIZ-40 closed the
-    last gap with the ``?fix_range=lo,hi`` param; ``render --fix-index-range``
-    and ``api``'s ``fix_index_range`` were already there). The link carries it
+    ``single_fix_range`` itself reaches all four surfaces: the
+    ``?fix_range=lo,hi`` link param, ``render --fix-index-range`` and ``api``'s
+    ``fix_index_range``. The link carries it
     only when the ``single_fix_range_user_set`` flag above says the window was
     *chosen* — see the ``FIX_RANGE_PARAM`` block in
     ``url_state._build_share_query`` — because the untouched default is the
     trial's own full range and would otherwise re-window every recipient.
-    ``tabs._build_studio_config`` still does not write one: a saved config is
+    ``tabs._build_studio_config`` does not write one: a saved config is
     restored onto whatever trial is open, where a fixation window means even
     less than it does on a link.
 
     ``single_fix_range_user_set`` itself is deliberately **not** wire format,
-    for the same reason as ``share_identity_mode`` and the checkbox above: it
+    for the same reason as the checkbox above: it
     records that *this* user moved *this* slider, which has no referent on the
     other three surfaces, and a recipient re-derives it here anyway (the
     ``setdefault`` in the explicit-value branch below). It is nonetheless
@@ -5485,7 +5431,7 @@ def _render_fix_range_slider(
     """
     if fixations is None:
         return
-    # CMP-24: the same slider serves scanpath B under its own keys; B's window is
+    # The same slider serves scanpath B under its own keys; B's window is
     # always per-trial (no *All trials* box — B's trial moves with its picker).
     user_key = f"{key}_user_set"
     min_fix, max_fix = _fix_range_bounds(fixations)
@@ -5494,7 +5440,7 @@ def _render_fix_range_slider(
         # plot isn't filtered by a window the slider can no longer show. The
         # `min_fix >= max_fix` half is the single-fixation frame: a one-value
         # range slider throws in the browser, and on a multipart screen that
-        # frame's lone index is 509, not 1 (BUG-47).
+        # frame's lone index is 509, not 1.
         if st.session_state.get(key) is not None:
             st.session_state[key] = None
         st.session_state[user_key] = False
@@ -5519,14 +5465,14 @@ def _render_fix_range_slider(
         _reset_to_full()
         st.session_state[user_key] = False
     elif user_set is False:
-        # BUG-16: an untouched auto-default follows the selected trial and always
+        # An untouched auto-default follows the selected trial and always
         # expands to its full range — which is the frame's OWN range, floor
         # included, so that an untouched window equals the full range on a later
-        # multipart screen too and no Illustration disclosure fires (BUG-47).
+        # multipart screen too and no Illustration disclosure fires.
         _reset_to_full()
     elif isinstance(stored, (tuple, list)) and len(stored) == 2:
         # A value supplied before this widget first renders (test seam, restored
-        # session, or future deep link) is explicit and should be preserved.
+        # session, or a deep link) is explicit and should be preserved.
         st.session_state.setdefault(user_key, True)
         lo = max(min_fix, min(int(stored[0]), max_fix))
         hi = max(lo, min(int(stored[1]), max_fix))
@@ -5535,11 +5481,11 @@ def _render_fix_range_slider(
         _reset_to_full()
         st.session_state[user_key] = False
 
-    # The slider sits in the 🧹 Filter popover. Once that has been open, the
-    # browser sends the window it last showed back on every rerun (#374 F9), so
+    # The slider sits in the Filters & highlights popover. Once that has been
+    # open, the browser sends the window it last showed back on every rerun, so
     # a window this run changed by itself — a new trial's full range, a clamp, a
-    # reset, a link — was undone on the next rerun, clamped to the new trial and
-    # silently hid most of its fixations. So `key` holds the window and the
+    # reset, a link — would be undone on the next rerun, clamped to the new trial,
+    # silently hiding most of its fixations. So `key` holds the window and the
     # widgets draw it under a key of their own, which moves to a new generation
     # whenever the window changed without them: a fresh widget has nothing old
     # to send back.
@@ -5562,8 +5508,8 @@ def _render_fix_range_slider(
 
     all_trials_disabled, _ = _layer_gate(False, None)
 
-    # UX-162: *All trials* sits on the range's own line, ahead of its slider,
-    # the way a colour range's *Auto* does (UX-157); its explanation joins the
+    # *All trials* sits on the range's own line, ahead of its slider,
+    # the way a colour range's *Auto* does; its explanation joins the
     # row title's tooltip. Seeded via `_VIZ_WIDGET_DEFAULTS`, so no `value=`.
     def _all_trials(col) -> None:
         col.checkbox(
@@ -5601,14 +5547,14 @@ def _seed_viz_state(
 
     Both ``render_plot_controls`` (which renders the widgets) and
     ``viz_settings_from_state`` (the non-rendering reader used by the Corpus view
-    and the Save & restore panel) call this first, so the controls and their
+    and the settings file) call this first, so the controls and their
     consumers can't drift. The widgets render WITHOUT a ``value=``/``index=``
     argument and rely on these defaults, which keeps their keys programmatically
     settable (deep links / plot-config restore) without Streamlit's "default
     value but also set via Session State API" warning.
 
     Seeding only — keeping a stored value alive through a run where its widget
-    doesn't render is the widgets' own ``persist_state="session"`` (ENG-36), so
+    doesn't render is the widgets' own ``persist_state="session"``, so
     this is safe to call both before rendering (``render_plot_controls``) and after
     (``app.main`` re-reads the settings once the rail has rendered, where writing
     a widget key would raise). Returns ``(color_fields, numeric_fields,
@@ -5621,7 +5567,7 @@ def _seed_viz_state(
 
     color_fields = color_field_options(trial_fixations)
     _drop_stale("global_color_by", color_fields)
-    # VIZ-17: one flat colour by default — see `color_field_options`.
+    # One flat colour by default — see `color_field_options`.
     _pin("global_color_by", UNIFORM_COLOR_FIELD)
 
     numeric_fields = numeric_field_options(trial_fixations)
@@ -5643,7 +5589,7 @@ def _seed_viz_state(
     highlight_options = highlight_column_options(words)
     _drop_stale("global_highlight_column", highlight_options)
     # A column the app seeded is re-derived for each dataset; only the user's own
-    # pick survives a switch. #374 F6: only the bundled demo is seeded (its
+    # pick survives a switch. Only the bundled demo is seeded (its
     # answer span); any other dataset opens with nothing highlighted, rather
     # than with whichever yes/no column came first (IA_SKIP on EyeLink data).
     ss = st.session_state
@@ -5660,7 +5606,7 @@ def _seed_viz_state(
             ss[_HIGHLIGHT_SEEDED_KEY] = seeded
         _pin("global_highlight_column", seeded)
 
-    # VIZ-26: arbitrary multi-field word/fixation hover. The legacy one-measure
+    # Arbitrary multi-field word/fixation hover. The older one-measure
     # key remains as a fallback for old links/configs, but new surfaces write the
     # explicit lists.
     word_hover_options = hover_field_options(words, words=True)
@@ -5794,7 +5740,7 @@ def _collect_legend_layout(ss) -> dict | None:
     """The legend placements set under 📐 Figure & canvas → Legends.
 
     Only the legends moved off *Auto* are listed; ``None`` when none is, which
-    every builder reads as "as it always drew". A stale value a link or an old
+    every builder reads as its own default placement. A stale value a link or an old
     config left behind falls back to *Auto* rather than failing the figure.
     """
     layout = {}
@@ -5822,17 +5768,17 @@ def _collect_legend_layout(ss) -> dict | None:
 BG_CUSTOM_CHOICE = "Custom…"
 #: Every value ``global_bg_choice`` can hold: the presets, then Custom….
 BG_CHOICES = (*BACKGROUND_PRESETS, BG_CUSTOM_CHOICE)
-#: #422 — the shadow behind the background swatch. The swatch always shows the
+#: The shadow behind the background swatch. The swatch always shows the
 #: colour the figure is drawn on (a preset's, or the custom one), so picking a
 #: colour in it simply applies it; only that pick writes the two wire keys.
 _BG_SWATCH_KEY = "rail_bg_swatch"
 
 
 def shadow_widget_key(name: str, value, *, seed: bool = True) -> str:
-    """The key a shadow widget showing ``value`` is drawn under (#422).
+    """The key a shadow widget showing ``value`` is drawn under.
 
     A shadow shows a value derived from wire keys it does not own, and writes
-    them only from its own ``on_change``. Inside a popover (#374 F9) a browser
+    them only from its own ``on_change``. Inside a popover a browser
     that once showed the widget keeps sending back the value it last showed, so
     a shadow re-seeded under one fixed key could take that stale value for a
     pick and write it back over a change made elsewhere (a link, a settings
@@ -5872,12 +5818,12 @@ def resolved_background_color(state) -> str:
 
 
 def _apply_background_swatch(widget_key: str) -> None:
-    """A colour picked in the swatch becomes the background (#422).
+    """A colour picked in the swatch becomes the background.
 
     A colour that is a preset's selects that preset; any other is stored as
     the custom colour and selects *Custom…*. Both keys are written through
-    (#374 F9): the selectbox beside the swatch sits in the same popover."""
-    if _shadow_key_missing(widget_key):  # BUG-18
+    (`write_through`): the selectbox beside the swatch sits in the same popover."""
+    if _shadow_key_missing(widget_key):
         return
     picked = str(st.session_state[widget_key])
     preset = next(
@@ -5895,13 +5841,10 @@ def _apply_background_swatch(widget_key: str) -> None:
 
 def background_swatch(host, *, label: str, disabled: bool = False, **kwargs):
     """The background's colour box: it shows the colour in use, and a colour
-    picked in it is applied at once (#422).
+    picked in it is applied at once.
 
-    It used to be the *Custom…* colour's own picker, greyed until *Custom…* was
-    chosen in the selectbox beside it — a box that did nothing until you found
-    the other control. It is a shadow now (`shadow_widget_key`), derived every
-    run from the wire keys, so links, settings files and presets move it and
-    only a pick writes them."""
+    It is a shadow (`shadow_widget_key`), derived every run from the wire keys,
+    so links, settings files and presets move it and only a pick writes them."""
     color = resolved_background_color(st.session_state)
     widget_key = shadow_widget_key(_BG_SWATCH_KEY, color, seed=False)
     return host.color_picker(
@@ -5916,7 +5859,7 @@ def background_swatch(host, *, label: str, disabled: bool = False, **kwargs):
 
 
 def _title_settings_state() -> dict:
-    """What the title / caption fields read of the settings (#422): the layer
+    """What the title / caption fields read of the settings: the layer
     switches and colour choices `{settings}` names, and the fixation window
     `{n_fixations}` counts within — straight from session state, gated as
     `_collect_viz_settings` gates them, without its pass over the whole pool."""
@@ -5961,19 +5904,19 @@ def _collect_viz_settings(
     show_fix = bool(ss.get("global_show_fix"))
     show_saccades = bool(ss.get("global_show_saccades"))
     show_heatmap = bool(ss.get("global_show_heatmap"))
-    # UX-128: the 📄 Stimulus section's master switch — ANDed into its two
+    # The 📄 Stimulus section's master switch — ANDed into its two
     # layers' *effective* values below, rather than read by the figure
     # builders directly, so it stays a pure display gate: `global_show_labels`/
     # `global_show_stimulus_image` still hold whatever the user configured, for
-    # the moment this is turned back on. Word boxes left the section for one of
-    # their own, so this switch no longer gates them.
+    # the moment this is turned back on. Word boxes have a section of their
+    # own, so this switch does not gate them.
     show_stimulus = bool(ss.get("global_show_stimulus", True))
     show_labels = show_stimulus and bool(ss.get("global_show_labels"))
     color_by = ss.get("global_color_by")
 
     # Fixation colour range only applies when fixations are shown AND coloured by
     # a numeric column with a valid spread — mirror the widget's gate. A range
-    # the user never set is ABSENT, not seeded (VIZ-46), so `None` reaches the
+    # the user never set is ABSENT, not seeded, so `None` reaches the
     # builders and each trial is scaled to its own values — the API's own rule.
     fixation_color_range = None
     if (
@@ -5993,7 +5936,7 @@ def _collect_viz_settings(
     if show_heatmap and ss.get("global_heatmap_metric") == "duration_ms":
         heatmap_range = _explicit_pair(ss.get("global_heatmap_color_range"))
 
-    # Fixation-index window (VIZ-7): a (start, end) tuple over `order_in_trial`,
+    # Fixation-index window: a (start, end) tuple over `order_in_trial`,
     # or None for the full trial. Read straight from the slider's session key;
     # the rendering path clamps it to the trial's fixation count, and the
     # non-rendering Corpus reader simply leaves it None (it never windows).
@@ -6045,17 +5988,17 @@ def _collect_viz_settings(
         if ss.get("global_heatmap_sigma_auto", True)
         else float(ss.get("global_heatmap_sigma_px", DEFAULT_HEATMAP_SIGMA_PX)),
         show_raw_gaze=bool(ss.get("global_show_raw_gaze")),
-        # UX-86: raw gaze's own style.
+        # Raw gaze's own style.
         raw_gaze_color=ss.get("global_raw_gaze_color") or "#888888",
         raw_gaze_marker_size=float(ss.get("global_raw_gaze_marker_size", 4.0)),
         raw_gaze_opacity=float(ss.get("global_raw_gaze_opacity", 0.6)),
         show_stimulus_image=show_stimulus
         and bool(ss.get("global_show_stimulus_image")),
-        # VIZ-4: image-stimulus opacity (applies to dataset + uploaded images) and
+        # Image-stimulus opacity (applies to dataset + uploaded images) and
         # the uploaded image's data URI (session-only; set by render_plot_controls).
         stimulus_image_opacity=float(ss.get("global_stimulus_image_opacity", 1.0)),
         stimulus_image_upload_uri=ss.get("_stimulus_image_upload_uri"),
-        # VIZ-4: manual image alignment (origin nudge + size scale).
+        # Manual image alignment (origin nudge + size scale).
         stimulus_image_offset_x=float(ss.get("global_stimulus_image_offset_x", 0.0)),
         stimulus_image_offset_y=float(ss.get("global_stimulus_image_offset_y", 0.0)),
         stimulus_image_scale=float(ss.get("global_stimulus_image_scale", 1.0)),
@@ -6079,7 +6022,7 @@ def _collect_viz_settings(
             for bar in ("fixation", "heatmap")
         },
         fit_to_monitor=bool(ss.get("global_fit_to_monitor")),
-        # #422: a margin only while cropping; `None` is the automatic one.
+        # A margin only while cropping; `None` is the automatic one.
         crop_margin_auto=bool(ss.get("global_crop_margin_auto", True)),
         crop_margin=(
             None
@@ -6106,7 +6049,7 @@ def _collect_viz_settings(
         saccade_style=ss.get("global_saccade_style") or "Solid",
         saccade_width=float(ss.get("global_saccade_width") or DEFAULT_SACCADE_WIDTH),
         saccade_opacity=float(ss.get("global_saccade_opacity", 1.0)),
-        # VIZ-8: colour-by-reading-type mode + the per-class palette + optional
+        # Colour-by-reading-type mode + the per-class palette + optional
         # colour-key legend.
         saccade_color_mode=ss.get("global_saccade_color_mode") or "Uniform",
         saccade_type_legend=bool(ss.get("global_saccade_type_legend", True)),
@@ -6118,7 +6061,7 @@ def _collect_viz_settings(
             )
             for cls_name in SACCADE_CLASS_EDITABLE
         },
-        # VIZ-31: the reading-class filter. Ordered by SACCADE_CLASS_ORDER (not by
+        # The reading-class filter. Ordered by SACCADE_CLASS_ORDER (not by
         # click order) so the same selection always produces the same figure key,
         # and unknown names are dropped — a stale link must not smuggle a class
         # the build no longer classifies into the builder. An *empty* selection
@@ -6130,7 +6073,7 @@ def _collect_viz_settings(
             for cls_name in SACCADE_CLASS_ORDER
             if cls_name in set(ss.get("global_saccade_classes") or SACCADE_CLASS_ORDER)
         ],
-        # VIZ-9: linear-reading mode (arced saccades + #422's snap to line).
+        # Linear-reading mode (arced saccades + snap to line).
         saccade_render_mode=ss.get("global_saccade_render_mode") or "Straight",
         fixation_snap_to_line=bool(ss.get("global_fixation_snap_to_line")),
         fixation_snap_position=float(
@@ -6138,17 +6081,17 @@ def _collect_viz_settings(
         ),
         illustration_label=ss.get("global_illustration_label") or "Auto",
         illustration_text=str(ss.get("global_illustration_text") or ""),
-        # VIZ-10: autoplay the animated replay on load (default on).
+        # Autoplay the animated replay on load (default on).
         anim_autoplay=bool(ss.get("global_anim_autoplay", True)),
-        # VIZ-11 follow-up: the animation frame grid (smoothness vs. frame count).
+        # The animation frame grid (smoothness vs. frame count).
         anim_grid_step_ms=float(ss.get("global_anim_grid_step_ms", 100) or 100),
         anim_max_frames=int(ss.get("global_anim_max_frames", 360) or 360),
         hollow_fixations=bool(ss.get("global_hollow_fixations")),
         fixation_opacity=float(ss.get("global_fixation_opacity", 1.0)),
-        # VIZ-17 uniform fixation colour + VIZ-15 marker shape.
+        # Uniform fixation colour + marker shape.
         fixation_color=ss.get("global_fixation_color") or DEFAULT_FIXATION_COLOR,
         fixation_symbol=ss.get("global_fixation_symbol") or DEFAULT_FIXATION_SYMBOL,
-        # VIZ-18: the active palette name — *derived* from the colour keys above
+        # The active palette name — *derived* from the colour keys above
         # rather than read back from the selector, so a hand-edited figure is
         # reported as `Custom` on every surface instead of carrying a palette
         # name it no longer matches. The colours themselves ride in the
@@ -6159,7 +6102,7 @@ def _collect_viz_settings(
         highlight_text_color=ss.get("global_highlight_text_color"),
         text_color=ss.get("global_text_color", WORD_LABEL_COLOR),
         color_by_line=color_by == "line",
-        # Fixation classification (PRE-2) + compare-overlay legend (CMP-2).
+        # Fixation classification + compare-overlay legend.
         fixation_flags=_collect_fixation_flags(),
         show_compare_legend=bool(ss.get("global_show_compare_legend")),
         span_border_color=ss.get("global_span_border_color", "#000000"),
@@ -6179,7 +6122,7 @@ def _collect_viz_settings(
                     f"{bar}_colorbar_tickfont_size",
                     int(ss.get(f"global_{bar}_colorbar_tickfont_size") or 12),
                 ),
-                # #422: thickness in px; a length only once Auto is unticked.
+                # Thickness in px; a length only once Auto is unticked.
                 (
                     f"{bar}_colorbar_thickness",
                     int(
@@ -6198,7 +6141,7 @@ def _collect_viz_settings(
                 ),
             )
         },
-        # #422: the title's and caption's text styling (drawn only with one).
+        # The title's and caption's text styling (drawn only with one).
         title_font_size=int(
             ss.get("global_title_font_size") or DEFAULT_TITLE_FONT_SIZE
         ),
@@ -6232,14 +6175,14 @@ def _collect_viz_settings(
         ),
         word_hover_fields=list(ss.get("global_word_hover_fields") or []),
         fixation_hover_fields=list(ss.get("global_fixation_hover_fields") or []),
-        # PRE-3: in-place drift correction. `tabs._drift_corrected` applies it once
-        # above the render-mode split, so it reaches all three builders (VIZ-23);
-        # only the connector layer is still static-figure-only.
+        # In-place drift correction. `tabs._drift_corrected` applies it once
+        # above the render-mode split, so it reaches all three builders; only
+        # the connector layer is static-figure-only.
         #
-        # PRE-21: resolved to "Off" while the feature is gated, rather than each
-        # consumer gating separately. That is what makes an old share link or
-        # saved config carrying `align_algorithm=warp` degrade *silently* — the
-        # setting is read, then ignored, and nothing downstream can disagree.
+        # Resolved to "Off" while the feature is gated (`drift_correction_enabled`),
+        # rather than each consumer gating separately. That is what makes a share
+        # link or saved config carrying `align_algorithm=warp` degrade *silently* —
+        # the setting is read, then ignored, and nothing downstream can disagree.
         align_algorithm=(
             (ss.get("global_align_algorithm") or "Off")
             if drift_correction_enabled()
@@ -6248,7 +6191,7 @@ def _collect_viz_settings(
         align_connectors=drift_correction_enabled()
         and bool(ss.get("global_align_connectors"))
         and (ss.get("global_align_algorithm") or "Off") != "Off",
-        # EXP-5: empty when the toggle is off, regardless of stored pattern text,
+        # Empty when the toggle is off, regardless of stored pattern text,
         # so turning it off can never leave a stale pattern silently applied.
         title_pattern=(
             ss.get("global_title_pattern") or "" if ss.get("global_show_title") else ""
@@ -6269,7 +6212,7 @@ def viz_settings_from_state(
     """Resolve the viz-settings dict from session_state WITHOUT rendering widgets.
 
     Used by the views that consume the settings but don't host the controls — the
-    Corpus Analysis figures and the Save & restore panel — so they stay in sync
+    Corpus Analysis figures and the settings file — so they stay in sync
     with the scanpath rail (which renders the actual widgets via
     ``render_plot_controls``) on whatever the user last set.
     """
@@ -6292,19 +6235,17 @@ def corpus_style_controls(
     host=None,
     canvas_renderer=None,
 ) -> dict:
-    """Focused, shared-key styling controls for Corpus Analysis (AN-29).
+    """Focused, shared-key styling controls for Corpus Analysis.
 
     Corpus figures intentionally expose only the palette channels they consume;
     the single-scanpath layer controls remain in the Scanpath rail. Because these
     widgets write the same ``global_*`` keys, Share/config restore, the CLI
     palette, and headless builder parameters stay one contract.
 
-    ``canvas_renderer`` renders the canvas / text panel here too (VIZ-31). The
+    ``canvas_renderer`` renders the canvas / text panel here too. The
     corpus figures are drawn true-to-scale from exactly those values — monitor
     size, fonts, line spacing, background — so the view that consumes them needs
-    a way to change them; before VIZ-31 the panel lived in the always-present
-    sidebar and was reachable from here for free (there is no sidebar now —
-    UX-38).
+    a way to change them.
     """
     _seed_viz_state(trial_fixations, base_font_size, words)
     target = host or st
@@ -6343,15 +6284,15 @@ def corpus_style_controls(
             persist_state="session",
             help="Used by word matrices and stimulus heatmaps.",
         )
-        # VIZ-31's canvas controls belong to this disclosure too. Rendering
-        # them after the `with` block left the expander collapsed but every
-        # monitor/font/background field open across the Corpus page.
+        # The canvas controls belong to this disclosure too. Rendered after
+        # the `with` block, every monitor/font/background field would sit
+        # open across the Corpus page under a collapsed expander.
         if canvas_renderer is not None:
             canvas_renderer(style_panel)
     return viz_settings_from_state(trial_fixations, base_font_size, words=words)
 
 
-#: #422: what a greyed rail switch says on hover, for the Animate gate. The
+#: What a greyed rail switch says on hover, for the Animate gate. The
 #: replay has its own fixation layer and none for the heatmap or raw gaze.
 _ANIMATE_GREYS = {
     "fix": "Greyed while Animate is on: the replay always draws fixations. "
@@ -6366,8 +6307,7 @@ _ANIMATE_GREYS = {
 def _greyed_help(*reasons: tuple[bool, str]) -> str | None:
     """A rail switch's hover text: why it is greyed, or nothing while it is live.
 
-    #422 moved the reason onto the switch itself (it was a caption under the
-    Animate row, #374 F23). ``reasons`` are ``(holds, text)`` pairs, most
+    The reason sits on the switch itself. ``reasons`` are ``(holds, text)`` pairs, most
     fundamental first — a trial with nothing to draw stays greyed whatever the
     mode — and the first that holds is the one said. `styles.py` makes the whole
     switch the hover target and draws no `?` beside it.
@@ -6376,65 +6316,57 @@ def _greyed_help(*reasons: tuple[bool, str]) -> str | None:
 
 
 def _rail_section(host, label: str, *, slug: str, name: str | None = None, **toggle):
-    """One rail section: `[toggle | ▾]` on a single line (UX-80).
+    """One rail section: `[toggle | ▾]` on a single line.
 
-    The shape #UX-68 gave 🎬 Animate and ⚖️ Compare, applied to every section of
-    the rail: the layer's switch and the disclosure for its options share a row,
-    and the options open in a **popover** rather than inside an expander.
+    Every section of the rail is shaped like 🎬 Animate and ⚖️ Compare: the
+    layer's switch and the disclosure for its options share a row, and the
+    options open in a **popover** rather than inside an expander.
 
     That last part is the point, not the tidiness. The rail is ~150–200 px wide
-    on purpose (the plot is the hero, #UX-51), so an expander lays its controls
-    out inside that width and crops them; a popover is positioned over the page
-    and sizes to its content. #UX-74 tried the opposite — inlining the popovers —
-    and had to be reverted for exactly this.
+    on purpose (the plot is the hero), so an expander lays its controls out
+    inside that width and crops them; a popover is positioned over the page and
+    sizes to its content. Inlining the popovers breaks the rail for exactly
+    this reason.
 
     Passing ``toggle`` kwargs (``key=``, ``disabled=``) draws the switch and
     returns its value; the name is the switch's label, so clicking it flips the
-    switch (UX-153). Omitting them leaves the section's **name** on its own,
-    for the sections that have no layer to switch: 📐 Figure & canvas holds
-    none, and Filters & highlights is not a layer at all — there, clicking the name opens
-    the popover. (📄 Stimulus has a master switch over its three layers since
-    UX-128.) ``note=`` is a line written into the top of the popover — used for
-    the ⚠️ that says why a switch is greyed.
+    switch. Omitting them leaves the section's **name** on its own, for the
+    sections that have no layer to switch: 📐 Figure & canvas holds none, and
+    Filters & highlights is not a layer at all — there, clicking the name opens
+    the popover. (📄 Stimulus has a master switch over its layers.) ``note=``
+    is a line written into the top of the popover — used for the ⚠️ that says
+    why a switch is greyed.
 
     Returns ``(value, body)`` — ``value`` is ``None`` for a name-only section.
     The ``split_mode_`` key prefix is what `styles.py` styles the row with; it is
     shared with the two mode rows above the plot deliberately, because they are
     the same control.
 
-    **Round 2 (UX-80).** Three things the first cut got wrong, all visible at
-    once in one screenshot: the row wrapped, the trigger showed two arrows, and
-    the toggle carried a `?`.
+    What keeps the row on one line, with one arrow and no `?`:
 
     - ``width="content"``, not ``"stretch"`` — a stretched trigger claims the
       row's whole width, so the switch and the ▾ could not share a line however
-      much room the rail had. Animate and Compare had it right.
+      much room the rail had.
     - **No visible label and no icon on the trigger.** A `▾` label (or a
       `:material/arrow_drop_down:` icon) sits *beside* the chevron Streamlit
-      draws on every popover, which is one arrow too many. Since BUG-108 the
-      trigger does carry a label, ``name="Fixation"`` → "Fixation settings"
-      (``label`` without its icon and bold when ``name`` is omitted), for
-      screen readers; `styles.py` clips it off screen.
-    - ``help_text`` went to the **popover**, not the toggle, so that a row which
-      has to fit did not also carry Streamlit's `?` icon. **UX-103 took the
-      hover text off this row entirely** — see the comments in the body.
+      draws on every popover, which is one arrow too many. The trigger does
+      carry a label for screen readers, ``name="Fixation"`` → "Fixation
+      settings" (``label`` without its icon and bold when ``name`` is omitted);
+      `styles.py` clips it off screen.
+    - **No hover text on the row**, so a row which has to fit carries no
+      Streamlit `?` icon — see the comments in the body.
 
-    **BUG-37 — the popover carries an explicit ``key=``.** ``st.popover`` is a
-    stateful widget in this Streamlit version (it takes ``key``/``on_change``
-    like ``st.expander``), and every section here called it with the same empty
-    label (``""``, until BUG-108 named each) — the only thing distinguishing one from another is
-    surrounding call order. Without a `key`, Streamlit falls back to a
-    positional auto-key, and this row sits downstream of several booleans that
-    change which widgets render (`_mode_gate`'s `disabled=`/`help=`, the
-    layer toggles themselves) — so the auto-key for a *later* section can shift
-    between reruns whenever an *earlier* one's rendered shape changes. A
-    shifted key reads to Streamlit as a brand-new widget, which drops the one
-    thing this widget tracks: whether it is open. That is what a click "not
-    working" looked like — the popover opened, a rerun landed before the user
-    saw it, and the fresh auto-key came back closed. Every OTHER popover in the
-    app has a distinct, stable label (the filter funnel, ⇅, Summary stats, …), which
-    is why only
-    this shared-blank-label family of eight was affected.
+    **The popover carries an explicit ``key=``.** ``st.popover`` is a stateful
+    widget in this Streamlit version (it takes ``key``/``on_change`` like
+    ``st.expander``). Without a `key`, Streamlit falls back to a positional
+    auto-key, and this row sits downstream of several booleans that change
+    which widgets render (`_mode_gate`'s `disabled=`/`help=`, the layer toggles
+    themselves) — so the auto-key for a *later* section can shift between
+    reruns whenever an *earlier* one's rendered shape changes. A shifted key
+    reads to Streamlit as a brand-new widget, which drops the one thing this
+    widget tracks: whether it is open — the popover opens, a rerun lands before
+    the user sees it, and the fresh auto-key comes back closed, so a click
+    seems not to work.
     """
     row = host.container(
         horizontal=True,
@@ -6444,25 +6376,24 @@ def _rail_section(host, label: str, *, slug: str, name: str | None = None, **tog
         key=f"split_mode_rail_{slug}",
     )
     note = toggle.pop("note", None)
-    # UX-153: the name is the switch's own label again, so clicking the word
-    # flips the switch -- as it always did on Animate and Compare. UX-103 had
-    # split them (a collapsed switch + the name as markdown) to be rid of the
-    # native tooltip: in a one-line row Streamlit puts a checkbox label in
-    # "truncate" mode, which stamps a `title=` repeating the words already on
-    # screen, and a `title` cannot be styled or suppressed from CSS. `wrap=True`
+    # The name is the switch's own label, so clicking the word flips the
+    # switch, as on Animate and Compare. It carries no native tooltip: in a
+    # one-line row Streamlit puts a checkbox label in "truncate" mode, which
+    # stamps a `title=` repeating the words already on screen, and a `title`
+    # cannot be styled or suppressed from CSS. `wrap=True`
     # is what turns truncate mode off, and with it the `title`; the one-line
     # ellipsis it would have drawn comes from `styles.py` instead (the
     # `split_mode_` label rule), which draws it without a tooltip.
     if toggle:
-        # #374 F19: no `**` in the label, which is the switch's accessible
+        # No `**` in the label, which is the switch's accessible
         # name verbatim; `styles.py` draws the row names bold instead.
         value = row.toggle(label.replace("**", ""), wrap=True, **toggle)
     else:
         # A name-only section: `styles.py` stretches the ▾ trigger's click
-        # target over the whole row, so the name opens the popover (UX-153).
+        # target over the whole row, so the name opens the popover.
         value = None
         row.markdown(label)
-    # BUG-108: the trigger is named for screen readers ("Fixation settings");
+    # The trigger is named for screen readers ("Fixation settings");
     # `styles.py` clips that label off screen, so the chevron stays the only
     # thing drawn. `wrap=True` for the reason the switch has it: a truncated
     # one-line label would stamp a native `title=` tooltip.
@@ -6473,8 +6404,8 @@ def _rail_section(host, label: str, *, slug: str, name: str | None = None, **tog
         wrap=True,
         key=f"split_mode_rail_{slug}_popover",
     )
-    # ...and the popover trigger carries no `help=` either. What hovered there
-    # was a restatement of the section's own name; what is worth saying -- why
+    # ...and the popover trigger carries no `help=` either: it would only
+    # restate the section's own name. What is worth saying -- why
     # a switch is greyed -- is written inside the popover instead, where it is
     # read without waiting for a tooltip and without covering the row below.
     if note:
@@ -6483,24 +6414,22 @@ def _rail_section(host, label: str, *, slug: str, name: str | None = None, **tog
 
 
 def _rail_subsection(host, label: str, *, note: str = "", first: bool = False):
-    """A named block inside the rail's Filters & highlights section (UX-72).
+    """A named block inside the rail's Filters & highlights section.
 
-    **Scope, after UX-74 was reverted.** That item flattened *every* section's
-    `⚙️ …` popovers into blocks like this one; the rail read worse for it — a
-    section became a long unbroken run — so the popovers are back everywhere
-    they were. What is left using this is the one section that never had them:
-    #UX-72's Filters & highlights, whose two halves (👁️ Fixations · ↗️ Saccades) are
-    genuinely one thing each and would spend a click for nothing.
+    Only that section uses blocks rather than popovers: its two halves
+    (👁️ Fixations · ↗️ Saccades) are genuinely one thing each, and a popover
+    would spend a click for nothing. Elsewhere the rail keeps its popovers —
+    flattened into blocks like this one, a section becomes a long unbroken run.
 
     ``note`` renders under the label — a block has no trigger, so the sentence a
     popover carried as a tooltip (what the filter does, and why it is inert in
     Animate or Compare) goes here instead.
 
     ``first`` marks the block that opens its popover: it draws no rule above
-    its label (#422), since the popover's own edge is the boundary there.
+    its label, since the popover's own edge is the boundary there.
     """
     # A line opening with `<div` is a raw HTML block, where the label's
-    # `ICONS` shortcode would print as text (UX-138).
+    # `ICONS` shortcode would print as text.
     first_class = " sps-rail-subhead-first" if first else ""
     host.markdown(
         f'<div class="sps-rail-subhead{first_class}">{icons_to_html(label)}</div>',
@@ -6512,14 +6441,14 @@ def _rail_subsection(host, label: str, *, note: str = "", first: bool = False):
     return box
 
 
-#: BUG-36 — the ♻️ Reset visualization button's confirmation flag.
+#: The ♻️ Reset visualization button's confirmation flag.
 _RESET_VIZ_PENDING_KEY = "_reset_viz_pending"
 
 
 @st.dialog("Reset visualization?")
 @guarded()
 def _reset_viz_confirmation_dialog() -> None:
-    """The modal body — BUG-36. Opened by ``render_viz_reset``.
+    """The modal body. Opened by ``render_viz_reset``.
 
     Handled by the button's *return value*, not ``on_click`` (see the module
     note on ``reset_viz_settings`` for why that function itself still runs as
@@ -6551,18 +6480,14 @@ def _reset_viz_confirmation_dialog() -> None:
 def render_viz_reset(host) -> None:
     """Render the scoped visualization reset into ``host`` — a plain button.
 
-    Full width, like every other control in the rail, and at its foot (BUG-24)
-    below everything it resets.
+    Full width, like every other control in the rail, and at its foot, below
+    everything it resets. A plain button rather than a popover, so the rail's
+    one escape hatch is not itself a click deep; its explanation is the
+    button's tooltip.
 
-    **UX-73**: it used to be a popover holding a caption and this button, so the
-    rail's one escape hatch was itself a click deep — and the thing behind the
-    click was a single button, which is what a popover is *for* avoiding. The
-    caption it held is the button's tooltip now; nothing else was in there.
-
-    **BUG-36**: the click now arms a confirmation dialog rather than firing
+    The click arms a confirmation dialog rather than firing
     ``reset_viz_settings`` straight away — a Share link's settings ride on this
-    too, so an accidental click used to be able to lose more than it looked
-    like.
+    too, so an accidental click could lose more than it looks like.
     """
     if host.button(
         f"{ICONS['reset']} Reset visualization",
@@ -6593,37 +6518,33 @@ def render_plot_controls(
 ) -> dict:
     """Render the visualization controls and return the resolved settings dict.
 
-    Layout (VIZ-31 / UX-44 — grouped so the rail reads by category):
-      1. Quick-view presets + Palette at the top: the two controls that get to a
-         good figure without opening anything.
-      2. Five collapsible sections — **👁️ Fixations** (expanded), then collapsed
-         **↗️ Saccades**, **📄 Stimulus**, **🔥 Overlays**, and
-         **📐 Figure & canvas** (canvas/text plus axes/labels).
-      3. Inside a section: **layer toggle → ⚙️ style**, the detail popovers
-         shown only while the layer is on. Streamlit nests neither
-         expander-in-expander nor popover-in-popover, so an expander holding
-         popovers is the only two-level shape available — which is also why
-         Fixations and Saccades are peer sections rather than sub-sections of a
-         single "Scanpath" group. UX-74 tried replacing those popovers with
-         inline blocks and was reverted: a section then read as one long
-         undifferentiated run.
-      3b. Filtering left the sections entirely (UX-72): one **Filters & highlights**
-         section after them holds both the fixation and the saccade filters.
-      4. **📐 Figure & canvas** follows the same shape with no layer to toggle
-         (UX-48): the framing toggle inline, then four popovers — 🖥️ Screen &
-         geometry · 🔤 Text & fonts (both from ``canvas_renderer``) · 📊 Axes &
-         grid · 🏷️ Title & labels.
+    Layout, grouped so the rail reads by category:
+      1. Design presets (Scanpath · Heatmap · Illustration · 🛠️ Custom, then
+         My designs) + Palette at the top: the controls that get to a good
+         figure without opening anything.
+      2. One `[switch | ▾]` row per layer (:func:`_rail_section`) —
+         **👁️ Fixations**, **↗️ Saccades**, **📄 Stimulus**, **⬚ Word boxes**,
+         **🔥 Heatmap**, **🔵 Raw gaze** — the ▾ popover holding the layer's
+         styling, greyed (never hidden) while the layer is off. Streamlit nests
+         neither expander-in-expander nor popover-in-popover, so the options are
+         one popover deep — which is also why Fixations and Saccades are peer
+         sections rather than sub-sections of a single "Scanpath" group.
+      3. One **Filters & highlights** section after the layers holds both the
+         fixation and the saccade filters.
+      4. **📐 Figure & canvas** has the same row shape with no layer to toggle:
+         🖥️ Screen & framing · 📊 Axes & grid · 🏷️ Title & labels · 💬 Hover ·
+         Legends, as named groups inside one popover.
 
     The sections are created up front (Streamlit lays containers out in creation
     order), so each block below renders into its section without moving in this
     file — see the "Layer groups" comment.
 
-    ``canvas_renderer`` is an optional ``callable(slot)`` rendering the canvas /
-    text panel (``app.render_canvas_controls``) into a slot reserved
-    between the Overlays and Figure groups. VIZ-31 moved that panel into the rail
-    so the figure's fonts, text colour and background sit beside the
-    other visual controls; when it is ``None`` (the wizard, the non-rendering
-    readers) nothing is drawn there and the panel keeps its own home.
+    ``canvas_renderer`` is an optional callable rendering the canvas / text
+    panel (``app.render_canvas_controls``): its screen rows into 🖥️ Screen &
+    framing and its typography into 📄 Stimulus → Text, so the figure's fonts,
+    text colour and background sit beside the other visual controls; when it is
+    ``None`` (the wizard, the non-rendering readers) nothing is drawn there and
+    the panel keeps its own home.
 
     ``host`` is the container to render into — the app passes the scanpath rail
     (``tabs.render_single_trial_tab``); ``None`` renders in place. The returned
@@ -6632,17 +6553,17 @@ def render_plot_controls(
     rendered controls and the non-rendering readers can't drift.
 
     ``fix_range_fixations`` is the *selected trial's* fixations, used only to size
-    the VIZ-7 fixation-index window slider (its max is that trial's fixation
+    the fixation-index window slider (its max is that trial's fixation
     count). When omitted, the slider isn't rendered (e.g. the non-rendering
     Corpus reader, which never windows).
 
-    ``title_fields`` (#422) maps the settings dict to the ``{field}`` values the
+    ``title_fields`` maps the settings dict to the ``{field}`` values the
     figure's title and caption render with (`tabs._title_caption_fields` for
     the selected trial), so the *Available fields* list, the validation and the
     preview are the figure's. Without it they are read off the selected
     trial's fixations alone.
     """
-    # can re-push the stored values to the browser (BUG-15 — see `_pin`).
+    # Seed every widget's default before any widget renders (see `_pin`).
     color_fields, numeric_fields, highlight_options = _seed_viz_state(
         trial_fixations, base_font_size, words
     )
@@ -6660,8 +6581,7 @@ def render_plot_controls(
     viz = (host if host is not None else st).container(key="tour_grp_viz_controls")
 
     # --- Design presets ---------------------------------------------------
-    # VIZ-39 renamed this from "Quick views" and gave it a second half: the four
-    # built-in designs in the 2x2 grid they have always been in, and the user's
+    # The three built-in designs and 🛠️ Custom in a 2x2 grid, and the user's
     # own saved designs in an expander under them. 🛠️ Custom is not a design —
     # it is the one unnamed slot holding *your most recent hand-tuning*, so
     # switching to a built-in and back does not lose it. Naming settings you
@@ -6717,28 +6637,27 @@ def render_plot_controls(
     )
     _render_saved_designs(viz)
 
-    # VIZ-31: the Illustration *label* (the publication-disclosure override) now
-    # lives in the "📐 Figure & canvas" group below, with the other figure-level
-    # presentation settings, rather than as a third top-level row up here.
+    # The Illustration *label* (the publication-disclosure override) lives in
+    # the "📐 Figure & canvas" group below, with the other figure-level
+    # presentation settings.
 
-    # VIZ-18: these figures end up in papers — printed, sometimes in black &
+    # These figures end up in papers — printed, sometimes in black &
     # white — and are read by colourblind viewers, so the colour defaults are a
     # choice rather than a constant. Picking one writes the individual colour
     # keys, so every per-element picker below still overrides it — and once one
     # is overridden the selector says **Custom** rather than keeping a name the
-    # figure no longer earns (the same rule the Quick-view buttons follow above).
+    # figure no longer earns (the same rule the design presets follow above).
     # `Custom` is offered only while it's true, so the list stays the three real
     # palettes the moment the colours match one again.
     _active = _active_palette()
     _palette_options = list(PALETTES) if _active else [CUSTOM_PALETTE, *PALETTES]
     st.session_state["global_palette"] = _active or CUSTOM_PALETTE
-    # UX-80 r2: no `help=`, because Streamlit draws it as a `?` icon and the ask
-    # was to clear those off the rail's head. This is the one that had nowhere
-    # else to go — the toggles' text moved to their ▾ tooltips, but a selectbox
-    # has no second hover target — so what each palette *is* now reads off the
-    # option names themselves ("Default (colourblind-safe)", "Print / greyscale",
-    # "High contrast"), and "any change reads Custom" is visible the moment it
-    # happens. The full explanation lives in the docs.
+    # No `help=`: Streamlit draws it as a `?` icon, and the rail's head is kept
+    # clear of those. A selectbox has no second hover target, so what each
+    # palette *is* reads off the option names themselves ("Default
+    # (colourblind-safe)", "Print / greyscale", "High contrast"), and "any change
+    # reads Custom" is visible the moment it happens. The full explanation lives
+    # in the docs.
     viz.selectbox(
         "Palette",
         options=_palette_options,
@@ -6753,19 +6672,19 @@ def render_plot_controls(
     viz.container(key="palette_layers_divider").divider()
 
     # Each main layer is an `st.toggle`; the layer's detailed styling lives in a
-    # per-layer popover shown only while the layer is on — so the rail shows just
-    # the toggles (plus, for fixations, the primary "Color by" control), and the
-    # fiddly knobs open in an overlay instead of growing the rail past the plot.
+    # per-layer popover (greyed while the layer is off) — so the rail shows just
+    # the toggles, and the fiddly knobs open in an overlay instead of growing the
+    # rail past the plot.
     # Values for off layers are read back from session_state by
     # `_collect_viz_settings`, so the returned dict always carries every key.
 
-    # VIZ-21: the two view modes (rail → 🎛️ Plot controls, rendered *before* this
-    # function) route the figure through different builders, and each ignores a
-    # different slice of these controls. Read both flags and gate every affected
-    # widget through `_mode_gate` — greyed with a reason, never silently ignored,
-    # and never with its stored value rewritten. VIZ-23 then made a batch of them
-    # live in Animate / Compare, so what remains gated below is the genuinely
-    # builder-less set (see CLAUDE.md's setting → render-path table).
+    # The two view modes (the 🎬 Animate / ⚖️ Compare rows, rendered *before*
+    # this function) route the figure through different builders, and each
+    # ignores a different slice of these controls. Read both flags and gate every
+    # affected widget through `_mode_gate` — greyed with a reason, never silently
+    # ignored, and never with its stored value rewritten. What is gated below is
+    # the genuinely builder-less set (see the setting → render-path table in
+    # AGENTS.md).
     comparing = bool(
         st.session_state.get(
             "_resolved_comparing", st.session_state.get("single_compare_toggle")
@@ -6780,42 +6699,33 @@ def render_plot_controls(
     _static_only = dict(in_animation=False, in_compare=False)
     _no_compare = dict(in_compare=False)
 
-    # --- Layer groups (VIZ-31) --------------------------------------------
-    # The seven layers used to sit as one flat top-to-bottom run of toggles, so
-    # the rail opened as ~13 peer rows with no hint that Text / Bounding boxes /
-    # Stimulus image describe the *stimulus* while Fixations / Saccades / Raw
-    # gaze describe the *recording*. They are now named groups, plus two for how
-    # the figure is framed.
+    # --- Layer groups -----------------------------------------------------
+    # Named sections rather than one flat run of toggles, so the rail shows which
+    # layers describe the *stimulus* (text, image, word boxes) and which the
+    # *recording* (fixations, saccades, raw gaze), plus two for how the figure is
+    # filtered and framed.
     #
-    # The groups are created HERE, up front, because Streamlit lays containers
-    # out in **creation** order — which lets each block below keep its current
-    # position in this file while rendering into whichever group it belongs to.
-    # So the visual order is exactly the order of these six lines; the code
-    # order further down is unchanged (and irrelevant to the layout).
+    # The sections are created HERE, up front, because Streamlit lays containers
+    # out in **creation** order — which lets each block below keep its position
+    # in this file while rendering into whichever section it belongs to. So the
+    # visual order is exactly the order of the `_rail_section` calls here; the
+    # code order further down is irrelevant to the layout.
     #
-    # **Section shape.** Each group is `layer toggle → ⚙️ style → 🧹 filter`, the
-    # nesting the original wireframe asked for. Streamlit nests neither
-    # expander-in-expander nor popover-in-popover, but popover-in-**expander** is
-    # allowed — so a section is an expander and its sub-sections are popovers,
-    # which is the only two-level shape the framework actually renders. That is
-    # also why Fixations and Saccades are *peer* sections rather than one
-    # "Scanpath" group holding two sub-sections: the sub-section level is spent
-    # on style/filter, where it earns more than on the layer split.
-    #
-    # Fixations opens because it is the primary layer; Saccades and the less-used
-    # groups stay collapsed so the independent rail starts compact. The preset row
-    # above still covers the common combinations without opening anything at all.
-    # UX-80: each section is a row — its switch (when it has exactly one thing
-    # to switch) and a ▾ holding everything else. The layer toggles are rendered
-    # HERE rather than in the blocks below, because a row lays its children out
-    # in creation order and the switch has to precede the ▾; the blocks below
-    # still own everything inside the popovers.
+    # **Section shape.** Each section is a row — its switch (when it has exactly
+    # one thing to switch) and a ▾ popover holding everything else. Streamlit
+    # nests neither expander-in-expander nor popover-in-popover, so the options
+    # are one popover deep; that is also why Fixations and Saccades are *peer*
+    # sections rather than one "Scanpath" group holding two. The layer toggles
+    # are rendered HERE rather than in the blocks below, because a row lays its
+    # children out in creation order and the switch has to precede the ▾; the
+    # blocks below own everything inside the popovers. The preset row above
+    # covers the common combinations without opening anything at all.
     fix_off_disabled, _fix_off_reason = _mode_gate(
         animating, comparing, in_animation=False, in_compare=True
     )
-    # VIZ-45: a trial with no fixations (raw gaze only, or words only) has
-    # nothing for the fixation-built controls to act on — Fixations, Saccades,
-    # the Filter and its index window — and the samples are never turned into
+    # A trial with no fixations (raw gaze only, or words only) has nothing for
+    # the fixation-built controls to act on — Fixations, Saccades, Filters &
+    # highlights and its index window — and the samples are never turned into
     # fixations, so they grey with that reason, keeping their values for the
     # next trial that has fixations.
     no_fixations_note = (
@@ -6860,15 +6770,12 @@ def render_plot_controls(
         disabled=not has_fixations,
         help=_greyed_help((not has_fixations, "This trial has no fixations.")),
     )
-    # UX-128: a master switch for the section's layers (text, image),
-    # matching Fixations/Saccades. Earlier this was name-only — each
-    # layer carried its own toggle and nothing gated all of them at once — on
-    # the reasoning that a master switch would have to remember which of the
-    # layers were on to restore them. It doesn't: this toggle never touches
-    # `global_show_labels`/`global_show_stimulus_image` themselves, so each
-    # keeps whatever the user set. It only ANDs into the *effective* values
-    # `_collect_viz_settings` returns — turning it back on reveals exactly what
-    # was configured before, with nothing to restore.
+    # A master switch for the section's layers (text, image), matching
+    # Fixations/Saccades. It never touches `global_show_labels` /
+    # `global_show_stimulus_image` themselves, so each keeps whatever the user
+    # set; it only ANDs into the *effective* values `_collect_viz_settings`
+    # returns — turning it back on reveals exactly what was configured before,
+    # with nothing to restore.
     show_stimulus, stim_grp = _rail_section(
         viz,
         f"{ICONS['stimulus']} **Stimulus**",
@@ -6877,10 +6784,9 @@ def render_plot_controls(
         key="global_show_stimulus",
         persist_state="session",
     )
-    # Word boxes were a third layer inside 📄 Stimulus; they are a section of
-    # their own now, with a style (outline + fill) that the Stimulus popover had
-    # no room for. The switch keeps its `global_show_words` key, so links and
-    # saved configs are unchanged — only the Stimulus master no longer gates it.
+    # Word boxes are a section of their own, with a style (outline + fill) that
+    # the Stimulus popover has no room for. Its switch is `global_show_words`,
+    # and the Stimulus master switch does not gate it.
     show_word_boxes, boxes_grp = _rail_section(
         viz,
         f"{ICONS['word_boxes']} **Word boxes**",
@@ -6892,12 +6798,12 @@ def render_plot_controls(
         disabled=not has_words,
         help=_greyed_help((not has_words, "This trial has no word boxes.")),
     )
-    # UX-86: Overlays dissolved — Heatmap and Raw gaze are now peer sections,
+    # Heatmap and Raw gaze are peer sections,
     # each with exactly one thing to switch, so each carries its own toggle
     # on the row the way Fixations/Saccades do. `_mode_gate` is called again
     # (cheaply) where each layer's style popover needs its own `reason` text.
     heat_disabled, heat_reason = _mode_gate(animating, comparing, in_animation=False)
-    # VIZ-45: the heatmap draws from fixations or from the word boxes' own
+    # The heatmap draws from fixations or from the word boxes' own
     # measures, so only a trial with neither has nothing for it.
     heat_nothing = not has_fixations and not has_words
     heat_nothing_note = (
@@ -6923,8 +6829,8 @@ def render_plot_controls(
         # Nothing to draw: the popover body's own `_layer_off` caption says it.
         note="" if heat_nothing else heat_reason,
     )
-    # VIZ-48: the comparison builder draws each reading's samples; the replay
-    # still has no raw-gaze layer (VIZ-49).
+    # The comparison builder draws each reading's samples; the replay
+    # has no raw-gaze layer.
     raw_disabled, raw_reason = _mode_gate(animating, comparing, in_animation=False)
     show_raw_gaze, raw_gaze_grp = _rail_section(
         viz,
@@ -6943,19 +6849,17 @@ def render_plot_controls(
             raw_reason,
         ),
     )
-    # UX-72 — ONE filter section for the whole figure, a peer of the layer
-    # sections rather than a 🧹 popover inside each of them. "Filter the plot"
-    # was two controls, in two places, each two clicks deep; it is one place
-    # now, and it sits after the layers because it thins what they draw.
+    # ONE filter section for the whole figure, a peer of the layer sections
+    # rather than a popover inside each of them; it sits after the layers
+    # because it thins what they draw.
     #
-    # Not to be confused with the filter funnel on the control line (#UX-64),
-    # which narrows
-    # the *trial pool* — which readings you can pick. This one thins one
-    # reading. The badge still says an active filter is on, or a thinned figure
-    # reads as missing data; with two filters folded together it now reports
-    # both, so `•` on the section means at least one of them is narrowing.
-    # UX-80: no toggle — filtering is not a layer — but the same row shape, so
-    # its controls open over the page instead of being cropped by the rail.
+    # Not to be confused with the filter funnel on the control line, which
+    # narrows the *trial pool* — which readings you can pick. This one thins one
+    # reading. The badge says an active filter is on, or a thinned figure reads
+    # as missing data; it reports both halves, so `•` on the section means at
+    # least one of them is narrowing. No toggle — filtering is not a layer — but
+    # the same row shape, so its controls open over the page instead of being
+    # cropped by the rail.
     _filter_none, filter_grp = _rail_section(
         viz,
         f"{ICONS['plot_filter']} **Filters & highlights**{_plot_filter_badge()}",
@@ -6968,16 +6872,16 @@ def render_plot_controls(
     # themselves use).
     filter_fix_slot = filter_grp.container()
     filter_sac_slot = filter_grp.container()
-    # CMP-24: scanpath B's own filters, filled by `render_compare_filters` once B
+    # Scanpath B's own filters, filled by `render_compare_filters` once B
     # is loaded (below the rail). Handed back through `slots`, not the settings
     # dict, which is hashed into figure keys and must stay plain data.
     if comparing and slots is not None:
         slots["compare_filter"] = filter_grp.container()
     ab = " · A" if comparing else ""
-    # Canvas/text and the former Figure/axes controls share one disclosure: both
+    # The canvas controls and the figure/axes controls share one section: both
     # describe the figure's framing rather than a data layer. The injected canvas
-    # renderer writes directly into this expander (not a nested expander), as its
-    # own popover sub-groups — see the "Figure & canvas" block below.
+    # renderer writes into its groups directly — see the "Figure & canvas" block
+    # below.
     _figure_none, figure_grp = _rail_section(
         viz,
         f"{ICONS['figure']} **Figure & canvas**",
@@ -6986,15 +6890,15 @@ def render_plot_controls(
     )
 
     # --- Fixations --------------------------------------------------------
-    # The Fixations toggle reaches the static figure AND Compare (CMP-7 — the
+    # The Fixations toggle reaches the static figure AND Compare (the
     # comparison heatmap is unreadable under two full sets of markers). Only the
     # animated replay ignores it: the replay *is* the fixation trail, so there is
     # nothing left to draw with it off, and `make_scanpath_animation` takes no
     # `show_fixations` argument.
-    # The toggle is on the section's row (UX-80); the styling below is still
+    # The toggle is on the section's row; the styling below is still
     # (partly) live in Animate / Compare, so the popover stays reachable even
     # when the (inert) layer toggle reads off.
-    # UX-158: every title in this popover is short, so its label column is
+    # Every title in this popover is short, so its label column is
     # narrower than the rail's, bringing the fields closer to their titles; the
     # keyed container is what `styles.py` spaces the rows apart by.
     with (
@@ -7012,14 +6916,11 @@ def render_plot_controls(
         # markers on one shared scale / one shared category→colour mapping,
         # and each scanpath's flat colour becomes its marker outline.
         metric_disabled, metric_reason = _mode_gate(animating, comparing)
-        # UX-158: colour, shape, size and opacity are one "Marker" group — a
-        # title on the first row and a short caption per row, instead of a full
-        # title each (VIZ-17 → UX-154 put the flat colour / colorscale beside
-        # the colour-by pick; UX-156 briefly squeezed shape, size and opacity
-        # into one row of unlabelled boxes). The swatch shows while
-        # **(uniform)** is picked, the colorscale once a column is; the flat
-        # colour is inert in Compare, where each scanpath wears its own colour
-        # (see "Per-scanpath (comparison)" below).
+        # Colour, shape, size and opacity are one "Marker" group — a title on
+        # the first row and a short caption per row, instead of a full title
+        # each. The swatch shows while **(uniform)** is picked, the colorscale
+        # once a column is; the flat colour is inert in Compare, where each
+        # scanpath wears its own colour (see `_render_compare_fix_styles`).
         by_help = _gated_help(
             "The column that colors the markers. **One color**: the "
             "color in the box beside it. A numeric column: the color scale "
@@ -7048,7 +6949,7 @@ def render_plot_controls(
         by_col, style_col = field.columns(
             [0.6, 0.4], gap=_LABEL_GAP, vertical_alignment="center"
         )
-        # DATA-66: the dataset's own names, its columns before the app's.
+        # The dataset's own names, its columns before the app's.
         rail_names = _rail_names()
         color_labels = rail_names.option_labels(
             color_fields,
@@ -7069,7 +6970,7 @@ def render_plot_controls(
             format_func=color_labels.__getitem__,
             key="global_color_by",
             persist_state="session",
-            # VIZ-46: a chosen colour range is in the units of the column it was
+            # A chosen colour range is in the units of the column it was
             # chosen for, so picking another column puts it back to auto rather
             # than clamping ms into, say, surprisal's (often one-value) span.
             on_change=forget_color_range,
@@ -7143,7 +7044,7 @@ def render_plot_controls(
             # (durations, surprisal, … all read cleaner as ints); values
             # stay floats so a restored config on different data clamps in.
             # The bounds span the loaded pool; the *default* is auto — each
-            # trial on its own scale, like the API (VIZ-46).
+            # trial on its own scale, like the API.
             cmin = float(math.floor(raw_cmin))
             cmax = float(math.ceil(raw_cmax))
             cmax_eff = cmax if cmax > cmin else cmin + 1.0
@@ -7160,9 +7061,9 @@ def render_plot_controls(
                 reason=metric_reason,
                 help="The values at the two ends of the color scale.",
             )
-        # VIZ-15: shape survives greyscale printing where hue doesn't, and
-        # VIZ-23 made it a true global — the one marker property Compare does
-        # NOT override per scanpath.
+        # Shape survives greyscale printing where hue doesn't, and it is a
+        # true global — the one marker property Compare does NOT override
+        # per scanpath.
         shape_help = (
             "Marker shape. Applies to every figure, and to both scanpaths in Compare."
         )
@@ -7225,16 +7126,16 @@ def render_plot_controls(
                 ),
                 field_host=_sub_row("Opacity", caption_help=opac_help),
             )
-        # #422: the outline round each filled marker, which used to be a fixed
-        # 0.5 px near-black hairline — one for every figure, both scanpaths of
-        # a comparison included. A hollow marker's ring is its colour.
+        # The outline round each filled marker — one for every figure, both
+        # scanpaths of a comparison included. A hollow marker's ring is its
+        # colour.
         _render_marker_outline_row(comparing)
         # The fixations' own colour bar, after the marker groups — idle unless
         # the colour-by column is numeric, since a discrete palette has no
-        # scale to show. #422: the greyed row then says why, and where the
-        # thing on the figure that looks like one is switched — a categorical
-        # colour's legend is the Legends table's, and a greyed, checked *Show*
-        # here read as a bar that could not be removed.
+        # scale to show. The greyed row then says why, and where the thing on
+        # the figure that looks like one is switched — a categorical colour's
+        # legend is the Legends table's; a greyed, checked *Show* here alone
+        # would read as a bar that cannot be removed.
         if color_by == UNIFORM_COLOR_FIELD:
             bar_idle = f"{ICONS['warning']} No color bar: the markers are one color."
         elif raw_cmin is None:
@@ -7250,17 +7151,17 @@ def render_plot_controls(
             disabled=metric_disabled or bool(bar_idle),
             reason=metric_reason or bar_idle,
         )
-        # PRE-3: vertical drift correction. Snap each fixation to its assigned
+        # Vertical drift correction. Snap each fixation to its assigned
         # text line using one of the Carr et al. (2021) algorithms; "Off"
-        # leaves the raw coordinates. VIZ-23 hoisted the correction above the
-        # render-mode split in `tabs.py`, so the *algorithm* now applies on all
+        # leaves the raw coordinates. The correction runs above the
+        # render-mode split in `tabs.py`, so the *algorithm* applies on all
         # three paths. The CONNECTORS don't: only `make_scanpath_figure` has a
         # connector layer, and drawing a full-length "original position" layer
         # from frame zero would misread as part of the replay's trail.
         static_disabled, static_reason = _mode_gate(
             animating, comparing, **_static_only
         )
-        # PRE-21: not fully integrated, so hidden unless SCANPATH_EXPERIMENTAL
+        # Not fully integrated, so hidden unless SCANPATH_EXPERIMENTAL
         # is set. The keys keep their defaults ("Off"), so nothing downstream
         # needs a second gate to render correctly.
         if drift_correction_enabled():
@@ -7290,17 +7191,17 @@ def render_plot_controls(
                         static_reason,
                     ),
                 )
-        # UX-155: the switch, the label colour and the label size share one
+        # The switch, the label colour and the label size share one
         # row, the last two greyed while the switch is off (never hidden, and
         # never rewritten — a disabled widget keeps its key). The size is a
-        # number box rather than UX-9's slider + box: three controls do not
+        # number box rather than a slider + box: three controls do not
         # leave a slider enough width to be draggable.
         order_disabled, order_help = _layer_gate(
             False, "Number each fixation by its order in the trial."
         )
         label_w = _label_w()
         rest = 1.0 - label_w
-        # UX-158: the checkbox says what it does ("Show") and the number box is
+        # The checkbox says what it does ("Show") and the number box is
         # captioned, so the row reads without hovering.
         label_col, check_col, color_col, size_cap_col, size_col = st.columns(
             [label_w, rest * 0.26, rest * 0.2, rest * 0.18, rest * 0.36],
@@ -7329,7 +7230,7 @@ def render_plot_controls(
             help=_tip,
             label_visibility="collapsed",
         )
-        # A shadow box (`__num`) writing the canonical key, as UX-9's boxes do:
+        # A shadow box (`__num`) writing the canonical key, as the slider boxes do:
         # the rail's CSS drops a `__num` box's steppers, and the canonical key is
         # what deep links, Share and restore read. Rounded, since a link or a
         # restored config can hand back a float and the box has int bounds.
@@ -7339,7 +7240,7 @@ def render_plot_controls(
             st.session_state[size_num_key] = round(st.session_state[size_key])
 
         def _apply_index_size() -> None:
-            if _shadow_key_missing(size_num_key):  # BUG-18
+            if _shadow_key_missing(size_num_key):
                 return
             st.session_state[size_key] = st.session_state[size_num_key]
 
@@ -7359,14 +7260,13 @@ def render_plot_controls(
             help=_tip,
             label_visibility="collapsed",
         )
-        # #422 Snap to line, the fixation half of VIZ-9 (its partner is
-        # ↗️ Saccades ▾ → Shape → Arc). It replaced "Snap above words", which
-        # moved a fixation onto its word sideways too: a fixation now keeps
-        # its x and moves only up or down, onto its line, *Position* line
-        # heights from the line's middle (−0.5, the top edge, by default —
-        # where the old snap drew it). Still `make_scanpath_figure`-only,
-        # unlike the drift correction — hence its own gate. UX-156 put it at
-        # the bottom of the panel: it is a schematic mode, not marker styling.
+        # Snap to line, the fixation half of the linear-reading schematic (its
+        # partner is ↗️ Saccades ▾ → Shape → Arc). A fixation keeps its x and
+        # moves only up or down, onto its line, *Position* line heights from
+        # the line's middle (−0.5, the top edge, by default). It is
+        # `make_scanpath_figure`-only, unlike the drift correction — hence its
+        # own gate. It sits at the bottom of the panel: it is a schematic mode,
+        # not marker styling.
         snapped, _ = _check_row(
             "Snap",
             key="global_fixation_snap_to_line",
@@ -7401,15 +7301,15 @@ def render_plot_controls(
             ),
         )
 
-    # VIZ-27: filtering decides which fixations are visible; it is not marker
-    # appearance. Keep it beside the fixation layer as a first-class popover and
-    # show a local badge so an active Discard cannot be forgotten. A chip in the
-    # trial-fact strip was rejected because this is a view setting, not trial data.
-    # CMP-24: every builder honours the flags now — Compare draws each scanpath
-    # under its own set — so nothing greys this block any more.
+    # Filtering decides which fixations are visible; it is not marker
+    # appearance. It has a block of its own with a local badge, so an active
+    # Discard cannot be forgotten — not a chip in the trial-fact strip,
+    # because this is a view setting, not trial data. Every builder honours
+    # the flags — Compare draws each scanpath under its own set — so nothing
+    # greys this block.
     _flag_dis, _flag_reason = False, ""
-    # UX-162: the subsection says only why it is greyed, when it is; what it does
-    # is in the rows' tooltips now, beside the controls it describes.
+    # The subsection says only why it is greyed, when it is; what it does
+    # is in the rows' tooltips, beside the controls it describes.
     with (
         _rail_subsection(
             filter_fix_slot,
@@ -7426,15 +7326,15 @@ def render_plot_controls(
         ),
         _popover_rows("filter_fix"),
     ):
-        # VIZ-27 follow-up: the index window removes fixations just like the
+        # The index window removes fixations just like the
         # short/long/OOB rules, so it belongs here rather than under marker style.
-        # The max follows the selected trial (BUG-16).
+        # The max follows the selected trial.
         _render_fix_range_slider(fix_range_fixations)
         _render_fixation_cleaning(disabled=_flag_dis, reason=_flag_reason)
 
     # --- Saccades ---------------------------------------------------------
-    # UX-159: laid out like 👁️ Fixations (UX-158) — one *Line* group (colour,
-    # style, width, opacity, shape) with a caption per row, then *Direction arrows* as a
+    # Laid out like 👁️ Fixations — one *Line* group (colour, style, width,
+    # opacity, shape) with a caption per row, then *Direction arrows* as a
     # `label | ☑ Show` row.
     with (
         sac_grp,
@@ -7445,7 +7345,7 @@ def render_plot_controls(
         ),
         _popover_rows("sac"),
     ):
-        # VIZ-8 / VIZ-19: uniform colour, the two-way forward-vs-regression
+        # Uniform colour, the two-way forward-vs-regression
         # split, or the full reading-class breakdown. Reading-class colouring
         # is a `make_scanpath_figure` feature — the animation draws one
         # uniform saccade colour and the comparison overlay one colour per
@@ -7453,7 +7353,7 @@ def render_plot_controls(
         class_disabled, class_reason = _mode_gate(animating, comparing, **_static_only)
         # The single uniform colour, style and width: honoured by the static
         # figure and the animation; Compare paints each scanpath in its own
-        # colour and style instead (see "Per-scanpath (comparison)" below).
+        # colour and style instead (see `_render_compare_saccade_styles`).
         _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
         mode_disabled, mode_help = _layer_gate(
             class_disabled,
@@ -7510,7 +7410,7 @@ def render_plot_controls(
                 label_visibility="collapsed",
             )
         else:
-            # VIZ-19: the two-way mode reuses the same class colours, so only
+            # The two-way mode reuses the same class colours, so only
             # the pickers it actually draws with, three to a row.
             classes = (
                 list(SACCADE_DIRECTION_CLASSES)
@@ -7534,7 +7434,7 @@ def render_plot_controls(
                 ):
                     # `persist_state` is what keeps a picker first drawn in a
                     # popover from mounting at its proto default (black) while
-                    # the figure draws the stored colour (BUG-15 / ENG-36).
+                    # the figure draws the stored colour.
                     col.color_picker(
                         SACCADE_CLASS_LABELS[cls_name],
                         key=f"global_saccade_class_color_{cls_name}",
@@ -7544,7 +7444,7 @@ def render_plot_controls(
         if comparing:
             _compare_saccade_line_rows(0)
         else:
-            # A selectbox, not UX-80's segmented control: four segments do not fit
+            # A selectbox, not a segmented control: four segments do not fit
             # beside a caption, and a wrapped control reads as two settings.
             if st.session_state.get("global_saccade_style") not in SACCADE_DASH_OPTIONS:
                 st.session_state["global_saccade_style"] = "Solid"
@@ -7577,7 +7477,7 @@ def render_plot_controls(
                 help=_gated_help("Thickness of the saccade lines. Default 2.", _reason),
                 field_host=_sub_row("Width", caption_help=width_help),
             )
-        # #422: one opacity for the lines and their arrows, on every figure —
+        # One opacity for the lines and their arrows, on every figure —
         # in Compare and the co-animation both scanpaths share it, as they
         # share Shape below (their own colour, style and width tell them apart).
         opacity_text = (
@@ -7599,8 +7499,8 @@ def render_plot_controls(
                 "Opacity", caption_help=_layer_gate(False, opacity_text)[1]
             ),
         )
-        # VIZ-9: "linear reading" schematic — arched saccades. Its paired
-        # control, Snap to line (#422), remains under Fixations because it moves
+        # "Linear reading" schematic — arched saccades. Its paired
+        # control, Snap to line, is under Fixations because it moves
         # fixations. Arcs are a `make_scanpath_figure` feature.
         shape_disabled, shape_help = _layer_gate(
             class_disabled,
@@ -7623,7 +7523,7 @@ def render_plot_controls(
         if comparing:
             # Scanpath B's group, under A's (whose last row is the shared Shape).
             _render_compare_saccade_styles()
-        # VIZ-23 gave `make_scanpath_animation` an arrow layer of its own (each
+        # `make_scanpath_animation` has an arrow layer of its own (each
         # arrowhead un-masks with the saccade it belongs to), so direction
         # arrows reach all three builders.
         arrows_on, _ = _check_row(
@@ -7632,7 +7532,7 @@ def render_plot_controls(
             persist_state="session",
             help="An arrowhead on each saccade, pointing in the gaze direction.",
         )
-        # #422: the arrowheads' size, which used to be a fixed 12 px.
+        # The arrowheads' size.
         arrow_help = (
             "The arrowheads' size, in px. Default 12."
             if arrows_on
@@ -7654,16 +7554,13 @@ def render_plot_controls(
             ),
         )
 
-    # VIZ-31: the Saccades section's *filter* sub-section, the counterpart to the
-    # fixation one above — which reading classes are drawn at all, as opposed to
-    # what colour they are drawn in. "Show only the regressions" is the figure a
-    # reading paper asks for, and until now the only way to approximate it was to
-    # colour the other four classes to match the background. Static-only for the
-    # same reason the class *colouring* is: the classification never reaches the
-    # animation or comparison builders (see CLAUDE.md's render-path table), so the
-    # picker greys out there rather than silently dropping the filter.
-    # CMP-24: the comparison builders honour the class filter now; only the
-    # animation still has no classification to filter on.
+    # The saccade *filter* block, the counterpart to the fixation one above —
+    # which reading classes are drawn at all, as opposed to what colour they are
+    # drawn in. "Show only the regressions" is the figure a reading paper asks
+    # for. The static and comparison builders honour it (Compare per scanpath);
+    # the animation has no classification to filter on, so the picker greys out
+    # there rather than silently dropping the filter (see the render-path table
+    # in AGENTS.md).
     _cls_dis, _cls_reason = _mode_gate(animating, comparing, in_animation=False)
     with (
         _rail_subsection(
@@ -7697,14 +7594,14 @@ def render_plot_controls(
         )
 
     # --- Stimulus ---------------------------------------------------------
-    # UX-163: the Fixations layout (UX-158). Each of the section's layers is a
+    # The Fixations layout. Each of the section's layers is a
     # `label | ☑ Show` row — *Text*, *Image* — with what it governs as
-    # captioned rows under it, greyed while it is off (UX-97) rather than
+    # captioned rows under it, greyed while it is off rather than
     # hidden; the span highlight is a *Highlight* row of its own. Word boxes
-    # have their own section now, and the hover fields moved to
+    # have their own section, and the hover fields are in
     # 📐 Figure & canvas → Hover.
     #
-    # UX-128: the layer switches and their settings stay live while the
+    # The layer switches and their settings stay live while the
     # section's master switch is off, so a user can set up what they want shown
     # before turning it back on — nothing here mutates them; `_collect_viz_
     # settings` only ANDs the master into what reaches the figure.
@@ -7722,16 +7619,16 @@ def render_plot_controls(
             "dataset's Recording setup (Data page); the rows below change only "
             "this figure.",
         )
-        # UX-81: the typography that draws this text lives beside the layer
+        # The typography that draws this text lives beside the layer
         # that draws it. Reserved here and filled by the single
         # `canvas_renderer` call in the 📐 Figure & canvas block below — one
         # call draws both halves, since a widget drawn twice is a duplicate-key
         # error. Keyed so `styles.py` spaces its rows like the popover's own.
         stim_text_slot = st.container(key="rail_rows_stim_text")
 
-        # "Highlight a span": the canonical value stays in
+        # "Highlight a span": the canonical value lives in
         # `global_critical_span_style` ("Mark text" | "Mark border" | "None"),
-        # so deep links / Share / restore are unchanged — the on/off and the
+        # which is what deep links / Share / restore carry — the on/off and the
         # mode widgets are derived from it each run, and their callbacks write
         # it back on interaction.
         canonical = st.session_state.get("global_critical_span_style", "Mark text")
@@ -7754,7 +7651,7 @@ def render_plot_controls(
         else:
             st.session_state.setdefault("global_highlight_span_mode", "Mark text")
 
-        # VIZ-23: the span's *text*-marking channel reaches all three builders —
+        # The span's *text*-marking channel reaches all three builders —
         # the animation and the comparison figure take `highlight_column` +
         # `highlight_text_color` and recolour the word labels. Neither has a
         # border-overlay layer, so **Mark border** stays a `make_scanpath_figure`
@@ -7786,7 +7683,7 @@ def render_plot_controls(
                 disabled=span_off_disabled,
                 label_visibility="collapsed",
                 placeholder="Choose a column",
-                # #374 F6: nothing is seeded outside the demo, and an unseeded
+                # Nothing is seeded outside the demo, and an unseeded
                 # selectbox would otherwise pick its first option itself.
                 **(
                     {}
@@ -7841,7 +7738,7 @@ def render_plot_controls(
                 label_visibility="collapsed",
             )
 
-        # VIZ-4: a stimulus image can come from the dataset (MultiplEYE stamps a
+        # A stimulus image can come from the dataset (MultiplEYE stamps a
         # per-trial `image_path`) OR be uploaded here for any dataset (a
         # full-monitor screenshot of the reading screen). The upload's `data:`
         # URI is stashed in session for the tab to place + the (pure) collector
@@ -7850,7 +7747,7 @@ def render_plot_controls(
         upload_uri = _uploaded_image_data_uri(uploaded_img)
         st.session_state["_stimulus_image_upload_uri"] = upload_uri
         can_show_image = has_stimulus_image or upload_uri is not None
-        # VIZ-23: `background_image*` are parameters of all three builders — the
+        # `background_image*` are parameters of all three builders — the
         # comparison figure places one `layout.image` per panel in the split
         # layouts — so the whole image group is live in every mode.
         show_stim_image, _ = _check_row(
@@ -7881,7 +7778,7 @@ def render_plot_controls(
         )
         # The placement rows need an image to place: with none loaded they
         # could never come alive, so they wait for one rather than sit greyed.
-        # Loaded but switched off, they grey (UX-97).
+        # Loaded but switched off, they grey.
         if can_show_image:
             image_idle = not show_stim_image
             opacity_help = "Image opacity."
@@ -7898,7 +7795,7 @@ def render_plot_controls(
                 help=opacity_help,
                 field_host=_sub_row("Opacity", caption_help=opacity_help),
             )
-            # VIZ-4: manual alignment. When the data's coordinates don't match the
+            # Manual alignment. When the data's coordinates don't match the
             # image exactly, nudge it (X/Y px) and scale it to line it up with the
             # word boxes and fixations. Dataset and uploaded images alike.
             offset = _sub_row(
@@ -7947,12 +7844,12 @@ def render_plot_controls(
     # --- Heatmap ----------------------------------------------------------
     # Compare supports a shared word-box scale: overlay splits each box into
     # A/B halves; side-by-side and stacked tint their respective full boxes.
-    # Animation remains disabled because a time-varying density layer would
+    # Animation is disabled because a time-varying density layer would
     # need a distinct frame contract. The toggle itself is on the section's
-    # row now (UX-86); this block only owns the style popover's contents.
-    # UX-160: the Fixations layout (UX-158) — a *Style* row (the style picker,
-    # plus Duration mass's spread, greyed for the other two styles), then one
-    # *Color* group: what is mapped and its colorscale, the scaling, the range.
+    # row; this block only owns the style popover's contents, in the
+    # Fixations layout — a *Style* row (the style picker, plus
+    # Interpolated's Blur, greyed for Word boxes), then one *Color* group:
+    # what is mapped and its colorscale, the scaling, the range.
     with (
         heatmap_grp,
         _layer_off(
@@ -7962,10 +7859,9 @@ def render_plot_controls(
         ),
         _popover_rows("heatmap"),
     ):
-        # A selectbox now rather than a radio: three long options do not fit
-        # one line beside a title, and a wrapped radio reads as two settings.
-        # `persist_state` shows the seeded style on first open — the reason
-        # this was a radio, not a segmented control, before ENG-36.
+        # A selectbox rather than a radio: long options do not fit one line
+        # beside a title, and a wrapped radio reads as two settings.
+        # `persist_state` shows the seeded style on first open.
         style_disabled, style_help = _layer_gate(
             heat_disabled or comparing,
             _gated_help(
@@ -8055,9 +7951,9 @@ def render_plot_controls(
                 heat_reason,
             ),
         )
-        # `required` — a radio before UX-160, so it could never be deselected;
-        # an empty segmented control would read "nothing" while the figure
-        # draws Linear (the collector's fallback).
+        # `required`, so it can never be deselected: an empty segmented
+        # control would read "nothing" while the figure draws Linear (the
+        # collector's fallback).
         _sub_row("Scale", caption_help=norm_help).segmented_control(
             "Scaling",
             options=["Linear", "Log"],
@@ -8068,7 +7964,7 @@ def render_plot_controls(
             help=norm_help,
             label_visibility="collapsed",
         )
-        # Finding 11: bounded by what a word box maps — its summed dwell —
+        # Bounded by what a word box maps — its summed dwell —
         # not by the longest single fixation, which refixations exceed.
         # The dwell groupby runs only while the heatmap is shown; switched off,
         # the greyed range is drawn from the single-fixation span instead.
@@ -8089,11 +7985,11 @@ def render_plot_controls(
                 " at the two ends of the color scale; auto runs from 0 to the "
                 "trial's highest. You can type values beyond the slider."
             )
-            # Finding 12: the smoothed styles scale their density to their own
+            # The smoothed styles scale their density to their own
             # peak, so a range does nothing there — greyed, and kept for Word
             # boxes. Compare always draws word boxes, so it applies again.
             self_scaled = not comparing and heat_style in SELF_SCALED_HEATMAP_STYLES
-            # VIZ-46: auto (per trial, like the API) until a range is chosen.
+            # Auto (per trial, like the API) until a range is chosen.
             _render_color_range(
                 "Color range",
                 "global_heatmap_color_range",
@@ -8112,8 +8008,7 @@ def render_plot_controls(
                 field_host=_sub_row("Range", caption_help=range_text),
             )
 
-        # #422: one opacity for the heatmap, which each style used to fix —
-        # Auto keeps the style's own.
+        # One opacity for the heatmap; Auto keeps each style's own.
         opacity_help = _gated_help(
             "How opaque the heatmap is. Auto: each style's own — Word boxes "
             "0.5 (0.35 for a trial with no word boxes), Interpolated 0.45. "
@@ -8152,16 +8047,15 @@ def render_plot_controls(
         _render_colorbar_rows("heatmap", disabled=heat_disabled, reason=heat_reason)
 
     # Raw gaze is drawn by the static and comparison builders. The toggle is on
-    # the section's row (UX-86); this owns the style popover — previously
-    # nothing, since raw gaze had no styling of its own before it got a section.
-    # UX-161: one *Marker* group, as in 👁️ Fixations (UX-158).
+    # the section's row; this owns the style popover: one *Marker* group, as in
+    # 👁️ Fixations.
     with (
         raw_gaze_grp,
         _layer_off(f"{ICONS['raw_gaze']} Raw gaze", off=not show_raw_gaze),
         _popover_rows("rawgaze"),
     ):
         if comparing:
-            # VIZ-48: a comparison colours each reading's samples by its own
+            # A comparison colours each reading's samples by its own
             # scanpath (the A/B cue), so the *Marker* group becomes scanpath
             # A's — as in 👁️ Fixations — and B's group follows it.
             _compare_raw_gaze_color_row(0, disabled=raw_disabled)
@@ -8221,7 +8115,7 @@ def render_plot_controls(
             _compare_raw_gaze_color_row(1, disabled=raw_disabled)
     # --- Word boxes -------------------------------------------------------
     # The interest areas' outline and fill. One *Box* group, as raw gaze's
-    # *Marker* (UX-161). All three render paths draw the boxes; a static
+    # *Marker*. All three render paths draw the boxes; a static
     # comparison outlines and fills each reading's in its own colours.
     with (
         boxes_grp,
@@ -8298,23 +8192,23 @@ def render_plot_controls(
             )
 
     # --- Figure & canvas --------------------------------------------------
-    # UX-80/81: one popover, four named groups inside it and nothing nested —
+    # One popover, named groups inside it and nothing nested —
     #
     #   🖥️ Screen & framing   Crop to data (the monitor's size is the Data
     #                         page's Recording setup)
     #   📊 Axes & grid        the coordinate grid and the axis fields (each
     #                         colour bar is under its own layer)
-    #   🏷️ Title & labels     the Illustration disclosure + the EXP-5 title
-    #   💬 Hover              the word and fixation tooltip fields (moved here
-    #                         from 📄 Stimulus and 👁️ Fixations)
+    #   🏷️ Title & labels     the Illustration disclosure + the figure title
+    #   💬 Hover              the word and fixation tooltip fields
+    #   Legends               where each legend sits
     #
-    # 🔤 Text & fonts is **not** here any more: it describes the stimulus text,
-    # so it moved to 📄 Stimulus → Text (UX-81), beside the layer it draws. The
-    # physical-geometry fields (monitor width in mm, viewing distance, DPI) went
-    # with the same pass — they are experiment facts the 🗂️ Data page's Recording
-    # setup already owns, and a second set here could disagree with it.
+    # 🔤 Text & fonts is **not** here: it describes the stimulus text, so it
+    # sits in 📄 Stimulus → Text, beside the layer it draws. Nor are the
+    # physical-geometry fields (monitor width in mm, viewing distance, DPI) —
+    # they are experiment facts the 🗂️ Data page's Recording setup owns, and a
+    # second set here could disagree with it.
     #
-    # The three containers are created up front so each block keeps its place in
+    # The containers are created up front so each block keeps its place in
     # this file while landing in the right group.
     screen_group = _rail_subsection(
         figure_grp, f"{ICONS['screen']} Screen & framing", first=True
@@ -8323,11 +8217,11 @@ def render_plot_controls(
     labels = _rail_subsection(figure_grp, f"{ICONS['labels']} Title & labels")
     hover = _rail_subsection(figure_grp, f"{ICONS['hover']} Hover")
     legends = _rail_subsection(figure_grp, f"{ICONS['legend']} Legends")
-    # UX-163: each block's rows take the popover layout (`_popover_rows`) — the
-    # framing switch, the grid and the colour bar become `label | ☑ Show | …`
-    # rows carrying what they govern (greyed while off), the monitor size and
-    # the two axis fields one row each.
-    # #422: the static figure takes any X / Y field, but only screen x / y is a
+    # Each block's rows take the popover layout (`_popover_rows`) — the
+    # framing switch and the grid are `label | ☑ Show | …` rows carrying what
+    # they govern (greyed while off), the monitor size and the two axis fields
+    # one row each.
+    # The static figure takes any X / Y field, but only screen x / y is a
     # screen. On other axes it draws a plain chart of the fixations, so the
     # framing and the grid have nothing to act on: they grey, saying why.
     # (Animate and Compare always plot x / y, whatever the fields say.)
@@ -8352,7 +8246,7 @@ def render_plot_controls(
         )
 
         def _apply_crop() -> None:
-            if _shadow_key_missing(crop_key):  # BUG-18
+            if _shadow_key_missing(crop_key):
                 return
             st.session_state["global_fit_to_monitor"] = not st.session_state[crop_key]
 
@@ -8369,7 +8263,7 @@ def render_plot_controls(
                 chart_reason,
             ),
         )
-        # #422: the crop's margin, which used to be fixed — automatic (5% of
+        # The crop's margin — automatic (5% of
         # the data's extent, at least 20 px), or a number of screen px. Greyed,
         # not hidden, while the whole monitor is shown.
         cropping = not st.session_state.get("global_fit_to_monitor", True)
@@ -8406,8 +8300,8 @@ def render_plot_controls(
             label_visibility="collapsed",
         )
         _sub_caption(unit_col, "px")
-        # #422: the border round the plot area (each panel's, in Compare's
-        # side-by-side and stacked layouts), which was always drawn in black.
+        # The border round the plot area (each panel's, in Compare's
+        # side-by-side and stacked layouts).
         frame_off, frame_reason = chart_axes, None
         # "Border": the row above is already *Frame* (what the view frames).
         frame_shown, frame_rest = _check_row(
@@ -8432,9 +8326,9 @@ def render_plot_controls(
         )
         screen_rows = st.container(key="rail_rows_fig_screen_canvas")
     if canvas_renderer is not None:
-        # UX-163: the typography rows always draw, greyed while *Text* is off
-        # (`text_disabled`), at the popovers' label width. BUG-38 still holds:
-        # they belong to 📄 Stimulus → Text and never fall back into this one.
+        # The typography rows always draw, greyed while *Text* is off
+        # (`text_disabled`), at the popovers' label width. They belong to
+        # 📄 Stimulus → Text and must never fall back into this one.
         with _rail_label_width(_POPOVER_LABEL_W):
             canvas_renderer(
                 screen_rows,
@@ -8475,7 +8369,7 @@ def render_plot_controls(
             label_visibility="collapsed",
         )
         _sub_caption(px_col, "px")
-        # #422: the grid's tick labels, which used to be a fixed 18 px.
+        # The grid's tick labels' size.
         grid_font_help = _gated_help(
             "The grid's coordinate labels, in px. Default 18."
             if show_coordinate_grid
@@ -8498,7 +8392,7 @@ def render_plot_controls(
         )
 
         # The animation and the comparison figures always plot spatial x/y —
-        # only `make_scanpath_figure` takes `x_field`/`y_field`. #422: the
+        # only `make_scanpath_figure` takes `x_field`/`y_field`. The
         # greyed fields' hover says so, and what turns them back on.
         axis_disabled, _ = _mode_gate(animating, comparing, **_static_only)
         modes = " and ".join(
@@ -8551,12 +8445,12 @@ def render_plot_controls(
                 "coordinate grid."
             )
 
-    # EXP-5: title/caption on the figure — moved here from being Export-only
-    # (EXP-2), so it's visible live rather than a setting a user has to remember
-    # to go find under Export. This is now the single source of truth: the
-    # Export panel's bulk section reads these two patterns back instead of
-    # keeping its own copy, and the live figure on screen (all three render
-    # paths) carries the same title/caption a bulk export would produce.
+    # Title/caption on the figure — set here, so it's visible live rather than
+    # a setting a user has to remember to go find under Export. This is the
+    # single source of truth: the Export panel's bulk section reads these two
+    # patterns back instead of keeping its own copy, and the live figure on
+    # screen (all three render paths) carries the same title/caption a bulk
+    # export would produce.
     def _prefill(show_key: str, pattern_key: str, default: str) -> None:
         # Switching one on fills an empty box with a starting pattern, rather
         # than leaving one the user has to know the field syntax to fill. It
@@ -8594,7 +8488,7 @@ def render_plot_controls(
             help=text_help,
             label_visibility="collapsed",
         )
-        # EXP-22: the *selected* trial's frames, not the corpus the rail was
+        # The *selected* trial's frames, not the corpus the rail was
         # handed — its tables name the `{table.field}` fields the boxes validate
         # against and the list shows, and "one value per trial" has to be read
         # off one trial.
@@ -8603,15 +8497,14 @@ def render_plot_controls(
         )
         # Read only while one is shown: with both off, the greyed boxes ask
         # nothing of the fields (`preview=False`), so the default rerun does no
-        # title/caption work at all (PERF-7's rule).
+        # title/caption work at all.
         #
-        # #422: the fields the figure itself renders with — the selected trial,
-        # its `combos` row and the live settings, from `title_fields` — so the
-        # list, the validation and the preview agree with the figure. They used
-        # to be computed for a stand-in trial ("p01" · "t01") without its row,
-        # so the preview showed made-up ids and a field the figure accepts
-        # (`{TRIAL_INDEX}`, a composite id's parts, a reader table's columns)
-        # was refused as unknown.
+        # The fields are the ones the figure itself renders with — the selected
+        # trial, its `combos` row and the live settings, from `title_fields` — so
+        # the list, the validation and the preview agree with the figure. A
+        # stand-in trial without its row would show made-up ids in the preview
+        # and refuse fields the figure accepts (`{TRIAL_INDEX}`, a composite id's
+        # parts, a reader table's columns) as unknown.
         _title_caption_fields = {}
         if st.session_state.get("global_show_title") or st.session_state.get(
             "global_show_caption"
@@ -8632,7 +8525,7 @@ def render_plot_controls(
                     {},
                     dataset_name=current_dataset_name(),
                     metadata_rows=_selected_metadata_rows(_sel_fix),
-                    # DATA-66: the field list offers the dataset's own names too.
+                    # The field list offers the dataset's own names too.
                     column_names=_rail_names(),
                 )
         any_shown = False
@@ -8673,7 +8566,7 @@ def render_plot_controls(
                 label_visibility="collapsed",
                 preview=shown,
             )
-            # #422: how it is written — its size, and the caption's colour.
+            # How it is written — its size, and the caption's colour.
             key_name = name.lower()
             style_help = (
                 f"The {key_name}'s text size in px"
@@ -8747,8 +8640,8 @@ def render_plot_controls(
         )
 
     # Where each legend sits — and whether it is drawn at all: each row's *Show*
-    # is that legend's own switch (its key unchanged, so links, settings files
-    # and designs read as before), which used to sit under its layer. A row
+    # is that legend's own switch (the key links, settings files and designs
+    # carry). A row
     # appears only while the figure can draw that legend, so the table lists
     # what is on the plot rather than four rows that may do nothing.
     with legends, _popover_rows("fig_legends"):
@@ -8786,8 +8679,8 @@ def render_plot_controls(
                 persist_state="session",
                 label_visibility="collapsed",
             )
-            # A position spelled the old way (a link, a settings file or the
-            # recovery cache from before the eight spots) reads as its spot.
+            # A position spelled the older way (a link, a settings file or the
+            # recovery cache written before the eight spots) reads as its spot.
             pos_key = f"global_legend_{kind}_position"
             stored = st.session_state.get(pos_key)
             if stored is not None and stored not in LEGEND_POSITION_LABELS:
@@ -8869,7 +8762,7 @@ def _column_unique_strs(_df: pd.DataFrame, column: str, cache_key) -> list[str]:
 def _numeric_column_bounds(_df: pd.DataFrame, column: str, cache_key):
     """``(lo, hi, distinct)`` over a column's **finite** values, or ``None``.
 
-    UX-49's slider needs finite bounds and at least two distinct values — a
+    The range slider needs finite bounds and at least two distinct values — a
     one-option range control is the same family as the single-option
     ``st.select_slider`` that throws ``RangeError`` in the browser. ``None`` here
     means "render no slider", not "render a degenerate one". Infinities are
@@ -8927,7 +8820,7 @@ def _column_present_bools(_df: pd.DataFrame, column: str, cache_key) -> frozense
         return frozenset()
     # Callers pass only bool-dtype columns today (a string "True"/"False"
     # column takes the categorical path); read by meaning anyway, never by
-    # truthiness, so a future caller can't hide a class (round 11).
+    # truthiness, so a future caller can't hide a class.
     flags = coerce_bool_or_na(pd.Series(_df[column])).dropna()
     return frozenset(bool(v) for v in flags.unique())
 
@@ -8988,7 +8881,7 @@ def _bool_filter_narrowing(
 
 
 # What the two values of a well-known boolean condition column mean. A filter's
-# *title* is the dataset's own name for its column (DATA-66, `trial_filter_labels`);
+# *title* is the dataset's own name for its column (`trial_filter_labels`);
 # these name its values, and any other boolean column reads Yes / No.
 _FILTER_FIELD_LABELS = {
     "question_preview": {"true": "Hunting", "false": "Gathering"},
@@ -9003,8 +8896,8 @@ _DEFAULT_FILTER_FIELDS = [
     "difficulty_level",
     "repeated_reading_trial",
     "is_correct",
-    # UX-49: the offered set is otherwise all-categorical, which left the range
-    # slider invisible on every bundled and public corpus. Presentation order is
+    # Without it the offered set is all-categorical, and no bundled or public
+    # corpus would get a range slider. Presentation order is
     # the one numeric trial-level field that is both universal (EyeLink writes it
     # on every export) and worth filtering on — it is how you exclude the start
     # or the tail of a session when you suspect practice or fatigue effects.
@@ -9019,15 +8912,15 @@ _DEFAULT_FILTER_FIELDS = [
 _EMPTY_TRIAL_FILTERS: dict = {
     "participants": None,
     "metadata": {},
-    # UX-49: column → (lo, hi) for the numeric trial-level range filters. Kept
+    # Column → (lo, hi) for the numeric trial-level range filters. Kept
     # apart from `metadata` because that one is membership (`.isin`) and
     # enumerating a float column's values is exactly what doesn't work.
     "ranges": {},
     # The ranged columns whose *Keep unknown values* is off: a trial with no
     # value there is left out instead of kept (`data.filter_trials`).
     "ranges_drop_unknown": (),
-    # DATA-20: widget keys behind a participant-grain metadata narrowing (which
-    # lands in `participants`, not `metadata`), so UX-7's per-filter clear can
+    # Widget keys behind a participant-grain metadata narrowing (which
+    # lands in `participants`, not `metadata`), so the per-filter clear can
     # reset the control that actually caused it.
     "participant_filter_keys": (),
     "favorites_only": False,
@@ -9037,7 +8930,7 @@ _EMPTY_TRIAL_FILTERS: dict = {
 
 
 #: Every filter-layer namespace in the app. ``""`` is the main trial pool;
-#: ``"cmp"`` is compare mode's scanpath B (CMP-8 §5.2). The empty prefix's
+#: ``"cmp"`` is compare mode's scanpath B. The empty prefix's
 #: clear-sweep uses this to know which keys are *not* its own — without it,
 #: "Clear all filters" on A would wipe B too, since ``"filter_"`` is a prefix of
 #: ``"cmpfilter_"``. Register a new instance here, not just at its call site.
@@ -9047,9 +8940,9 @@ FILTER_PREFIXES: tuple = ("", "cmp")
 def read_trial_filters(prefix: str = "") -> dict:
     """The trial-filter selections to apply this run.
 
-    ``prefix`` scopes the whole filter layer to one instance (CMP-8 §5.2). The
-    default ``""`` is the main pool and leaves every existing call site
-    byte-identical; compare mode's scanpath **B** renders with ``prefix="cmp"``
+    ``prefix`` scopes the whole filter layer to one instance. The
+    default ``""`` is the main pool; compare mode's scanpath **B** renders with
+    ``prefix="cmp"``
     so it can be narrowed on *its own* dataset's columns, which A's filters may
     not even have.
 
@@ -9057,13 +8950,13 @@ def read_trial_filters(prefix: str = "") -> dict:
     session_state value (not a widget key), so it survives runs where the filter
     panel itself isn't rendered — e.g. when a non-Scanpath view is active on the
     top nav. ``main()`` reads this *before* the tab renders, so filtering
-    stays global even though the controls now live in the Trial Selection panel.
+    stays global across every view.
     """
     return dict(st.session_state.get(f"{prefix}_trial_filters", _EMPTY_TRIAL_FILTERS))
 
 
 def clear_trial_filters(prefix: str = "") -> None:
-    """Reset every trial filter to "no constraint" (UX-7's one-click escape).
+    """Reset every trial filter to "no constraint" (the one-click escape).
 
     All of them — the Narrow-by multiselects, the More-popover condition filters,
     and the annotation filters — live under the ``filter_`` key prefix, so
@@ -9085,9 +8978,9 @@ def clear_trial_filters(prefix: str = "") -> None:
 def _own_filter_keys(prefix: str) -> list:
     """Filter widget keys belonging to ``prefix`` and to no *longer* prefix.
 
-    The sweep used to be prefix-blind, which is fine while there is one filter
-    set and wrong the moment there are two: ``"filter_"`` is a prefix of
-    ``"cmpfilter_"``, so clearing A's filters would silently wipe B's as well.
+    A prefix-blind sweep would be wrong with two filter sets: ``"filter_"`` is
+    a prefix of ``"cmpfilter_"``, so clearing A's filters would silently wipe
+    B's as well.
     Matching forwards is not enough — the empty prefix has to explicitly skip
     keys carrying a known namespace.
     """
@@ -9101,7 +8994,7 @@ def _own_filter_keys(prefix: str) -> list:
 
 
 def reset_viz_settings() -> None:
-    """Put every visualization setting back to the app's defaults (UX-26).
+    """Put every visualization setting back to the app's defaults.
 
     The mechanism is ``clear_trial_filters``' — delete the widget keys and let
     each control re-seed from ``_VIZ_WIDGET_DEFAULTS`` (plus the data-dependent
@@ -9129,7 +9022,7 @@ def reset_viz_settings() -> None:
 
     keys = set(_sk.PLOT_CONFIG_STATE_KEYS)
     keys |= set(_sk.compare_state_keys(0)) | set(_sk.compare_state_keys(1))
-    # CMP-24 — B's own filters and window.
+    # B's own filters and window.
     keys |= set(_sk.COMPARE_B_FILTER_STATE_KEYS) | {
         _sk.SINGLE_COMPARE_FIX_RANGE,
         f"{_sk.SINGLE_COMPARE_FIX_RANGE}_user_set",
@@ -9144,7 +9037,7 @@ def reset_viz_settings() -> None:
         _QUICK_VIEW_APPLIED_STATE,
         _QUICK_VIEW_DRIFTED_FROM,
     }
-    # VIZ-39: `DESIGN_PRESETS_KEY` is deliberately NOT in that set. Reset puts
+    # `DESIGN_PRESETS_KEY` is deliberately NOT in that set. Reset puts
     # the *view* back to defaults; the user's saved designs are a library, not
     # a view, and losing them to a reset button would be the kind of undoless
     # deletion nothing here offers.
@@ -9157,7 +9050,7 @@ def reset_viz_settings() -> None:
     st.session_state.pop("_font_seeded_for", None)
     st.session_state.pop("_palette_picked", None)
     st.session_state.pop(_PRE_ILLUSTRATION_STATE, None)
-    # VIZ-45 — and the raw-gaze layer's dataset default, the same way.
+    # And the raw-gaze layer's dataset default, the same way.
     _forget_raw_gaze_default(st.session_state)
     for param in (*_sk.URL_PRESET_PARAMS, *_sk.LEGEND_PARAMS):
         st.query_params.pop(param, None)
@@ -9166,7 +9059,7 @@ def reset_viz_settings() -> None:
 def clear_trial_filter(
     *keys: str, prefix: str = "", frames: tuple | None = None
 ) -> None:
-    """Reset *one* trial filter (UX-7) — the same mechanism as the reset-all.
+    """Reset *one* trial filter — the same mechanism as the reset-all.
 
     Deleting the widget's key is the correct reset for every filter shape here,
     because each re-seeds to its own "no constraint" default on the next render:
@@ -9174,11 +9067,11 @@ def clear_trial_filter(
     unchecked for Favorites. Safe as a button ``on_click`` for the same reason
     :func:`clear_trial_filters` is.
 
-    BUG-115: only ``keys`` leave the ``_trial_filters_raw`` mirror. The
+    Only ``keys`` leave the ``_trial_filters_raw`` mirror. The
     empty-pool panel, the one caller, replaces the view and its filter funnel,
     so on that run Streamlit has dropped every filter widget's key and the
-    mirror is all that remembers the *other* filters; dropping it whole cleared
-    them all. With ``frames`` (the ``(words, fixations)`` the funnel filters)
+    mirror is all that remembers the *other* filters; dropping it whole would
+    clear them all. With ``frames`` (the ``(words, fixations)`` the funnel filters)
     the survivors are seeded back into their widget keys and the result is
     re-derived, so the next run applies them instead of one run later.
     """
@@ -9215,7 +9108,7 @@ def has_active_trial_filters(prefix: str = "") -> bool:
     )
 
 
-#: UX-198 — the titles of the filters whose session key is not
+#: The titles of the filters whose session key is not
 #: ``filter_<column>``; every other one is titled by its column.
 _FILTER_KEY_LABELS = {
     "filter_participants": "Participant",
@@ -9225,15 +9118,15 @@ _FILTER_KEY_LABELS = {
     "filter_exc_tags": "Excluding tags",
 }
 
-#: The metadata filters' key stems (DATA-20 / DATA-29 / text grain), longest
+#: The metadata filters' key stems (participant / trial / text grain), longest
 #: first so ``filter_meta_`` cannot claim a ``filter_metadata_…`` column.
 _METADATA_FILTER_STEMS = ("filter_trialmeta_", "filter_textmeta_", "filter_meta_")
 
 
 def active_filter_keys(trial_filters: dict, prefix: str = "") -> list[str]:
-    """The widget keys behind every narrowing in ``trial_filters`` (UX-198).
+    """The widget keys behind every narrowing in ``trial_filters``.
 
-    The filter result already carries them for UX-7's per-filter clear; this
+    The filter result already carries them for the per-filter clear; this
     lists them once, in the panel's order, so a summary of the pool names the
     same controls the panel shows.
     """
@@ -9311,7 +9204,7 @@ def describe_filter_keys(
 def active_filter_items(
     words: pd.DataFrame, fixations: pd.DataFrame, *, prefix: str = ""
 ) -> list[dict]:
-    """What is narrowing the pool this run, one entry per filter (UX-198).
+    """What is narrowing the pool this run, one entry per filter.
 
     Read from the result ``app.main`` filtered with (``read_trial_filters``),
     so the list always matches the counts beside it. The values are the
@@ -9375,8 +9268,8 @@ _CHIP_TEXT_ID_COLS = (
     "paragraph_id",
 )
 # Sensible default chips: trial identity + the common OneStop conditions + the
-# computed trial-level summary stats (which the chips replaced the Trial Info tab
-# with). The "@"-prefixed keys are virtual fields computed per trial in
+# computed trial-level summary stats. The "@"-prefixed keys are virtual fields
+# computed per trial in
 # `tabs._render_trial_condition_chips` (see SUMMARY_CHIP_FIELDS).
 _CHIP_DEFAULT_CONDITIONS = [
     "difficulty_level",
@@ -9389,42 +9282,39 @@ _CHIP_DEFAULT_CONDITIONS = [
     "pp_age",
     "pp_gender",
 ]
-# Virtual chip fields → label. These are computed per trial (not data columns),
-# always trial-level, and folded in from the former Trial Info tab's summary.
+# Virtual chip fields → label. These are computed per trial (not data columns)
+# and always trial-level.
 SUMMARY_CHIP_FIELDS = {
-    # #374 F8: the sum of the fixation durations (or the recorded dwell time),
-    # not the time spent on the trial — that is the next chip. The key keeps
-    # its old name: saved chip lists carry it.
+    # The sum of the fixation durations (or the recorded dwell time),
+    # not the time spent on the trial — that is the next chip. The key says
+    # "reading time" because saved chip lists carry that name.
     "@reading_time_s": "Total fixation time (s)",
     "@trial_duration_s": "Trial duration (s)",
     "@word_count": "Number of words",
     "@fixation_count": "Number of fixations",
     "@in_text_fixations": "Fixations in word boxes",
-    # VIZ-45: a raw-gaze trial's own headline number. Written only for a trial
+    # A raw-gaze trial's own headline number. Written only for a trial
     # that has samples (`tabs._summary_rows`), so a dataset without raw gaze
     # never shows it.
     "@gaze_sample_count": "Number of gaze samples",
 }
-#: What each summary chip counts, as its tooltip (#374 F8).
+#: What each summary chip counts, as its tooltip.
 SUMMARY_CHIP_HELP = {
     "@reading_time_s": "The sum of the trial's fixation durations "
     "(the recorded trial dwell time when the data has one).",
     "@trial_duration_s": "From the first fixation's onset to the last fixation's "
     "end, saccades included. Only when the data records fixation onsets.",
 }
-#: …and the ones shown by default. The other two are offered in *Available*
-#: like any other field. All four used to be default chips behind a **Summary
-#: stats** popover; now that they are chips on the strip itself, four of them
-#: crowd out the conditions beside them — and reading time and the fixation
-#: count are the ones worth a permanent chip ("how long was this reading, and
-#: how many fixations"). Word count is a property of the text rather than of
-#: the reading, and the in-text count only means something when you are
-#: already chasing a geometry problem.
+#: …and the ones shown by default. The other two (word count, in-text count)
+#: are offered in *Available* like any other field: every summary chip on the
+#: strip would crowd out the conditions beside them. Word count is a property
+#: of the text rather than of the reading, and the in-text count only means
+#: something when you are already chasing a geometry problem.
 #:
-#: VIZ-45 added the gaze-sample count. A summary chip is drawn only for a number
-#: the trial has, so a trial with fixations and no samples still shows the same
-#: two chips, and a raw-gaze-only trial — whose reading time and fixation count
-#: were never measured and are left out — shows the one count it has.
+#: A summary chip is drawn only for a number the trial has, so a trial with
+#: fixations and no samples shows no gaze-sample chip, and a raw-gaze-only
+#: trial — whose reading time and fixation count were never measured and are
+#: left out — shows the one count it has.
 _CHIP_DEFAULT_SUMMARY = (
     "@reading_time_s",
     "@trial_duration_s",
@@ -9477,7 +9367,7 @@ def _chip_field_options(words, fixations, trial_level: set) -> list[str]:
     cols: list[str] = []
 
     def add(c: str) -> None:
-        # #374 F5: one chip per role — `unique_trial_id` beside `trial_id` would
+        # One chip per role — `unique_trial_id` beside `trial_id` would
         # be a second "Trial", told apart only by an internal name.
         role = cn.ROLE_LABELS.get(c)
         if role is not None and any(cn.ROLE_LABELS.get(x) == role for x in cols):
@@ -9491,12 +9381,12 @@ def _chip_field_options(words, fixations, trial_level: set) -> list[str]:
     for c in list(words.columns) + list(fixations.columns):
         if c in trial_level and c not in INTERNAL_COLUMNS:
             add(c)
-    # DATA-20: participant-grain metadata is constant within a trial by
+    # Participant-grain metadata is constant within a trial by
     # construction, so it belongs in this list on exactly the same terms as a
     # trial-level recorded column — no allowlist of its own.
     for field in participant_metadata_fields():
         add(field.name)
-    # DATA-29 — and a trial-grain field is constant within a trial by
+    # And a trial-grain field is constant within a trial by
     # definition, which is the property this list is for.
     for field in trial_metadata_fields():
         add(field.name)
@@ -9513,8 +9403,9 @@ def unique_field_labels(columns, label_of) -> dict[str, str]:
 
     Two columns can share a label — `text_id` and `unique_text_id` read from
     one column of the user's file — so the first keeps its label and each later
-    one adds its column name: "PARAGRAPH (unique_text_id)". The ✏️ chip editor needs this to stay
-    invertible; the trial filters use it (UX-149) so two sliders over different
+    one adds its column name: "PARAGRAPH (unique_text_id)". The ✏️ chip editor
+    needs this to stay invertible; the trial filters use it so two sliders over
+    different
     columns never carry the same title.
     """
     labels: dict[str, str] = {}
@@ -9533,7 +9424,7 @@ def chip_field_label(col: str, names: cn.ColumnNames | None = None) -> str:
     """What a chip field is called, on the chip and in ✏️ Edit chips alike.
 
     A summary statistic keeps the app's name (`SUMMARY_CHIP_FIELDS`); a data
-    column is shown under the dataset's own name (DATA-66). ``names`` is the
+    column is shown under the dataset's own name. ``names`` is the
     map to read, the open dataset's by default (Compare's B passes its own).
     """
     if col in SUMMARY_CHIP_FIELDS:
@@ -9542,7 +9433,7 @@ def chip_field_label(col: str, names: cn.ColumnNames | None = None) -> str:
 
 
 def field_help(col: str, names: cn.ColumnNames | None = None) -> str:
-    """The tooltip beside a field's name (#374 F5): the bundled demo's
+    """The tooltip beside a field's name: the bundled demo's
     description of its own column, and a role's source column
     ("from RECORDING_SESSION_LABEL"). ``""`` when there is neither."""
     if col in SUMMARY_CHIP_FIELDS:
@@ -9574,7 +9465,7 @@ def render_trial_chip_picker(
     words: pd.DataFrame, fixations: pd.DataFrame, host
 ) -> None:
     """Render the inline **Edit chips** control: choose which ``Field = Value``
-    chips appear above the scanpath and **drag to reorder** them (UX-1 / UX-1a).
+    chips appear above the scanpath and **drag to reorder** them.
 
     Two drag buckets — *Shown* (in display order) and *Available* — via
     ``streamlit_sortables.sort_items``: drag a field between buckets to show / hide
@@ -9588,16 +9479,16 @@ def render_trial_chip_picker(
     Default seeded once (participant + text + common conditions + summary)."""
     # Cached per column-signature (stable across trials / filters within a
     # dataset), recomputed on a dataset/column change or Refresh. Shared with
-    # UX-49's range filters, which gate on the same answer.
-    # DATA-20: the field universe now also depends on the attached participant
-    # registry, so it has to be part of the signature — attaching or detaching a
-    # table changes what the picker offers, and without this the component kept
-    # a drag order built from the old set.
+    # the numeric range filters, which gate on the same answer.
+    # The field universe also depends on the attached participant table, so it
+    # is part of the signature — attaching or detaching a table changes what the
+    # picker offers, and without this the component would keep a drag order
+    # built from the old set.
     signature = (
         tuple(words.columns),
         tuple(fixations.columns),
         tuple(field.name for field in participant_metadata_fields()),
-        # DATA-29 — attaching or detaching the trial table changes the offered
+        # Attaching or detaching the trial table changes the offered
         # set the same way, so it belongs in the signature for the same reason.
         tuple(field.name for field in trial_metadata_fields()),
         # And the text table, the third grain — same reasoning again.
@@ -9640,8 +9531,8 @@ def render_trial_chip_picker(
     ]
     with host:
         # Key varies with the field universe so the component re-mounts (rather than
-        # keeping a stale drag order) when the dataset / columns change. DATA-66:
-        # and with the labels — the component hands back the labels it holds, so
+        # keeping a stale drag order) when the dataset / columns change, and
+        # with the labels — the component hands back the labels it holds, so
         # one renamed by ✏️ Edit dataset → Save would otherwise drop its chip.
         result = sort_items(
             buckets,
@@ -9662,12 +9553,10 @@ def render_trial_chip_picker(
         on_click=lambda: st.session_state.pop("_trial_level_cache", None),
     )
 
-    # UX-28: per-chip colour, generalized from what used to be a handful of
-    # hardcoded OneStop column/value special-cases (tabs._chip_color) — any
-    # dataset's condition chips can now be highlighted, not just OneStop's.
+    # Per-chip colour: any dataset's condition chips can be highlighted.
     # `#EEF2F7` must match `tabs._CHIP_NEUTRAL_BG`: a chip at it has no
-    # override. The ✕ beside a highlighted chip puts it back there — picking
-    # that exact gray by hand was the only way before, and nobody could.
+    # override. The ✕ beside a highlighted chip puts it back there, so
+    # nobody has to pick that exact gray by hand.
     _neutral = "#EEF2F7"
     shown_now = st.session_state["trial_chip_fields"]
     if shown_now:
@@ -9792,7 +9681,7 @@ def cached_trial_level_columns(words: pd.DataFrame, fixations: pd.DataFrame) -> 
 
     Trial-level-ness is a property of the dataset's shape, so the signature is
     the two frames' column tuples — stable across trials and filters. Shared by
-    the ✏️ Edit chips picker and UX-49's range filters, which need the *same*
+    the ✏️ Edit chips picker and the numeric range filters, which need the *same*
     answer: a column that varies inside a trial would filter rows rather than
     trials, silently cutting a scanpath in half.
     """
@@ -9808,7 +9697,7 @@ def cached_trial_level_columns(words: pd.DataFrame, fixations: pd.DataFrame) -> 
 
 
 def _range_filter_key(col: str, prefix: str = "") -> str:
-    """Session key of ``col``'s range slider (prefix-scoped, CMP-8 §5.2).
+    """Session key of ``col``'s range slider (prefix-scoped).
 
     Under the ``filter_`` prefix on purpose: that is what gets it swept by
     *✕ Clear all filters* and kept out of compare-mode B's namespace for free.
@@ -9831,7 +9720,7 @@ def keep_unknown_key(range_key: str) -> str:
     one more filter key without being taught about it. A plain session key:
     trial filters travel in no share link or settings file, so it is not a
     wire key either. ``True`` (or absent) keeps the records with no value —
-    the filter's long-standing rule; ``False`` leaves them out.
+    the default; ``False`` leaves them out.
     """
     head, sep, rest = range_key.partition("filter_")
     if not sep or rest.startswith(_KEEP_UNKNOWN_STEM):
@@ -9896,18 +9785,18 @@ def _render_fixed_value(host, label: str, value: float, noun: str) -> None:
 def _numeric_filter_fields(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> dict[str, tuple]:
-    """UX-49: which of the offered filter fields render as a *range*, and over what.
+    """Which of the offered filter fields render as a *range*, and over what.
 
     Maps column → ``(frame, lo, hi)``. The set of columns the panel offers does
     **not** grow — this only auto-detects the *dtype* of what
     ``_filter_fields_for`` already returns, so a numeric one renders as a
     two-ended slider instead of a multiselect with one option per distinct float.
-    That also bounds the panel's size: it can show no more rows than it does now.
+    That also bounds the panel's size: a range takes the row the field had anyway.
 
     Two gates, both load-bearing. **Trial-level**: a column that varies inside a
     trial (fixation duration, word surprisal) would filter *rows*, not trials —
-    that is PRE-2's render-layer territory, not this one. **Two distinct finite
-    values**: fewer, and there is no range to pick.
+    that is the plot's Filters & highlights territory, not this one. **Two
+    distinct finite values**: fewer, and there is no range to pick.
     """
     trial_level = cached_trial_level_columns(words, fixations)
     fields: dict[str, tuple] = {}
@@ -9930,7 +9819,7 @@ def _numeric_filter_fields(
 
 
 def metadata_filter_key(name: str, prefix: str = "") -> str:
-    """Session key of a participant-metadata filter (DATA-20).
+    """Session key of a participant-metadata filter.
 
     Under the ``filter_`` prefix like every other trial filter, which is what
     gets it swept by *✕ Clear all filters*, mirrored into
@@ -9941,9 +9830,10 @@ def metadata_filter_key(name: str, prefix: str = "") -> str:
 
 
 def trial_metadata_filter_key(name: str, prefix: str = "") -> str:
-    """Session key of a trial-metadata filter (DATA-29).
+    """Session key of a trial-metadata filter.
 
-    Its own ``filter_trialmeta_`` prefix rather than DATA-20's ``filter_meta_``:
+    Its own ``filter_trialmeta_`` prefix rather than the participant table's
+    ``filter_meta_``:
     the two tables may legitimately register the *same* column name at different
     grains (a ``session`` column describing readers and one describing trials),
     and a shared prefix would collide them onto one widget. Still under
@@ -9966,7 +9856,7 @@ def text_metadata_filter_key(name: str, prefix: str = "") -> str:
 
 
 def participant_metadata_fields():
-    """The attached participant table's fields, or ``()`` when none (DATA-20)."""
+    """The attached participant table's fields, or ``()`` when none."""
     from scanpath_studio.tabs import active_participant_metadata
 
     attached = active_participant_metadata()
@@ -9974,7 +9864,7 @@ def participant_metadata_fields():
 
 
 def trial_metadata_fields():
-    """The attached trial table's fields, or ``()`` when none (DATA-29)."""
+    """The attached trial table's fields, or ``()`` when none."""
     from scanpath_studio import metadata as md
 
     attached = md.active_trials()
@@ -10005,9 +9895,9 @@ def _render_metadata_range(
 
     A slider over the loaded records' values, then *Keep unknown values* when
     some record has none. A field with one value has no range to slide —
-    Streamlit refuses a slider whose ends are equal, which stopped the whole
-    Scanpath view for a one-row trial table — so it is shown as that value,
-    and its unknowns choice is the only narrowing it offers.
+    Streamlit refuses a slider whose ends are equal, and the error would stop
+    the whole Scanpath view (a one-row trial table, say) — so it is shown as
+    that value, and its unknowns choice is the only narrowing it offers.
     """
     extent = _metadata_numeric_summary(attached)[field.name][0]
     if extent is None:
@@ -10109,10 +9999,10 @@ def _render_trial_metadata_filters(
     keys: Callable[[], set] | None = None,
     pool_key: tuple | None = None,
 ) -> None:
-    """One control per registered trial-grain field (DATA-29).
+    """One control per registered trial-grain field.
 
-    The mirror image of :func:`_render_participant_metadata_filters`, and simpler
-    for the reason DATA-29 opened with: a trial attribute already *is* the grain
+    The mirror image of :func:`_render_participant_metadata_filters`, and
+    simpler: a trial attribute already *is* the grain
     the pool is keyed on, so the selection resolves straight to
     ``(participant_id, trial_id)`` keys with no reader indirection in between.
 
@@ -10238,7 +10128,7 @@ def _text_metadata_narrowing(prefix: str) -> tuple:
 
 
 def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
-    """``((participant_id, trial_id) keys | None, widget keys)`` (DATA-29).
+    """``((participant_id, trial_id) keys | None, widget keys)``.
 
     ``None`` means no constraint; an empty set means a constraint nothing
     satisfies — the same three-way contract as
@@ -10299,7 +10189,7 @@ def _participant_metadata_narrowing(prefix: str) -> tuple:
     """``(reader ids | None, widget keys)`` for the active metadata filters.
 
     ``None`` means no constraint; an **empty set** means a constraint nothing
-    satisfies. The keys are the widgets that produced it, so UX-7's per-filter
+    satisfies. The keys are the widgets that produced it, so the per-filter
     clear can reset the right controls.
     """
     from scanpath_studio import metadata as md
@@ -10333,7 +10223,7 @@ def _participant_metadata_narrowing(prefix: str) -> tuple:
 
 
 def _loaded_trial_keys(words: pd.DataFrame, fixations: pd.DataFrame) -> set:
-    """``(participant_id, trial_id)`` pairs present in either frame (DATA-29)."""
+    """``(participant_id, trial_id)`` pairs present in either frame."""
     from scanpath_studio.data import frame_fingerprint
 
     return set(
@@ -10365,7 +10255,7 @@ def _metadata_numeric_summary(
 
     Cached on the table's content (its frame's fingerprint and its join report)
     and, when ``keys`` counts unknowns over the loaded pool, on ``pool_key``:
-    the filter panel draws on every rerun, and these were several Python passes
+    the filter panel draws on every rerun, and these are several Python passes
     over the table and the pool per numeric field each time. ``keys`` without a
     ``pool_key`` is called every time, and the pool it returns is the key.
     """
@@ -10417,14 +10307,14 @@ def _compute_trial_filters(
         # Ranged columns whose *Keep unknown values* is off.
         "ranges_drop_unknown": (),
         # column -> the session key holding it, so "clear just this filter"
-        # (UX-7) can reset one widget. Not derivable from the column name: the
+        # can reset one widget. Not derivable from the column name: the
         # Narrow-by Text multiselect lands in `metadata` under the *text column*
         # but lives under `filter_text_id`.
         "metadata_keys": {},
-        # DATA-20: widget keys behind a participant-grain metadata narrowing,
+        # Widget keys behind a participant-grain metadata narrowing,
         # which lands in `participants` above rather than in `metadata`.
         "participant_filter_keys": (),
-        # DATA-29: a trial-grain narrowing is already `(participant_id,
+        # A trial-grain narrowing is already `(participant_id,
         # trial_id)` keys, so it gets its own slot rather than being squeezed
         # into `participants` (a reader may be kept for one trial and dropped
         # for another) or `metadata` (which is column → values on the frames).
@@ -10433,7 +10323,7 @@ def _compute_trial_filters(
         "trial_filter_keys": (),
         # Text-grain metadata's own widget keys, folded into the existing
         # "Narrow by → Text" slot above (`metadata`/`metadata_keys`) rather
-        # than a fourth top-level slot — this is only for UX-7's per-filter
+        # than a fourth top-level slot — this is only for the per-filter
         # clear, since the *value* already lives in `metadata[text_field]`.
         "text_filter_keys": (),
         "favorites_only": False,
@@ -10449,7 +10339,7 @@ def _compute_trial_filters(
         sel = st.session_state.get(f"{prefix}filter_participants")
         if sel and len(sel) < len(parts):
             result["participants"] = list(sel)
-    # DATA-20: a participant-grain metadata constraint *is* a participant
+    # A participant-grain metadata constraint *is* a participant
     # constraint, so it folds into the same slot rather than becoming a fourth
     # kind of filter every consumer would have to learn. Intersection, not
     # replacement: an explicit reader pick still wins over the table.
@@ -10462,15 +10352,15 @@ def _compute_trial_filters(
         # legitimately be **empty** — an impossible combination narrows to no
         # reader, which `data.filter_trials` distinguishes from "no constraint".
         result["participants"] = [p for p in parts if str(p) in keep]
-        # UX-7's per-filter report clears by widget key, and this narrowing did
+        # The per-filter report clears by widget key, and this narrowing did
         # not come from `filter_participants`. Its own top-level slot, not an
         # entry in `metadata_keys`: that dict is column-name → *one* key string,
         # and a dataset is free to have a column called "participants".
         result["participant_filter_keys"] = meta_keys
-    # DATA-29: the trial table narrows to keys directly. Computed against the
+    # The trial table narrows to keys directly. Computed against the
     # loaded pool so a trial-id-keyed table expands to every reading of that
     # trial, and so a numeric range keeps the trials the table never mentions
-    # (UX-49's rule, one grain down).
+    # (the range filters' rule, one grain down).
     by_trial, trial_keys_used = _trial_metadata_narrowing(
         prefix, lambda: _loaded_trial_keys(words, fixations)
     )
@@ -10505,11 +10395,11 @@ def _compute_trial_filters(
             combined = by_text_meta & {str(v) for v in text_vals}
         if combined is not None:
             result["metadata"][text_field] = combined
-            # UX-7's per-filter clear pops exactly this key, so it must be
+            # The per-filter clear pops exactly this key, so it must be
             # emitted already-prefixed or clearing one of B's filters no-ops.
             result["metadata_keys"][text_field] = f"{prefix}filter_text_id"
             result["text_filter_keys"] = text_meta_keys
-    # UX-49: numeric trial-level columns narrow by range, not by membership. A
+    # Numeric trial-level columns narrow by range, not by membership. A
     # slider still at full extent is "no filter" and contributes nothing.
     # With *Keep unknown values* off, even the full extent narrows: it leaves
     # out the trials with no value.
@@ -10572,7 +10462,7 @@ def _text_field_and_frame(words: pd.DataFrame, fixations: pd.DataFrame):
     """The text/passage id column to narrow by + the frame it lives on (prefer
     fixations, where trials live). ``(None, fixations)`` when no text column.
 
-    #412: not the fixations' when their ``text_id`` is only the trial-id
+    Not the fixations' when their ``text_id`` is only the trial-id
     fallback and the Words table maps a real Text ID — the filter is decided
     from the table with real texts (`data.select_trials`), so it offers those.
     """
@@ -10602,8 +10492,8 @@ def render_narrow_by(
     part_host=None,
 ) -> None:
     """Inline **Narrow by** multiselects — Text + Participant — that narrow the
-    trial pool feeding the picker (the former Browse-by Text/Participant modes, now
-    filters). They write the same ``filter_*`` keys the "More" popover uses and
+    trial pool feeding the picker. They write the same ``filter_*`` keys the
+    "More" popover uses and
     recompute via ``_compute_trial_filters``, so narrowing applies the same run.
     Start empty = no narrowing; pick values to narrow."""
 
@@ -10659,9 +10549,9 @@ def trial_filter_labels(
 ) -> dict[str, str]:
     """``{column: title}`` for the trial-filter panel's data-column filters.
 
-    DATA-66: a filter is titled by the dataset's own name for its column
+    A filter is titled by the dataset's own name for its column
     (``names``, the open dataset's map by default; Compare's B passes its own).
-    UX-149: one label namespace across the range sliders and the multiselects,
+    One label namespace across the range sliders and the multiselects,
     so two filters over different columns never share a title — the ✏️ chip
     editor's rule (`unique_field_labels`).
     """
@@ -10689,15 +10579,15 @@ def render_trial_filters(
     Lets the user narrow the trial pool by participant and by categorical
     condition (Hunting/Gathering, difficulty, first/repeated reading,
     correctness) plus annotation state (favorites / tags). Renders into ``host``
-    — since UX-64 the trial picker's 🔎 funnel popover. The narrowing result is
+    — e.g. the trial picker's 🔎 funnel popover. The narrowing result is
     derived by ``_compute_trial_filters`` and stashed in session_state
     (`_trial_filters`); each widget's ``on_change`` recomputes it *before* the
     rerun so ``main()``'s ``read_trial_filters`` applies the change on the same
     run. The persisted value also survives runs where this panel isn't rendered
     (a non-Scanpath view on the top nav).
-    ``host`` is required: it used to default to ``st.sidebar``, a container the
-    app has not drawn since UX-38 — a caller that forgot it rendered the whole
-    panel into chrome nobody sees. Now it cannot compile.
+    ``host`` is required, with no default: the app draws no sidebar or other
+    fallback container, so a forgotten host would put the panel where nobody
+    sees it.
     """
 
     def _apply() -> None:
@@ -10705,10 +10595,10 @@ def render_trial_filters(
             words, fixations, prefix=prefix
         )
 
-    # Text + Participant narrowing now lives in the inline "Narrow by" row
-    # (``render_narrow_by``); this popover keeps the condition + annotation filters.
+    # Text + Participant narrowing lives in the inline "Narrow by" row
+    # (``render_narrow_by``); this popover holds the condition + annotation filters.
     #
-    # UX-49: a numeric trial-level column gets a two-ended range slider instead
+    # A numeric trial-level column gets a two-ended range slider instead
     # of a multiselect over its distinct floats. Rendered first, as extra rows
     # among the categorical ones rather than in a section of their own.
     numeric_fields = _numeric_filter_fields(words, fixations)
@@ -10810,7 +10700,7 @@ def render_trial_filters(
         on_change=_apply,
         help="Keep trials starred as a whole. A star on one screen does not count.",
     )
-    # DATA-48: the tags of the dataset this pool comes from — compare mode's B
+    # The tags of the dataset this pool comes from — compare mode's B
     # (the `cmp` prefix) may be another dataset, with tags of its own.
     tags = known_tags(prefix, trial_level=True)
     if tags:
@@ -10840,10 +10730,9 @@ def render_trial_filters(
             f"on {ICONS['view_data']} **Data Management → Annotations**."
         )
 
-    # UX-26: the filter reset used to appear only in the empty-result diagnostic
-    # panel — you had to filter yourself into nothing before the escape hatch
-    # showed up. It now has a permanent home at the foot of the panel that set
-    # the filters (and a second one in the rail's Reset settings popover).
+    # The filter reset has a permanent home at the foot of the panel that sets
+    # the filters, so the escape hatch does not wait until you have filtered
+    # yourself into nothing (the empty-result diagnostic panel has one too).
     host.divider()
     host.button(
         "✕ Clear all filters",
@@ -10857,7 +10746,7 @@ def render_trial_filters(
     # Mirror the rendered widget values so _seed_filter_widget can restore them on
     # a run where this panel isn't shown (the keys get cleared); then publish the
     # derived result for read_trial_filters (covers no-change runs).
-    # UX-49: the range keys have to be listed explicitly. Without them a range
+    # The range keys have to be listed explicitly. Without them a range
     # silently resets on any run where this popover isn't rendered — a trip
     # through Corpus Analysis is enough, since Streamlit drops the key and
     # `_seed_range_widget` would then find nothing to restore.
@@ -10870,11 +10759,10 @@ def render_trial_filters(
         ]
         + [f"{prefix}filter_{c}" for c in _filter_fields_for(words, fixations)]
         + [_range_filter_key(c, prefix) for c in numeric_fields]
-        # DATA-20 — mirrored like any other filter, so a metadata narrowing
-        # survives a run where the popover didn't render and round-trips
-        # through Share / save & restore with the rest of the filter layer.
+        # Mirrored like any other filter, so a metadata narrowing
+        # survives a run where the popover didn't render.
         + [metadata_filter_key(f.name, prefix) for f in participant_metadata_fields()]
-        # DATA-29 — same reason, one grain down.
+        # Same reason, one grain down.
         + [trial_metadata_filter_key(f.name, prefix) for f in trial_metadata_fields()]
         # And the text table, the third grain — same reasoning again.
         + [text_metadata_filter_key(f.name, prefix) for f in text_metadata_fields()]

@@ -1,10 +1,10 @@
-"""BUG-86: a `help=` tooltip shows only while *its own* trigger is hovered or keyboard-focused.
+"""A `help=` tooltip shows only while *its own* trigger is hovered or keyboard-focused.
 
 Streamlit 1.64's tooltip trigger keeps the panel open for as long as focus is
 inside it, whatever the pointer does, and it can leave several panels open at
-once — so clicking buttons or popovers that have `help=` left their tooltips
-floating over the page, and hovering any other tooltip button brought all of
-them back. Two layers fix it, both keyed on the browser's own `:hover` /
+once — so clicking buttons or popovers that have `help=` would leave their
+tooltips floating over the page, and hovering any other tooltip button would
+bring all of them back. Two layers prevent it, both keyed on the browser's own `:hover` /
 `:focus-visible` rather than on React's open state:
 
 * `app._TOOLTIP_OWNER_SCRIPT` marks a panel *owned* while its own trigger (the
@@ -15,12 +15,12 @@ them back. Two layers fix it, both keyed on the browser's own `:hover` /
   keyboard-focused — the floor if the script cannot run.
 
 Both hide at once: a hide delayed for a fade (which Streamlit's own animation
-pins at full opacity anyway) is what let a stale panel flash for 100 ms.
+pins at full opacity anyway) lets a stale panel flash for 100 ms.
 
 Both name Streamlit's frontend DOM, so the last test reads the installed
-Streamlit bundle for it: BUG-48's JavaScript sweeper went dead without a single
-failing test when an upgrade dropped the Base Web `data-baseweb="tooltip"` layer
-it looked for, and this is the guard against the same silent break.
+Streamlit bundle for it: a script keyed on DOM that an upgrade drops (such as
+Base Web's `data-baseweb="tooltip"` layer) goes dead without a single failing
+test, and this is the guard against that silent break.
 """
 
 from __future__ import annotations
@@ -96,7 +96,7 @@ def test_streamlit_bundle_still_has_the_tooltip_dom_this_relies_on() -> None:
     for test_id in (*TRIGGERS, *PANELS):
         assert f"`{test_id}`" in bundle, (
             f"Streamlit {streamlit.__version__} no longer names {test_id!r}; "
-            "the BUG-86 tooltip rules hide nothing until they are re-pointed at "
+            "the tooltip-hiding rules hide nothing until they are re-pointed at "
             "the new tooltip DOM"
         )
     # The owner script finds a panel's trigger through `aria-describedby` on
@@ -107,6 +107,6 @@ def test_streamlit_bundle_still_has_the_tooltip_dom_this_relies_on() -> None:
 
 
 def test_the_dead_base_web_sweeper_is_gone() -> None:
-    """BUG-48/51's sweeper waited for a `[data-baseweb="tooltip"]` layer that
-    Streamlit 1.64 no longer renders, so it polled every 250 ms for nothing."""
+    """No sweeper polls every 250 ms for a `[data-baseweb="tooltip"]` layer,
+    which Streamlit 1.64 does not render."""
     assert not hasattr(app, "_TOOLTIP_SWEEPER_SCRIPT")

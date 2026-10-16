@@ -1,4 +1,4 @@
-"""DATA-16 / security audit S2: the corpus **Data directory** box.
+"""The corpus **Data directory** box, and when it is offered.
 
 It takes a free-text path from the browser, stats it, reports the result back
 into the page, and — via ⬇ Download — writes into it. On a local run that is a
@@ -6,7 +6,7 @@ file picker. On any deployment someone else can reach it is a path-existence
 oracle plus an arbitrary-directory write, and the app has no authentication on
 any deployment.
 
-ENG-66: unset, the gate follows the server's bind address — on for a server
+Unset, the gate follows the server's bind address — on for a server
 listening on loopback only (``scanpath-studio run``, the desktop app), off for
 one other machines can reach — and ``SCANPATH_LOCAL_FS`` overrides it either
 way. ``SCANPATH_DATA_ROOT`` confines paths to a subtree and is useful either way.
@@ -63,7 +63,7 @@ class TestTheGate:
         assert local_filesystem_enabled() is True
 
     def test_off_for_a_server_other_machines_can_reach(self, monkeypatch):
-        """ENG-66: a hosted demo is safe without remembering to set anything."""
+        """A hosted demo is safe without remembering to set anything."""
         _serving(monkeypatch, loopback=False)
         assert local_filesystem_enabled() is False
 
@@ -101,7 +101,7 @@ class TestTheGate:
         assert at.session_state["answer"] is False
 
     def test_the_folder_picker_refuses_on_a_shared_deployment(self, monkeypatch):
-        """Degrading to None on a *headless* host was never the guarantee: on a
+        """Degrading to None on a *headless* host is not the guarantee: on a
         host that has a display, a remote click pops a modal dialog on the
         server's own desktop and blocks the thread until someone dismisses it."""
         monkeypatch.setenv(LOCAL_FS_ENV, "0")
@@ -158,8 +158,8 @@ class TestTheAllowRoot:
         assert _resolve_data_dir("   ") == ""
 
     def test_a_relative_path_still_anchors_to_the_project_root(self):
-        """Unchanged behaviour without an allow-root: the server may run from
-        anywhere, so `data/OneStop` must not depend on cwd."""
+        """Without an allow-root too, the server may run from anywhere, so
+        `data/OneStop` must not depend on cwd."""
         resolved = _resolve_data_dir("data/OneStop")
         assert resolved.endswith("/data/OneStop")
         assert resolved.startswith("/")
@@ -175,10 +175,10 @@ def _servable_app():
 
 
 class TestUploadedImagePaths:
-    """ENG-57: the stimulus layer reads ``image_path`` off the server's disk and
-    sends it to the browser. With local access off, an uploaded table's
-    ``image_path`` must not reach that read — it let an upload exfiltrate any PNG
-    on the server (a real file with a secret appended came back base64-encoded)."""
+    """The stimulus layer reads ``image_path`` off the server's disk and sends
+    it to the browser. With local access off, an uploaded table's ``image_path``
+    must not reach that read — or an upload could exfiltrate any PNG on the
+    server (a real file with a secret appended would come back base64-encoded)."""
 
     def _answer(self, source, path="/srv/secret.png"):
         from streamlit.testing.v1 import AppTest
@@ -205,7 +205,7 @@ class TestUploadedImagePaths:
         assert self._answer("Bundled demo") == "/srv/secret.png"
 
     def test_a_server_nobody_configured_reads_nothing(self):
-        """ENG-66: the demo's case — no variable set, every interface."""
+        """The demo's case — no variable set, every interface."""
         assert self._answer("my upload") is None
 
     def test_a_local_run_keeps_an_uploads_images(self, monkeypatch):
@@ -214,7 +214,7 @@ class TestUploadedImagePaths:
 
 
 class TestTheUploadCap:
-    """ENG-68: a deployment's own per-file cap, set on the hosted demo only."""
+    """A deployment's own per-file cap, set on the hosted demo only."""
 
     @pytest.fixture(autouse=True)
     def _unset(self, monkeypatch):
@@ -257,7 +257,7 @@ class TestTheUploadCap:
         assert upload_limit_mb() == int(st.get_option("server.maxUploadSize"))
 
     def test_the_wizard_names_the_limit_in_force(self, monkeypatch):
-        """UX-124 hides Streamlit's own size line, so this label is the only one."""
+        """Streamlit's own size line is hidden, so this label is the only one."""
         assert upload_limit_label() == f"{UPLOAD_MAX_SIZE_MB // 1000}GB"
         monkeypatch.setenv(UPLOAD_LIMIT_ENV, "200")
         assert upload_limit_label() == "200MB"
@@ -278,7 +278,8 @@ class TestTheUploadCap:
         assert _max_upload_cli_flags(["--server.maxUploadSize=10"]) == []
 
     def test_every_table_upload_box_takes_xls(self):
-        """DATA-53 reads legacy workbooks; a picker that greys them out hides it."""
+        """The loader reads legacy .xls workbooks; a picker that greys them out
+        hides that."""
         package = Path(app_module.__file__).parent
         narrow = []
         for path in sorted(package.glob("*.py")):

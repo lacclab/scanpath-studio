@@ -1,4 +1,4 @@
-"""UX-165: the Streamlit-free progress hook (`scanpath_studio.progress`)."""
+"""The Streamlit-free progress hook (`scanpath_studio.progress`)."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def test_a_task_records_counts_and_moves_through_its_steps():
 
 
 def test_a_report_marks_its_task_as_having_worked_but_a_step_does_not():
-    """UX-166: a gated card shows only once its task has done real work — a
+    """A gated card shows only once its task has done real work — a
     cache miss, which each build under one reports, if only with a bare
     ``report()``. Moving between steps is the orchestrator's bookkeeping, done
     on a cache hit just the same, so it counts for nothing."""
@@ -271,7 +271,7 @@ def test_building_a_replay_reports_every_frame():
 def test_a_replay_cancelled_mid_build_caches_nothing_and_the_next_starts_afresh(
     monkeypatch,
 ):
-    """UX-169: a cancelled replay stops within a frame — `Cancelled` straight
+    """A cancelled replay stops within a frame — `Cancelled` straight
     out of the app's cached build — and, having returned nothing, leaves
     nothing in the cache. The next build, under a fresh task (`begin` never
     joins a cancelled one), is a miss: it starts again from the first frame

@@ -1,4 +1,4 @@
-"""UX-166 … UX-169 in the running app, via AppTest.
+"""The loading cards in the running app, via AppTest.
 
 A run freezes with ``st.stop()`` inside the step under test, so the tree keeps
 the card that step is showing — with ``loading._KEEP_ON_STOP`` set, since a
@@ -150,7 +150,7 @@ def test_a_view_switch_card_has_a_task_of_its_own(at, monkeypatch):
     """The switch card and a load card never join each other's task, while
     ``DATASET_TASK_KEY`` still names the dataset: a switch is not a new load.
 
-    UX-168/Ruling T6-8: the switch card opens with no explicit ``task_key``, so
+    The switch card opens with no explicit ``task_key``, so
     it gets ``Card``'s own implicit one (``"card", session, PAGE_CARD_KEY``) —
     a fresh task every time, never the dataset's and never a stale switch's."""
     at.run()
@@ -184,7 +184,7 @@ def _hold_every_task(monkeypatch) -> dict:
     return begun
 
 
-# UX-166 — a card over work that is cheap on a cache hit shows only for real work.
+# A card over work that is cheap on a cache hit shows only for real work.
 
 
 def _slowed(real, seconds: float):
@@ -212,8 +212,9 @@ def _slow_pipeline_frozen_before_the_view(monkeypatch) -> None:
 
 def test_a_plain_rerun_shows_no_page_card_however_long_it_takes(at, monkeypatch):
     """On a big corpus a plain rerun's pipeline — every build a cache hit — can
-    outlast the delay, and the card then blanked the view to the skeleton on
-    every widget touch. A hit reports nothing, so the card stays hidden."""
+    outlast the delay, and a card that showed would blank the view to the
+    skeleton on every widget touch. A hit reports nothing, so the card stays
+    hidden."""
     at.run()  # the load itself
     _slow_pipeline_frozen_before_the_view(monkeypatch)
     at.run()  # a plain rerun of the same dataset
@@ -293,7 +294,7 @@ def test_a_filter_changes_default_filters_report_on_a_miss():
 
 
 def test_compares_second_dataset_reports_on_a_miss():
-    # AN-32: the Corpus view no longer computes measures, so it has no miss.
+    # The Corpus view computes no measures, so it has no miss to report.
     compare_source._load_builtin_frames.clear()
     assert _reports_on_a_miss(lambda: compare_source._load_builtin_frames(SYNTHETIC))
 
@@ -331,9 +332,9 @@ def test_the_restore_card_opens_only_while_there_is_something_to_restore(
     at, monkeypatch
 ):
     """The recovery cache is restored once a session, and `restore_local_state`
-    returns at once after that — so a card around it on every later run was a
-    timer thread and a task for nothing. Its slot is still held on every run
-    (UX-167), so the view keeps its place."""
+    returns at once after that — so a card around it on every later run would
+    be a timer thread and a task for nothing. Its slot is still held on every
+    run, so the view keeps its place."""
     opened = _record_opened_cards(monkeypatch)
     at.run()
     assert not at.exception, at.exception
@@ -351,10 +352,9 @@ def _unmappable(raw_words, raw_fixations, **_kwargs):
 
 
 def test_an_early_return_takes_the_card_and_the_skeleton_down(at, monkeypatch):
-    """BUG-81, for the card that replaced the loading banners: a run that returns
-    early (here, a mapping that can't be satisfied) takes a *showing* card and
-    its skeleton down itself — `_KEEP_ON_STOP` switches off the run's own
-    safety net, so only the early return can have cleared them."""
+    """A run that returns early (here, a mapping that can't be satisfied) takes
+    a *showing* card and its skeleton down itself — `_KEEP_ON_STOP` switches off
+    the run's own safety net, so only the early return can have cleared them."""
     at.run()
     monkeypatch.setattr(loading, "DELAY_S", 0)
     monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
@@ -367,8 +367,9 @@ def test_an_early_return_takes_the_card_and_the_skeleton_down(at, monkeypatch):
 
 
 def test_the_missing_corpus_notice_stays_above_the_view(at, monkeypatch):
-    """UX-7(b)'s panel is drawn on the way to the view. With the view inside the
-    reserved area it has to go in there too, or it lands below the whole page."""
+    """The missing-corpus panel is drawn on the way to the view. With the view
+    inside the reserved area it has to go in there too, or it lands below the
+    whole page."""
 
     def _notice():
         import streamlit as st
@@ -441,13 +442,13 @@ def test_the_synthetic_sample_shows_its_view_until_edited(at, monkeypatch):
 
 
 def test_a_download_takes_the_dataset_card_down_first(at, monkeypatch):
-    """UX-7(b)'s ⬇ Download now runs while the dataset card is still open. The
-    card must come down first, or it hides the panel behind a step that isn't
-    what is running.
+    """The missing-corpus panel's ⬇ Download now runs while the dataset card is
+    still open. The card must come down first, or it hides the panel behind a
+    step that isn't what is running.
 
-    UX-168: downloading now opens its own progress card around the fetch, so
-    ``covered()`` is True once the download starts — that card, not the old
-    dataset skeleton, is what covers. ``page_up`` is the assertion that
+    Downloading opens its own progress card around the fetch, so ``covered()``
+    is True once the download starts — that card, not the dataset skeleton, is
+    what covers. ``page_up`` is the assertion that
     matters here: the *page* (the skeleton) is what must be gone."""
     seen = {}
 
@@ -465,7 +466,7 @@ def test_a_download_takes_the_dataset_card_down_first(at, monkeypatch):
 
 
 def test_the_editors_download_releases_the_page_first(at, monkeypatch, tmp_path):
-    """Ruling T6-8: the editor's own ⬇ Download (`_dataset_access_status`)
+    """The editor's own ⬇ Download (`_dataset_access_status`)
     must release the page before downloading too, exactly like the main-area
     ⬇ Download now above — same fixture shape, driven on PoTeC's editor
     button instead of the main-area empty-state one."""
@@ -504,7 +505,7 @@ def test_an_unavailable_corpus_gets_no_counts_on_its_card(at, monkeypatch):
 def test_the_editors_card_sits_on_the_editor_screen(at, monkeypatch):
     """While ✏️ Edit dataset is open the page card lives in the slot under the
     editor's header — where the user is looking, since opening the editor
-    scrolls down to it (UX-197) — and not a second time above the table."""
+    scrolls down to it — and not a second time above the table."""
     monkeypatch.setattr(loading, "DELAY_S", 0)
     monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
     monkeypatch.setattr(app, "prepare_data", _stop)
@@ -518,7 +519,7 @@ def test_the_editors_card_sits_on_the_editor_screen(at, monkeypatch):
 
 
 def test_only_the_data_view_hides_what_the_view_area_holds(at, monkeypatch):
-    """T6-1: on the Data view the reserved area holds only what the previous view
+    """On the Data view the reserved area holds only what the previous view
     left there (the Data page draws outside it), so its first slot carries a
     marker the CSS hides the rest of the area by — from the top of the run, before
     any card exists, and never on a view the area actually holds."""
@@ -565,7 +566,7 @@ def test_a_slow_figure_holds_its_area_with_a_size_box(at, monkeypatch):
     assert "Drawing the scanpath" in text
 
 
-# UX-167 — Streamlit matches a rerun's elements to the last run's by position, so
+# Streamlit matches a rerun's elements to the last run's by position, so
 # one element more or fewer above `sps_view` shifts it: the browser lays the new
 # view area on the *next* block's slot and inherits its children, dropping the old
 # view (rail, pickers, plot) for the whole run. These three pin that every
@@ -651,11 +652,11 @@ def test_the_views_blocks_keep_their_place_when_a_notice_comes_and_goes(
     assert index_after == index_before
 
 
-# UX-168 — Cancel a dataset load or Compare's second dataset.
+# Cancel a dataset load or Compare's second dataset.
 
 
 def test_cancel_goes_back_to_the_last_dataset_and_try_again_returns(at, monkeypatch):
-    # T8-5: Cancel's "back" must be one of this run's own `_data_source_entries`
+    # Cancel's "back" must be one of this run's own `_data_source_entries`
     # (`resolve_data_source`'s published list) — and the synthetic trial is only
     # ever in that list while debug mode is on or it is the active choice, so
     # once the run below switches away from it, it needs debug mode to still be
@@ -663,7 +664,7 @@ def test_cancel_goes_back_to_the_last_dataset_and_try_again_returns(at, monkeypa
     monkeypatch.setattr(app, "debug_enabled", lambda: True)
     at.run()  # synthetic finishes: it is the dataset Cancel goes back to
     monkeypatch.setattr(loading, "DELAY_S", 0)
-    # Ruling T3-1: freezing with `st.stop()` leaves a stopped run's cards to be
+    # Freezing with `st.stop()` leaves a stopped run's cards to be
     # cleared unless `_KEEP_ON_STOP` says otherwise — without it, `sps_cancel_page`
     # would be gone before the test can click it. `monkeypatch.undo()` below
     # restores both this and `DELAY_S` together, as intended.
@@ -722,7 +723,7 @@ def test_the_compare_cancel_goes_back_to_this_dataset():
 
 
 def test_compares_cancel_names_a_and_returns_to_this_dataset(at, monkeypatch):
-    """T8-4: the full-app wiring — `loading_slot=plot_loading_slot` reaching
+    """The full-app wiring — `loading_slot=plot_loading_slot` reaching
     `_resolve_compare_source`, the card it opens, and the callback — pinned
     together rather than only through the isolated script above."""
     at.session_state["single_compare_toggle"] = True
@@ -738,8 +739,8 @@ def test_compares_cancel_names_a_and_returns_to_this_dataset(at, monkeypatch):
     assert at.session_state[COMPARE_SOURCE_STATE_KEY] == tabs.THIS_DATASET
 
 
-#: The session's remembered load of Compare's B dataset (UX-168) — an
-#: ``_sps_*`` internal.
+#: The session's remembered load of Compare's B dataset — an ``_sps_*``
+#: internal.
 COMPARE_TASK = "_sps_compare_task"
 
 
@@ -778,11 +779,11 @@ def test_a_run_that_loads_no_dataset_for_b_stops_the_one_left_loading(at, stop):
     assert COMPARE_TASK not in at.session_state
 
 
-# UX-168 fix round 1 (task-8-findings-r1.md) — T8-2 … T8-5.
+# Which loads offer Cancel, and what it goes back to.
 
 
 def test_a_slow_rerun_of_the_dataset_on_screen_offers_no_cancel(at, monkeypatch):
-    """T8-2: Cancel is for a load the user started — cold, or by switching away
+    """Cancel is for a load the user started — cold, or by switching away
     from what was on screen — never for a slow rerun of the dataset already on
     screen (a filter change, a re-normalization, a slow ✏️ Edit dataset step):
     there is nothing to switch away from, and clicking it must not abandon the
@@ -798,8 +799,8 @@ def test_a_slow_rerun_of_the_dataset_on_screen_offers_no_cancel(at, monkeypatch)
 
 def test_a_slow_rerun_of_the_dataset_on_screen_says_updating(at, monkeypatch):
     """A filter change on a big corpus re-runs the pipeline for the dataset on
-    screen: an update, not a load — "Loading …" with its steps ticking read as
-    a reload. No Cancel (nothing to go back to) and no "last load" hint."""
+    screen: an update, not a load — "Loading …" with its steps ticking would
+    read as a reload. No Cancel (nothing to go back to) and no "last load" hint."""
     at.run()  # synthetic finishes: the dataset on screen
     monkeypatch.setitem(progress._DURATIONS, ("dataset", SYNTHETIC), 6.0)
     monkeypatch.setattr(loading, "DELAY_S", 0)
@@ -836,7 +837,7 @@ def test_an_updates_time_never_replaces_the_loads(at, monkeypatch):
 
 
 def test_the_demos_own_first_load_of_a_session_gets_no_cancel(monkeypatch):
-    """T8-4: `_dataset_cancel`'s ``None`` branch — with nothing finished loading
+    """`_dataset_cancel`'s ``None`` branch — with nothing finished loading
     yet this session, the demo is the fallback ``back``, but never Cancel back
     to the very dataset it would be cancelling."""
     test = AppTest.from_file(APP_SCRIPT, default_timeout=120)
@@ -850,12 +851,12 @@ def test_the_demos_own_first_load_of_a_session_gets_no_cancel(monkeypatch):
 
 
 def test_a_view_switch_onto_an_in_flight_load_opens_the_loads_own_card(at, monkeypatch):
-    """T8-3: a view switch that lands on an in-flight load must not hide it
+    """A view switch that lands on an in-flight load must not hide it
     behind the task-less "Opening <view>" skeleton — the load's own steps and
     Cancel have to stay visible, and its checkpoints must keep reporting to its
     own task rather than a fresh one a later dataset pick can't find."""
     monkeypatch.setattr(app, "debug_enabled", lambda: True)  # keeps SYNTHETIC
-    # in `_data_source_entries` below (T8-5), so Cancel has somewhere to go.
+    # in `_data_source_entries` below, so Cancel has somewhere to go.
     at.run()  # synthetic finishes: LAST_LOADED_SOURCE_KEY == SYNTHETIC
     monkeypatch.setattr(loading, "DELAY_S", 30)  # only `reveal_now` can show it
     monkeypatch.setattr(loading, "REFRESH_S", 30)
@@ -863,7 +864,7 @@ def test_a_view_switch_onto_an_in_flight_load_opens_the_loads_own_card(at, monke
     monkeypatch.setattr(app, "prepare_data", _stop)
     # In flight: an abandoned run's thread would still be computing the load,
     # holding its task. `st.stop()` froze the run instead, so hold it here — a
-    # task nothing holds is no load in flight (FR-6, the test after this one).
+    # task nothing holds is no load in flight (see the test after this one).
     _hold_every_task(monkeypatch)
     demo = app.DEMO_CHOICE
     at.session_state["_pending_source_choice"] = demo
@@ -897,7 +898,8 @@ def _emptied(words, fixations, **_kwargs):
 
 def test_cancel_goes_back_to_the_author_editor_you_had_open(at, monkeypatch):
     """✏️ Author opens no card, so no pipeline "finished" for it — yet it is
-    where you were, and Cancel went back past it to the demo."""
+    where you were, so Cancel goes back to it rather than past it to the
+    demo."""
     at.session_state["data_source_choice"] = app.AUTHOR_CHOICE
     at.run()
     assert not at.exception, at.exception
@@ -959,7 +961,7 @@ def test_a_view_switch_after_a_stopped_load_shows_the_view_not_a_load(at, monkey
 
 
 def test_a_hidden_last_loaded_dataset_is_never_offered_as_a_cancel_target(monkeypatch):
-    """T8-5: `resolve_data_source` can heal a stale/hidden selection to
+    """`resolve_data_source` can heal a stale/hidden selection to
     ``entries[0]`` — a Cancel that still read "Back to <hidden dataset>" would
     silently reopen something else instead of what it says, so a dataset no
     longer in this run's `_data_source_entries` must not be offered at all."""
@@ -978,7 +980,7 @@ def test_a_hidden_last_loaded_dataset_is_never_offered_as_a_cancel_target(monkey
         test.button(key="sps_cancel_page")
 
 
-# UX-169 — the animation card's Cancel switches Animate off.
+# The animation card's Cancel switches Animate off.
 
 
 def _animation_cancel_script():
@@ -996,15 +998,16 @@ def test_the_animation_cancel_switches_animate_off():
     assert at.session_state["single_animate"] is False
 
 
-#: The session's remembered replay task (UX-169) — an ``_sps_*`` internal.
+#: The session's remembered replay task — an ``_sps_*`` internal.
 ANIM_TASK = "_sps_anim_task"
 
 
 def test_stepping_to_another_trial_cancels_the_replay_built_for_the_last(at):
     """A replay's task is keyed by what it is a replay of. A run that opens the
     card for another trial than the one remembered cancels that build — it is
-    for a trial no longer on screen — instead of joining it, which interleaved
-    two frame loops' counts on one card while the obsolete build ran on."""
+    for a trial no longer on screen — instead of joining it, which would
+    interleave two frame loops' counts on one card while the obsolete build
+    ran on."""
     stale = ("anim", "a-superseded-run", "another reader", "another trial")
     task = progress.begin(stale, title="Building the animation")
     at.session_state[ANIM_TASK] = stale
@@ -1052,8 +1055,9 @@ def test_a_setting_that_changes_the_frames_cancels_the_replay_being_built(
 ):
     """A replay is a replay of its frames: a rail setting that changes them —
     the saccades switched off here — makes the build under way an obsolete one.
-    Joined, two frame loops counted into one card, and the old build, which
-    nothing could cancel, ran to its end beside the new one at half the speed."""
+    Joined, two frame loops would count into one card, and the old build,
+    which nothing could cancel, would run to its end beside the new one at half
+    the speed."""
     building, task = _a_replay_left_building(at, monkeypatch)
     at.session_state["global_show_saccades"] = False
     at.run()
@@ -1063,7 +1067,7 @@ def test_a_setting_that_changes_the_frames_cancels_the_replay_being_built(
 
 
 def test_a_speed_change_joins_the_replay_being_built(at, monkeypatch):
-    """The speed reaches only the player's clock (PERF-15) — the frames are
+    """The speed reaches only the player's clock — the frames are
     built at ×1 whatever it is — so the build under way is the one this run
     wants: the same key, and nothing cancelled."""
     building, task = _a_replay_left_building(at, monkeypatch)
@@ -1097,7 +1101,7 @@ def test_stepping_to_another_screen_cancels_the_replay_built_for_the_last(
 ):
     """A multipart replay covers one screen, so ▶ to the next screen of the same
     trial mid-build must cancel the build for the screen left behind — not join
-    it, which interleaved two frame loops' counts on one card."""
+    it, which would interleave two frame loops' counts on one card."""
     at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
     _store_two_screen_dataset(at)
     at.session_state["single_animate"] = True
@@ -1113,7 +1117,7 @@ def test_stepping_to_another_screen_cancels_the_replay_built_for_the_last(
 
 
 def test_a_co_replays_key_names_bs_screen_too():
-    """In a co-replay B steps through its own screens (UX-112), so B's screen is
+    """In a co-replay B steps through its own screens, so B's screen is
     part of what the replay is of, beside B's reader and trial."""
     a = ("synthetic", "multipart_demo", "intro")
     on_bs_intro = tabs._animation_task_key(*a, compare=a)
@@ -1123,7 +1127,7 @@ def test_a_co_replays_key_names_bs_screen_too():
     assert on_bs_intro != on_bs_question
 
 
-# UX-169 — a placeholder inside the plot's frame.
+# A placeholder inside the plot's frame.
 
 
 def test_the_plot_frame_carries_a_placeholder_removed_on_first_draw():
@@ -1181,7 +1185,7 @@ def test_animate_on_a_trial_with_no_fixations_stops_the_replay_left_building():
     at.session_state["single_animate"] = True
     at.run()
     assert not at.exception, at.exception
-    # VIZ-45: the static figure is drawn instead, and the note says why.
+    # The static figure is drawn instead, and the note says why.
     assert any("**Animate** draws fixations" in caption.value for caption in at.caption)
     assert task.cancelled
     assert tabs.ANIM_TASK_KEY not in at.session_state

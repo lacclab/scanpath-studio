@@ -1,10 +1,10 @@
-"""UX-187 / UX-189 / UX-202: a trial id shown part by part, and the pickers' help.
+"""A trial id shown part by part, and the pickers' help.
 
 The pickers *display* ``l37_1129_2_2_1_Adv_r1`` as ``l37_1129 · 2_2_1_Adv · r1``.
 A plain split on ``_`` cannot do that — the reader id has an underscore of its
 own — so the parts come from the ids the trial is known to be made of, and an
-id none of them matches stays as it is. UX-202 keeps the text id whole and
-leaves a first reading (``r0``) out. Only the display changes: the selected value
+id none of them matches stays as it is. The text id stays whole and a first
+reading (``r0``) is left out. Only the display changes: the selected value
 is still the id itself.
 """
 
@@ -35,7 +35,7 @@ class TestTrialIdParts:
         assert trial_id_display(parts) == "l37_1129 · 2_2_1_Adv · r1"
 
     def test_a_first_reading_is_not_shown(self):
-        """UX-202: the demo holds first readings only; `r0` on every trial said
+        """The demo holds first readings only; `r0` on every trial would say
         nothing."""
         parts = trial_id_parts(
             "l37_1129_2_2_1_Adv_r0", participant_id="l37_1129", text_id="2_2_1_Adv"
@@ -50,7 +50,7 @@ class TestTrialIdParts:
         assert trial_id_display(parts) == "3 · r2"
 
     def test_an_id_that_does_not_split_still_sets_its_reading_off(self):
-        """UX-202: wherever a repeat suffix is shown it reads `· r2`, not `_r2`."""
+        """Wherever a repeat suffix is shown it reads `· r2`, not `_r2`."""
         assert trial_id_display(trial_id_parts("someone_else_r2")) == (
             "someone_else · r2"
         )
@@ -175,8 +175,8 @@ def test_compare_label_keeps_markers_and_participant_suffix():
 
 
 def test_iframes_sit_off_the_text_baseline():
-    """UX-188: an inline iframe left a descender's gap under the plot, which its
-    overflow:auto container showed as a scrollbar with nothing to scroll."""
+    """An inline iframe leaves a descender's gap under the plot, which its
+    overflow:auto container shows as a scrollbar with nothing to scroll."""
     from scanpath_studio.styles import get_app_css
 
     css = get_app_css()
@@ -201,7 +201,7 @@ def test_the_scanpath_pickers_show_ids_by_part_and_explain_them():
     # The value is still the id itself; only the option text is split.
     assert "_" in picker.value
     assert all(" · " in option for option in picker.options), picker.options
-    # UX-202: the text id is one part, and the demo's first readings show none.
+    # The text id is one part, and the demo's first readings show none.
     assert "participant · text" in picker.help
     assert not any(o.endswith(" · r0") for o in picker.options), picker.options
 

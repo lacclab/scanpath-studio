@@ -1,4 +1,4 @@
-"""UX-196 — hover a cut-off dropdown label to read all of it.
+"""Hover a cut-off dropdown label to read all of it.
 
 Streamlit's selectbox ends a label that does not fit with an ellipsis, in the
 open list and in the closed box alike, and gives neither a ``title`` — so

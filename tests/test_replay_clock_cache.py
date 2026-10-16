@@ -1,6 +1,6 @@
-"""PERF-15: a speed or autoplay change re-times the replay instead of rebuilding it.
+"""A speed or autoplay change re-times the replay instead of rebuilding it.
 
-Since BUG-93 the frames of a replay depend on neither its playback speed nor its
+The frames of a replay depend on neither its playback speed nor its
 autoplay switch: only ▶ Play's own frame duration and the clock on
 ``layout.meta`` do. `plots.build_scanpath_replay` returns the figure with the grid
 step that duration is made from, and `plots.set_replay_clock` stamps a speed and
@@ -92,9 +92,9 @@ class TestRetimingIsByteIdentical:
     def test_retiming_a_cache_hit_matches_the_old_cache_hit(self, speed):
         # `st.cache_data` hands back an unpickled copy, whose JSON already differs
         # from a freshly built figure's (plotly rebuilds it from `to_dict()`), so
-        # pin the comparison the app makes: a re-timed hit against the hit the
-        # old code got by caching the build at that speed. The export signature
-        # hashes this JSON.
+        # pin the comparison the app makes: a re-timed hit against the hit a
+        # cache of the build at that speed would hand back. The export
+        # signature hashes this JSON.
         grid = dict(anim_grid_step_ms=10, anim_max_frames=25)
         old_hit = pickle.loads(
             pickle.dumps(

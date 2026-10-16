@@ -1,4 +1,4 @@
-"""UX-9: sliders paired with a typed number box.
+"""Sliders paired with a typed number box.
 
 The contract that matters is that the *slider* still owns the canonical session
 key (deep links, Share, Save & restore and ``_collect_viz_settings`` read it
@@ -49,8 +49,8 @@ def _float_range_with_int_format_app():
     """The colour-range shape: whole numbers on screen, float bounds underneath.
 
     The bounds are floats on purpose (a restored config clamps into another
-    dataset's range), so a bare ``"%d"`` made ``st.number_input`` print a yellow
-    type-mismatch warning above each box in the rail.
+    dataset's range), so a bare ``"%d"`` would make ``st.number_input`` print a
+    yellow type-mismatch warning above each box in the rail.
     """
     import streamlit as st
 

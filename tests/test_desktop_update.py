@@ -1,4 +1,4 @@
-"""The desktop app's own updater (#385)."""
+"""The desktop app's own updater."""
 
 from __future__ import annotations
 
@@ -571,8 +571,8 @@ def _run_helper(plan, argv):
 
 def _powershells():
     """PowerShell 7 wherever it is installed, and on Windows the Windows
-    PowerShell 5.1 the helper really runs under (#394: CI's ordinary test run
-    has only PowerShell 7, on Linux; desktop.yml runs these on Windows)."""
+    PowerShell 5.1 the helper really runs under (CI's ordinary test run has
+    only PowerShell 7, on Linux; desktop.yml runs these on Windows)."""
     shells = ["pwsh"] if shutil.which("pwsh") else []
     if sys.platform == "win32" and Path(du._powershell()).exists():
         shells.append("powershell")
@@ -1081,7 +1081,7 @@ def test_the_e2e_driver_is_stdlib_plus_the_package():
     assert "import streamlit" not in source
 
 
-# --- final review fixes ------------------------------------------------------
+# --- The helper's start-up, its contract and its edge cases ------------------
 
 
 class _FakeHelper:
@@ -1360,7 +1360,7 @@ def test_the_boot_timeout_outlasts_the_relaunched_launchers_own_wait():
     assert du.BOOT_TIMEOUT_S > launcher.HEALTH_TIMEOUT_S
 
 
-# --- #394: hardening ------------------------------------------------------
+# --- Hardening ------------------------------------------------------------
 
 
 def test_refusal_creates_nothing(tmp_path, cache_home):
@@ -1584,7 +1584,7 @@ def test_the_last_result_says_when_it_was_written(tmp_path):
     assert abs(du.last_result(state=tmp_path).at - time.time()) < 60
 
 
-# --- #394: the rollback that fails too ------------------------------------
+# --- The rollback that fails too ------------------------------------------
 
 _DOUBLE_FAILURES = pytest.mark.parametrize(
     ("mode", "reason"),

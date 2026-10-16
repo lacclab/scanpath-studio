@@ -179,7 +179,7 @@ nav:
       - Privacy: privacy.md
 
 # Fail the strict build on a link to a heading that does not exist, not only on
-# one to a missing page (ENG-79).
+# one to a missing page.
 validation:
   omitted_files: warn
   absolute_links: warn
@@ -188,9 +188,8 @@ validation:
 
 # The abbreviation list is appended to every page by pymdownx.snippets; it is
 # not a page of its own. The dataset-adapter contract is developer material,
-# read on GitHub from CONTRIBUTING.md, and the harmonised benchmark corpora
-# need a bundle only the private EyeGenBench pipeline can build (ENG-80).
-# MultiplEYE is held back from the beta, in the app as well (DATA-54).
+# read on GitHub from CONTRIBUTING.md. The harmonised benchmark corpora and
+# MultiplEYE are off by default in the app, so their pages stay off the site.
 exclude_docs: |
   includes/
   contributing-a-dataset.md
@@ -203,7 +202,7 @@ hooks:
 plugins:
   - search
   # Google Fonts and every other external asset are downloaded at build time
-  # and served from the site itself (ENG-79).
+  # and served from the site itself.
   - privacy
   # Link-preview cards. Needs Cairo, so only the deploy renders them
   # (docs.yml sets SOCIAL_CARDS); a local or pull-request build skips them.
@@ -212,7 +211,7 @@ plugins:
       cards_layout_options:
         background_color: "#1f77b4"
         color: "#ffffff"
-  # The pages UX-23 retired and ENG-77 deleted: their old URLs keep working.
+  # Pages that were moved, merged or removed: their old URLs keep working.
   - redirects:
       redirect_maps:
         guides/outputs-sharing.md: guides/scanpath-visualization/index.md#under-the-plot
@@ -232,16 +231,15 @@ plugins:
         gallery/workflows.md: index.md#from-recording-to-publication
         gallery/word-profile.md: gallery/across-experiment.md
         gallery/time-course.md: gallery.md
-        # ENG-80 took these off the site for the beta; old links land on the
-        # repository file that now carries the subject.
+        # Pages that left the site: old links land on the repository file that
+        # now carries the subject, or on the nearest guide.
         architecture.md: https://github.com/lacclab/scanpath-studio/blob/main/AGENTS.md
         security.md: https://github.com/lacclab/scanpath-studio/blob/main/SECURITY.md
         benchmark-corpora.md: guides/loading-data/index.md
-        # DATA-54: MultiplEYE is held back from the beta.
         multipleye.md: guides/loading-data/index.md
         rendering.md: guides/scanpath-visualization/index.md
         contributing-a-dataset.md: https://github.com/lacclab/scanpath-studio/blob/main/docs/contributing-a-dataset.md
-        # ENG-88 folded these into Getting started and the FAQ.
+        # Folded into Getting started and the FAQ.
         desktop.md: install.md#install
         getting-started.md: install.md
         export-troubleshooting.md: faq.md#export-fails

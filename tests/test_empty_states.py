@@ -1,4 +1,4 @@
-"""UX-7: empty states that name the cause and offer the next action.
+"""Empty states that name the cause and offer the next action.
 
 (a) The filters emptied the trial pool — which filter, and how many trials it
 drops on its own. (b) A public corpus isn't on disk yet.
@@ -124,7 +124,7 @@ class TestDiagnoseFilters:
 
 
 class TestClearOneTrialFilter:
-    """UX-7 follow-up: clearing a single culprit, not everything."""
+    """Clearing a single culprit, not everything."""
 
     def test_drops_only_the_named_key(self):
         import streamlit as st
@@ -148,7 +148,7 @@ class TestClearOneTrialFilter:
         clear_trial_filter("filter_never_set")  # must not raise
 
     def test_the_other_filters_survive_a_run_without_the_funnel(self, pool):
-        """BUG-115: the empty-pool panel replaces the view, funnel and all, so on
+        """The empty-pool panel replaces the view, funnel and all, so on
         that run Streamlit has dropped every ``filter_*`` widget key and only the
         ``_trial_filters_raw`` mirror remembers them. Clearing one culprit must
         leave the rest of that mirror alone, and with the frames it re-derives
@@ -227,7 +227,7 @@ class TestClearTrialFilters:
 
 
 class TestDatasetUnavailableState:
-    """UX-7(b): a missing corpus is recorded for the main-area empty state."""
+    """A missing corpus is recorded for the main-area empty state."""
 
     def test_missing_download_corpus_offers_the_download_inline(self):
         import streamlit as st
@@ -274,9 +274,10 @@ class TestDatasetUnavailableState:
 
     @pytest.mark.timeout(240)
     def test_the_note_does_not_outlive_a_run_that_stops_at_a_mapping(self, tmp_path):
-        """BUG-96: a run that returns at the mapping-problems exit never reached
-        the panel that consumes the note, so the next run — on another dataset —
-        said PoTeC "isn't here yet" above the demo."""
+        """A run that returns at the mapping-problems exit never reaches the
+        panel that consumes the note, so the note must not carry over: the next
+        run — on another dataset — would say PoTeC "isn't here yet" above the
+        demo."""
         from streamlit.testing.v1 import AppTest
 
         from scanpath_studio import app
@@ -308,10 +309,10 @@ class TestDatasetUnavailableState:
 
 @pytest.mark.timeout(180)
 class TestADeadEndStillShowsTheWayOut:
-    """BUG-81: a mapping that can't be satisfied (or a filter that empties the
-    pool) returned early — before the "⏳ Loading…" banner was cleared and
-    before 📂 Available datasets was drawn — so the Data page the warning sent
-    you to showed a stuck spinner over a heading with no table under it, and no
+    """A mapping that can't be satisfied (or a filter that empties the pool)
+    returns early, but the "⏳ Loading…" banner is still cleared and 📂 Available
+    datasets still drawn — otherwise the Data page the warning sends you to
+    would show a stuck spinner over a heading with no table under it, and no
     way to switch to another dataset."""
 
     def test_a_broken_mapping_leaves_the_datasets_table_and_no_spinner(self):
@@ -331,15 +332,15 @@ class TestADeadEndStillShowsTheWayOut:
         assert not [i for i in at.info if i.value.startswith("Loading")]
         from scanpath_studio.app import DATASET_TABLE_ROWS_KEY
 
-        # UX-174: the table's rows, by value (it is no longer a dataframe).
+        # The table's rows, by value (it is not a dataframe).
         assert at.session_state[DATASET_TABLE_ROWS_KEY]
 
 
 @pytest.mark.timeout(180)
 def test_a_relative_data_directory_names_the_folder_it_downloads_to():
-    """UX-184: the box said `data/PoTeC`, and an installed copy downloaded it to
-    the per-user data home (on Windows `%LOCALAPPDATA%`), which nothing on the
-    page named — the finished download looked lost."""
+    """A relative box (`data/PoTeC`) names the folder it resolves to: an
+    installed copy downloads to the per-user data home (on Windows
+    `%LOCALAPPDATA%`), and unnamed, the finished download would look lost."""
     from streamlit.testing.v1 import AppTest
 
     from scanpath_studio import app
@@ -366,9 +367,10 @@ POTEC_LABEL = "PoTeC — Potsdam Textbook Corpus"
 @pytest.mark.timeout(240)
 class TestAMissingCorpusShownAsTheDemo:
     """A corpus that isn't on disk is replaced by the bundled demo — and the page
-    has to say *the demo* everywhere, not only in the notice. On a server that
-    can't download it the picker went on naming PoTeC, and on every install the
-    demo's 2560×1440 text was drawn on PoTeC's 1680×1050 screen, cut off."""
+    has to say *the demo* everywhere, not only in the notice. Otherwise, on a
+    server that can't download it the picker would go on naming PoTeC, and on
+    every install the demo's 2560×1440 text would be drawn on PoTeC's
+    1680×1050 screen, cut off."""
 
     def _open_missing_potec(self, monkeypatch, tmp_path, *, local_fs: bool):
         from streamlit.testing.v1 import AppTest

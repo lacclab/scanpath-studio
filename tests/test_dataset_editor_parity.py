@@ -1,14 +1,12 @@
-"""UX-135: the ✏️ Edit dataset screen draws like the ➕ Add dataset screen.
+"""The ✏️ Edit dataset screen draws like the ➕ Add dataset screen.
 
-DATA-35 split the 🗂️ Data page into an overview and an editor, and gave the
-editor the add screen's sticky bar and its two-button footer. What it kept was a
-stack of ``st.divider()`` + ``st.subheader("🔤 …")`` + ``st.caption(…)`` section
-headers grown one at a time, against an add screen whose parts are numbered
-one-line headlines with hover-only prose. The two screens ask the same questions
-of the same dataset — one before it exists and one after — so this round made the
-chrome the same too: the same `wizard_shell.part` headline, the same order
-(tables & mapping → metadata → recording setup), and Recording setup lifted out
-of the mapping form into a numbered part, as it already is on the add screen.
+The two screens ask the same questions of the same dataset — one before it
+exists and one after — so their chrome is the same too: the add screen's sticky
+bar and two-button footer, the same `wizard_shell.part` numbered one-line
+headlines with hover-only prose (not ``st.divider()`` + ``st.subheader("🔤 …")``
++ ``st.caption(…)`` section headers), the same order (tables & mapping →
+metadata → recording setup), and Recording setup as a numbered part of its own
+rather than inside the mapping form, as on the add screen.
 """
 
 from __future__ import annotations
@@ -25,7 +23,7 @@ AppTest = streamlit_testing.AppTest
 
 class TestTheStepRegistry:
     def test_the_first_three_parts_mirror_the_add_screens(self):
-        """Naming it (UX-178) and editing its tables are the add screen's first
+        """Naming it and editing its tables are the add screen's first
         two questions, and Recording setup is literally the same renderer."""
         from scanpath_studio.wizard_shell import EDITOR_STEPS, STEPS_BY_ID
 
@@ -52,7 +50,7 @@ class TestTheStepRegistry:
         assert [every[s.id].number for s in EDITOR_STEPS] == [1, 2, 3, 4, 5, 6]
 
         # Stimulus images need a local filesystem and preprocessing is behind
-        # PRE-22's flag; a screen reading 1 · 2 · 3 · 5 looks like a section that
+        # the experimental flag; a screen reading 1 · 2 · 3 · 5 looks like a section that
         # failed to render rather than one that does not apply here.
         some = numbered(EDITOR_STEPS, {"edit_data", "edit_setup", "edit_identity"})
         assert [step.number for step in some.values()] == [1, 2, 3]
@@ -69,7 +67,7 @@ class TestTheStepRegistry:
 class TestThePartHeadline:
     def test_a_note_becomes_the_wizards_own_hover_tooltip(self):
         """Not an `st.caption` under the title — the add screen's prose is
-        hover-only, and a caption line under every part is what this replaces."""
+        hover-only, not a caption line under every part."""
         import streamlit as st
 
         from scanpath_studio.wizard_shell import EDITOR_STEPS_BY_ID, part
@@ -99,7 +97,7 @@ class TestThePartHeadline:
 
     def test_the_hover_carrier_is_styled_inside_a_part(self):
         """`.sps-fhelp` only gets its dotted-underline cue in the contexts named
-        in `styles.py`; a part was not one of them."""
+        in `styles.py`; a part has to be one of them."""
         from scanpath_studio.styles import get_app_css
 
         assert ".sps-wiz-part .sps-fhelp" in get_app_css()
@@ -137,9 +135,9 @@ class TestThePageItDraws:
     def test_the_editor_sections_render_as_numbered_parts(self):
         at = self._data_page()
         parts = self._parts(at)
-        # Name & description (UX-178) · Tables & mapping · Recording setup ·
+        # Name & description · Tables & mapping · Recording setup ·
         # Stimulus images (the tests allow a local filesystem) · Trial
-        # identity — the add screen's four parts first (#417).
+        # identity — the add screen's four parts first.
         assert len(parts) >= 5
         numbers = [
             body.split('class="sps-wiz-part-n">')[1].split("<")[0] for body in parts
@@ -151,8 +149,8 @@ class TestThePageItDraws:
         assert "Trial identity" in parts[4]
 
     def test_the_old_subheaders_are_gone(self):
-        """Only the overview screen keeps `st.subheader` sections; every heading
-        the editor owned is a part now."""
+        """Only the overview screen has `st.subheader` sections; every heading
+        on the editor is a part."""
         at = self._data_page()
         headings = {s.value for s in at.subheader}
         assert not any(h.startswith(("🔤 ", "🧾 ", "🖼️ ", "🧹 ")) for h in headings), (
@@ -160,8 +158,8 @@ class TestThePageItDraws:
         )
 
     def test_recording_setup_is_not_titled_twice(self):
-        """It renders into its own part, so the `##### ` heading it used to carry
-        inside the mapping form has to go — not stack under the part's title."""
+        """It renders into its own part, so it carries no `##### ` heading of its
+        own to stack under the part's title."""
         at = self._data_page()
         assert [
             m.value
@@ -186,7 +184,7 @@ class TestTheSlotOrder:
     def _positions(*names):
         from scanpath_studio import app
 
-        # UX-166: `main` wraps the run in a loading scope; `_run_app` is the run.
+        # `main` wraps the run in a loading scope; `_run_app` is the run.
         source = inspect.getsource(app._run_app)
         found = {}
         for name in names:
@@ -198,7 +196,7 @@ class TestTheSlotOrder:
     def test_metadata_sits_with_the_mapping_ahead_of_recording_setup(self):
         """The add screen's order: every upload and its mapping, the metadata
         tables under the same heading, then Recording setup and Stimulus images
-        (#417) — and only then the parts that need the finished dataset."""
+        — and only then the parts that need the finished dataset."""
         pos = self._positions(
             "editor_part_data_slot",
             "setup_metadata_slot",
@@ -221,8 +219,8 @@ class TestTheSlotOrder:
 
 class TestTheRehostedRenderer:
     def test_the_setup_host_is_optional(self):
-        """The collapsed / legacy call sites still want it inline, heading and
-        all — only the editor passes a host."""
+        """Every other call site wants it inline, heading and all — only the
+        editor passes a host."""
         from scanpath_studio.tabs import (
             _render_column_mapping_section,
             _render_remap_editor,
@@ -256,7 +254,7 @@ class TestNoNumberedPartIsLeftEmpty:
     """A headline standing over nothing reads as a section that failed to
     render — the very thing contiguous numbering exists to prevent. Two of
     `_render_column_mapping_section`'s three modes could produce exactly that
-    for **Recording setup**, which UX-135 promoted to a part of its own."""
+    for **Recording setup**, which is a part of its own."""
 
     def test_a_source_with_no_recorded_setup_says_so(self, monkeypatch):
         """`active_setup_snapshot()` is None for a source that claims no screen
@@ -278,8 +276,8 @@ class TestNoNumberedPartIsLeftEmpty:
         assert "doesn't state the screen" in captions[0]
 
     def test_inline_it_stays_silent(self, monkeypatch):
-        """Without a host there is no headline to strand, and the note has
-        always said nothing rather than invent a monitor."""
+        """Without a host there is no headline to strand, and the note says
+        nothing rather than invent a monitor."""
         from scanpath_studio import tabs
 
         monkeypatch.setattr(
@@ -297,7 +295,8 @@ class TestNoNumberedPartIsLeftEmpty:
         assert written == []
 
     def test_no_mapping_available_does_not_skip_the_setup_part(self):
-        """Mode C used to `return` on that branch, stranding the part below it."""
+        """Mode C (no mapping) must not `return` before the setup part, or the
+        part below it is stranded."""
         source = " ".join(
             inspect.getsource(_render_column_mapping_section_source()).split()
         )

@@ -1,4 +1,4 @@
-"""Pure helpers for hand-authored scanpath documents and edits (VIZ-33)."""
+"""Pure helpers for hand-authored scanpath documents and edits."""
 
 from __future__ import annotations
 
@@ -541,7 +541,7 @@ _NOT_AUTHORING = "That file isn't an authoring file saved from this editor."
 
 
 def parse_authoring_document(payload: str) -> AuthoringDocument:
-    """Restore schema 2 or migrate a VIZ-20 schema-1 authoring document."""
+    """Restore schema 2 or migrate a schema-1 authoring document."""
     try:
         value = json.loads(payload)
     except ValueError:

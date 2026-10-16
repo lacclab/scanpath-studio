@@ -1,8 +1,8 @@
-"""The *second* dataset a comparison can draw scanpath B from (CMP-8 §2).
+"""The *second* dataset a comparison can draw scanpath B from.
 
-Compare mode used to pick B out of the same loaded corpus as A. This module is
-what lets it reach a different one — a PoTeC reader beside a OneStop reader, or
-the same text read under two corpora.
+Compare mode picks B out of the same loaded corpus as A by default. This module
+is what lets it reach a different one — a PoTeC reader beside a OneStop reader,
+or the same text read under two corpora.
 
 **The one hard constraint: nothing here may render.** The app's public-corpus
 loaders (`app._load_public_dataset`) draw directory inputs, *Expected files*
@@ -40,8 +40,8 @@ from .data import adopt_source, stamp_source, vouch_for_frames
 from .experimental_setup import Provenance, SetupSnapshot
 from .session_keys import COMPARE_SOURCE_STATE_KEY
 
-#: The picker's "stay in this dataset" entry — compare mode's behaviour before
-#: CMP-8, and still the default.
+#: The picker's "stay in this dataset" entry — B out of A's own pool, the
+#: default.
 THIS_DATASET = "This dataset"
 
 #: Session key holding the picked secondary source name. Re-exported from
@@ -50,9 +50,10 @@ THIS_DATASET = "This dataset"
 #: exists to prevent.
 COMPARE_SOURCE_KEY = COMPARE_SOURCE_STATE_KEY
 
-#: `<key_prefix>_dir` session keys written by `app._dataset_dir_input`, plus the
-#: default each loader passes it. Read-only here: this module never writes a
-#: location, it only reports whether one is usable.
+#: Label substrings that route a registry entry to its loader. The locations
+#: come from the `<key_prefix>_dir` session keys `app._dataset_dir_input` writes,
+#: plus the default each loader passes it. Read-only here: this module never
+#: writes a location, it only reports whether one is usable.
 _MULTIPLEYE_LABEL_HINT = "MultiplEYE"
 _POTEC_LABEL_HINT = "PoTeC"
 
@@ -71,11 +72,12 @@ class SecondaryDataset:
     combos: pd.DataFrame
     setup: SetupSnapshot
     composite_trial_columns: tuple[str, ...] = field(default=())
-    #: VIZ-48: the source's normalized raw gaze, when it carries any — an
-    #: upload's, or the bundled demo's. The public corpora ship none.
+    #: The source's normalized raw gaze, when it carries any — an upload's, or
+    #: the bundled demo's. The public corpora ship none.
     raw_gaze: pd.DataFrame | None = None
-    #: DATA-66: B's column-name map per table — a stored upload's own; empty for
-    #: a public corpus or the demo until their loaders return one (phase 4).
+    #: B's column-name map per table — a stored upload's own, or the one its
+    #: corpus' loader (or the demo's auto-detected schema) gives; empty when the
+    #: source has none.
     column_names: Mapping[str, ColumnNames] = field(default_factory=dict)
 
 
@@ -89,7 +91,7 @@ def _resolved_dir(key: str, default_dir: str) -> str:
 
     raw = str(st.session_state.get(key) or "").strip() or default_dir
     if app.data_root() and not app.local_filesystem_enabled():
-        # S2: on a shared deployment the path box isn't rendered at all and the
+        # On a shared deployment the path box isn't rendered at all and the
         # location comes from the server's environment — the same rule the
         # loader itself follows.
         return str(app.data_root())
@@ -99,13 +101,14 @@ def _resolved_dir(key: str, default_dir: str) -> str:
 def _public_location(label: str) -> tuple[str, dict]:
     """``(root, loader kwargs)`` for a `PUBLIC_DATASET_REGISTRY` label.
 
-    The kwargs are the *user's current* source options (OneStop's variant /
-    regime / parts, MultiplEYE's fixation source) — the same session keys the
-    the Compare-with widgets own, read rather than re-rendered.
+    The kwargs are the source's options: a benchmark corpus' name, OneStop's
+    variant / regime / parts (from the label), and MultiplEYE's fixation source
+    — the session key the main source's widget owns, read rather than
+    re-rendered.
     """
     from scanpath_studio import app, datasets
 
-    # DATA-27 (Task 11R): a prepared benchmark corpus is one registry entry that
+    # A prepared benchmark corpus is one registry entry that
     # names the corpus inside the bundle, so it dispatches on `benchmark_dataset`
     # — **before** the label-substring branches below, which a harmonised
     # "PoTeC …" / "OneStop …" label would otherwise match and send to the native
@@ -116,8 +119,8 @@ def _public_location(label: str) -> tuple[str, dict]:
             "dataset": dataset,
         }
     if regime := onestop_regime_for_choice(label):
-        # DATA-63: one dataset per regime, every part, from the public release.
-        # UX-184: the box's own default — under the Download folder.
+        # One dataset per regime, every part, from the public release. The
+        # default is the path box's own — under the Download folder.
         default = app._download_target(ONESTOP_PUBLIC_DEFAULT_DIR)
         return _resolved_dir("onestop_public_dir", default), {
             "variant": "public",
@@ -159,8 +162,8 @@ def _short_name(label: str) -> str:
 
     The registry's own ``short`` name, not the label's prefix: two entries can
     share one prefix — the native and the harmonised PoTeC both split to
-    ``"PoTeC"`` — so a prefix-derived hint told the user to go and open one of
-    two entries it couldn't tell apart (M12).
+    ``"PoTeC"`` — so a prefix-derived hint would tell the user to go and open
+    one of two entries it couldn't tell apart.
     """
     from scanpath_studio import app
 
@@ -202,12 +205,12 @@ def _public_ready_cached(
             return False, f"{short} isn't loadable as a comparison dataset."
     except (OSError, ValueError, KeyError):
         # `KeyError` because a manifest row is data from a file on disk and can
-        # be malformed — a row with no `name` used to escape this catch and take
-        # the whole app down through the compare-B enumeration, which runs over
-        # *every* registry entry on every rerun Compare is on (I2). The nameless
-        # row is now skipped at the source too (`eyegenbench.entry_name`); this
-        # is the belt to that braces, since the same catch covers four loaders'
-        # readiness probes and only one of them has been hardened.
+        # be malformed — a row with no `name` must not escape this catch and
+        # take the whole app down through the compare-B enumeration, which runs
+        # over *every* registry entry on every rerun Compare is on. The nameless
+        # row is skipped at the source too (`eyegenbench.entry_name`); this is
+        # the belt to that braces, since the same catch covers four loaders'
+        # readiness probes and only one of them is hardened at the source.
         present = False
     return (True, "") if present else (False, hint)
 
@@ -230,7 +233,7 @@ def secondary_dataset_options(
     cohort. The picker has no participant to give at the moment it builds its
     options, so offering the bundle would mean blocking the whole app for
     minutes, and possibly OOM-ing the server, to draw one comparison trial. The
-    same corpus is reachable as the public *OneStop* entry below.
+    same corpus is reachable as the public *OneStop* entries below.
 
     ``exclude`` drops one name (the active source — comparing a dataset with
     itself is what `THIS_DATASET` already means).
@@ -249,12 +252,12 @@ def secondary_dataset_options(
     return [option for option in options if option[0] != exclude]
 
 
-@st.cache_data(show_spinner=False)  # UX-168: B's dataset card covers this.
+@st.cache_data(show_spinner=False)  # B's dataset card covers this.
 def _load_public_frames(
     label: str, root: str, options: tuple
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     """Normalized frames for a public corpus, keyed on its location + options,
-    and its column-name map per table, as payloads (DATA-66).
+    and its column-name map per table, as payloads.
 
     Goes through the `datasets.load_*` entry points (which normalize internally
     via `api.load_scanpath_data`), never `app.prepare_data` — that one takes a
@@ -263,8 +266,8 @@ def _load_public_frames(
     from scanpath_studio import datasets
 
     kwargs = dict(options)
-    # The app works in the internal names; DATA-66: the corpus' own names come
-    # back beside the frames (`ScanpathData.column_names`), for B's labels.
+    # The app works in the internal names; the corpus' own names come back
+    # beside the frames (`ScanpathData.column_names`), for B's labels.
     if dataset := kwargs.get("dataset"):
         from scanpath_studio.eyegenbench import load_eyegenbench
 
@@ -283,7 +286,7 @@ def _load_public_frames(
         data = datasets.load_multipleye(
             root, fixation_source=kwargs["fixation_source"], names="canonical"
         )
-    # BUG-103: B's corpus is copied out of this cache on every rerun; the label
+    # B's corpus is copied out of this cache on every rerun; the label
     # lets `load_secondary_dataset` key it without hashing it each time.
     words, fixations = stamp_source((data[0], data[1]))
     payloads = {
@@ -293,14 +296,14 @@ def _load_public_frames(
     return words, fixations, payloads
 
 
-@st.cache_data(show_spinner=False)  # UX-168: B's dataset card covers this.
+@st.cache_data(show_spinner=False)  # B's dataset card covers this.
 def _load_builtin_frames(name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Normalized frames for the bundled demo / synthetic trial.
 
     Both are small and packaged, so caching the *normalized* result here is the
     whole cost — the raw loaders they call are already cached themselves.
     Normalizing reports nothing on this path, so it reports once, first thing:
-    only a miss gets here, and B's gated card waits for a report (UX-166).
+    only a miss gets here, and B's gated card waits for a report.
     """
     from scanpath_studio import api
     from scanpath_studio.data import load_sample_data
@@ -314,7 +317,7 @@ def _load_builtin_frames(name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 @st.cache_data(show_spinner=False)
 def _builtin_column_names(name: str) -> dict[str, dict]:
-    """DATA-66: the demo's / synthetic trial's own column names, for a B drawn
+    """The demo's / synthetic trial's own column names, for a B drawn
     from them — read from the same raw frames and auto-detected schemas
     `_load_builtin_frames` normalizes, as payloads — with the columns that
     load rewrites marked (the demo's word ids are shifted onto its boxes)."""
@@ -349,7 +352,7 @@ def source_has_raw_gaze(name: str | None) -> bool:
     """Whether comparison source ``name`` carries raw gaze, without loading it.
 
     The rail is drawn before B's dataset loads, and its 🔵 Raw gaze switch must
-    be live when only B's dataset has samples (VIZ-48). A stored upload says so
+    be live when only B's dataset has samples. A stored upload says so
     in its frame, the demo always has some, the public corpora never do.
     """
     if not name or name == THIS_DATASET:
@@ -363,7 +366,7 @@ def source_has_raw_gaze(name: str | None) -> bool:
 
 @st.cache_data(show_spinner=False)
 def _load_demo_raw_gaze() -> pd.DataFrame:
-    """The bundled demo's normalized raw gaze, for a demo B (VIZ-48)."""
+    """The bundled demo's normalized raw gaze, for a demo B."""
     from scanpath_studio import api
 
     return api.load_sample_raw_gaze(names="canonical")
@@ -381,7 +384,7 @@ def snapshot_for(
     viewing distance and typography stay at their defaults, marked ``ASSUMED`` —
     no registry entry records them, and B's panel does not use them.
 
-    **Name-driven, not B-specific** (CMP-11). The `global_*` keys describe
+    **Name-driven, not B-specific.** The `global_*` keys describe
     whichever dataset is *active*, so resolving B through here and A through
     `app.active_setup_snapshot` would report different provenance for the same
     corpus depending on which side of a comparison it landed on — and
@@ -409,7 +412,7 @@ def snapshot_for(
     )
 
 
-#: Pre-CMP-11 private name, kept so existing call sites and tests resolve.
+#: :func:`snapshot_for` under its older private name.
 _snapshot_for = snapshot_for
 
 
@@ -417,7 +420,7 @@ def load_secondary_dataset(name: str | None) -> SecondaryDataset | None:
     """Load one comparison source by name, or ``None`` when there is nothing to load.
 
     ``None`` / `THIS_DATASET` / an unready name all return ``None`` — the caller
-    then behaves exactly as it did before CMP-8 (B out of A's own pool).
+    then draws B out of A's own pool.
     """
     from scanpath_studio.utils import build_combo_options_for
 
@@ -469,7 +472,7 @@ def load_secondary_dataset(name: str | None) -> SecondaryDataset | None:
     from scanpath_studio import app
 
     if app.local_filesystem_enabled():
-        # #417 — B draws its own dataset's stimulus images, kept in a slot of
+        # B draws its own dataset's stimulus images, kept in a slot of
         # their own so they and A's do not evict each other on every run.
         images = app.with_dataset_stimulus_images(
             name, words, fixations, slot="cmp_stimulus_images"

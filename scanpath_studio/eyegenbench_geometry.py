@@ -31,8 +31,8 @@ class DisplaySpec:
     source: str
 
 
-# Provisional -- DATA-27 open decision. A synthesized layout needs *some*
-# screen; this is the one used when nothing at all is published for a corpus.
+# Provisional. A synthesized layout needs *some* screen; this is the one used
+# when nothing at all is published for a corpus.
 DEFAULT_SPEC = DisplaySpec(
     width_px=1920,
     height_px=1080,
@@ -118,7 +118,7 @@ def _spec(
 # the UZH dataset review table -> the corpus' own paper. Anything not listed
 # here falls back to DEFAULT_SPEC and is stamped `synthesized`.
 #
-# R49/R50 -- the entry bar is a PUBLISHED parameter, not a plausible one. An
+# The entry bar is a PUBLISHED parameter, not a plausible one. An
 # entry here upgrades a corpus from `synthesized` to `reconstructed`, i.e. from
 # "this geometry is invented" to "this geometry follows the corpus' own
 # reported screen"; a plausible-but-unsourced entry makes an invented layout
@@ -258,7 +258,7 @@ DISPLAY_SPECS: dict[str, DisplaySpec] = {
     "cuentos": _spec(1920, 1080, 24, source="uzh", distance_cm=55),
     "zuco1": _spec(1920, 1080, 20, source="paper:Hollenstein2018", mono=False),
     "zuco2": _spec(1920, 1080, 20, source="paper:Hollenstein2020", mono=False),
-    # R49 -- OneStop publishes more of its layout than any other corpus here:
+    # OneStop publishes more of its layout than any other corpus here:
     # monitor, display area, both viewing distances, the letter cell in px and
     # the line pitch in px (Berzak et al. 2025, Sci Data 12:1995,
     # doi:10.1038/s41597-025-06272-2, Methods -> Apparatus). Two judgement
@@ -282,7 +282,7 @@ DISPLAY_SPECS: dict[str, DisplaySpec] = {
     # `double_spaced=True` is not an assumption here: 38 x 2 = 76 px is exactly
     # the "triple spacing (76 px)" the paper reports. This entry is also the
     # single sourced home for the 2560x1440 that app.py / cli.py / datasets.py
-    # pin for the *native* OneStop corpus; those sites now cite it.
+    # pin for the *native* OneStop corpus; those sites cite it.
     "onestop": _spec(
         2560,
         1440,
@@ -298,7 +298,7 @@ DISPLAY_SPECS: dict[str, DisplaySpec] = {
         double_spaced=True,
         margin_px=368,
     ),
-    # R49 -- Laurinavichyute et al. 2019, Behav Res Methods 51(3):1161-1178,
+    # Laurinavichyute et al. 2019, Behav Res Methods 51(3):1161-1178,
     # doi:10.3758/s13428-018-1051-6, Method -> Procedure states the monitor and
     # resolution, 22 pt Courier New, 90 cm, and 0.29 deg per character.
     # `font_px=28` converts the published 22 pt at this screen's 92 ppi -- it is
@@ -320,12 +320,12 @@ DISPLAY_SPECS: dict[str, DisplaySpec] = {
         distance_cm=90,
         width_cm=53.1,
     ),
-    # R49 -- Yan, Pan & Kliegl 2025, Behav Res Methods 57(2):60,
+    # Yan, Pan & Kliegl 2025, Behav Res Methods 57(2):60,
     # doi:10.3758/s13428-024-02523-z, Apparatus. BSC-II's apparatus does NOT
     # carry over from `bsc` above and the asymmetry between the two entries is
     # real, not a gap: BSC was a 19" CRT at 1024x768 / 43 cm / 0.75 chars per
     # degree, BSC-II a 24.5" LCD at 1920x1080 / 70 cm / 0.909. Inheriting BSC's
-    # numbers would have been wrong by ~2x in px per degree.
+    # numbers would be wrong by ~2x in px per degree.
     # A Song-font CJK glyph cell is square, so the published 1.1 deg per
     # character IS the font size (~48 px); the harmonised interest areas are
     # words, and `layout_words` multiplies per-character, so the per-character
@@ -343,28 +343,22 @@ DISPLAY_SPECS: dict[str, DisplaySpec] = {
         distance_cm=70,
         width_cm=53.8,
     ),
-    # R50 -- `mecol2w2` USED to be here as
-    # `_spec(1920, 1080, 21, source="uzh + paper:MECO-L2-W2")`. It was removed
-    # after both of its cited sources were re-read, and neither contains it:
+    # `mecol2w2` deliberately has no entry: neither source that might give one
+    # states a corpus-level screen.
     #
-    #  * Kuperman et al. 2025 (SSLA, doi:10.1017/S0272263125000105), Procedure:
-    #    "A mono-spaced font (Consolas) was used, with a size generally ranging
-    #    from 20 to 22 points (given variation in screen size and resolution at
-    #    different testing sites) and 1.5 line spacing. In accordance with
-    #    their local experimental setup, the German site in Zurich used a
-    #    smaller font size of 10 with a lower resolution of 1280 x 1024. ... For
-    #    further specifications of the screen, font size, presentation settings,
-    #    and apparatus at each participating site, see supplementary material
-    #    S2." The string "1920" does not occur in the paper at all; the only
-    #    resolution it prints is one site's exception.
+    #  * Kuperman et al. 2025 (SSLA, doi:10.1017/S0272263125000105), Procedure,
+    #    gives a 20-22 pt Consolas font that varied with each testing site's
+    #    screen (one site, Zurich, used 10 pt at 1280 x 1024) and defers each
+    #    site's screen to supplementary material S2. No 1920-px resolution
+    #    appears in the paper; the only resolution it prints is that one site's
+    #    exception.
     #  * The UZH review row for "MECO L2 2nd Wave" has `Resolution: null` and
     #    puts a LINK to those same supplementary materials in its `Monitor` and
     #    eye-to-screen-distance cells -- the curators' way of writing "per
     #    site".
     #
-    # So 1920x1080 was corpus-level for no site in particular, and `font_px=21`
-    # was the midpoint of a 20-22 **pt** range used as **px** -- a unit error
-    # on its own terms, and one that ignored both the range and the 10 pt site.
+    # So a 1920x1080 entry would be corpus-level for no site in particular, and
+    # a `font_px=21` taken from the 20-22 **pt** range would be a unit error.
     # Falling back to `synthesized` is a user-visible downgrade and the correct
     # direction: an unsourced `reconstructed` is worse than an honest
     # `synthesized`, because the user cannot tell it is a guess.
@@ -431,13 +425,13 @@ def extract_eyelink_boxes(
     Only interest areas that were *fixated* appear -- the column rides on
     fixations. `fill_missing_boxes` completes the rest.
 
-    R28: screen coordinates are non-negative by definition, so a box whose
+    Screen coordinates are non-negative by definition, so a box whose
     ``start_x``/``start_y`` is negative is malformed data, not a real
     on-screen position -- it is dropped here rather than earning the `real`
     stamp. This is the same discipline `extract_text_df_boxes` applies to its
     own real-box source; both feed the same stamp, so both must guarantee it.
 
-    R33: the raw-EyeLink tier is an optional upgrade (tier 1 of 4). All three
+    The raw-EyeLink tier is an optional upgrade (tier 1 of 4). All three
     columns this function indexes -- ``paragraph_col``, ``ia_col`` and
     ``data_col`` -- must be present before any of them is read; when one is
     missing this returns the empty, correctly-columned frame so
@@ -445,9 +439,9 @@ def extract_eyelink_boxes(
     Verified against a real corpus: onestop's raw EyeLink export carries
     ``CURRENT_FIX_INTEREST_AREA_DATA`` but neither ``unique_paragraph_id`` nor
     ``ia_index`` (an un-prefixed ``paragraph_id`` and no interest-area index
-    at all) -- a hard skip here used to drop the entire corpus from the
+    at all) -- a hard skip here would drop the entire corpus from the
     catalogue behind a one-line log entry, when the bundle the reconstructed/
-    synthesized tiers would have produced is perfectly good.
+    synthesized tiers produce is perfectly good.
     """
     if not {paragraph_col, ia_col, data_col} <= set(frame.columns):
         return pd.DataFrame(columns=[paragraph_col, ia_col, *_BOX_COLUMNS])
@@ -486,7 +480,7 @@ def extract_text_df_boxes(
     Presence is not trust: a row only contributes a box when its ``ia_index``
     is a valid finite non-negative whole number (`_valid_ia_index`, the same
     discipline `extract_eyelink_boxes` uses) *and* the box itself is finite,
-    non-negative (``start_x >= 0`` and ``start_y >= 0`` -- R28: a screen
+    non-negative (``start_x >= 0`` and ``start_y >= 0`` -- a screen
     coordinate is non-negative by definition, and since ``start < end`` is
     already required, a non-negative start also bounds ``end`` -- a box
     straddling the origin, e.g. ``start_x=-5, end_x=40``, is rejected too, not
@@ -497,9 +491,9 @@ def extract_text_df_boxes(
     """
     if not all(c in text_df.columns for c in [ia_col, *_TEXT_DF_BOX_COLUMNS]):
         # The four box columns alone don't guarantee ia_index is there too --
-        # the brief's own TEXTS fixture is exactly that shape (no ia_index).
-        # Without this check that row indexing below raised KeyError, which
-        # dropped the whole dataset from the manifest instead of falling
+        # the tests' TEXTS fixture is exactly that shape (no ia_index).
+        # Without this check the row indexing below would raise KeyError and
+        # drop the whole dataset from the manifest instead of falling
         # through to the reconstructed/synthesized tiers as it must.
         return pd.DataFrame(columns=[paragraph_col, ia_col, *_TEXT_DF_BOX_COLUMNS])
 
@@ -912,7 +906,7 @@ def place_fixations(fix_df: pd.DataFrame, words: pd.DataFrame) -> pd.DataFrame:
     passthrough source columns, not part of EyeGenBench's documented schema).
     A plain merge would collide on those names and pandas would suffix both
     sides (``start_x_x``/``start_x_y``), leaving no column literally named
-    ``start_x`` -- exactly the R24 crash. The box used for placement must
+    ``start_x``, and the placement would crash. The box used for placement must
     always be the **words** frame's box, resolved once and unambiguously by
     merging the words-side columns in under private names, never whatever
     ``fix_df`` happened to already carry; ``fix_df``'s own box columns (if
@@ -926,7 +920,7 @@ def place_fixations(fix_df: pd.DataFrame, words: pd.DataFrame) -> pd.DataFrame:
         "geometry_source", pd.Series(index=words.index, dtype="object")
     )
     # A box with a missing key places nothing: pandas joins NaN to NaN, which
-    # would put every fixation with no IA on it (#412).
+    # would put every fixation with no IA on it.
     words_boxes = words_boxes.dropna(subset=["unique_paragraph_id", "ia_index"])
     words_boxes = words_boxes.rename(columns=internal)
     merged = fix_df.merge(

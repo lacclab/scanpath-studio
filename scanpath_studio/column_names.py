@@ -1,8 +1,8 @@
-"""DATA-66: the dataset's own column names, behind the canonical ones.
+"""The dataset's own column names, behind the canonical ones.
 
 Normalization (`data.normalize_*`) rebuilds every table under canonical names —
-`duration_ms`, `total_fixation_duration_ms` — and, until this module, kept no
-record of what each was called in the user's files. A :class:`ColumnNames` is
+`duration_ms`, `total_fixation_duration_ms` — and keeps no record of what each
+was called in the user's files. A :class:`ColumnNames` is
 that record, one per table of a dataset: for each canonical column, the source
 column(s) it was read from and how (`kind`). :func:`from_schema` builds it from
 the same schema, registries and raw columns normalization used, so the two
@@ -10,7 +10,7 @@ cannot disagree. Pure — no Streamlit, no I/O.
 
 The canonical names stay the internal contract and every wire format's values;
 this map is what a person is shown, what an export writes and what the API
-accepts (DATA-66 phases 2–4).
+accepts.
 """
 
 from __future__ import annotations
@@ -133,11 +133,11 @@ _CANONICAL_LABELS: dict[str, str] = {
 }
 
 
-#: #374 F5: a mapped **role** — a field the add-dataset wizard asks for — is
+#: A mapped **role** — a field the add-dataset wizard asks for — is
 #: named by its role wherever the app names a field (chips, trial filters,
 #: figure text), with the dataset's own column in a tooltip
 #: (:meth:`ColumnNames.source_tooltip`). The dataset's other columns keep their
-#: own names. The mapping screens themselves still offer the source columns
+#: own names. The mapping screens themselves offer the source columns
 #: (:meth:`ColumnNames.label`).
 ROLE_LABELS: dict[str, str] = {
     "participant_id": "Participant",
@@ -161,7 +161,7 @@ ROLE_LABELS: dict[str, str] = {
     "canvas_height": "Screen height",
 }
 
-#: #374 F5: one-sentence descriptions of the bundled OneStop demo's own columns,
+#: One-sentence descriptions of the bundled OneStop demo's own columns,
 #: shown as a tooltip beside their (unchanged) names. Only what the repo's docs
 #: state (the OneStop corpus' own documentation); a column not listed gets none.
 DEMO_COLUMN_NOTES: dict[str, str] = {
@@ -179,7 +179,7 @@ DEMO_COLUMN_NOTES: dict[str, str] = {
     "is_in_dspan": "True for the words of the distractor span.",
 }
 
-#: A short name for a highlight column in the figure's key (#374 F6).
+#: A short name for a highlight column in the figure's key.
 HIGHLIGHT_NOTES: dict[str, str] = {
     "is_in_aspan": "answer span",
     "is_in_dspan": "distractor span",
@@ -291,7 +291,7 @@ class ColumnNames:
         return ColumnNames(out)
 
     def label(self, column) -> str:
-        """What a person is shown for ``column`` (DATA-66 phase 2).
+        """What a person is shown for ``column``.
 
         The user's own name when the column was read from their files; a
         curated label marked :data:`COMPUTED_SUFFIX` when the app made it; else
@@ -311,7 +311,7 @@ class ColumnNames:
                 return entry.note
             return entry.display
         if kind == GENERATED and str(column) == "timestamp_ms":
-            # #374: no onset in the data — the stand-in is the order, not ms.
+            # No onset in the data — the stand-in is the order, not ms.
             return "Fixation order" + COMPUTED_SUFFIX
         if kind in (COMPUTED, GENERATED):
             return canonical_label(column) + COMPUTED_SUFFIX
@@ -319,7 +319,7 @@ class ColumnNames:
 
     def field_label(self, column) -> str:
         """What ``column`` is called where the app names a *field* — a chip, a
-        trial filter, a picker on the rail (#374 F5).
+        trial filter, a picker on the rail.
 
         A role the dataset mapped (:data:`ROLE_LABELS`) is named by its role,
         not by the source column; everything else as :meth:`label`.
@@ -334,7 +334,7 @@ class ColumnNames:
 
     def source_tooltip(self, column) -> str:
         """``"from RECORDING_SESSION_LABEL"`` for a role :meth:`field_label`
-        names by its role, else ``""`` (#374 F5)."""
+        names by its role, else ``""``."""
         column = str(column)
         entry = self.source(column)
         if column not in ROLE_LABELS or entry is None or not entry.sources:
@@ -361,8 +361,8 @@ class ColumnNames:
 
         out: dict[str, str] = {}
         for column in columns:
-            # #374 F5/F7: a role is the figure's own plain word ("Duration",
-            # "Word #"), not the source column.
+            # A role is the figure's own plain word ("Duration", "Word #"),
+            # not the source column.
             if (
                 column in INTERNAL_COLUMNS
                 or str(column) in ROLE_LABELS
@@ -422,7 +422,7 @@ class ColumnNames:
     def aliases(self, columns: Iterable[str]) -> set[str]:
         """Columns in ``columns`` that only repeat a partner from the same source.
 
-        `unique_trial_id` mirrors `trial_id` (BUG-58) and `unique_text_id`
+        `unique_trial_id` mirrors `trial_id` and `unique_text_id`
         usually mirrors `text_id`; when both of a pair were read from one column
         of the user's file, a table needs to show it once.
         """
@@ -469,7 +469,7 @@ class ColumnNames:
         """:meth:`aliases` that really repeat their partner in ``frame``.
 
         The map says both came from one column; the values decide, since a
-        padded or suffixed id can part from its copy (BUG-59)."""
+        padded or suffixed id can part from its copy."""
         partners = {alias: main for main, alias in _ALIAS_PAIRS}
         return {
             alias
@@ -478,7 +478,7 @@ class ColumnNames:
         }
 
     def export_headers(self, columns: Iterable) -> dict[str, str]:
-        """``{column: header}`` for a table written out (DATA-66 phase 3).
+        """``{column: header}`` for a table written out.
 
         A column read from one column of the user's file is written under that
         column's name. One built from several (a composite trial id), converted
@@ -707,7 +707,7 @@ def from_schema(
         out["trial_id"] = out["unique_trial_id"] = trial
     paragraph = table != "raw_gaze" and "unique_paragraph_id" in present
     if text_id := _id_entry(schema.get("text_id")):
-        # The mapped Text ID wins over a literal `unique_paragraph_id` (#412),
+        # The mapped Text ID wins over a literal `unique_paragraph_id`,
         # which `normalize_*` then fill `unique_text_id` from. A remap fills
         # it from the mapped Text ID too (`data.remap_normalized_frame`); a
         # first load with neither has no such column, and an entry for an
@@ -738,7 +738,8 @@ def from_schema(
             out["width"] = SourceName((right, left), CONVERTED, f"{right} − {left}")
             out["height"] = SourceName((bottom, top), CONVERTED, f"{bottom} − {top}")
         _registry(out, data.WORD_OPTIONAL_FIELDS, present, keep)
-        # AN-32: a measure the schema names decides it, after the passthrough.
+        # A reading measure the schema names decides it (a cleared one is
+        # absent), after the passthrough.
         for key, canonical, *_ in data.READING_MEASURE_FIELDS:
             if key not in schema:
                 continue
@@ -802,7 +803,7 @@ def for_tables(
     return out
 
 
-# --- Phase 3: what a written table calls its columns -------------------------
+# --- What a written table calls its columns ----------------------------------
 
 #: The `columns.json` format a bundle writes beside its tables.
 COLUMNS_FILE_SCHEMA = 1
@@ -968,10 +969,10 @@ def stored_source_recipe(stored: Mapping) -> dict:
 
     Written when the dataset is added (`wizard._source_recipe`) and kept
     current by ✏️ Edit dataset; read by Share → Code
-    (`code_snippet.upload_source`). A dataset stored before the recipe existed
-    gets one read off its stored mapping through its column-name map, which is
-    right unless one of its files used a canonical column name for a different
-    field.
+    (`code_snippet.upload_source`). A stored dataset with no recipe (one saved
+    by an older version) gets one read off its stored mapping through its
+    column-name map, which is right unless one of its files used a canonical
+    column name for a different field.
     """
     recipe = stored.get("source_recipe")
     if isinstance(recipe, Mapping):
@@ -988,7 +989,7 @@ def stored_source_recipe(stored: Mapping) -> dict:
     return {"schemas": schemas, "unresolved": unresolved}
 
 
-# --- Phase 4: a frame that carries its own names ------------------------------
+# --- A frame that carries its own names ---------------------------------------
 
 #: The `DataFrame.attrs` key a frame under the dataset's own names carries its
 #: map in (`attach`). pandas 3 keeps `attrs` through filtering, `loc`, `copy`,
@@ -1009,7 +1010,7 @@ def attach(frame, table: str, names: ColumnNames | None):
     partners = {alias: main for main, alias in _ALIAS_PAIRS}
     out = as_written(frame, names, hidden)
     # One JSON string, not a nested dict: pandas deep-copies `attrs` on every
-    # operation, and walking a dict of dicts made a script's per-trial loop
+    # operation, and walking a dict of dicts makes a script's per-trial loop
     # over a corpus 2-3x slower; a string is copied for nothing.
     record = {
         "table": table,

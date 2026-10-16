@@ -8,7 +8,7 @@ loader's aggregation of the corpus's character-level areas of interest.
 NOTE: reproduction of the stimulus page in print is subject to the release's
 license; confirm before submission.
 
-Run from the app repo:  cd app && uv run python paper/paper_fig_multipleye.py
+Run from the repo root:  uv run python paper/paper_fig_multipleye.py
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def _figures_dir() -> Path:
 
     Defaults to ``paper/figures/`` inside the software repo so an archived
     release is self-contained; set ``PAPER_FIGURES_DIR`` to write straight into
-    the manuscript tree (e.g. ``PAPER_FIGURES_DIR=../../overleaf/figures``).
+    the manuscript tree (e.g. ``PAPER_FIGURES_DIR=../overleaf/figures``).
     """
     env = os.environ.get("PAPER_FIGURES_DIR")
     out = Path(env) if env else Path(__file__).resolve().parent / "figures"
@@ -38,7 +38,7 @@ def _figures_dir() -> Path:
 
 
 OUT = _figures_dir() / "fig_multipleye.png"
-# DATA-24: a MultiplEYE trial is one reading of a stimulus, and its pages are
+# A MultiplEYE trial is one reading of a stimulus, and its pages are
 # SCREENS inside it — so the figure names the trial and the screen separately.
 SESSION, TRIAL, SCREEN = "001_ZH_CH_1_ET1", "Lit_MagicMountain_6", "page_4"
 

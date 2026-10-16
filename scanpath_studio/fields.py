@@ -1,8 +1,7 @@
 """The ``label | field`` row — one primitive, shared by every panel that has one.
 
-UX-51 built this for the Scanpath rail's plot controls and UX-53 spread it over
-the upload wizard, but both kept it private to :mod:`controls`. UX-69 needs the
-same row in the Scanpath subtabs, and :mod:`controls` cannot supply it there:
+The Scanpath rail's plot controls, the add-dataset wizard and the Scanpath
+subtabs all draw this row, and :mod:`controls` cannot supply it to the subtabs:
 it already imports :mod:`annotations` and :mod:`export`, so those two — which
 render three of the subtabs between them — would import it back in a cycle.
 Hence a module *below* all of them, holding nothing but the row.
@@ -25,7 +24,7 @@ import html
 import re
 
 #: The label column's share of a ``label | field`` row in a **full-width** panel
-#: — a Scanpath subtab body, which is 4/5 of the page (UX-69). About 180px at a
+#: — a Scanpath subtab body, which is 4/5 of the page. About 180px at a
 #: typical window: enough for "Participant fields to include" to survive, while
 #: leaving the control the room a pills row or a path pattern wants.
 PANEL_LABEL_W = 0.2
@@ -33,7 +32,7 @@ PANEL_LABEL_W = 0.2
 #: The same share in a **narrow** column: the rail's ~28rem popover (`styles.
 #: get_app_css` pins `stPopoverBody`), or a subtab's side column. ~160px of
 #: label — about 23 characters at the rail's 0.92rem — while leaving the field
-#: wide enough for a multiselect's chips, or for a slider plus the UX-9 box you
+#: wide enough for a multiselect's chips, or for a slider plus the box you
 #: type an exact value into.
 NARROW_LABEL_W = 0.36
 
@@ -44,7 +43,7 @@ LABEL_GAP = "xsmall"
 #: punctuation.
 _MD_MARKS = re.compile(r"\*\*|`")
 _WHITESPACE_RUN = re.compile(r"\s+")
-#: A `constants.ICONS` shortcode (UX-138) — in the label, or in a gate reason
+#: A `constants.ICONS` shortcode — in the label, or in a gate reason
 #: folded into the help: drawn as the glyph in the visible title, but a
 #: tooltip is plain text and would spell it out.
 _ICON_CODE = re.compile(r":material/[a-z0-9_]+:\s*")
@@ -54,7 +53,7 @@ def plain(text: str) -> str:
     """``text`` with markdown emphasis stripped, for a plain-text tooltip.
 
     Newlines collapse to spaces along with every other run of whitespace, and
-    that is not cosmetic (UX-68): :func:`row_label` interpolates the result into
+    that is not cosmetic: :func:`row_label` interpolates the result into
     an HTML attribute inside an ``st.markdown`` string, and a **blank line** ends
     a raw HTML block in markdown — so a two-paragraph help text (every
     ``controls._gated_help`` result is one) would split the opening ``<span …>``
@@ -67,8 +66,8 @@ def plain(text: str) -> str:
 def tooltip(*parts: str | None) -> str:
     """A CSS tooltip's text: ``parts`` joined with " — ", plain, no icon codes.
 
-    Escaped for an HTML attribute. Every ``data-tip`` goes through this (#374
-    F36): an icon shortcode left in one printed as text, ":material_warning:".
+    Escaped for an HTML attribute. Every ``data-tip`` goes through this: an icon
+    shortcode left in one would print as text.
     """
     text = " — ".join(plain(part) for part in parts if part)
     return html.escape(_ICON_CODE.sub("", text).strip(), quote=True)
@@ -86,9 +85,9 @@ def row_label(host, label: str, help: str | None, *, emphasis: bool = False) -> 
     before it appears — fine for an occasional "what is this file", far too slow
     for a form whose every row hides its description there. The CSS one opens in
     ~120 ms, matching the `?` icons Streamlit draws elsewhere. ``aria-label``
-    keeps the text reachable now that no ``title`` carries it.
+    keeps the text reachable, since no ``title`` carries it.
 
-    ``emphasis`` (UX-113) adds ``.sps-flabel-emph`` — bolder and a touch
+    ``emphasis`` adds ``.sps-flabel-emph`` — bolder and a touch
     larger than the ordinary field title, for a row that should stand out
     among plainer ones on the same screen (the upload wizard's own table
     titles among their neighbouring mapping fields).
@@ -110,18 +109,18 @@ def row_label(host, label: str, help: str | None, *, emphasis: bool = False) -> 
     )
 
 
-#: Widget kinds that take a ``wrap=`` argument (ENG-49). Streamlit 1.63 resolves
-#: ``wrap=None`` to **no** wrapping for a control "directly placed in a column"
-#: — which is exactly what :func:`labeled` does — so on the upgrade every
-#: multiselect, segmented control and pill row in the app would silently turn
-#: from a block that grows taller into a strip that scrolls sideways. That is a
-#: reasonable default for a wide page and a poor one here: the rail is ~28rem
-#: with a title column in front of the field, and these particular controls are
-#: read at a glance (*which* participants the pool is filtered to, *which*
-#: layout is selected), so a selection that scrolls out of sight is worse than a
-#: row that grows. The pre-1.63 behaviour is therefore kept **explicitly** at
-#: this one chokepoint rather than inherited — a caller that wants the new look
-#: passes ``wrap=False`` itself, and dropping this set adopts it everywhere.
+#: Widget kinds that take a ``wrap=`` argument. Streamlit resolves ``wrap=None``
+#: to **no** wrapping for a control "directly placed in a column" — which is
+#: exactly what :func:`labeled` does — so every multiselect, segmented control
+#: and pill row in the app would be a strip that scrolls sideways rather than a
+#: block that grows taller. That is a reasonable default for a wide page and a
+#: poor one here: the rail is ~28rem with a title column in front of the field,
+#: and these particular controls are read at a glance (*which* participants the
+#: pool is filtered to, *which* layout is selected), so a selection that scrolls
+#: out of sight is worse than a row that grows. Wrapping is therefore set
+#: **explicitly** at this one chokepoint rather than inherited — a caller that
+#: wants the strip passes ``wrap=False`` itself, and dropping this set adopts it
+#: everywhere.
 WRAPPING_KINDS = frozenset({"multiselect", "segmented_control", "pills"})
 
 
@@ -163,7 +162,7 @@ def labeled(
     row_label(label_col, display if display is not None else label, help)
     if kind in WRAPPING_KINDS:
         kwargs.setdefault("wrap", True)
-    # #374 F19: the collapsed label is only the accessible name, which a
+    # The collapsed label is only the accessible name, which a
     # screen reader reads verbatim — so no icon shortcode or `**` in it.
     return getattr(field_col, kind)(
         accessible_name(label), help=help, label_visibility="collapsed", **kwargs
@@ -187,7 +186,7 @@ def switch(host, kind: str, label: str, *, help: str | None = None, **kwargs):
 
 
 def accessible_name(label: str) -> str:
-    """``label`` as words: icon shortcodes and markdown bold removed (#374 F19).
+    """``label`` as words: icon shortcodes and markdown bold removed.
 
     Streamlit sets a widget's ``aria-label`` to its label string as written."""
     return " ".join(re.sub(r":material/\w+:|\*\*", " ", label).split())

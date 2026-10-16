@@ -1,8 +1,8 @@
-"""VAL-5 — integrity of the computation register.
+"""Integrity of the computation register.
 
 These guard *catalogue drift*, not correctness: they prove the register still
 describes the code that exists, that nothing user-visible has quietly appeared
-without an entry, and that the generated documentation is current. None of them
+without an entry, and that its Markdown rendering covers every entry. None of them
 claims a computation is right — that is what the per-entry ``status`` field is
 for, and why it is conservative.
 """
@@ -90,23 +90,14 @@ class TestNothingUserVisibleIsMissing:
         assert reg.BY_ID["sim.nld"].unit.startswith("dimensionless")
 
     def test_each_category_is_populated(self):
-        """An empty category means the audit skipped a whole class of work."""
+        """An empty category means a whole class of work goes undescribed."""
         for category in reg.CATEGORIES:
             if category == reg.CATEGORY_IMPORTED:
                 continue  # covered by the `precedence` field on each measure
             assert reg.entries_in(category), f"no entries for {category}"
 
 
-class TestGeneratedDocsAreCurrent:
-    def test_the_docs_page_matches_the_register(self):
-        """`python -m scanpath_studio.computations` regenerates it."""
-        page = REPO / "plans" / "computation-register.md"
-        assert page.exists(), "plans/computation-register.md has not been generated"
-        assert page.read_text(encoding="utf-8") == reg.to_markdown(), (
-            "plans/computation-register.md is stale — regenerate it with "
-            "`python -m scanpath_studio.computations`"
-        )
-
+class TestMarkdownRendering:
     def test_every_entry_reaches_the_page(self):
         rendered = reg.to_markdown()
         for entry in reg.REGISTER:
@@ -114,25 +105,22 @@ class TestGeneratedDocsAreCurrent:
 
 
 class TestKnownInconsistenciesAreRecorded:
-    """VAL-5 step 6: an audit records discrepancies, it does not silently fix
-    them. Both findings from the recon pass were then fixed under their own BUG
-    items, and the register carries what changed and why."""
+    """Known discrepancies are recorded, not silently fixed: the affected
+    entries carry what changed and why."""
 
     def test_the_saccade_amplitude_units_finding_is_recorded(self):
         entry = reg.BY_ID["fix.saccade_amplitude"]
         assert entry.unit == "px"
-        assert "BUG-25" in entry.reference
         assert "_deg" in entry.precedence
 
     def test_the_two_within_word_scales_point_at_one_accessor(self):
-        """#BUG-27. The audit found the letter measures deriving their own
-        `width / len(text)`. Both now resolve through `word_char_advance`, and
-        the geometry entries have to say how they relate — a reader landing on
-        either one must not conclude that a tiling box's right edge (#BUG-83:
-        the experiment's, including the trailing space) is where its letters
-        end."""
+        """The letter measures resolve through `word_char_advance` rather than
+        deriving their own `width / len(text)`, and the geometry entries have to
+        say how the two scales relate — a reader landing on either one must not
+        conclude that a tiling box's right edge (the experiment's, including the
+        trailing space) is where its letters end."""
         advance = reg.BY_ID["geom.word_char_advance"]
-        assert "BUG-27" in advance.precedence
+        assert "width / len(text)" in advance.precedence
         for consumer in (
             "measure.landing_position",
             "agg.landing_curve",
@@ -143,7 +131,7 @@ class TestKnownInconsistenciesAreRecorded:
         assert "between" in bounds.precedence
         assert "word_char_advance" in bounds.precedence
         assert "word_glyph_span" in bounds.precedence
-        # #374: the reverted half-space shift (7.4%) is history — changelog, not page.
+        # The page describes the geometry as it is: no half-space shift (7.4%).
         assert "7.4%" not in bounds.precedence
 
 

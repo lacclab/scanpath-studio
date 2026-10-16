@@ -190,7 +190,7 @@ def _two_readings(
 
 
 def test_repeated_readings_do_not_inflate_fixations_across_participants(tmp_path):
-    """Two readers, each reading p1 twice -- R17 regression (round 1 fix).
+    """Two readers, each reading p1 twice.
 
     Word rows are stimulus-level (one shared layout, not one per reader), so
     the 2nd-reading key must get exactly ONE words copy, not one per
@@ -260,10 +260,10 @@ def test_disambiguate_repeated_readings_is_a_noop_for_single_readings():
     assert set(new_words["unique_paragraph_id"]) == {"p1"}
 
 
-# --- Round 3 fixes -----------------------------------------------------
+# --- The bundle entry, the manifest and the git env guard ---------------
 
 # A text_df carrying real box columns (one row per (paragraph, ia_index), as
-# real EyeGenBench frames do -- see the R23/R24 tests in
+# real EyeGenBench frames do -- see the text_df box tests in
 # test_eyegenbench_geometry.py) whose coordinates exceed a hypothetical
 # 1920x1080 default screen, for an UNKNOWN corpus (no DISPLAY_SPECS entry).
 TEXT_LARGE_REAL_BOXES = pd.DataFrame(
@@ -282,7 +282,7 @@ TEXT_LARGE_REAL_BOXES = pd.DataFrame(
 
 
 def _assert_monitor_contains_every_box(words: pd.DataFrame, monitor: list) -> None:
-    """The R26/R28 invariant, in full: every word box sits on the declared
+    """The monitor invariant, in full: every word box sits on the declared
     canvas -- non-negative on both axes, never exceeding the monitor size.
     """
     assert (words["start_x"] >= 0).all()
@@ -292,7 +292,7 @@ def _assert_monitor_contains_every_box(words: pd.DataFrame, monitor: list) -> No
 
 
 def test_monitor_is_published_when_a_display_spec_exists(tmp_path):
-    """Item 2 / R26, case 1: a published spec is itself a measurement."""
+    """Case 1: a published spec is itself a measurement."""
     entry = prep.build_bundle("PoTeC", FIX, TEXTS, PARTS, None, tmp_path)
     assert entry["monitor_source"] == "published"
     assert entry["monitor"] == [1680, 1050]
@@ -301,10 +301,9 @@ def test_monitor_is_published_when_a_display_spec_exists(tmp_path):
 
 
 def test_monitor_is_derived_from_real_boxes_when_no_spec_is_published(tmp_path):
-    """Item 2 / R26, case 2: no published spec, real boxes exceeding the
-    1920x1080 default -- the monitor must expand to cover them, never crop.
-    Also the R28 "unaffected" pin: these boxes are entirely non-negative, so
-    R28's added rejection must not change this outcome.
+    """Case 2: no published spec, real boxes exceeding the 1920x1080 default --
+    the monitor must expand to cover them, never crop. These boxes are entirely
+    non-negative, so the negative-box rejection must not change this outcome.
     """
     entry = prep.build_bundle(
         "cfiltsarcasm", FIX, TEXT_LARGE_REAL_BOXES, PARTS, None, tmp_path
@@ -317,7 +316,7 @@ def test_monitor_is_derived_from_real_boxes_when_no_spec_is_published(tmp_path):
 
 
 def test_monitor_falls_back_to_the_default_when_nothing_is_known(tmp_path):
-    """Item 2 / R26, case 3: no spec, no real boxes -- the reconstructed
+    """Case 3: no spec, no real boxes -- the reconstructed
     (here: synthesized, since the corpus is unknown) fallback.
     """
     entry = prep.build_bundle("cfiltsarcasm", FIX, TEXTS, PARTS, None, tmp_path)
@@ -329,8 +328,8 @@ def test_monitor_falls_back_to_the_default_when_nothing_is_known(tmp_path):
 
 
 # A text_df carrying one real (valid, published-screen-exceeding-irrelevant)
-# box and one box with negative coordinates -- reproduces the R28 hole
-# through the full build_bundle pipeline, not just the extractor.
+# box and one box with negative coordinates -- exercises the negative-box
+# rejection through the full build_bundle pipeline, not just the extractor.
 TEXT_DF_ONE_NEGATIVE_BOX = pd.DataFrame(
     {
         "unique_paragraph_id": ["p1", "p1"],
@@ -347,11 +346,11 @@ TEXT_DF_ONE_NEGATIVE_BOX = pd.DataFrame(
 
 
 def test_monitor_invariant_holds_when_a_real_box_has_negative_coordinates(tmp_path):
-    """R28 regression, end to end: PoTeC's published 1680x1050 monitor
+    """End to end: PoTeC's published 1680x1050 monitor
     (monitor_source="published") must still contain every box even though
-    one input box carried negative coordinates -- R28 rejects it at
+    one input box carried negative coordinates -- the box is rejected at
     extraction, before it can ever violate the invariant `_resolve_monitor`
-    alone could never have held (a monitor origin cannot be negative).
+    alone could never hold (a monitor origin cannot be negative).
     """
     entry = prep.build_bundle(
         "PoTeC", FIX, TEXT_DF_ONE_NEGATIVE_BOX, PARTS, None, tmp_path
@@ -362,7 +361,7 @@ def test_monitor_invariant_holds_when_a_real_box_has_negative_coordinates(tmp_pa
 
 
 def test_monospaced_is_omitted_for_real_geometry(tmp_path):
-    """Item 3 / R25: `monospaced` describes a reconstructed-layout spec that
+    """`monospaced` describes a reconstructed-layout spec that
     was never built for a real-geometry corpus -- must not be asserted.
     """
     entry = prep.build_bundle(
@@ -373,14 +372,14 @@ def test_monospaced_is_omitted_for_real_geometry(tmp_path):
 
 
 def test_monospaced_is_present_for_reconstructed_geometry(tmp_path):
-    """R5 (round 1), pinned: still present when the geometry isn't real."""
+    """`monospaced` is still present when the geometry isn't real."""
     entry = prep.build_bundle("PoTeC", FIX, TEXTS, PARTS, None, tmp_path)
     assert entry["geometry_source"] == "reconstructed"
     assert entry["monospaced"] is True
 
 
 def test_n_readers_excludes_a_reader_whose_every_fixation_was_dropped(tmp_path):
-    """Item 5b: count what was actually written, not the input frame.
+    """Count what was actually written, not the input frame.
 
     `r_dropped`'s only fixation targets an out-of-range ia_index that no word
     box covers, so place_fixations' inner join drops it entirely -- it must
@@ -414,9 +413,9 @@ def test_n_readers_excludes_a_reader_whose_every_fixation_was_dropped(tmp_path):
 
 
 def test_n_texts_counts_distinct_texts_not_reading_instances(tmp_path):
-    """R27 regression: one text, read twice by each of 2 readers.
+    """One text, read twice by each of 2 readers.
 
-    R17 gives the 2nd reading its own `p1__r2` paragraph key so it keeps its
+    The 2nd reading gets its own `p1__r2` paragraph key so it keeps its
     own geometry in `words.parquet` -- but that key is a reading instance,
     not a new text. `n_texts` must strip the suffix before counting: the
     corpus has exactly one distinct text, and `repeated_readings` (2) already
@@ -439,7 +438,7 @@ def test_n_texts_counts_distinct_texts_not_reading_instances(tmp_path):
 
 
 def test_n_texts_is_unaffected_when_there_are_no_repeated_readings(tmp_path):
-    """A corpus with no repeated readings must not be touched by the R27
+    """A corpus with no repeated readings must not be touched by the
     suffix-stripping -- n_texts still equals the plain distinct-paragraph
     count, and repeated_readings stays 0.
     """
@@ -452,7 +451,7 @@ def test_n_texts_is_unaffected_when_there_are_no_repeated_readings(tmp_path):
 def test_write_manifest_is_atomic_and_leaves_the_original_on_failure(
     tmp_path, monkeypatch
 ):
-    """Item 5a / R21: an interrupted write must not truncate a good manifest."""
+    """An interrupted write must not truncate a good manifest."""
     prep.write_manifest(tmp_path, [{"name": "A", "monitor": [1, 2]}])
     original = (tmp_path / "manifest.json").read_text(encoding="utf-8")
 
@@ -468,7 +467,7 @@ def test_write_manifest_is_atomic_and_leaves_the_original_on_failure(
 
 
 def test_git_over_https_sets_env_vars_and_restores_absence(monkeypatch):
-    """Item 4 / R22: the four env vars are set during the block and fully
+    """The four env vars are set during the block and fully
     cleared afterward when they weren't present before -- never leaked.
     """
     for key in prep._GIT_HTTPS_REWRITE_ENV:
@@ -485,7 +484,7 @@ def test_git_over_https_sets_env_vars_and_restores_absence(monkeypatch):
 
 
 def test_git_over_https_restores_a_preexisting_value(monkeypatch):
-    """Item 4 / R22: a value present before the block is restored, not cleared."""
+    """A value present before the block is restored, not cleared."""
     monkeypatch.setenv("GIT_TERMINAL_PROMPT", "1")
 
     with prep._git_over_https():

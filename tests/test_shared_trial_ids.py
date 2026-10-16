@@ -1,10 +1,10 @@
-"""#412 — readers who share a Trial ID are each a trial in the picker.
+"""Readers who share a Trial ID are each a trial in the picker.
 
 Many datasets give every reader the same Trial IDs (`1`, `2`, … per session).
-The Scanpath picker kept one row per Trial ID, so it offered only the first
-reader's reading of each — and a link that named the second reader matched,
-then opened the first reader's scanpath under it. Its options and its state
-are readings now (``utils.reading_key``); a Trial ID several readers share is
+A picker with one row per Trial ID would offer only the first reader's reading
+of each — and a link that named the second reader would match, then open the
+first reader's scanpath under it. So its options and its state are readings
+(``utils.reading_key``); a Trial ID several readers share is
 labelled with the reader, and a link or saved selection that names the id
 alone says it is ambiguous instead of picking one.
 """
@@ -25,7 +25,7 @@ pytestmark = pytest.mark.timeout(240)
 
 
 def _picker_app() -> None:
-    """The probe: two readers of one Trial ID, and a link to the second."""
+    """Two readers of one Trial ID, and a link to the second."""
     import pandas as pd
     import streamlit as st
 
@@ -144,13 +144,13 @@ class TestTheApp:
         assert "_single_trial_chosen" not in at.session_state
 
     def test_a_shared_id_saved_alone_is_reported_not_guessed(self):
-        """A recovery cache from before #412 holds a trial id alone."""
+        """An older recovery cache holds a trial id alone."""
         at = _app()
         at.session_state["single_trial_id"] = "t2"
         at.run()
         assert not at.exception, at.exception
         assert "Couldn't reopen the last trial: trial t2" in _notices(at)
-        # A trial id the pool lacks is not ambiguous: the picker opens as before.
+        # A trial id the pool lacks is not ambiguous: the picker opens as usual.
         at = _app()
         at.session_state["single_trial_id"] = "nowhere"
         at.run()
@@ -162,7 +162,7 @@ class TestTheApp:
 
 
 class TestHeadless:
-    """`render -t` and the API name a reading, never guess one (#412)."""
+    """`render -t` and the API name a reading, never guess one."""
 
     @staticmethod
     def _two_readers():

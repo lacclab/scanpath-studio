@@ -1,7 +1,7 @@
-"""UX-174: what a row of 📂 Available datasets says, and how the list orders.
+"""What a row of 📂 Available datasets says, and how the list orders.
 
-The row model (`scanpath_studio.dataset_table`) is pure, so every rule the
-issue set — grouped numbers, a reason in place of every missing count, zero only
+The row model (`scanpath_studio.dataset_table`) is pure, so every rule —
+grouped numbers, a reason in place of every missing count, zero only
 when it was measured, numeric sorting with the gaps last, a list that does not
 move when the open dataset changes — is checked here without booting the app.
 The AppTest side (clicks landing on the right row) is in `test_apptest.py`.
@@ -70,7 +70,7 @@ class TestCells:
 
 
 class TestStatus:
-    """BUG-113: Status says whether a dataset can be opened, never where its
+    """Status says whether a dataset can be opened, never where its
     numbers came from."""
 
     @pytest.mark.parametrize("source", ["loaded", "published", ""])

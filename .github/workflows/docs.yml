@@ -1,9 +1,9 @@
 name: Docs
 
 # Build and publish the MkDocs site to GitHub Pages for each release, so the
-# site describes what `pip install scanpath-studio` gives. It used to follow
-# every push to main, which documented features PyPI did not have yet.
-# Every pull request still runs the same strict build (ci.yml → Docs build).
+# site describes what `pip install scanpath-studio` gives — following every
+# push to main would document features PyPI does not have yet. Every pull
+# request runs the same strict build (ci.yml → Docs build).
 # Enable Pages once in repo Settings → Pages → Build and deployment → "Deploy
 # from a branch" → branch `gh-pages` / root.
 on:
@@ -19,8 +19,8 @@ on:
         default: ""
 
 # Two runs close together (a release tag and a manual rebuild) would deploy
-# concurrently, and their force-pushes to gh-pages collide (seen on the v0.25.0
-# release, when this still ran on every push). Queue instead — last run wins.
+# concurrently, and their force-pushes to gh-pages collide. Queue instead —
+# last run wins.
 concurrency:
   group: docs-deploy
   cancel-in-progress: false
@@ -32,7 +32,7 @@ jobs:
   build-deploy:
     runs-on: ubuntu-latest
     env:
-      # Link-preview cards (the Material social plugin, ENG-79) — rendered for
+      # Link-preview cards (the Material social plugin) — rendered for
       # the published site only.
       SOCIAL_CARDS: "true"
       # Material and a plugin both print a banner about MkDocs 2.0; the site
@@ -59,13 +59,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libcairo2
       - name: Install (package + docs + test extras)
         # The test extras are here for the coverage report published alongside
-        # the site (ENG-37) — see "Coverage report" below.
+        # the site — see "Coverage report" below.
         run: pip install -e ".[docs,test]"
       - name: Build (strict — fail on warnings / bad refs)
         id: build
         run: mkdocs build --strict
 
-      # ENG-37 — the coverage badge, with no third-party account and no
+      # The coverage badge, with no third-party account and no
       # commit-back. The site is already published from this workflow, so the
       # HTML report is written into the built `site/` and shipped with it, plus a
       # tiny shields.io *endpoint* JSON the README badge reads. That makes the
@@ -73,12 +73,10 @@ jobs:
       # The deploy below publishes `site/` as built, so these extra files ship
       # with it.
       #
-      # ENG-62: the report is a by-product of this job, not its gate. It used to
-      # run the whole suite *before* deploying with the coverage floor enforced,
-      # so one flaky AppTest (ENG-50) or a coverage dip silently stopped the
-      # docs from publishing — 10 of 12 pushes to main, the v0.30.0 release
-      # included. The PR's CI already gates on both; here the floor is off and a
-      # failing run still ships the site (with whatever report it produced).
+      # The report is a by-product of this job, not its gate: one flaky AppTest
+      # or a coverage dip must not stop the docs from publishing. The PR's CI
+      # already gates on both; here the floor is off and a failing run still
+      # ships the site (with whatever report it produced).
       - name: Coverage report
         continue-on-error: true
         run: pytest -q -n auto --cov --cov-fail-under=0 --cov-report=html:site/coverage --cov-report=json
@@ -110,14 +108,14 @@ jobs:
           )
           PY
 
-      # Publish the `site/` built above, as it is. `mkdocs gh-deploy --dirty`
-      # rebuilt it first, and a dirty build skips every page older than its
-      # output — all of them, a minute after the strict build — so the llmstxt
-      # plugin saw no page and shipped llms.txt / llms-full.txt as bare headings.
-      # ghp-import is what gh-deploy itself pushes with (a MkDocs dependency).
-      # ENG-94: only a build that passed. `always()` (there so a failed coverage
-      # run or badge still ships the site) also force-pushed the partial `site/`
-      # a failed strict build leaves behind.
+      # Publish the `site/` built above, as it is. Not `mkdocs gh-deploy
+      # --dirty`: it rebuilds first, and a dirty build skips every page older
+      # than its output — all of them, a minute after the strict build — so the
+      # llmstxt plugin sees no page and ships llms.txt / llms-full.txt as bare
+      # headings. ghp-import is what gh-deploy itself pushes with (a MkDocs
+      # dependency). Only a build that passed deploys: `!cancelled()` lets a
+      # failed coverage run or badge still ship the site, while `always()` would
+      # also force-push the partial `site/` a failed strict build leaves behind.
       - name: Deploy to GitHub Pages
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ghp-import --no-jekyll --push --force --message "Deploy docs from ${GITHUB_SHA}" site

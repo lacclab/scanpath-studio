@@ -1,10 +1,11 @@
 """Loaders for public eye-tracking-while-reading corpora.
 
-Currently: PoTeC (Potsdam Textbook Corpus, Jakobi et al. 2024,
+PoTeC (Potsdam Textbook Corpus, Jakobi et al. 2024,
 https://github.com/DiLi-Lab/PoTeC) — a German corpus of 75 readers × 12
-textbook texts — and MultiplEYE (https://multipleye.eu), a large multilingual
+textbook texts — MultiplEYE (https://multipleye.eu), a large multilingual
 corpus whose per-session, filename-keyed shape :func:`load_multipleye` adapts
-to the generic pipeline. Between them they exercise the two dataset shapes the
+to the generic pipeline, and OneStop Eye Movements (:func:`load_onestop`).
+PoTeC and MultiplEYE between them exercise the two dataset shapes the
 generic pipeline supports:
 
 * **multi-file** — fixations ship as one TSV per reader × text
@@ -76,13 +77,12 @@ _POTEC_NA_VALUES = [
 
 _POTEC_TEXTS = [f"{domain}{i}" for domain in ("b", "p") for i in range(6)]
 
-#: DATA-65 — one OSF file version, pinned. ``osf.io/download/<id>`` with no
-#: version serves whatever was uploaded last, and PoTeC's own files have been
-#: replaced five times since 2023 (the scanpaths archive is at version 5, of
-#: 2026-06-17), so an unpinned download could hand two users two corpora under
-#: one name — and the dataset table's published figures (DATA-36) would describe
-#: neither. A pin is the file's version *and* its size in bytes, which the
-#: download is checked against.
+#: One OSF file version, pinned. ``osf.io/download/<id>`` with no version
+#: serves whatever was uploaded last, and PoTeC's own files have been replaced
+#: several times (the scanpaths archive is at version 5), so an unpinned
+#: download could hand two users two corpora under one name — and the dataset
+#: table's published figures would describe neither. A pin is the file's
+#: version *and* its size in bytes, which the download is checked against.
 _OSF_DOWNLOAD_URL = "https://osf.io/download/{resource}/?version={version}"
 
 
@@ -100,7 +100,7 @@ class OsfFile:
 
 
 def _check_download_size(got: int, pin: OsfFile, detail: str) -> None:
-    """Refuse a download that is not the pinned file (DATA-65)."""
+    """Refuse a download that is not the pinned file."""
     if got != pin.size:
         raise OSError(
             f"{detail}: OSF sent a different file ({got:,} bytes, expected "
@@ -108,14 +108,14 @@ def _check_download_size(got: int, pin: OsfFile, detail: str) -> None:
         )
 
 
-# OSF storage ids from the PoTeC repo's download_data_files.py, at the versions
-# current on 2026-10-02.
+# OSF storage ids from the PoTeC repo's download_data_files.py, each pinned to
+# one version.
 _POTEC_OSF_RESOURCES = {
     "scanpaths": OsfFile("thgv2", 5, 9_796_046),
     "fixations": OsfFile("53zwb", 2, 6_456_542),
     "reading_measures": OsfFile("g5jds", 6, 3_326_244),
 }
-#: The AOI files come from the PoTeC repo itself — pinned to a commit (DATA-65),
+#: The AOI files come from the PoTeC repo itself — pinned to a commit,
 #: not ``main``, for the same reason as the OSF versions above.
 _POTEC_REPO_COMMIT = "46247ca2aea5876311acf6b59338880d0bf5449d"
 _POTEC_RAW_URL = (
@@ -129,14 +129,14 @@ def _read_potec_tsv(path) -> pd.DataFrame:
     )
 
 
-#: UX-168: download in reads of at most this size, reporting bytes after each —
-#: the progress the card shows, and the checkpoint a Cancel stops at. Each is a
-#: `read1`, which returns whatever has arrived: a `read` waits for the whole
-#: MiB, so on a 100 KB/s line Stop took ~10 s to act.
+#: Download in reads of at most this size, reporting bytes after each — the
+#: progress the card shows, and the checkpoint a Cancel stops at. Each is a
+#: `read1`, which returns whatever has arrived: a `read` would wait for the
+#: whole MiB, so on a 100 KB/s line Stop would take ~10 s to act.
 _DOWNLOAD_CHUNK = 1 << 20
-#: UX-168: seconds a download may wait on the network — to connect, or for its
-#: next bytes — before giving up. Without it a stalled connection blocked its
-#: read forever, so Stop, which acts between reads, never could; the timeout
+#: Seconds a download may wait on the network — to connect, or for its next
+#: bytes — before giving up. Without it a stalled connection would block its
+#: read forever, and Stop, which acts between reads, never could; the timeout
 #: surfaces as an `OSError`, which both ⬇ Download buttons already report.
 _DOWNLOAD_TIMEOUT_S = 60
 
@@ -149,7 +149,7 @@ def _content_length(response) -> int | None:
 def _read_body(response, write: Callable[[bytes], object], *, detail: str) -> None:
     """Hand ``response``'s body to ``write`` as it arrives, with progress.
 
-    Only a body that arrives whole returns (UX-168). `read1` returns ``b""`` on
+    Only a body that arrives whole returns. `read1` returns ``b""`` on
     an early EOF — a server, proxy or load balancer closing the connection
     mid-body — exactly as at the real end, so a body shorter than its
     ``Content-Length`` is a `ConnectionError`; so is a chunked body cut short,
@@ -180,7 +180,7 @@ def _open_url(url: str):
     Python's own `ssl` defaults read OpenSSL's CA list, which a python.org
     install on macOS ships empty until *Install Certificates.command* is run,
     and which never holds the root a TLS-inspecting campus or company proxy
-    re-signs with. Either way every download failed with
+    re-signs with. Either way every download would fail with
     ``CERTIFICATE_VERIFY_FAILED``. `truststore` verifies against the macOS
     Keychain / Windows certificate store / the system bundle instead, as the
     browser does.
@@ -190,7 +190,7 @@ def _open_url(url: str):
 
 
 def _fetch_bytes(url: str, *, detail: str) -> bytes:
-    """``url``'s body, read as it arrives with progress (UX-168) — all of it, or
+    """``url``'s body, read as it arrives with progress — all of it, or
     a `ConnectionError` (`_read_body`)."""
     with _open_url(url) as response:
         buffer = io.BytesIO()
@@ -199,7 +199,7 @@ def _fetch_bytes(url: str, *, detail: str) -> bytes:
 
 
 def _fetch_to_file(url: str, dest: Path, *, detail: str) -> None:
-    """Stream ``url`` into ``dest`` through a ``.part`` file (UX-168).
+    """Stream ``url`` into ``dest`` through a ``.part`` file.
 
     The ``.part`` → final rename keeps an interrupted fetch from passing for a
     complete file, and it happens only once the whole body has arrived
@@ -248,7 +248,7 @@ def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
         _check_download_size(len(payload), pin, detail)
         target = root / "eyetracking_data"
         target.mkdir(parents=True, exist_ok=True)
-        # UX-168: unpack into a staging folder and rename it into place only
+        # Unpack into a staging folder and rename it into place only
         # when complete. A cancel mid-unpack would otherwise leave a partial
         # `scanpaths/` that `potec_present`'s "any .tsv" check accepts.
         staging = target / f".{fixation_source}.part"
@@ -278,7 +278,7 @@ def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
                     )
             (staging / fixation_source).replace(eyetracking_dir)
         except zipfile.BadZipFile as exc:
-            # UX-168: a damaged archive — opened or extracted — is a data error
+            # A damaged archive — opened or extracted — is a data error
             # both ⬇ Download buttons report, not a raw traceback.
             raise ValueError(
                 "The downloaded PoTeC archive is damaged; download it again."
@@ -390,14 +390,14 @@ def _potec_fixations(
     suffix = "scanpath" if source == "scanpaths" else "fixations"
 
     reader_set = None if readers is None else {str(r) for r in readers}
-    # UX-166: gather the files first, so the card can say "312 of 900 files".
+    # Gather the files first, so the card can say "312 of 900 files".
     jobs: list[tuple[Path, pd.DataFrame]] = []
     for text_id in texts:
         char_boxes = _read_potec_ias(root, text_id)
         char_x = (char_boxes["start_x"] + char_boxes["end_x"]) / 2.0
         char_y = (char_boxes["start_y"] + char_boxes["end_y"]) / 2.0
         # A box with no AOI index places nothing: the merge below would match
-        # it to every fixation with none (pandas joins NaN to NaN, #412).
+        # it to every fixation with none (pandas joins NaN to NaN).
         centers = (
             pd.DataFrame({"aoi": char_boxes["aoi"], "x": char_x, "y": char_y})
             .dropna(subset=["aoi"])
@@ -408,7 +408,7 @@ def _potec_fixations(
             if reader_set is not None and reader_id not in reader_set:
                 continue
             jobs.append((path, centers))
-    # UX-166: "0 of N" before the first file, so a gated card is armed from the
+    # "0 of N" before the first file, so a gated card is armed from the
     # start — a report only after each file would hide the first one.
     progress.report(0, len(jobs), unit="files")
     frames = []
@@ -433,7 +433,7 @@ def _potec_fixations(
 # A trial is one reader's reading of one text, so the fixations' Trial ID is
 # the composite ``reader_id`` + ``text_id`` (``"0_b0"``): the text name alone
 # repeats across all 75 readers. The word boxes stay keyed by text, and each
-# reading finds its text's boxes through the Text ID both tables map (DATA-49).
+# reading finds its text's boxes through the Text ID both tables map.
 POTEC_WORD_SCHEMA = dict(
     participant=None,
     trial="text_id",
@@ -574,8 +574,8 @@ def load_potec(
 # ``$ONESTOP_DATA_DIR`` and its per-pid shards for review-app deep links.
 # ---------------------------------------------------------------------------
 
-#: DATA-65 — every OneStop report is at OSF version 1 (2025-05-28, checked
-#: 2026-10-02); id → size in bytes, the pin `download_onestop` checks against.
+#: Every OneStop report is at OSF version 1 (2025-05-28); id → size in bytes,
+#: the pin `download_onestop` checks against.
 _ONESTOP_OSF_VERSION = 1
 _ONESTOP_OSF_SIZES = {
     # all-regimes full release, interest areas
@@ -611,7 +611,7 @@ _ONESTOP_OSF_SIZES = {
 # screens (title, the pre/post question, its four answers, the correctness
 # feedback) — except QA, which is not a screen: it is the Questions and Answers
 # interest periods taken together (the corpus gives its page as "3+4"), so its
-# fixations are theirs again (DATA-64). All share the Paragraph report schema
+# fixations are theirs again. All share the Paragraph report schema
 # (IA_LEFT/RIGHT/TOP/BOTTOM boxes, IA_LABEL word text, per-word reading measures),
 # so every part renders as a scanpath. Keep the display order = presentation order.
 _ONESTOP_PARTS: tuple[str, ...] = (
@@ -662,7 +662,7 @@ _ONESTOP_REGIMES = {
 
 ONESTOP_VARIANTS = ("public", "lacclab")
 
-# DATA-63: what makes a trial belong to a regime, as the corpus records it on
+# What makes a trial belong to a regime, as the corpus records it on
 # every report — ``(question_preview, repeated_reading_trial)``. The per-regime
 # Paragraph files are exactly these slices (checked against the OSF ordinary
 # file: every row is ``(False, False)``), and the all-regimes reports of the
@@ -686,7 +686,7 @@ def onestop_regime_parts(regime: str) -> list[str]:
     The parts other than QA, and of those the question-preview screen only for
     the information-seeking regimes — its report holds no trial of the others,
     so loading it there would download a file to keep none of it. QA is left
-    out (DATA-64): it repeats the Questions and Answers screens' fixations as
+    out: it repeats the Questions and Answers screens' fixations as
     one interest period, so loading it beside them counts each fixation twice
     and shows that stretch of the trial as a further screen. ``parts=["QA"]``
     still loads it on request.
@@ -734,7 +734,7 @@ def _onestop_report_path(
 ) -> Path:
     """Local path of a public-variant OneStop report CSV.zip.
 
-    Paragraph keeps the historical ``<kind>_Paragraph_<regime>.csv.zip`` name
+    Paragraph uses the ``<kind>_Paragraph_<regime>.csv.zip`` name
     (per-regime download). Other parts are all-regimes, so they use
     ``<kind>_<Part>.csv.zip`` (matching the OSF full-release filenames)."""
     if part == "Paragraph":
@@ -845,13 +845,13 @@ def download_onestop(
     return root
 
 
-# BUG-43: the public OSF release ships **no** ``unique_paragraph_id``, so the
-# only text identity on its reports is ``paragraph_id`` — the paragraph's index
-# *within its article*, 1..7. On its own that makes paragraph 3 of article 1 and
-# paragraph 3 of article 27 the same "text" (162 paragraphs read as 7), and
-# because the same id then repeats dozens of times per reader,
-# ``data._disambiguate_repeated_readings`` ranks the collisions apart into trial
-# ids like ``3_r17`` — an order, not an identity.
+# The public OSF release ships **no** ``unique_paragraph_id``, so the only
+# text identity on its reports is ``paragraph_id`` — the paragraph's index
+# *within its article*, 1..7. On its own that would make paragraph 3 of
+# article 1 and paragraph 3 of article 27 the same "text" (162 paragraphs read
+# as 7), and because the same id would then repeat dozens of times per reader,
+# ``data._disambiguate_repeated_readings`` would rank the collisions apart into
+# trial ids like ``3_r17`` — an order, not an identity.
 #
 # So compose the ids the corpus's own tooling writes, in the same field order
 # ``update_sample_data.add_unique_ids`` uses for the bundled demo. The demo is a
@@ -867,7 +867,7 @@ _ONESTOP_PARAGRAPH_ID_PARTS: tuple[str, ...] = (
 )
 _ONESTOP_TRIAL_ID_PARTS: tuple[str, ...] = ("participant_id", "repeated_reading_trial")
 #: Every source column the composition needs — handed to the planned read so
-#: narrowing it (PERF-6) can never quietly cost us the ids.
+#: narrowing it can never quietly cost us the ids.
 _ONESTOP_ID_COLUMNS: tuple[str, ...] = (
     _ONESTOP_PARAGRAPH_ID_PARTS + _ONESTOP_TRIAL_ID_PARTS
 )
@@ -875,7 +875,7 @@ _ONESTOP_ID_COLUMNS: tuple[str, ...] = (
 
 def _compose_onestop_ids(frame: pd.DataFrame) -> pd.DataFrame:
     """Give an OneStop report the ``unique_paragraph_id`` / ``unique_trial_id``
-    the public release omits (BUG-43).
+    the public release omits.
 
     Each id is composed only when the frame does not already carry it: the
     lacclab export ships its own ``unique_paragraph_id`` (in its own field
@@ -910,7 +910,7 @@ def _compose_onestop_ids(frame: pd.DataFrame) -> pd.DataFrame:
 def _join_ids(frame: pd.DataFrame, columns: Iterable[str]) -> pd.Series:
     """``"_"``-joined string form of ``columns`` — one composed id per row.
 
-    Each part goes through ``stable_id`` (BUG-44), not a plain ``.astype(str)``
+    Each part goes through ``stable_id``, not a plain ``.astype(str)``
     — several of OneStop's own id components (``paragraph_id``, ``article_id``)
     are whole numbers, and one blank cell anywhere else in that CSV column is
     enough for pandas to read the whole thing as ``float64``. Left uncorrected
@@ -947,14 +947,14 @@ def _read_onestop_part(
     # .csv.zip archives wrap the CSV alongside macOS __MACOSX resource-fork
     # entries, which pandas' zip reader rejects ("Multiple files found in ZIP").
     # read_table's zip path filters that cruft and reads with low_memory=False —
-    # and PERF-6's planned read parses only the columns normalization keeps,
+    # and the planned read parses only the columns normalization keeps,
     # which is most of what a multi-gigabyte report costs.
     frame = data.read_mapped_table(
         path,
         kind="words" if kind == "ia" else "fixations",
         filter_fields=_ONESTOP_ID_COLUMNS + _ONESTOP_REGIME_COLUMNS,
     )
-    # DATA-63: only Paragraph is regime-split on OSF; every other public part
+    # Only Paragraph is regime-split on OSF; every other public part
     # holds all four regimes' trials, so cut it to the one asked for.
     if variant == "public" and part != "Paragraph":
         frame = _keep_onestop_regime(frame, regime)
@@ -968,7 +968,7 @@ def _read_onestop_part(
 def _onestop_parts_as_screens(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Make each part a *screen* of its trial, in presentation order (DATA-63).
+    """Make each part a *screen* of its trial, in presentation order.
 
     Every part of a reading shares its ``unique_trial_id`` — the title, the
     passage and the question screens are one trial, shown one after another —
@@ -1026,7 +1026,7 @@ def onestop_raw_frames(
     ``parts`` is any subset of the seven trial parts (default: Paragraph;
     :func:`onestop_regime_parts` lists every part of a regime). A public part
     other than Paragraph is cut to ``regime`` by its ``question_preview`` /
-    ``repeated_reading_trial`` flags (DATA-63). Each part is a *screen* of its
+    ``repeated_reading_trial`` flags. Each part is a *screen* of its
     trial (``part`` → ``screen_id``, plus a ``screen_index`` in presentation
     order), so a reading's title, passage and question screens are one trial.
     ``variant`` is
@@ -1047,7 +1047,7 @@ def onestop_raw_frames(
         download_onestop(root, regime=regime, parts=part_list)
 
     reports = [(kind, part) for kind in ("ia", "fixations") for part in part_list]
-    # UX-166: "0 of N" first — one report here is a whole IA or fixation file,
+    # "0 of N" first — one report here is a whole IA or fixation file,
     # so a report only after it would hide most of the load from a gated card.
     progress.report(0, len(reports), unit="reports")
     word_frames, fix_frames = [], []
@@ -1065,7 +1065,7 @@ def onestop_raw_frames(
 def _onestop_drop_unmatched_screens(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Keep only the screens both reports have, loudly (DATA-63).
+    """Keep only the screens both reports have, loudly.
 
     Several parts make each part a screen, and ``multipart.validate_matching_parts``
     rejects a screen present in one report and absent from the other — which
@@ -1178,7 +1178,7 @@ def load_onestop(
 #   string — ``participant_id = "001_ZH_CH_1_ET1"`` — not the bare pid.
 # * **One stimulus spans several screens** ``page_1..page_N`` (plus the
 #   comprehension-question screens that follow them) which all reuse the *same*
-#   on-screen coordinates. DATA-24 models that directly: one reading of one
+#   on-screen coordinates. The loader models that directly: one reading of one
 #   stimulus is **one trial** (``trial_id == text_id == "<stimulus>"``) whose
 #   screens are the corpus's own ``page`` values — ``screen_id = "page_1"`` /
 #   ``"question_4111"`` — each its own coordinate space (``multipart.py``).
@@ -1547,7 +1547,7 @@ def _multipleye_question_boxes_from_frame(
     if sort_by:
         chars = chars.sort_values(_QUESTION_KEY + sort_by, kind="stable")
     # One aggregation for the whole stimulus/version rather than one per block:
-    # the groups are ~10 rows each, so per-call pandas overhead dominated.
+    # the groups are ~10 rows each, so per-call pandas overhead would dominate.
     out = _multipleye_char_boxes(chars, _QUESTION_KEY + ["word_idx"])
     out = out.merge(order, on=_QUESTION_KEY, how="left").sort_values(
         ["_question_id", "_block_order", "line_idx", "word_idx"], kind="stable"
@@ -1651,7 +1651,7 @@ def _multipleye_fixations(
             return None
         return info
 
-    # UX-166 fix-round-1 (Minor #6): keep only files `_wanted` will actually
+    # Keep only files `_wanted` will actually
     # read, so "N of M files" isn't inflated by ones a session/stimulus filter
     # (or an unparseable name) was always going to skip.
     reading = [
@@ -1661,7 +1661,7 @@ def _multipleye_fixations(
         for path in sorted(session_dir.glob(f"*_{suffix}.csv"))
         if (info := _wanted(path)) is not None
     ]
-    # UX-166: "0 of N" before the first file, so a gated card is armed from the
+    # "0 of N" before the first file, so a gated card is armed from the
     # start — a report only after each file would hide the first one.
     progress.report(0, len(reading), unit="files")
     frames = []

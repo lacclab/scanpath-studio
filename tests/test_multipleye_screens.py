@@ -1,9 +1,8 @@
-"""MultiplEYE trials as ordered screens — reading pages **and** questions (DATA-24).
+"""MultiplEYE trials as ordered screens — reading pages **and** questions.
 
-A MultiplEYE trial used to be one ``(stimulus, page)`` pseudo-trial, and the
-comprehension-question screens were dropped. Now one reading of one stimulus is
-one trial (``trial_id == text_id``) whose screens are the corpus's own ``page``
-values, ordered by ``screen_index``.
+One reading of one stimulus is one trial (``trial_id == text_id``) whose
+screens are the corpus's own ``page`` values — reading pages and
+comprehension-question screens alike — ordered by ``screen_index``.
 
 Three joins carry the weight, and each has a way of failing silently that these
 tests pin:
@@ -521,8 +520,8 @@ def test_the_headless_api_lists_and_plots_a_question_screen(screens_root):
 
 def test_the_cli_resolves_a_stimulus_trial_id_and_can_drop_the_questions(screens_root):
     """`render --source multipleye` loads from a corpus ROOT, so it resolves
-    ``--trial`` itself — and that resolver has to know the trial is the stimulus
-    now, not a ``<stim>__page_NN`` id."""
+    ``--trial`` itself — and that resolver has to know the trial is the
+    stimulus, not a ``<stim>__page_NN`` id."""
     from scanpath_studio.cli import _load_multipleye_render
 
     _, fixations, pid, tid = _load_multipleye_render(str(screens_root), READER_A, LIT)

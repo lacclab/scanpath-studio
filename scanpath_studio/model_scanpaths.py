@@ -1,11 +1,10 @@
 """Synthetic "model-generated" scanpaths over a real text's word boxes.
 
-This is **placeholder data** for the *Multiple Comparison* tab. The intended
-end state is: for a given participant reading a given text, several scanpath
-*models* each predict a scanpath, and the tab shows the real reading alongside
-each model's prediction plus similarity scores. Until those real model outputs
-are connected, this module fabricates a reading-like scanpath per "model" so the
-whole tab — grid layout, similarity table — can be built and demoed.
+This is **placeholder data**: a reading-like scanpath per "model", standing in
+for the predictions of real scanpath models so a real reading can be laid out
+beside them and scored for similarity. Nothing in the app renders them;
+``alignment.py`` reuses :func:`_ordered_word_rows` for its warp / compare
+line-assignment algorithms.
 
 Design goals:
 
@@ -15,8 +14,8 @@ Design goals:
   spreads out across models.
 - **Reproducible.** A scanpath is deterministic in ``(trial_id, model_index,
   nonce)``. Streamlit reruns the whole script on every interaction, so a
-  non-seeded generator would reshuffle every panel on each click. The tab's
-  "Regenerate" button bumps the ``nonce`` to deliberately re-draw.
+  non-seeded generator would reshuffle every panel on each click. Bump
+  ``nonce`` to deliberately re-draw.
 - **Canonical output.** Frames carry the same columns
   :func:`scanpath_studio.data.normalize_fixations` produces, so they drop
   straight into :func:`scanpath_studio.plots.make_scanpath_figure` and the
@@ -55,9 +54,9 @@ class ModelProfile:
 
 
 # Ordered from most reading-like (Model 1: few skips/regressions, durations near
-# typical reading) to progressively noisier. The tab slices this to the
-# requested model count. Tuned so the panels look visibly different and the NLD
-# vs. the real scanpath spreads across a useful range.
+# typical reading) to progressively noisier. ``generate_model_scanpaths`` slices
+# this to the requested model count. Tuned so the panels look visibly different
+# and the NLD vs. the real scanpath spreads across a useful range.
 MODEL_PROFILES = [
     ModelProfile("Model 1", 0.08, 0.06, 0.10, 230, 60, 0.12),
     ModelProfile("Model 2", 0.15, 0.10, 0.12, 215, 70, 0.16),
@@ -194,8 +193,8 @@ def generate_model_scanpath(
         return _empty_fix_frame()
     n_words = len(ordered)
 
-    # Generate inside the experiment's own boxes (BUG-83), so a model fixation
-    # is assigned to the word it was generated for.
+    # Generate inside the experiment's own boxes, so a model fixation is
+    # assigned to the word it was generated for.
     x_box, y_box, x_right, y_bottom = word_box_bounds(ordered)
     w_box = x_right - x_box
     h_box = y_bottom - y_box
@@ -269,8 +268,7 @@ def generate_model_scanpaths(
     """Generate ``n_models`` synthetic scanpaths over ``words``.
 
     Returns an insertion-ordered ``{model_name: fixations_df}`` (Python dicts
-    preserve order), so the tab grid and the similarity table list models in the
-    same Model 1..N order.
+    preserve order), so callers list models in the same Model 1..N order.
     """
     count = max(1, min(int(n_models), MAX_MODELS))
     profiles = MODEL_PROFILES[:count]

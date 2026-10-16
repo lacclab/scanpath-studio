@@ -1,4 +1,4 @@
-"""MultiplEYE side-data enrichment, end to end over a synthetic corpus tree (ENG-3).
+"""MultiplEYE side-data enrichment, end to end over a synthetic corpus tree.
 
 Beyond the fixation / AOI tables, ``datasets.multipleye_raw_frames`` enriches the
 loaded frames from four kinds of side data, each gated on its file or folder
@@ -39,7 +39,7 @@ READER_A = "001_ZH_CH_1_ET1"  # reads Lit_Demo_1 (2 pages)
 READER_B = "014_ZH_CH_1_ET2"  # reads Lit_Demo_1 (2 pages) + Arg_Other_2 (1 page)
 LIT = "Lit_Demo_1"
 ARG = "Arg_Other_2"
-# DATA-24: a trial is one *reading of a stimulus*; its pages are screens inside
+# A trial is one *reading of a stimulus*; its pages are screens inside
 # it. Each constant below is the (trial_id, screen_id) pair that names one page.
 LIT_P1 = (LIT, "page_1")
 LIT_P2 = (LIT, "page_2")

@@ -81,7 +81,7 @@ def test_filter_to_keys():
 
 
 # -----------------------------------------------------------------------------
-# CMP-8 §5.2 — the filter layer is prefix-scoped, so compare mode's scanpath B
+# The filter layer is prefix-scoped, so compare mode's scanpath B
 # can be narrowed on its own dataset's columns without disturbing A.
 # -----------------------------------------------------------------------------
 
@@ -106,10 +106,10 @@ def _filter_prefix_app():
 
 
 def test_clearing_one_prefix_leaves_the_other_alone():
-    """The sweep used to match every key starting with ``filter_``.
+    """Clearing the default prefix skips keys that carry another namespace.
 
-    ``"filter_"`` is a prefix of ``"cmpfilter_"`` in one direction only, so a
-    naive forward match is fine for ``cmp`` and catastrophic for the default
+    ``"filter_"`` is contained in ``"cmpfilter_"`` in one direction only, so a
+    prefix-blind match is fine for ``cmp`` and catastrophic for the default
     prefix: clearing A's filters would silently wipe B's too.
     """
     at = AppTest.from_function(_filter_prefix_app)
@@ -149,7 +149,7 @@ def test_clearing_the_compare_prefix_leaves_the_main_pool_alone():
 
 
 def _metadata_keys_app():
-    """`metadata_keys` must come back already-prefixed (UX-7's per-filter clear
+    """`metadata_keys` must come back already-prefixed (the per-filter clear
     pops exactly the key it is given, so an unprefixed one silently no-ops)."""
     import pandas as pd
     import streamlit as st

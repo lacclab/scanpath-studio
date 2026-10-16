@@ -1,17 +1,17 @@
-"""BUG-89: one click on a popover's ▾ opens it, however long the popover takes to draw.
+"""One click on a popover's ▾ opens it, however long the popover takes to draw.
 
 Streamlit swaps the trigger's chevron glyph (``expand_more`` → ``expand_less``)
 when a popover opens, detaching the span the pointer hit. Its outside-click
 handler then receives that same opening click on ``document`` and skips it only
 inside a 50 ms window; past that, the detached target reads as "outside" and
-the popover closes itself right after opening. The fix makes the chevron
-transparent to the pointer, so the click's target is an element that survives
-the re-render.
+the popover closes itself right after opening. So the chevron is transparent
+to the pointer, and the click's target is an element that survives the
+re-render.
 
 The failure needs a browser (AppTest renders no frontend), so what is pinned
-here is the rule that carries the fix. It was verified in the browser by
-stalling the click 70 ms after React handled it: the popover closed without the
-rule and stayed open with it.
+here is the CSS rule that does it. Verified in the browser by stalling the click
+70 ms after React handled it: the popover closes without the rule and stays
+open with it.
 """
 
 from __future__ import annotations

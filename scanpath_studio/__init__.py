@@ -39,7 +39,7 @@ __all__ = [
 # The release this tree descends from: the number `/release` bumps (with
 # CITATION.cff), `pyproject.toml` builds with, and publish.yml checks a tag
 # against. `__version__` is the exact build, worked out from it lazily
-# (build_info.py, #139) — "0.35.0" at the release itself,
+# (build_info.py) — "0.35.0" at the release itself,
 # "0.35.0.post3+g8f18219" three commits after it.
 __release__ = "0.38.4"
 
@@ -47,11 +47,11 @@ __release__ = "0.38.4"
 # `import scanpath_studio` stays cheap and doesn't pull in pandas/plotly/
 # streamlit until first use.
 # The MultiplEYE and benchmark-corpus loaders stay importable but are left out
-# of `__all__`: those corpora are held back from this release
+# of `__all__`: those corpora are experimental
 # (`constants.multipleye_enabled` / `benchmark_corpora_enabled`).
-# The app's own computed measures are held back the same way
+# The app's own computed measures are experimental the same way
 # (`constants.computed_measures_enabled`): importable, but not advertised —
-# they raise without SCANPATH_EXPERIMENTAL=1 (#374).
+# they raise without SCANPATH_EXPERIMENTAL=1.
 _HELD_BACK_EXPORTS = frozenset(
     {
         "alignment_sensitivity",

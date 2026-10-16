@@ -1,8 +1,8 @@
-"""Several colour bars each get a place of their own (round-7 review, finding 16).
+"""Several colour bars each get a place of their own.
 
-A word heatmap's scale and the fixations' numeric colour scale used to share
-`_colorbar_dict`'s one position, so their gradients, titles and ticks were
-drawn over each other.
+`_colorbar_dict` puts every bar of one orientation at one spot, so a word
+heatmap's scale and the fixations' numeric colour scale need positions of
+their own, or their gradients, titles and ticks are drawn over each other.
 """
 
 from __future__ import annotations

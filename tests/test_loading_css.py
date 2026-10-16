@@ -1,4 +1,4 @@
-"""UX-165: the loading states' CSS, and the retired spinner banner."""
+"""The loading states' CSS, and the absence of a pulsing spinner banner."""
 
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ def test_the_data_view_hides_what_the_previous_view_left():
 
 
 def test_a_card_takes_no_space_until_it_shows():
-    """UX-166: a card opens hidden — the page card on every run — so until it is
+    """A card opens hidden — the page card on every run — so until it is
     revealed its slot is out of the layout; otherwise each rerun pushes the view
     down by the card's margins and back. A size box is the exception: holding
     the area is what a region card's box is for."""
@@ -83,7 +83,7 @@ def test_a_card_takes_no_space_until_it_shows():
 
 
 def test_a_card_sits_centred_over_the_figure_it_stands_in_for():
-    """UX-167: Streamlit stretches a block's wrapper to the full width, so the
+    """Streamlit stretches a block's wrapper to the full width, so the
     body's wrapper takes a width of its own — or no `justify-self` places it.
     Every width resolves top-down from the column (the size box caps its card
     at the figure's width): a track sized by its content would overflow a
@@ -94,7 +94,7 @@ def test_a_card_sits_centred_over_the_figure_it_stands_in_for():
         "        display: grid !important;\n"
         "        grid-template-columns: minmax(0, 1fr);"
     ) in CSS
-    assert "fit-content" not in CSS[CSS.index("UX-165 · loading states") :]
+    assert "fit-content" not in CSS[CSS.index("=== Loading states") :]
     wrapper = (
         '[class*="st-key-sps_card_"] > [data-testid="stLayoutWrapper"]'
         ':has(> [class*="st-key-sps_cardbody_"]) {'
@@ -159,14 +159,15 @@ def _nested_has(css: str) -> list[str]:
 
 
 def test_no_rule_nests_has_inside_has():
-    """A browser drops a rule whose `:has()` holds another `:has()` — the
-    first cut of the rule above did, silently, so the check is on every rule."""
+    """A browser silently drops a rule whose `:has()` holds another `:has()`,
+    and the rule above is easy to write that way, so the check is on every
+    rule."""
     assert _nested_has(CSS) == []
 
 
 def test_the_nesting_check_catches_what_it_is_for():
-    """The check above passing means something only if it can fail: the first
-    cut's shape is flagged, the flat form and a `:has()` in a comment are not."""
+    """The check above passing means something only if it can fail: the nested
+    shape is flagged, the flat form and a `:has()` in a comment are not."""
     nested = '.w:has(> [class*="c_"]:not(:has(.sps-reveal))) { display: none; }'
     flat = '.w:has(> [class*="c_"]):not(:has(.sps-reveal)) { display: none; }'
     comment = "/* `:has()` may not nest inside `:has()` */ .x { color: red; }"

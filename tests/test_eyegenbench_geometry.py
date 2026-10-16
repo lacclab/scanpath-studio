@@ -119,7 +119,7 @@ def test_chars_per_degree_entries_use_the_measured_width_not_the_ratio():
 
 
 def test_onestop_reconstructs_its_published_layout():
-    """R49 -- Berzak et al. 2025 (Sci Data 12:1995), Methods -> Apparatus.
+    """Berzak et al. 2025 (Sci Data 12:1995), Methods -> Apparatus.
 
     Every number here is quoted by the paper, so each assertion is a check that
     `_spec`'s model reproduces a published figure rather than a plausible one:
@@ -148,12 +148,12 @@ def test_onestop_is_reconstructed_not_synthesized():
 
 
 def test_rsc_reconstructs_its_published_layout():
-    """R49 -- Laurinavichyute et al. 2019, Method -> Procedure.
+    """Laurinavichyute et al. 2019, Method -> Procedure.
 
     `font_px` is the assertion that matters: the paper publishes *22 points*,
     and 28 px is that converted at the screen's own 92 ppi. A regression that
-    dropped the conversion would leave 22 here -- the same points-as-pixels
-    mistake R50 removed from `mecol2w2`.
+    dropped the conversion would leave 22 here -- the points-as-pixels mistake
+    `test_no_spec_reads_a_point_size_as_a_pixel_size` guards against.
     """
     spec = display_spec_for("rsc")
     assert (spec.width_px, spec.height_px) == (1920, 1080)
@@ -167,7 +167,7 @@ def test_rsc_reconstructs_its_published_layout():
 
 
 def test_bscii_does_not_inherit_the_bsc_apparatus():
-    """R49 -- Yan, Pan & Kliegl 2025, Apparatus.
+    """Yan, Pan & Kliegl 2025, Apparatus.
 
     BSC-II is a different lab setup a decade after BSC, not the same one: a
     24.5" LCD at 1920x1080 / 70 cm / 0.909 characters per degree, against BSC's
@@ -198,7 +198,7 @@ def test_the_three_published_corpora_leave_the_synthesized_tier(dataset):
 
 
 def test_psc2_stays_synthesized_because_the_published_setup_is_another_experiment():
-    """R49's trap, pinned so nobody "fixes" it.
+    """A tempting wrong source, pinned so nobody "fixes" it.
 
     A complete apparatus IS published for the PSC2 sentences -- 1280x960,
     Courier New 24 pt, 14 px per letter, 60 cm (Laubrock & Kliegl 2015) -- but
@@ -225,23 +225,23 @@ def test_psc2_stays_synthesized_because_the_published_setup_is_another_experimen
 @pytest.mark.parametrize(
     "dataset",
     [
-        # R50: both MECO L2 waves -- same sites, same protocol, same materials,
-        # so they are decided together. `mecol2w2` used to carry
-        # `_spec(1920, 1080, 21, ...)`; neither of its two cited sources
-        # contains that screen. The SSLA Wave 2 paper never prints "1920", says
-        # font size ranges 20-22 *points* "given variation in screen size and
-        # resolution at different testing sites", names one site (Zurich) at
-        # 10 pt and 1280x1024, and defers the rest to supplementary S2; the UZH
-        # review row has a null resolution and a LINK to those same
-        # supplementary materials where a monitor would go.
+        # Both MECO L2 waves -- same sites, same protocol, same materials,
+        # so they are decided together. Neither of `mecol2w2`'s two cited
+        # sources publishes a corpus-level screen. The SSLA Wave 2 paper
+        # never prints "1920", says font size ranges 20-22 *points* "given
+        # variation in screen size and resolution at different testing
+        # sites", names one site (Zurich) at 10 pt and 1280x1024, and defers
+        # the rest to supplementary S2; the UZH review row has a null
+        # resolution and a LINK to those same supplementary materials where
+        # a monitor would go.
         "mecol2w1",
         "mecol2w2",
-        # R49: MECO L1 is multi-lab by construction too -- Wave 1 states that a
+        # MECO L1 is multi-lab by construction too -- Wave 1 states that a
         # common font size, viewing distance and resolution were "unfeasible",
         # Wave 2 tabulates 16 different screens.
         "mecol1w1",
         "mecol1w2",
-        # R49: partial (physical geometry but no pixel resolution and no font
+        # Partial (physical geometry but no pixel resolution and no font
         # size for readingbrain; a monitor's physical size and nothing else for
         # oasstetc), or nothing published at all.
         "readingbrain",
@@ -262,13 +262,13 @@ def test_corpora_with_no_published_corpus_level_screen_stay_synthesized(dataset)
 
 
 def test_no_spec_reads_a_point_size_as_a_pixel_size():
-    """R50's unit error, generalised.
+    """No entry stores a point size as a pixel size.
 
     `font_px` is pixels. Points are not pixels: at a reading-study screen
     density a point is ~1.3 px, so a point size copied into this field renders
     the text ~25% small and, through `line_pitch_px`, packs the lines the same
-    way. The removed `mecol2w2` entry carried `font_px=21` -- the midpoint of a
-    published *20-22 pt* range. There is no way to detect the mistake from the
+    way (`font_px=21`, the midpoint of a published *20-22 pt* range, is the
+    kind of value that slips in). There is no way to detect the mistake from the
     number alone, so what this pins is the shape of the table: every entry that
     quotes a point size in its comment converts it, and 8 px is below anything
     a legible reading stimulus was ever rendered at.
@@ -314,7 +314,7 @@ def test_extract_returns_empty_when_the_column_is_absent():
 
 
 def test_extract_eyelink_boxes_rejects_a_negative_coordinate_box():
-    """R28: a negative screen coordinate is malformed data, not a real box."""
+    """A negative screen coordinate is malformed data, not a real box."""
     frame = pd.DataFrame(
         {
             "unique_paragraph_id": ["p1"],
@@ -328,7 +328,7 @@ def test_extract_eyelink_boxes_rejects_a_negative_coordinate_box():
 
 
 def test_extract_eyelink_boxes_rejects_a_box_straddling_the_origin():
-    """R28: not representable on a 0-origin canvas even though end_x > 0."""
+    """Not representable on a 0-origin canvas even though end_x > 0."""
     frame = pd.DataFrame(
         {
             "unique_paragraph_id": ["p1"],
@@ -340,9 +340,8 @@ def test_extract_eyelink_boxes_rejects_a_box_straddling_the_origin():
 
 
 def test_extract_eyelink_boxes_returns_empty_when_paragraph_col_is_absent():
-    """R33: `paragraph_col` is indexed alongside `ia_col` and must be guarded
-    the same way `data_col` already is -- mirroring the discipline
-    `extract_text_df_boxes` established (R23/R28)."""
+    """`paragraph_col` is indexed alongside `ia_col` and is guarded the same
+    way `data_col` is, as in `extract_text_df_boxes`."""
     frame = pd.DataFrame(
         {
             "ia_index": [0],
@@ -353,7 +352,7 @@ def test_extract_eyelink_boxes_returns_empty_when_paragraph_col_is_absent():
 
 
 def test_extract_eyelink_boxes_returns_empty_when_ia_col_is_absent():
-    """R33: same as above, for `ia_col`."""
+    """Same as above, for `ia_col`."""
     frame = pd.DataFrame(
         {
             "unique_paragraph_id": ["p1"],
@@ -364,7 +363,7 @@ def test_extract_eyelink_boxes_returns_empty_when_ia_col_is_absent():
 
 
 def test_extract_eyelink_boxes_returns_empty_when_both_harmonised_columns_are_absent():
-    """R33 -- the actual onestop shape: an un-prefixed `paragraph_id` and no
+    """The raw onestop shape: an un-prefixed `paragraph_id` and no
     interest-area index column at all, alongside the raw EyeLink data
     column."""
     frame = pd.DataFrame(
@@ -593,7 +592,7 @@ def test_real_geometry_wins_when_ia_data_is_present():
 
 
 def test_resolve_geometry_falls_through_when_raw_frame_lacks_harmonised_ia_columns():
-    """R33 headline: the actual onestop failure. Its raw EyeLink export
+    """The raw onestop export falls through to the next tier. It
     carries `CURRENT_FIX_INTEREST_AREA_DATA` (so `run_prepare_data` picks it
     as the raw tier's data source) but neither `unique_paragraph_id` nor
     `ia_index` -- it has an un-prefixed `paragraph_id` and no interest-area
@@ -603,12 +602,11 @@ def test_resolve_geometry_falls_through_when_raw_frame_lacks_harmonised_ia_colum
     through to the next tier and stamp `geometry_source` accordingly rather
     than sinking the whole corpus.
 
-    R49 changed *which* tier that is for onestop -- the corpus now has a
-    published screen, so the fall-through lands on `reconstructed` rather than
-    `synthesized`. The property under test is unchanged: no raise, and no
-    `real` stamp for a raw frame that contributed no box. A spec-less corpus
-    given the identical frame still falls all the way to `synthesized`, which
-    is what keeps this a fall-through test rather than a tier-name test."""
+    Onestop has a published screen, so the fall-through lands on
+    `reconstructed`. The property under test is no raise, and no `real` stamp
+    for a raw frame that contributed no box. A spec-less corpus given the
+    identical frame falls all the way to `synthesized`, which is what keeps
+    this a fall-through test rather than a tier-name test."""
     raw = pd.DataFrame(
         {
             "paragraph_id": ["p1", "p1"],
@@ -721,10 +719,10 @@ def test_place_fixations_drops_rows_with_no_matching_box():
     assert len(place_fixations(fix, words)) == 1
 
 
-# Controller addendum, Ruling R8: a paragraph with no measured boxes must not be
-# stamped `real`, even when the raw file DID yield real boxes for a sibling
-# paragraph in the same dataset. `unique_paragraph_id` "p2" never appears in the
-# raw fixture below -- EyeGenBench's raw file has nothing on it at all.
+# A paragraph with no measured boxes must not be stamped `real`, even when the
+# raw file DID yield real boxes for a sibling paragraph in the same dataset.
+# `unique_paragraph_id` "p2" never appears in the raw fixture below --
+# EyeGenBench's raw file has nothing on it at all.
 TEXTS_TWO_PARAGRAPHS = pd.DataFrame(
     {
         "unique_paragraph_id": ["p1", "p2"],
@@ -885,13 +883,12 @@ def test_a_nan_ia_index_does_not_raise_or_earn_the_real_stamp():
 def test_a_dot_row_alongside_a_real_row_still_earns_real_and_is_interpolated():
     # One genuinely fixated interest area (ia_index=0, a real box) plus one
     # that landed on no interest area at all (ia_index="."), same paragraph.
-    # Per Ruling R8 the tier is stamped per PARAGRAPH: p1 contributed a real
-    # box, so the whole paragraph -- and both its rows -- read `real` (this is
-    # the same per-paragraph granularity round 1 already established, not a
-    # new distinction). The "." interest area itself is simply interpolated
-    # like any other gap: it must not raise, must not be treated as its own
-    # real box, and must land somewhere distinct from ia_index 0 (never a
-    # crash, never a guess masquerading as measured geometry).
+    # The tier is stamped per PARAGRAPH: p1 contributed a real box, so the
+    # whole paragraph -- and both its rows -- read `real`. The "." interest
+    # area itself is simply interpolated like any other gap: it must not raise,
+    # must not be treated as its own real box, and must land somewhere distinct
+    # from ia_index 0 (never a crash, never a guess masquerading as measured
+    # geometry).
     raw = pd.DataFrame(
         {
             "unique_paragraph_id": ["p1", "p1"],
@@ -918,7 +915,7 @@ def test_a_dot_row_alongside_a_real_row_still_earns_real_and_is_interpolated():
 def test_a_negative_fractional_ia_index_does_not_earn_the_real_stamp():
     # -0.5 is doubly invalid: negative (like the -1 case) AND fractional. A
     # coercion that only checks `>= 0` would keep it (-0.5 >= 0 is False, so
-    # this alone doesn't reproduce the bug) -- the real hazard is int(-0.5)
+    # this alone doesn't trigger it) -- the real hazard is int(-0.5)
     # truncating TOWARD ZERO to 0, landing the malformed row's own raw box at
     # slot 0 un-interpolated. Assert the box actually placed at slot 0 is the
     # interpolated one, not the malformed row's raw (900, 950) coordinates.
@@ -942,7 +939,7 @@ def test_a_negative_fractional_ia_index_does_not_earn_the_real_stamp():
 
 def test_a_fractional_ia_index_does_not_silently_overwrite_the_genuine_box():
     # The worst variant: ia_index=0 is a genuine real box at (10, 60);
-    # ia_index=0.9 is bogus and (before validation) truncates to the SAME
+    # ia_index=0.9 is bogus and, unvalidated, would truncate to the SAME
     # slot 0. If both were allowed into the lookup keyed by int(ia_index),
     # boxes sorted ascending would insert 0 before 0.9 and the dict's
     # last-write-wins semantics would let the bogus row's box (900, 950)
@@ -1007,9 +1004,10 @@ def test_no_flavour_of_invalid_ia_index_ever_earns_the_real_stamp(bad_ia_index):
 def _resolve_with_warnings_as_errors(dataset, text_df, raw_fix_df):
     """`resolve_geometry`, promoting any warning to an exception.
 
-    Round 3's `.astype("Int64")` emitted a silent `RuntimeWarning: invalid
-    value encountered in cast` alongside its `TypeError` on an oversized
-    ``ia_index`` -- test output must be pristine, not merely non-crashing.
+    A fixed-width cast such as `.astype("Int64")` emits a `RuntimeWarning:
+    invalid value encountered in cast` alongside its `TypeError` on an
+    oversized ``ia_index`` -- resolving must be warning-free, not merely
+    non-crashing.
     """
     with warnings.catch_warnings():
         warnings.simplefilter("error")
@@ -1018,11 +1016,10 @@ def _resolve_with_warnings_as_errors(dataset, text_df, raw_fix_df):
 
 def test_an_ia_index_past_int64_range_resolves_without_raising_or_warning():
     # 2**63 is exactly one past the signed-64-bit range a fixed-width Int64
-    # cast can hold (2**63 - 1 was already fine). Nothing here bounds the
-    # *magnitude* of an otherwise valid-shaped index -- only the existing
-    # `< count` check does, the same one that already rejects a merely
-    # past-the-end value -- so this must resolve like any other oversized
-    # index: no `real` stamp, no exception, no warning.
+    # cast can hold (2**63 - 1 fits). Nothing here bounds the *magnitude* of an
+    # otherwise valid-shaped index -- only the `< count` check does, the same
+    # one that rejects a merely past-the-end value -- so this must resolve like
+    # any other oversized index: no `real` stamp, no exception, no warning.
     raw = pd.DataFrame(
         {
             "unique_paragraph_id": ["p1"],
@@ -1049,9 +1046,9 @@ def test_a_huge_float_ia_index_resolves_without_raising_or_warning():
 
 
 def test_an_infinite_ia_index_resolves_without_raising_or_warning():
-    # Previously OverflowError -- `_valid_ia_index`'s explicit finite check
-    # closes it, the same way the whole-number check closes fractional
-    # values and the >= 0 check closes negative ones.
+    # A naive int() raises OverflowError here -- `_valid_ia_index`'s explicit
+    # finite check closes it, the same way the whole-number check closes
+    # fractional values and the >= 0 check closes negative ones.
     raw = pd.DataFrame(
         {
             "unique_paragraph_id": ["p1"],
@@ -1065,15 +1062,14 @@ def test_an_infinite_ia_index_resolves_without_raising_or_warning():
 
 
 def test_an_oversized_ia_index_does_not_poison_the_genuine_boxes_beside_it():
-    # The worst variant round 4 found: two real, well-formed boxes (indices 0
-    # and 1) plus one 2**63 row, all on the same paragraph. A fixed-width
-    # cast over the whole per-paragraph series raises the moment it hits the
-    # huge value -- which would take down BOTH genuine boxes with it, a
-    # harder failure than any earlier round (those mislabelled a paragraph;
-    # this would abort resolving it at all). Assert both real boxes still
-    # resolve with their own coordinates and the oversized row contributes
-    # nothing -- no interpolation needed, since the two real indices (0, 1)
-    # already cover this 2-word paragraph completely.
+    # The worst variant: two real, well-formed boxes (indices 0 and 1) plus one
+    # 2**63 row, all on the same paragraph. A fixed-width cast over the whole
+    # per-paragraph series raises the moment it hits the huge value -- which
+    # would take down BOTH genuine boxes with it and abort resolving the
+    # paragraph at all. Assert both real boxes still resolve with their own
+    # coordinates and the oversized row contributes nothing -- no interpolation
+    # needed, since the two real indices (0, 1) already cover this 2-word
+    # paragraph completely.
     raw = pd.DataFrame(
         {
             "unique_paragraph_id": ["p1", "p1", "p1"],
@@ -1093,14 +1089,14 @@ def test_an_oversized_ia_index_does_not_poison_the_genuine_boxes_beside_it():
     assert (words["geometry_source"] == GEOMETRY_REAL).all()
 
 
-# --- R23/R24: real boxes carried directly on text_df (verified: PoTeC) -----
+# --- Real boxes carried directly on text_df (verified: PoTeC) ---------------
 #
 # The real EyeGenBench frames are richer than the documented schema: text_df
 # is one row per (paragraph, interest area) -- not one row per paragraph --
 # and (for some corpora) carries its own genuinely measured start_x/start_y/
-# end_x/end_y, and fix_df carries those same four column names too. Both
-# facts, together, are what produced the R24 KeyError and the R23 honesty
-# inversion (synthesizing a layout while real boxes sat unused in the frame).
+# end_x/end_y, and fix_df carries those same four column names too. Missing
+# either fact risks a KeyError on the merge, or synthesizing a layout while
+# real boxes sit unused in the frame.
 
 TEXT_DF_WITH_BOXES = pd.DataFrame(
     {
@@ -1122,11 +1118,10 @@ def test_extract_text_df_boxes_returns_empty_when_the_columns_are_absent():
 
 
 def test_extract_text_df_boxes_falls_through_when_ia_index_is_missing():
-    """Round-3 regression (item 1): the four box columns alone are not enough
-    -- TEXTS (the brief's own fixture) has box-less columns AND no ia_index.
-    A text_df carrying the box columns but not ia_index must resolve to
-    empty (falling through to the existing tiers), not raise KeyError and
-    drop the whole dataset from the manifest.
+    """The four box columns alone are not enough -- TEXTS has box-less columns
+    AND no ia_index. A text_df carrying the box columns but not ia_index must
+    resolve to empty (falling through to the other tiers), not raise KeyError
+    and drop the whole dataset from the manifest.
     """
     box_columns_no_ia_index = TEXT_DF_WITH_BOXES.drop(columns=["ia_index"])
     assert extract_text_df_boxes(box_columns_no_ia_index).empty
@@ -1135,10 +1130,10 @@ def test_extract_text_df_boxes_falls_through_when_ia_index_is_missing():
 
 
 def test_place_fixations_uses_the_words_box_even_when_fix_df_has_its_own():
-    """R24 regression: fix_df carrying its own start_x/... must not crash the
-    merge, and the box used for placement must be the words frame's, never
-    fix_df's own (different) values -- which survive untouched as
-    passthrough data on the output.
+    """fix_df carrying its own start_x/... must not crash the merge, and the
+    box used for placement must be the words frame's, never fix_df's own
+    (different) values -- which survive untouched as passthrough data on the
+    output.
     """
     words = pd.DataFrame(
         {
@@ -1251,17 +1246,17 @@ TEXT_DF_NEGATIVE_BOX = pd.DataFrame(
 
 
 def test_extract_text_df_boxes_rejects_a_negative_coordinate_box():
-    """R28: a negative screen coordinate is malformed data, not a real box."""
+    """A negative screen coordinate is malformed data, not a real box."""
     boxes = extract_text_df_boxes(TEXT_DF_NEGATIVE_BOX)
     assert list(boxes["ia_index"]) == [1]  # only the valid row survives
 
 
 def test_resolve_geometry_negative_box_is_interpolated_not_used_as_is():
     """The paragraph still reads `real` overall (ia_index 1's box IS real --
-    same per-paragraph stamping R8/round-1 already established), but the
-    rejected negative box at ia_index 0 must never reach the words frame
-    as-is: `fill_missing_boxes` interpolates it instead, honestly, and the
-    interpolation can never itself produce a negative coordinate.
+    the tier is stamped per paragraph), but the rejected negative box at
+    ia_index 0 must never reach the words frame as-is: `fill_missing_boxes`
+    interpolates it instead, honestly, and the interpolation can never itself
+    produce a negative coordinate.
     """
     words, report = resolve_geometry("potec", TEXT_DF_NEGATIVE_BOX, None)
     assert report["geometry_source"] == GEOMETRY_REAL
@@ -1288,17 +1283,17 @@ TEXT_DF_ORIGIN_STRADDLING_BOX = pd.DataFrame(
 
 
 def test_extract_text_df_boxes_rejects_a_box_straddling_the_origin():
-    """R28: start_x=-5 < end_x=40 passes the shape check but is still not
-    representable on a 0-origin canvas -- must be rejected all the same.
+    """start_x=-5 < end_x=40 passes the shape check but is still not
+    representable on a 0-origin canvas, so it is rejected all the same.
     """
     boxes = extract_text_df_boxes(TEXT_DF_ORIGIN_STRADDLING_BOX)
     assert list(boxes["ia_index"]) == [1]
 
 
 def test_a_corpus_without_text_df_box_columns_resolves_exactly_as_before():
-    """Regression pin (R23): a corpus whose text_df carries no start_x/...
-    columns must resolve byte-identically to the pre-R23 behaviour -- the new
-    highest-priority tier is a no-op for the other 38 corpora.
+    """A corpus whose text_df carries no start_x/... columns resolves through
+    the other tiers unchanged -- the highest-priority text_df tier is a no-op
+    for it.
     """
     assert extract_text_df_boxes(TEXTS).empty
     words, report = resolve_geometry("potec", TEXTS, None)

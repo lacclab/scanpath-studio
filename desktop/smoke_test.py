@@ -1,4 +1,4 @@
-"""Smoke test for the frozen desktop bundle (ENG-15).
+"""Smoke test for the frozen desktop bundle.
 
 Usage:
     python desktop/smoke_test.py [path/to/ScanpathStudio[.app|.exe]]
@@ -35,7 +35,7 @@ from launcher import _env_flag, _free_port
 
 BOOT_TIMEOUT_S = 180.0
 SELFCHECK_TIMEOUT_S = 300.0
-#: What the selfcheck shakes hands with through the OS trust store (#394):
+#: What the selfcheck shakes hands with through the OS trust store:
 #: GitHub, which the update check and the update download reach.
 TLS_URL = "https://github.com/"
 
@@ -74,7 +74,7 @@ def _child_env(**overrides: str) -> dict[str, str]:
 
     Both phases run the executable *inside* the bundle, which is precisely the
     launcher's cue to redirect output to ``~/Library/Logs`` and to arm the
-    idle-exit watcher (ENG-21). Neither belongs in a test: the redirect would
+    idle-exit watcher. Neither belongs in a test: the redirect would
     swallow the very output a failure is diagnosed from, and it would also write
     into a developer's real log directory on a local run.
     """
@@ -99,7 +99,7 @@ def _run_selfcheck(binary: Path) -> None:
         # fire. The traceback this phase exists to surface would land in a file
         # on a throwaway runner, leaving a red CI run with no reason attached.
         # A real handshake through the frozen truststore, which reaches the
-        # OS's certificate store only then (#394).
+        # OS's certificate store only then.
         env=_child_env(SCANPATH_SELFCHECK_TLS_URL=TLS_URL),
     )
     sys.stdout.write(result.stdout)
@@ -131,7 +131,7 @@ def _verify_macos_signature(binary: Path) -> None:
 
 
 def _verify_notarization(bundle: Path) -> None:
-    """Assert the ticket is stapled and Gatekeeper accepts it (ENG-21).
+    """Assert the ticket is stapled and Gatekeeper accepts it.
 
     Behind ``SCANPATH_EXPECT_NOTARIZED`` rather than automatic: an unsigned fork
     or local build has no ticket and must still pass the rest of this test. CI

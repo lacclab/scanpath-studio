@@ -3,7 +3,7 @@
 The full IA + fixations reports are ~15GB CSV (5GB zipped) and take ~3 min to
 load into pandas. The scanpath app only ever shows ONE participant at a time
 when deep-linked from an external review tool (see
-`data.load_onestop_server_bundle` and `app._apply_url_preset`), so loading
+`data.load_onestop_server_bundle` and `url_state._apply_url_preset`), so loading
 the whole cohort is pure overhead.
 
 This script writes:

@@ -175,9 +175,9 @@ def _chain(
 
 
 def _cluster(fixation_XY: np.ndarray, line_Y: np.ndarray, word_XY) -> np.ndarray:
-    # ENG-91: scipy is imported where it is used, never at module import —
-    # `controls` imports this module on every app run, and Windows Smart App
-    # Control can block scipy's compiled extensions in the desktop bundle.
+    # scipy is imported where it is used, never at module import — `controls`
+    # imports this module on every app run, and Windows Smart App Control can
+    # block scipy's compiled extensions in the desktop bundle.
     from scipy.cluster.vq import kmeans2
 
     m = len(line_Y)
@@ -647,8 +647,8 @@ def _line_centers(words: pd.DataFrame) -> np.ndarray:
 def _word_centers_reading_order(words: pd.DataFrame) -> np.ndarray:
     """Word-box centers ``(x_center, y_center)`` in reading order, NaN-geometry dropped."""
     ordered = _ordered_word_rows(words)
-    # The interest-area centres, from the experiment's own boxes (BUG-83) — the
-    # same rectangles the fixations are assigned against.
+    # The interest-area centres, from the experiment's own boxes — the same
+    # rectangles the fixations are assigned against.
     x0, y0, x1, y1 = word_box_bounds(ordered)
     finite = np.isfinite(x0) & np.isfinite(y0) & np.isfinite(x1) & np.isfinite(y1)
     cx = ((x0 + x1) / 2.0)[finite]
@@ -733,7 +733,7 @@ def correction_sensitivity(
     words: pd.DataFrame,
     methods: tuple[str, ...] = ("attach", "slice", "consensus"),
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Carry several assignments together and report mean correction (PRE-18)."""
+    """Carry several assignments together and report mean correction."""
     combined = fixations.copy()
     report = []
     for method in methods:

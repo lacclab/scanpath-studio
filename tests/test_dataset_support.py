@@ -49,7 +49,7 @@ def test_read_table_uses_single_pass_dtype_inference(tmp_path, monkeypatch, ext,
     can't become a single ``object`` column mixing Python ``float`` and ``str``.
     That mix emits a ``DtypeWarning`` and crashes pyarrow when Streamlit displays
     the frame — only on big (multi-chunk) files, so a small upload reads fine
-    locally while a full report kills the cloud worker. Regression guard."""
+    locally while a full report kills the cloud worker."""
     captured = {}
     real_read_csv = data_module.pd.read_csv
 
@@ -91,7 +91,7 @@ def test_read_table_csv_zip_path(tmp_path):
 
 
 def test_read_table_csv_zip_uploaded_file_like():
-    # The real bug: an in-memory upload named *.csv.zip — pandas infers
+    # An in-memory upload named *.csv.zip — pandas infers
     # compression only from string paths, so this must be handled explicitly.
     upload = _NamedBytesIO(_zip_bytes("data.csv", b"a,b\n1,x\n2,y\n"), "data.csv.zip")
     df = data_module.read_table(upload)
@@ -129,7 +129,7 @@ def test_read_table_zip_multiple_members_concatenates():
 
 
 def test_read_table_zip_same_stem_in_different_folders_stays_distinct():
-    """Round 11 #1: two readers' ``fixations.csv`` must not become one."""
+    """Two readers' ``fixations.csv`` must not become one."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         zf.writestr("reader-a/fixations.csv", "trial_id,x,y,duration_ms\nt1,1,2,100\n")
@@ -398,8 +398,8 @@ def test_stimulus_words_without_fixations_get_synthetic_participant(stimulus_wor
 
 
 def test_a_repeated_reading_gets_the_stimulus_words_too(stimulus_words_df):
-    """BUG-57: the second reading's id is `t1_r2`, which a table keyed by the
-    text alone never has — the broadcast found no boxes for it."""
+    """The second reading's id is `t1_r2`, which a table keyed by the text
+    alone never has — the broadcast must still find its boxes."""
     fixations = pd.DataFrame(
         {
             "reader_id": [7, 7, 7, 7],
@@ -458,7 +458,7 @@ def test_fix_schema_requires_xy_or_word_id():
 
 
 def test_participant_less_fixations_get_synthetic_participant():
-    """A fixations table with no participant column loads (participant is now
+    """A fixations table with no participant column loads (participant is
     optional) and every row is stamped with the synthetic participant."""
     fixations = pd.DataFrame(
         {
@@ -501,7 +501,7 @@ def test_asymmetric_participant_reconciles_word_boxes():
     )
     assert set(fix_n["participant_id"]) == {data_module.SYNTHETIC_PARTICIPANT}
     assert set(words_n["participant_id"]) == {data_module.SYNTHETIC_PARTICIPANT}
-    # The boxes for the trial the picker offers ('(all)', 't1') are now reachable.
+    # The boxes for the trial the picker offers ('(all)', 't1') are reachable.
     fig = sps.plot_scanpath(words_n, fix_n, data_module.SYNTHETIC_PARTICIPANT, "t1")
     assert len(fig.data) > 0
 
@@ -617,7 +617,7 @@ def test_load_potec_reader_subset(potec_root):
 
 @pytest.mark.timeout(120)
 def test_the_app_maps_potec_trials_as_reader_and_text(potec_root, monkeypatch):
-    """DATA-61: the app declares PoTeC's schema rather than detecting it, so its
+    """The app declares PoTeC's schema rather than detecting it, so its
     Trial ID is the reader + text the headless loader uses, not the text alone."""
     from streamlit.testing.v1 import AppTest
 
@@ -656,9 +656,9 @@ def test_load_potec_missing_data_message(tmp_path):
 
 
 def test_potec_reports_each_fixation_file(potec_root, monkeypatch):
-    """UX-166: `_potec_fixations` reports each file read, so a card can say
-    "1 of 2 files" while loading. Fix-round-1 (Minor #8) also pins the FULL
-    call sequence via a spy on `progress.report` — not just the final
+    """`_potec_fixations` reports each file read, so a card can say
+    "1 of 2 files" while loading. This pins the FULL call sequence via a spy
+    on `progress.report` — not just the final
     snapshot, since a cancel checkpoint needs the intermediate reports to
     actually have happened, in order, one per file. The first, "0 of 2", comes
     before any file is read (see the next test)."""
@@ -688,7 +688,7 @@ def _state_of_the_active_task() -> tuple:
 def test_a_potec_load_has_reported_before_its_first_fixation_file(
     potec_root, monkeypatch
 ):
-    """UX-166: a gated card shows once its task reports, and a loop that reports
+    """A gated card shows once its task reports, and a loop that reports
     only *after* each file hides its first file — for OneStop, a whole report —
     behind the delay. So a reader reports "0 of N" before it reads anything."""
     seen = []
@@ -759,8 +759,8 @@ def _write_csv_zip_with_macosx(path, frame, member_name):
 
 # The composing columns every OneStop report carries, and the id the loader
 # builds out of them (batch_article_paragraph_level -- update_sample_data's
-# convention). The public OSF release ships NO unique_paragraph_id, which is
-# what BUG-43 was about; `shape="lacclab"` adds the lab export's own instead.
+# convention). The public OSF release ships NO unique_paragraph_id, so the
+# loader composes one; `shape="lacclab"` adds the lab export's own instead.
 _FAKE_ONESTOP_IDS = {
     "article_batch": 2,
     "article_id": 3,
@@ -895,7 +895,7 @@ def test_onestop_missing_report_message(tmp_path):
 
 
 class TestPinnedDownloads:
-    """DATA-65: a download names one OSF file version (and one commit of the
+    """A download names one OSF file version (and one commit of the
     PoTeC repo), and a file that is not that version is refused — or two users
     could open two different corpora under one name, and the dataset table's
     published figures would describe neither."""
@@ -952,10 +952,10 @@ def test_download_onestop_atomic_and_skips_existing(monkeypatch, tmp_path):
     calls = []
 
     class _FakeResp(io.BytesIO):
-        """UX-168: `download_onestop` now reads in chunks (`.read1(size)`), so
-        this has to behave like a real response body — `io.BytesIO` does —
-        rather than returning the whole payload on every call. No declared
-        Content-Length, same as before this fake grew one."""
+        """`download_onestop` reads in chunks (`.read1(size)`), so this has to
+        behave like a real response body — `io.BytesIO` does — rather than
+        returning the whole payload on every call. It declares no
+        Content-Length."""
 
         def __init__(self, data):
             super().__init__(data)
@@ -972,7 +972,7 @@ def test_download_onestop_atomic_and_skips_existing(monkeypatch, tmp_path):
         return _FakeResp(_zip_bytes("x.csv", b"a\n1\n"))
 
     monkeypatch.setattr(datasets_module.urllib.request, "urlopen", fake_urlopen)
-    # The fake reports are not the pinned files (DATA-65 is tested below).
+    # The fake reports are not the pinned files (see TestPinnedDownloads).
     monkeypatch.setattr(datasets_module, "_check_download_size", lambda *a: None)
     datasets_module.download_onestop(tmp_path, regime="ordinary")
 
@@ -992,12 +992,12 @@ def test_onestop_default_part_is_paragraph(onestop_offline, tmp_path):
         tmp_path, regime="ordinary", download=True
     )
     assert set(words["part"]) == {"Paragraph"}
-    # Single-part load keeps the historical (unfolded) paragraph id.
+    # Single-part load keeps the plain (unfolded) paragraph id.
     assert set(words["unique_paragraph_id"]) == {_FAKE_ONESTOP_PARAGRAPH}
 
 
 def test_onestop_parts_are_screens_of_one_trial(onestop_offline, tmp_path):
-    """DATA-63: a reading's parts are the *screens* of one trial, in presentation
+    """A reading's parts are the *screens* of one trial, in presentation
     order — not one trial per part."""
     words, fixations = datasets_module.load_onestop(
         tmp_path,
@@ -1115,7 +1115,7 @@ def test_load_onestop_normalized(onestop_offline, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# BUG-43: the public release has no unique_paragraph_id, so the loader composes
+# The public release has no unique_paragraph_id, so the loader composes
 # one. Without it `paragraph_id` (the index of the paragraph WITHIN its article,
 # 1..7) is the whole text identity, and every article's paragraph 3 is the same
 # "text".
@@ -1267,7 +1267,7 @@ def test_onestop_without_the_composing_columns_is_left_alone(tmp_path):
 
 # Two characters per "word", 20x30 boxes laid out side by side. Pages reuse the
 # SAME coordinates (the real corpus does), so the per-page SCREENS inside one
-# stimulus trial (DATA-24) are what keep them from overlapping.
+# stimulus trial are what keep them from overlapping.
 _AOI_COLS = [
     "char_idx",
     "char",
@@ -1539,8 +1539,8 @@ def test_multipleye_raw_frames_auto_detect_path(multipleye_root):
 
 
 def test_a_multipleye_load_reports_before_its_first_file(multipleye_root, monkeypatch):
-    """UX-166: "0 of N files" first, so a gated card is armed before the first
-    file is read — then one report per file, as before."""
+    """The load reports "0 of N files" first, so a gated card is armed before
+    the first file is read — then one report per file."""
     calls = []
     real_report = progress.report
 
@@ -1777,7 +1777,7 @@ def test_extract_columns_from_source_file_noops():
 
 
 def test_split_and_extract_from_a_column_other_than_source_file():
-    # UX-113: the wizard's "derive from a column" tool isn't pinned to
+    # The wizard's "derive from a column" tool isn't pinned to
     # `source_file` — a `page`-style column encoding identity in its own text
     # (e.g. MultiplEYE's question-AOI screens) works the same way.
     df = pd.DataFrame(
@@ -1848,7 +1848,7 @@ def test_aggregate_char_boxes_origin_size():
 
 
 def test_aggregate_char_boxes_with_block_keeps_blocks_apart_and_renumbers():
-    # UX-113: two blocks (e.g. a question's stem/target answer blocks) each
+    # Two blocks (e.g. a question's stem/target answer blocks) each
     # restart their own local word_idx — without block-aware grouping, both
     # blocks' word 0 would silently merge into one box spanning both
     # locations. "stem" sits above "target" (lower y = earlier reading order).
@@ -1882,7 +1882,7 @@ def test_aggregate_char_boxes_with_block_keeps_blocks_apart_and_renumbers():
         bottom="bottom",
     )
     out = data_module.aggregate_char_boxes(chars, schema)
-    # 4 distinct words survive (not 2 — the bug this fixes), renumbered
+    # 4 distinct words survive (not 2 merged ones), renumbered
     # sequentially per screen in block-reading-order (stem's two words first,
     # since it sits above target) then original word-id order within a block.
     assert len(out) == 4
@@ -1890,12 +1890,11 @@ def test_aggregate_char_boxes_with_block_keeps_blocks_apart_and_renumbers():
     by_block = out.set_index("block")
     assert sorted(by_block.loc["stem", "word_idx"].tolist()) == [0, 1]
     assert sorted(by_block.loc["target", "word_idx"].tolist()) == [2, 3]
-    # No box spans both blocks' rows (the merge bug: top 10 through 60).
+    # No box spans both blocks' rows (a merged box would run from 10 to 60).
     assert out["top"].max() - out["top"].min() < 50
 
-    # Leaving `block` unmapped reproduces the (buggy but pre-existing) merge —
-    # a regression guard that this phase doesn't change behavior when the new
-    # field is left unused.
+    # Leaving `block` unmapped keeps the block-blind merge — behavior is
+    # unchanged when the field is left unused.
     schema_noblock = {k: v for k, v in schema.items() if k != "block"}
     legacy = data_module.aggregate_char_boxes(chars, schema_noblock)
     assert len(legacy) == 2
@@ -1984,7 +1983,7 @@ def test_multipleye_uploads_case_match_join():
 
 
 def test_generic_wizard_tools_reproduce_multipleye_upload_recipe():
-    # UX-113 Phase 4 parity checkpoint: the same reading-pages-only upload,
+    # Parity check: the same reading-pages-only upload,
     # built with the *generic* wizard tools (column-derive via
     # extract_columns_from_source_file + api.load_scanpath_data) instead of
     # the MultiplEYE-specific recipe, lands on the same trial/participant
@@ -2151,7 +2150,7 @@ def test_multipleye_uploads_stimulus_without_aoi():
     )
     assert "Lit_Demo_1" in set(words["text_id"])  # has boxes
     assert "Arg_Other_2" not in set(words["text_id"])  # no AOI → no boxes, no raise
-    # DATA-24: screens are part of the identity now, and multipart forbids a
+    # Screens are part of the identity, and multipart forbids a
     # screen present in one report and absent from the other — so a stimulus with
     # no uploaded AOI loses its fixations (loudly) instead of crashing the load.
     assert set(fixations["text_id"]) == {"Lit_Demo_1"}
@@ -2218,7 +2217,7 @@ def test_multipleye_uploads_prefers_scanpath_fixation_first_order():
 
 def test_multipleye_uploads_pageless_file_does_not_crash():
     # A stray / question-AOI upload without a `page` column must contribute zero
-    # boxes, not crash the wizard (regression for the KeyError('page') guard).
+    # boxes, not crash the wizard (the KeyError('page') guard).
     scan = _upload_frame(
         {
             "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath": [
@@ -2534,7 +2533,7 @@ def test_categorize_columns_splits_mapped_detected_unclaimed():
     assert "my_custom_col" in cats["unclaimed"]
 
 
-# --- CMP-8 §2 · the comparison-dataset readiness gate ------------------------
+# --- The comparison-dataset readiness gate -----------------------------------
 # The one hard constraint on the secondary loader is that it must not RENDER —
 # the app's public-corpus loaders draw directory inputs and ⬇ Download buttons,
 # none of which can appear inside the compare picker. So a corpus whose files
@@ -2655,7 +2654,7 @@ def test_a_stored_upload_reports_the_setup_its_wizard_captured():
 
 
 # ---------------------------------------------------------------------------
-# DATA-63: one dataset per regime. Only Paragraph is regime-split on OSF, so a
+# One dataset per regime. Only Paragraph is regime-split on OSF, so a
 # regime's other parts are the all-regimes reports cut by the corpus' own flags.
 # ---------------------------------------------------------------------------
 
@@ -2664,8 +2663,8 @@ def test_a_regime_lists_every_part_it_shows():
     assert datasets_module.onestop_regime_parts("information_seeking") == [
         p for p in datasets_module._ONESTOP_PARTS if p != "QA"
     ]
-    # DATA-64: QA is Questions + Answers again, as one interest period — not a
-    # screen, so no regime's dataset loads it.
+    # QA is Questions + Answers as one interest period — not a screen, so no
+    # regime's dataset loads it.
     for regime in datasets_module._ONESTOP_REGIME_FLAGS:
         assert "QA" not in datasets_module.onestop_regime_parts(regime)
     # Only the information-seeking regimes show the question first.
@@ -2714,9 +2713,9 @@ def test_an_all_regimes_part_is_cut_to_the_regime(tmp_path, regime, kept):
 
 
 def test_a_screen_only_one_report_has_is_dropped_not_fatal(tmp_path, caplog):
-    """DATA-63: the OSF Answers fixation report holds a trial its interest-area
-    report lacks. Several parts make each part a screen, and one such orphan
-    used to abort the whole load in `multipart.validate_matching_parts`."""
+    """The OSF Answers fixation report holds a trial its interest-area report
+    lacks. Several parts make each part a screen, and one such orphan must not
+    abort the whole load in `multipart.validate_matching_parts`."""
     _onestop_public_report(
         tmp_path, _onestop_public_words(), _onestop_public_fixations()
     )

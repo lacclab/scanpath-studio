@@ -1,7 +1,7 @@
-"""Pin the session-state / URL **wire format** (ENG-6).
+"""Pin the session-state / URL **wire format**.
 
 A ``st.session_state`` key that a deep link seeds, the Share button emits, or a
-saved 💾 config restores is not a variable name — it is a contract with links
+saved config restores is not a variable name — it is a contract with links
 and files that already exist in the world. Renaming one is silent: the link
 still opens and the config still restores, they just quietly lose the setting.
 
@@ -270,10 +270,10 @@ def test_deep_link_seeds_frozen_state_keys():
         sk.PARAM_ONESTOP_VARIANT: next(iter(ONESTOP_VARIANT_LABELS)),
         sk.PARAM_ONESTOP_REGIME: next(iter(ONESTOP_REGIME_LABELS)),
         sk.PARAM_ONESTOP_PARTS: ",".join(list(ONESTOP_PART_LABELS)[:2]),
-        # CMP-8 §7. Both halves are needed: the reader requires `<pid>:<trial>`,
+        # Both halves are needed: the reader requires `<pid>:<trial>`,
         # and without them the two keys they seed (`single_compare_toggle`,
         # `cmp_dataset`) would never appear here — leaving the frozen-key
-        # assertion below vacuous for exactly the newest additions.
+        # assertion below vacuous for them.
         sk.COMPARE_PARAM: "p2:t2",
         sk.COMPARE_SOURCE_PARAM: "synthetic",
     }
@@ -282,21 +282,21 @@ def test_deep_link_seeds_frozen_state_keys():
     # reader validates against a closed domain needs its own real value here.
     validated = {
         "align_algorithm": "Warp",
-        # VIZ-31: the reading-class filter parses against a closed set of class
+        # The reading-class filter parses against a closed set of class
         # names, so a placeholder would be rejected with a warning.
         "saccade_classes": "forward,regression",
-        # CMP-11: both are `st.segmented_control` options, so both readers
+        # Both are `st.segmented_control` options, so both readers
         # validate against the control's exact spellings. The layout is given in
         # its hyphenated CLI form on purpose — the parser accepts both, and a
         # link built from a `--compare-layout` value must survive the round trip.
         sk.COMPARE_LAYOUT_PARAM: "side-by-side",
         sk.COMPARE_STIMULUS_PARAM: "B",
     }
-    # BUG-69: colours are read as `#rrggbb` only, so a placeholder is rejected.
+    # Colours are read as `#rrggbb` only, so a placeholder is rejected.
     from scanpath_studio.url_state import _SHARE_COLOR_PARAMS
 
     validated.update({param: "#123456" for param in _SHARE_COLOR_PARAMS})
-    # EXP-18: the settings that joined the link are closed vocabularies too.
+    # These figure settings are closed vocabularies too.
     validated["fixation_colorbar_orientation"] = "Horizontal"
     validated["heatmap_style"] = "Interpolated"
     validated["heatmap_colorbar_orientation"] = "Horizontal"
@@ -304,12 +304,12 @@ def test_deep_link_seeds_frozen_state_keys():
     for category in ("short", "long", "oob", "blink"):
         validated[f"fixclass_{category}_mode"] = "Discard"
         validated[f"fixclass_{category}_symbol"] = "x"
-        # CMP-24 — B's flag modes, the same closed vocabulary.
+        # B's flag modes, the same closed vocabulary.
         validated[f"cmp_b_fixclass_{category}_mode"] = "Discard"
     validated["cmp_b_saccade_classes"] = "forward,regression"
-    # #374 F28: the print width's unit.
+    # The print width's unit.
     validated["export_width_unit"] = "in"
-    # EXP-19: a per-scanpath line style is the selectbox's own label.
+    # A per-scanpath line style is the selectbox's own label.
     validated.update(
         {p: "Dash-dot" for p in sk.COMPARE_STYLE_PARAMS if p.endswith("_style")}
     )
@@ -378,7 +378,7 @@ def _share_query_app():
         st.session_state[key] = 1.0
     for key in (*SHARE_INT_RANGE_PARAMS.values(), *SHARE_FLOAT_RANGE_PARAMS.values()):
         st.session_state[key] = (5, 10)
-    # CMP-11: `cmp_layout` / `cmp_stimulus` describe a comparison, so they are
+    # `cmp_layout` / `cmp_stimulus` describe a comparison, so they are
     # emitted only when one is being shared. Without a `compare` entry here the
     # frozen-param assertion below would report them as "gone from
     # `_build_share_query`" — and, worse, a future genuine removal would be
@@ -421,7 +421,7 @@ def test_share_link_emits_frozen_params():
         what="params the Share link emits",
         where="url_state._build_share_query()",
     )
-    # DATA-63: read from old links, never written to new ones.
+    # Read from old links, never written to new ones.
     assert not emitted & sk.URL_LEGACY_PARAMS
     accepted = sk.URL_PRESET_PARAMS | sk.URL_SELECTION_PARAMS | sk.URL_OPTIONAL_PARAMS
     assert emitted <= accepted, (
@@ -491,7 +491,7 @@ def _restore_config_app():
             "show_color_legend": True,
             "show_highlight_legend": True,
             "saccade_class_colors": {c: "#445566" for c in SACCADE_CLASS_EDITABLE},
-            # VIZ-31 reading-class filter — a real subset, since the reader
+            # The reading-class filter — a real subset, since the reader
             # validates the names against the classes this build knows.
             "saccade_classes": ["forward", "regression"],
             "fixation_snap_to_line": True,
@@ -531,7 +531,7 @@ def _restore_config_app():
             "size_key": {"position": "top-left", "arrangement": "stacked"},
             "highlight": {"position": "bottom-center-outside", "size": 13},
         },
-        # #374 F28 — Export → Current figure's print size.
+        # Export → Current figure's print size.
         "export": {"width": 180.0, "unit": "mm", "dpi": 600},
         "canvas_px": {"width": 1000, "height": 800},
         "axes": {
@@ -570,7 +570,7 @@ def _restore_config_app():
             "title_pattern": "{participant_id} · {trial_id}",
             "caption_pattern": "{text_id} · {n_fixations} fixations",
         },
-        # VIZ-43 — raw gaze's own style (`available`/`points` are read-only).
+        # Raw gaze's own style (`available`/`points` are read-only).
         "raw_gaze": {"color": "#445566", "marker_size": 6.0, "opacity": 0.4},
         "word_boxes": {
             "color": "#112233",
@@ -578,7 +578,7 @@ def _restore_config_app():
             "fill_color": "#445566",
             "fill_opacity": 0.2,
         },
-        # CMP-24 — B's entry carries B's own filters too.
+        # B's entry carries B's own filters too.
         "compare": [
             compare_entry,
             {
@@ -592,7 +592,7 @@ def _restore_config_app():
                 "saccade_classes": ["forward", "regression"],
             },
         ],
-        # CMP-11 — the compare *view*, distinct from the per-scanpath styling
+        # The compare *view*, distinct from the per-scanpath styling
         # list above. Both fields are validated against the segmented controls'
         # options, so placeholders would be skipped rather than written.
         "compare_view": {"layout": "Stacked", "stimulus": "A", "legend": True},
@@ -603,7 +603,7 @@ def _restore_config_app():
             "compare": {"participant_id": "p2", "trial_id": "t1", "screen_id": "2"},
         },
         "mode": {"animate": True, "compare": True},
-        # #422 — the design choices that used to be fixed.
+        # The finer design choices.
         "design": {
             "heatmap_opacity_auto": False,
             "heatmap_opacity": 0.8,
@@ -658,8 +658,8 @@ def test_saved_config_restore_writes_frozen_state_keys():
 
     written = set(at.session_state["_written"])
     mapping_keys = {k for k in written if k.startswith(sk.COLUMN_MAPPING_PREFIX)}
-    # UX-179: a settings file no longer re-maps the dataset — the mapping is
-    # ✏️ Edit dataset → Download setup file's file — even when an old one carries it.
+    # A settings file does not re-map the dataset — the mapping is ✏️ Edit
+    # dataset → Download setup file's file — even when an old one carries it.
     assert mapping_keys == set(), sorted(mapping_keys)
 
     expected = (
@@ -712,9 +712,9 @@ def _setup_prov_round_trip_app():
 
 
 def test_setup_provenance_round_trips_through_the_share_link():
-    """DATA-22 §7 surface 2: a link carries the recording setup's *values*
-    already; without the badge the recipient cannot tell a monitor the sender
-    measured from one the app assumed on their behalf."""
+    """A link carries the recording setup's *values*; without the badge the
+    recipient cannot tell a monitor the sender measured from one the app
+    assumed on their behalf."""
     at = AppTest.from_function(_setup_prov_round_trip_app)
     at.run(timeout=30)
     assert not at.exception, at.exception
@@ -732,7 +732,7 @@ def test_setup_provenance_round_trips_through_the_share_link():
 
 
 def _compare_share_round_trip_app():
-    """CMP-8 §7: emit the comparison selection, then read it back."""
+    """Emit the comparison selection, then read it back."""
     from urllib.parse import parse_qs as _parse_qs
 
     import streamlit as st
@@ -761,8 +761,7 @@ def _compare_share_round_trip_app():
 
 
 def test_compare_selection_round_trips_through_the_share_link():
-    """Compare mode had no link representation at all before CMP-8 — a
-    `cmp_source` naming B's corpus without naming B's trial would restore
+    """A `cmp_source` naming B's corpus without naming B's trial would restore
     nothing, so the pair travels together."""
     at = AppTest.from_function(_compare_share_round_trip_app)
     at.run(timeout=30)
@@ -830,7 +829,8 @@ def test_url_bound_widget_keys_frozen():
         "Per participant",
         "Groups",
     )
-    # #374 renamed "Per reader"; its old links still open the subtab.
+    # "Per participant" was once "Per reader"; links to the old name still
+    # open the subtab.
     assert tabs.CORPUS_SUBTAB_ALIASES == {"Per reader": "Per participant"}
 
 
@@ -845,7 +845,7 @@ def _old_corpus_subtab_app():
 
 
 def test_an_old_per_reader_link_opens_per_participant():
-    """#374: a bookmarked `?corpus_subtab=Per+reader` opens Per participant
+    """A bookmarked `?corpus_subtab=Per+reader` opens Per participant
     (Streamlit itself would drop the unknown label and open Per text)."""
     at = AppTest.from_function(_old_corpus_subtab_app)
     at.query_params["corpus_subtab"] = "Per reader"
@@ -856,7 +856,7 @@ def test_an_old_per_reader_link_opens_per_participant():
 
 def _groups_definition_app():
     """The Groups subtab's toggle + group definition, drawn only while
-    `_groups_open` — the way PERF-9 draws only the open Corpus subtab."""
+    `_groups_open` — the way only the open Corpus subtab is drawn."""
     import pandas as pd
     import streamlit as st
 
@@ -876,8 +876,8 @@ def _groups_definition_app():
 
 
 def test_the_groups_setup_survives_another_subtab():
-    """#374 F34: leaving Groups for another Corpus subtab and back kept neither
-    the Compare toggle nor the group definitions."""
+    """Leaving Groups for another Corpus subtab and back keeps both the
+    Compare toggle and the group definitions."""
     at = AppTest.from_function(_groups_definition_app)
     at.run(timeout=30)
     at.toggle(key="groups_compare").set_value(True).run(timeout=30)

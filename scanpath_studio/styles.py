@@ -1338,7 +1338,7 @@ def get_app_css() -> str:
        from `.sps-flabel-emph` itself (not down) and in the app's accent
        color: it introduces three titles at once, so it reads as *more*
        prominent than any one of them, not less. The tooltip re-centers with
-       it so it still opens under the centered text. */
+       it so it still opens under the centered text.
        A prefix match, not the exact class: the ✏️ Edit dataset screen draws the
        same three rows under the same heading (`wiz_map_meta_heading_edit` — a
        key may be used once per run, and the offscreen editor is built even

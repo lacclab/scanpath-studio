@@ -168,7 +168,7 @@ def test_corpus_tables_offer_a_recipe_that_records_the_filters(monkeypatch):
     assert not at.exception, at.exception
 
     # Per text → Per-reader profiles is the page's default view.
-    buttons = {b.key: b for b in at.get("download_button")}
+    buttons = {b.key: b for b in at.download_button}
     assert "dl_ptext1" in buttons
     assert buttons["dl_ptext1_recipe"].proto.label == "⬇ Download the recipe (JSON)"
     assert bound, "the recipe button was never handed its inputs"

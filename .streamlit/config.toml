@@ -5,6 +5,8 @@ backgroundColor = "#ffffff"
 secondaryBackgroundColor = "#f5f7fa"
 textColor = "#212529"
 font = "sans-serif"
+# No built-in gap under the last element — see constants.APP_THEME.
+paddingBottom = "0"
 
 # Dark variant for the app chrome (header, top navigation, tabs, controls). Users
 # switch via Streamlit's own ⋮ menu (top right) → Settings, or have it follow

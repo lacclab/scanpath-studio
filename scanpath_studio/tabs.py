@@ -113,29 +113,25 @@ from scanpath_studio.compare_source import (
     snapshot_for,
     source_has_raw_gaze,
 )
-from scanpath_studio.computations import anchor as computation_anchor
 from scanpath_studio.computations import measure_entry
 from scanpath_studio.constants import (
-    CITATION,
+    AUTHOR_CHOICE,
     DATASET_EDITOR_OPEN_KEY,
-    DEFAULT_CROP_MARGIN_PX,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
-    DEFAULT_HEATMAP_SIGMA_PX,
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
-    DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
     FOCUS_MAPPING_KEY,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
+    MANUAL_SAMPLE_CHOICE,
     PLOTLY_CONFIG,
     SACCADE_CLASS_COLORS,
-    SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
     SACCADE_DASH_OPTIONS,
     SELECTOR_ROW_GRID,
@@ -147,6 +143,7 @@ from scanpath_studio.constants import (
     SUBTAB_LINE_ASSIGNMENT,
     SUBTAB_SHARE,
     SUBTAB_STIMULUS,
+    SYNTHETIC_CHOICE,
     TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
     UNIFORM_COLOR_FIELD,
@@ -338,24 +335,19 @@ from scanpath_studio.plots import (
     replay_page,
     replay_size_key_range,
     set_replay_clock,
+    stimulus_image_settings,
 )
 from scanpath_studio.session_keys import (
     COMPARE_IDENTITY_STATE_KEY,
     CORPUS_SUBTAB,
-    DESIGN_COLOR_PARAMS,
-    DESIGN_FLOAT_PARAMS,
-    DESIGN_INT_PARAMS,
-    DESIGN_TOGGLE_PARAMS,
     EXPORT_FIGURE_DPI,
     EXPORT_FIGURE_WIDTH,
     EXPORT_FIGURE_WIDTH_UNIT,
     PENDING_COMPARE_STATE_KEY,
     SETUP_PROVENANCE_STATE_KEY,
-    SINGLE_ANIMATE,
     SINGLE_COMPARE_LAYOUT,
     SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
-    SINGLE_PLAYBACK_SPEED,
     SINGLE_SHOW_CHIPS,
     SINGLE_TRIAL_ID,
 )
@@ -4262,369 +4254,36 @@ def _build_studio_config(
     exported_at: str,
     compare_styles: list | None = None,
 ) -> dict:
-    """Build the 🔗 Share → **File** settings JSON (pure — no Streamlit).
+    """Build Share's settings file using the bundle's serializer."""
+    from scanpath_studio.app import active_setup_snapshot
+    from scanpath_studio.plot_config import build_plot_config
 
-    The full figure configuration (layers, colouring, sizing, text and
-    highlighting, canvas, screen geometry, axes, comparison styling, trial
-    selection) plus provenance (app version, export date, data source).
-
-    **UX-179 (schema 4) took everything else out.** The file used to be the
-    💾 Session dialog's whole-session backup and also carried the annotations,
-    the column mapping and the three metadata tables. Each now has its own
-    file where it is edited — 🗂️ Data → Annotations → *Export*, ✏️ Edit dataset
-    → *Download setup file*, and the tables you attached — so this one describes a
-    figure and nothing else."""
-    # ENG-11: PLOT_CONFIG_SCHEMA is the single source of truth for the version;
-    # bump it (+ register a migration) in url_state when this layout changes.
-    from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
-
-    def _setup_provenance_section() -> dict:
-        # Lazy import: `wizard` imports `tabs._collect_column_mapping`, so a
-        # module-level import here would close the cycle.
-        from scanpath_studio.app import active_setup_snapshot
-
-        snapshot = active_setup_snapshot()
-        if snapshot is None:
-            return {}
-        return {"provenance": {g: str(p) for g, p in snapshot.provenance.items()}}
-
-    # Schema 6: the *requested* mode (the switches), as a link records it.
-    animate_on = bool(st.session_state.get(SINGLE_ANIMATE, False))
-    compare_on = bool(st.session_state.get(SINGLE_COMPARE_TOGGLE, False))
-    published = (st.session_state.get("_share_selection") or {}).get("compare")
-    compare_b = (
-        {
-            "participant_id": str(published["participant_id"]),
-            "trial_id": str(published["trial_id"]),
-            "source": published.get("source") or None,
-            "screen_id": (
-                str(published["screen_id"])
-                if published.get("screen_id") not in (None, "")
-                else None
-            ),
-        }
-        if compare_on
-        and isinstance(published, dict)
-        and published.get("trial_id") not in (None, "")
-        else None
+    snapshot = active_setup_snapshot()
+    return build_plot_config(
+        selected_participant=selected_participant,
+        selected_trial=selected_trial,
+        canvas_width=canvas_width,
+        canvas_height=canvas_height,
+        x_field=x_field,
+        y_field=y_field,
+        figure_settings=figure_settings,
+        viz_settings=viz_settings,
+        base_font_size=base_font_size,
+        trial_raw_gaze=trial_raw_gaze,
+        font_family=font_family,
+        data_source=data_source,
+        app_version=app_version,
+        exported_at=exported_at,
+        compare_styles=compare_styles,
+        state=st.session_state,
+        setup_provenance=(
+            {"provenance": {g: str(p) for g, p in snapshot.provenance.items()}}
+            if snapshot is not None
+            else None
+        ),
+        print_size=_print_size_setting(),
+        raw_gaze_synthesized=bool(_synthesized_raw_gaze_note(data_source)),
     )
-
-    return {
-        # Schema 4 (UX-179) = the figure only; older files still restore
-        # through the same reader, which ignores what they carry beyond it.
-        "schema": PLOT_CONFIG_SCHEMA,
-        "app": {"name": "Scanpath Studio", "version": app_version},
-        # When this config was saved (ISO 8601, local time) — provenance only,
-        # surfaced when restoring (Share → File + the upload wizard's restore step).
-        "exported_at": exported_at,
-        "data_source": data_source,
-        "selection": {
-            "participant_id": selected_participant,
-            "trial_id": selected_trial,
-            **(
-                {"screen_id": str(st.session_state["single_screen_id"])}
-                if st.session_state.get("single_screen_id") not in (None, "")
-                else {}
-            ),
-            # Schema 6: scanpath B by identity — reader, trial, dataset (None
-            # = A's) and screen — as the figure last published it for Share.
-            **({"compare": compare_b} if compare_b else {}),
-        },
-        # Schema 6: the mode the figure was saved in. Written both ways, so a
-        # static file restores as static rather than leaving a replay running.
-        "mode": {"animate": animate_on, "compare": compare_on},
-        "canvas_px": {"width": int(canvas_width), "height": int(canvas_height)},
-        "experimental_setup": {
-            "monitor_width_mm": float(
-                st.session_state.get("global_monitor_width_mm", 597.0)
-            ),
-            "viewing_distance_mm": float(
-                st.session_state.get("global_viewing_distance_mm", 800.0)
-            ),
-            "display_dpi": float(st.session_state.get("global_display_dpi", 96.0)),
-            "stimulus_font_pt": float(
-                st.session_state.get("global_stimulus_font_pt", 12.0)
-            ),
-            "use_stimulus_font_pt": bool(
-                st.session_state.get("global_use_stimulus_font_pt", False)
-            ),
-            # DATA-22 §7 surface 3: how each group came to be known. Additive, so
-            # per ENG-11 this is a documented no-op migration and
-            # PLOT_CONFIG_SCHEMA stays put. Absent when the active source never
-            # declared a setup — an omitted key reads as "unknown", which is
-            # true; writing "assumed" there would invent a claim.
-            **_setup_provenance_section(),
-        },
-        "axes": {
-            "x_field": x_field,
-            "y_field": y_field,
-            "coordinate_grid": bool(figure_settings.get("show_coordinate_grid", False)),
-            "coordinate_grid_auto": bool(
-                viz_settings.get("coordinate_grid_auto", True)
-            ),
-            "coordinate_grid_spacing": float(
-                st.session_state.get("global_coordinate_grid_spacing", 100.0)
-            ),
-            # #422: Crop to data's margin (applies while cropping).
-            "crop_margin_auto": bool(
-                st.session_state.get("global_crop_margin_auto", True)
-            ),
-            "crop_margin_px": float(
-                st.session_state.get("global_crop_margin_px", DEFAULT_CROP_MARGIN_PX)
-            ),
-        },
-        "layers": {
-            "words": figure_settings["show_words"],
-            "word_labels": figure_settings["show_word_labels"],
-            # UX-128: the 📄 Stimulus master switch — like the other section
-            # switches (fixations/saccades/heatmap/raw_gaze) this is the raw
-            # widget value, not something `_collect_viz_settings` gates.
-            "stimulus": bool(st.session_state.get("global_show_stimulus", True)),
-            "fixations": figure_settings["show_fixations"],
-            "order_labels": figure_settings["show_order"],
-            "saccades": figure_settings["show_saccades"],
-            "saccade_arrows": figure_settings.get("show_saccade_arrows", False),
-            "heatmap": figure_settings["show_heatmap"],
-            # BUG-72: the switch, not the figure's *effective* raw gaze (switch
-            # AND this trial has samples) — saving on a trial without raw gaze
-            # used to record the layer as off.
-            "raw_gaze": bool(viz_settings.get("show_raw_gaze", False)),
-            "stimulus_image": viz_settings.get("show_stimulus_image", False),
-            "full_monitor": figure_settings.get("fit_to_monitor", True),
-            # VIZ-10: autoplay the animated replay on load.
-            "autoplay": bool(viz_settings.get("anim_autoplay", True)),
-        },
-        "illustration": {
-            "label_mode": viz_settings.get("illustration_label", "Auto"),
-            "text": str(viz_settings.get("illustration_text", "")),
-            "reasons": list(viz_settings.get("illustration_reasons") or []),
-        },
-        "preprocessing": {
-            "enabled": bool(st.session_state.get("global_preproc_enabled", False)),
-            "short_policy": st.session_state.get("global_preproc_short_policy", "Off"),
-            "short_threshold_ms": float(
-                st.session_state.get("global_preproc_short_threshold_ms", 80.0)
-            ),
-            "merge_distance_chars": float(
-                st.session_state.get("global_preproc_merge_distance_chars", 1.0)
-            ),
-            "discard_blink_adjacent": bool(
-                st.session_state.get("global_preproc_blink_adjacent", True)
-            ),
-        },
-        # VIZ-11 follow-up: the animation frame grid, so a restored config
-        # reproduces the same smoothness / export size.
-        "animation": {
-            "grid_step_ms": int(viz_settings.get("anim_grid_step_ms", 100) or 100),
-            "max_frames": int(viz_settings.get("anim_max_frames", 360) or 360),
-            # BUG-72: the replay speed — a non-1× speed is an Illustration.
-            "playback_speed": float(
-                st.session_state.get(SINGLE_PLAYBACK_SPEED, 1.0) or 1.0
-            ),
-        },
-        # #374 F28: Export → Current figure's print size (a blank width is the
-        # screen-size PNG).
-        "export": _print_size_setting(),
-        "coloring": {
-            "color_by": figure_settings["color_by"],
-            "heatmap_metric": viz_settings["heatmap_metric"],
-            "heatmap_style": figure_settings.get("heatmap_style", "Word boxes"),
-            # The Interpolated blur: Auto, and the fixed σ kept for when it is off.
-            "heatmap_sigma_auto": bool(
-                st.session_state.get("global_heatmap_sigma_auto", True)
-            ),
-            "heatmap_sigma_px": float(
-                st.session_state.get(
-                    "global_heatmap_sigma_px", DEFAULT_HEATMAP_SIGMA_PX
-                )
-            ),
-            "heatmap_norm": figure_settings.get("heatmap_norm", "Linear"),
-            **{
-                key: bool(figure_settings.get(key, default))
-                for key, default in COLORBAR_DEFAULTS.items()
-                if key.startswith("show_")
-            },
-            "fixation_range": (
-                list(figure_settings["fixation_color_range"])
-                if figure_settings["fixation_color_range"]
-                else None
-            ),
-            "heatmap_range": (
-                list(figure_settings["heatmap_range"])
-                if figure_settings["heatmap_range"]
-                else None
-            ),
-            "fixation_colorscale": figure_settings["fixation_colorscale"],
-            "heatmap_colorscale": figure_settings["heatmap_colorscale"],
-            "saccade_color": figure_settings.get("saccade_color", SACCADE_COLOR),
-            "saccade_style": viz_settings.get("saccade_style", "Solid"),
-            "saccade_width": float(
-                viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH)
-            ),
-            "saccade_opacity": float(viz_settings.get("saccade_opacity", 1.0)),
-            # VIZ-8: colour-by-reading-type mode + per-class palette + legend.
-            "saccade_color_mode": viz_settings.get("saccade_color_mode", "Uniform"),
-            "saccade_type_legend": bool(viz_settings.get("saccade_type_legend", True)),
-            "show_color_legend": bool(viz_settings.get("show_color_legend", True)),
-            "show_highlight_legend": bool(
-                viz_settings.get("show_highlight_legend", True)
-            ),
-            "saccade_class_colors": dict(
-                viz_settings.get("saccade_class_colors") or {}
-            ),
-            # VIZ-31: the reading-class filter (which classes are drawn at all).
-            "saccade_classes": list(
-                viz_settings.get("saccade_classes") or SACCADE_CLASS_ORDER
-            ),
-            # VIZ-9: linear-reading mode (arced saccades + #422's snap to line).
-            "saccade_render_mode": viz_settings.get("saccade_render_mode", "Straight"),
-            "fixation_snap_to_line": bool(
-                viz_settings.get("fixation_snap_to_line", False)
-            ),
-            "fixation_snap_position": float(
-                viz_settings.get("fixation_snap_position", DEFAULT_SNAP_POSITION)
-            ),
-            # PRE-3 drift correction (ENG-23): saved as the picker's own
-            # spelling ("Off" or a title-cased algorithm) so it restores 1:1.
-            "drift_correction": str(viz_settings.get("align_algorithm", "Off")),
-            "drift_connectors": bool(viz_settings.get("align_connectors", False)),
-            "hollow_fixations": bool(viz_settings.get("hollow_fixations", False)),
-            "fixation_opacity": float(viz_settings.get("fixation_opacity", 1.0)),
-            # VIZ-17 uniform fixation colour · VIZ-15 marker shape · VIZ-18 palette
-            # (the palette's colours are already in the individual keys; the name
-            # rides along so the picker restores onto the right entry).
-            "fixation_color": viz_settings.get(
-                "fixation_color", DEFAULT_FIXATION_COLOR
-            ),
-            "fixation_symbol": viz_settings.get(
-                "fixation_symbol", DEFAULT_FIXATION_SYMBOL
-            ),
-            "palette": viz_settings.get("palette", DEFAULT_PALETTE),
-            # VIZ-4: image-stimulus opacity + manual alignment (dataset + uploads).
-            "stimulus_image_opacity": float(
-                viz_settings.get("stimulus_image_opacity", 1.0)
-            ),
-            "stimulus_image_offset_x": float(
-                viz_settings.get("stimulus_image_offset_x", 0.0)
-            ),
-            "stimulus_image_offset_y": float(
-                viz_settings.get("stimulus_image_offset_y", 0.0)
-            ),
-            "stimulus_image_scale": float(
-                viz_settings.get("stimulus_image_scale", 1.0)
-            ),
-            **{
-                key: figure_settings.get(key, default)
-                for key, default in COLORBAR_DEFAULTS.items()
-                if not key.startswith("show_")
-            },
-        },
-        "sizing": {
-            "marker_size_range": [int(s) for s in figure_settings["marker_size_range"]],
-            "marker_size_scale": str(
-                figure_settings.get("marker_size_scale", DEFAULT_MARKER_SIZE_SCALE)
-            ),
-            "marker_duration_range": [
-                int(s)
-                for s in figure_settings.get(
-                    "marker_duration_range", DEFAULT_MARKER_DURATION_RANGE
-                )
-            ],
-            "duration_size_legend": bool(
-                figure_settings.get("duration_size_legend", True)
-            ),
-            "order_font_size": int(figure_settings["order_font_size"]),
-            "order_font_color": figure_settings["order_font_color"],
-            "base_font_size": int(base_font_size),
-        },
-        # Figure & canvas → Legends: every legend, Auto included, so a file
-        # restores the placement it was saved with rather than leaving a
-        # moved legend where the receiving session had it.
-        "legends": normalize_legend_layout(figure_settings.get("legend_layout")),
-        "text": {
-            "scale_text_to_boxes": bool(
-                figure_settings.get("scale_text_to_boxes", True)
-            ),
-            "line_spacing": float(
-                figure_settings.get("line_spacing", DEFAULT_LINE_SPACING)
-            ),
-            "font_family": font_family,
-            "text_color": figure_settings.get("text_color", WORD_LABEL_COLOR),
-            "word_hover_fields": list(viz_settings.get("word_hover_fields") or []),
-            "fixation_hover_fields": list(
-                viz_settings.get("fixation_hover_fields") or []
-            ),
-        },
-        # EXP-5: title/caption pattern, moved here from being Export-only.
-        "labels": {
-            "show_title": bool(st.session_state.get("global_show_title", False)),
-            "show_caption": bool(st.session_state.get("global_show_caption", False)),
-            "title_pattern": viz_settings.get("title_pattern", ""),
-            "caption_pattern": viz_settings.get("caption_pattern", ""),
-        },
-        "highlighting": {
-            "critical_span_style": figure_settings.get(
-                "critical_span_style", "Mark text"
-            ),
-            "highlight_column": figure_settings.get("highlight_column", "is_in_aspan"),
-            # Fixation classification (PRE-2): short/long/out-of-bounds highlight or
-            # discard, saved verbatim so it restores 1:1.
-            "fixation_flags": figure_settings.get("fixation_flags"),
-            "highlight_text_color": figure_settings.get(
-                "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
-            ),
-            "background_color": figure_settings.get("background_color"),
-            "span_border_color": figure_settings.get("span_border_color", "#000000"),
-        },
-        # #422: the design choices that used to be fixed, as the rail holds
-        # them (an Auto box stays ticked, its number kept) so they restore 1:1.
-        "design": {
-            param: st.session_state[key]
-            for group in (
-                DESIGN_TOGGLE_PARAMS,
-                DESIGN_COLOR_PARAMS,
-                DESIGN_INT_PARAMS,
-                DESIGN_FLOAT_PARAMS,
-            )
-            for param, key in group.items()
-            if st.session_state.get(key) is not None
-        },
-        "raw_gaze": {
-            "available": not trial_raw_gaze.empty,
-            "points": len(trial_raw_gaze) if not trial_raw_gaze.empty else 0,
-            # VIZ-50: the dataset's samples are made up (the bundled demo's) —
-            # provenance, like the two keys above, and not read back.
-            "synthesized": bool(_synthesized_raw_gaze_note(data_source)),
-            # VIZ-43: the layer's own style — the two keys above describe the
-            # trial the config was saved on and are not read back.
-            "color": viz_settings.get("raw_gaze_color", "#888888"),
-            "marker_size": float(viz_settings.get("raw_gaze_marker_size", 4.0)),
-            "opacity": float(viz_settings.get("raw_gaze_opacity", 0.6)),
-        },
-        # The ⬚ Word boxes section's style (its switch is `layers.words`).
-        "word_boxes": {
-            "color": viz_settings.get("word_box_color", WORD_BOX_COLOR),
-            "line_opacity": float(
-                viz_settings.get("word_box_line_opacity", WORD_BOX_LINE_OPACITY)
-            ),
-            "fill_color": viz_settings.get("word_box_fill_color", WORD_BOX_FILL_COLOR),
-            "fill_opacity": float(
-                viz_settings.get("word_box_fill_opacity", WORD_BOX_FILL_OPACITY)
-            ),
-        },
-        # Per-scanpath styling for the two-trial comparison (None when the caller
-        # didn't collect it). Each entry holds raw widget values so it restores 1:1.
-        "compare": compare_styles,
-        # CMP-11 — how the two scanpaths are arranged, and whose stimulus an
-        # overlay draws. Separate from `compare` above, which is a two-entry list
-        # of per-scanpath *styling*; these describe the view itself.
-        "compare_view": {
-            "layout": st.session_state.get(SINGLE_COMPARE_LAYOUT, "Overlay"),
-            "stimulus": st.session_state.get(SINGLE_COMPARE_STIMULUS, "Both"),
-            # BUG-72: the A/B legend, the one compare setting that is a switch.
-            "legend": bool(viz_settings.get("show_compare_legend", True)),
-        },
-    }
 
 
 def _collect_column_mapping() -> dict:
@@ -5896,6 +5555,8 @@ def _render_export_panel(
 
     st.divider()
     st.markdown("## Export bundle")
+    if animate or st.session_state.get(SINGLE_COMPARE_TOGGLE):
+        st.caption("The bundle exports static, single-trial figures.")
     # VIZ-45: the batch draws raw gaze when the rail does — it used to be forced
     # off here, so a raw-gaze-only dataset exported blank figures. Each trial's
     # own samples are handed to its figure inside `bulk_export`.
@@ -5904,6 +5565,27 @@ def _render_export_panel(
     )
     bulk_settings["line_spacing"] = line_spacing
     bulk_settings["scale_text_to_boxes"] = scale_text_to_boxes
+    bulk_settings.update(
+        {
+            key: viz_settings[key]
+            for key in (
+                "show_stimulus_image",
+                "stimulus_image_upload_uri",
+                "stimulus_image_opacity",
+                "stimulus_image_offset_x",
+                "stimulus_image_offset_y",
+                "stimulus_image_scale",
+                "illustration_label",
+            )
+            if key in viz_settings
+        }
+    )
+    bulk_settings["data_source"] = st.session_state.get("data_source_choice")
+    bulk_settings["synthetic_source"] = bulk_settings["data_source"] in (
+        AUTHOR_CHOICE,
+        MANUAL_SAMPLE_CHOICE,
+        SYNTHETIC_CHOICE,
+    )
     # VIZ-50: each trial's `plot_config.json` says when its samples are made up.
     bulk_settings["raw_gaze_synthesized"] = bool(
         _synthesized_raw_gaze_note(st.session_state.get("data_source_choice"))
@@ -7381,48 +7063,14 @@ def render_single_trial_tab(
     effective_show_raw_gaze = bool(global_raw_toggle and trial_has_raw_gaze)
     figure_settings = _build_figure_settings(viz_settings, effective_show_raw_gaze)
     figure_raw_gaze = trial_raw_gaze if trial_has_raw_gaze else None
-    # Stimulus-image background layer (VIZ-4) — only when toggled on. A
-    # user-uploaded image WINS over the dataset's built-in one (VIZ-4 fix): the
-    # upload is an explicit override, so it must beat the bundled demo's / a
-    # MultiplEYE session's image. The upload is stretched to fill the monitor at
-    # (0,0); the dataset image carries a precise per-trial origin/size (pass the
-    # path — a small cache key; plots.py base64-encodes it). Either way the manual
-    # nudge below lets the user fine-tune the fit to the text + fixations.
-    upload_uri = viz_settings.get("stimulus_image_upload_uri")
-    if viz_settings.get("show_stimulus_image") and upload_uri:
-        base_image = upload_uri
-        base_size = (float(canvas_width), float(canvas_height))
-        base_origin = (0.0, 0.0)
-    elif viz_settings.get("show_stimulus_image") and has_stimulus_image:
-        base_image = trial_image_path
-        base_size = trial_image_size
-        base_origin = trial_image_origin
-    else:
-        base_image = None
-        base_size = None
-        base_origin = None
-    # VIZ-4: manual alignment — nudge the image origin (dx, dy) and scale its size
-    # so the user can line the stimulus up with the text boxes / fixations when the
-    # data's coordinate frame doesn't match the image exactly.
-    if base_image is not None and base_size is not None:
-        dx = float(viz_settings.get("stimulus_image_offset_x", 0.0))
-        dy = float(viz_settings.get("stimulus_image_offset_y", 0.0))
-        scale = float(viz_settings.get("stimulus_image_scale", 1.0)) or 1.0
-        ox, oy = base_origin or (0.0, 0.0)
-        figure_settings["background_image"] = base_image
-        figure_settings["background_image_size"] = (
-            base_size[0] * scale,
-            base_size[1] * scale,
+    figure_settings.update(
+        stimulus_image_settings(
+            viz_settings,
+            (canvas_width, canvas_height),
+            (trial_image_path, trial_image_size, trial_image_origin)
+            if has_stimulus_image
+            else None,
         )
-        figure_settings["background_image_origin"] = (ox + dx, oy + dy)
-    else:
-        figure_settings["background_image"] = None
-        figure_settings["background_image_size"] = None
-        figure_settings["background_image_origin"] = None
-    # Opacity applies to whichever image is shown (dataset or uploaded); harmless
-    # when no image is drawn.
-    figure_settings["background_image_opacity"] = viz_settings.get(
-        "stimulus_image_opacity", 1.0
     )
     # Carried into both the live figure and the bulk export so exported plots are
     # sized identically to what's on screen (true-to-scale reading text).
@@ -8585,6 +8233,7 @@ def _render_bulk_export(
                     settings=figure_settings,
                     options=options,
                     raw_gaze=active_raw_gaze,
+                    stimulus_image_resolver=_reading_stimulus_image,
                     status_callback=on_status,
                     # DATA-66: the tables go out under the dataset's own names.
                     column_names=_dataset_table_names(),
@@ -9213,8 +8862,6 @@ def _measure_picker(
     return MEASURES[labels[chosen]]
 
 
-_COMPUTATIONS_URL = f"{CITATION['docs_url']}computations/"
-
 #: Corpus Analysis views whose numbers the app computes from the fixations
 #: (reading speed, regression rate, landing positions, the summary tables)
 #: rather than reading them from the dataset. Held back with
@@ -9256,23 +8903,19 @@ def _views_phrase(views) -> str:
 def _measure_note(host, measure: Measure, observation: str) -> None:
     """One caption under the measure picker: what the measure is and its unit
     (quoted from the computation register, VAL-5), what each plotted value
-    is, and a link to the measure's full definition."""
+    is."""
     entry = measure_entry(measure.column)
     if entry is None:
-        about, url = (
-            "As recorded in the data.",
-            f"{CITATION['docs_url']}guides/loading-data/#reading-measures",
-        )
+        about = "As recorded in the data."
         unit = measure.unit or "count"
     else:
         # The register's summaries can end in a tracker id ("(BUG-25)").
         about = re.sub(r"\s*\([A-Z]+-\d+\)(?=\.?$)", "", entry.summary)
-        url = f"{_COMPUTATIONS_URL}#{computation_anchor(entry.id)}"
         unit = entry.unit or measure.unit or "count"
     if measure.column in UNFIXATED_BLANK_MEASURES:
         # #374 F1: a skipped word has no value here, not a 0 ms one.
         about += " Skipped words are left out."
-    host.caption(f"{about} Unit: {unit}. {observation} [Definition ↗]({url})")
+    host.caption(f"{about} Unit: {unit}. {observation}")
 
 
 #: Appended to a measure note when the values are z-scored (AN-25).
@@ -9309,7 +8952,7 @@ def _spread_note(host, spread: str, agg: str | None = None) -> None:
     if agg == "sum" and spread in ("SD", "SEM"):
         note = "With Sum, SD and SEM are drawn as a 95% bootstrap interval of the sum."
     if note:
-        host.caption(f"{note} [Details ↗]({_COMPUTATIONS_URL}#agg-spread)")
+        host.caption(note)
 
 
 def _normalize_toggle(host, *, key, disabled=False):
@@ -17360,11 +17003,7 @@ def render_data_health(
             + (" · whole dataset, before the trial filters" if filtered else "")
         )
         if not findings:
-            st.caption(
-                "No fixation lasts 0 ms or less, every duration, onset and "
-                "position is a finite number, every word box has an area, and "
-                "every screen's recorded size is usable."
-            )
+            st.caption("No issues found in the data checks.")
             return
         lines: dict[str, list[str]] = {"warning": [], "note": []}
         for finding in findings:
@@ -17382,10 +17021,7 @@ def render_data_health(
         if lines["note"]:
             st.caption("  \n".join(lines["note"]))
         with st.expander("What the data checks found", expanded=False):
-            st.caption(
-                "Nothing is removed or changed: these rows stay in every table "
-                "and export. What each one does in the app:"
-            )
+            st.caption("Flagged rows are kept. Details and examples:")
             for finding in findings:
                 names = active(st.session_state, finding.table)
                 st.markdown(f"**{finding.title}**")

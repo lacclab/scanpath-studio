@@ -349,7 +349,7 @@ def _static_export_app():
 
 
 def _download_buttons(at):
-    return [element.proto for element in at.get("download_button")]
+    return [element.proto for element in at.download_button]
 
 
 def _record_image_downloads(monkeypatch) -> list[dict]:

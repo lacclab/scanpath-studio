@@ -1,6 +1,7 @@
 # Feature guides
 
-For end-to-end workflows, see the [tutorials](../tutorials/index.md).
+Each guide covers the app, with Python and CLI examples beside the relevant
+features. For step-by-step workflows, see the [tutorials](../tutorials/index.md).
 
 <div class="grid cards" markdown>
 
@@ -15,5 +16,9 @@ For end-to-end workflows, see the [tutorials](../tutorials/index.md).
 - :material-chart-box:{ .lg .middle } **[Corpus Analysis](corpus-workspace/index.md)**
 
     Per text, Per participant and Groups, from the measures your data brings.
+
+- :material-file-export:{ .lg .middle } **[Export and share](exporting/index.md)**
+
+    Figure downloads, share links, batch rendering and replay export.
 
 </div>

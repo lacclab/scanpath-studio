@@ -100,10 +100,10 @@ class TestNothingUserVisibleIsMissing:
 class TestGeneratedDocsAreCurrent:
     def test_the_docs_page_matches_the_register(self):
         """`python -m scanpath_studio.computations` regenerates it."""
-        page = REPO / "docs" / "computations.md"
-        assert page.exists(), "docs/computations.md has not been generated"
+        page = REPO / "plans" / "computation-register.md"
+        assert page.exists(), "plans/computation-register.md has not been generated"
         assert page.read_text(encoding="utf-8") == reg.to_markdown(), (
-            "docs/computations.md is stale — regenerate it with "
+            "plans/computation-register.md is stale — regenerate it with "
             "`python -m scanpath_studio.computations`"
         )
 

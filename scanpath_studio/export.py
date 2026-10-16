@@ -32,7 +32,7 @@ import io
 import json
 import re
 import zipfile
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -54,22 +54,18 @@ from .constants import (
     CITATION,
     DEFAULT_CAPTION_COLOR,
     DEFAULT_CAPTION_FONT_SIZE,
-    DEFAULT_FIXATION_COLOR,
-    DEFAULT_FIXATION_SYMBOL,
-    DEFAULT_LINE_SPACING,
     DEFAULT_PALETTE,
     DEFAULT_TITLE_FONT_SIZE,
     DEMO_CHOICE,
     ICONS,
     PLOTLY_CONFIG,
-    SACCADE_CLASS_ORDER,
     UNIFORM_COLOR_FIELD,
     computed_measures_enabled,
-    drift_correction_enabled,
 )
 from .data import brought_reading_measures, shareable_frame
 from .export_status import ExportStage, StatusCallback, emit_status
 from .fields import panel_field
+from .illustration import illustration_reasons, resolve_label_reasons
 from .measures import assign_fixations_to_words, enrich_fixations
 from .multipart import (
     SCREEN_ID,
@@ -78,14 +74,16 @@ from .multipart import (
     part_catalog,
     screen_canvas_size,
 )
+from .plot_config import render_plot_config
 from .plots import (
     SCANPATH_LAYER_ORDER,
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
     _plotly_literal,
     make_scanpath_figure,
-    normalize_legend_layout,
+    reading_stimulus_image,
     split_scanpath_layers,
+    stimulus_image_settings,
 )
 from .preprocessing import (
     character_grid,
@@ -1216,96 +1214,26 @@ def _plot_config_dict(
     *,
     screen_id: str | None = None,
     drift_applied: bool = False,
+    base_font_size: int = 16,
+    font_family: str = "monospace",
 ) -> dict:
-    selection = {"participant_id": participant, "trial_id": trial}
-    if screen_id not in (None, ""):
-        selection[SCREEN_ID] = str(screen_id)
-    return {
-        "selection": selection,
-        "canvas_px": {"width": int(canvas_width), "height": int(canvas_height)},
-        "axes": {
-            "x_field": x_field,
-            "y_field": y_field,
-            "coordinate_grid": bool(settings.get("show_coordinate_grid", False)),
-            "coordinate_grid_auto": settings.get("coordinate_grid_spacing") is None,
-            "coordinate_grid_spacing": settings.get("coordinate_grid_spacing"),
-            "crop_margin_auto": settings.get("crop_margin") is None,
-            "crop_margin_px": settings.get("crop_margin"),
+    """The same restorable settings file as Share, for one exported figure."""
+    return render_plot_config(
+        {
+            **settings,
+            "color_by_line": bool(settings.get("color_by_line")) or drift_applied,
         },
-        "layers": {
-            "words": settings.get("show_words"),
-            "word_labels": settings.get("show_word_labels"),
-            "fixations": settings.get("show_fixations"),
-            "order_labels": settings.get("show_order"),
-            "saccades": settings.get("show_saccades"),
-            "saccade_arrows": settings.get("show_saccade_arrows", False),
-            "heatmap": settings.get("show_heatmap"),
-            "raw_gaze": settings.get("show_raw_gaze"),
-        },
-        "coloring": {
-            "color_by": settings.get("color_by"),
-            "heatmap_metric": settings.get("heatmap_metric"),
-            "heatmap_style": settings.get("heatmap_style", "Word boxes"),
-            "fixation_colorscale": settings.get("fixation_colorscale"),
-            "heatmap_colorscale": settings.get("heatmap_colorscale"),
-            # VIZ-18 palette · VIZ-17 flat colour · VIZ-15 shape — part of how the
-            # figure looked, so the manifest records them for reproduction.
-            "palette": settings.get("palette", DEFAULT_PALETTE),
-            "fixation_color": settings.get("fixation_color", DEFAULT_FIXATION_COLOR),
-            "fixation_symbol": settings.get("fixation_symbol", DEFAULT_FIXATION_SYMBOL),
-            "saccade_color_mode": settings.get("saccade_color_mode", "Uniform"),
-            # VIZ-31: which reading classes the exported figures actually drew —
-            # a regressions-only batch has to say so, or the files look like a
-            # dataset with almost no saccades in it.
-            "saccade_classes": list(
-                settings.get("saccade_classes") or SACCADE_CLASS_ORDER
-            ),
-            # EXP-4 / VIZ-24: which PRE-3 drift correction produced the exported
-            # figure ("Off" = none). The exported tables stay uncorrected — the
-            # manifest is where that split is recorded. Same keys as the 💾 Save
-            # & restore config (ENG-23). `color_by_line` records the EFFECTIVE
-            # value: a corrected figure is force-coloured by line, like the
-            # on-screen static path.
-            # PRE-21: omitted entirely while drift correction is gated off —
-            # recording `"drift_correction": "Off"` in every bundle would
-            # advertise a control the build doesn't have.
-            **(
-                {
-                    "drift_correction": str(
-                        settings.get("align_algorithm", "Off") or "Off"
-                    ),
-                    "drift_connectors": bool(settings.get("align_connectors", False)),
-                }
-                if drift_correction_enabled()
-                else {}
-            ),
-            "color_by_line": bool(settings.get("color_by_line", False))
-            or drift_applied,
-        },
-        "sizing": {
-            "marker_size_range": list(settings.get("marker_size_range", [])),
-            "marker_size_scale": settings.get("marker_size_scale"),
-            "marker_duration_range": list(settings.get("marker_duration_range") or []),
-            "duration_size_legend": bool(settings.get("duration_size_legend", True)),
-            "order_font_size": settings.get("order_font_size"),
-        },
-        # Where each legend was placed (Figure & canvas → Legends); absent = Auto.
-        # Every legend, Auto included, as the settings file writes them: a
-        # partial section would leave a restoring session's moved legends.
-        "legends": normalize_legend_layout(settings.get("legend_layout")),
-        # True-to-scale reading text: records how the word labels were sized so
-        # the figure can be reproduced exactly (see plots._word_label_font_px).
-        "text": {
-            "scale_text_to_boxes": settings.get("scale_text_to_boxes", True),
-            "line_spacing": settings.get("line_spacing", DEFAULT_LINE_SPACING),
-        },
-        # DATA-22 §7 surface 4: the recording setup + how each group is known, so
-        # an exported figure set records that (say) its monitor size was assumed.
-        # Sits beside `coloring.drift_correction`, which makes the same kind of
-        # "what produced these files" statement. Omitted when the source declared
-        # no setup — an absent key means unknown, which is the truth.
-        **({"experimental_setup": setup} if (setup := _setup_section()) else {}),
-    }
+        participant=participant,
+        trial=trial,
+        canvas_width=canvas_width,
+        canvas_height=canvas_height,
+        base_font_size=base_font_size,
+        font_family=font_family,
+        x_field=x_field,
+        y_field=y_field,
+        screen_id=screen_id,
+        setup=_setup_section(),
+    )
 
 
 def _setup_section() -> dict | None:
@@ -2585,6 +2513,7 @@ def bulk_export(
     annotation_records: list[dict] | None = None,
     annotation_dataset: str | None = None,
     column_names: Mapping[str, ColumnNames] | None = None,
+    stimulus_image_resolver: Callable | None = None,
 ) -> tuple[bytes, ExportProgress]:
     """Build a zip archive of selected artifacts and return its bytes.
 
@@ -2951,6 +2880,36 @@ def bulk_export(
             unit_width = int(unit_canvas[0] if unit_canvas else canvas_width)
             unit_height = int(unit_canvas[1] if unit_canvas else canvas_height)
 
+            unit_settings = dict(settings)
+            if "show_stimulus_image" in settings:
+                resolver = stimulus_image_resolver or reading_stimulus_image
+                page = (
+                    resolver(trial_words, trial_fix)
+                    if settings.get("show_stimulus_image")
+                    and not settings.get("stimulus_image_upload_uri")
+                    else None
+                )
+                unit_settings.update(
+                    stimulus_image_settings(
+                        settings,
+                        (unit_width, unit_height),
+                        page,
+                    )
+                )
+                # The resolver has already allowed or refused this page.
+                # Never retry an app-refused server path in the builder.
+                unit_settings["show_stimulus_image"] = False
+            reasons = illustration_reasons(
+                unit_settings,
+                data_source=settings.get("data_source"),
+                synthetic=bool(settings.get("synthetic_source")),
+                static=True,
+            )
+            unit_settings["illustration_reasons"] = resolve_label_reasons(
+                str(settings.get("illustration_label", "Auto")).title(),
+                reasons,
+            )
+
             # EXP-1/EXP-2: everything this trial's paths, title and caption can
             # substitute — its combo row plus counts and the settings summary.
             fields = pattern_fields(
@@ -3017,9 +2976,9 @@ def bulk_export(
                         trial_fix, trial_words, settings
                     )
                     render_values = {
-                        name: settings[name]
+                        name: unit_settings[name]
                         for name in STATIC_FIGURE_OPTIONS
-                        if name in settings
+                        if name in unit_settings
                     }
                     render_settings = FigureSettings.from_mapping(
                         render_values,
@@ -3155,9 +3114,11 @@ def bulk_export(
                     unit_height,
                     x_field,
                     y_field,
-                    settings,
+                    unit_settings,
                     screen_id=str(screen_id) if screen_slug else None,
                     drift_applied=drift_applied,
+                    base_font_size=base_font_size,
+                    font_family=font_family,
                 )
                 # EXP-2: the title/caption are part of how the figure looked, so
                 # the manifest records them verbatim alongside the settings.
@@ -3166,10 +3127,11 @@ def bulk_export(
                 # the bundled demo's are synthesized, which its figure and its
                 # raw-gaze table cannot say for themselves.
                 if not trial_raw_gaze.empty:
-                    cfg["raw_gaze"] = {
-                        "points": len(trial_raw_gaze),
-                        "synthesized": bool(settings.get("raw_gaze_synthesized")),
-                    }
+                    cfg["raw_gaze"].update(
+                        available=True,
+                        points=len(trial_raw_gaze),
+                        synthesized=bool(settings.get("raw_gaze_synthesized")),
+                    )
                 data = json.dumps(cfg, indent=2).encode("utf-8")
                 path = _path("plot_config", "json")
                 zf.writestr(path, data)

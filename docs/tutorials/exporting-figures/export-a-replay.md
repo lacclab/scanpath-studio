@@ -1,12 +1,12 @@
 # Export a replay
 
-The reading as it happened, for a talk or a supplement.
+Save an animated reading for a talk or supplement.
 
-1. Choose the view as for [one figure](export-one-figure.md#1-choose-the-view),
-   then turn on **Animate** and set the speed.
-2. Open **Export → Current figure**: the replay saves as **HTML** (interactive,
-   with its own play controls), **GIF** or **MP4**. GIF and MP4 need Chrome,
-   Chromium or Edge; the clip runs as long as the replay plays at its speed.
+1. Select a trial in Scanpath and turn on Animate.
+2. Set the playback speed and visible layers.
+3. Open Export → Current figure and choose GIF, MP4 or HTML.
+4. Download the replay. GIF and MP4 use the selected playback speed;
+   HTML has interactive playback controls.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../../assets/workflows/replay-export_poster.webp" data-autoplay
@@ -14,4 +14,7 @@ The reading as it happened, for a talk or a supplement.
   <source src="../../../assets/workflows/replay-export.mp4" type="video/mp4">
 </video>
 
-*Rendering the replay to a GIF and downloading it; the wait while it renders is fast-forwarded.*
+*Exporting a GIF; the rendering wait is shortened in this recording.*
+
+For [GIF/MP4 export from Python](../../guides/exporting/index.md#replays-as-gif-or-mp4),
+see Export and share.

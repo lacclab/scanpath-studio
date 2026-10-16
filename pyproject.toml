@@ -34,7 +34,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
-    "streamlit>=1.65.0",
+    "streamlit[performance]>=1.66.0",
     # Build versions sort and compare as PEP 440 (`build_info.py`, `updates.py`, #139).
     "packaging>=26.3",
     "pandas>=3.0",

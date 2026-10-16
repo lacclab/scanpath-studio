@@ -97,7 +97,14 @@ def test_the_bundle_plot_config_records_synthesized_samples():
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
         name = next(n for n in zf.namelist() if n.endswith("plot_config.json"))
         config = json.loads(zf.read(name))
-    assert config["raw_gaze"] == {"points": 2, "synthesized": True}
+    assert config["raw_gaze"] == {
+        "available": True,
+        "points": 2,
+        "synthesized": True,
+        "color": "#888888",
+        "marker_size": 4.0,
+        "opacity": 0.6,
+    }
 
 
 def _demo(trial: str) -> AppTest:

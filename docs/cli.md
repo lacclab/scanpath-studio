@@ -57,8 +57,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv \
   -o replay.html
 ```
 
-HTML is interactive and needs no browser. PNG, SVG and PDF need Chrome,
-Chromium or Edge installed (or run `plotly_get_chrome -y` once).
+See the [FAQ](faq.md#export-fails) for image-export setup.
 
 ### When a column isn't recognized
 
@@ -282,7 +281,7 @@ print(cli_reference("check"))
 
 ## Many trials
 
-The `render` command renders one trial per invocation; use the [Python batch pattern](automation.md#batch-pattern)
+The `render` command renders one trial per invocation; use the [Python batch recipe](guides/exporting/index.md#batch-pattern)
 or **Export → Export bundle** for many figures.
 
 `--all-screens` is the multipart exception: it writes one deterministic

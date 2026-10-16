@@ -442,7 +442,7 @@ class TestBulkExportFlow:
 
     @staticmethod
     def _download_labels(at: AppTest) -> list[str]:
-        return [str(getattr(e, "label", "")) for e in at.get("download_button")]
+        return [str(getattr(e, "label", "")) for e in at.download_button]
 
     @staticmethod
     def _zip_names(zip_bytes: bytes) -> set[str]:
@@ -586,7 +586,7 @@ class TestBulkExportFlow:
         # it exists: that is what proves the button is wired to a live payload
         # and that the app survives serving it (ENG-36).
         zip_button = [
-            b for b in at.get("download_button") if b.label == "⬇ Download bundle (zip)"
+            b for b in at.download_button if b.label == "⬇ Download bundle (zip)"
         ]
         assert zip_button, "the zip download button should render after a build"
         zip_button[0].click()
@@ -986,7 +986,7 @@ class TestAddDatasetMenu:
         assert at.session_state["main_nav"] == VIEW_DATA
         assert at.session_state["_prev_source"] == SYNTHETIC_SOURCE
         assert at.button(key="cancel_add_data")
-        assert at.get("file_uploader")
+        assert at.file_uploader
 
     def test_the_picker_offers_only_datasets(self):
         """#374 F31: no "More coming soon!" entry; its help says it instead."""

@@ -17,8 +17,18 @@ def embedded(monkeypatch):
 
 
 def test_a_fragment_gets_a_document_around_it(embedded):
+    html_embed.embed_html_iframe("<p>1</p>", height=10)
+    assert embedded == ["<!doctype html><html><body><p>1</p></body></html>"]
+
+
+def test_a_script_carrier_cannot_scroll(embedded):
+    # A zero-height carrier is drawn 1 px tall in a frame `st.iframe` always
+    # lets scroll: with the body's default margin it drew a scrollbar sliver.
     html_embed.embed_html_iframe("<script>1</script>", height=0)
-    assert embedded == ["<!doctype html><html><body><script>1</script></body></html>"]
+    assert embedded == [
+        '<!doctype html><html><body style="margin:0;overflow:hidden">'
+        "<script>1</script></body></html>"
+    ]
 
 
 @pytest.mark.parametrize(

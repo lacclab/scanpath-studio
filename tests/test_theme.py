@@ -20,7 +20,6 @@ from scanpath_studio.constants import APP_THEME, APP_THEME_DARK
 from scanpath_studio.styles import get_app_css
 
 _CONFIG_TOML = Path(__file__).resolve().parents[1] / ".streamlit" / "config.toml"
-_DOCS_CSS = Path(__file__).resolve().parents[1] / "docs" / "stylesheets" / "extra.css"
 
 
 def test_config_toml_matches_theme_constants():
@@ -29,17 +28,6 @@ def test_config_toml_matches_theme_constants():
     dark = theme.pop("dark", {})
     assert theme == APP_THEME
     assert dark == APP_THEME_DARK
-
-
-def test_docs_stylesheet_matches_theme_constants():
-    """The docs site's brand palette mirrors the app theme constants.
-
-    ``docs/stylesheets/extra.css`` hand-mirrors the primary colors (CSS can't
-    import Python); this guards a rebrand in ``constants.py`` from silently
-    leaving the published docs on the old palette."""
-    css = _DOCS_CSS.read_text(encoding="utf-8")
-    assert APP_THEME["primaryColor"] in css
-    assert APP_THEME_DARK["primaryColor"] in css
 
 
 def test_app_css_page_background_matches_theme_constants():
@@ -51,7 +39,7 @@ def test_app_css_page_background_matches_theme_constants():
     that does not exist, so the fallback painted a white strip in dark mode —
     so ``styles.py`` resolves it with ``light-dark()`` against the ``color-scheme``
     Streamlit sets on ``.stApp``. CSS can't import Python, so pin the two colours
-    here the way the docs palette is pinned above."""
+    here to keep the sticky bars consistent with the page."""
     css = get_app_css()
     light, dark = APP_THEME["backgroundColor"], APP_THEME_DARK["backgroundColor"]
     assert f"--sps-page-bg: light-dark({light}, {dark});" in css

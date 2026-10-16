@@ -422,7 +422,7 @@ class TestUseCaseTutorials:
         assert len(TUTORIALS) == 5
         assert len({tutorial.id for tutorial in TUTORIALS}) == len(TUTORIALS)
         for tutorial in TUTORIALS:
-            assert tutorial.outcome.startswith("Finish")
+            assert tutorial.outcome.strip()
             assert tutorial.estimated_time.endswith("min")
             assert tutorial.completion_test
             assert tutorial.docs_url.startswith("https://")
@@ -525,6 +525,14 @@ class TestUseCaseTutorials:
         assert at.session_state["tutorial_completed"]["filter_annotate"] is True
         assert "load_inspect" not in at.session_state["tutorial_completed"]
 
+    def test_the_card_links_to_its_own_docs_page(self):
+        from scanpath_studio.tour import TUTORIALS
+
+        tutorial = next(t for t in TUTORIALS if t.id == "filter_annotate")
+        at = AppTest.from_function(_use_case_tutorial_app).run()
+        assert not at.exception, at.exception
+        assert [b.proto.url for b in at.link_button] == [tutorial.docs_url]
+
     def test_a_data_page_step_counts_as_open_on_the_data_page(self):
         """UX-40: the surface check predated DATA-26's third top-level view.
 
@@ -581,6 +589,17 @@ class TestFaq:
         _choose_help_entry(at, "help_faq")
         assert not at.error
         assert len(at.expander) == len(faq_items())
+
+    def test_the_dialog_links_out_to_the_faq_and_tutorials_pages(self):
+        from scanpath_studio.tour import DOCS_FAQ_URL, DOCS_TUTORIALS_URL
+
+        at = AppTest.from_function(_faq_app)
+        at.run()
+        _choose_help_entry(at, "help_faq")
+        assert [b.proto.url for b in at.link_button] == [
+            DOCS_FAQ_URL,
+            DOCS_TUTORIALS_URL,
+        ]
 
     def test_docs_links_point_at_the_published_pages(self):
         """The FAQ is the app's help-context route into the docs — if these
@@ -944,13 +963,15 @@ class TestSpotlightSelectorsResolve:
         """The first Scanpath row must sit fully below Streamlit's fixed chrome.
 
         Asserted per declaration rather than on one packed line: #UX-99 added
-        the side gutters to the same rule, so the block is now multi-line.
+        the side gutters to the same rule, so the block is now multi-line. The
+        bottom gap is the theme's own `paddingBottom` (Streamlit 1.66).
         """
+        from scanpath_studio.constants import APP_THEME
         from scanpath_studio.styles import get_app_css
 
         css = get_app_css()
         assert "padding-top: 3rem;" in css
-        assert "padding-bottom: 0 !important;" in css
+        assert APP_THEME["paddingBottom"] == "0"
 
     def test_plot_control_rows_are_tall_and_have_one_outline(self):
         """The popover key shares the row prefix; never style both as rows."""
@@ -1235,9 +1256,9 @@ def test_the_setup_guide_progress_names_the_save_step():
 
     at.session_state["wizard_guide_step"] = len(_WIZARD_GUIDE_STEPS) - 1
     at.run()
-    (bar,) = at.get("progress")
-    assert "Last step" in bar.proto.text
-    assert "Part 4" not in bar.proto.text
+    (bar,) = at.progress
+    assert "Last step" in bar.text
+    assert "Part 4" not in bar.text
 
 
 class TestEveryGuideCardFolds:
@@ -1255,7 +1276,7 @@ class TestEveryGuideCardFolds:
         assert not at.exception, at.exception
         assert self._keys(at) == {f"guide_unfold_{kind}"}
         assert any(tab in m.value for m in at.markdown)
-        assert not at.get("progress")
+        assert not at.progress
         at.button(key=f"guide_unfold_{kind}").click().run()
         assert next_key in self._keys(at)
 

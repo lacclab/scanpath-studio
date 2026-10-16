@@ -4088,7 +4088,7 @@ class TestCorpusAnalysisTab:
         assert d.value == "—"
 
     def test_the_measure_and_error_bars_are_explained_in_place(self):
-        """The Measure picker carries the register's definition, unit, link and
+        """The Measure picker carries the register's definition, unit and
         what one plotted value is; the error-bar choice says what it shows."""
         at = _make_apptest()
         at.session_state["main_nav"] = "Corpus Analysis"
@@ -4097,7 +4097,7 @@ class TestCorpusAnalysisTab:
         at.run(timeout=60)
         assert not at.exception, at.exception
         captions = [c.value for c in at.caption]
-        note = next(c for c in captions if "computations/#measure-tfd" in c)
+        note = next(c for c in captions if "All time spent on a word" in c)
         assert "All time spent on a word" in note and "Unit: ms." in note
         assert "Each word's value is the mean across its participants." in note
         assert any(
@@ -4185,21 +4185,21 @@ class TestNavRegressions:
         at.session_state[SUBTAB_KEY] = SUBTAB_SHARE
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        switch = [c for c in at.get("button_group") if c.key == SHARE_SECTION_KEY]
+        switch = [c for c in at.segmented_control if c.key == SHARE_SECTION_KEY]
         assert switch, "the Link · Code · File switch is missing"
         assert list(switch[0].options) == list(SHARE_SECTIONS)
         # Link is the default, and only the chosen part draws.
         assert "_share_query_current" in at.session_state
-        assert not [u for u in at.get("file_uploader") if u.key == "plot_config_upload"]
+        assert not [u for u in at.file_uploader if u.key == "plot_config_upload"]
 
         at.session_state[SUBTAB_KEY] = SUBTAB_SHARE
         at.session_state[SHARE_SECTION_KEY] = "File"
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert [
-            d for d in at.get("download_button") if d.key == "plot_config_download"
-        ], "Share → File has no settings download"
-        assert [u for u in at.get("file_uploader") if u.key == "plot_config_upload"]
+        assert [d for d in at.download_button if d.key == "plot_config_download"], (
+            "Share → File has no settings download"
+        )
+        assert [u for u in at.file_uploader if u.key == "plot_config_upload"]
         # UX-199: what the file holds, and what it does not, beside it.
         captions = " ".join(str(c.value) for c in at.caption)
         assert "Includes the figure settings, recording setup and trial" in captions

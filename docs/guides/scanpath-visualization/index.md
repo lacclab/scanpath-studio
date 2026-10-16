@@ -55,8 +55,40 @@ Each layer is one line: a switch, and a **▾** with its settings.
 | **Annotations** | Star, tag and write notes on the trial, to find or filter it later. |
 | **Stimulus & context** | The trial's context, such as its title, question and answers, and its highlighted word spans. |
 | **Comparisons** | Compare this trial with other trials that match it on a field you choose, such as other readings of the same text, shown side by side. |
-| **Export** | Download the figure (PNG, SVG, PDF, HTML) or the video (HTML, GIF, MP4), or a zip bundle of figures and data for many trials. PDF, GIF and MP4 need Chrome, Chromium or Edge installed ([FAQ](../../faq.md#export-fails)). |
+| **Export** | Download the figure (PNG, SVG, PDF, HTML) or the video (HTML, GIF, MP4), or a zip bundle of figures and data for many trials. |
 | **Share** | A link that reopens this view (for whoever has the same dataset loaded), the Python or command-line code that redraws the figure, or a settings file. |
+
+## Render in code
+
+Set up a figure in the app, then open Share → Code for its Python or CLI
+recipe. For uploaded data, replace the placeholder file paths with your own.
+
+??? example "Python and CLI: render the demo"
+
+    === "Python"
+
+        ```python
+        import scanpath_studio as sps
+
+        words, fixations = sps.load_sample_data()
+        fig = sps.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
+        sps.save_figure(fig, "scanpath.html")
+        ```
+
+    === "CLI"
+
+        ```bash
+        scanpath-studio render --sample \
+          -p l37_1129 -t l37_1129_2_1_1_Ele_r0 -o scanpath.html
+        ```
+
+    For your own files, use the [data loaders](../loading-data/index.md#load-and-inspect-in-code).
+    Figure settings are listed in the [API options](../../api.md#figure-options)
+    and [CLI options](../../cli.md#common-options).
+
+The [gallery](../../gallery.md) gives app, CLI and Python instructions for
+heatmaps, comparisons, replays and other views.
+For [batch exports and GIF/MP4](../exporting/index.md), see Export and share.
 
 ## Back up your work
 

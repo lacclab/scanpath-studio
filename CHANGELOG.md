@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/)
 (ENG-86); `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.38.3] - 2026-10-16
+
+### Changed
+- Simplified the README with one overview demo, clear download links, a compact feature overview, and links to detailed documentation. ([#456](https://github.com/lacclab/scanpath-studio/issues/456))
+- Scanpath Studio now runs on Streamlit 1.66, which adds a "Skip to main content" link and screen-reader names for icon buttons. ([#452](https://github.com/lacclab/scanpath-studio/issues/452))
+- Shorten tutorials, remove unsupported interpretations, and clarify heatmap scales and static bundle exports. ([#453](https://github.com/lacclab/scanpath-studio/issues/453))
+- Streamlined the home page and tutorials, added workflow demos, consolidated setup guidance, and removed the public computation register. ([#456](https://github.com/lacclab/scanpath-studio/issues/456))
+- Modernized the docs with clearer navigation, Inter typography, refined light and dark palettes, and consistent cards, tables and code panels. Removed page date stamps. ([#456](https://github.com/lacclab/scanpath-studio/issues/456))
+- Rebuilt the plot gallery with visual previews, app-first instructions, CLI and Python recipes, and a separate recordings page. ([#456](https://github.com/lacclab/scanpath-studio/issues/456))
+- Integrated Python and CLI examples into the feature guides, with contextual export recipes and dedicated technical references. ([#456](https://github.com/lacclab/scanpath-studio/issues/456))
+
+### Fixed
+- Demo updates preserve deployment-only changes when advancing to a release. ([#453](https://github.com/lacclab/scanpath-studio/issues/453))
+- Export bundles keep stimulus images, Illustration labels and complete figure settings; Share code retains custom word fields. ([#453](https://github.com/lacclab/scanpath-studio/issues/453))
+- Stray dash marks no longer show on the welcome tour, the Tutorials dialog and the page's top-right corner. ([#454](https://github.com/lacclab/scanpath-studio/issues/454))
+
 ## [0.38.2] - 2026-10-16
 
 ### Added

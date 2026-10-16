@@ -1,54 +1,68 @@
 # Corpus Analysis
 
+Summarize reading measures by text, participant or group. The selected dataset
+and trial filters apply here too.
+
 <figure class="sps-screenshot" markdown>
-![Corpus Analysis, Per text: each participant's total fixation duration on every word of one text, against the cohort mean](../../assets/screenshots/corpus-analysis.webp)
+![Corpus Analysis: total fixation duration by word and participant](../../assets/screenshots/corpus-analysis.webp)
 </figure>
 
-**:material/bar_chart: Corpus Analysis** summarizes many trials at once. It uses the same
-dataset and trial filters as the Scanpath view. The line beside the dataset
-picker counts what those filters keep (for example *12 of 24 trials · 1 of 2
-participants*) and names each active filter. **Edit filters** opens the Scanpath
-view's filter panel, and **Clear** resets every filter.
+## Choose a view
 
-## Reading measures come from your data
-
-Corpus Analysis shows the reading measures your interest-area report provides
-(first fixation duration, total fixation duration, regression path, and so on).
-It does not compute them itself, and without any, the page says so. Which
-columns count as reading measures is set when the data is loaded (see
-[Reading measures](../loading-data/index.md#reading-measures)). The per-fixation measures are the fixation table's
-own durations, and its saccade amplitudes, or, when it has none, the distance
-between consecutive fixations.
-
-## Three views
-
-| View | Answers |
+| View | Use it to |
 | --- | --- |
-| **Per text** | How was this text read, word by word, across participants? |
-| **Per participant** | How does this participant behave across trials? |
-| **Groups** | How do conditions or populations differ? |
+| Per text | Compare word-by-word reading across participants |
+| Per participant | Inspect one participant across trials |
+| Groups | Compare conditions or populations |
 
-The address bar names the open view (`?corpus_subtab=Per+participant`), so a
-bookmark or a copied link reopens it.
+Choose a measure, aggregation and spread. For word profiles, set the minimum
+number of participants per word.
 
-Choose a measure, how to aggregate it, and the spread to show. A line under the
-measure says what it is, its unit, and what each plotted value is (one word,
-one participant's mean, …), with a link to its definition; a line under the spread
-says whether it shows how values vary (SD, IQR) or how precisely the center is
-known (SEM, bootstrap CI). Set a minimum number of participants per word so
-sparse words don't look like stable estimates.
+## Supply reading measures
 
-**Groups** defines a cohort by splitting on a field, or with its own filters.
-Turn on **Compare a second group**, with the two group means and their
-difference — descriptive, with no significance test.
-Fields from attached participant, trial or text tables appear here too.
-A group is a set of whole trials, whichever table holds its field: its word
-and fixation measures come from the same trials. A trial whose Words and
-Fixations tables disagree about the field is left out, and the page says so.
+Word-level analyses use the [reading measures in your data](../loading-data/index.md#reading-measures),
+such as first fixation duration or total fixation duration. Map those columns
+when importing. Fixation views use the fixation table.
 
-## From summary to evidence
+## Compare groups
 
-Every result table has **⬇ Download this table (CSV)**, with **⬇ Download the
-recipe (JSON)** beside it: the dataset, trial filters, analysis choices and
-counts that produced the table, without its rows or any figure settings. When
-something looks odd, open the trials behind it in the Scanpath view.
+Split on a field or define cohorts with filters. Turn on Compare a second group
+to see group means and their difference. These comparisons are descriptive.
+
+## Save results
+
+Download a result table as CSV and its analysis recipe as JSON. The recipe
+records the dataset, filters and analysis choices. Return to Scanpath to inspect
+individual trials.
+
+## Plot a summary in code
+
+Use a tidy summary table: a word profile needs `word_id` and `value`, with
+optional `lo` and `hi` for a band. Rename a source word ID column to `word_id`
+if needed. The [gallery example](../../gallery/word-profile.md) includes a
+ready-to-render table.
+
+??? example "Python and CLI: word profile"
+
+    === "Python"
+
+        ```python
+        import pandas as pd
+        import scanpath_studio as sps
+
+        profile = pd.read_csv("profile.csv")
+        fig = sps.plot_corpus_figure(
+            profile, kind="profile", measure_label="Total fixation duration (ms)"
+        )
+        sps.save_figure(fig, "profile.html")
+        ```
+
+    === "CLI"
+
+        ```bash
+        scanpath-studio corpus --input profile.csv --kind profile \
+          --measure-label "Total fixation duration (ms)" -o profile.html
+        ```
+
+    [API parameters](../../api.md#scanpath_studio.api.plot_corpus_figure) ·
+    [CLI options](../../cli.md#corpus-figures)

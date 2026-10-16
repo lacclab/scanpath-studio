@@ -316,7 +316,7 @@ def test_the_toggle_reveals_the_panel():
     assert not at.exception, at.exception
     assert [s for s in at.selectbox if s.key == "_debug_level"]
     assert [b for b in at.button if b.key == "_debug_clear"]
-    assert any(d.key == "_debug_download" for d in at.get("download_button"))
+    assert any(d.key == "_debug_download" for d in at.download_button)
     # …inside the dialog, not a recreated menu-bar popover.
     labels = {popover.proto.popover.label for popover in at.get("popover")}
     assert "🐛 Debug" not in labels

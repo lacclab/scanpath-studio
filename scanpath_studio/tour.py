@@ -168,7 +168,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
     TutorialDefinition(
         id="load_inspect",
         title="Load and verify a dataset",
-        outcome="Finish with the parsed words, fixations, and mapping visibly checked.",
+        outcome="Check the tables and column mapping.",
         estimated_time="3 min",
         prerequisite="A demo or uploaded dataset",
         availability="always",
@@ -231,7 +231,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
     TutorialDefinition(
         id="filter_annotate",
         title="Filter and mark trials",
-        outcome="Finish with reviewed trials starred or tagged, and exported.",
+        outcome="Star, tag and export trials.",
         estimated_time="4 min",
         prerequisite="At least one trial",
         availability="has_trials",
@@ -282,7 +282,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
     TutorialDefinition(
         id="publication_figure",
         title="Build a publication figure",
-        outcome="Finish at a ready figure download with a reproducible configuration.",
+        outcome="Export a figure and save its settings.",
         estimated_time="4 min",
         prerequisite="Words or fixations for a selected trial",
         availability="has_visual_data",
@@ -290,15 +290,14 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         docs_url=f"{DOCS_TUTORIALS_URL}exporting-figures/",
         steps=(
             TutorialStep(
-                "Choose the visual language",
-                "Use design presets, palette, and the layer controls. Heatmap and scanpath "
-                "are settings on the same figure, not separate data transformations.",
+                "Choose layers and colors",
+                "Use the design presets, palette and layer controls.",
                 ".st-key-tour_grp_viz_controls",
             ),
             TutorialStep(
                 "Decide static or animated",
-                "Use **Animate** only when motion is the outcome. Multipart replay keeps "
-                "screen boundaries explicit and draws no connector between canvases.",
+                "Turn on **Animate** to inspect fixation order and timing. "
+                "Multipart trials replay one screen at a time.",
                 ".st-key-tour_grp_view_modes",
             ),
             TutorialStep(
@@ -310,9 +309,8 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Keep the figure reproducible",
-                f"**{ICONS['share']} Share** turns the exact configuration into a **Link**, the "
-                "**Code** that redraws it, or a settings **File**. Any of them "
-                "reproduces this figure later — the PNG on its own does not.",
+                f"**{ICONS['share']} Share** offers a **Link**, **Code**, or settings "
+                "**File**. Keep the original data too.",
                 ".st-key-tutorial_share",
                 subtab=SUBTAB_SHARE,
                 optional=True,
@@ -322,9 +320,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
     TutorialDefinition(
         id="compare_readings",
         title="Compare trials of one text",
-        outcome=(
-            "Finish with the other trials of one text side by side, at one scale."
-        ),
+        outcome="Show other readings of the same text.",
         estimated_time="3 min",
         prerequisite="Two trials sharing a text (and screen for multipart data)",
         availability="has_comparable_readings",
@@ -351,10 +347,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
     TutorialDefinition(
         id="explore_corpus",
         title="Explore a corpus question",
-        outcome=(
-            "Finish having answered one worked question — how a participant's average "
-            "fixation duration moved across the experiment."
-        ),
+        outcome="Inspect mean fixation duration across trials.",
         estimated_time="4 min",
         prerequisite="Variation across trials, participants, or texts",
         availability="has_corpus_variation",
@@ -373,12 +366,8 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 NAV_SELECTOR,
             ),
             TutorialStep(
-                "Pick the question, not the chart",
-                "Each subtab answers one shape of question: **Per text** (one text, "
-                "many participants), **Per participant** (one participant, all their "
-                "trials) and **Groups** (a cohort, or two compared). Our question — "
-                "*did this participant speed up over the experiment?* — is "
-                "**Per participant**.",
+                "Open Per participant",
+                "Select **Per participant** to inspect one participant across trials.",
                 ".st-key-tutorial_corpus_subtabs",
                 view=_VIEW_CORPUS,
             ),
@@ -393,10 +382,8 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Read average fixation duration across the experiment",
-                "Set the measure to **fixation duration**; each point is that trial's "
-                "mean. A downward slope is the participant settling in — but check the "
-                "spread and the trial count before believing it, because one short "
-                "trial moves a mean a long way.",
+                "Set the measure to **fixation duration**. Each point is a trial's "
+                "mean; the trend alone does not explain why it changes.",
                 ".st-key-tutorial_corpus_analysis",
                 view=_VIEW_CORPUS,
             ),
@@ -1874,7 +1861,7 @@ def _tutorial_library_dialog() -> None:
     # client-side — without this it floats on top of the modal.
     close_open_popovers()
     context = st.session_state.get("_tutorial_context") or {}
-    st.markdown("**Choose the outcome you want to reach.**")
+    st.markdown("**Choose a tutorial.**")
     st.caption(
         "Each one points at the real controls and changes nothing — your data, "
         "filters and settings are exactly where you left them."

@@ -7,7 +7,7 @@ the full page width.
 **The nav** (:func:`render_nav`) is Streamlit's own
 ``st.navigation(position="top")``: three **views** — 🗺️ Scanpath · 📊 Corpus
 Analysis · 🗂️ Data — and a ❓ Help section of **action** entries (Tutorials,
-FAQ, About; Debug opens from the foot of About). Selecting an action arms a dialog and bounces the router
+FAQ, About, Send feedback; Debug opens from the foot of About). Selecting an action arms a dialog and bounces the router
 straight back to the view you were on, so the modal opens over your work.
 
 **UX-179 retired 💾 Session**, the last top-level action entry. Its four blocks
@@ -72,12 +72,15 @@ _HELP_PAGES = {
     "help_tutorials": ("Tutorials", ICONS["tutorials"], "help-tutorials"),
     "help_faq": ("FAQ", ICONS["faq"], "help-faq"),
     "help_about": ("About", ICONS["about"], "help-about"),
+    # Last, where a help menu's *Send feedback* usually sits: it is where you
+    # go once the other three have not answered you.
+    "help_feedback": ("Send feedback", ICONS["feedback"], "help-feedback"),
     # #374 F31: Debug is no longer an entry here — a developer tool listed
     # beside Tutorials and FAQ read as something every user should open. It
     # is a small button at the foot of About (`app._about_dialog`).
 }
 
-#: The nav section heading the four entries above collapse under.
+#: The nav section heading the entries above collapse under.
 HELP_SECTION = f"{ICONS['help']} Help"
 
 #: This run's ``st.Page`` objects, view constant → Page. Rebuilt every run (an
@@ -196,6 +199,10 @@ def _arm_help_action(entry: str) -> None:
         from scanpath_studio import app
 
         app._arm_about()
+    elif entry == "help_feedback":
+        from scanpath_studio import feedback
+
+        feedback._arm_feedback()
 
 
 def render_nav() -> str:

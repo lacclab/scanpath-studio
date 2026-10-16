@@ -82,6 +82,8 @@ or `--onestop` (the Public variant) runs against a folder that doesn't have it
 yet. **Check for updates** (Help → About, or `scanpath-studio version --check`)
 asks GitHub's API (`api.github.com`) for the latest release, only when you click
 it; the request carries nothing but the app's version, in its User-Agent.
+**Send feedback** (Help → Send feedback) makes no request: its buttons open
+GitHub pages in your browser, where you write and submit the report yourself.
 In the desktop app, **Update & restart** then downloads that release's
 archive for your computer from GitHub (`github.com`, which serves the file
 from its download servers) — only when you click it. The

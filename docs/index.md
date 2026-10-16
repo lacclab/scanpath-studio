@@ -1,4 +1,6 @@
 ---
+title: "Eye-tracking scanpath visualization for reading research"
+description: "Free, open-source software for visualizing eye movements in reading: scanpaths, fixations, saccades, gaze heatmaps and raw gaze over the text, from EyeLink, Tobii and other eye trackers."
 hide:
   - navigation
   - toc
@@ -38,65 +40,93 @@ Bring your own data, or start with the bundled demo.
 
 ## From recording to publication
 
-<div class="grid cards sps-home-features" markdown>
+<div class="sps-home-workflows" markdown>
 
-- :material-database-import:{ .lg .middle } **[Bring your own data](guides/loading-data/index.md)**
-
-    - Load words, fixations and raw gaze
-    - Add participant, trial and text metadata
-
-- :material-eye:{ .lg .middle } **[Inspect and replay](guides/scanpath-visualization/index.md)**
-
-    - View scanpaths, word boxes and heatmaps
-    - Replay a reading at your chosen speed
-
-- :material-filter:{ .lg .middle } **[Filter and annotate](tutorials/data-filtering/index.md)**
-
-    - Select participants, conditions and trials
-    - Star, tag and write notes on trials
-
-- :material-compare-horizontal:{ .lg .middle } **[Compare readings](guides/scanpath-visualization/controls.md#compare)**
-
-    - Overlay trials or place them side by side
-    - Compare readers and datasets
-
-- :material-chart-box:{ .lg .middle } **[Analyze a corpus](guides/corpus-workspace/index.md)**
-
-    - Summarize measures by text, reader or group
-    - Plot them against word features
-
-- :material-file-export:{ .lg .middle } **[Export and share](guides/exporting/index.md)**
-
-    - Save figures, replays or every trial at once
-    - Share a view or get its Python / CLI code
-
-</div>
-
-## See it in action
-
-=== "Add your data"
+=== "Bring your data"
 
     <video class="sps-shot" controls muted loop playsinline preload="none"
            poster="assets/workflows/add-your-data_poster.webp" data-autoplay
-           aria-label="Adding EyeLink fixation and interest-area reports">
+           aria-label="Import your own recordings">
       <source src="assets/workflows/add-your-data.mp4" type="video/mp4">
     </video>
+
+    **Import your own recordings.** Load words, fixations and raw gaze. Add metadata for participants, trials and texts.
+
+    [Add your data :material-arrow-right:](guides/loading-data/index.md#add-your-own-data){ .md-button }
+
+=== "Inspect & replay"
+
+    <video class="sps-shot" controls muted loop playsinline preload="none"
+           poster="assets/workflows/home-replay_poster.webp" data-autoplay
+           aria-label="Follow a reading">
+      <source src="assets/workflows/home-replay.mp4" type="video/mp4">
+    </video>
+
+    **Follow a reading.** Inspect fixations, saccades and heatmaps. Replay the reading, fixation by fixation.
+
+    [Review a session :material-arrow-right:](tutorials/data-collection/check-a-session.md){ .md-button }
+
+=== "Customize"
+
+    <video class="sps-shot" controls muted loop playsinline preload="none"
+           poster="assets/workflows/home-customize_poster.webp" data-autoplay
+           aria-label="Design presets, palettes and plot controls">
+      <source src="assets/workflows/home-customize.mp4" type="video/mp4">
+    </video>
+
+    **Make the view your own.** Try a design preset, choose a palette, and adjust the layers and their properties.
+
+    [Explore plot controls :material-arrow-right:](guides/scanpath-visualization/controls.md){ .md-button }
+
+=== "Filter & annotate"
+
+    <video class="sps-shot" controls muted loop playsinline preload="none"
+           poster="assets/workflows/home-filter-annotate_poster.webp" data-autoplay
+           aria-label="Find the trials you need">
+      <source src="assets/workflows/home-filter-annotate.mp4" type="video/mp4">
+    </video>
+
+    **Find the trials you need.** Filter by participant or condition. Star, tag and add notes to readings worth a second look.
+
+    [Select trials for analysis :material-arrow-right:](tutorials/data-filtering/index.md){ .md-button }
 
 === "Compare readings"
 
     <video class="sps-shot" controls muted loop playsinline preload="none"
-           poster="assets/workflows/compare_poster.webp" data-autoplay
-           aria-label="Two readers of one text side by side">
-      <source src="assets/workflows/compare.mp4" type="video/mp4">
+           poster="assets/workflows/home-compare_poster.webp" data-autoplay
+           aria-label="Put readings side by side">
+      <source src="assets/workflows/home-compare.mp4" type="video/mp4">
     </video>
+
+    **Put readings side by side.** Compare readers or datasets on the same text. Overlay scanpaths when their screen coordinates match.
+
+    [Compare two recordings :material-arrow-right:](guides/scanpath-visualization/controls.md#compare){ .md-button }
 
 === "Analyze a corpus"
 
     <video class="sps-shot" controls muted loop playsinline preload="none"
            poster="assets/workflows/corpus-analysis_poster.webp" data-autoplay
-           aria-label="A reading measure on the text, against surprisal and between groups">
+           aria-label="Go beyond a single trial">
       <source src="assets/workflows/corpus-analysis.mp4" type="video/mp4">
     </video>
+
+    **Go beyond a single trial.** Summarize your reading measures by text, reader or group, and plot them against word features.
+
+    [Analyze a text :material-arrow-right:](tutorials/corpus-analysis/analyze-one-text.md){ .md-button }
+
+=== "Export & share"
+
+    <video class="sps-shot" controls muted loop playsinline preload="none"
+           poster="assets/workflows/home-export-share_poster.webp" data-autoplay
+           aria-label="Take the figure with you">
+      <source src="assets/workflows/home-export-share.mp4" type="video/mp4">
+    </video>
+
+    **Take the figure with you.** Save figures, replays or a batch of trials. Share a view, or copy its Python or CLI code.
+
+    [Export your first figure :material-arrow-right:](tutorials/exporting-figures/export-one-figure.md){ .md-button }
+
+</div>
 
 More examples in the [plot gallery](gallery.md).
 

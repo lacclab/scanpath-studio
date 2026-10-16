@@ -1,3 +1,7 @@
+---
+description: "Compare an eye-tracking reading measure between two groups or conditions, such as native and non-native readers."
+---
+
 # Compare groups or conditions
 
 Compare a reading measure between two cohorts.

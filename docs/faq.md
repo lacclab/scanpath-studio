@@ -1,3 +1,7 @@
+---
+description: "Answers to common questions about Scanpath Studio: fixations that do not line up with the text, wrongly detected columns, reading measures, export, privacy and citing."
+---
+
 # FAQ
 
 ## Loading data
@@ -85,7 +89,7 @@ data to the online demo. See [Privacy](privacy.md).
 
 Not on a local or desktop install: the app saves your datasets and
 settings on this computer (when it listens only on this computer, as
-`scanpath-studio` and the desktop app do — see [Privacy](privacy.md)), and
+`scanpath-studio` and the desktop app do), and
 **:material/database: Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload,
 so export your annotations and settings before you leave
 ([what to back up](guides/scanpath-visualization/index.md#back-up-your-work)).
@@ -102,7 +106,7 @@ over it until you retry or clear it.
 Start the app with `scanpath-studio run --no-persist` to save nothing. To
 delete what is saved and start over, use **Clear what is saved…** under
 **Saved on this computer**, or close the app and run `scanpath-studio cache --clear`.
-See [Recovery cache](cli.md#recovery-cache).
+See [Recovery cache](cli.md#cache).
 
 ## Help and versions
 
@@ -114,6 +118,15 @@ Report a bug as a
 with the version, your operating system and how you run the app (pip, the
 desktop app or the online demo). :material/help: **Help → About** shows the
 version and links both; on the command line, `scanpath-studio --version`.
+
+### How do I update Scanpath Studio? { #updating }
+
+Open :material/help: **Help → About → Check for updates**. In the desktop app,
+choose **Update & restart**. For a Python install, run:
+
+```bash
+pip install -U scanpath-studio
+```
 
 ### Will my links, settings and scripts work after an update?
 

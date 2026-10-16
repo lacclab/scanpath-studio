@@ -1,3 +1,7 @@
+---
+description: "Export a publication-ready scanpath, gaze heatmap or comparison figure at the size you need, as PNG or SVG."
+---
+
 # Export one figure
 
 Save a scanpath, heatmap or comparison at the size you need.

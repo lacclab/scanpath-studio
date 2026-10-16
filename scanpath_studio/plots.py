@@ -6949,6 +6949,12 @@ def _render_scanpath_animation(
         title=None,
         range=y_range,
         constrain="domain",
+        # The figure is _CONTROLS_SAFETY_PX taller than the plot, and a
+        # constrained domain is centred by default — so the paper's bottom
+        # edge, where the highlight note and the size key anchor, sat half
+        # that below the plot's border and they straddled it. Pinned to the
+        # bottom, the slack goes under the transport controls instead.
+        constraintoward="bottom",
         scaleanchor="x",
         scaleratio=1,
         automargin=False,

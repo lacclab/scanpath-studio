@@ -1,3 +1,7 @@
+---
+description: "Export eye-tracking figures as PNG, SVG or animated replays, export every trial at once, and share a view as a link or as Python and CLI code."
+---
+
 # Export and share
 
 Save a figure, export a batch, or reuse a view in the app or in code.
@@ -12,6 +16,14 @@ Save a figure, export a batch, or reuse a view in the app or in code.
 | Reuse the design | My designs, or Share → File |
 
 For step-by-step instructions, see the [export tutorials](../../tutorials/exporting-figures/index.md).
+
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../../assets/workflows/share-link_poster.webp" data-autoplay
+       aria-label="Copying a link that reopens the same trial and design">
+  <source src="../../assets/workflows/share-link.mp4" type="video/mp4">
+</video>
+
+A shared link reopens the view for someone with the same dataset loaded.
 
 ## Reproduce a figure { #from-the-app-to-a-script }
 
@@ -68,4 +80,4 @@ The CLI's `render --animate` saves interactive HTML. For a GIF or MP4 in Python:
     Use `fmt="gif"` and a `.gif` filename for GIF output.
 
 [Export setup and troubleshooting](../../faq.md#export-fails) ·
-[Python save options](../../api.md#save) · [CLI options](../../cli.md#common-options)
+[Python save options](../../api.md#save) · [CLI options](../../cli.md#common-tasks)

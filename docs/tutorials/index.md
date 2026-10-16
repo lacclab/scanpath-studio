@@ -1,3 +1,7 @@
+---
+description: "Step-by-step tutorials for eye-tracking reading studies: check recording sessions, compare eye trackers, exclude trials, export scanpath figures and analyze a corpus."
+---
+
 # Tutorials
 
 Choose a task. For installation, see [Get started](../install.md); for control

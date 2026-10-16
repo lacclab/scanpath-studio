@@ -274,6 +274,7 @@
 .md-typeset .md-button:focus {
   background: var(--sps-surface-alt);
   border-color: var(--sps-brand);
+  color: var(--sps-brand);
 }
 
 .md-typeset .md-button--primary,
@@ -307,5 +308,42 @@
   .md-typeset .grid.cards > ul > li,
   .md-typeset .sps-gallery-card {
     transition: none;
+  }
+}
+
+/* Installation: one primary download choice, two compact alternatives. */
+.md-typeset .sps-install-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.md-typeset .sps-install-options > ul > li:first-child {
+  grid-column: 1 / -1;
+  border-color: var(--sps-brand);
+}
+
+.sps-install-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 1rem;
+  background: var(--sps-surface-alt);
+  color: var(--sps-brand);
+  font-size: 0.6rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.md-typeset .sps-install-options .md-button {
+  padding: 0.45rem 0.8rem;
+  font-size: 0.7rem;
+}
+
+.md-typeset .sps-install-options details {
+  margin-bottom: 0;
+}
+
+@media (max-width: 40em) {
+  .md-typeset .sps-install-options {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

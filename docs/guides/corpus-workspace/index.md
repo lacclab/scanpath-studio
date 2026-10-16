@@ -1,3 +1,7 @@
+---
+description: "Summarize eye-tracking reading measures by text, participant or group, plot them against word features such as surprisal, and compare groups."
+---
+
 # Corpus Analysis
 
 Summarize reading measures by text, participant or group. The selected dataset
@@ -39,8 +43,8 @@ individual trials.
 
 Use a tidy summary table: a word profile needs `word_id` and `value`, with
 optional `lo` and `hi` for a band. Rename a source word ID column to `word_id`
-if needed. The [gallery example](../../gallery/word-profile.md) includes a
-ready-to-render table.
+if needed. Use a result table exported from Corpus Analysis.
+For a trial-order trend, see [Across the experiment](../../gallery/across-experiment.md).
 
 ??? example "Python and CLI: word profile"
 
@@ -65,4 +69,4 @@ ready-to-render table.
         ```
 
     [API parameters](../../api.md#scanpath_studio.api.plot_corpus_figure) ·
-    [CLI options](../../cli.md#corpus-figures)
+    [CLI options](../../cli.md#corpus)

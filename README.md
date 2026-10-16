@@ -20,7 +20,7 @@ A free, open-source app for exploring eye movements in reading. Check data quali
 - **Analyze a corpus.** Explore the reading measures in your data by text, reader or group.
 - **Export and share.** Save publication-ready figures, GIF/MP4 replays or a batch of trials, and share a view with a link.
 
-[Follow a tutorial](https://lacclab.github.io/scanpath-studio/tutorials/) · [Watch the workflows](https://lacclab.github.io/scanpath-studio/gallery/workflows/)
+[Follow a tutorial](https://lacclab.github.io/scanpath-studio/tutorials/) · [See it in action](https://lacclab.github.io/scanpath-studio/#from-recording-to-publication)
 
 ## Run it on your computer
 

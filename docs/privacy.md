@@ -1,98 +1,11 @@
+---
+description: "Your recordings stay on your computer when you use Scanpath Studio locally or as a desktop app."
+hide:
+  - toc
+---
+
 # Privacy
 
-For sensitive participant data, use the desktop app or run Scanpath Studio on
-your own machine. Do not upload identifiable recordings to the hosted demo.
-
-| Where you run it | Where the data is processed |
-| --- | --- |
-| desktop app | your machine |
-| local `scanpath-studio` | your machine |
-| hosted demo | a Streamlit Community Cloud server operated by Snowflake |
-
-## What happens to a file you upload
-
-Completed datasets, mappings, view settings,
-and annotations are stored in an on-device recovery cache so a refresh does not
-erase the session. This happens only when the app listens on this machine
-alone — the desktop app, or a launch with `server.address` set to `127.0.0.1`,
-`::1` or `localhost` — or when you opt in with `SCANPATH_STUDIO_PERSIST=1`. A
-server other machines can reach stores nothing: a hosted deployment, and a bare
-`streamlit run`, which listens on every interface.
-
-The cache is visible from inside the app: **Saved on this computer**, at the
-foot of the **:material/database: Data Management** page, reports what is stored, how large it is and the
-folder it is in, and **Clear what is saved…** deletes it after a
-confirmation that lists what goes, then starts the app over. To run without it, start the app with
-`scanpath-studio run --no-persist`, or set `SCANPATH_STUDIO_PERSIST=0`. From a
-terminal, with the app closed:
-
-```bash
-scanpath-studio cache                       # what is stored, where, how big
-scanpath-studio cache --clear               # delete it
-SCANPATH_STUDIO_PERSIST=0 scanpath-studio   # disable recovery storage
-SCANPATH_STUDIO_STATE_DIR=/secure/path scanpath-studio   # store it elsewhere
-```
-
-The cache holds the research tables themselves, not just settings — treat that
-folder like the data files it came from (disk encryption, shared-machine
-accounts). It is single-user and unencrypted: anyone with your account on that
-machine can read it.
-
-Exporting an **MP4** replay also writes to disk: the
-encoder needs a real file, so the clip is written to a temporary file in the
-system's temp folder (readable by your account only) and deleted as soon as it
-has been read back. Only a crash or a forced kill mid-encode leaves it behind,
-and it holds the rendered frames, not your tables.
-
-## The online demo
-
-The public demo has no account or data-use agreement. Use it with the bundled
-sample or data you are comfortable sending to the hosting
-provider. Sessions are temporary and server resources are limited.
-
-## What's in a link, a settings file, and an export
-
-- A **share link** contains the participant and trial IDs plus the visualization
-  settings. It does not contain the data tables — except for a scanpath made
-  with **:material/draw: Author a scanpath**, whose link carries the typed text and every
-  hand-placed fixation, because they *are* its data.
-- A **settings file** (:material/share: Share → File) contains the figure's settings and the
-  selected participant and trial IDs — for a comparison, the second trial's
-  participant and trial IDs and its dataset's name too.
-- An **annotations file** (:material/database: Data Management → Annotations, or `annotations.json` in an
-  Export bundle) contains your notes, which may mention participants.
-- A **setup file** (:material/edit: Edit dataset → Download setup file) contains the
-  dataset's name, its column mapping, and its recording setup.
-- An **exported table** contains the selected research data. A bundle's
-  attached metadata tables hold only the participants, trials and texts it exports.
-
-Review these artifacts before sharing them. Share links can enter browser
-history, logs, or chat previews, so do not copy one when its participant or
-trial identifiers should not be exposed there.
-
-## Network activity
-
-Downloading a public corpus contacts its host, and only when you click
-**⬇ Download** — or, headlessly, the first time `scanpath-studio render --potec`
-or `--onestop` (the Public variant) runs against a folder that doesn't have it
-yet. **Check for updates** (Help → About, or `scanpath-studio version --check`)
-asks GitHub's API (`api.github.com`) for the latest release, only when you click
-it; the request carries nothing but the app's version, in its User-Agent.
-In the desktop app, **Update & restart** then downloads that release's
-archive for your computer from GitHub (`github.com`, which serves the file
-from its download servers) — only when you click it. The
-scanpath, animation and comparison figures load the Plotly
-charting library from the app's own server — the copy installed with the app —
-so drawing a figure contacts no other host and works without an internet
-connection, the desktop app included. A figure you download as **HTML** is
-different: a saved file has no app server behind it. By default it loads the
-library from **cdn.plot.ly** when you open it, which needs an internet
-connection and tells that host the file was opened (no data travels with the
-request). Tick **Self-contained HTML** — shown on the Export subtab once HTML
-is the chosen format, for the figure, the replay and the bundle — and the HTML
-embeds the library instead (about 4.8 MB more per file), opens offline and
-makes no request. HTML written headlessly (`save_figure`,
-`scanpath-studio render -o figure.html`) always embeds it.
-Streamlit's own usage statistics are switched off on every launch path
-(`scanpath-studio run`, the desktop app and the repository's
-`.streamlit/config.toml`). The application adds no analytics service of its own.
+With the desktop app or a local install, your recordings stay on your computer
+and are processed locally. The online demo processes uploads on its hosted
+server; use the bundled sample there and keep sensitive recordings local.

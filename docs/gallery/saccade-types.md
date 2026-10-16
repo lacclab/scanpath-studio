@@ -1,4 +1,6 @@
 ---
+title: "Saccade types"
+description: "Saccades colored by type — forward movements, skips, refixations, return sweeps and regressions — over the text, with Python and CLI code."
 hide:
   - navigation
   - toc
@@ -16,7 +18,7 @@ print(gallery_figure("saccade-types"))
 
 === "In the app"
 
-    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization.
+    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight → Show.
     2. Open Saccades ▾ → Line → Color and choose By type.
     3. To match this view, hide the on-figure type legend under Figure & canvas → Legends. The color key is shown below this example.
 
@@ -28,6 +30,7 @@ print(gallery_figure("saccade-types"))
     scanpath-studio render --sample \
       -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
       --saccade-color-by-type --no-saccade-type-legend \
+      --highlight-column '' \
       -o saccade-types.html
     ```
 

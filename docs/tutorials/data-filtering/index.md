@@ -1,3 +1,7 @@
+---
+description: "Filter eye-tracking data for analysis: exclude unsuitable trials, select participants by metadata, and find the trials with particular fixation patterns."
+---
+
 # Filter data
 
 <div class="grid cards" markdown>
@@ -21,6 +25,12 @@
 Open a dataset in Scanpath. The filter button beside Select trial selects
 whole trials. Plot controls → Filters & highlights changes which fixations
 and saccades the figure draws.
+
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../../assets/workflows/trial-filtering_poster.webp" data-autoplay
+       aria-label="Narrowing the trial list by condition and participant">
+  <source src="../../assets/workflows/trial-filtering.mp4" type="video/mp4">
+</video>
 
 ## Check and export the selection { #every-task-ends-the-same-way }
 

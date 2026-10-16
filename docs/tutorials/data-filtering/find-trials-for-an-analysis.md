@@ -1,3 +1,7 @@
+---
+description: "Find eye-tracking trials with particular fixation patterns — short, long, out-of-bounds fixations or blinks — and tag them for an analysis."
+---
+
 # Find the trials an analysis needs
 
 Locate trials containing particular fixation patterns.

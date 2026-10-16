@@ -1,3 +1,8 @@
+---
+title: "Load eye-tracking data"
+description: "Load your own eye-tracking data — fixation reports, interest areas and raw gaze from EyeLink, Tobii, Gazepoint, SMI or Pupil Labs — or open a public reading corpus."
+---
+
 # Data management
 
 Load your own data, open a public corpus, or try the bundled sample.
@@ -66,6 +71,12 @@ Corpus Analysis uses the measures you supply.
 4. Optionally attach stimulus screenshots from a local folder.
 5. Click Add dataset.
 
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../../assets/workflows/add-your-data_poster.webp" data-autoplay
+       aria-label="Importing fixation and interest-area reports">
+  <source src="../../assets/workflows/add-your-data.mp4" type="video/mp4">
+</video>
+
 ## Load and inspect in code
 
 Load the same files in a script; column names are detected automatically.
@@ -89,7 +100,7 @@ Load the same files in a script; column names are detected automatically.
         ```
 
     For raw gaze, metadata and explicit column mappings, see the
-    [loaders](../../api.md#load) and [CLI input options](../../cli.md#render).
+    [loaders](../../api.md#load-your-data) and [CLI input options](../../cli.md#render).
 
 ## Manage datasets
 

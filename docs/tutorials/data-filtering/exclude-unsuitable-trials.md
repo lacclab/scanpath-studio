@@ -1,3 +1,7 @@
+---
+description: "Apply your exclusion criteria to eye-tracking trials: tag rejected trials in Scanpath Studio and leave them out of the selection and the export."
+---
+
 # Exclude unsuitable trials
 
 Apply your exclusion criteria and leave rejected trials out of the selection.

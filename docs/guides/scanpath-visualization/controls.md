@@ -1,3 +1,8 @@
+---
+title: "All scanpath controls"
+description: "Every control on Scanpath Studio's Scanpath page — fixations, saccades, stimulus, word boxes, heatmap, raw gaze, filters and figure layout — and what it does."
+---
+
 # All controls
 
 Every control on the :material/route: **Scanpath** page, where it is and what it
@@ -17,7 +22,7 @@ its context, compare it, export it or share it. For how the parts fit
 together, see the [Scanpath visualization](index.md) guide.
 
 For the corresponding Python keywords and CLI flags, use the
-[figure options table](../../api.md#figure-options).
+[figure options table](../../figure-options.md).
 
 ## Trial control bar
 

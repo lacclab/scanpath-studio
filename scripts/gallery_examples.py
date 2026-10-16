@@ -26,7 +26,7 @@ class Example:
 def _scanpath() -> dict:
     words, fixations = sps.load_sample_data()
     pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
-    fig = sps.plot_scanpath(words, fixations, pid, tid)
+    fig = sps.plot_scanpath(words, fixations, pid, tid, highlight_column=None)
     return locals()
 
 
@@ -40,6 +40,7 @@ def _heatmap() -> dict:
         tid,
         show_heatmap=True,
         heatmap_style="Interpolated",
+        highlight_column=None,
         show_fixations=False,
         show_saccades=False,
     )
@@ -49,7 +50,9 @@ def _heatmap() -> dict:
 def _text_lines() -> dict:
     words, fixations = sps.load_sample_data()
     pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
-    fig = sps.plot_scanpath(words, fixations, pid, tid, color_by_line=True)
+    fig = sps.plot_scanpath(
+        words, fixations, pid, tid, color_by_line=True, highlight_column=None
+    )
     return locals()
 
 
@@ -61,6 +64,7 @@ def _saccade_types() -> dict:
         fixations,
         pid,
         tid,
+        highlight_column=None,
         saccade_color_mode="By type",
         saccade_type_legend=False,
     )
@@ -68,30 +72,49 @@ def _saccade_types() -> dict:
 
 
 def _illustration() -> dict:
-    words, fixations = sps.load_sample_data()
-    pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+    from scanpath_studio.measures import fixation_in_text_mask
+    from scanpath_studio.synthetic import load_synthetic_data
+
+    words, fixations = load_synthetic_data()
+    fixations = fixations[fixation_in_text_mask(fixations, words)].copy()
+    pid, tid = "synthetic", "synthetic_2line_demo"
     fig = sps.plot_scanpath(
         words,
         fixations,
         pid,
         tid,
+        highlight_column=None,
+        canvas_size=(450, 340),
         fixation_snap_to_line=True,
         saccade_render_mode="Arc",
-        fix_index_range=(124, 139),
+        illustration_text="Illustration · hand-drawn",
+        show_order=True,
+        duration_size_legend=False,
     )
     return locals()
 
 
 def _comparison() -> dict:
     words, fixations = sps.load_sample_data()
-    pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+    pid, tid = "l37_1129", "l37_1129_2_2_4_Ele_r0"
     fig = sps.compare_scanpaths(
         words,
         fixations,
         (pid, tid),
-        ("l7_1090", "l7_1090_2_1_1_Ele_r0"),
-        fix_index_range=(1, 50),
+        ("l7_1090", "l7_1090_2_2_4_Ele_r0"),
+        highlight_column=None,
+        labels=("Reader A", "Reader B"),
+        fit_to_monitor=False,
+        crop_margin=50,
         show_legend=True,
+        duration_size_legend=False,
+        legend_layout={
+            "compare": {
+                "position": "top-center-outside",
+                "arrangement": "side-by-side",
+                "size": 24,
+            }
+        },
     )
     return locals()
 
@@ -106,6 +129,7 @@ def _raw_gaze() -> dict:
         "l37_1129",
         "l37_1129_2_2_2_Adv_r0",
         raw_gaze=raw_gaze,
+        highlight_column=None,
         fixation_opacity=0.35,
         show_saccades=False,
     )
@@ -115,44 +139,83 @@ def _raw_gaze() -> dict:
 def _replay() -> dict:
     words, fixations = sps.load_sample_data()
     pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
-    fig = sps.animate_scanpath(words, fixations, pid, tid, fix_index_range=(1, 40))
-    return locals()
-
-
-def _word_profile() -> dict:
-    words, fixations = sps.load_sample_data()
-    pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
-    # The demo's word table carries EyeLink's own measures (IA_DWELL_TIME, …).
-    one_text = words[words["unique_paragraph_id"] == "2_1_1_Ele"]
-    profile = (
-        one_text.groupby("IA_ID")
-        .agg(
-            value=("IA_DWELL_TIME", "mean"),
-            sd=("IA_DWELL_TIME", "std"),
-            word_text=("IA_LABEL", "first"),
-        )
-        .rename_axis("word_id")  # the column plot_corpus_figure reads
-        .reset_index()
-        .assign(lo=lambda d: d.value - d.sd, hi=lambda d: d.value + d.sd)
-    )
-    fig = sps.plot_corpus_figure(
-        profile, kind="profile", measure_label="Total fixation duration (ms)"
+    fig = sps.animate_scanpath(
+        words,
+        fixations,
+        pid,
+        tid,
+        fix_index_range=(1, 40),
+        highlight_column=None,
+        playback_speed=2.0,
     )
     return locals()
 
 
-def _time_course() -> dict:
+def _word_boxes() -> dict:
     words, fixations = sps.load_sample_data()
     pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
     fig = sps.plot_scanpath(
-        words, fixations, pid, tid, x_field="timestamp_ms", y_field="x"
+        words,
+        fixations,
+        pid,
+        tid,
+        highlight_column=None,
+        show_heatmap=True,
+        heatmap_style="Word boxes",
+        show_fixations=False,
+        show_saccades=False,
+    )
+    return locals()
+
+
+def _highlighted_text() -> dict:
+    words, fixations = sps.load_sample_data()
+    pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+    fig = sps.plot_scanpath(
+        words,
+        fixations,
+        pid,
+        tid,
+        highlight_column="is_in_aspan",
+        critical_span_style="Mark text",
+        show_saccades=False,
+    )
+    return locals()
+
+
+def _across_experiment() -> dict:
+    from scanpath_studio.aggregation import metric_by_trial_index
+    from scanpath_studio.data import derive_trial_index
+    from scanpath_studio.plots import make_trend_figure
+
+    words, fixations = sps.load_sample_data(names="canonical")
+    reader = words[words["participant_id"] == "l37_1129"].copy()
+    reader["trial_index"] = derive_trial_index(reader)
+    trend = metric_by_trial_index(reader, "total_fixation_duration_ms")
+    fig = make_trend_figure(
+        trend,
+        x_col="trial_index",
+        x_label="Recorded trial order",
+        y_label="Mean total fixation duration per word (ms)",
+        title="Across the experiment · Reader A",
+        canvas_width=1000,
+        base_font_size=18,
+        font_family="Arial",
+        height=450,
+        break_gaps=True,
     )
     return locals()
 
 
 EXAMPLES = (
     Example("scanpath", "Scanpath", "Fixations and saccades over the text.", _scanpath),
-    Example("heatmap", "Heatmap", "Where fixation time concentrates.", _heatmap),
+    Example("heatmap", "Gaze heatmap", "Where fixation time concentrates.", _heatmap),
+    Example(
+        "word-boxes",
+        "Word-box heatmap",
+        "Fixation time within each word’s bounding box.",
+        _word_boxes,
+    ),
     Example(
         "text-lines",
         "Fixations by line",
@@ -168,13 +231,13 @@ EXAMPLES = (
     Example(
         "illustration",
         "Reading schematic",
-        "Snapped fixations and arced saccades; an illustration of the reading.",
+        "A hand-drawn, two-line reading with snapped fixations and arced saccades.",
         _illustration,
     ),
     Example(
         "comparison",
         "Two readers",
-        "Two readings of one text on the same canvas.",
+        "Two complete readings of a shorter text, labeled Reader A and Reader B.",
         _comparison,
     ),
     Example(
@@ -190,16 +253,16 @@ EXAMPLES = (
         _replay,
     ),
     Example(
-        "word-profile",
-        "Word profile",
-        "Mean total fixation duration across readers, with a standard-deviation band.",
-        _word_profile,
+        "highlighted-text",
+        "Highlighted text",
+        "Mark a selected text span alongside its fixations.",
+        _highlighted_text,
     ),
     Example(
-        "time-course",
-        "Time course",
-        "Horizontal gaze position against fixation onset time.",
-        _time_course,
+        "across-experiment",
+        "Across the experiment",
+        "Mean reading time per word across one reader’s recorded trials.",
+        _across_experiment,
     ),
 )
 BY_SLUG = {example.slug: example for example in EXAMPLES}
@@ -207,21 +270,11 @@ BY_SLUG = {example.slug: example for example in EXAMPLES}
 
 @cache
 def _build(slug: str, preview: bool = False) -> dict:
-    if preview and slug == "replay":
-        words, fixations = sps.load_sample_data()
-        fig = sps.plot_scanpath(
-            words,
-            fixations,
-            "l37_1129",
-            "l37_1129_2_1_1_Ele_r0",
-            fix_index_range=(1, 40),
-        )
-        return {"fig": fig}
     return BY_SLUG[slug].build()
 
 
 def gallery_cards() -> str:
-    """Compact links with static previews of the same example figures."""
+    """Compact links with previews of the same example figures, including replay."""
     cards = []
     for example in EXAMPLES:
         figure = embed(_build(example.slug, preview=True)["fig"], preview=True)
@@ -250,7 +303,17 @@ def gallery_python(slug: str) -> str:
 
 
 def write_gallery_assets(site: Path) -> None:
-    """The CLI's ready-to-render example table, downloadable beside its page."""
-    target = site / "gallery" / "word-profile" / "word-profile.csv"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    _build("word-profile")["profile"].to_csv(target, index=False)
+    """Downloadable data and scripts used by the gallery’s shell recipes."""
+    target = site / "gallery" / "illustration"
+    target.mkdir(parents=True, exist_ok=True)
+    example = _build("illustration")
+    example["words"].to_csv(target / "words.csv", index=False)
+    example["fixations"].to_csv(target / "fixations.csv", index=False)
+    target = site / "gallery" / "across-experiment"
+    target.mkdir(parents=True, exist_ok=True)
+    code = (
+        gallery_python("across-experiment")
+        .removeprefix("```python\n")
+        .removesuffix("\n```")
+    )
+    (target / "across-experiment.py").write_text(code + "\n", encoding="utf-8")

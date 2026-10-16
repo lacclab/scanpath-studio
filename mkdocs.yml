@@ -158,15 +158,16 @@ nav:
   - Plot gallery:
       - gallery.md
       - Scanpath: gallery/scanpath.md
-      - Heatmap: gallery/heatmap.md
+      - Gaze heatmap: gallery/heatmap.md
+      - Word-box heatmap: gallery/word-boxes.md
       - Fixations by line: gallery/text-lines.md
       - Saccade types: gallery/saccade-types.md
       - Reading schematic: gallery/illustration.md
       - Two readers: gallery/comparison.md
       - Raw gaze: gallery/raw-gaze.md
       - Replay: gallery/replay.md
-      - Word profile: gallery/word-profile.md
-      - Time course: gallery/time-course.md
+      - Highlighted text: gallery/highlighted-text.md
+      - Across the experiment: gallery/across-experiment.md
       - App recordings: gallery/workflows.md
   - Reference:
       - Python API: api.md
@@ -227,6 +228,8 @@ plugins:
         tutorials/run-it-headless.md: guides/scanpath-visualization/index.md#render-in-code
         automation.md: guides/exporting/index.md
         agents.md: api.md
+        gallery/word-profile.md: gallery/across-experiment.md
+        gallery/time-course.md: gallery.md
         # ENG-80 took these off the site for the beta; old links land on the
         # repository file that now carries the subject.
         architecture.md: https://github.com/lacclab/scanpath-studio/blob/main/AGENTS.md

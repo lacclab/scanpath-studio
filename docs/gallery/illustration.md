@@ -8,7 +8,7 @@ hide:
 
 # Reading schematic
 
-Snapped fixations and arced saccades; an illustration of the reading.
+A hand-drawn two-line text, with fixations snapped to its lines and arced saccades.
 
 ```python exec="true" html="true"
 from gallery_examples import gallery_figure
@@ -18,20 +18,23 @@ print(gallery_figure("illustration"))
 
 === "In the app"
 
-    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization.
-    2. In Filters & highlights ▾ → Fixations → Index range, choose 124–139.
-    3. In Fixations ▾ → Snap, turn on To line. In Saccades ▾ → Shape, choose Arc.
-    4. Keep the Illustration label: these positions and arcs are schematic.
+    1. Download the <a href="words.csv" download>words</a> and <a href="fixations.csv" download>fixations</a>, then choose + → Import files in the app.
+    2. Add the two tables as a dataset. Select its only trial and Reset visualization.
+    3. In Fixations → Snap, choose To line and show the reading order. In Saccades → Shape, choose Arc.
+    4. In Figure & canvas, use a 450 × 340 canvas and hide the duration size key. Set the Illustration label text to “Illustration · hand-drawn”.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
 
 === "CLI"
 
+    Download the example <a href="words.csv" download>words</a> and <a href="fixations.csv" download>fixations</a> into the same folder.
+
     ```bash
-    scanpath-studio render --sample \
-      -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
-      --snap-fixations --saccade-arcs --fix-index-range 124:139 \
-      -o illustration.html
+    scanpath-studio render --words words.csv --fixations fixations.csv \
+      -p synthetic -t synthetic_2line_demo \
+      --canvas 450x340 --snap-fixations --saccade-arcs --fixation-index \
+      --illustration-text "Illustration · hand-drawn" --no-duration-size-legend \
+      --highlight-column '' -o illustration.html
     ```
 
 === "Python"

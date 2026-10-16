@@ -703,7 +703,7 @@ def embed(
     word labels keep the size they were fitted to. Plotly itself is loaded only
     on a page that has a figure, from the site's own copy (``mkdocs_hooks.on_post_build``), never a CDN.
     ``legend`` is ``[(label, colour), …]``, drawn as swatches under the figure.
-    ``preview`` disables hover and the toolbar for linked gallery thumbnails.
+    ``preview`` disables interaction for gallery thumbnails; replays loop while visible.
     A replay also carries the app's player, so its ▶ Play keeps real time, and
     its frames packed, as the app's page does (PERF-17).
     """
@@ -716,16 +716,19 @@ def embed(
     # BUG-93: a replay keeps time on the app's own wall-clock player, not on
     # Plotly's frame queue; figures.js runs it once the plot is drawn — and the
     # script rebuilds the frames the spec leaves out (PERF-17). It waits for ▶
-    # rather than autoplaying: a page draws its figures before they scroll into
-    # view.
-    page = None if preview else replay_page(fig)
+    # on detail pages; gallery previews instead loop while visible.
+    page = replay_page(fig)
     if page is None:
         spec = json.loads(fig.to_json())
     else:
         figure_dict, player = page
         spec = json.loads(to_json_plotly(figure_dict))
         spec["player"] = player
-        spec["layout"]["meta"]["scanpath_autoplay"] = False
+        spec["layout"]["meta"]["scanpath_autoplay"] = preview
+        if preview:
+            spec["layout"]["meta"]["sps_preview_loop"] = True
+            spec["layout"]["updatemenus"] = []
+            spec["layout"]["sliders"] = []
     spec["config"] = {**_PLOT_CONFIG, "staticPlot": True} if preview else _PLOT_CONFIG
     # An attribute, not a `<script type="application/json">`: Material's instant
     # navigation re-creates every inline script in the new page from its text

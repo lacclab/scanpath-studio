@@ -48,6 +48,9 @@
 
   const draw = async (host) => {
     const { player, ...spec } = JSON.parse(host.dataset.figure);
+    const replayPreview = Boolean(spec.layout?.meta?.sps_preview_loop);
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (replayPreview && reducedMotion) spec.layout.meta.scanpath_autoplay = false;
     const stage = document.createElement("div");
     stage.className = "sps-plot-stage";
     stage.id = `sps-plot-${++plotCount}`;
@@ -58,6 +61,30 @@
     await Plotly.newPlot(stage, spec);
     // The site's own build wrote this script, exactly as the app embeds it.
     if (player) new Function(player.split("{plot_id}").join(stage.id))();
+    if (replayPreview && !reducedMotion) {
+      // Use the same wall-clock player as the detail page. Keep thumbnail
+      // playback visible and repeat it, so arriving late never shows a still.
+      const last = spec.layout.meta.scanpath_frame_times_ms.length - 1;
+      let visible = false;
+      let restartTimer;
+      const play = () => {
+        if (visible && stage.isConnected && !document.hidden)
+          stage.emit("plotly_buttonclicked", { button: { name: "play" } });
+      };
+      const visibility = new IntersectionObserver(([entry]) => {
+        visible = entry.isIntersecting;
+        clearTimeout(restartTimer);
+        if (visible) play();
+        else stage.emit("plotly_buttonclicked", { button: { name: "pause" } });
+        if (!stage.isConnected) visibility.disconnect();
+      });
+      stage.on("plotly_animatingframe", (event) => {
+        if (Number(event.name) !== last || !visible) return;
+        clearTimeout(restartTimer);
+        restartTimer = setTimeout(play, 800);
+      });
+      visibility.observe(host);
+    }
     fit(host);
     new ResizeObserver(() => fit(host)).observe(host);
     host.dataset.state = "ready";

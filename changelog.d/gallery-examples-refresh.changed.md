@@ -1,0 +1,1 @@
+Added word-box heatmap and text-highlight examples, animated the replay preview, clarified full-reader comparisons and two-line schematics, and replaced the bottom plots with an across-experiment trend.

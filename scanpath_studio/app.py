@@ -2194,6 +2194,11 @@ _PLACEHOLDER_SHOWN_KEY = "_dataset_placeholder_shown"
 #: the demo's, so a star made on them is the demo's, and must not wait under a
 #: corpus whose own trials (once it is set up) merely share their ids.
 _ANNOTATIONS_STANDIN_KEY = "_annotations_standin_for"
+#: The missing-corpus note of a corpus this server can't fetch, kept after the
+#: picker has switched to the demo (`_switch_missing_corpus_to_demo`). Unlike
+#: `_UNAVAILABLE_KEY` it outlives its run: it is shown while the demo stays
+#: open, and dropped when it is dismissed or another dataset is opened.
+_UNAVAILABLE_CARRIED_KEY = "_dataset_unavailable_carried"
 
 
 def annotations_owner(dataset: str) -> str:
@@ -2242,8 +2247,15 @@ def _note_dataset_unavailable(
     size_hint: str = "",
     download: Callable[[str], None] | None = None,
     key_prefix: str = "",
+    switch_to_demo: bool = False,
 ) -> None:
-    """Record that ``label`` couldn't be loaded, for the main-area empty state."""
+    """Record that ``label`` couldn't be loaded, for the main-area empty state.
+
+    ``switch_to_demo``: nothing can be done about it from here (this server
+    doesn't download), so rather than leave the corpus selected over the demo's
+    trials, the run switches the picker to the demo itself
+    (`_switch_missing_corpus_to_demo`).
+    """
     st.session_state[_PLACEHOLDER_SHOWN_KEY] = True
     st.session_state[_UNAVAILABLE_KEY] = dict(
         label=label,
@@ -2253,7 +2265,28 @@ def _note_dataset_unavailable(
         size_hint=size_hint,
         download=download,
         key_prefix=key_prefix,
+        switch_to_demo=switch_to_demo,
     )
+
+
+def _switch_missing_corpus_to_demo() -> None:
+    """Open the demo in place of a corpus this server can't fetch, and rerun.
+
+    The demo used to stand in under the corpus' name: the picker said PoTeC
+    above the demo's trials, with no way to get PoTeC here. Showing the demo
+    *as* the demo keeps the picker, the figure's screen and the counts honest,
+    and the note says why it switched (`_UNAVAILABLE_CARRIED_KEY`).
+    """
+    note = st.session_state.get(_UNAVAILABLE_KEY)
+    if not (note and note.get("switch_to_demo")):
+        return
+    st.session_state[_UNAVAILABLE_CARRIED_KEY] = note
+    st.session_state["_pending_source_choice"] = DEMO_CHOICE
+    st.rerun()
+
+
+def _dismiss_carried_unavailable_note() -> None:
+    st.session_state.pop(_UNAVAILABLE_CARRIED_KEY, None)
 
 
 def _stop_download(task_key: tuple) -> None:
@@ -2292,6 +2325,15 @@ def _render_dataset_unavailable() -> None:
     what's on screen meanwhile.
     """
     note = st.session_state.pop(_UNAVAILABLE_KEY, None)
+    switched = False
+    if not note:
+        # A corpus this server can't fetch already switched the picker to the
+        # demo; its note stays while the demo does.
+        note = st.session_state.get(_UNAVAILABLE_CARRIED_KEY)
+        if note and st.session_state.get("data_source_choice") != DEMO_CHOICE:
+            st.session_state.pop(_UNAVAILABLE_CARRIED_KEY, None)
+            note = None
+        switched = bool(note)
     if not note:
         return
     download = note["download"]
@@ -2303,7 +2345,11 @@ def _render_dataset_unavailable() -> None:
         st.markdown(
             f"#### {ICONS['missing_bundle']} {note['label']} isn't here yet\n"
             f"{note['reason'][:1].upper()}{note['reason'][1:].rstrip('.')} — "
-            "**showing the bundled demo** meanwhile."
+            + (
+                "**switched to the bundled demo**."
+                if switched
+                else "**showing the bundled demo** meanwhile."
+            )
         )
         details = [f"{note['action'].rstrip('.')}{size}"]
         if note["root"]:
@@ -2311,6 +2357,12 @@ def _render_dataset_unavailable() -> None:
             verb = "Downloads to" if download is not None else "Looking in"
             details.append(f"{verb} `{note['root']}`")
         st.markdown("\n".join(f"- {line}" for line in details))
+        if switched:
+            st.button(
+                "Dismiss",
+                key="dataset_unavailable_dismiss",
+                on_click=_dismiss_carried_unavailable_note,
+            )
         if download is None:
             return
         clicked = st.button(
@@ -2398,6 +2450,7 @@ def _dataset_access_status(
             action=f"Open it in the [desktop app]({CITATION['desktop_url']}) ↗ "
             "or a pip install (`pip install scanpath-studio`), where it "
             "downloads in one click",
+            switch_to_demo=True,
         )
         return False
     _note_dataset_unavailable(
@@ -10540,6 +10593,8 @@ def _run_app() -> None:
         # BUG-103: the loader's own ID for these tables, so the normalization
         # below is keyed on which load they came from rather than re-hashed.
         adopt_source(raw_words_df, raw_fixations_df)
+        # A corpus this server can't fetch: open the demo as itself instead.
+        _switch_missing_corpus_to_demo()
         # DATA-48: the demo may have stood in for a corpus that isn't here.
         _file_annotations_under_shown_dataset(_dataset_owner)
         if dataset_card is not None and len(dataset_card.steps) == 3:
@@ -10987,6 +11042,11 @@ def _run_app() -> None:
     canvas_geometry_frame = (
         fixations_filtered if not fixations_filtered.empty else raw_gaze_filtered
     )
+    # The demo standing in for a missing corpus is drawn on the demo's screen:
+    # its text runs past the corpus' (PoTeC's 1680×1050 cut it off).
+    canvas_choice = (
+        DEMO_CHOICE if st.session_state.get(_PLACEHOLDER_SHOWN_KEY) else data_choice
+    )
     (
         canvas_width,
         canvas_height,
@@ -10994,7 +11054,7 @@ def _run_app() -> None:
         font_family,
         line_spacing,
         scale_text_to_boxes,
-    ) = seed_canvas_state(words_filtered, canvas_geometry_frame, data_choice)
+    ) = seed_canvas_state(words_filtered, canvas_geometry_frame, canvas_choice)
 
     def canvas_renderer(
         slot,
@@ -11014,7 +11074,7 @@ def _run_app() -> None:
         render_canvas_controls(
             words_filtered,
             canvas_geometry_frame,
-            data_choice,
+            canvas_choice,
             slot=slot,
             bare=True,
             text_host=text_host,

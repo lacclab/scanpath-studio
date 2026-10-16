@@ -358,3 +358,79 @@ def test_a_relative_data_directory_names_the_folder_it_downloads_to():
     assert any(f"Full path: `{full}`" in str(c.value) for c in at.caption)
     assert any(f"saves it to `{full}`" in str(i.value) for i in at.info)
     assert any(f"Downloads to `{full}`" in str(m.value) for m in at.markdown)
+
+
+POTEC_LABEL = "PoTeC — Potsdam Textbook Corpus"
+
+
+@pytest.mark.timeout(240)
+class TestAMissingCorpusShownAsTheDemo:
+    """A corpus that isn't on disk is replaced by the bundled demo — and the page
+    has to say *the demo* everywhere, not only in the notice. On a server that
+    can't download it the picker went on naming PoTeC, and on every install the
+    demo's 2560×1440 text was drawn on PoTeC's 1680×1050 screen, cut off."""
+
+    def _open_missing_potec(self, monkeypatch, tmp_path, *, local_fs: bool):
+        from streamlit.testing.v1 import AppTest
+
+        from scanpath_studio import app
+        from tests.conftest import APP_SCRIPT
+
+        monkeypatch.setenv(app.LOCAL_FS_ENV, "1" if local_fs else "0")
+        # A server reads the corpus from its configured root, not the box.
+        monkeypatch.setenv(app.DATA_ROOT_ENV, str(tmp_path))
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+        at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+        at.session_state["public_dataset_choice"] = POTEC_LABEL
+        at.session_state["potec_dir"] = str(tmp_path)  # empty → not on disk
+        at.run()
+        assert not at.exception, at.exception
+        return at
+
+    @staticmethod
+    def _notice(at) -> str:
+        return next(
+            (str(m.value) for m in at.markdown if "isn't here yet" in str(m.value)),
+            "",
+        )
+
+    def test_a_server_that_cannot_download_switches_to_the_demo(
+        self, monkeypatch, tmp_path
+    ):
+        from scanpath_studio import app
+
+        at = self._open_missing_potec(monkeypatch, tmp_path, local_fs=False)
+        assert at.session_state["data_source_choice"] == app.DEMO_CHOICE
+        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
+        assert picker.value == app.DEMO_CHOICE
+        notice = self._notice(at)
+        assert "PoTeC" in notice and "switched to the bundled demo" in notice
+        assert at.session_state["global_canvas_width"] == 2560
+        # The notice stays while the demo is open, until it is dismissed…
+        at.run()
+        assert self._notice(at)
+        next(b for b in at.button if b.key == "dataset_unavailable_dismiss").click()
+        at.run()
+        assert not at.exception, at.exception
+        assert not self._notice(at)
+
+    def test_the_notice_goes_with_the_demo(self, monkeypatch, tmp_path):
+        from scanpath_studio import app
+
+        at = self._open_missing_potec(monkeypatch, tmp_path, local_fs=False)
+        assert self._notice(at)
+        at.session_state["data_source_choice"] = app.MANUAL_SAMPLE_CHOICE
+        at.run()
+        assert not at.exception, at.exception
+        assert not self._notice(at)
+
+    def test_a_stand_in_is_drawn_on_the_demos_screen(self, monkeypatch, tmp_path):
+
+        at = self._open_missing_potec(monkeypatch, tmp_path, local_fs=True)
+        # Here it can be downloaded, so PoTeC stays selected with ⬇ Download now.
+        assert at.session_state["data_source_choice"] == POTEC_LABEL
+        assert "showing the bundled demo" in self._notice(at)
+        assert (
+            at.session_state["global_canvas_width"],
+            at.session_state["global_canvas_height"],
+        ) == (2560, 1440)

@@ -974,8 +974,8 @@ def figure_text_style(settings) -> dict:
 # normalization and rides into the exported fixation tables — and a fixations
 # CSV is exactly the file that gets attached to a paper,
 # posted to OSF, or mailed to a collaborator. `/Users/<name>/` discloses the OS
-# account; the rest discloses the directory layout, including where a corpus
-# lives. The basename still identifies the stimulus, which is all the
+# account; the rest discloses the directory layout, including where a MultiplEYE
+# corpus lives. The basename still identifies the stimulus, which is all the
 # column is used for downstream.
 #
 # `source_file` is deliberately NOT here: it is an identity label, not a path.

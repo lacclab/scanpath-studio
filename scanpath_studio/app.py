@@ -112,6 +112,8 @@ from scanpath_studio.constants import (
     FONT_FAMILY,
     ICONS,
     MANUAL_SAMPLE_CHOICE,
+    MULTIPLEYE_BUNDLE_CHOICE,
+    MULTIPLEYE_DEFAULT_DIR,
     ONESTOP_CHOICE,
     ONESTOP_LEGACY_SOURCE_TOKEN,
     ONESTOP_PUBLIC_DEFAULT_DIR,
@@ -134,6 +136,7 @@ from scanpath_studio.constants import (
     WIZARD_STAY_KEY,
     WORD_LABEL_COLOR,
     icon_html,
+    multipleye_enabled,
     plural,
     preprocessing_enabled,
     spoken,
@@ -232,6 +235,8 @@ from scanpath_studio.dataset_table import DATASET_COUNT_FIELDS, DatasetRow
 from scanpath_studio.datasets import (
     POTEC_FIX_SCHEMA,
     POTEC_WORD_SCHEMA,
+    load_multipleye_server_bundle,
+    multipleye_bundle_dir,
 )
 from scanpath_studio.debug_log import (
     debug_enabled,
@@ -392,7 +397,7 @@ def __getattr__(name):
 
 
 def public_datasets_enabled() -> bool:
-    """Whether the "Public datasets" source (PoTeC, OneStop) is offered.
+    """Whether the "Public datasets" source (PoTeC, MultiplEYE) is offered.
 
     Enabled by default; set ``SCANPATH_PUBLIC_DATASETS=0`` (or ``false`` / ``no``)
     to hide it. Read at call time so tests can toggle the env var."""
@@ -1726,6 +1731,24 @@ folder you let **Download** populate:
 ```
 """
 
+_MULTIPLEYE_STRUCTURE_MD = """\
+**Expected layout** — a MultiplEYE session set (e.g. the read-only ZH-CH-Zurich
+sample). Identity is read from the folder + file names, so there are no id
+columns to map:
+```
+<dir>/
+├─ scanpaths/                 # or fixations/
+│  └─ <session>/              # one folder per reader session
+│     └─ *.csv                 (one per stimulus page)
+└─ stimuli_<lang>_<…>/
+   ├─ aoi_stimuli_<…>/        # character AOIs: <stimulus>_aoi.csv
+   ├─ config/config_*.py      # font size + family (optional)
+   ├─ stimuli_images_<lang>_* # page images (optional)
+   └─ …_comprehension_questions_*.xlsx   (optional)
+```
+`reading_measures/` and `participant_data.csv` (optional) enrich the load.
+"""
+
 
 def _onestop_structure_md(regime: str) -> str:
     """Expected-files note for one OneStop regime's dataset."""
@@ -2105,6 +2128,13 @@ def _onestop_files_present(regime: str) -> bool:
     return datasets.onestop_present(root, regime=regime, parts=parts)
 
 
+def _multipleye_files_present() -> bool:
+    root = _dataset_folder("multipleye", MULTIPLEYE_DEFAULT_DIR)
+    source = st.session_state.get("multipleye_fixation_source") or "scanpaths"
+    sessions, _ = _cached_multipleye_inventory(root, source)
+    return bool(sessions)
+
+
 # Session slot describing a data source the user selected but that
 # isn't available locally. Written by `_dataset_access_status` (and the bundle
 # sources) on the run it happens, read + cleared by `_render_dataset_unavailable`
@@ -2474,6 +2504,86 @@ def _load_potec_source(
 
 # The dataset card lists this step.
 @st.cache_data(show_spinner=False)
+def _cached_multipleye_raw_frames(
+    root: str, fixation_source: str
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Cached raw MultiplEYE frames (pre-normalization) — the full session set.
+
+    Same shape as an upload — the normal auto-detect → normalize → harmonize
+    pipeline then handles them — cached on the selection so re-runs (toggling
+    viz controls) don't re-read the files. Loads every session × stimulus;
+    narrow the trial pool with **Narrow by**."""
+    from scanpath_studio.datasets import multipleye_raw_frames
+
+    return stamp_source(multipleye_raw_frames(root, fixation_source=fixation_source))
+
+
+@st.cache_data(show_spinner=False)
+def _cached_multipleye_inventory(
+    root: str, fixation_source: str
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    from scanpath_studio.datasets import multipleye_inventory
+
+    return multipleye_inventory(root, fixation_source=fixation_source)
+
+
+def _load_multipleye_source(
+    options_host=None, location_host=None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Source controls + loader for the MultiplEYE corpus data source.
+
+    MultiplEYE can't be loaded through the generic Upload flow (participant /
+    trial / stimulus live only in the folder + file names), so this dedicated
+    source wraps ``datasets.multipleye_raw_frames``. The returned raw frames go
+    through the same normalization as an upload, so the Column-mapping
+    panels still appear and stay overridable. The whole session set loads —
+    narrow it with the **Narrow by** trial filters.
+
+    ``options_host`` / ``location_host`` are the source-options and
+    data-location sub-slots (the fixation-source radio above, the data location
+    below); each defaults to a plain container when called standalone.
+    """
+    opt = options_host if options_host is not None else st.container()
+    loc = location_host if location_host is not None else st.container()
+    fixation_source = opt.radio(
+        "Fixation source",
+        options=["scanpaths", "fixations"],
+        key="multipleye_fixation_source",
+        help="scanpaths/ fixations are pre-tagged with page + word index "
+        "(richer); fixations/ are raw onset/duration/x/y with no word linkage.",
+    )
+    root = _dataset_dir_input(
+        loc,
+        default_dir=MULTIPLEYE_DEFAULT_DIR,
+        dir_help="Folder holding a MultiplEYE session set, e.g. the read-only "
+        "ZH-CH-Zurich sample.",
+        structure_md=_MULTIPLEYE_STRUCTURE_MD,
+        key_prefix="multipleye",
+    )
+    try:
+        sessions_all, _ = _cached_multipleye_inventory(root, fixation_source)
+    except (FileNotFoundError, OSError):
+        sessions_all = ()
+    # MultiplEYE ships no public download URL — present means the local folder
+    # holds a recognizable session set, otherwise fall back to the demo.
+    ready = _dataset_access_status(
+        loc,
+        root=root,
+        present=bool(sessions_all),
+        key_prefix="multipleye",
+        label="MultiplEYE — multilingual reading",
+    )
+    if not ready:
+        return load_sample_data()
+    try:
+        return _cached_multipleye_raw_frames(root, fixation_source)
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        loc.error(f"Couldn't load MultiplEYE from `{root}`: {exc}")
+        return pd.DataFrame(), pd.DataFrame()
+
+
+# The dataset card lists this step.
+@st.cache_data(show_spinner=False)
 def _cached_onestop_raw_frames(
     root: str, regime: str, parts: tuple[str, ...], variant: str
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -2577,6 +2687,9 @@ def picker_name_for(choice: str, registry: dict | None = None) -> str:
 # caption). To add a corpus: write a loader in datasets.py, wrap it in a
 # `_load_*_source` function above, and add one entry here — the
 # searchable picker scales as the catalogue grows.
+#: The MultiplEYE entry's registry label, named because its gate
+#: (`constants.multipleye_enabled`) has to find it.
+MULTIPLEYE_PUBLIC_CHOICE = "MultiplEYE — multilingual reading (ZH-CH sample)"
 
 #: A regime dataset's ``?source=`` token → its registry label.
 ONESTOP_REGIME_TOKEN_CHOICES = {
@@ -2718,6 +2831,22 @@ PUBLIC_DATASET_REGISTRY: dict = {
         reading_note="Fixation positions are reconstructed, not recorded: "
         "PoTeC's release keeps no screen coordinates, so each fixation is drawn "
         "at the center of the character it landed on.",
+    ),
+    MULTIPLEYE_PUBLIC_CHOICE: dict(
+        loader=_load_multipleye_source,
+        # No download: MultiplEYE is read from a local session set.
+        files_present=_multipleye_files_present,
+        monitor=(1920, 1080),  # MultiplEYE physical screen (coords offset to it)
+        short="MultiplEYE",
+        language="Multilingual (ZH-CH sample)",
+        size="local session set",
+        description="MultiplEYE multilingual eye-tracking-while-reading — the "
+        "read-only Zurich Chinese sample, loaded from a local folder.",
+        link="https://multipleye.eu/",
+        # No published figures on purpose. This source reads whichever
+        # session folders are on the machine it runs on, so there is no corpus-
+        # wide number that would be true of the next person's copy — the row
+        # fills in the moment it is opened, which is the honest answer.
     ),
     # One dataset per reading regime, each holding every part.
     **{
@@ -2869,8 +2998,15 @@ def public_dataset_registry() -> dict:
 
     `PUBLIC_DATASET_REGISTRY` is the literal home of the built-in corpora, and
     every consumer calls this instead of reading the dict.
+
+    MultiplEYE is held back unless ``SCANPATH_EXPERIMENTAL`` is on. Gating here,
+    the one place every consumer reads, is what hides it from the picker, the
+    🗂️ Data page, Compare's second dataset and share links at once.
     """
-    return dict(PUBLIC_DATASET_REGISTRY)
+    registry = dict(PUBLIC_DATASET_REGISTRY)
+    if not multipleye_enabled():
+        registry.pop(MULTIPLEYE_PUBLIC_CHOICE, None)
+    return registry
 
 
 def _load_public_dataset(
@@ -3080,10 +3216,9 @@ def _dataset_font(words: pd.DataFrame) -> tuple[float | None, str | None]:
     """The stimulus typeface ``(font_px, css_family)`` a dataset declares, or
     ``(None, None)``.
 
-    A dataset can carry ``stimulus_font_px`` / ``stimulus_font_family`` (the
-    font size + family its stimuli were rendered with) on every word; the app
-    snaps its font controls to them so the reading text matches the stimulus
-    exactly."""
+    MultiplEYE stamps ``stimulus_font_px`` / ``stimulus_font_family`` (the real
+    ``FONT_SIZE`` + font from its stimulus config) onto every word; the app snaps
+    its font controls to them so the reading text matches the stimulus exactly."""
     if words is None or words.empty or "stimulus_font_px" not in words.columns:
         return None, None
     px = pd.to_numeric(words["stimulus_font_px"], errors="coerce").dropna()
@@ -3164,6 +3299,15 @@ def _cached_trial_identity_report(
     return diagnose_trial_identity(_words, _fixations, sample_trials=sample_trials)
 
 
+# The dataset card lists this step.
+@st.cache_data(show_spinner=False)
+def _cached_multipleye_server_bundle(
+    participant: str | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    progress.report()  # a miss: real work, so the gated dataset card may show
+    return stamp_source(load_multipleye_server_bundle(participant))
+
+
 def load_words_and_fixations(
     data_choice: str,
     participant: str | None = None,
@@ -3185,13 +3329,13 @@ def load_words_and_fixations(
 
     Args:
         data_choice: ``DEMO_CHOICE`` ("Bundled Demo") / ``SYNTHETIC_CHOICE`` /
-            ``PUBLIC_DATASETS_CHOICE`` / ``ONESTOP_CHOICE``. The Upload source
-            and stored uploaded datasets are handled by ``main`` directly, not
-            here.
+            ``PUBLIC_DATASETS_CHOICE`` / ``ONESTOP_CHOICE`` /
+            ``MULTIPLEYE_BUNDLE_CHOICE``. The Upload source and stored uploaded
+            datasets are handled by ``main`` directly, not here.
         participant: Lowercased participant_id from the URL deep link. When set
-            AND `data_choice` is ``ONESTOP_CHOICE``, the loader fast-paths to
-            just that pid's shard — sub-second instead of loading the whole
-            corpus. Ignored for the other sources.
+            AND `data_choice` is ``ONESTOP_CHOICE`` / ``MULTIPLEYE_BUNDLE_CHOICE``,
+            the loader fast-paths to just that pid's shard/session — sub-second
+            instead of loading the whole corpus. Ignored for the other sources.
 
     Returns:
         Tuple of (words_df, fixations_df) as raw DataFrames before normalization.
@@ -3218,6 +3362,22 @@ def load_words_and_fixations(
                 "OneStop export folder and restart the app, or open a **OneStop · "
                 "…** dataset to download the reports instead.",
                 root=str(onestop_data_dir() or ""),
+            )
+            return load_sample_data()
+        return words, fixations
+    if data_choice == MULTIPLEYE_BUNDLE_CHOICE:
+        try:
+            words, fixations = _cached_multipleye_server_bundle(participant=participant)
+        except (FileNotFoundError, ValueError, OSError) as exc:
+            st.error(f"Couldn't load the MultiplEYE bundle: {exc}")
+            st.stop()
+        if words.empty or fixations.empty:
+            _note_dataset_unavailable(
+                label="MultiplEYE bundle",
+                reason="its session folders weren't found.",
+                action="Point `MULTIPLEYE_DATA_DIR` at a MultiplEYE session set "
+                "and restart the app.",
+                root=str(multipleye_bundle_dir() or ""),
             )
             return load_sample_data()
         return words, fixations
@@ -4518,6 +4678,7 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
 #: metadata tables and annotations.
 BUILTIN_SOURCE_CHOICES = (
     ONESTOP_CHOICE,
+    MULTIPLEYE_BUNDLE_CHOICE,
     DEMO_CHOICE,
     MANUAL_SAMPLE_CHOICE,
     SYNTHETIC_CHOICE,
@@ -4598,6 +4759,9 @@ def resolve_data_source(host=None) -> str:
     if onestop_data_dir() is not None:
         entries.append(ONESTOP_CHOICE)
         kinds[ONESTOP_CHOICE] = "🔒"
+    if multipleye_bundle_dir() is not None:
+        entries.append(MULTIPLEYE_BUNDLE_CHOICE)
+        kinds[MULTIPLEYE_BUNDLE_CHOICE] = "🔒"
     entries.append(DEMO_CHOICE)
     kinds[DEMO_CHOICE] = "🧪"
     entries.append(MANUAL_SAMPLE_CHOICE)
@@ -7044,6 +7208,14 @@ def resolve_source_monitor(
     # declared screen, and which would scan the whole corpus per rerun.
     if declared := (public_dataset_registry().get(data_choice) or {}).get("monitor"):
         return int(declared[0]), int(declared[1]), True
+    if data_choice == MULTIPLEYE_BUNDLE_CHOICE:
+        # MultiplEYE server bundle = the same native MultiplEYE export as the
+        # public source; coordinates are offset onto the centered stimulus on
+        # the real 1920x1080 monitor, so snap the canvas to it (true-to-scale),
+        # exactly like the public MultiplEYE registry entry's monitor.
+        from scanpath_studio.datasets import MULTIPLEYE_MONITOR
+
+        return MULTIPLEYE_MONITOR[0], MULTIPLEYE_MONITOR[1], True
     stored = (st.session_state.get("_datasets") or {}).get(data_choice)
     if isinstance(stored, dict) and isinstance(stored.get("setup"), dict):
         snapshot = SetupSnapshot.from_dict(stored["setup"], fallback=SetupSnapshot())
@@ -7218,7 +7390,7 @@ def _declared_setup_snapshot(choice: str | None) -> SetupSnapshot | None:
     """What a built-in source itself declares (``active_setup_snapshot``'s
     answer without an override), or ``None`` when it declares nothing."""
     declared = (
-        choice in (ONESTOP_CHOICE, DEMO_CHOICE)
+        choice in (ONESTOP_CHOICE, DEMO_CHOICE, MULTIPLEYE_BUNDLE_CHOICE)
         or _public_dataset_monitor(choice) is not None
         # A public corpus reached by its own label rather than through the
         # `Public datasets` picker still declares a monitor in the registry.
@@ -7403,7 +7575,7 @@ def seed_canvas_state(
     # via Session State API" warning.
     #
     # For a source with an authoritative monitor, snap the canvas to it whenever
-    # that source *changes* (selecting a public dataset, switching PoTeC↔OneStop,
+    # that source *changes* (selecting a public dataset, switching PoTeC↔MultiplEYE,
     # or a public dataset whose registered monitor was updated): a plain
     # ``setdefault`` would let a previously-seeded canvas stick, so a returning
     # session would keep the old monitor and render the corpus off-scale. Manual
@@ -7442,8 +7614,8 @@ def seed_canvas_state(
         st.session_state["_canvas_seeded_for"] = source_key
     # The canvas pair itself is pinned with the rest of the defaults below.
 
-    # Authoritative reading font: a dataset can carry its stimulus font size +
-    # family on the words. Snap the font controls to it when the source
+    # Authoritative reading font: MultiplEYE stamps the stimulus FONT_SIZE + family
+    # from its config onto the words. Snap the font controls to it when the source
     # changes (same gate as the canvas), so the reading text renders at the exact
     # size and (CJK) typeface the stimulus images were drawn with. We also turn off
     # "scale text to boxes" since the precise px is known — box geometry can only
@@ -7451,11 +7623,11 @@ def seed_canvas_state(
     # the snap doesn't re-fire); a returning source re-snaps to the known font.
     #
     # **And the snap is undone on the way out.** Otherwise a source that
-    # declares no typeface simply inherits the previous corpus': Demo → a
-    # font-declaring corpus → Demo would come back with that corpus' px, its
-    # font stack, and *scale-to-boxes off* — the demo's reading text visibly
-    # smaller, with nothing on screen saying why, for the rest of the session
-    # (and into the recovery cache, and into any link or config saved from it).
+    # declares no typeface simply inherits the previous corpus': Demo →
+    # MultiplEYE → Demo would come back with MultiplEYE's px, its CJK stack, and
+    # *scale-to-boxes off* — the demo's reading text visibly smaller, with
+    # nothing on screen saying why, for the rest of the session (and into the
+    # recovery cache, and into any link or config saved from it).
     #
     # The general shape, worth stating because the other two source-switch snaps
     # in this file share it: a snap writes **session**-scoped state to express a
@@ -7466,10 +7638,10 @@ def seed_canvas_state(
     # it overwrote and put it back.
     #
     # Restoring the *stashed* values rather than the factory defaults is what
-    # keeps a hand-tuned font across a detour: tune the demo, look at a
-    # font-declaring corpus, come back, and your own size is still there. Stashed
-    # only on the **first** snap of a run of them, so one font-declaring corpus →
-    # another → Demo restores the state before the first and not the first's.
+    # keeps a hand-tuned font across a detour: tune the demo, look at MultiplEYE,
+    # come back, and your own size is still there. Stashed only on the **first**
+    # snap of a run of them, so MultiplEYE → another font-declaring corpus →
+    # Demo restores the pre-MultiplEYE state and not MultiplEYE's.
     if st.session_state.get("_font_seeded_for") != source_key:
         # Read only when the snap can fire: on a font-declaring corpus it is a
         # numeric parse over every word row, and every other run discards it.
@@ -8179,7 +8351,7 @@ def render_canvas_controls(
         text.caption(
             "↔ Right-to-left script detected — labels are laid out by the browser."
         )
-    # When the dataset declares its stimulus typeface, the overlaid
+    # When the dataset declares its stimulus typeface (MultiplEYE), the overlaid
     # text only lines up with the stimulus image if that exact font is installed
     # on the viewer's machine — we don't bundle it, and the browser otherwise
     # falls back per-script (CJK lands, but half-width Latin in a CJK font drifts,
@@ -9152,6 +9324,10 @@ def _run_app() -> None:
         linked_choice = st.session_state.setdefault(
             "data_source_choice", ONESTOP_CHOICE
         )
+    elif url_source == "multipleye" and multipleye_bundle_dir() is not None:
+        linked_choice = st.session_state.setdefault(
+            "data_source_choice", MULTIPLEYE_BUNDLE_CHOICE
+        )
     elif url_source == "demo":
         linked_choice = st.session_state.setdefault("data_source_choice", DEMO_CHOICE)
     elif url_source == "synthetic":
@@ -9749,6 +9925,10 @@ def _run_app() -> None:
         deep_link_pid = deeplink_pid
     elif data_choice == ONESTOP_CHOICE and not onestop_full_bundle_exists():
         deep_link_pid = st.session_state.get("single_participant")
+    elif data_choice == MULTIPLEYE_BUNDLE_CHOICE:
+        # MultiplEYE has no full-corpus bundle: each session is its own shard, so
+        # the live participant selector fast-paths to one session's shards too.
+        deep_link_pid = st.session_state.get("single_participant")
     else:
         deep_link_pid = None
     raw_gaze_df: pd.DataFrame | None = None
@@ -9861,10 +10041,10 @@ def _run_app() -> None:
         # Re-propose the column mapping when the monitor-defining source changes.
         # The `col_map_*` widget keys persist across reruns, so a previous corpus'
         # mapping sticks to the next one — e.g. PoTeC maps Trial → `text_id`, and
-        # a next corpus that *also* has a `text_id` column would not be caught by
-        # the stale-column reset (which only fires when a mapped column
-        # vanishes), so its own `trial_id` would be ignored and its trials
-        # collapsed into one per text. Clearing on source change lets each
+        # since MultiplEYE *also* has a `text_id` column the stale-column reset
+        # (which only fires when a mapped column vanishes) wouldn't catch it, so
+        # MultiplEYE's per-page `trial_id` was ignored and every page collapsed
+        # into one stimulus-level trial. Clearing on source change lets each
         # corpus auto-detect its own mapping; same-source reruns (and restores)
         # keep their keys. Mirrors the canvas re-seed in seed_canvas_state.
         source_key = (data_choice, st.session_state.get("public_dataset_choice"))

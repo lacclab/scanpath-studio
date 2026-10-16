@@ -27,6 +27,7 @@ from .code_snippet import (
     SNIPPET_STATE_KEY,
     SOURCE_AUTHOR,
     SOURCE_DEMO,
+    SOURCE_MULTIPLEYE,
     SOURCE_ONESTOP,
     SOURCE_POTEC,
     SOURCE_RAW_GAZE,
@@ -62,6 +63,7 @@ from .constants import (
     MANUAL_SAMPLE_CHOICE,
     MARKER_DURATION_BOUNDS,
     MARKER_SIZE_SCALES,
+    MULTIPLEYE_BUNDLE_CHOICE,
     ONESTOP_CHOICE,
     ONESTOP_PART_LABELS,
     ONESTOP_REGIME_CHOICES,
@@ -950,6 +952,7 @@ _SHAREABLE_SOURCES = {
     MANUAL_SAMPLE_CHOICE: "author",
     DEMO_CHOICE: "demo",
     ONESTOP_CHOICE: "onestop",
+    MULTIPLEYE_BUNDLE_CHOICE: "multipleye",
     SYNTHETIC_CHOICE: "synthetic",
     # The public OneStop corpus (OSF download-on-demand) is shareable too: one
     # dataset per regime, each its own token (`onestop_<regime>`). An older
@@ -3719,7 +3722,7 @@ def _link_defaults(data_choice: str) -> dict:
 
     defaults = dict(SETUP_DEFAULTS)
     if _FONT_SNAP_RESTORE_KEY in st.session_state:
-        # The source declares its typeface, so its first seeding
+        # The source declares its typeface (MultiplEYE), so its first seeding
         # snaps the base font to *that* — a sender who chose the factory 16
         # there has to say so, or the recipient gets the corpus' size.
         defaults.pop("global_base_font_size")
@@ -3960,6 +3963,23 @@ def _snippet_source(data_choice: str) -> SnippetSource:
             label=corpus_label,
             options={"root": root("potec_dir", "data/PoTeC", downloadable=True)},
         )
+    if short == "MultiplEYE":
+        fixation_source = str(
+            st.session_state.get("multipleye_fixation_source") or "scanpaths"
+        )
+        return SnippetSource(
+            kind=SOURCE_MULTIPLEYE,
+            label=corpus_label,
+            options={
+                "root": root("multipleye_dir", "data/MultiplEYE"),
+                "fixation_source": fixation_source,
+            },
+            # `render --source multipleye` has no fixation-source flag, so the
+            # non-default reading of the corpus can only be said in Python.
+            cli_unsupported=(
+                () if fixation_source == "scanpaths" else ("fixation_source",)
+            ),
+        )
     if regime := onestop_regime_for_choice(corpus_label or data_choice):
         # One regime's dataset — every part, from the public release.
         from scanpath_studio import datasets
@@ -4000,6 +4020,15 @@ def _snippet_source(data_choice: str) -> SnippetSource:
                 "which expects the regime/part report layout in that same "
                 "folder — point it at your reports if the two differ."
             ),
+        )
+    if data_choice == MULTIPLEYE_BUNDLE_CHOICE:
+        # Unlike OneStop's, this bundle loader *is* `multipleye_raw_frames` over
+        # the configured root — the same call `load_multipleye` makes — so the
+        # snippet reproduces it exactly and needs no caveat.
+        return SnippetSource(
+            kind=SOURCE_MULTIPLEYE,
+            label=MULTIPLEYE_BUNDLE_CHOICE,
+            options={"root": root("multipleye_dir", "data/MultiplEYE")},
         )
     stored = (st.session_state.get("_datasets") or {}).get(data_choice)
     if isinstance(stored, dict) and _samples_only(stored):

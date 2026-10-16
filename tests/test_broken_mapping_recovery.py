@@ -224,6 +224,45 @@ def test_a_collapsed_wizard_upload_recovers_like_any_other_bad_mapping(
     assert any("Screen ID" in e.value for e in at.error)
 
 
+def test_the_multipleye_preset_reports_a_rejected_load_instead_of_dying(monkeypatch):
+    """The format preset skips the mapping steps but runs the same pipeline.
+
+    Fault-injected rather than contrived from files: which MultiplEYE upload
+    combinations `multipart` still rejects is a moving target (the loader drops
+    screens without boxes precisely to avoid one), and what is under test here
+    is the guard, not today's list of rejections.
+    """
+    # The one MultiplEYE-shaped upload fixture in the suite; sharing it beats a
+    # second hand-built copy of the filename conventions the loader parses.
+    from scanpath_studio import app
+    from tests.test_apptest import _mpe_upload_frames
+
+    scan, aoi = _mpe_upload_frames()
+    frames = {"mpe_fix": scan, "mpe_aoi": aoi}
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: frames.get(kw["state_prefix"], pd.DataFrame()),
+    )
+
+    def _rejected(*_args, **_kwargs):
+        raise ValueError("Multipart reports contain orphan screens: no words for x")
+
+    monkeypatch.setattr(app, "_normalize_pair", _rejected)
+
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
+    at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+    at.session_state["_show_upload_wizard"] = True
+    at.session_state["setup_complete"] = False
+    at.session_state["wizard_dataset_format"] = "MultiplEYE"
+    pin_data_view(at)
+    at.run(timeout=180)
+
+    assert not at.exception
+    assert any("orphan screens" in e.value for e in at.error)
+    assert "_wizard_finalize_payload" not in at.session_state
+
+
 # --- a complete mapping whose numbers don't parse -----------------------------
 
 

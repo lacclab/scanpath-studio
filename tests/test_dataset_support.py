@@ -3,6 +3,7 @@ datasets (words-only / fixations-only), stimulus-level word tables, AOI-only
 fixations, and the PoTeC loader."""
 
 import io
+import json
 import zipfile
 from pathlib import Path
 
@@ -1261,6 +1262,425 @@ def test_onestop_without_the_composing_columns_is_left_alone(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# MultiplEYE loader (against a tiny synthesized MultiplEYE-format tree)
+# ---------------------------------------------------------------------------
+
+# Two characters per "word", 20x30 boxes laid out side by side. Pages reuse the
+# SAME coordinates (the real corpus does), so the per-page SCREENS inside one
+# stimulus trial are what keep them from overlapping.
+_AOI_COLS = [
+    "char_idx",
+    "char",
+    "top_left_x",
+    "top_left_y",
+    "width",
+    "height",
+    "char_idx_in_line",
+    "line_idx",
+    "page",
+    "word_idx",
+    "word_idx_in_line",
+    "word",
+]
+
+
+def _aoi_word(page, word_idx, word, x0):
+    """Two char-AOI rows for one word starting at x0 (boxes 20px wide)."""
+    return [
+        {
+            "char_idx": word_idx * 2 + i,
+            "char": word[i],
+            "top_left_x": x0 + i * 20,
+            "top_left_y": 50,
+            "width": 20,
+            "height": 30,
+            "char_idx_in_line": word_idx * 2 + i,
+            "line_idx": 0,
+            "page": page,
+            "word_idx": word_idx,
+            "word_idx_in_line": word_idx,
+            "word": word,
+        }
+        for i in range(2)
+    ]
+
+
+def _scan_row(onset, dur, x, y, page, word_idx):
+    return {
+        "onset": onset,
+        "duration": dur,
+        "name": "fixation",
+        "location_x": x,
+        "location_y": y,
+        "page": page,
+        "word_idx": word_idx,
+    }
+
+
+@pytest.fixture
+def multipleye_root(tmp_path):
+    """A minimal MultiplEYE-shaped tree: two sessions reading disjoint stimuli.
+
+    001_ZH_CH_1_ET1 reads Lit_Demo_1 (2 pages, reusing the same coords);
+    014_ZH_CH_1_ET2 reads Arg_Other_2 (1 page). The raw fixations/ file carries a
+    ``question_*`` screen; this tree ships neither a question-AOI file nor an
+    answer-layout version table, so it must be dropped rather than guessed."""
+    aoi_dir = tmp_path / "stimuli_Demo" / "aoi_stimuli_demo"
+    aoi_dir.mkdir(parents=True)
+
+    # Lit_Demo_1: page_1 = AA BB, page_2 = CC DD (same coords as page_1).
+    rows = (
+        _aoi_word("page_1", 0, "AA", 80)
+        + _aoi_word("page_1", 1, "BB", 140)
+        + _aoi_word("page_2", 0, "CC", 80)
+        + _aoi_word("page_2", 1, "DD", 140)
+    )
+    pd.DataFrame(rows, columns=_AOI_COLS).to_csv(
+        aoi_dir / "lit_demo_1_aoi.csv", index=False
+    )
+    pd.DataFrame(_aoi_word("page_1", 0, "EE", 80), columns=_AOI_COLS).to_csv(
+        aoi_dir / "arg_other_2_aoi.csv", index=False
+    )
+
+    s1 = "001_ZH_CH_1_ET1"
+    scan1 = tmp_path / "scanpaths" / s1
+    fix1 = tmp_path / "fixations" / s1
+    scan1.mkdir(parents=True)
+    fix1.mkdir(parents=True)
+    pd.DataFrame(
+        [
+            _scan_row(1000, 200, 90, 65, "page_1", 0),
+            _scan_row(1300, 180, 150, 65, "page_1", 1),
+            _scan_row(2000, 210, 90, 65, "page_2", 0),
+        ]
+    ).to_csv(scan1 / f"{s1}_trial_1_Lit_Demo_1_scanpath.csv", index=False)
+    # Raw fixations/: no word_idx, and a question_* screen to be filtered.
+    pd.DataFrame(
+        [
+            {
+                "onset": 1000,
+                "duration": 200,
+                "location_x": 90,
+                "location_y": 65,
+                "page": "page_1",
+            },
+            {
+                "onset": 1500,
+                "duration": 100,
+                "location_x": 500,
+                "location_y": 500,
+                "page": "question_1",
+            },
+            {
+                "onset": 2000,
+                "duration": 210,
+                "location_x": 90,
+                "location_y": 65,
+                "page": "page_2",
+            },
+        ]
+    ).to_csv(fix1 / f"{s1}_trial_1_Lit_Demo_1_fixation.csv", index=False)
+
+    s2 = "014_ZH_CH_1_ET2"
+    scan2 = tmp_path / "scanpaths" / s2
+    scan2.mkdir(parents=True)
+    pd.DataFrame([_scan_row(500, 150, 90, 65, "page_1", 0)]).to_csv(
+        scan2 / f"{s2}_trial_1_Arg_Other_2_scanpath.csv", index=False
+    )
+    return tmp_path
+
+
+def test_load_multipleye(multipleye_root):
+    words, fixations = datasets_module.load_multipleye(
+        multipleye_root, names="canonical"
+    )
+
+    # Reader key = full session; ET1/ET2 are distinct readers.
+    assert set(fixations["participant_id"]) == {"001_ZH_CH_1_ET1", "014_ZH_CH_1_ET2"}
+    # One trial per reading of a stimulus, its pages as ordered screens inside it.
+    assert set(words["trial_id"]) == {"Lit_Demo_1", "Arg_Other_2"}
+    assert set(zip(words["trial_id"], words["screen_id"])) == {
+        ("Lit_Demo_1", "page_1"),
+        ("Lit_Demo_1", "page_2"),
+        ("Arg_Other_2", "page_1"),
+    }
+    assert set(words["screen_kind"]) == {"reading"}
+    # text_id stays the stimulus (for stimulus-level merges/grouping).
+    assert set(words["text_id"]) == {"Lit_Demo_1", "Arg_Other_2"}
+
+    # Char AOIs aggregated to one box per (page, word_idx): AA spans x 80..120 in
+    # image space, shifted to where the centered stimulus sat on the monitor.
+    off_x, off_y = datasets_module._MULTIPLEYE_IMAGE_ORIGIN
+    aa = words[(words["trial_id"] == "Lit_Demo_1") & (words["screen_id"] == "page_1")]
+    aa = aa[aa["word_id"] == 0]
+    assert aa["text"].iloc[0] == "AA"
+    assert aa["x"].iloc[0] == 80 + off_x and aa["width"].iloc[0] == 40
+    assert aa["y"].iloc[0] == 50 + off_y and aa["height"].iloc[0] == 30
+
+    # Fixations carry the word index (scanpaths source) and link to boxes.
+    f1 = fixations[fixations["participant_id"] == "001_ZH_CH_1_ET1"]
+    assert f1["word_id"].notna().all()
+    assert sorted(f1["trial_id"].unique()) == ["Lit_Demo_1"]
+    assert sorted(f1["screen_id"].unique()) == ["page_1", "page_2"]
+    assert sorted(f1["screen_index"].unique()) == [1, 2]
+
+    fig = sps.plot_scanpath(
+        words,
+        fixations,
+        "001_ZH_CH_1_ET1",
+        "Lit_Demo_1",
+        screen="page_1",
+        canvas_size=(1920, 1080),
+    )
+    assert len(fig.data) > 0
+
+
+def test_load_multipleye_pages_are_separate_non_overlapping_screens(multipleye_root):
+    # page_1 and page_2 reuse the SAME coordinates but are different screens with
+    # different text — proving the per-screen split avoids the overlap.
+    words, _ = datasets_module.load_multipleye(
+        multipleye_root, stimuli=["Lit_Demo_1"], names="canonical"
+    )
+    p1 = words[words["screen_id"] == "page_1"]
+    p2 = words[words["screen_id"] == "page_2"]
+    assert set(p1["text"]) == {"AA", "BB"}
+    assert set(p2["text"]) == {"CC", "DD"}
+    # Same box geometry on both pages.
+    assert sorted(p1["x"]) == sorted(p2["x"])
+
+
+def test_load_multipleye_fixations_source_fallback(multipleye_root):
+    # The raw fixations/ files have no word index, and the question_* screen has
+    # no question-AOI file / version table here, so it is dropped rather than
+    # guessed (3 rows in -> 2 reading-page fixations out).
+    _words, fixations = datasets_module.load_multipleye(
+        multipleye_root,
+        sessions=["001_ZH_CH_1_ET1"],
+        fixation_source="fixations",
+        names="canonical",
+    )
+    assert fixations["word_id"].isna().all()
+    assert fixations["x"].notna().all()
+    assert len(fixations) == 2
+    assert set(fixations["trial_id"]) == {"Lit_Demo_1"}
+    assert set(fixations["screen_id"]) == {"page_1", "page_2"}
+
+
+def test_multipleye_centered_offset(multipleye_root):
+    _, fixations = datasets_module.load_multipleye(
+        multipleye_root,
+        sessions=["001_ZH_CH_1_ET1"],
+        stimuli=["Lit_Demo_1"],
+        names="canonical",
+    )
+    off_x, off_y = datasets_module._MULTIPLEYE_IMAGE_ORIGIN
+    # The centering offset is (screen - image) / 2 = (305, 44.5) for the 1310x991
+    # image on the 1920x1080 monitor — image-relative coords are shifted onto the
+    # centered on-screen position.
+    assert datasets_module.MULTIPLEYE_MONITOR == (1920, 1080)
+    assert (off_x, off_y) == (305.0, 44.5)
+    f0 = fixations.iloc[0]
+    assert f0["x"] == 90 + off_x and f0["y"] == 65 + off_y  # _scan_row(…, 90, 65, …)
+
+
+def test_multipleye_screen_kind_and_question_parsing():
+    # Screen kinds decide what is loaded at all: the rating / difficulty screens
+    # ship no AOI file, so they are neither "reading" nor "question".
+    assert datasets_module._multipleye_screen_kind("page_2") == "reading"
+    assert datasets_module._multipleye_screen_kind("question_4111") == "question"
+    assert datasets_module._multipleye_screen_kind("subject_difficulty_screen") == ""
+    assert datasets_module._multipleye_screen_kind("familiarity_rating_screen_1") == ""
+    assert datasets_module._multipleye_page_number("page_10") == 10
+    assert datasets_module._multipleye_page_number("question_4111") is None
+    # The AOI file zero-pads the stimulus id and the fixations do not, so the two
+    # only ever meet on int(question_id) — never on the string.
+    assert datasets_module._multipleye_question_parts("question_4111") == (4111, "stem")
+    assert datasets_module._multipleye_question_parts(
+        "Lit_Alchemist_4_question_04111_target"
+    ) == (4111, "target")
+    assert datasets_module._multipleye_question_parts("page_1") is None
+
+
+def test_load_multipleye_session_and_stimulus_filters(multipleye_root):
+    words, fixations = datasets_module.load_multipleye(
+        multipleye_root, sessions=["014_ZH_CH_1_ET2"], names="canonical"
+    )
+    assert set(fixations["participant_id"]) == {"014_ZH_CH_1_ET2"}
+    assert set(words["text_id"]) == {"Arg_Other_2"}
+
+
+def test_multipleye_raw_frames_auto_detect_path(multipleye_root):
+    # The in-app "Public datasets" source feeds multipleye_raw_frames through
+    # auto-detection (not the explicit schema), so the raw column names must
+    # auto-map to the same result — including text_id = stimulus, not the
+    # per-page trial id.
+    words_raw, fix_raw = datasets_module.multipleye_raw_frames(
+        multipleye_root, sessions=["001_ZH_CH_1_ET1"]
+    )
+    word_schema = data_module.propose_word_schema(words_raw)
+    fix_schema = data_module.propose_fix_schema(fix_raw)
+    assert not data_module.validate_word_schema(word_schema)
+    assert not data_module.validate_fix_schema(fix_schema)
+    assert word_schema["participant"] is None  # stimulus-level -> broadcast
+    assert fix_schema["participant"] == "participant_id"  # the session string
+
+    # The screen columns auto-detect too ("page" is a SCREEN_ID candidate), so the
+    # app's public-dataset path gets the same multipart identity.
+    assert word_schema["screen_id"] == "page"
+    assert fix_schema["screen_id"] == "page"
+
+    words = data_module.normalize_words(words_raw, word_schema)
+    fixations = data_module.normalize_fixations(fix_raw, fix_schema)
+    words, fixations = data_module.harmonize_frames(words, fixations)
+    assert set(words["text_id"]) == {"Lit_Demo_1"}
+    assert set(words["participant_id"]) == {"001_ZH_CH_1_ET1"}  # broadcast worked
+    assert set(words["trial_id"]) == {"Lit_Demo_1"}
+    assert set(words["screen_id"]) == {"page_1", "page_2"}
+
+
+def test_a_multipleye_load_reports_before_its_first_file(multipleye_root, monkeypatch):
+    """The load reports "0 of N files" first, so a gated card is armed before
+    the first file is read — then one report per file."""
+    calls = []
+    real_report = progress.report
+
+    def spy(done=None, total=None, *, unit="", detail=None):
+        calls.append((done, total, unit))
+        return real_report(done, total, unit=unit, detail=detail)
+
+    monkeypatch.setattr(progress, "report", spy)
+    with progress.task(("t", "multipleye-first"), title="Loading MultiplEYE"):
+        datasets_module.multipleye_raw_frames(multipleye_root)
+    files = calls[-1][1]
+    assert calls == [(index, files, "files") for index in range(files + 1)]
+
+
+def test_multipleye_inventory(multipleye_root):
+    sessions, stimuli = datasets_module.multipleye_inventory(multipleye_root)
+    assert sessions == ("001_ZH_CH_1_ET1", "014_ZH_CH_1_ET2")
+    assert stimuli == ("Arg_Other_2", "Lit_Demo_1")
+
+
+def test_load_multipleye_missing_aoi_raises(multipleye_root):
+    (
+        multipleye_root / "stimuli_Demo" / "aoi_stimuli_demo" / "lit_demo_1_aoi.csv"
+    ).unlink()
+    with pytest.raises(FileNotFoundError, match="AOI file not found"):
+        datasets_module.load_multipleye(
+            multipleye_root, stimuli=["Lit_Demo_1"], names="canonical"
+        )
+
+
+def test_load_multipleye_bad_fixation_source(multipleye_root):
+    with pytest.raises(ValueError, match="fixation_source"):
+        datasets_module.load_multipleye(
+            multipleye_root, fixation_source="saccades", names="canonical"
+        )
+
+
+# Optional end-to-end check against the read-only ZH-CH-Zurich sample, when present.
+_MULTIPLEYE_SAMPLE = __import__("pathlib").Path("data/MultiplEYE_ZH_CH_Zurich_1_2025")
+
+
+@pytest.mark.skipif(
+    not _MULTIPLEYE_SAMPLE.is_dir(), reason="MultiplEYE sample not present"
+)
+def test_load_multipleye_real_sample():
+    words, fixations = datasets_module.load_multipleye(
+        _MULTIPLEYE_SAMPLE, stimuli=["Lit_Alchemist_4"], names="canonical"
+    )
+    assert not words.empty and not fixations.empty
+    # One trial per reading of the stimulus; its pages + question screens inside.
+    assert set(words["text_id"]) == {"Lit_Alchemist_4"}
+    assert set(words["trial_id"]) == {"Lit_Alchemist_4"}
+    screens = (
+        words[words["participant_id"] == "001_ZH_CH_1_ET1"][
+            ["screen_index", "screen_id", "screen_kind"]
+        ]
+        .drop_duplicates()
+        .sort_values("screen_index")
+    )
+    assert list(screens["screen_index"]) == list(range(1, len(screens) + 1))
+    assert list(screens["screen_id"])[:5] == [f"page_{n}" for n in range(1, 6)]
+    # The question order is shuffled per reader, so it comes from the onsets:
+    # this reader saw question_4132 BEFORE question_4131.
+    assert list(screens["screen_id"])[5:] == [
+        "question_4111",
+        "question_4112",
+        "question_4121",
+        "question_4122",
+        "question_4132",
+        "question_4131",
+    ]
+    assert list(screens["screen_kind"]) == ["reading"] * 5 + ["question"] * 6
+    # Coords + image sit at the centered on-screen position (true-to-scale on the
+    # 1920x1080 monitor), and the image origin matches the coordinate offset.
+    off_x, off_y = datasets_module._MULTIPLEYE_IMAGE_ORIGIN
+    assert fixations["x"].between(0, 1920).all()
+    assert fixations["y"].between(0, 1080).all()
+    assert (float(words["image_x"].iloc[0]), float(words["image_y"].iloc[0])) == (
+        off_x,
+        off_y,
+    )
+    pid = min(fixations["participant_id"])
+    tid = min(fixations["trial_id"])
+    fig = sps.plot_scanpath(
+        words, fixations, pid, tid, canvas_size=datasets_module.MULTIPLEYE_MONITOR
+    )
+    assert len(fig.data) > 0
+
+
+@pytest.mark.skipif(
+    not _MULTIPLEYE_SAMPLE.is_dir(), reason="MultiplEYE sample not present"
+)
+def test_multipleye_real_sample_stamps_font():
+    # The stimulus FONT_SIZE (28) + CJK font are read from the config and stamped,
+    # surviving normalization so the app can snap its font controls to them.
+    words, fixations = datasets_module.load_multipleye(
+        _MULTIPLEYE_SAMPLE, stimuli=["Lit_Alchemist_4"], names="canonical"
+    )
+    assert float(words["stimulus_font_px"].iloc[0]) == 28.0
+    fam = words["stimulus_font_family"].iloc[0]
+    assert "Noto Sans Mono CJK SC" in fam
+    assert float(fixations["stimulus_font_px"].iloc[0]) == 28.0
+
+
+def test_multipleye_font_config_and_css(tmp_path):
+    cfg = tmp_path / "stimuli_X" / "config"
+    cfg.mkdir(parents=True)
+    (cfg / "config_zh_ch_X.py").write_text(
+        "MAX_CHARS_PER_LINE = 82\n"
+        "FONT_SIZE = 28\n"
+        'FONT = "fonts/NotoSansMonoCJKsc-VF.ttf"\n',
+        encoding="utf-8",
+    )
+    px, family = datasets_module._multipleye_font_config(tmp_path)
+    assert px == 28.0
+    assert family == "'Noto Sans Mono CJK SC', 'Noto Sans CJK SC', monospace"
+    # Unknown font → humanised name + monospace; "cjk" in the name adds a CJK stack.
+    assert datasets_module._multipleye_font_css("CourierPrime.ttf").endswith(
+        ", monospace"
+    )
+    assert "Noto Sans CJK SC" in datasets_module._multipleye_font_css("MyCJKFont.otf")
+    # No config under the root → (None, None), no stamping.
+    assert datasets_module._multipleye_font_config(tmp_path / "empty") == (None, None)
+
+
+def test_multipleye_stamps_font_when_config_present(multipleye_root):
+    # Drop a config into the synthetic tree → the loader stamps the typeface.
+    cfg = multipleye_root / "stimuli_Demo" / "config"
+    cfg.mkdir(parents=True)
+    (cfg / "config_zh_ch_demo.py").write_text(
+        'FONT_SIZE = 22\nFONT = "fonts/NotoSansMonoCJKsc-VF.ttf"\n', encoding="utf-8"
+    )
+    words, _fixations = datasets_module.load_multipleye(
+        multipleye_root, names="canonical"
+    )
+    assert (words["stimulus_font_px"] == 22.0).all()
+    assert words["stimulus_font_family"].str.contains("CJK SC").all()
+
+
+# ---------------------------------------------------------------------------
 # MultiplEYE-flavoured auto-detect + filename derivation
 # ---------------------------------------------------------------------------
 
@@ -1507,60 +1927,8 @@ def test_aggregate_char_boxes_edges_and_noop():
 
 
 # ---------------------------------------------------------------------------
-# The generic wizard tools on a MultiplEYE-shaped upload (identity from
-# source_file)
+# MultiplEYE browser-upload recipe (identity from source_file)
 # ---------------------------------------------------------------------------
-
-# Two characters per "word", 20x30 boxes laid out side by side. Pages reuse the
-# SAME coordinates (the real corpus does), so the per-page SCREENS inside one
-# stimulus trial are what keep them from overlapping.
-_AOI_COLS = [
-    "char_idx",
-    "char",
-    "top_left_x",
-    "top_left_y",
-    "width",
-    "height",
-    "char_idx_in_line",
-    "line_idx",
-    "page",
-    "word_idx",
-    "word_idx_in_line",
-    "word",
-]
-
-
-def _aoi_word(page, word_idx, word, x0):
-    """Two char-AOI rows for one word starting at x0 (boxes 20px wide)."""
-    return [
-        {
-            "char_idx": word_idx * 2 + i,
-            "char": word[i],
-            "top_left_x": x0 + i * 20,
-            "top_left_y": 50,
-            "width": 20,
-            "height": 30,
-            "char_idx_in_line": word_idx * 2 + i,
-            "line_idx": 0,
-            "page": page,
-            "word_idx": word_idx,
-            "word_idx_in_line": word_idx,
-            "word": word,
-        }
-        for i in range(2)
-    ]
-
-
-def _scan_row(onset, dur, x, y, page, word_idx):
-    return {
-        "onset": onset,
-        "duration": dur,
-        "name": "fixation",
-        "location_x": x,
-        "location_y": y,
-        "page": page,
-        "word_idx": word_idx,
-    }
 
 
 def _upload_frame(rows_by_file, columns=None):
@@ -1582,13 +1950,47 @@ def _aoi_pages(*specs):
     return rows
 
 
-def test_generic_wizard_tools_load_a_multipleye_shaped_upload():
-    # The wizard's generic tools — column-derive via
-    # extract_columns_from_source_file, character-AOI aggregation and
-    # api.load_scanpath_data — build one reading of a stimulus, its pages as
-    # screens, from the file names alone. Case is folded on both derived
-    # columns (the CamelCase scanpath name and the lowercase AOI name), so the
-    # two tables meet on the same trial.
+def test_multipleye_uploads_case_match_join():
+    # The load-bearing blocker: scanpath filenames are CamelCase, AOI filenames
+    # lowercase — the recipe must relabel AOI stimuli to the CamelCase canonical
+    # so the stimulus-words broadcast (inner join on trial_id) keeps the boxes.
+    scan = _upload_frame(
+        {
+            "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath": [
+                _scan_row(1000, 200, 90, 65, "page_1", 0),
+                _scan_row(1300, 180, 150, 65, "page_1", 1),
+                _scan_row(2000, 210, 90, 65, "page_2", 0),
+            ]
+        }
+    )
+    aoi = _upload_frame(
+        {
+            "lit_demo_1_aoi": _aoi_pages(
+                ("page_1", 0, "AA", 80),
+                ("page_1", 1, "BB", 140),
+                ("page_2", 0, "CC", 80),
+            )
+        },
+        columns=_AOI_COLS,
+    )
+    words, fixations = datasets_module.load_multipleye_uploads(
+        scan, aoi, names="canonical"
+    )
+    assert not words.empty  # boxes joined despite the lowercase AOI filename
+    assert set(words["text_id"]) == {"Lit_Demo_1"}  # CamelCase canonical, not lowercase
+    assert set(words["trial_id"]) <= set(fixations["trial_id"])
+    assert set(fixations["participant_id"]) == {"001_ZH_CH_1_ET1"}
+
+
+def test_generic_wizard_tools_reproduce_multipleye_upload_recipe():
+    # Parity check: the same reading-pages-only upload,
+    # built with the *generic* wizard tools (column-derive via
+    # extract_columns_from_source_file + api.load_scanpath_data) instead of
+    # the MultiplEYE-specific recipe, lands on the same trial/participant
+    # identity and the same row counts. Case is folded on both derived
+    # columns here (the generic tool has no cross-table CamelCase canonical —
+    # that's `datasets.py`'s own case-matching trick, still MultiplEYE-only),
+    # so identity is compared case-insensitively rather than literally.
     from scanpath_studio import api
 
     scan = _upload_frame(
@@ -1610,13 +2012,12 @@ def test_generic_wizard_tools_load_a_multipleye_shaped_upload():
         },
         columns=_AOI_COLS,
     )
+    words_ref, fixations_ref = datasets_module.load_multipleye_uploads(
+        scan, aoi, names="canonical"
+    )
 
     fix_raw = data_module.extract_columns_from_source_file(
-        scan,
-        r"^(?P<session>\d+_[A-Za-z]{2}_[A-Za-z]{2}_\d+_ET\d+)_"
-        r"(?:(?P<practice>PRACTICE)_)?trial_(?P<trial_num>\d+)_"
-        r"(?P<stimulus>.+)_(?P<kind>fixation|scanpath)$",
-        lowercase=True,
+        scan, datasets_module._MULTIPLEYE_TRIAL_RE.pattern, lowercase=True
     )
     aoi_raw = data_module.extract_columns_from_source_file(
         aoi, r"(?P<stimulus>.+)_aoi$", lowercase=True
@@ -1653,12 +2054,209 @@ def test_generic_wizard_tools_load_a_multipleye_shaped_upload():
         names="canonical",
     )
 
-    assert len(words) == 3  # one box per word: AA, BB on page 1, CC on page 2
-    assert len(fixations) == 3
-    assert set(words["trial_id"]) == {"lit_demo_1"}
-    assert set(fixations["participant_id"]) == {"001_zh_ch_1_et1"}
-    assert set(words["screen_id"]) == {"page_1", "page_2"}
-    assert set(fixations["screen_id"]) == {"page_1", "page_2"}
+    assert len(words) == len(words_ref)
+    assert len(fixations) == len(fixations_ref)
+    assert {t.lower() for t in words["trial_id"].unique()} == {
+        t.lower() for t in words_ref["trial_id"].unique()
+    }
+    assert {p.lower() for p in fixations["participant_id"].unique()} == {
+        p.lower() for p in fixations_ref["participant_id"].unique()
+    }
+
+
+def test_multipleye_uploads_fixations_only():
+    scan = _upload_frame(
+        {
+            "014_ZH_CH_1_ET2_trial_1_Arg_Other_2_scanpath": [
+                _scan_row(500, 150, 90, 65, "page_1", 0)
+            ]
+        }
+    )
+    words, fixations = datasets_module.load_multipleye_uploads(
+        scan, None, names="canonical"
+    )
+    assert words.empty and not fixations.empty
+    assert fixations["x"].notna().all()
+    assert set(fixations["trial_id"]) == {"Arg_Other_2"}
+    assert set(fixations["screen_id"]) == {"page_1"}
+
+
+def test_multipleye_uploads_unrecognized_filenames():
+    bad = pd.DataFrame(
+        {
+            "onset": [1],
+            "duration": [1],
+            "location_x": [1.0],
+            "location_y": [1.0],
+            "page": ["page_1"],
+            "word_idx": [0],
+            "source_file": ["just_a_random_filename"],
+        }
+    )
+    words, fixations = datasets_module.multipleye_frames_from_uploads(bad, None)
+    assert words.empty and fixations.empty  # empty, not a raise
+
+
+def test_multipleye_uploads_prefers_scanpath_over_fixation():
+    # Both kinds uploaded for the same trial → scanpath wins (carries word_idx),
+    # so rows aren't doubled.
+    df = pd.concat(
+        [
+            _upload_frame(
+                {
+                    "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath": [
+                        _scan_row(1000, 200, 90, 65, "page_1", 0)
+                    ]
+                }
+            ),
+            _upload_frame(
+                {
+                    "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_fixation": [
+                        {
+                            "onset": 1000,
+                            "duration": 200,
+                            "location_x": 90,
+                            "location_y": 65,
+                            "page": "page_1",
+                        }
+                    ]
+                }
+            ),
+        ],
+        ignore_index=True,
+        sort=False,
+    )
+    _words, fixations = datasets_module.multipleye_frames_from_uploads(df, None)
+    assert len(fixations) == 1
+    assert fixations["word_idx"].notna().all()
+
+
+def test_multipleye_uploads_stimulus_without_aoi():
+    scan = _upload_frame(
+        {
+            "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath": [
+                _scan_row(1000, 200, 90, 65, "page_1", 0)
+            ],
+            "001_ZH_CH_1_ET1_trial_2_Arg_Other_2_scanpath": [
+                _scan_row(1000, 200, 90, 65, "page_1", 0)
+            ],
+        }
+    )
+    aoi = _upload_frame(
+        {"lit_demo_1_aoi": _aoi_pages(("page_1", 0, "AA", 80))}, columns=_AOI_COLS
+    )
+    words, fixations = datasets_module.load_multipleye_uploads(
+        scan, aoi, names="canonical"
+    )
+    assert "Lit_Demo_1" in set(words["text_id"])  # has boxes
+    assert "Arg_Other_2" not in set(words["text_id"])  # no AOI → no boxes, no raise
+    # Screens are part of the identity, and multipart forbids a
+    # screen present in one report and absent from the other — so a stimulus with
+    # no uploaded AOI loses its fixations (loudly) instead of crashing the load.
+    assert set(fixations["text_id"]) == {"Lit_Demo_1"}
+
+
+def test_multipleye_uploads_match_directory_loader(multipleye_root):
+    # Read the same files as "uploads" (tagging source_file) and assert the recipe
+    # reproduces the directory loader exactly — guards against drift.
+    import glob
+
+    def tag(paths):
+        frames = []
+        for p in paths:
+            df = pd.read_csv(p)
+            df["source_file"] = __import__("pathlib").Path(p).stem
+            frames.append(df)
+        return pd.concat(frames, ignore_index=True, sort=False)
+
+    scan = tag(glob.glob(str(multipleye_root / "scanpaths" / "*" / "*_scanpath.csv")))
+    aoi = tag(
+        glob.glob(str(multipleye_root / "stimuli_*" / "aoi_stimuli_*" / "*_aoi.csv"))
+    )
+    wu, fu = datasets_module.load_multipleye_uploads(scan, aoi, names="canonical")
+    wd, fd = datasets_module.load_multipleye(multipleye_root, names="canonical")
+    assert sorted(wu["trial_id"].unique()) == sorted(wd["trial_id"].unique())
+    assert sorted(fu["trial_id"].unique()) == sorted(fd["trial_id"].unique())
+    assert set(wu["text_id"]) == set(wd["text_id"])
+    assert round(float(wu["x"].sum()), 3) == round(float(wd["x"].sum()), 3)
+
+
+def test_multipleye_uploads_prefers_scanpath_fixation_first_order():
+    # Same trial, the fixation file uploaded BEFORE the scanpath file → scanpath
+    # still wins (the dedup is order-independent).
+    df = pd.concat(
+        [
+            _upload_frame(
+                {
+                    "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_fixation": [
+                        {
+                            "onset": 1000,
+                            "duration": 200,
+                            "location_x": 90,
+                            "location_y": 65,
+                            "page": "page_1",
+                        }
+                    ]
+                }
+            ),
+            _upload_frame(
+                {
+                    "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath": [
+                        _scan_row(1000, 200, 90, 65, "page_1", 0)
+                    ]
+                }
+            ),
+        ],
+        ignore_index=True,
+        sort=False,
+    )
+    _, fixations = datasets_module.multipleye_frames_from_uploads(df, None)
+    assert len(fixations) == 1
+    assert fixations["word_idx"].notna().all()  # the scanpath rows (with word idx)
+
+
+def test_multipleye_uploads_pageless_file_does_not_crash():
+    # A stray / question-AOI upload without a `page` column must contribute zero
+    # boxes, not crash the wizard (the KeyError('page') guard).
+    scan = _upload_frame(
+        {
+            "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath": [
+                _scan_row(1000, 200, 90, 65, "page_1", 0)
+            ]
+        }
+    )
+    good_aoi = _upload_frame(
+        {"lit_demo_1_aoi": _aoi_pages(("page_1", 0, "AA", 80))}, columns=_AOI_COLS
+    )
+    pageless = pd.DataFrame(
+        {
+            "char_idx": [0],
+            "char": ["x"],
+            "top_left_x": [1],
+            "top_left_y": [1],
+            "width": [1],
+            "height": [1],
+            "word_idx": [0],
+            "word": ["x"],
+            "source_file": ["lit_demo_1_aoi_questions"],  # no `page` column
+        }
+    )
+    aoi = pd.concat([good_aoi, pageless], ignore_index=True, sort=False)
+    words, _ = datasets_module.load_multipleye_uploads(scan, aoi, names="canonical")
+    assert (
+        not words.empty
+    )  # the real AOI still produced boxes; the page-less one didn't
+
+
+def test_multipleye_uploads_pageless_fixation_skipped():
+    bad = pd.DataFrame(
+        {"onset": [1], "duration": [1], "location_x": [1.0], "location_y": [1.0]}
+    )
+    bad["source_file"] = (
+        "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath"  # no `page` column
+    )
+    words, fixations = datasets_module.multipleye_frames_from_uploads(bad, None)
+    assert words.empty and fixations.empty  # skipped, not a crash
 
 
 def test_extract_columns_skips_existing_columns():
@@ -1723,6 +2321,154 @@ def test_extract_columns_feeds_trial_mapping():
     )
     assert set(norm["trial_id"]) == {"t1", "t2"}
     assert set(norm["participant_id"]) == {"p1"}
+
+
+# ---------------------------------------------------------------------------
+# MultiplEYE side data: questions / reader metadata / reading measures / images
+# ---------------------------------------------------------------------------
+
+
+def test_multipleye_questions_from_frame():
+    qs = pd.DataFrame(
+        {
+            "stimulus_name": ["Lit_Alchemist", "Lit_Alchemist"],
+            "stimulus_id": [4, 4],
+            "question_no": [2, 1],
+            "condition_no": [1, 1],
+            "question": ["Q2?", "Q1?"],
+            "target": ["A2", "A1"],
+            "distractor_a": ["d1", "d1"],
+            "distractor_b": ["nan", "d2"],  # 'nan' must be dropped
+            "condition_name": ["local", "local"],
+        }
+    )
+    out = datasets_module._multipleye_questions_from_frame(qs)
+    # Join key is stimulus_name + "_" + stimulus_id.
+    assert set(out) == {"Lit_Alchemist_4"}
+    items = json.loads(out["Lit_Alchemist_4"])
+    assert [q["question_no"] for q in items] == [1, 2]  # sorted by (cond, q_no)
+    assert items[0]["target"] == "A1"
+    assert items[1]["distractors"] == ["d1"]  # 'nan' distractor filtered
+
+
+def test_multipleye_participant_meta_int_join():
+    fixations = pd.DataFrame(
+        {
+            "participant": ["001", "014"],  # zero-padded text
+            "session": ["ET1", "ET2"],
+            "x": [1.0, 2.0],
+        }
+    )
+    meta = datasets_module._normalize_multipleye_participant_meta(
+        pd.DataFrame(
+            {
+                "participant_id": [1, 14],  # integer
+                "session": ["ET1", "ET2"],
+                "age": [25, 30],
+                "gender": ["F", "M"],
+            }
+        )
+    )
+    merged = datasets_module._merge_multipleye_participant_meta(fixations, meta)
+    assert merged["pp_age"].tolist() == [25, 30]  # int "001" joined int 1
+    assert merged["pp_gender"].tolist() == ["F", "M"]
+    assert "participant_id" not in merged.columns  # the meta key isn't leaked
+
+
+def test_multipleye_rm_map_no_rr_and_derived_flags():
+    # RR (re-reading) must NOT be mapped to a regression flag; in/out flags are
+    # derived from the counts.
+    assert "RR" not in datasets_module.MULTIPLEYE_RM_MAP
+    assert datasets_module.MULTIPLEYE_RM_MAP["FFD"] == "IA_FIRST_FIXATION_DURATION"
+    assert datasets_module.MULTIPLEYE_RM_MAP["TFT"] == "IA_DWELL_TIME"
+    # Every IA_* target is a recognized pre-aggregated source the app prefers.
+    word_sources = {src for src, *_ in data_module.WORD_OPTIONAL_FIELDS}
+    assert set(datasets_module.MULTIPLEYE_RM_MAP.values()) <= word_sources
+
+
+def test_multipleye_words_per_reader_merges_rm_by_page_word():
+    # word_idx restarts per page, so the RM merge key MUST include page.
+    boxes = pd.DataFrame(
+        {
+            "stimulus": ["S"] * 3,
+            "page": ["page_1", "page_1", "page_2"],
+            "word_idx": [0, 1, 0],
+            "left": [0, 10, 0],
+        }
+    )
+    rm = pd.DataFrame(
+        {
+            "participant_id": ["r1"] * 3,
+            "stimulus": ["S"] * 3,
+            "page": ["page_1", "page_1", "page_2"],
+            "word_idx": [0, 1, 0],
+            "IA_FIRST_FIXATION_DURATION": [100, 110, 120],
+        }
+    )
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["r1", "r1"],
+            "stimulus": ["S", "S"],
+            "page": ["page_1", "page_2"],
+        }
+    )
+    words = datasets_module._multipleye_words_per_reader(boxes, rm, fixations)
+    assert set(words["participant_id"]) == {"r1"}
+    # page_2 word 0 gets its own measure (not page_1 word 0's).
+    p2 = words[(words["page"] == "page_2") & (words["word_idx"] == 0)]
+    assert p2["IA_FIRST_FIXATION_DURATION"].iloc[0] == 120
+
+
+def test_multipleye_uploads_with_questions_and_participant_meta():
+    scan = _upload_frame(
+        {
+            "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath": [
+                _scan_row(1000, 200, 90, 65, "page_1", 0)
+            ]
+        }
+    )
+    questions = pd.DataFrame(
+        {
+            "stimulus_name": ["Lit_Demo"],
+            "stimulus_id": [1],
+            "question": ["Why?"],
+            "target": ["Because"],
+            "condition_name": ["local"],
+            "question_no": [1],
+            "condition_no": [1],
+        }
+    )
+    meta = pd.DataFrame(
+        {"participant_id": [1], "session": ["ET1"], "age": [22], "gender": ["F"]}
+    )
+    _, fixations = datasets_module.load_multipleye_uploads(
+        scan, None, questions_df=questions, participant_meta_df=meta, names="canonical"
+    )
+    assert (
+        json.loads(fixations["comprehension_questions"].iloc[0])[0]["target"]
+        == "Because"
+    )
+    assert fixations["pp_age"].iloc[0] == 22
+    assert fixations["pp_gender"].iloc[0] == "F"
+
+
+@pytest.mark.skipif(
+    not _MULTIPLEYE_SAMPLE.is_dir(), reason="MultiplEYE sample not present"
+)
+def test_load_multipleye_real_sample_side_data():
+    words, fixations = datasets_module.load_multipleye(
+        _MULTIPLEYE_SAMPLE, stimuli=["Lit_Alchemist_4"], names="canonical"
+    )
+    # Per-reader words with pre-aggregated reading measures (IA_* → canonical).
+    assert "participant_id" in words.columns
+    assert words["first_fixation_ms"].notna().any()  # FFD → IA_FIRST_FIXATION_DURATION
+    assert words["total_fixation_duration_ms"].notna().any()  # TFT → IA_DWELL_TIME
+    # Reader metadata + comprehension + image path on the fixations.
+    assert fixations["pp_age"].notna().any()
+    questions = json.loads(fixations["comprehension_questions"].dropna().iloc[0])
+    assert len(questions) >= 1 and questions[0]["question"]
+    img = fixations["image_path"].dropna().iloc[0]
+    assert __import__("os").path.exists(img)
 
 
 # ---------------------------------------------------------------------------

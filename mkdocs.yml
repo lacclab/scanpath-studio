@@ -188,10 +188,12 @@ validation:
 
 # The abbreviation list is appended to every page by pymdownx.snippets; it is
 # not a page of its own. The dataset-adapter contract is developer material,
-# read on GitHub from CONTRIBUTING.md.
+# read on GitHub from CONTRIBUTING.md. MultiplEYE is off by default in the
+# app, so its page stays off the site.
 exclude_docs: |
   includes/
   contributing-a-dataset.md
+  multipleye.md
 
 hooks:
   - scripts/mkdocs_hooks.py

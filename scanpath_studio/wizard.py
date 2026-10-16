@@ -1,8 +1,8 @@
 """The Upload / Add-dataset wizard (the main-area guided data-setup flow).
 
 Everything from the upload-table reading UI through the wizard's parts (name →
-upload and map each table → recording setup → stimulus images → add).
-``app.py`` drives this from ``resolve_data_source`` /
+upload and map each table → recording setup → stimulus images → add) and the
+MultiplEYE upload branch. ``app.py`` drives this from ``resolve_data_source`` /
 ``main`` and re-exports a few helpers for tests.
 
 A handful of data-IO / normalization helpers (``_read_uploaded_frame``,
@@ -35,6 +35,7 @@ from .constants import (
     ICONS,
     TRIAL_IDENTITY_CHECK_KEY,
     WIZARD_LEAVE_KEY,
+    multipleye_upload_enabled,
     plural,
     upload_identity,
     upload_limit_label,
@@ -174,6 +175,7 @@ def _reset_wizard_widgets() -> None:
         "wizard_dataset_description",
         WIZARD_IMAGES_FOLDER_KEY,
         WIZARD_IMAGES_PATTERN_KEY,
+        "wizard_dataset_format",
         "wizard_config_restore",
         "_wizard_config_last",
         "_wizard_restored_meta",
@@ -182,7 +184,11 @@ def _reset_wizard_widgets() -> None:
         _COPY_FROM_KEY,
         "_composite_trial_columns",
         "wizard_filter_fields",
-        # Generic filename-derivation / aggregation.
+        # MultiplEYE preset uploads + generic filename-derivation / aggregation.
+        "mpe_fix_upload",
+        "mpe_aoi_upload",
+        "mpe_questions_upload",
+        "mpe_participant_upload",
         "wizard_filename_split",
         "wizard_filename_mode",
         "wizard_filename_regex",
@@ -235,7 +241,7 @@ def _safe_dataset_name(name: str | None, *, exclude: str | None = None) -> str:
     overwriting an existing entry's frames).
 
     Built-in labels are every token the picker can list
-    (``app.reserved_source_names`` — the demo, the samples, the server bundle
+    (``app.reserved_source_names`` — the demo, the samples, the server bundles
     and every public corpus): a user dataset shadowing one gets a duplicate
     option and hijacks the built-in's load branch. A name that still
     holds another dataset's annotation store counts as taken too, so a new or
@@ -3254,6 +3260,263 @@ def _apply_restored_setup(snapshot: SetupSnapshot) -> None:
     _remember_setup(remembered)
 
 
+def _render_multipleye_upload(body, active: bool) -> _UploadResult:
+    """MultiplEYE preset for the Add-dataset wizard (the "MultiplEYE" format).
+
+    Skips the generic column-mapping steps: the user uploads the corpus's
+    scanpath/fixation CSVs (+ optional word-AOI CSVs) and the recipe
+    (``datasets.multipleye_frames_from_uploads``) parses participant / session /
+    trial / stimulus from the file names, makes each *stimulus* a trial with its
+    pages (and, when the question AOI + answer-layout version files are uploaded
+    too, its comprehension-question screens) as ordered screens inside it,
+    aggregates character AOIs into word boxes, and case-matches the (lowercase)
+    AOI file names to the (CamelCase) stimuli. Produces the same normalized frames
+    + ``_wizard_finalize_payload`` as a finished generic upload, so finalize /
+    reload behave identically."""
+    from scanpath_studio.datasets import (
+        MULTIPLEYE_FIX_SCHEMA,
+        MULTIPLEYE_MONITOR,
+        multipleye_frames_from_uploads,
+        multipleye_word_schema,
+    )
+
+    if active:
+        body.caption(
+            "Upload the MultiplEYE **scanpath** (or fixation) CSVs and, for word "
+            "boxes, the **AOI** CSVs — identity is read from the file names, each "
+            "stimulus becomes a trial whose pages are screens you can step "
+            "through, and character AOIs are aggregated into word boxes "
+            "automatically."
+        )
+        # Seed the MultiplEYE presentation monitor (true-to-scale default).
+        st.session_state.setdefault("global_canvas_width", MULTIPLEYE_MONITOR[0])
+        st.session_state.setdefault("global_canvas_height", MULTIPLEYE_MONITOR[1])
+        app.render_canvas_controls(
+            empty_words_frame(),
+            empty_fixations_frame(),
+            data_choice=None,
+            slot=body,
+            expanded=False,
+            title="Monitor, font & text scaling",
+        )
+
+    fix_df = app._read_uploaded_frame(
+        uploader_label="Scanpath / fixation CSVs",
+        upload_help="The per-trial *_scanpath.csv (preferred — they carry the word "
+        "index) or *_fixation.csv files. Drop in as many as you like.",
+        state_prefix="mpe_fix",
+        multi=True,
+        container=body,
+    )
+    aoi_df = app._read_uploaded_frame(
+        uploader_label="Word AOI CSVs (optional)",
+        upload_help="The per-stimulus *_aoi.csv files (character interest areas). "
+        "Optional — without them you get fixations and no word boxes. To get the "
+        "comprehension-question screens too, add the *_aoi_questions.csv files "
+        "AND stimulus_order_versions_*.csv here (the version table says which "
+        "answer layout each reader saw; without it the question screens are "
+        "skipped), and upload the *_fixation.csv files — the scanpath export "
+        "does not contain those screens.",
+        state_prefix="mpe_aoi",
+        multi=True,
+        container=body,
+    )
+    questions_df = app._read_uploaded_frame(
+        uploader_label="Comprehension questions (optional)",
+        upload_help="The multipleye_comprehension_questions_*.xlsx workbook — "
+        "adds the questions to the Stimulus & context panel.",
+        state_prefix="mpe_questions",
+        multi=False,
+        container=body,
+    )
+    participant_df = app._read_uploaded_frame(
+        uploader_label="participant_data.csv (optional)",
+        upload_help="Participant metadata (age / gender / languages…) → Trial Info chips.",
+        state_prefix="mpe_participant",
+        multi=False,
+        container=body,
+    )
+
+    if fix_df.empty:
+        if active:
+            body.info(
+                f"{ICONS['upload']} Upload MultiplEYE scanpath / fixation CSVs to begin."
+            )
+        return _UploadResult(
+            empty_words_frame(),
+            empty_fixations_frame(),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            ["Upload MultiplEYE scanpath / fixation CSVs to begin."],
+        )
+
+    words_raw, fix_raw = multipleye_frames_from_uploads(
+        fix_df,
+        aoi_df if not aoi_df.empty else None,
+        questions_df=questions_df if not questions_df.empty else None,
+        participant_meta_df=participant_df if not participant_df.empty else None,
+    )
+    if fix_raw.empty:
+        problem = (
+            "No MultiplEYE-shaped file names recognized — expected "
+            "`<session>_…_trial_N_<stimulus>_<scanpath|fixation>.csv` (e.g. "
+            "`001_ZH_CH_1_ET1_trial_1_Lit_Alchemist_4_scanpath.csv`). "
+            "Browser uploads keep the file name but drop the folder, so the "
+            "name must carry the session + stimulus."
+        )
+        if active:
+            body.error(problem)
+        return _UploadResult(
+            empty_words_frame(),
+            empty_fixations_frame(),
+            pd.DataFrame(),
+            words_raw,
+            fix_raw,
+            [problem],
+        )
+
+    has_words = not words_raw.empty
+    # Stimulus-level unless the recipe emitted per-reader boxes (question screens).
+    word_schema = multipleye_word_schema(words_raw) if has_words else None
+    fix_schema = dict(
+        MULTIPLEYE_FIX_SCHEMA,
+        word_id="word_idx" if "word_idx" in fix_raw.columns else None,
+    )
+    # Carry MultiplEYE's trial-level facets + side-data through normalization
+    # (the upload path passes a keep-set, so registered meta fields must be named
+    # here to survive — the directory path uses keep=None and keeps them all).
+    keep_fix = compute_keep_columns(
+        fix_schema,
+        keep_columns={
+            "genre",
+            "session",
+            "participant",
+            "is_practice",
+            "trial_num",
+            "comprehension_questions",
+            "pp_age",
+            "pp_gender",
+            "pp_native_language",
+            "pp_years_education",
+            "pp_education_level",
+            # A trial mixes reading pages (from the scanpath export) and
+            # question screens (from the fixation one), so the marker that tells
+            # them apart must survive the keep-set too.
+            "screen_kind",
+        },
+    )
+    keep_words = (
+        compute_keep_columns(
+            word_schema,
+            keep_columns={
+                "genre",
+                "comprehension_questions",
+                "screen_kind",
+                "aoi_block",
+            },
+        )
+        if has_words
+        else None
+    )
+    # app._normalize_pair sets _composite_trial_columns from the (single-column)
+    # trial mapping → None, exactly what the reload branch expects.
+    try:
+        words_norm, fixations_norm = app._normalize_pair(
+            words_raw if has_words else empty_words_frame(),
+            word_schema,
+            fix_raw,
+            fix_schema,
+            keep_words=keep_words,
+            keep_fix=keep_fix,
+        )
+    except Exception as exc:
+        # A rejected upload is a blocked wizard step, not a dead app — the
+        # uploaders above have to stay on screen for the user to fix the set of
+        # files they dropped in. See app.mapping_failure_problem.
+        problem = app.mapping_failure_problem(exc)
+        if active:
+            body.error(problem)
+        return _UploadResult(
+            empty_words_frame(),
+            empty_fixations_frame(),
+            pd.DataFrame(),
+            words_raw,
+            fix_raw,
+            [problem],
+        )
+    filter_fields = ["genre", "session", "is_practice"]
+    st.session_state["wizard_filter_fields"] = filter_fields
+    schemas = {"words": word_schema, "fixations": fix_schema, "raw_gaze": None}
+    # With the loader-built frames' columns, so the map is stashed too.
+    app._stash_active_mapping(
+        "words", word_schema, words_raw.columns, keep_columns=keep_words
+    )
+    app._stash_active_mapping(
+        "fixations", fix_schema, fix_raw.columns, keep_columns=keep_fix
+    )
+
+    if active:
+        boxes_msg = (
+            f" · **{len(words_norm):,}** word boxes"
+            if has_words
+            else " · no AOI boxes (upload *_aoi.csv for word boxes)"
+        )
+        body.success(
+            f"~**{fixations_norm['participant_id'].nunique()}** participants · "
+            f"**{fixations_norm['trial_id'].nunique()}** page-trials" + boxes_msg
+        )
+        st.session_state["_wizard_finalize_payload"] = {
+            "words": words_norm,
+            "fixations": fixations_norm,
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": filter_fields,
+            "composite_trial_columns": [],
+            "schemas": schemas,
+            # Share → Code: these schemas map the loader-built frames, not the
+            # files the user picked, so the snippet names the preset instead.
+            "source_recipe": {"schemas": {}, "steps": ["multipleye_preset"]},
+            # The loader-built frames' names (MultiplEYE's own files carry no
+            # identity columns).
+            "column_names": for_tables(
+                schemas,
+                {"words": words_raw, "fixations": fix_raw},
+                {"words": keep_words, "fixations": keep_fix},
+                rewrites=st.session_state.get(app.HARMONIZE_REWRITES_KEY),
+            ),
+            "dropped_columns": {
+                "words": dropped_columns(words_raw, keep=keep_words)
+                if has_words
+                else [],
+                "fixations": dropped_columns(fix_raw, keep=keep_fix),
+                "raw_gaze": [],
+            },
+            # MultiplEYE needs no Recording-setup part — it *declares*
+            # its geometry. The corpus records a real 1920x1080 presentation
+            # monitor and stamps the stimulus font size + family from its own
+            # config onto the words, so both are `measured`. Only the physical
+            # size / viewing distance are unrecorded, and those stay honestly
+            # `assumed` rather than being invented as measured.
+            "setup": app.capture_setup_snapshot(
+                {
+                    "screen": Provenance.MEASURED,
+                    "geometry": Provenance.ASSUMED,
+                    "text": Provenance.MEASURED,
+                }
+            ).to_dict(),
+        }
+        body.button(
+            f"{ICONS['confirm']} Add dataset",
+            type="primary",
+            key="wizard_finalize",
+            on_click=_finalize_wizard_dataset,
+        )
+
+    return _UploadResult(
+        words_norm, fixations_norm, pd.DataFrame(), words_raw, fix_raw, []
+    )
+
+
 #: Every mapping line is one grid: the table's name column, then four equal
 #: picker cells. A table maps on three short lines rather than two long ones —
 #: six pickers to a line would leave each one too narrow to read the column
@@ -3562,8 +3825,26 @@ def _render_data_setup(active: bool) -> _UploadResult:
     s_name = _part("name")
     _wizard_name_header(s_name, active)
 
+    # The "Dataset format" choice + the MultiplEYE branch it dispatches to are
+    # behind `constants.multipleye_upload_enabled()` (the
+    # `SCANPATH_EXPERIMENTAL` gate) — with the flag off there is no format
+    # *question* at all, on either Add or Edit dataset (this function backs
+    # both). Force the key rather than relying on the `.get(..., "Generic")`
+    # fallback below, so a stale "MultiplEYE" left over from an earlier,
+    # flagged session can't sneak back in.
+    _multipleye_enabled = multipleye_upload_enabled()
+    if not _multipleye_enabled:
+        st.session_state["wizard_dataset_format"] = "Generic"
+
+    # Restoring a config seeds `col_map_*` keys, which mean nothing on the
+    # MultiplEYE branch (no column mapping there) — read from state, same as
+    # the format-dispatch check below, since the picker itself hasn't
+    # (re-)rendered yet at this point in the script.
+    _generic_format = (
+        st.session_state.get("wizard_dataset_format", "Generic") != "MultiplEYE"
+    )
     s1 = _part("data")
-    if active:
+    if active and _generic_format:
         _render_start_from(s1)
     # Uploading and mapping share the "data" part: the identity/geometry
     # sections and each table's own upload+mapping row render straight into
@@ -3572,6 +3853,28 @@ def _render_data_setup(active: bool) -> _UploadResult:
     s_map = s1
 
     # === Upload data tables: intro note ======================================
+    if active and _multipleye_enabled:
+        s1.segmented_control(
+            "Dataset format",
+            ["Generic", "MultiplEYE"],
+            key="wizard_dataset_format",
+            default="Generic",
+            help="**Generic**: map your own columns. **MultiplEYE**: upload the "
+            "corpus's scanpath/fixation + AOI CSVs and the app parses identity "
+            "from the file names (no column mapping needed).",
+        )
+
+    # A dedicated dataset format runs its own tailored flow and bypasses the
+    # generic mapping steps. It renders into `body`, NOT into a step panel:
+    # `_render_multipleye_upload` opens its own canvas expander, and
+    # expander-in-expander is forbidden. Read from state so the collapsed review
+    # panel branches the same way.
+    if (
+        _multipleye_enabled
+        and st.session_state.get("wizard_dataset_format", "Generic") == "MultiplEYE"
+    ):
+        return _render_multipleye_upload(body, active)
+
     # The run-locally tip keeps its always-created container: a *conditional*
     # child here shifts the element tree mid-parse and Streamlit leaves a
     # greyed-out ghost of the whole upload group on screen.

@@ -311,7 +311,7 @@
 }
 
 /* Installation: one primary download choice, two compact alternatives. */
-.md-typeset .sps-install-options > ul {
+.md-typeset .sps-install-options {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -332,12 +332,6 @@
   vertical-align: middle;
 }
 
-.sps-install-downloads p {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
 .md-typeset .sps-install-options .md-button {
   padding: 0.45rem 0.8rem;
   font-size: 0.7rem;
@@ -348,7 +342,7 @@
 }
 
 @media (max-width: 40em) {
-  .md-typeset .sps-install-options > ul {
+  .md-typeset .sps-install-options {
     grid-template-columns: minmax(0, 1fr);
   }
 }

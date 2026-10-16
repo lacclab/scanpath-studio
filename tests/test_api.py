@@ -1017,9 +1017,7 @@ def test_a_misspelled_color_by_column_raises_with_the_closest(builder):
 def test_a_misspelled_highlight_column_raises():
     words, fixations = api.load_sample_data(names="canonical")
     with pytest.raises(ValueError, match="highlight_column='is_in_aspn'.*is_in_aspan"):
-        api.plot_scanpath(
-            words, fixations, *_DEMO_TRIAL, highlight_column="is_in_aspn"
-        )
+        api.plot_scanpath(words, fixations, *_DEMO_TRIAL, highlight_column="is_in_aspn")
 
 
 def test_a_comparison_checks_the_column_across_both_readings():

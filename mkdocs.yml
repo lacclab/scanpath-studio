@@ -188,12 +188,11 @@ validation:
 
 # The abbreviation list is appended to every page by pymdownx.snippets; it is
 # not a page of its own. The dataset-adapter contract is developer material,
-# read on GitHub from CONTRIBUTING.md. The harmonised benchmark corpora and
-# MultiplEYE are off by default in the app, so their pages stay off the site.
+# read on GitHub from CONTRIBUTING.md. MultiplEYE is off by default in the
+# app, so its page stays off the site.
 exclude_docs: |
   includes/
   contributing-a-dataset.md
-  benchmark-corpora.md
   multipleye.md
 
 hooks:

@@ -29,7 +29,6 @@ from . import progress
 from .column_names import ColumnNames
 from .constants import (
     DEMO_CHOICE,
-    EYEGENBENCH_DEFAULT_DIR,
     MULTIPLEYE_DEFAULT_DIR,
     ONESTOP_PUBLIC_DEFAULT_DIR,
     POTEC_DEFAULT_DIR,
@@ -101,23 +100,12 @@ def _resolved_dir(key: str, default_dir: str) -> str:
 def _public_location(label: str) -> tuple[str, dict]:
     """``(root, loader kwargs)`` for a `PUBLIC_DATASET_REGISTRY` label.
 
-    The kwargs are the source's options: a benchmark corpus' name, OneStop's
-    variant / regime / parts (from the label), and MultiplEYE's fixation source
-    — the session key the main source's widget owns, read rather than
-    re-rendered.
+    The kwargs are the source's options: OneStop's variant / regime / parts
+    (from the label), and MultiplEYE's fixation source — the session key the
+    main source's widget owns, read rather than re-rendered.
     """
     from scanpath_studio import app, datasets
 
-    # A prepared benchmark corpus is one registry entry that
-    # names the corpus inside the bundle, so it dispatches on `benchmark_dataset`
-    # — **before** the label-substring branches below, which a harmonised
-    # "PoTeC …" / "OneStop …" label would otherwise match and send to the native
-    # loader.
-    spec = app.public_dataset_registry().get(label) or {}
-    if dataset := spec.get("benchmark_dataset"):
-        return _resolved_dir("eyegenbench_dir", EYEGENBENCH_DEFAULT_DIR), {
-            "dataset": dataset,
-        }
     if regime := onestop_regime_for_choice(label):
         # One dataset per regime, every part, from the public release. The
         # default is the path box's own — under the Download folder.
@@ -161,9 +149,9 @@ def _short_name(label: str) -> str:
     """What to call this corpus in a disabled entry's hint.
 
     The registry's own ``short`` name, not the label's prefix: two entries can
-    share one prefix — the native and the harmonised PoTeC both split to
-    ``"PoTeC"`` — so a prefix-derived hint would tell the user to go and open
-    one of two entries it couldn't tell apart.
+    share one prefix — the four OneStop datasets all split to ``"OneStop"`` —
+    so a prefix-derived hint would tell the user to go and open one of several
+    entries it couldn't tell apart.
     """
     from scanpath_studio import app
 
@@ -183,11 +171,7 @@ def _public_ready_cached(
         return False, f"{short} has no data folder yet — open it once first."
     hint = f"Open {short} as the main dataset once to download or locate it."
     try:
-        if dataset := kwargs.get("dataset"):
-            from scanpath_studio.eyegenbench import eyegenbench_present
-
-            present = eyegenbench_present(root, dataset)
-        elif onestop_regime_for_choice(label):
+        if onestop_regime_for_choice(label):
             present = datasets.onestop_present(
                 root,
                 regime=kwargs["regime"],
@@ -204,13 +188,9 @@ def _public_ready_cached(
         else:
             return False, f"{short} isn't loadable as a comparison dataset."
     except (OSError, ValueError, KeyError):
-        # `KeyError` because a manifest row is data from a file on disk and can
-        # be malformed — a row with no `name` must not escape this catch and
-        # take the whole app down through the compare-B enumeration, which runs
-        # over *every* registry entry on every rerun Compare is on. The nameless
-        # row is skipped at the source too (`eyegenbench.entry_name`); this is
-        # the belt to that braces, since the same catch covers four loaders'
-        # readiness probes and only one of them is hardened at the source.
+        # `KeyError` too: no one probe may take the whole app down through the
+        # compare-B enumeration, which runs over *every* registry entry on every
+        # rerun Compare is on.
         present = False
     return (True, "") if present else (False, hint)
 
@@ -268,11 +248,7 @@ def _load_public_frames(
     kwargs = dict(options)
     # The app works in the internal names; the corpus' own names come back
     # beside the frames (`ScanpathData.column_names`), for B's labels.
-    if dataset := kwargs.get("dataset"):
-        from scanpath_studio.eyegenbench import load_eyegenbench
-
-        data = load_eyegenbench(root, dataset=dataset, names="canonical")
-    elif onestop_regime_for_choice(label):
+    if onestop_regime_for_choice(label):
         data = datasets.load_onestop(
             root,
             regime=kwargs["regime"],

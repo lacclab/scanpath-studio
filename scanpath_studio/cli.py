@@ -53,7 +53,6 @@ from .constants import (
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
     UNIFORM_COLOR_FIELD,
-    benchmark_corpora_enabled,
     drift_correction_enabled,
     multipleye_enabled,
     palette_settings,
@@ -538,27 +537,6 @@ def _render_parser() -> argparse.ArgumentParser:
         "75 ids (sparse within 0–105; --list-trials shows them); a trial is "
         "one participant reading one text, <participant>_<text> (0_b0), "
         "with texts b0–b5 and p0–p5.",
-    )
-
-    # The harmonised benchmark corpora are experimental, like MultiplEYE's
-    # flags below: without SCANPATH_EXPERIMENTAL they still parse and work, but
-    # `--help` (and the generated CLI reference) doesn't list them.
-    def benchmark_help(text: str) -> str:
-        return text if benchmark_corpora_enabled() else argparse.SUPPRESS
-
-    src.add_argument(
-        "--eyegenbench",
-        metavar="DIR",
-        help=benchmark_help(
-            "EyeGenBench bundle directory (built by "
-            "scripts/prepare_eyegenbench.py). Pick the corpus with "
-            "--eyegenbench-dataset."
-        ),
-    )
-    src.add_argument(
-        "--eyegenbench-dataset",
-        metavar="NAME",
-        help=benchmark_help("Which EyeGenBench corpus to render, e.g. PoTeC."),
     )
     src.add_argument(
         "--onestop",
@@ -2397,15 +2375,6 @@ def _snippet_data_source(args) -> SnippetSource:
         return cs.SnippetSource(
             kind=cs.SOURCE_POTEC, label="PoTeC", options={"root": args.potec}
         )
-    if args.eyegenbench:
-        return cs.SnippetSource(
-            kind=cs.SOURCE_BENCHMARK,
-            label=args.eyegenbench_dataset or "benchmark",
-            options={
-                "root": args.eyegenbench,
-                "dataset": args.eyegenbench_dataset or "",
-            },
-        )
     if args.onestop:
         return cs.SnippetSource(
             kind=cs.SOURCE_ONESTOP,
@@ -2766,8 +2735,6 @@ def _parse_screen_list(value: str | None) -> tuple[str, ...] | None:
 
 
 def render(argv: list[str]) -> None:
-    # Bound, not inlined: the --eyegenbench branch calls
-    # `parser.error(...)` further down to reject a missing --eyegenbench-dataset.
     parser = _render_parser()
     args = parser.parse_args(argv)
     _apply_shared_colorbar_flags(args)
@@ -2783,7 +2750,6 @@ def render(argv: list[str]) -> None:
         args.sample,
         bool(args.authoring),
         bool(args.potec),
-        bool(args.eyegenbench),
         bool(args.onestop),
         bool(args.source),
     ]
@@ -2796,10 +2762,7 @@ def render(argv: list[str]) -> None:
     if sum([*corpus_inputs, own_tables]) != 1:
         # Only the inputs `--help` lists: the experimental sources still
         # count towards the guard, but the message doesn't advertise them.
-        inputs = ["--sample", "--authoring PATH", "--potec DIR"]
-        if benchmark_corpora_enabled():
-            inputs.append("--eyegenbench DIR --eyegenbench-dataset NAME")
-        inputs.append("--onestop DIR")
+        inputs = ["--sample", "--authoring PATH", "--potec DIR", "--onestop DIR"]
         if multipleye_enabled():
             inputs.append("--source NAME [--export DIR]")
         raise SystemExit(
@@ -2977,26 +2940,6 @@ def render(argv: list[str]) -> None:
         words, fixations = data
         column_names = dict(data.column_names)
         canvas = canvas or source_canvas(SOURCE_POTEC)
-    elif args.eyegenbench:
-        if not args.eyegenbench_dataset:
-            parser.error("--eyegenbench requires --eyegenbench-dataset NAME")
-        from .eyegenbench import eyegenbench_monitor, load_eyegenbench
-
-        try:
-            data = load_eyegenbench(
-                args.eyegenbench, dataset=args.eyegenbench_dataset, names="canonical"
-            )
-            words, fixations = data
-            column_names = dict(data.column_names)
-            # `eyegenbench_monitor` answers None for a corpus whose manifest
-            # only carries the invented default screen, so `render` falls back
-            # to the data's own extents there — the same call the app's picker
-            # entry makes, so the CLI and the app draw those corpora alike.
-            canvas = canvas or eyegenbench_monitor(
-                args.eyegenbench, args.eyegenbench_dataset
-            )
-        except (ValueError, FileNotFoundError, OSError) as exc:
-            raise SystemExit(str(exc))
     elif args.onestop:
         from .datasets import load_onestop
 

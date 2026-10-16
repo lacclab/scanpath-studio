@@ -43,12 +43,11 @@ __all__ = [
 # "0.35.0.post3+g8f18219" three commits after it.
 __release__ = "0.38.4"
 
-# Public headless API (see api.py / datasets.py / eyegenbench.py). Resolved lazily so
+# Public headless API (see api.py / datasets.py). Resolved lazily so
 # `import scanpath_studio` stays cheap and doesn't pull in pandas/plotly/
 # streamlit until first use.
-# The MultiplEYE and benchmark-corpus loaders stay importable but are left out
-# of `__all__`: those corpora are experimental
-# (`constants.multipleye_enabled` / `benchmark_corpora_enabled`).
+# The MultiplEYE loader stays importable but is left out of `__all__`: that
+# corpus is experimental (`constants.multipleye_enabled`).
 # The app's own computed measures are experimental the same way
 # (`constants.computed_measures_enabled`): importable, but not advertised —
 # they raise without SCANPATH_EXPERIMENTAL=1.
@@ -63,12 +62,10 @@ _HELD_BACK_EXPORTS = frozenset(
     }
 )
 _DATASET_EXPORTS = frozenset({"load_potec", "load_multipleye", "load_onestop"})
-_EYEGENBENCH_EXPORTS = frozenset({"load_eyegenbench", "eyegenbench_datasets"})
 _API_EXPORTS = (
     (frozenset(__all__) | _HELD_BACK_EXPORTS)
     - {"__version__", "main"}
     - _DATASET_EXPORTS
-    - _EYEGENBENCH_EXPORTS
 )
 
 
@@ -87,10 +84,6 @@ def __getattr__(name: str):
         from . import datasets
 
         return getattr(datasets, name)
-    if name in _EYEGENBENCH_EXPORTS:
-        from . import eyegenbench
-
-        return getattr(eyegenbench, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

@@ -2548,11 +2548,10 @@ def _claim_compare_task(task_key: tuple) -> None:
 
 
 def _dataset_label(token: str) -> str:
-    """A dataset as its picker names it (Select Dataset's name), with the WIP
-    marker a benchmark corpus carries."""
-    from scanpath_studio.app import _dataset_display_name, mark_wip_if_benchmark
+    """A dataset as its picker names it (Select Dataset's name)."""
+    from scanpath_studio.app import _dataset_display_name
 
-    return _dataset_display_name(token) + mark_wip_if_benchmark(token)[len(token) :]
+    return _dataset_display_name(token)
 
 
 def _abandon_compare_task() -> None:
@@ -16459,8 +16458,7 @@ def _render_setup_provenance_note(host=None) -> None:
     if snapshot is None:
         # Nothing to say — an uploaded dataset carries the wizard's snapshot and
         # a corpus that declares a monitor reports it, so this is a source that
-        # claims neither (the synthetic trial; a benchmark corpus whose manifest
-        # invents its screen). Inline that is silence.
+        # claims neither (the synthetic trial). Inline that is silence.
         # Given a host it is not: this is the body of a *numbered* part, and a
         # headline standing over nothing reads as a section that failed to
         # render — the very thing contiguous numbering exists to prevent. So say

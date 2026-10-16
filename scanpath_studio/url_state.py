@@ -26,7 +26,6 @@ from .code_snippet import (
     INSTALL_COMMAND,
     SNIPPET_STATE_KEY,
     SOURCE_AUTHOR,
-    SOURCE_BENCHMARK,
     SOURCE_DEMO,
     SOURCE_MULTIPLEYE,
     SOURCE_ONESTOP,
@@ -986,30 +985,14 @@ def _source_choice_for_param(value) -> str | None:
 # Every public corpus on the link — `?source=corpus&corpus=…`
 #
 # `_SHAREABLE_SOURCES` above works for sources whose *identity is the token*.
-# The public corpora can't: `app.public_dataset_registry()` is the built-in
-# corpora **∪ one entry per harmonised benchmark corpus the user added**, a
-# catalogue that varies per machine, so there is no fixed token per corpus to
-# freeze. One generic token names the kind and a second param names the corpus.
-#
-# Deliberately generic: a benchmark-only branch would have to re-derive which
-# registry entry produced the picker's collapsed choice, duplicating
-# `app.resolve_data_source`'s healing logic. A built-in corpus and a prepared
-# one are the same kind of thing here.
+# The public corpora can't: `app.public_dataset_registry()` is a catalogue that
+# varies per machine, so there is no fixed token per corpus to freeze. One
+# generic token names the kind and a second param names the corpus.
 CORPUS_SOURCE_TOKEN = "corpus"
 
-# What gets slugged is the entry's **stable identifier** — a prepared corpus'
-# manifest `name`, a built-in's registry `short` — never its display label, which
-# carries em-dashes and "(harmonised benchmark)" and is the thing most likely to
-# be reworded. A link has to survive a rewording.
-#
-# Prepared corpora are namespaced with this prefix because the two identifier
-# spaces overlap: PoTeC and OneStop each ship *both* natively and harmonised, and
-# both entries are kept on purpose, so bare slugs would collide and a link would
-# silently open the wrong corpus — the worst failure this feature can have. The
-# prefix is a constant in code, so it is unaffected by any relabelling, and it
-# names the property that actually differs (a re-derived harmonisation of the
-# publisher's release) rather than the pipeline that produced it.
-_PREPARED_CORPUS_SLUG_PREFIX = "harmonised-"
+# What gets slugged is the entry's **stable identifier** — its registry `short`
+# — never its display label, which carries em-dashes and is the thing most
+# likely to be reworded. A link has to survive a rewording.
 
 
 def _slugify_corpus(value: str) -> str:
@@ -1020,18 +1003,10 @@ def _slugify_corpus(value: str) -> str:
 def corpus_slug(label: str, spec) -> str:
     """The ``?corpus=`` slug for one `public_dataset_registry()` entry, or ``""``.
 
-    Empty for an identifier with nothing sluggable in it. A manifest ``name``
-    written in a non-Latin script slugifies to ``""``, and returning the bare
-    namespace prefix for it would give *every* such corpus the same slug **and**
-    one the reader can never match (it re-slugifies its input, which strips the
-    trailing hyphen). Not shareable is honest, and is already a supported state;
-    a slug naming several corpora is the failure this scheme exists to prevent.
+    Empty for an identifier with nothing sluggable in it (one written in a
+    non-Latin script): not shareable is honest, and is already a supported
+    state.
     """
-    # `benchmark_dataset` is the manifest `name`, put on the spec as the
-    # stable identifier for this wire format.
-    if dataset := str(spec.get("benchmark_dataset") or "").strip():
-        slug = _slugify_corpus(dataset)
-        return f"{_PREPARED_CORPUS_SLUG_PREFIX}{slug}" if slug else ""
     return _slugify_corpus(str(spec.get("short") or label))
 
 
@@ -1040,20 +1015,14 @@ def registry_corpus_slugs() -> dict[str, str]:
 
     A slug **two** entries would claim is dropped from both — so it is neither
     emitted nor resolvable, and the link degrades onto the existing "doesn't move
-    the picker" path. The namespace prefix stops the collision this catalogue is
-    known to have (PoTeC and OneStop each ship natively *and* harmonised) from
-    arising at all, but avoidance is not detection, and three ways in remain:
-    `_slugify_corpus` is not injective (``ZuCo-1`` and ``ZuCo 1`` slug alike, and
-    near-identical names are the norm here — ``MECOL1W1``/``MECOL1W2``/
-    ``MECOL2W1``/``MECOL2W2``, ``ZuCo1``/``ZuCo2``); nothing reserves the prefix
-    against a future built-in whose ``short`` is "Harmonised Foo"; and a bundle
-    can hold two corpora whose names differ only in punctuation. Refusing to
-    answer costs the recipient one link. Picking a winner opens the wrong
-    corpus, silently, which is the worst failure this feature can have.
+    the picker" path: `_slugify_corpus` is not injective (``ZuCo-1`` and
+    ``ZuCo 1`` slug alike). Refusing to answer costs the recipient one link.
+    Picking a winner opens the wrong corpus, silently, which is the worst
+    failure this feature can have.
 
     Reads `app.public_dataset_registry()` — the *function*, never the static
-    `PUBLIC_DATASET_REGISTRY` dict, which answers for the three built-ins only.
-    The import is inside the function because `app` imports this module.
+    `PUBLIC_DATASET_REGISTRY` dict. The import is inside the function because
+    `app` imports this module.
     """
     from scanpath_studio.app import public_dataset_registry
 
@@ -1067,10 +1036,9 @@ def registry_corpus_slugs() -> dict[str, str]:
 def corpus_choice_for_slug(value) -> str | None:
     """A ``?corpus=`` slug → its registry label, or ``None``.
 
-    ``None`` covers "this reader's bundle doesn't hold that corpus" (the common
-    case — the recipient has no bundle, or a different subset of one), an unknown
-    slug, and a slug two entries would answer to (`registry_corpus_slugs` has
-    already dropped that one). All degrade the way `_source_choice_for_param`
+    ``None`` covers an unknown slug (a corpus this app does not offer) and a
+    slug two entries would answer to (`registry_corpus_slugs` has already
+    dropped that one). All degrade the way `_source_choice_for_param`
     does: the link simply doesn't move the picker. Never guess a near match — a
     slug resolving to the wrong corpus opens the wrong data silently.
     """
@@ -1189,8 +1157,7 @@ def _apply_url_preset() -> str | None:
                                    (also demo / synthetic / upload — see main())
         ?source=corpus&corpus=potec
                                  → a public corpus: one entry of
-                                   `app.public_dataset_registry()`, built-in or
-                                   locally prepared (`corpus=harmonised-potec`).
+                                   `app.public_dataset_registry()`.
                                    Resolved in main(); an unresolvable slug
                                    leaves the picker alone and says so.
         &participant=p001        → preselect participant (Participant mode)
@@ -1537,8 +1504,8 @@ def scope_link_setup(choice: str | None) -> None:
 
     Called by `app.main` once its `?source=` dispatch has run, with the choice
     the link landed on — or ``None`` when it named no source this app can open
-    (an uploaded dataset, a corpus the recipient has no bundle for, a server
-    bundle with no data directory). Then there is nothing to protect: the
+    (an uploaded dataset, a corpus this app does not offer, a server bundle
+    with no data directory). Then there is nothing to protect: the
     recipient is on whatever source they already had, and it snaps to its own
     monitor exactly as if no link had been opened."""
     marker = st.session_state.get(LINK_SETUP_STATE_KEY)
@@ -3440,7 +3407,7 @@ def _build_share_query(
     # the choice isn't already a token of its own, so the ordinary sources never
     # pay for a registry lookup. `corpus_label` is the *registry label*, which is
     # what the picker collapsed away — see `_selected_corpus`.
-    corpus_label, corpus_spec = ("", {}) if source else _selected_corpus(data_choice)
+    corpus_label, _ = ("", {}) if source else _selected_corpus(data_choice)
     if corpus_label and not source:
         # A corpus reachable by both tokens emits its own: OneStop's regimes
         # (`onestop_<regime>`). The generic token is additive.
@@ -3458,18 +3425,6 @@ def _build_share_query(
     elif corpus_slug_out:
         params["source"] = CORPUS_SOURCE_TOKEN
         params[PARAM_CORPUS] = corpus_slug_out
-        # Sharing "you'd need this corpus" beats sharing nothing. The
-        # recipient's bundle is theirs — and
-        # is the one thing a link can't carry — so the caveat names the corpus
-        # and says what to do about it rather than the link quietly not working.
-        if prepared := str(corpus_spec.get("benchmark_dataset") or ""):
-            caveats.append(
-                f"**{prepared}** is a locally prepared corpus. The link names it, "
-                "but the data can't travel in a URL: the recipient needs their "
-                "own harmonised bundle holding that corpus, with the app's "
-                "benchmark data directory pointed at it. Everything else in the "
-                "link still applies."
-            )
     else:
         # A link carries settings, never files — so for a dataset the user added
         # there is nothing a URL could do that would save the recipient the
@@ -3963,10 +3918,9 @@ def _with_stimulus_folder(source: SnippetSource) -> SnippetSource:
 def _snippet_source(data_choice: str) -> SnippetSource:
     """Describe the loaded data the way a script would have to load it.
 
-    Dispatches on the registry entry's **stable identifier** (`short` for a
-    built-in, `benchmark_dataset` for a prepared corpus), not the display label
-    — the same rule `corpus_slug` follows for the share link, and for the same
-    reason: the label is copy and can be reworded.
+    Dispatches on the registry entry's **stable identifier** (its `short`), not
+    the display label — the same rule `corpus_slug` follows for the share link,
+    and for the same reason: the label is copy and can be reworded.
 
     A corpus root is a *local path*, which is why it is emitted only when the
     path box is the user's own (`local_filesystem_enabled`). On a shared
@@ -4002,15 +3956,6 @@ def _snippet_source(data_choice: str) -> SnippetSource:
         )
 
     corpus_label, spec = _selected_corpus(data_choice)
-    if spec.get("benchmark_dataset"):
-        return SnippetSource(
-            kind=SOURCE_BENCHMARK,
-            label=corpus_label,
-            options={
-                "root": root("eyegenbench_dir", "data/eyegenbench"),
-                "dataset": str(spec["benchmark_dataset"]),
-            },
-        )
     short = str(spec.get("short") or "")
     if short == "PoTeC":
         return SnippetSource(

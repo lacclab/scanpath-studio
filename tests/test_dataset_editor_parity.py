@@ -258,7 +258,7 @@ class TestNoNumberedPartIsLeftEmpty:
 
     def test_a_source_with_no_recorded_setup_says_so(self, monkeypatch):
         """`active_setup_snapshot()` is None for a source that claims no screen
-        (the synthetic trial; a benchmark corpus whose manifest invents one)."""
+        (the synthetic trial)."""
         from scanpath_studio import tabs
 
         monkeypatch.setattr(tabs, "active_setup_snapshot", lambda: None, raising=False)

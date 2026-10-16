@@ -383,10 +383,8 @@ class TestProposeFixSchemaMatching:
 
     `FIX_FIXATION_ID_CANDIDATES` / `FIX_WORD_ID_CANDIDATES` list `fix_index` /
     `ia_index`, and `PARTICIPANT_CANDIDATES` lists `unique_participant_id`, so
-    the app's auto-detect path finds the three fields the explicit
-    `EYEGENBENCH_FIX_SCHEMA` of the headless loader names; without them it would
-    silently drop all three on every EyeGenBench corpus. See
-    `scanpath_studio/eyegenbench.py::EYEGENBENCH_FIX_SCHEMA`.
+    the app's auto-detect path finds all three on an EyeGenBench table; without
+    them it would silently drop them.
     """
 
     def test_eyegenbench_columns_resolve_participant_fixation_id_and_word_id(self):
@@ -408,9 +406,9 @@ class TestProposeFixSchemaMatching:
 
     def test_unique_participant_id_outranks_recording_session_label(self):
         # Provo carries both columns (a coincidental parallel id);
-        # `unique_participant_id` is the one EYEGENBENCH_FIX_SCHEMA
-        # names, and it must win regardless of which column exists in a given
-        # corpus. Pin the *priority*, not just presence of either alone.
+        # `unique_participant_id` is EyeGenBench's own reader id, and it must
+        # win regardless of which column exists in a given corpus. Pin the
+        # *priority*, not just presence of either alone.
         df = pd.DataFrame(
             {
                 "unique_participant_id": ["r1", "r1"],

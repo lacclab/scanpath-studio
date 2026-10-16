@@ -1,1 +1,0 @@
-The Reference docs are easier to use: a new Figure options page groups every option by plot-rail section with a description, the CLI reference is organized by command with every `render` flag listed by topic, and each Python API entry has an at-a-glance index row and a parameter list.

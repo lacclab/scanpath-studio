@@ -2,7 +2,7 @@
 
 A public corpus is not read until it is opened, so without published figures its
 row on 🗂️ Data would be blank — which is most of the table on a fresh session.
-Each dataset declares the figures its own documentation publishes, and the
+Each dataset declares the figures its own documentation (or its bundle manifest) publishes, and the
 table shows those until the dataset is actually loaded, at which point what
 loaded takes over.
 
@@ -201,6 +201,25 @@ class TestTheLookup:
         edited them in place would be editing the catalogue for the session."""
         app.dataset_about(DEMO_CHOICE)["published_counts"]["Participants"] = 999
         assert app.published_dataset_counts(DEMO_CHOICE)["Participants"] == 2
+
+
+class TestPreparedBenchmarkCorpora:
+    """Their figures are already in the bundle manifest — per column, not prose."""
+
+    def test_manifest_counts_become_table_counts(self):
+        entry = {"name": "Provo", "n_readers": 84, "n_texts": 55, "n_fixations": 219556}
+        counts = app.benchmark_published_counts(entry)
+        assert counts == {"Participants": 84, "Texts": 55, "Fixations": 219556}
+
+    def test_an_unreadable_count_is_left_out_rather_than_read_as_zero(self):
+        """`entry_count` returns `None` for a value it cannot parse and `0` for
+        one that is absent; publishing either as a count would assert a corpus
+        with no readers (the overclaim `entry_count` warns about)."""
+        entry = {"name": "Provo", "n_readers": "many", "n_texts": 0, "n_fixations": 12}
+        assert app.benchmark_published_counts(entry) == {"Fixations": 12}
+
+    def test_a_corpus_with_no_counts_publishes_nothing(self):
+        assert app.benchmark_published_counts({"name": "Provo"}) == {}
 
 
 class TestTrialsAreTrialsNotTrialIds:

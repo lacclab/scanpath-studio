@@ -68,6 +68,8 @@ scanpath_studio/
 │  ├─ metadata.py        participant / trial / text metadata tables (never broadcast onto frames)
 │  ├─ annotations.py     favorites / tags / notes, one store per dataset
 │  ├─ datasets.py        public-corpus loaders: PoTeC, OneStop; the experimental MultiplEYE reader
+│  ├─ eyegenbench.py, eyegenbench_geometry.py
+│  │                     harmonised benchmark corpora from a locally prepared bundle (experimental)
 │  ├─ compare_source.py  Compare's second dataset (scanpath B): widget-free readiness + loading
 │  ├─ experimental_setup.py
 │  │                     display-geometry conversions + `SetupSnapshot` with per-group provenance
@@ -253,7 +255,8 @@ Some finished-but-unvalidated or unfinished features are off unless
 - Corpus Analysis's *Per sentence* subtab;
 - the MultiplEYE session-set format (`multipleye_format_enabled`): the
   wizard's *Dataset format* choice, `datasets.load_multipleye` and
-  `render --multipleye`. A dataset already added that way still opens.
+  `render --multipleye`. A dataset already added that way still opens;
+- the harmonised benchmark corpora.
 
 Hidden, not broken: the code and its tests stay, CLI flags still parse (they
 are only hidden from `--help`), and the docs site does not describe them.

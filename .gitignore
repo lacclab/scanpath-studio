@@ -191,6 +191,9 @@ uv.lock
 # Subagent-driven-development scratch (ledger, briefs, review packages).
 .superpowers/
 
+# EyeGenBench preprocessing venv (torch/lightning), kept apart from the app's.
+.venv-eyegenbench/
+
 # Local-only config and scratch that must never be committed: Streamlit
 # secrets (deployment settings live there), Claude Code's per-user settings
 # and worktrees, editor folders, agent-skill symlinks into the venv, and the

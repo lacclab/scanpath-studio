@@ -27,4 +27,7 @@ exclude = [
   '^https://doi\.org/',
   # LinkedIn answers anything that is not a signed-in browser with status 999.
   '^https://(www\.)?linkedin\.com/',
+  # The benchmark-corpus pipeline's repository is private until it is
+  # released; its page (docs/benchmark-corpora.md) is excluded from the site.
+  '^https://github\.com/EyeBench/EyeGenBench',
 ]

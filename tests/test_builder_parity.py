@@ -247,6 +247,13 @@ class TestAnimationParity:
         assert fig.layout.sliders[0].yanchor == "bottom"
         assert fig.layout.margin.t == _CONTROLS_MARGIN_PX
 
+    def test_plot_sits_on_the_papers_bottom_edge(self):
+        """The keys anchored at paper y=0 (highlight note, size key) stay
+        inside the border: the figure's spare height goes above the plot."""
+        fig = _anim()
+        assert fig.layout.yaxis.constrain == "domain"
+        assert fig.layout.yaxis.constraintoward == "bottom"
+
     def test_colorbar_keeps_its_placement_and_reserve(self):
         fig = _anim(
             color_by="duration_ms",

@@ -2090,7 +2090,6 @@ class TestUnmappedRawDataView:
         for const in (
             "ONESTOP_PUBLIC_DEFAULT_DIR",
             "POTEC_DEFAULT_DIR",
-            "MULTIPLEYE_DEFAULT_DIR",
         ):
             monkeypatch.setattr(app, const, str(tmp_path / const.lower()))
         for label in app.public_dataset_registry():
@@ -2104,7 +2103,7 @@ class TestUnmappedRawDataView:
             dir_inputs = [t for t in at.text_input if t.label == "Data directory"]
             assert dir_inputs, f"{label}: expected a Data directory input"
         # PoTeC + OneStop are downloadable → a Download button is offered when the
-        # files are absent; MultiplEYE (no public URL) shows a missing-data note.
+        # files are absent.
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
         at.session_state["public_dataset_choice"] = next(
@@ -2147,8 +2146,8 @@ class TestUnmappedRawDataView:
             }
         )
         potec_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k)
-        mpe_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "MultiplEYE" in k)
-        for key in (potec_key, mpe_key):
+        onestop_key = app.ONESTOP_REGIME_CHOICES["ordinary"]
+        for key in (potec_key, onestop_key):
             monkeypatch.setitem(
                 app.PUBLIC_DATASET_REGISTRY[key],
                 "loader",
@@ -2177,10 +2176,10 @@ class TestUnmappedRawDataView:
         # resolved away. Leaving it unset here would let `resolve_data_source`'s
         # healing step re-publish the *old* `public_dataset_choice` from the
         # stale `data_source_choice`, masking the switch entirely.
-        at.session_state["data_source_choice"] = mpe_key
+        at.session_state["data_source_choice"] = onestop_key
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state["public_dataset_choice"] == mpe_key
+        assert at.session_state["public_dataset_choice"] == onestop_key
         assert at.session_state["filter_participants"] == []
 
     def test_public_dataset_canvas_snaps_to_its_monitor(self, monkeypatch):
@@ -2188,7 +2187,7 @@ class TestUnmappedRawDataView:
         even when a previous source left a stale canvas in session state.
 
         With ``setdefault`` a returning session would keep an old canvas, so a
-        corpus' monitor update (e.g. MultiplEYE → 1920x1080) would never show and
+        corpus' monitor update (e.g. PoTeC → 1680x1050) would never show and
         the scanpath would render off-scale."""
         import pandas as pd
 
@@ -2218,14 +2217,16 @@ class TestUnmappedRawDataView:
                 "word_idx": [0, 1],
             }
         )
-        mpe_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "MultiplEYE" in k)
+        potec_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k)
         monkeypatch.setitem(
-            app.PUBLIC_DATASET_REGISTRY[mpe_key],
+            app.PUBLIC_DATASET_REGISTRY[potec_key],
             "loader",
             # Loaders take (options_host, location_host) sub-slots.
             lambda *_slots: (words, fixations),
         )
-        monitor = app.PUBLIC_DATASET_REGISTRY[mpe_key]["monitor"]
+        # These stand-in frames are not PoTeC's, so its schema can't map them.
+        monkeypatch.delitem(app.PUBLIC_DATASET_REGISTRY[potec_key], "declared_schemas")
+        monitor = app.PUBLIC_DATASET_REGISTRY[potec_key]["monitor"]
 
         at = _make_apptest()
         # Simulate a returning session: a stale canvas seeded by a *different* source.
@@ -2233,7 +2234,7 @@ class TestUnmappedRawDataView:
         at.session_state["global_canvas_height"] = 991
         at.session_state["_canvas_seeded_for"] = (app.PUBLIC_DATASETS_CHOICE, "other")
         at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
-        at.session_state["public_dataset_choice"] = mpe_key
+        at.session_state["public_dataset_choice"] = potec_key
         at.run(timeout=60)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -2243,13 +2244,13 @@ class TestUnmappedRawDataView:
         ) == monitor
 
     def test_switching_public_datasets_re_proposes_mapping(self, monkeypatch):
-        """Switching PoTeC → MultiplEYE must re-propose each corpus' mapping.
+        """Switching PoTeC → another corpus must re-propose each corpus' mapping.
 
         If the `col_map_*` widget keys persisted across the source switch,
-        PoTeC's Trial → `text_id` would stick to MultiplEYE (which also has a
-        `text_id` column, so the stale-column reset would not catch it).
-        MultiplEYE's per-page `trial_id` would then be ignored and every page
-        would collapse into one stimulus-level trial."""
+        PoTeC's Trial → `text_id` would stick to the next corpus (which also has
+        a `text_id` column, so the stale-column reset would not catch it). Its
+        per-page `trial_id` would then be ignored and every page would collapse
+        into one stimulus-level trial."""
         import pandas as pd
 
         from scanpath_studio import app
@@ -2279,8 +2280,8 @@ class TestUnmappedRawDataView:
                 "y": [60.0, 60.0],
             }
         )
-        # MultiplEYE-shaped frames: trial is the per-page id; text_id is the stimulus.
-        mpe_w = pd.DataFrame(
+        # Per-page frames: trial is the per-page id; text_id is the stimulus.
+        paged_w = pd.DataFrame(
             {
                 "trial_id": ["X__page_01", "X__page_02"],
                 "text_id": ["X", "X"],
@@ -2292,7 +2293,7 @@ class TestUnmappedRawDataView:
                 "bottom": [80.0, 80.0],
             }
         )
-        mpe_f = pd.DataFrame(
+        paged_f = pd.DataFrame(
             {
                 "participant_id": ["001_ZH_CH_1_ET1"] * 2,
                 "trial_id": ["X__page_01", "X__page_02"],
@@ -2305,16 +2306,16 @@ class TestUnmappedRawDataView:
             }
         )
         potec_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k)
-        mpe_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "MultiplEYE" in k)
+        onestop_key = app.ONESTOP_REGIME_CHOICES["ordinary"]
         monkeypatch.setitem(
             app.PUBLIC_DATASET_REGISTRY[potec_key],
             "loader",
             lambda *_slots: (potec_w, potec_f),
         )
         monkeypatch.setitem(
-            app.PUBLIC_DATASET_REGISTRY[mpe_key],
+            app.PUBLIC_DATASET_REGISTRY[onestop_key],
             "loader",
-            lambda *_slots: (mpe_w, mpe_f),
+            lambda *_slots: (paged_w, paged_f),
         )
 
         at = _make_apptest()
@@ -2323,8 +2324,8 @@ class TestUnmappedRawDataView:
         # setting the corpus token directly (no separate Public/Dataset two-step).
         at.session_state["data_source_choice"] = potec_key
         at.run(timeout=120)  # PoTeC maps Trial → text_id
-        at.session_state["data_source_choice"] = mpe_key
-        at.run(timeout=120)  # switch to MultiplEYE
+        at.session_state["data_source_choice"] = onestop_key
+        at.run(timeout=120)  # switch to the per-page corpus
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # The picker's label carries the active sort key, so match the
@@ -3734,200 +3735,10 @@ class TestNavRegressions:
         assert "excludes trial filters, cohort definitions, annotations" in captions
 
 
-def _mpe_upload_frames():
-    """A tiny MultiplEYE upload: scanpath rows (CamelCase filename) + char AOIs
-    (lowercase filename), each row tagged with its source_file stem."""
-    import pandas as pd
-
-    scan = pd.DataFrame(
-        {
-            "onset": [1000, 1300, 2000],
-            "duration": [200, 180, 210],
-            "name": ["fixation"] * 3,
-            "location_x": [90, 150, 90],
-            "location_y": [65, 65, 65],
-            "page": ["page_1", "page_1", "page_2"],
-            "word_idx": [0, 1, 0],
-        }
-    )
-    scan["source_file"] = "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath"
-
-    def _chars(page, word_idx, word, x0):
-        return [
-            dict(
-                char_idx=word_idx * 2 + i,
-                char=word[i],
-                top_left_x=x0 + i * 20,
-                top_left_y=50,
-                width=20,
-                height=30,
-                char_idx_in_line=word_idx * 2 + i,
-                line_idx=0,
-                page=page,
-                word_idx=word_idx,
-                word_idx_in_line=word_idx,
-                word=word,
-            )
-            for i in range(2)
-        ]
-
-    aoi = pd.DataFrame(
-        _chars("page_1", 0, "AA", 80)
-        + _chars("page_1", 1, "BB", 140)
-        + _chars("page_2", 0, "CC", 80)
-    )
-    aoi["source_file"] = "lit_demo_1_aoi"
-    return scan, aoi
-
-
-@pytest.mark.timeout(60)
-class TestMultiplEYEUploadPreset:
-    """Add-dataset → MultiplEYE format: filename-keyed browser upload."""
-
-    def _seed_preset(self, at, app, monkeypatch, scan, aoi):
-        import pandas as pd
-
-        frames = {"mpe_fix": scan, "mpe_aoi": aoi}
-        monkeypatch.setattr(
-            app,
-            "_read_uploaded_frame",
-            lambda **kw: frames.get(kw["state_prefix"], pd.DataFrame()),
-        )
-        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
-        at.session_state["_show_upload_wizard"] = True
-        at.session_state["setup_complete"] = False
-        at.session_state["wizard_dataset_format"] = "MultiplEYE"
-
-    def test_preset_bypasses_generic_mapping(self, monkeypatch):
-        from scanpath_studio import app
-
-        scan, aoi = _mpe_upload_frames()
-        at = _make_apptest()
-        self._seed_preset(at, app, monkeypatch, scan, aoi)
-        at.run(timeout=60)
-
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.error == [], f"st.error: {[e.value for e in at.error]}"
-        # The preset assembled a finalize payload — with single-literal trial id
-        # (no composite components) and MultiplEYE's filter facets.
-        assert "_wizard_finalize_payload" in at.session_state
-        payload = at.session_state["_wizard_finalize_payload"]
-        assert payload["composite_trial_columns"] == []
-        assert payload["filter_fields"] == ["genre", "session", "is_practice"]
-        # One trial per stimulus with its pages as screens, CamelCase
-        # stimulus (case-match worked), boxes joined.
-        fixations = payload["fixations"]
-        assert set(fixations["trial_id"]) == {"Lit_Demo_1"}
-        assert set(fixations["screen_id"]) == {"page_1", "page_2"}
-        assert not payload["words"].empty
-        # The generic column-mapping widgets are NOT rendered in this format.
-        sel_keys = {s.key for s in at.selectbox}
-        assert "col_map_words_word_id" not in sel_keys
-        assert "col_map_fix_duration" not in sel_keys
-
-    def test_preset_finalize_stores_dataset(self, monkeypatch):
-        from scanpath_studio import app
-
-        scan, aoi = _mpe_upload_frames()
-        at = _make_apptest()
-        self._seed_preset(at, app, monkeypatch, scan, aoi)
-        at.run(timeout=60)
-        finalize = [b for b in at.button if b.key == "wizard_finalize"]
-        assert finalize, "Add dataset button missing"
-        # Finalizing renders the complete app and may build the host's font cache;
-        # use the same explicit budget as the initial preset render instead of
-        # AppTest's three-second default.
-        finalize[0].click().run(timeout=60)
-
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # The dataset was stored and reselected — it renders without re-mapping.
-        assert "_datasets" in at.session_state and at.session_state["_datasets"], (
-            "dataset was not stored"
-        )
-        stored = next(iter(at.session_state["_datasets"].values()))
-        assert not stored["fixations"].empty
-        assert stored["composite_trial_columns"] == []
-
-    def test_preset_unrecognized_filenames_blocks(self, monkeypatch):
-        import pandas as pd
-
-        from scanpath_studio import app
-
-        bad = pd.DataFrame(
-            {
-                "onset": [1],
-                "duration": [1],
-                "location_x": [1.0],
-                "location_y": [1.0],
-                "page": ["page_1"],
-                "word_idx": [0],
-            }
-        )
-        bad["source_file"] = "not_a_multipleye_name"
-        at = _make_apptest()
-        self._seed_preset(at, app, monkeypatch, bad, pd.DataFrame())
-        at.run(timeout=60)
-
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        errors = " ".join(e.value for e in at.error)
-        assert "No MultiplEYE-shaped file names" in errors
-        # No finalize payload when the upload couldn't be parsed.
-        assert "_wizard_finalize_payload" not in at.session_state
-
-    def test_preset_questions_and_participant_metadata(self, monkeypatch):
-        import json
-
-        import pandas as pd
-
-        from scanpath_studio import app
-
-        scan, aoi = _mpe_upload_frames()
-        questions = pd.DataFrame(
-            {
-                "stimulus_name": ["Lit_Demo"],
-                "stimulus_id": [1],
-                "question": ["Why?"],
-                "target": ["Because"],
-                "condition_name": ["local"],
-                "question_no": [1],
-                "condition_no": [1],
-            }
-        )
-        participant = pd.DataFrame(
-            {"participant_id": [1], "session": ["ET1"], "age": [22], "gender": ["F"]}
-        )
-        frames = {
-            "mpe_fix": scan,
-            "mpe_aoi": aoi,
-            "mpe_questions": questions,
-            "mpe_participant": participant,
-        }
-        monkeypatch.setattr(
-            app,
-            "_read_uploaded_frame",
-            lambda **kw: frames.get(kw["state_prefix"], pd.DataFrame()),
-        )
-        at = _make_apptest()
-        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
-        answer_setup_step(at)
-        at.session_state["_show_upload_wizard"] = True
-        at.session_state["setup_complete"] = False
-        at.session_state["wizard_dataset_format"] = "MultiplEYE"
-        at.run(timeout=60)
-
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        payload = at.session_state["_wizard_finalize_payload"]
-        fixations = payload["fixations"]
-        assert fixations["pp_age"].dropna().iloc[0] == 22
-        assert fixations["pp_gender"].dropna().iloc[0] == "F"
-        q = json.loads(fixations["comprehension_questions"].dropna().iloc[0])
-        assert q[0]["target"] == "Because"
-
-
 @pytest.mark.timeout(60)
 class TestGenericFilenamePowers:
-    """Generic wizard powers reusable beyond MultiplEYE: regex filename → columns
-    and the character-AOI aggregation toggle."""
+    """Generic wizard powers: regex filename → columns and the character-AOI
+    aggregation toggle."""
 
     def test_regex_derive_exposes_columns_and_aggregate_toggle(self, monkeypatch):
         import pandas as pd
@@ -3967,7 +3778,6 @@ class TestGenericFilenamePowers:
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         at.session_state["_show_upload_wizard"] = True
         at.session_state["setup_complete"] = False
-        at.session_state["wizard_dataset_format"] = "Generic"
         # Enable filename derivation in regex mode.
         at.session_state["wizard_filename_split"] = True
         at.session_state["wizard_filename_mode"] = "Regex named groups"
@@ -4015,7 +3825,6 @@ class TestGenericFilenamePowers:
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         at.session_state["_show_upload_wizard"] = True
         at.session_state["setup_complete"] = False
-        at.session_state["wizard_dataset_format"] = "Generic"
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
@@ -4061,7 +3870,6 @@ class TestGenericFilenamePowers:
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         at.session_state["_show_upload_wizard"] = True
         at.session_state["setup_complete"] = False
-        at.session_state["wizard_dataset_format"] = "Generic"
         at.session_state["wizard_dataset_name"] = "Gaze only"
         at.session_state["wizard_filename_split"] = True
         at.session_state["wizard_filename_mode"] = "Regex named groups"
@@ -4130,7 +3938,6 @@ class TestGenericFilenamePowers:
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         at.session_state["_show_upload_wizard"] = True
         at.session_state["setup_complete"] = False
-        at.session_state["wizard_dataset_format"] = "Generic"
         at.session_state["wizard_filename_split"] = True
         at.session_state["wizard_filename_mode"] = "Regex named groups"
         at.session_state["wizard_filename_regex"] = (
@@ -4184,7 +3991,6 @@ class TestGenericFilenamePowers:
         answer_setup_step(at)
         at.session_state["_show_upload_wizard"] = True
         at.session_state["setup_complete"] = False
-        at.session_state["wizard_dataset_format"] = "Generic"
         at.session_state["wizard_aggregate_char_boxes"] = True
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -4231,7 +4037,6 @@ class TestGenericFilenamePowers:
         answer_setup_step(at)
         at.session_state["_show_upload_wizard"] = True
         at.session_state["setup_complete"] = False
-        at.session_state["wizard_dataset_format"] = "Generic"
         at.session_state["wizard_aggregate_char_boxes"] = True
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"

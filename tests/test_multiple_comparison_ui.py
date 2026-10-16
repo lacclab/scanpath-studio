@@ -189,7 +189,7 @@ def test_generation_column_options_excludes_within_trial_ids():
 
 
 def test_generation_column_options_skips_unhashable_columns():
-    # A list/JSON-valued column (e.g. MultiplEYE comprehension_questions) must be
+    # A list/JSON-valued column (e.g. comprehension_questions) must be
     # skipped, not crash nunique() with TypeError.
     fix = _gen_fixations()
     fix["questions"] = [["a"], ["b"], ["a"], ["b"], ["a"], ["c"]]

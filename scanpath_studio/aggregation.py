@@ -363,7 +363,7 @@ def text_screen_options(frame: pd.DataFrame, text_col: str, text_id) -> list[str
 
     Empty for a single-screen dataset — which is every corpus without
     screen identity, so callers can treat "no options" as "there is nothing to
-    pick". Ordered by ``screen_index`` when present (MultiplEYE ranks it by first
+    pick". Ordered by ``screen_index`` when present (it can be ranked by first
     fixation onset, i.e. the order the reader actually went through the pages),
     else by first appearance.
     """

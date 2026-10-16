@@ -785,8 +785,8 @@ class TestLocalPathsAreNotExported:
     normalization and rides into the exported fixation tables — and a fixations
     CSV is exactly the file that gets attached to a paper, posted to OSF, or
     mailed to a collaborator. `/Users/<name>/` discloses the OS account name and
-    the rest discloses the directory layout, including where a MultiplEYE corpus
-    lives on the machine.
+    the rest discloses the directory layout, including where a corpus lives on
+    the machine.
     """
 
     LEAKY = "/Users/someone/Projects/corpora/images/2_1_1_Ele__paragraph.png"

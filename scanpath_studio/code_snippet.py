@@ -73,7 +73,6 @@ SOURCE_FILES = "files"
 SOURCE_AUTHOR = "author"
 SOURCE_POTEC = "potec"
 SOURCE_ONESTOP = "onestop"
-SOURCE_MULTIPLEYE = "multipleye"
 #: A dataset recorded as raw gaze alone — no words or fixations table,
 #: so its data half is the samples (``options["raw_gaze"]``, the paths) and the
 #: builder is handed ``None`` for the other two.
@@ -142,11 +141,6 @@ def source_canvas(kind: str) -> tuple[int, int] | None:
         return (1680, 1050)  # PoTeC monitor (DELL P2210)
     if kind == SOURCE_AUTHOR:
         return (1200, 800)
-    if kind == SOURCE_MULTIPLEYE:
-        # Coordinates are offset onto the centred stimulus on the real screen.
-        from .datasets import MULTIPLEYE_MONITOR
-
-        return tuple(MULTIPLEYE_MONITOR)
     return None
 
 
@@ -298,18 +292,6 @@ def _onestop_python(source: SnippetSource) -> list[str]:
     return lines
 
 
-def _multipleye_python(source: SnippetSource) -> list[str]:
-    lines = [
-        "words, fixations = sps.load_multipleye(",
-        f"    {_py(_root(source, 'data/MultiplEYE'))},",
-    ]
-    fixation_source = source.options.get("fixation_source")
-    if fixation_source and fixation_source != "scanpaths":
-        lines.append(f"    fixation_source={_py(str(fixation_source))},")
-    lines.append(")")
-    return lines
-
-
 def _unknown_python(source: SnippetSource) -> list[str]:
     if source.options.get("keep_columns"):
         return [
@@ -360,10 +342,6 @@ def _onestop_cli(source: SnippetSource) -> list[str]:
     return argv
 
 
-def _multipleye_cli(source: SnippetSource) -> list[str]:
-    return ["--source", "multipleye", "--export", _root(source, "data/MultiplEYE")]
-
-
 def _unknown_cli(source: SnippetSource) -> list[str]:
     return ["--words", "words.csv", "--fixations", "fixations.csv", *_keep_cli(source)]
 
@@ -379,11 +357,6 @@ UPLOAD_STEP_NOTES = {
         "Its AOIs were character boxes, which the app joined into word boxes; "
         "the loader in the snippet does not, so join them in your words table "
         "first."
-    ),
-    "multipleye_preset": (
-        "It was added with the MultiplEYE files preset, which builds its tables "
-        "from the corpus's own files; the loader in the snippet cannot replay "
-        "that, so its mapping is not written out."
     ),
 }
 
@@ -420,11 +393,7 @@ def upload_source(
             if present
         )
         + " with them (a list of files works for one added from several). "
-        + (
-            "The column mapping it was added with is written out."
-            if "multipleye_preset" not in steps
-            else ""
-        )
+        "The column mapping it was added with is written out."
     ]
     notes += [UPLOAD_STEP_NOTES[s] for s in steps if s in UPLOAD_STEP_NOTES]
     if derived := [str(c) for c in recipe.get("derived") or ()]:
@@ -450,8 +419,6 @@ def upload_source(
             + ("those fields" if len(unresolved) > 1 else "that field")
             + " before running it."
         )
-    if "multipleye_preset" in steps:
-        schemas = {}
     options: dict = {
         "words": UPLOAD_WORDS_PLACEHOLDER if words else None,
         "fixations": UPLOAD_FIXATIONS_PLACEHOLDER if fixations else None,
@@ -571,7 +538,6 @@ _SOURCE_WRITERS: dict[str, tuple[Any, Any]] = {
     SOURCE_AUTHOR: (_author_python, _author_cli),
     SOURCE_POTEC: (_potec_python, _potec_cli),
     SOURCE_ONESTOP: (_onestop_python, _onestop_cli),
-    SOURCE_MULTIPLEYE: (_multipleye_python, _multipleye_cli),
     SOURCE_RAW_GAZE: (_raw_gaze_only_python, _raw_gaze_only_cli),
     SOURCE_UPLOAD: (_upload_python, _upload_cli),
     SOURCE_UNKNOWN: (_unknown_python, _unknown_cli),

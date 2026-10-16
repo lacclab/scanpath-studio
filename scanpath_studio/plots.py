@@ -3392,7 +3392,7 @@ def _image_to_data_uri(src: str | None) -> str | None:
     """A ``data:`` URI for an image path, or pass through an existing one.
 
     Returns None for a missing / unreadable file so the background-image layer
-    simply doesn't draw (e.g. an uploaded MultiplEYE dataset has no image path)."""
+    simply doesn't draw (e.g. an uploaded dataset has no image path)."""
     if not src:
         return None
     text = str(src)
@@ -6917,7 +6917,7 @@ def _render_scanpath_animation(
     grid_left, grid_bottom = _grid_reserves(
         show_coordinate_grid, settings.coordinate_grid_font_size
     )
-    # Stimulus-page background image (MultiplEYE) — same layout image as
+    # Stimulus-page background image — same layout image as
     # make_scanpath_figure: placed at its (centered) origin, UNDER every trace,
     # and persisting across frames (a layout image, not per-frame data). Lets the
     # animated replay show the rendered page exactly like the static plot.

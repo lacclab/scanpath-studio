@@ -31,7 +31,7 @@ class TestCells:
         assert row.gap("Participants") == ""
 
     def test_never_opened_and_publishing_nothing_is_not_loaded(self):
-        row = _row("MultiplEYE", 0)
+        row = _row("A local corpus", 0)
         assert {row.cell(f) for f in dt.DATASET_COUNT_FIELDS} == {dt.NOT_LOADED}
 
     def test_a_figure_the_corpus_does_not_publish_is_not_reported(self):

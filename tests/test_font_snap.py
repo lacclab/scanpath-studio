@@ -1,13 +1,14 @@
 """A corpus' declared typeface must not outlive the corpus.
 
-MultiplEYE stamps the stimulus `FONT_SIZE` + family onto its words, and
-`app.seed_canvas_state` snaps the font controls to them so the reading text
-matches the stimulus exactly. A one-way snap — gated on the *new* source
-declaring a font — would let a source that declares none (the demo, OneStop,
-PoTeC, every upload) silently inherit the previous corpus' answer: Demo →
-MultiplEYE → Demo would come back with MultiplEYE's px, its CJK stack and
-**scale-to-boxes off**, so the demo's reading text would render visibly smaller
-with nothing on screen saying why.
+A dataset can carry its stimulus font size + family on its words
+(`stimulus_font_px` / `stimulus_font_family`), and `app.seed_canvas_state`
+snaps the font controls to them so the reading text matches the stimulus
+exactly. A one-way snap — gated on the *new* source declaring a font — would
+let a source that declares none (the demo, OneStop, PoTeC, most uploads)
+silently inherit the previous corpus' answer: Demo → a font-declaring corpus →
+Demo would come back with that corpus' px, its CJK stack and **scale-to-boxes
+off**, so the demo's reading text would render visibly smaller with nothing on
+screen saying why.
 
 The general shape is worth pinning, not just the symptom: a source-switch snap
 writes *session*-scoped state to express a *source*-scoped fact, and that only
@@ -42,7 +43,8 @@ _FIXATIONS = pd.DataFrame(
         "duration_ms": [100],
     }
 )
-#: What a corpus that declares its stimulus typeface looks like on the way in.
+#: A source that declares its stimulus typeface, and its words on the way in.
+_FONT_CORPUS = "A font-declaring corpus"
 _WORDS_WITH_FONT = _WORDS.assign(
     stimulus_font_px=[22.0],
     stimulus_font_family=["'Noto Sans Mono CJK SC', monospace"],
@@ -81,7 +83,7 @@ def _font(session):
 
 class TestTheRoundTrip:
     def test_a_declared_font_is_snapped_to(self, session):
-        _seed("MultiplEYE", _WORDS_WITH_FONT)
+        _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
 
         size, family, scale = _font(session)
         assert size == 22
@@ -94,7 +96,7 @@ class TestTheRoundTrip:
         _seed("Bundled Demo", _WORDS)
         before = _font(session)
 
-        _seed("MultiplEYE", _WORDS_WITH_FONT)
+        _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
         assert _font(session) != before
 
         _seed("Bundled Demo", _WORDS)
@@ -107,18 +109,18 @@ class TestTheRoundTrip:
         session["global_base_font_size"] = 29
         tuned = _font(session)
 
-        _seed("MultiplEYE", _WORDS_WITH_FONT)
+        _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
         _seed("Bundled Demo", _WORDS)
 
         assert _font(session) == tuned
 
     def test_two_font_declaring_corpora_in_a_row_restore_the_original(self, session):
         """The stash is taken on the *first* snap of a run of them, so the third
-        source gets the pre-MultiplEYE state and not MultiplEYE's."""
+        source gets the state before the first corpus and not the first's."""
         _seed("Bundled Demo", _WORDS)
         before = _font(session)
 
-        _seed("MultiplEYE", _WORDS_WITH_FONT)
+        _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
         _seed(
             "Another corpus",
             _WORDS.assign(stimulus_font_px=[31.0], stimulus_font_family=["serif"]),
@@ -131,10 +133,10 @@ class TestTheRoundTrip:
     def test_staying_on_one_source_does_not_re_snap(self, session):
         """Manual edits within a source stick — the key is unchanged, so the
         snap must not re-fire over them."""
-        _seed("MultiplEYE", _WORDS_WITH_FONT)
+        _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
         session["global_base_font_size"] = 40
 
-        _seed("MultiplEYE", _WORDS_WITH_FONT)
+        _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
 
         assert session["global_base_font_size"] == 40
 
@@ -155,7 +157,7 @@ class TestWhatMustNotBeTouched:
     def test_a_key_absent_before_the_snap_returns_to_its_factory_value(self, session):
         """Popping it lets the `defaults` pin restore the factory value in the
         same run, rather than freezing whatever the last corpus left."""
-        _seed("MultiplEYE", _WORDS_WITH_FONT)
+        _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
         _seed("Bundled Demo", _WORDS)
 
         assert session["global_base_font_size"] == 16

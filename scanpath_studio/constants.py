@@ -65,36 +65,6 @@ def similarity_enabled() -> bool:
     return experimental_features_enabled()
 
 
-def multipleye_upload_enabled() -> bool:
-    """Whether the wizard's "Dataset format" choice + MultiplEYE upload branch
-    are exposed **in the app**.
-
-    Off unless ``SCANPATH_EXPERIMENTAL`` is set. While it is off every upload
-    goes through the Generic flow, which covers most of what the MultiplEYE
-    branch does by hand (filename-derived ids, block-aware character-AOI
-    aggregation); the code (`wizard._render_multipleye_upload`, the format
-    `segmented_control`) stays in place. Scope is the **app** only;
-    `datasets.multipleye_frames_from_uploads`/`load_multipleye_uploads` are
-    untouched and still callable directly.
-    """
-    return experimental_features_enabled()
-
-
-def multipleye_enabled() -> bool:
-    """Whether the MultiplEYE corpus is offered.
-
-    Off unless ``SCANPATH_EXPERIMENTAL`` is set: its data is not openly
-    available yet, and the loader was built and tested on one sample (Zurich
-    Chinese). Off, the entry leaves the public-dataset registry — so the data
-    picker, the 🗂️ Data page, Compare's second dataset and share links all stop
-    offering it — and `render`'s ``--source multipleye`` / ``--export`` /
-    ``--no-question-screens`` flags are hidden from ``--help``. This hides
-    rather than breaks: those flags still parse, and `datasets.load_multipleye`
-    is untouched, so a script that already uses them keeps working.
-    """
-    return experimental_features_enabled()
-
-
 def preprocessing_enabled() -> bool:
     """Whether the soft-exclusion / merge pipeline is exposed **in the app**.
 
@@ -724,7 +694,6 @@ DEMO_CHOICE = "Bundled Demo"
 SYNTHETIC_CHOICE = "Synthetic test trial"
 PUBLIC_DATASETS_CHOICE = "Public datasets"
 POTEC_DEFAULT_DIR = "data/PoTeC"
-MULTIPLEYE_DEFAULT_DIR = "data/MultiplEYE_ZH_CH_Zurich_1_2025"
 ONESTOP_CHOICE = "OneStop server bundle"
 # Public OneStop (OSF download-on-demand) — distinct from the env-var
 # ONESTOP_CHOICE server bundle. Each reading regime is its own dataset in the
@@ -782,13 +751,6 @@ ONESTOP_VARIANT_LABELS = {
     "public": "Public (OSF download)",
     "lacclab": "LaCC lab (local export)",
 }
-MULTIPLEYE_BUNDLE_CHOICE = "MultiplEYE server bundle"
-# Default dir for the MultiplEYE *server bundle* (per-session parquet shards
-# under `<dir>/scanpath/`), overridable via the `MULTIPLEYE_DATA_DIR` env var.
-# Empty default so the source only appears when the env var is set (like the
-# OneStop server bundle). Distinct from MULTIPLEYE_DEFAULT_DIR above, which is
-# the public-corpus loader's tree.
-MULTIPLEYE_BUNDLE_DEFAULT_DIR = ""
 _VIEW_SCANPATH = "Scanpath Visualization"
 _VIEW_CORPUS = "Corpus Analysis"
 # The third top-level view — everything about the dataset *itself* (source,

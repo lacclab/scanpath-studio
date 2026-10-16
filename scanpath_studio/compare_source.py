@@ -29,7 +29,6 @@ from . import progress
 from .column_names import ColumnNames
 from .constants import (
     DEMO_CHOICE,
-    MULTIPLEYE_DEFAULT_DIR,
     ONESTOP_PUBLIC_DEFAULT_DIR,
     POTEC_DEFAULT_DIR,
     SYNTHETIC_CHOICE,
@@ -53,7 +52,6 @@ COMPARE_SOURCE_KEY = COMPARE_SOURCE_STATE_KEY
 #: come from the `<key_prefix>_dir` session keys `app._dataset_dir_input` writes,
 #: plus the default each loader passes it. Read-only here: this module never
 #: writes a location, it only reports whether one is usable.
-_MULTIPLEYE_LABEL_HINT = "MultiplEYE"
 _POTEC_LABEL_HINT = "PoTeC"
 
 
@@ -101,8 +99,7 @@ def _public_location(label: str) -> tuple[str, dict]:
     """``(root, loader kwargs)`` for a `PUBLIC_DATASET_REGISTRY` label.
 
     The kwargs are the source's options: OneStop's variant / regime / parts
-    (from the label), and MultiplEYE's fixation source — the session key the
-    main source's widget owns, read rather than re-rendered.
+    (from the label).
     """
     from scanpath_studio import app, datasets
 
@@ -117,12 +114,6 @@ def _public_location(label: str) -> tuple[str, dict]:
         }
     if _POTEC_LABEL_HINT in label:
         return _resolved_dir("potec_dir", app._download_target(POTEC_DEFAULT_DIR)), {}
-    if _MULTIPLEYE_LABEL_HINT in label:
-        return _resolved_dir("multipleye_dir", MULTIPLEYE_DEFAULT_DIR), {
-            "fixation_source": str(
-                st.session_state.get("multipleye_fixation_source") or "scanpaths"
-            ),
-        }
     return "", {}
 
 
@@ -130,14 +121,13 @@ def _public_ready(label: str) -> tuple[bool, str]:
     """Whether a public corpus can be loaded *silently*, and why not if it can't.
 
     Uses the existing readiness helpers — `datasets.potec_present` /
-    `onestop_present` / `multipleye_inventory` — so a corpus is never offered as
-    B unless the very same check the main source picker runs says its files are
-    there. A download is deliberately never triggered from here.
+    `onestop_present` — so a corpus is never offered as B unless the very same
+    check the main source picker runs says its files are there. A download is
+    deliberately never triggered from here.
 
     Cached on the resolved location + source options: this runs for *every*
-    registry entry on every rerun that Compare is on, and `multipleye_inventory`
-    walks each session directory (`app._cached_multipleye_inventory` wraps the
-    same call for the same reason). Location changes bust the key.
+    registry entry on every rerun that Compare is on. Location changes bust the
+    key.
     """
     root, kwargs = _public_location(label)
     return _public_ready_cached(
@@ -180,11 +170,6 @@ def _public_ready_cached(
             )
         elif _POTEC_LABEL_HINT in label:
             present = datasets.potec_present(root)
-        elif _MULTIPLEYE_LABEL_HINT in label:
-            sessions, _ = datasets.multipleye_inventory(
-                root, fixation_source=kwargs["fixation_source"]
-            )
-            present = bool(sessions)
         else:
             return False, f"{short} isn't loadable as a comparison dataset."
     except (OSError, ValueError, KeyError):
@@ -256,12 +241,8 @@ def _load_public_frames(
             variant=kwargs["variant"],
             names="canonical",
         )
-    elif _POTEC_LABEL_HINT in label:
-        data = datasets.load_potec(root, names="canonical")
     else:
-        data = datasets.load_multipleye(
-            root, fixation_source=kwargs["fixation_source"], names="canonical"
-        )
+        data = datasets.load_potec(root, names="canonical")
     # B's corpus is copied out of this cache on every rerun; the label
     # lets `load_secondary_dataset` key it without hashing it each time.
     words, fixations = stamp_source((data[0], data[1]))

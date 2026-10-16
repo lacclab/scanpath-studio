@@ -71,8 +71,8 @@ cross-cutting files. The load-bearing ones:
   CLI surfaces (the four-surface rule's non-UI half).
 - `test_export.py`, `test_export_naming.py`, `test_animation_export.py` —
   bulk export, path patterns, separable layers, GIF/MP4.
-- `test_dataset_support.py`, `test_multipleye_enrichment.py`,
-  `test_onestop_shard.py` — the public-corpus loaders.
+- `test_dataset_support.py`, `test_onestop_shard.py` — the public-corpus
+  loaders.
 - **Contract tests that gate CI on a rename**:
   `test_session_key_contract.py` pins the share-link / saved-config session
   keys against a frozen list — a renamed key fails the test instead

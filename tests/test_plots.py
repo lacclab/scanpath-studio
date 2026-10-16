@@ -1181,7 +1181,7 @@ class TestMakeScanpathAnimation:
     def test_make_scanpath_animation_background_image_layer(
         self, tmp_path, normalized_words_df, normalized_fixations_df
     ):
-        # The stimulus-image background (MultiplEYE) must show in the animated
+        # The stimulus-image background must show in the animated
         # replay too — placed at its centered origin, below the traces, and
         # persisting across frames (a layout image, not per-frame data).
         p = tmp_path / "stim.png"
@@ -2774,7 +2774,7 @@ class TestLinePitchAndScript:
 
 
 class TestBackgroundImageLayer:
-    """The stimulus-page background image layer (MultiplEYE)."""
+    """The stimulus-page background image layer."""
 
     def test_png_size_and_data_uri(self, tmp_path):
         p = tmp_path / "stim.png"

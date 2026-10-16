@@ -28,7 +28,6 @@ PAPER_FIGURES_DIR=../overleaf/figures uv run python paper/paper_figs.py
 | `paper_fig_architecture.py` | `fig1_architecture.pdf` | none |
 | `paper_fig_potec.py` | `fig_potec` | PoTeC under `data/PoTeC` (`download=True` on first use) |
 | `paper_fig_drift.py` | `fig_drift` | PoTeC under `data/PoTeC` |
-| `paper_fig_multipleye.py` | `fig_multipleye` | MultiplEYE ZH pilot under `data/MultiplEYE_ZH_CH_Zurich_1_2025` |
 | `paper_fig_corpus.py` | `fig_corpus` | full OneStop under `data/OneStop` (`datasets.download_onestop`) |
 | `paper_stats.py` | case-study descriptives + the measure validation | bundled demo (none) |
 | `paper_timings.py` | the runtime table | bundled demo, plus PoTeC for the long-trial row |

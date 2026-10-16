@@ -520,21 +520,6 @@ def _render_screen_navigator(
     return str(selected)
 
 
-def _part_catalog_for_display(
-    words: pd.DataFrame, fixations: pd.DataFrame
-) -> pd.DataFrame:
-    """Use MultiplEYE's fixation-onset order if cached word order is stale."""
-    try:
-        return part_catalog(words, fixations)
-    except ValueError as exc:
-        if (
-            str(exc) == "Multipart metadata 'screen_index' conflicts across tables."
-            and "screen_kind" in fixations.columns
-        ):
-            return part_catalog(fixations)
-        raise
-
-
 def _embed_html_iframe(
     html: str, *, height: int, alt: str | None = None, focusable: bool = False
 ) -> None:
@@ -3651,7 +3636,7 @@ def _parse_comprehension_questions(raw: str) -> tuple[list[_Question], int]:
 def _render_comprehension_questions(trial_words: pd.DataFrame) -> None:
     """Render structured comprehension questions for the trial's stimulus.
 
-    Parses the ``comprehension_questions`` JSON column (MultiplEYE) into a list of
+    Parses the ``comprehension_questions`` JSON column into a list of
     questions, each with the target (✓ reference answer) and distractors. The
     corpus records no per-reader answer, so the target is shown as the key only —
     not as a 'selected'/'correct' result. No-op when the column is absent or
@@ -3889,12 +3874,12 @@ def _render_paragraph_panel(
             _render_paragraph_with_spans(trial_words, span_bg)
 
         # Breathing room between the stimulus text and the question block (generic
-        # Q&A fields and/or MultiplEYE's structured comprehension questions).
+        # Q&A fields and/or structured comprehension questions).
         has_comprehension = bool(_first_str(trial_words, "comprehension_questions"))
         if qa_cols or has_comprehension:
             st.markdown("<div style='height:1.2rem'></div>", unsafe_allow_html=True)
 
-        # MultiplEYE structured comprehension questions (target + distractors).
+        # Structured comprehension questions (target + distractors).
         _render_comprehension_questions(trial_words)
 
         # Trial context fields, generically. Keep OneStop's combined
@@ -6297,7 +6282,7 @@ def render_single_trial_tab(
         # samples, so each screen draws in its own coordinate space.
         part_catalog(parent_raw_gaze)
         if parent_words.empty and parent_fixations.empty
-        else _part_catalog_for_display(parent_words, parent_fixations)
+        else part_catalog(parent_words, parent_fixations)
     )
     selected_screen = _render_screen_navigator(screens, host=screen_slot)
     if selected_screen is not None:
@@ -6339,7 +6324,7 @@ def render_single_trial_tab(
     trial_has_fixations = not trial_fixations.empty
     has_raw_gaze = raw_gaze is not None and not raw_gaze.empty
 
-    # Stimulus-page background image (MultiplEYE): the trial's (screen's) own.
+    # Stimulus-page background image: the trial's (screen's) own.
     trial_image = _reading_stimulus_image(trial_words, trial_fixations)
     has_stimulus_image = trial_image is not None
     trial_image_path, trial_image_size, trial_image_origin = trial_image or (
@@ -6985,7 +6970,7 @@ def render_single_trial_tab(
             compare_parent_fixations = extract_trial(
                 compare_fixations_pool, compare_participant, compare_trial
             )
-            compare_screens = _part_catalog_for_display(
+            compare_screens = part_catalog(
                 compare_parent_words, compare_parent_fixations
             )
         else:
@@ -9117,7 +9102,6 @@ _GROUP_SPLIT_CANDIDATES = (
     "is_correct",
     "genre",
     "session",
-    "pp_gender",
     "participant_id",
 )
 _FILTER_SET_FIELDS = (
@@ -12077,7 +12061,7 @@ def _generation_column_options(fixations: pd.DataFrame) -> list:
             cols.append(c)
         except TypeError:
             # A column holding unhashable values (e.g. a list / JSON column like
-            # MultiplEYE's `comprehension_questions`) can't group scanpaths.
+            # `comprehension_questions`) can't group scanpaths.
             continue
 
     def _rank(col: str) -> tuple:

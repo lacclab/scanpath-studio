@@ -1,0 +1,1 @@
+MultiplEYE support is removed: its corpus entry and upload format (only offered with `SCANPATH_EXPERIMENTAL=1`), the `MULTIPLEYE_DATA_DIR` server bundle, `load_multipleye`, and `render --source multipleye` / `--export` / `--no-question-screens`.

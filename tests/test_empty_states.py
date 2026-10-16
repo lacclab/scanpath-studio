@@ -257,7 +257,7 @@ class TestDatasetUnavailableState:
 
         st.session_state.pop(app._UNAVAILABLE_KEY, None)
         app._dataset_access_status(
-            st, root="/nowhere", present=False, label="MultiplEYE"
+            st, root="/nowhere", present=False, label="A local corpus"
         )
         note = st.session_state[app._UNAVAILABLE_KEY]
         assert note["download"] is None

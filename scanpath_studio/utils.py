@@ -425,8 +425,6 @@ _TRIAL_SORT_PREFERRED_COLS = (
     "is_correct",
     "genre",
     "session",
-    "pp_age",
-    "pp_gender",
     "TRIAL_INDEX",
     "trial_index",
 )

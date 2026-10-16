@@ -346,15 +346,6 @@ class TestTheTableItself:
         assert row["Participants"] == 1
         assert row["Fixations"] > 0
 
-    def test_a_source_that_publishes_nothing_stays_blank(self, table):
-        """MultiplEYE reads whatever session folders are on this machine, so no
-        figure would be true of the next person's copy."""
-        row = table.set_index("Dataset").loc["MultiplEYE"]
-        assert row["Counts"] == ""
-        assert pd.isna(row["Participants"])
-        # And the cell says why, rather than showing a blank or a 0.
-        assert row["_cells"]["Participants"] == "Not counted"
-
 
 class TestWhatTheDataPageSays:
     """One sentence per dataset, a note only where it matters."""

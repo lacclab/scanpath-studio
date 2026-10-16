@@ -2112,7 +2112,7 @@ def _read_by_extension(
             # EyeLink Data Viewer's "Excel" export is tab-separated text
             # with an .xls name — read it as what it is.
             return _read_delimited(buf, sep or _sniff_delimiter(buf, name), plan)
-        # First sheet (e.g. MultiplEYE questions workbook).
+        # First sheet.
         frame = pd.read_excel(buf, **_excel_na_kwargs(buf, plan))
         return frame[[c for c in columns if c in frame.columns]] if columns else frame
     return _read_delimited(buf, sep or _sniff_delimiter(buf, name), plan)
@@ -3178,7 +3178,7 @@ def source_labels(paths: Sequence[str]) -> list[str]:
 def source_file_name(label: str) -> str:
     """The file stem inside a :func:`source_labels` label — without the folders
     that qualify it, its ``#n`` occurrence number or a kept extension — for
-    code that parses identity out of a file's name (MultiplEYE uploads)."""
+    code that parses identity out of a file's name."""
     name = re.sub(r"#\d+$", "", str(label).rsplit("/", 1)[-1])
     stem = Path(name).stem
     return stem if Path(name).suffix.lower().lstrip(".") in UPLOAD_FILE_TYPES else name
@@ -5357,9 +5357,9 @@ WORD_OPTIONAL_FIELDS = [
     ("dspan_ind_end", "dspan_ind_end", "passthrough", "meta"),
     ("is_in_aspan", "is_in_aspan", "boolean", "meta"),
     ("is_in_dspan", "is_in_dspan", "boolean", "meta"),
-    # MultiplEYE side-data (also see FIX_OPTIONAL_FIELDS): the comprehension
-    # questions JSON + the per-trial stimulus-image path + the genre facet, kept
-    # so the panels / image layer can read them off the word frame too.
+    # Side data (also see FIX_OPTIONAL_FIELDS): the comprehension questions
+    # JSON + the per-trial stimulus-image path + the genre facet, kept so the
+    # panels / image layer can read them off the word frame too.
     ("comprehension_questions", "comprehension_questions", "passthrough", "meta"),
     ("image_path", "image_path", "passthrough", "meta"),
     ("image_x", "image_x", "numeric", "meta"),
@@ -5369,12 +5369,9 @@ WORD_OPTIONAL_FIELDS = [
     ("stimulus_font_px", "stimulus_font_px", "numeric", "meta"),
     ("stimulus_font_family", "stimulus_font_family", "passthrough", "meta"),
     ("genre", "genre", "string", "meta"),
-    # Multipart screens: what a screen *is* (`reading` / `question` on
-    # MultiplEYE — a trial mixes both, and their fixations have different
-    # provenance), and which block of a question screen a word belongs to
-    # (`stem` / `target` / `distractor_a`… — a per-word facet).
+    # Multipart screens: what a screen *is* (e.g. `reading` / `question` — a
+    # trial can mix both, and their fixations can have different provenance).
     ("screen_kind", "screen_kind", "passthrough", "meta"),
-    ("aoi_block", "aoi_block", "passthrough", "meta"),
 ]
 
 FIX_OPTIONAL_FIELDS = [
@@ -5418,10 +5415,9 @@ FIX_OPTIONAL_FIELDS = [
     ("blink", "is_blink", "boolean", "fixation"),
     ("blink_flag", "is_blink", "boolean", "fixation"),
     ("BLINK", "is_blink", "boolean", "fixation"),
-    # MultiplEYE trial-level facets + side-data → Trial Info chips / filter
-    # facets / the comprehension panel / the stimulus-image layer. All are
-    # MultiplEYE-specific source names (carried only when the loader emits them),
-    # so they're inert for other corpora.
+    # Trial-level facets + side data → Trial Info chips / filter facets / the
+    # comprehension panel / the stimulus-image layer. Carried only when the
+    # data has them, so they're inert for other corpora.
     ("genre", "genre", "string", "meta"),
     ("session", "session", "string", "meta"),
     ("participant", "participant", "string", "meta"),
@@ -5433,12 +5429,6 @@ FIX_OPTIONAL_FIELDS = [
     ("image_y", "image_y", "numeric", "meta"),
     ("stimulus_font_px", "stimulus_font_px", "numeric", "meta"),
     ("stimulus_font_family", "stimulus_font_family", "passthrough", "meta"),
-    # Reader metadata merged from participant_data.csv (namespaced pp_*).
-    ("pp_age", "pp_age", "numeric", "meta"),
-    ("pp_gender", "pp_gender", "string", "meta"),
-    ("pp_native_language", "pp_native_language", "string", "meta"),
-    ("pp_years_education", "pp_years_education", "numeric", "meta"),
-    ("pp_education_level", "pp_education_level", "string", "meta"),
     # Which kind of screen a fixation happened on (see the word table).
     ("screen_kind", "screen_kind", "passthrough", "meta"),
 ]

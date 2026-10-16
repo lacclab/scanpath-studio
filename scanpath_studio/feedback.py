@@ -3,8 +3,8 @@
 **Nothing is sent from the app.** Every route is a GitHub page the user opens in
 their browser and submits themselves — the privacy page promises the app makes
 no request of its own, and a feedback form posting somewhere would break that.
-The dialog lists three routes (a bug report, a feature request, an idea or
-general comment) and, for a bug report, the details its template asks for —
+The dialog lists four routes (a bug report, a feature request, an idea or
+general comment, a question) and, for a bug report, the details its template asks for —
 version, install, Python, Streamlit, OS — in a block with a *Copy* button, so
 a report doesn't depend on the user finding the version first.
 
@@ -48,6 +48,13 @@ ROUTES: tuple[tuple[str, str, str, str, str], ...] = (
         "comment",
         CITATION["ideas_url"],
         "Anything else: what works, what is confusing, what you use it for.",
+    ),
+    (
+        "question",
+        "Ask a question",
+        "question",
+        CITATION["questions_url"],
+        "How do I…? Is this expected? The answer helps the next person too.",
     ),
 )
 
@@ -95,7 +102,7 @@ def maybe_show_feedback() -> None:
 @st.dialog(f"{ICONS['feedback']} Send feedback", width="medium")
 @guarded()
 def _feedback_dialog() -> None:
-    """Three routes to GitHub, and the details to paste into a bug report."""
+    """Four routes to GitHub, and the details to paste into a bug report."""
     from scanpath_studio.menu import close_open_popovers
 
     close_open_popovers()

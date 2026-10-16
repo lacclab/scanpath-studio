@@ -1,4 +1,4 @@
-"""❓ Help → Send feedback: three GitHub routes and the details for a bug report."""
+"""❓ Help → Send feedback: four GitHub routes and the details for a bug report."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def _dialog_script() -> None:
     feedback.maybe_show_feedback()
 
 
-def test_dialog_shows_the_three_routes_and_the_details():
+def test_dialog_shows_every_route_and_the_details():
     at = AppTest.from_function(_dialog_script).run()
     assert not at.exception
     urls = [button.proto.url for button in at.get("link_button")]

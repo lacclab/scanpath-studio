@@ -615,7 +615,7 @@ Every keyword the figure builders take, with the default it renders with, the va
 save_figure(fig: Figure, path: str | Path, *, scale: float = 2, width: int | None = None, height: int | None = None, width_mm: float | None = None, width_in: float | None = None, dpi: int | None = None) -> Path
 ```
 
-Save a figure by extension: `.html` (interactive, needs no browser) or `.png`/`.svg`/`.pdf` (static via Kaleido — needs Chrome, Chromium or Edge; run `plotly_get_chrome -y` once if none is installed). `width` / `height` set the image size in px (overriding the figure's own size); both ignored for `.html`. Returns the written path.
+Save a figure by extension: `.html` (interactive) or `.png`/`.svg`/`.pdf` (static via Kaleido). See the [export FAQ](https://lacclab.github.io/scanpath-studio/faq/#export-fails) for setup. `width` / `height` set the image size in px (overriding the figure's own size); both ignored for `.html`. Returns the written path.
 
 `width_mm` or `width_in` with `dpi` (default 300) sizes a PNG for print, as the app's Export → *Current figure* does: 180 mm at 600 dpi is a 4,252 px wide PNG, its height following the figure's aspect, with the dpi written into the file. They replace `scale`.
 
@@ -673,4 +673,4 @@ Ask GitHub whether a newer release than this build is out.
 
 The one call here that uses the network, and only when made: it reads the latest release from `api.github.com` (drafts and pre-releases excluded) and compares it with version_info. It never raises. `status` is `"up_to_date"`, `"update_available"`, `"ahead"` (a development build past the latest release) or `"error"` (offline, no answer within `timeout` seconds, rate-limited, …), and `message` says it in a sentence. With an update available, `command` is the shell command that updates this install (`pip install -U scanpath-studio`, `uv tool upgrade scanpath-studio`, `git pull`, …), `latest.url` the release notes, and in the desktop app `download` the archive for this computer. The same check is Help → About → *Check for updates* and `scanpath-studio version --check`.
 
-For a batch loop, see [Automation](https://lacclab.github.io/scanpath-studio/automation/#batch-pattern). GIF and MP4 export uses `scanpath_studio.animation_export.export_animation` and requires Kaleido plus Chrome, Chromium or Edge.
+For [batch exports](https://lacclab.github.io/scanpath-studio/guides/exporting/#batch-pattern) and [GIF/MP4 replays](https://lacclab.github.io/scanpath-studio/guides/exporting/#replays-as-gif-or-mp4), see Export and share.

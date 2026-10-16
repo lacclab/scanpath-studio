@@ -1,51 +1,35 @@
 # Check a session
 
-Check a pilot or completed session for setup, calibration and recording problems, and leave a record of which trials need attention and why.
+Inspect a recording and save the trials that need attention.
 
-## 1. Load the session
+## 1. Open the session
 
-On the **Data Management** page select **Add dataset → Import files**, upload the Words (interest areas) and Fixations tables, then check the proposed columns and the **Recording setup** — the monitor resolution the session was actually recorded at — before selecting **Add dataset**. If the dataset is already loaded, click its row in the list of datasets.
+[Import your tables](https://lacclab.github.io/scanpath-studio/guides/loading-data/#add-your-own-data), or select a loaded dataset. Check its Recording setup against the screen used in the experiment.
 
-\[!\[
+## 2. Inspect a trial
 
-\](../../../assets/workflows/add-your-data_poster.webp)\](../../../assets/workflows/add-your-data.mp4)
+Select a participant and trial in Scanpath. Turn on Word boxes and inspect:
 
-*Adding the bundled demo's EyeLink fixation and interest-area reports: the columns are detected, and the recording setup arrives filled in.*
+- whether the boxes match the stimulus screenshot, if available;
+- how fixations sit relative to the words;
+- unexpected gaps, shifts or off-screen positions.
 
-## 2. Check the setup on one trial
-
-Keep the default view first, then turn on **Word boxes** and confirm that:
-
-- the word boxes match the displayed text;
-- fixations fall on or near words rather than off the screen;
-- the first and last fixations look plausible.
-
-If every trial is shifted in the same way, the problem is the setup, not the participant: check the monitor size in the **Recording setup** and the coordinate system.
+For a consistent offset, check [coordinate units and screen setup](https://lacclab.github.io/scanpath-studio/faq/#the-fixations-dont-line-up-with-the-text).
 
 ## 3. Replay the recording
 
-A still scanpath hides timing. Turn on **Animate** and look for long missing periods, repeated points out of bounds, frequent interruptions such as a participant blinking often, or a vertical shift that grows during the trial — a sign of calibration drift.
-
-To make these stand out, open **Filters & highlights → Fixations** in the plot rail and **Highlight** short, long or out-of-bounds fixations. Highlighting keeps the whole trial visible; keep **Discard** for a later, documented filtering decision.
+Turn on Animate to inspect fixation order and timing. To mark short, long or out-of-bounds fixations, use Plot controls → Filters & highlights → Fixations and choose Highlight. Gaps and unusual scanpaths alone do not establish their cause.
 
 \[!\[
 
 \](../../../assets/workflows/replay_poster.webp)\](../../../assets/workflows/replay.mp4)
 
-*Replaying a trial fixation by fixation, then at four times real time.*
+## 4. Record the review
 
-## 4. Record what you find
-
-Open **Annotations** under the plot: star a good example, add a tag such as `calibration`, `blink`, `setup` or `review`, and write one sentence describing the evidence and the action. Move through the participant's trials with the trial picker.
-
-\[!\[
-
-\](../../../assets/workflows/favorites_poster.webp)\](../../../assets/workflows/favorites.mp4)
-
-*Starring a trial and tagging it, starring another, then showing only the starred ones.*
+In Annotations, tag a trial `review` and note what you observed. Use the trial picker's arrows to continue through the session.
 
 ## 5. Save the review
 
-Open **Data Management → Annotations** and select **Export**. The file keeps your stars, tags and notes; **Share → File** keeps the view settings beside it. To return to a trial from its note, select **Open** on its row there.
+Export stars, tags and notes from Data Management → Annotations → Export. The record includes participant and trial IDs. Use Open on an annotation row to return to that trial.
 
-**Done:** you have checked geometry and timing, marked the trials that need attention, and saved the review. For a formal retained and excluded pool, continue with [Filter data](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/index.md).
+For exclusion decisions, follow [Exclude unsuitable trials](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/exclude-unsuitable-trials/index.md).

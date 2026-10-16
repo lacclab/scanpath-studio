@@ -9,6 +9,8 @@ The page has two sets of controls:
 
 The tabs under the plot then work with the trial on screen: annotate it, read its context, compare it, export it or share it. For how the parts fit together, see the [Scanpath visualization](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/index.md) guide.
 
+For the corresponding Python keywords and CLI flags, use the [figure options table](https://lacclab.github.io/scanpath-studio/api/#figure-options).
+
 ## Trial control bar
 
 The bar above the plot: pick a dataset and a trial, step through the trials, and narrow, sort or label the list.
@@ -153,16 +155,16 @@ The **Word boxes** switch draws each word's interest area; its **▾** holds:
 
 The **Heatmap** switch shows where reading concentrated; its **▾** holds:
 
-| Control                                                                               | What it does                                                                                                                                                                                                                   |
-| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Style**                                                                             | Choose the heatmap style: colored word boxes, a smooth interpolated map, or fixation density.                                                                                                                                  |
-| **Blur**                                                                              | Set the heatmap blur: how far each fixation spreads, for the smooth styles; **Auto** picks it.                                                                                                                                 |
-| **Color** → **By**                                                                    | Choose what the heatmap measures: total fixation duration (dwell time), or the number of fixations.                                                                                                                            |
-| **Color** → **Colors**                                                                | Choose the heatmap colors (color scale).                                                                                                                                                                                       |
-| **Scale**                                                                             | Choose a linear or log heatmap scale.                                                                                                                                                                                          |
-| **Range**                                                                             | Set the heatmap color range: the values the colors span. Anything below the range takes the lowest color, and anything above it the highest, so a fixed range keeps colors comparable across trials. **Auto** fits each trial. |
-| **Opacity**                                                                           | Set the heatmap opacity; **Auto** uses each style's own.                                                                                                                                                                       |
-| **Color bar** → **Show**, orientation, **Angle**, **Size**, **Thickness**, **Length** | Show the heatmap color bar, and set its orientation, label angle and size, thickness and length.                                                                                                                               |
+| Control                                                                               | What it does                                                                                                                          |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Style**                                                                             | Choose the heatmap style: colored word boxes, a smooth interpolated map, or fixation density.                                         |
+| **Blur**                                                                              | Set the heatmap blur: how far each fixation spreads, for the smooth styles; **Auto** picks it.                                        |
+| **Color** → **By**                                                                    | Choose what the heatmap measures: total fixation duration (dwell time), or the number of fixations.                                   |
+| **Color** → **Colors**                                                                | Choose the heatmap colors (color scale).                                                                                              |
+| **Scale**                                                                             | Choose a linear or log heatmap scale.                                                                                                 |
+| **Range**                                                                             | For word-box heatmaps, fix the color range across trials. **Auto** fits each trial. Interpolated heatmaps use each figure's own peak. |
+| **Opacity**                                                                           | Set the heatmap opacity; **Auto** uses each style's own.                                                                              |
+| **Color bar** → **Show**, orientation, **Angle**, **Size**, **Thickness**, **Length** | Show the heatmap color bar, and set its orientation, label angle and size, thickness and length.                                      |
 
 ### Raw gaze
 

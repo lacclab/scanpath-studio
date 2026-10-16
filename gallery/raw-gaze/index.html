@@ -1,0 +1,2565 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables.">
+      
+      
+      
+        <link rel="canonical" href="https://lacclab.github.io/scanpath-studio/gallery/raw-gaze/">
+      
+      
+        <link rel="prev" href="../comparison/">
+      
+      
+        <link rel="next" href="../replay/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/icon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Raw gaze - Scanpath Studio</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        
+        <link rel="stylesheet" href="../../assets/external/fonts.googleapis.com/css.56f7ac64.css">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_markdown_exec_pyodide.css">
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+      <link rel="stylesheet" href="../../stylesheets/theme.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Raw gaze - Scanpath Studio" />
+<meta property="og:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
+<meta property="og:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/gallery/raw-gaze.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:url" content="https://lacclab.github.io/scanpath-studio/gallery/raw-gaze/" />
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:title" content="Raw gaze - Scanpath Studio" />
+<meta property="twitter:description" content="Interactive workbench for eye-tracking-while-reading data: draw, replay and compare scanpaths over the text, and export figures and tables." />
+<meta property="twitter:image" content="https://lacclab.github.io/scanpath-studio/assets/images/social/gallery/raw-gaze.png" />
+</head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#raw-gaze" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Scanpath Studio" class="md-header__button md-logo" aria-label="Scanpath Studio" data-md-component="logo">
+      
+  <img src="../../assets/icon.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Scanpath Studio
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Raw gaze
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/lacclab/scanpath-studio" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    lacclab/scanpath-studio
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../install/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../tutorials/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guides/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Feature guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Plot gallery
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../api/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../cite/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  About
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+                
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" hidden>
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Scanpath Studio" class="md-nav__button md-logo" aria-label="Scanpath Studio" data-md-component="logo">
+      
+  <img src="../../assets/icon.png" alt="logo">
+
+    </a>
+    Scanpath Studio
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/lacclab/scanpath-studio" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    lacclab/scanpath-studio
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../tutorials/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../tutorials/data-collection/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimize data collection
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Optimize data collection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/data-collection/check-a-session/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Check a session
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/data-collection/compare-eye-trackers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compare two eye trackers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/data-collection/audit-an-experimenter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit an experimenter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../tutorials/data-filtering/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Filter data
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Filter data
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/data-filtering/exclude-unsuitable-trials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exclude unsuitable trials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/data-filtering/select-participants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Select participants by a field
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/data-filtering/find-trials-for-an-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Find the trials an analysis needs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../tutorials/exporting-figures/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export customized figures
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Export customized figures
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/exporting-figures/export-one-figure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export one figure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/exporting-figures/export-a-replay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export a replay
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/exporting-figures/export-every-trial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export every trial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../tutorials/corpus-analysis/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analyze a corpus
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Analyze a corpus
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/corpus-analysis/analyze-one-text/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analyze one text
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/corpus-analysis/compare-groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compare groups or conditions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/corpus-analysis/progression-over-time/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    See progression over time
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../guides/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature guides
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Feature guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../guides/scanpath-visualization/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanpath visualization
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Scanpath visualization
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/scanpath-visualization/controls/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    All controls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/loading-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../guides/corpus-workspace/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Corpus Analysis
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Corpus Analysis
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/exporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export and share
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plot gallery
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plot gallery
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plot gallery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scanpath/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanpath
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../heatmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heatmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../text-lines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fixations by line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../saccade-types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Saccade types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../illustration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reading schematic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Two readers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Raw gaze
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../replay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Replay
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../word-profile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Word profile
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../time-course/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Time course
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    App recordings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For coding agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    About
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cite/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cite
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../privacy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+                
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" hidden>
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+  
+
+
+
+  
+
+
+  <nav class="md-path" aria-label="Navigation" >
+    <ol class="md-path__list">
+      
+        
+  
+  
+    <li class="md-path__item">
+      <a href="../.." class="md-path__link">
+        
+  <span class="md-ellipsis">
+    Home
+  </span>
+
+      </a>
+    </li>
+  
+
+      
+      
+        
+  
+  
+    
+    
+      <li class="md-path__item">
+        <a href="../" class="md-path__link">
+          
+  <span class="md-ellipsis">
+    Plot gallery
+  </span>
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ol>
+  </nav>
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+  
+
+
+
+  
+  
+
+
+<h1 id="raw-gaze">Raw gaze<a class="headerlink" href="#raw-gaze" title="Permanent link">&para;</a></h1>
+<p>Samples under translucent fixations. The demo samples are synthetic.</p>
+<div class="sps-figure"><div class="sps-plot" data-width="960" data-height="540" style="aspect-ratio: 960 / 540; max-width: 960px" data-figure="{&quot;data&quot;:[{&quot;customdata&quot;:[[&quot;The&quot;,0,1,165],[&quot;scientist,&quot;,1,1,662],[&quot;who&quot;,2,1,227],[&quot;is&quot;,3,1,396],[&quot;a&quot;,4,1,271],[&quot;familiar&quot;,5,1,1071],[&quot;face&quot;,6,1,762],[&quot;on&quot;,7,1,665],[&quot;Polish&quot;,8,1,874],[&quot;television,&quot;,9,1,473],[&quot;says&quot;,10,1,399],[&quot;wolves&quot;,11,1,1005],[&quot;are&quot;,12,1,454],[&quot;exceptional&quot;,13,1,574],[&quot;animals&quot;,14,1,272],[&quot;that&quot;,15,2,192],[&quot;are&quot;,16,2,149],[&quot;capable&quot;,17,2,541],[&quot;of&quot;,18,2,233],[&quot;moving&quot;,19,2,0],[&quot;up&quot;,20,2,389],[&quot;to&quot;,21,2,396],[&quot;30km&quot;,22,2,216],[&quot;during&quot;,23,2,248],[&quot;a&quot;,24,2,0],[&quot;single&quot;,25,2,225],[&quot;hunt.&quot;,26,2,503],[&quot;\u201cThe&quot;,27,2,218],[&quot;Beskidy&quot;,28,2,265],[&quot;pack&quot;,29,2,435],[&quot;is&quot;,30,2,259],[&quot;a&quot;,31,2,0],[&quot;strong&quot;,32,2,397],[&quot;unit,&quot;,33,2,140],[&quot;eight&quot;,34,3,574],[&quot;or&quot;,35,3,210],[&quot;nine&quot;,36,3,457],[&quot;individuals.&quot;,37,3,762],[&quot;This&quot;,38,3,512],[&quot;year,&quot;,39,3,133],[&quot;we&quot;,40,3,214],[&quot;have&quot;,41,3,669],[&quot;recorded&quot;,42,3,734],[&quot;five&quot;,43,3,590],[&quot;cubs,&quot;,44,3,457],[&quot;two&quot;,45,3,340],[&quot;yearlings&quot;,46,3,1675],[&quot;and&quot;,47,3,232],[&quot;two&quot;,48,3,176],[&quot;adults.&quot;,49,3,327],[&quot;We&quot;,50,4,991],[&quot;track&quot;,51,4,652],[&quot;them&quot;,52,4,232],[&quot;using&quot;,53,4,319],[&quot;motion-activated&quot;,54,4,1142],[&quot;cameras&quot;,55,4,583],[&quot;in&quot;,56,4,417],[&quot;the&quot;,57,4,368],[&quot;forest&quot;,58,4,542],[&quot;and&quot;,59,4,218],[&quot;by&quot;,60,4,0],[&quot;following&quot;,61,4,296],[&quot;their&quot;,62,4,225],[&quot;prints&quot;,63,4,179],[&quot;in&quot;,64,4,202],[&quot;the&quot;,65,4,0],[&quot;mud&quot;,66,5,184],[&quot;and&quot;,67,5,500],[&quot;snow.&quot;,68,5,0],[&quot;In&quot;,69,5,871],[&quot;each&quot;,70,5,189],[&quot;family&quot;,71,5,553],[&quot;group,&quot;,72,5,517],[&quot;only&quot;,73,5,447],[&quot;one&quot;,74,5,723],[&quot;pair&quot;,75,5,615],[&quot;reproduces,&quot;,76,5,2087],[&quot;once&quot;,77,5,1062],[&quot;a&quot;,78,5,0],[&quot;year.&quot;,79,5,192],[&quot;All&quot;,80,5,180],[&quot;pack&quot;,81,5,502],[&quot;members&quot;,82,5,264],[&quot;care&quot;,83,6,364],[&quot;for&quot;,84,6,165],[&quot;the&quot;,85,6,156],[&quot;young&quot;,86,6,126],[&quot;with&quot;,87,6,362],[&quot;solidarity&quot;,88,6,567],[&quot;and&quot;,89,6,379],[&quot;devotion.\u201d&quot;,90,6,489],[&quot;Myslajek,&quot;,91,6,1070],[&quot;the&quot;,92,6,209],[&quot;son&quot;,93,6,666],[&quot;of&quot;,94,6,199],[&quot;a&quot;,95,6,337],[&quot;shepherd,&quot;,96,6,1047],[&quot;is&quot;,97,6,206],[&quot;puzzled&quot;,98,6,608],[&quot;by&quot;,99,7,205],[&quot;wolves&#x27;&quot;,100,7,473],[&quot;bad&quot;,101,7,535],[&quot;reputation.&quot;,102,7,729],[&quot;\u201cWhy&quot;,103,7,428],[&quot;does&quot;,104,7,691],[&quot;one&quot;,105,7,738],[&quot;speak&quot;,106,7,780],[&quot;of&quot;,107,7,0],[&quot;a&quot;,108,7,164],[&quot;&#x27;lone-wolf&quot;,109,7,614],[&quot;gunman&#x27;?&quot;,110,7,486],[&quot;Why&quot;,111,7,562],[&quot;did&quot;,112,7,173],[&quot;we&quot;,113,7,560],[&quot;have&quot;,114,7,552],[&quot;to&quot;,115,7,0],[&quot;have&quot;,116,7,327],[&quot;Little&quot;,117,8,330],[&quot;Red&quot;,118,8,0],[&quot;Riding&quot;,119,8,638],[&quot;Hood,&quot;,120,8,85],[&quot;with&quot;,121,8,270],[&quot;its&quot;,122,8,657],[&quot;big&quot;,123,8,398],[&quot;bad&quot;,124,8,405],[&quot;wolf?\u201d&quot;,125,8,157],[&quot;He&quot;,126,8,627],[&quot;is&quot;,127,8,228],[&quot;fascinated&quot;,128,8,650],[&quot;by&quot;,129,8,178],[&quot;these&quot;,130,8,536],[&quot;aloof&quot;,131,8,559],[&quot;canines&quot;,132,8,863],[&quot;who&quot;,133,8,1222],[&quot;remained&quot;,134,9,1181],[&quot;in&quot;,135,9,734],[&quot;the&quot;,136,9,911],[&quot;wild&quot;,137,9,651],[&quot;33,000&quot;,138,9,208],[&quot;years&quot;,139,9,1020],[&quot;ago&quot;,140,9,525],[&quot;when&quot;,141,9,1730],[&quot;others&quot;,142,9,1742],[&quot;decided&quot;,143,9,378],[&quot;on&quot;,144,9,0],[&quot;a&quot;,145,9,254],[&quot;much&quot;,146,9,319],[&quot;more&quot;,147,9,278],[&quot;comfortable&quot;,148,9,505],[&quot;existence&quot;,149,9,455],[&quot;as&quot;,150,10,0],[&quot;domestic&quot;,151,10,473],[&quot;dogs.&quot;,152,10,205]],&quot;hovertemplate&quot;:&quot;Word: %{customdata[0]}&lt;br&gt;Word #: %{customdata[1]}&lt;br&gt;Line #: %{customdata[2]}&lt;br&gt;IA_DWELL_TIME: %{customdata[3]} ms&lt;extra&gt;&lt;/extra&gt;&quot;,&quot;mode&quot;:&quot;text&quot;,&quot;name&quot;:&quot;words&quot;,&quot;showlegend&quot;:false,&quot;text&quot;:[&quot;The&quot;,&quot;scientist,&quot;,&quot;who&quot;,&quot;is&quot;,&quot;a&quot;,&quot;familiar&quot;,&quot;face&quot;,&quot;on&quot;,&quot;Polish&quot;,&quot;television,&quot;,&quot;says&quot;,&quot;wolves&quot;,&quot;are&quot;,&quot;exceptional&quot;,&quot;animals&quot;,&quot;that&quot;,&quot;are&quot;,&quot;capable&quot;,&quot;of&quot;,&quot;moving&quot;,&quot;up&quot;,&quot;to&quot;,&quot;30km&quot;,&quot;during&quot;,&quot;a&quot;,&quot;single&quot;,&quot;hunt.&quot;,&quot;\u201cThe&quot;,&quot;Beskidy&quot;,&quot;pack&quot;,&quot;is&quot;,&quot;a&quot;,&quot;strong&quot;,&quot;unit,&quot;,&quot;eight&quot;,&quot;or&quot;,&quot;nine&quot;,&quot;individuals.&quot;,&quot;This&quot;,&quot;year,&quot;,&quot;we&quot;,&quot;have&quot;,&quot;recorded&quot;,&quot;five&quot;,&quot;cubs,&quot;,&quot;two&quot;,&quot;yearlings&quot;,&quot;and&quot;,&quot;two&quot;,&quot;adults.&quot;,&quot;We&quot;,&quot;track&quot;,&quot;them&quot;,&quot;using&quot;,&quot;motion-activated&quot;,&quot;cameras&quot;,&quot;in&quot;,&quot;the&quot;,&quot;forest&quot;,&quot;and&quot;,&quot;by&quot;,&quot;following&quot;,&quot;their&quot;,&quot;prints&quot;,&quot;in&quot;,&quot;the&quot;,&quot;mud&quot;,&quot;and&quot;,&quot;snow.&quot;,&quot;In&quot;,&quot;each&quot;,&quot;family&quot;,&quot;group,&quot;,&quot;only&quot;,&quot;one&quot;,&quot;pair&quot;,&quot;reproduces,&quot;,&quot;once&quot;,&quot;a&quot;,&quot;year.&quot;,&quot;All&quot;,&quot;pack&quot;,&quot;members&quot;,&quot;care&quot;,&quot;for&quot;,&quot;the&quot;,&quot;young&quot;,&quot;with&quot;,&quot;solidarity&quot;,&quot;and&quot;,&quot;devotion.\u201d&quot;,&quot;Myslajek,&quot;,&quot;the&quot;,&quot;son&quot;,&quot;of&quot;,&quot;a&quot;,&quot;shepherd,&quot;,&quot;is&quot;,&quot;puzzled&quot;,&quot;by&quot;,&quot;wolves&#x27;&quot;,&quot;bad&quot;,&quot;reputation.&quot;,&quot;\u201cWhy&quot;,&quot;does&quot;,&quot;one&quot;,&quot;speak&quot;,&quot;of&quot;,&quot;a&quot;,&quot;&#x27;lone-wolf&quot;,&quot;gunman&#x27;?&quot;,&quot;Why&quot;,&quot;did&quot;,&quot;we&quot;,&quot;have&quot;,&quot;to&quot;,&quot;have&quot;,&quot;Little&quot;,&quot;Red&quot;,&quot;Riding&quot;,&quot;Hood,&quot;,&quot;with&quot;,&quot;its&quot;,&quot;big&quot;,&quot;bad&quot;,&quot;wolf?\u201d&quot;,&quot;He&quot;,&quot;is&quot;,&quot;fascinated&quot;,&quot;by&quot;,&quot;these&quot;,&quot;aloof&quot;,&quot;canines&quot;,&quot;who&quot;,&quot;remained&quot;,&quot;in&quot;,&quot;the&quot;,&quot;wild&quot;,&quot;33,000&quot;,&quot;years&quot;,&quot;ago&quot;,&quot;when&quot;,&quot;others&quot;,&quot;decided&quot;,&quot;on&quot;,&quot;a&quot;,&quot;much&quot;,&quot;more&quot;,&quot;comfortable&quot;,&quot;existence&quot;,&quot;as&quot;,&quot;domestic&quot;,&quot;dogs.&quot;],&quot;textfont&quot;:{&quot;color&quot;:[&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#D55E00&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;,&quot;#000000&quot;],&quot;family&quot;:&quot;monospace&quot;,&quot;size&quot;:11.875},&quot;textposition&quot;:&quot;middle center&quot;,&quot;x&quot;:{&quot;dtype&quot;:&quot;f8&quot;,&quot;bdata&quot;:&quot;AAAAAADAeEAAAAAAANSAQAAAAAAASIVAAAAAAABch0AAAAAAANiIQAAAAAAAHIxAAAAAAAAikEAAAAAAAFKRQAAAAAAAzpJAAAAAAACglUAAAAAAACaYQAAAAAAA7plAAAAAAACQm0AAAAAAAPCdQAAAAAAAdaBAAAAAAABYeUAAAAAAALB+QAAAAAAA6IJAAAAAAAAshkAAAAAAACSJQAAAAAAAHIxAAAAAAADkjUAAAAAAACKQQAAAAAAA6pFAAAAAAABAk0AAAAAAAJaUQAAAAAAAhJZAAAAAAAAmmEAAAAAAABSaQAAAAAAAApxAAAAAAAAynUAAAAAAAPCdQAAAAAAARp9AAAAAAACboEAAAAAAAPB5QAAAAAAASH9AAAAAAAAEgkAAAAAAAFyHQAAAAAAAtIxAAAAAAAD4j0AAAAAAAFKRQAAAAAAAgpJAAAAAAACWlEAAAAAAAKqWQAAAAAAATJhAAAAAAADImUAAAAAAANybQAAAAAAA8J1AAAAAAAAgn0AAAAAAAHWgQAAAAAAAKHhAAAAAAACAfUAAAAAAAASCQAAAAAAASIVAAAAAAAAcjEAAAAAAAMSRQAAAAAAAZpNAAAAAAABwlEAAAAAAABKWQAAAAAAAtJdAAAAAAAC+mEAAAAAAAKyaQAAAAAAADJ1AAAAAAAD6nkAAAAAAADugQAAAAAAAwaBAAAAAAADAeEAAAAAAAIB9QAAAAAAAuIFAAAAAAABkhEAAAAAAAMSGQAAAAAAAVIpAAAAAAAB8jkAAAAAAAAaRQAAAAAAAXJJAAAAAAACyk0AAAAAAADiWQAAAAAAAvphAAAAAAADImUAAAAAAAPiaQAAAAAAAdJxAAAAAAADKnUAAAAAAALqfQAAAAAAAWHlAAAAAAACwfkAAAAAAALiBQAAAAAAAsIRAAAAAAAD0h0AAAAAAALSMQAAAAAAAlJBAAAAAAADOkkAAAAAAAOyVQAAAAAAAAJhAAAAAAAAwmUAAAAAAADqaQAAAAAAA+JpAAAAAAADAnEAAAAAAAK6eQAAAAAAAKaBAAAAAAAAoeEAAAAAAALB+QAAAAAAA6IJAAAAAAACoh0AAAAAAALSMQAAAAAAArI9AAAAAAAAskUAAAAAAAKiSQAAAAAAA/pNAAAAAAAC8lEAAAAAAAKqWQAAAAAAAoplAAAAAAACQm0AAAAAAAMCcQAAAAAAAyp1AAAAAAAD6nkAAAAAAABWgQAAAAAAArqBAAAAAAACIekAAAAAAAIiAQAAAAAAAzINAAAAAAACoh0AAAAAAAOyKQAAAAAAAmI1AAAAAAAD4j0AAAAAAACyRQAAAAAAAzpJAAAAAAABKlEAAAAAAAC6VQAAAAAAAQpdAAAAAAABWmUAAAAAAAKyaQAAAAAAAdJxAAAAAAACInkAAAAAAACmgQAAAAAAAuHtAAAAAAABsgUAAAAAAAICDQAAAAAAALIZAAAAAAAC8iUAAAAAAAJiNQAAAAAAASJBAAAAAAACekUAAAAAAAGaTQAAAAAAAoJVAAAAAAABCl0AAAAAAAACYQAAAAAAACplAAAAAAACGmkAAAAAAAAydQAAAAAAAKaBAAAAAAAAoeEAAAAAAAEh/QAAAAAAAHIRA&quot;},&quot;y&quot;:{&quot;dtype&quot;:&quot;f8&quot;,&quot;bdata&quot;:&quot;AAAAAAAQakAAAAAAABBqQAAAAAAAEGpAAAAAAAAQakAAAAAAABBqQAAAAAAAEGpAAAAAAAAQakAAAAAAABBqQAAAAAAAEGpAAAAAAAAQakAAAAAAABBqQAAAAAAAEGpAAAAAAAAQakAAAAAAABBqQAAAAAAAEGpAAAAAAAAQdEAAAAAAABB0QAAAAAAAEHRAAAAAAAAQdEAAAAAAABB0QAAAAAAAEHRAAAAAAAAQdEAAAAAAABB0QAAAAAAAEHRAAAAAAAAQdEAAAAAAABB0QAAAAAAAEHRAAAAAAAAQdEAAAAAAABB0QAAAAAAAEHRAAAAAAAAQdEAAAAAAABB0QAAAAAAAEHRAAAAAAAAQdEAAAAAAADB7QAAAAAAAMHtAAAAAAAAwe0AAAAAAADB7QAAAAAAAMHtAAAAAAAAwe0AAAAAAADB7QAAAAAAAMHtAAAAAAAAwe0AAAAAAADB7QAAAAAAAMHtAAAAAAAAwe0AAAAAAADB7QAAAAAAAMHtAAAAAAAAwe0AAAAAAADB7QAAAAAAAKIFAAAAAAAAogUAAAAAAACiBQAAAAAAAKIFAAAAAAAAogUAAAAAAACiBQAAAAAAAKIFAAAAAAAAogUAAAAAAACiBQAAAAAAAKIFAAAAAAAAogUAAAAAAACiBQAAAAAAAKIFAAAAAAAAogUAAAAAAACiBQAAAAAAAKIFAAAAAAAC4hEAAAAAAALiEQAAAAAAAuIRAAAAAAAC4hEAAAAAAALiEQAAAAAAAuIRAAAAAAAC4hEAAAAAAALiEQAAAAAAAuIRAAAAAAAC4hEAAAAAAALiEQAAAAAAAuIRAAAAAAAC4hEAAAAAAALiEQAAAAAAAuIRAAAAAAAC4hEAAAAAAALiEQAAAAAAASIhAAAAAAABIiEAAAAAAAEiIQAAAAAAASIhAAAAAAABIiEAAAAAAAEiIQAAAAAAASIhAAAAAAABIiEAAAAAAAEiIQAAAAAAASIhAAAAAAABIiEAAAAAAAEiIQAAAAAAASIhAAAAAAABIiEAAAAAAAEiIQAAAAAAASIhAAAAAAADYi0AAAAAAANiLQAAAAAAA2ItAAAAAAADYi0AAAAAAANiLQAAAAAAA2ItAAAAAAADYi0AAAAAAANiLQAAAAAAA2ItAAAAAAADYi0AAAAAAANiLQAAAAAAA2ItAAAAAAADYi0AAAAAAANiLQAAAAAAA2ItAAAAAAADYi0AAAAAAANiLQAAAAAAA2ItAAAAAAABoj0AAAAAAAGiPQAAAAAAAaI9AAAAAAABoj0AAAAAAAGiPQAAAAAAAaI9AAAAAAABoj0AAAAAAAGiPQAAAAAAAaI9AAAAAAABoj0AAAAAAAGiPQAAAAAAAaI9AAAAAAABoj0AAAAAAAGiPQAAAAAAAaI9AAAAAAABoj0AAAAAAAGiPQAAAAAAAfJFAAAAAAAB8kUAAAAAAAHyRQAAAAAAAfJFAAAAAAAB8kUAAAAAAAHyRQAAAAAAAfJFAAAAAAAB8kUAAAAAAAHyRQAAAAAAAfJFAAAAAAAB8kUAAAAAAAHyRQAAAAAAAfJFAAAAAAAB8kUAAAAAAAHyRQAAAAAAAfJFAAAAAAAA+k0AAAAAAAD6TQAAAAAAAPpNA&quot;},&quot;type&quot;:&quot;scatter&quot;},{&quot;customdata&quot;:{&quot;dtype&quot;:&quot;i4&quot;,&quot;bdata&quot;:&quot;Ph4AAGoeAACWHgAAwh4AAOYeAADzHgAADh8AADgfAABiHwAAjB8AALYfAADgHwAAAyAAABMgAAAwIAAAWSAAAIIgAACsIAAA1SAAAP4gAAAYIQAAISEAAEMhAABuIQAAmCEAAMMhAADtIQAA/SEAAAQiAAAuIgAAWCIAAIMiAACtIgAA1yIAAOYiAAD8IgAAJiMAAFEjAACBIwAAvyMAAPMjAAAeJAAASSQAAHQkAACfJAAAwSQAAMgkAADiJAAADSUAADglAABXJQAAaSUAAIwlAAC2JQAA4CUAAAkmAAAzJgAAXSYAAH4mAACIJgAAoiYAAMwmAAD3JgAAIScAADgnAABUJwAAficAAKknAADTJwAA/icAACgoAAA6KAAARCgAAHAoAACbKAAAxigAAPIoAAABKQAAGCkAAEIpAABsKQAAlikAAMApAADqKQAAFCoAADQqAAA3KgAATioAAHgqAACiKgAAzCoAAO8qAAD6KgAAFSsAAD8rAABpKwAAkysAALUrAADOKwAA8ysAABwsAABGLAAAbywAAJgsAAC6LAAAxywAAOIsAAALLQAANS0AAF4tAACILQAAsS0AANstAAD2LQAADS4AADYuAABgLgAAiS4AALMuAADcLgAA5S4AAPYuAAAhLwAATC8AAHYvAAChLwAAui8AAMwvAAD4LwAAJDAAAFAwAABqMAAAczAAAJUwAADAMAAA6jAAABUxAAA/MQAAVTEAAGQxAACNMQAAtjEAAN8xAAAJMgAAMjIAAFsyAACEMgAArTIAANYyAAD/MgAAKTMAAFIzAABkMwAAbzMAAJszAADHMwAABzQAAE00AAB8NAAAqjQAAL80AADLNAAA9TQAAB81AABINQAAcjUAAJw1AADGNQAA0DUAAOE1AAALNgAANTYAAF82AACBNgAAjDYAAKc2AADRNgAA+zYAABU3AAApNwAAUjcAAHs3AAClNwAAzjcAANw3AADiNwAADDgAADc4AABhOAAAizgAAJw4AAClOAAAzzgAAPg4AAAiOQAASzkAAHU5AACEOQAAmTkAAMM5AADsOQAAFToAAD46AABoOgAAkToAALo6AADkOgAADTsAADY7AABXOwAAXjsAAHg7AAClOwAA0jsAAPc7AAAIPAAAJjwAAE48AAB4PAAAoDwAAMo8AADyPAAAHD0AAEQ9AABuPQAAlj0AAK49AAC0PQAA1T0AAP89AAApPgAAUj4AAHw+AACXPgAApD4AAMc+AADxPgAAHD8AAEY/AABwPwAAhj8AAJU/AAC/PwAA6j8AABRAAAA+QAAAaEAAAHlAAACCQAAAq0AAANVAAAD+QAAAKEEAAFFBAABgQQAAdkEAAKBBAADKQQAA9EEAAB5CAABIQgAAckIAALhCAAAIQwAAM0MAAF1DAACIQwAAo0MAALBDAADTQwAA/kMAAChEAABTRAAAdkQAAINEAACeRAAAx0QAAPBEAAAZRQAAQkUAAGtFAACURQAAvEUAAN1FAADjRQAA+0UAACZGAABRRgAAfEYAAKdGAAC9RgAAy0YAAPVGAAAgRwAASkcAAHRHAACfRwAAukcAAMdHAADpRwAAEkgAADxIAABlSAAAjkgAAK9IAAC5SAAA0kgAAPtIAAAkSQAATEkAAHVJAACdSQAAxkkAAO9JAAAXSgAAQEoAAFJKAABcSgAAhUoAAK5KAADXSgAAAUsAACpLAAA4SwAAPUsAAGZLAACQSwAAuUsAAOJLAAAMTAAANUwAAENMAABZTAAAhEwAAK5MAADZTAAABE0AAC9NAAB/TQAAxU0AAO5NAAAXTgAAQE4AAGpOAACTTgAAvE4AAOVOAAAOTwAAN08AAGBPAACJTwAAsk8AAMBPAADVTwAA/08AAChQAABSUAAAe1AAAKVQAACsUAAAvFAAAOZQAAAQUQAAO1EAAGVRAACQUQAAulEAAMVRAADYUQAAAVIAAClSAABSUgAAelIAAKJSAADLUgAA81IAABxTAABEUwAAbVMAAIdTAACSUwAAtFMAAN5TAAAHVAAAMFQAAFpUAACDVAAAnVQAAKZUAADHVAAA71QAABhVAABBVQAAalUAAJNVAAC8VQAA5VUAAP5VAAAHVgAALVYAAHJWAADMVgAAA1cAAC5XAABZVwAAjVcAAMlXAAD4VwAAIlgAAExYAAB2WAAAoFgAAMpYAADRWAAA4VgAAAtZAAA0WQAAXlkAAIdZAACxWQAA2lkAAARaAAAlWgAALloAAEhaAAByWgAAnFoAAMZaAADwWgAAClsAABRbAAA1WwAAXlsAAIhbAACxWwAA21sAAARcAAAQXAAAI1wAAExcAAB1XAAAnlwAAMdcAADwXAAAEV0AABpdAAA0XQAAXl0AAIhdAACyXQAA3F0AAPBdAAD+XQAAKl4AAFZeAACCXgAAv14AAAxfAABAXwAAbV8AAJlfAACvXwAAvV8AAOdfAAASYAAAPGAAAF5gAABlYAAAfWAAAKhgAADTYAAA/mAAAClhAABDYQAATGEAAG9hAACaYQAAxmEAAPFhAAARYgAAJWIAAEpiAAB2YgAAoWIAAMxiAADaYgAA7mIAABhjAABCYwAAbGMAAJZjAADAYwAA6mMAABRkAAAvZAAAOmQAAF1kAACHZAAAsWQAANtkAAAGZQAAMGUAAD1lAABRZQAAemUAAKRlAADNZQAA9mUAAB9mAABIZgAAcWYAAItmAACVZgAAtmYAAOBmAAAKZwAANGcAAF1nAACHZwAAsWcAAMBnAADXZwAAA2gAADBoAABjaAAAq2gAAORoAAANaQAANmkAAF9pAACIaQAAlWkAAJppAADEaQAA7mkAABhqAAAragAANmoAAGBqAACLagAAtWoAANhqAADjagAA/WoAACZrAABPawAAeGsAAKBrAADJawAA8msAAANsAAANbAAANmwAAF9sAACJbAAAsmwAAL9sAADEbAAA7mwAABltAABDbQAAX20AAG5tAACSbQAAvG0AAOZtAAAQbgAAOm4AAFxuAABkbgAAfW4AAKZuAADQbgAA+W4AABpvAAAhbwAAOW8AAGRvAACObwAAuW8AAONvAAAEcAAACXAAACNwAABRcAAAgnAAALlwAADqcAAAFXEAAEFxAABscQAAj3EAAJhxAACycQAA23EAAARyAAAtcgAAVnIAAH9yAACocgAA0XIAAPpyAAAjcwAATXMAAHZzAACfcwAArHMAAK9zAADYcwAAAXQAACl0AABSdAAAe3QAAKR0AADMdAAA9XQAABx1AABFdQAAcnUAAJZ1AACjdQAAv3UAAOh1AAARdgAAOnYAAGN2AACMdgAAtnYAAN92AAAIdwAAMXcAAD93AABUdwAAfncAAKh3AADSdwAA+3cAACV4AABPeAAAYXgAAGx4AACVeAAAvngAAOh4AAAReQAATnkAAJJ5AAC+eQAA6XkAAAx6AAAUegAALXoAAFh6AACCegAArXoAANB6AADdegAA93oAACB7AABJewAAcnsAAJt7AADEewAA7HsAAA18AAAUfAAALHwAAFV8AAB+fAAAp3wAANF8AAACfQAANn0AAF99AACIfQAAsX0AANp9AAADfgAALH4AAD5+AABJfgAAdH4AAJ9+AADKfgAA5X4AAO9+AAARfwAAO38AAGV/AACPfwAAuX8AAM1/AADafwAABIAAAC6AAABZgAAAg4AAAK2AAADJgAAA1oAAAPiAAAAhgQAASoEAAHOBAACdgQAAxoEAAO+BAAAYggAAI4IAADaCAABiggAAjoIAALqCAADuggAAKYMAAFeDAACBgwAAq4MAANSDAAD+gwAAGoQAACeEAABJhAAAcYQAAJqEAADDhAAA7IQAABWFAAA9hQAAZoUAAI+FAAC4hQAA4YUAAPiFAAD+hQAAIIYAAEuGAAB2hgAAg4YAAJeGAADAhgAA6YYAABKHAAA7hwAAZIcAAI2HAAC2hwAA34cAAPuHAAAKiAAALYgAAFeIAACBiAAAq4gAANWIAADiiAAA9YgAAB6JAABHiQAAcIkAAJmJAADCiQAA24kAAOWJAAAKigAAN4oAAGSKAABzigAAiIoAALGKAADaigAAA4sAACyLAABViwAAfYsAAKaLAADJiwAA14sAAPSLAAAfjAAASowAAHWMAACEjAAAiYwAALOMAADcjAAABo0AADCNAAA9jQAAUY0AAH2NAACojQAA1I0AABCOAABcjgAAj44AALmOAADjjgAA9o4AAA+PAAA4jwAAYY8AAIqPAACzjwAA3I8AAAWQAAAWkAAALZAAAFeQAACBkAAArJAAAMqQAADckAAA/5AAACmRAABTkQAAfJEAAKaRAADQkQAA45EAAO6RAAAXkgAAQJIAAGqSAACTkgAAvJIAAMWSAADXkgAABZMAADSTAACKkwAA1JMAAP6TAAAolAAAUpQAAG6UAAB7lAAAnZQAAMeUAADwlAAAGpUAAEOVAABdlQAAZ5UAAIqVAAC1lQAA4JUAAAuWAAAllgAAL5YAAFOWAACBlgAAp5YAALaWAADSlgAA/ZYAACiXAABTlwAAfpcAAKGXAACrlwAAxZcAAO+XAAAZmAAAQ5gAAGaYAABwmAAAipgAALWYAADfmAAACpkAADSZAABrmQAApZkAAM+ZAAD5mQAAJJoAAE6aAAB4mgAAopoAAMSaAADOmgAA6ZoAABSbAAA/mwAAa5sAAI6bAACbmwAAtZsAAN6bAAAHnAAAMJwAAFmcAAB8nAAAjpwAAKycAADWnAAAAJ0AACqdAABUnQAAfp0AAKidAADKnQAA1p0AAPGdAAAangAAQ54AAGyeAACVngAAvp4AAOeeAAAQnwAAOZ8AAE2fAABanwAAhZ8AALCfAADbnwAABqAAABugAAA2oAAAYaAAAIugAAC2oAAA96AAAD6hAABpoQAAlKEAAL+hAADqoQAABKIAAAyiAAAuogAAWKIAAIOiAACtogAA2KIAAPOiAAD+ogAAIKMAAEqjAAB0owAAnqMAAMGjAADMowAA6KMAABOkAAA+pAAAaaQAAJSkAACjpAAAuaQAAOOkAAANpQAAN6UAAISlAADHpQAA8aUAABumAABEpgAAbqYAAJCmAACbpgAAt6YAAOKmAAANpwAAOKcAAFqnAABjpwAAfacAAKmnAADVpwAAAagAABSoAAAeqAAASKgAAHOoAACdqAAAx6gAAPGoAAAEqQAAD6kAADmpAABkqQAAjqkAALipAADiqQAA96kAAAWqAAAxqgAAXaoAAImqAADVqgAAGKsAAEKrAABrqwAAlKsAALGrAADBqwAA5KsAAA6sAAA3rAAAYKwAAIqsAACzrAAAzqwAANusAAD9rAAAJa0AAE6tAAB3rQAAoK0AAMmtAADyrQAAG64AADKuAAA4rgAAWa4AAIOuAACtrgAA164AAAGvAAArrwAAVa8AAF2vAABurwAAmq8AAMWvAADxrwAAMLAAAIKwAAC1sAAA3rAAAAixAAAxsQAAQLEAAFaxAAB/sQAAqLEAANGxAAD6sQAAI7IAAEyyAAB1sgAAjrIAAJiyAAC7sgAA5rIAABCzAAA7swAAXrMAAGqzAACFswAAsLMAANuzAAAGtAAAMbQAAFa0AABotAAAhrQAAK+0AADYtAAAArUAACu1AABVtQAAfrUAAKi1AADRtQAA+rUAABe2AAAotgAAS7YAAHS2AACetgAAx7YAAOu2AAABtwAAIrcAAE+3AAB8twAAmbcAAKa3AADItwAA8rcAABy4AABGuAAAb7gAAJm4AADDuAAA1LgAAOq4AAAUuQAAPrkAAGi5AACDuQAAj7kAALG5AADauQAAA7oAAC26AABWugAAf7oAAIS6AACUugAAwroAAOG6AADwugAAE7sAADy7AABmuwAAj7sAALm7AADiuwAADLwAACO8AAA1vAAAX7wAAIm8AACzvAAA3bwAAO28AADzvAAAHL0AAEa9AABvvQAAkr0AAKG9AAC9vQAA6L0AABK+AAA8vgAAX74AAGm+AACCvgAAq74AANS+AAD9vgAAJr8AAE+/AAB4vwAAob8AAMq/AADzvwAAHMAAAEXAAABnwAAAcsAAAIzAAAC2wAAA4cAAAAvBAAA1wQAAX8EAAI3BAADEwQAA9MEAAB3CAABHwgAAccIAAJrCAADEwgAA7cIAABfDAABBwwAAU8MAAF3DAACJwwAAtcMAAOHDAAAXxAAAasQAAKnEAADTxAAA/cQAABXFAAAaxQAAOsUAAGTFAACNxQAAt8UAAMbFAADcxQAABcYAAC/GAABYxgAAgcYAAIbGAACUxgAAvsYAAOjGAAARxwAAO8cAAE7HAABaxwAAhMcAAK7HAADZxwAAA8gAAC3IAABFyAAATMgAAG7IAACYyAAAwsgAAOzIAAAWyQAAJckAADrJAABjyQAAjMkAALXJAADeyQAAB8oAADDKAABZygAAgsoAAKvKAACyygAAwcoAAOvKAAAVywAAP8sAAGjLAACSywAAvMsAAObLAAAGzAAACcwAACDMAABJzAAAcswAAJzMAACyzAAAw8wAAO3MAAAWzQAAQM0AAFrNAABwzQAAms0AAMPNAADtzQAAF84AAEDOAABqzgAAlM4AAKrOAAC6zgAA484AAAzPAAA0zwAAXc8AAIbPAACvzwAA188AAADQAAAp0AAAUtAAAGXQAABw0AAAmtAAAMPQAADt0AAAF9EAAEDRAABa0QAAZNEAAIfRAACz0QAA39EAAAvSAABg0gAArNIAANzSAADp0gAA/NIAACXTAABO0wAAeNMAAKHTAADK0wAA3NMAAOfTAAAR1AAAO9QAAGTUAACO1AAAuNQAAMDUAADQ1AAA+tQAACPVAABM1QAAdtUAAJ/VAADA1QAAydUAAOLVAAAM1gAANtYAAGDWAACK1gAAntYAAKvWAADU1gAA/dYAACbXAABP1wAAeNcAAKHXAADB1wAAxtcAAN3XAAAI2AAAMtgAAF3YAAB52AAAhtgAAKnYAADV2AAA+tgAAA/ZAAAv2QAAWtkAAIXZAACw2QAA7NkAADvaAABu2gAAmNoAAMHaAADq2gAAFNsAAD3bAABn2wAAjtsAAKzbAADQ2wAA+tsAACTcAABO3AAAYdwAAGvcAACU3AAAvdwAAOXcAAAO3QAAN90AAGDdAACJ3QAAst0AANrdAAAI3gAAQ94AAHfeAACi3gAAzd4AAPjeAAAj3wAAMt8AADjfAABh3wAAit8AALPfAADc3wAA/t8AAAzgAAAo4AAAUeAAAHrgAACj4AAAzOAAAPXgAAAe4QAAK+EAAEDhAABq4QAAleEAAMDhAADq4QAAM+IAAIXiAACu4gAA1+IAAADjAAAp4wAAUuMAAHvjAACe4wAAr+MAAM3jAAD24wAAH+QAAEnkAABy5AAAm+QAALTkAAC75AAA3OQAAAblAAAw5QAAWuUAAITlAACu5QAAueUAAMvlAAD05QAAHuYAAEfmAABw5gAAmeYAAMLmAADi5gAA5eYAAP3mAAAo5wAAU+cAAHfnAACI5wAAp+cAANPnAAD+5wAAKugAAD7oAABJ6AAAeOgAAKboAAC76AAAxugAAO/oAAAY6QAAQekAAGrpAACT6QAApukAALPpAADc6QAABeoAAC7qAABX6gAAeOoAAILqAACb6gAAxOoAAO3qAAAW6wAAP+sAAGfrAACI6wAAkusAAKzrAADV6wAA/usAACjsAABR7AAAeuwAAKTsAADN7AAA0+wAAOPsAAAN7QAAOO0AAGPtAAC67QAAB+4AADHuAABb7gAAhe4AAK/uAADL7gAA2e4AAP3uAAAn7wAAUe8AAHvvAACl7wAAz+8AAOHvAADr7wAAFfAAAD/wAABq8AAAlPAAAL7wAADa8AAA5/AAAAjxAAAx8QAAWfEAAILxAACq8QAA0/EAAPvxAAAk8gAATPIAAHXyAACd8gAAxvIAANzyAADr8gAAFPMAAD3zAABl8wAAjvMAALfzAADg8wAALPQAAIX0AACw9AAA3PQAAAf1AAAy9QAAO/UAAEz1AAB29QAAoPUAAMv1AAD19QAACPYAABL2AAA89gAAZvYAAJD2AAC69gAA5PYAAP72AAAH9wAAKfcAAFT3AAB/9wAAqvcAAN33AAAX+AAARPgAAG74AACY+AAAuvgAAMX4AADg+AAAC/kAADb5AABi+QAAhvkAAJX5AACx+QAA3PkAAAf6AAAy+gAAXfoAAH/6AACJ+gAApvoAANf6AADt+gAA+/oAACX7AABP+wAAevsAAKT7AADO+wAA+PsAAAH8AAAT/AAAPvwAAGr8AACV/AAAwfwAAM/8AADj/AAADf0AADb9AABg/QAAiv0AALP9AADd/QAA7f0AAPT9AAAd/gAARv4AAHD+AACZ/gAAwv4AAOv+AAD2/gAACf8AADP/AABe/wAAiP8AALP/AADW/wAA4/8AAP7/AAAnAAEAUQABAHoAAQCkAAEAzQABAPcAAQAhAQEASgEBAHQBAQCHAQEAkwEBAL0BAQDnAQEAEQIBAEICAQCIAgEAwQIBAO0CAQAZAwEAMAMBAEADAQBpAwEAkwMBALwDAQDmAwEADwQBACkEAQA0BAEAVgQBAH8EAQCoBAEA0QQBAPoEAQAHBQEAGwUBAEUFAQBuBQEAlwUBAMAFAQDpBQEABAYBABEGAQA1BgEAYAYBAIwGAQCjBgEAtAYBAN0GAQAHBwEAMAcBAFoHAQCDBwEApAcBAK0HAQDHBwEA8AcBABoIAQBDCAEAbAgBAIYIAQCQCAEAswgBAN0IAQAHCQEAMQkBAFQJAQBfCQEAegkBAKMJAQDMCQEA9QkBAB4KAQBHCgEAcAoBAJkKAQDCCgEA6woBAP0KAQAHCwEALwsBAFgLAQCACwEAqAsBANELAQD5CwEAIQwBAEkMAQByDAEAmgwBAMIMAQDrDAEAEw0BADsNAQBkDQEAjA0BALQNAQDcDQEABQ4BAC0OAQBVDgEAfg4BAKYOAQDODgEA9w4BAB8PAQBXDwEAlA8BAL8PAQDrDwEAFhABACgQAQAyEAEAXBABAIUQAQCvEAEA2BABAAIRAQAsEQEAVREBAG4RAQB1EQEAlxEBAMIRAQDsEQEAIRIBAHUSAQC0EgEA3hIBAAgTAQAyEwEAXBMBAIYTAQCpEwEAtBMBAM0TAQD2EwEAHxQBAEgUAQBxFAEAmhQBAMMUAQDgFAEA8hQBABYVAQA/FQEAZxUBAJAVAQC5FQEA4hUBAAsWAQA0FgEARxYBAFIWAQB7FgEApRYBAM4WAQD3FgEAIBcBAEoXAQBzFwEAnBcBAMUXAQDvFwEAGBgBAB8YAQAuGAEAWBgBAIEYAQCrGAEA1BgBAP0YAQAnGQEAUBkBAGoZAQB0GQEAlRkBAL4ZAQDmGQEADxoBADgaAQBhGgEAahoBAHsaAQClGgEAzxoBAPkaAQAwGwEAjRsBANEbAQD6GwEAJBwBAE4cAQB3HAEAkhwBAJ4cAQDAHAEA6hwBABMdAQA8HQEAZh0BAIgdAQCWHQEAsh0BANsdAQAEHgEALR4BAFYeAQB/HgEAqR4BANIeAQD7HgEAJB8BAE0fAQB3HwEAoB8BALQfAQDBHwEA6h8BABMgAQA7IAEAZCABAI0gAQC2IAEAySABANUgAQD/IAEAKCEBAFIhAQB7IQEApSEBALMhAQDIIQEA8iEBABsiAQBEIgEAbSIBAJciAQDAIgEA6SIBAO8iAQD/IgEAKSMBAFMjAQB9IwEApyMBANEjAQD7IwEAJSQBAC8kAQBBJAEAayQBAJYkAQDAJAEA6yQBACMlAQCBJQEAxCUBAO0lAQAVJgEAPSYBAGYmAQCOJgEAtiYBAN8mAQAHJwEALycBAFgnAQCAJwEAqCcBANEnAQDyJwEA/ScBABcoAQBAKAEAaCgBAJAoAQC5KAEA4SgBAAopAQAyKQEAWykBAIMpAQCrKQEA1CkBAPwpAQAlKgEARCoBAEoqAQBhKgEAiioBALMqAQDcKgEABSsBAC4rAQBWKwEAfysBAKgrAQDRKwEA+isBACMsAQBMLAEAdCwBAJYsAQCjLAEAviwBAOcsAQAQLQEAOS0BAGItAQCLLQEAtC0BANwtAQAFLgEAJy4BADQuAQBPLgEAei4BAKQuAQDOLgEA+C4BACMvAQA8LwEARS8BAGovAQCYLwEA9C8BAF8wAQCIMAEAsTABANowAQADMQEALDEBAEYxAQBPMQEAcDEBAJkxAQDCMQEA6zEBABUyAQA+MgEAZzIBAHIyAQCEMgEArTIBANYyAQD/MgEAKDMBAFEzAQB6MwEAozMBALozAQDAMwEA4TMBAAs0AQA1NAEAXzQBAIE0AQCONAEAqTQBANM0AQD+NAEAKDUBAFI1AQB8NQEAnjUBAKU1AQC9NQEA6DUBABI2AQA9NgEAZzYBAKQ2AQDdNgEACzcBADk3AQBDNwEAVjcBAIE3AQCsNwEA1zcBAPo3AQAGOAEAITgBAEs4AQB0OAEAnjgBAMg4AQDhOAEA9jgBACE5AQBMOQEAdzkBAKM5AQDaOQEANjoBAHk6AQCkOgEAzjoBAPg6AQAjOwEATTsBAHA7AQB9OwEAmTsBAMQ7AQDwOwEAGzwBADA8AQA+PAEAZzwBAI88AQC4PAEA4TwBAAo9AQAyPQEAWz0BAIQ9AQCXPQEAoz0BAMw9AQD1PQEAHT4BAEY+AQBvPgEAmD4BAME+AQDUPgEA3z4BAAo/AQA0PwEAXz8BAIo/AQClPwEAxT8BAPA/AQAaQAEARUABAFpAAQBnQAEAkUABALtAAQDlQAEAD0EBADlBAQBjQQEAcEEBAIVBAQCvQQEA2UEBAANCAQAuQgEAWEIBAGNCAQB2QgEAoEIBAMlCAQDyQgEAG0MBADhDAQBHQwEAa0MBAJVDAQC/QwEA6UMBABREAQA+RAEAaEQBAJFEAQC6RAEA5UQBABBFAQA7RQEAVkUBAGBFAQCCRQEArUUBANhFAQD1RQEABUYBAClGAQBURgEAfkYBAKlGAQC0RgEAx0YBAPNGAQAeRwEASkcBAGlHAQB7RwEAokcBANBHAQD9RwEAD0gBACZIAQBQSAEAekgBAKRIAQDOSAEA2kgBAO5IAQAYSQEAQkkBAG1JAQCrSQEA/UkBADJKAQBdSgEAiEoBAKNKAQCsSgEAzUoBAPdKAQAgSwEASksBAHNLAQCdSwEAxksBAPBLAQD8SwEAEEwBADxMAQBnTAEAk0wBALhMAQDXTAEA/0wBACpNAQBVTQEAdE0BAI5NAQC4TQEA400BAA1OAQA3TgEAUE4BAGNOAQCMTgEAtU4BAN5OAQAHTwEAKE8BADJPAQBMTwEAdU8BAJ9PAQDITwEA8k8BABZQAQAqUAEASVABAHNQAQCdUAEAx1ABAOFQAQD3UAEAIFEBAElRAQBzUQEAnFEBAMVRAQDuUQEACVIBABVSAQA4UgEAY1IBAI1SAQDUUgEAJFMBAFBTAQB8UwEAqFMBAL1TAQDXUwEAAFQBACpUAQBTVAEAfFQBAKVUAQDOVAEA+1QBACtVAQBYVQEAhFUBALBVAQDLVQEA1VUBAPhVAQAlVgEAUlYBAGlWAQB4VgEAoVYBAMpWAQD0VgEAHVcBAEZXAQBQVwEAYlcBAIxXAQC2VwEA4FcBAApYAQAwWAEATFgBAG9YAQCZWAEAwlgBAOxYAQAWWQEAGlkBAChZAQBTWQEAflkBAJtZAQCqWQEAzVkBAPZZAQAfWgEASFoBAHFaAQCaWgEAw1oBAOxaAQAVWwEAKFsBADRbAQBeWwEAh1sBALBbAQDaWwEA4VsBAPBbAQAaXAEAQ1wBAGxcAQCIXAEAllwBALpcAQDnXAEAE10BAA==&quot;},&quot;hovertemplate&quot;:&quot;Raw gaze&lt;br&gt;x: %{x:.1f}&lt;br&gt;y: %{y:.1f}&lt;br&gt;Timestamp: %{customdata} ms&lt;extra&gt;&lt;/extra&gt;&quot;,&quot;marker&quot;:{&quot;color&quot;:{&quot;dtype&quot;:&quot;i4&quot;,&quot;bdata&quot;:&quot;Ph4AAGoeAACWHgAAwh4AAOYeAADzHgAADh8AADgfAABiHwAAjB8AALYfAADgHwAAAyAAABMgAAAwIAAAWSAAAIIgAACsIAAA1SAAAP4gAAAYIQAAISEAAEMhAABuIQAAmCEAAMMhAADtIQAA/SEAAAQiAAAuIgAAWCIAAIMiAACtIgAA1yIAAOYiAAD8IgAAJiMAAFEjAACBIwAAvyMAAPMjAAAeJAAASSQAAHQkAACfJAAAwSQAAMgkAADiJAAADSUAADglAABXJQAAaSUAAIwlAAC2JQAA4CUAAAkmAAAzJgAAXSYAAH4mAACIJgAAoiYAAMwmAAD3JgAAIScAADgnAABUJwAAficAAKknAADTJwAA/icAACgoAAA6KAAARCgAAHAoAACbKAAAxigAAPIoAAABKQAAGCkAAEIpAABsKQAAlikAAMApAADqKQAAFCoAADQqAAA3KgAATioAAHgqAACiKgAAzCoAAO8qAAD6KgAAFSsAAD8rAABpKwAAkysAALUrAADOKwAA8ysAABwsAABGLAAAbywAAJgsAAC6LAAAxywAAOIsAAALLQAANS0AAF4tAACILQAAsS0AANstAAD2LQAADS4AADYuAABgLgAAiS4AALMuAADcLgAA5S4AAPYuAAAhLwAATC8AAHYvAAChLwAAui8AAMwvAAD4LwAAJDAAAFAwAABqMAAAczAAAJUwAADAMAAA6jAAABUxAAA/MQAAVTEAAGQxAACNMQAAtjEAAN8xAAAJMgAAMjIAAFsyAACEMgAArTIAANYyAAD/MgAAKTMAAFIzAABkMwAAbzMAAJszAADHMwAABzQAAE00AAB8NAAAqjQAAL80AADLNAAA9TQAAB81AABINQAAcjUAAJw1AADGNQAA0DUAAOE1AAALNgAANTYAAF82AACBNgAAjDYAAKc2AADRNgAA+zYAABU3AAApNwAAUjcAAHs3AAClNwAAzjcAANw3AADiNwAADDgAADc4AABhOAAAizgAAJw4AAClOAAAzzgAAPg4AAAiOQAASzkAAHU5AACEOQAAmTkAAMM5AADsOQAAFToAAD46AABoOgAAkToAALo6AADkOgAADTsAADY7AABXOwAAXjsAAHg7AAClOwAA0jsAAPc7AAAIPAAAJjwAAE48AAB4PAAAoDwAAMo8AADyPAAAHD0AAEQ9AABuPQAAlj0AAK49AAC0PQAA1T0AAP89AAApPgAAUj4AAHw+AACXPgAApD4AAMc+AADxPgAAHD8AAEY/AABwPwAAhj8AAJU/AAC/PwAA6j8AABRAAAA+QAAAaEAAAHlAAACCQAAAq0AAANVAAAD+QAAAKEEAAFFBAABgQQAAdkEAAKBBAADKQQAA9EEAAB5CAABIQgAAckIAALhCAAAIQwAAM0MAAF1DAACIQwAAo0MAALBDAADTQwAA/kMAAChEAABTRAAAdkQAAINEAACeRAAAx0QAAPBEAAAZRQAAQkUAAGtFAACURQAAvEUAAN1FAADjRQAA+0UAACZGAABRRgAAfEYAAKdGAAC9RgAAy0YAAPVGAAAgRwAASkcAAHRHAACfRwAAukcAAMdHAADpRwAAEkgAADxIAABlSAAAjkgAAK9IAAC5SAAA0kgAAPtIAAAkSQAATEkAAHVJAACdSQAAxkkAAO9JAAAXSgAAQEoAAFJKAABcSgAAhUoAAK5KAADXSgAAAUsAACpLAAA4SwAAPUsAAGZLAACQSwAAuUsAAOJLAAAMTAAANUwAAENMAABZTAAAhEwAAK5MAADZTAAABE0AAC9NAAB/TQAAxU0AAO5NAAAXTgAAQE4AAGpOAACTTgAAvE4AAOVOAAAOTwAAN08AAGBPAACJTwAAsk8AAMBPAADVTwAA/08AAChQAABSUAAAe1AAAKVQAACsUAAAvFAAAOZQAAAQUQAAO1EAAGVRAACQUQAAulEAAMVRAADYUQAAAVIAAClSAABSUgAAelIAAKJSAADLUgAA81IAABxTAABEUwAAbVMAAIdTAACSUwAAtFMAAN5TAAAHVAAAMFQAAFpUAACDVAAAnVQAAKZUAADHVAAA71QAABhVAABBVQAAalUAAJNVAAC8VQAA5VUAAP5VAAAHVgAALVYAAHJWAADMVgAAA1cAAC5XAABZVwAAjVcAAMlXAAD4VwAAIlgAAExYAAB2WAAAoFgAAMpYAADRWAAA4VgAAAtZAAA0WQAAXlkAAIdZAACxWQAA2lkAAARaAAAlWgAALloAAEhaAAByWgAAnFoAAMZaAADwWgAAClsAABRbAAA1WwAAXlsAAIhbAACxWwAA21sAAARcAAAQXAAAI1wAAExcAAB1XAAAnlwAAMdcAADwXAAAEV0AABpdAAA0XQAAXl0AAIhdAACyXQAA3F0AAPBdAAD+XQAAKl4AAFZeAACCXgAAv14AAAxfAABAXwAAbV8AAJlfAACvXwAAvV8AAOdfAAASYAAAPGAAAF5gAABlYAAAfWAAAKhgAADTYAAA/mAAAClhAABDYQAATGEAAG9hAACaYQAAxmEAAPFhAAARYgAAJWIAAEpiAAB2YgAAoWIAAMxiAADaYgAA7mIAABhjAABCYwAAbGMAAJZjAADAYwAA6mMAABRkAAAvZAAAOmQAAF1kAACHZAAAsWQAANtkAAAGZQAAMGUAAD1lAABRZQAAemUAAKRlAADNZQAA9mUAAB9mAABIZgAAcWYAAItmAACVZgAAtmYAAOBmAAAKZwAANGcAAF1nAACHZwAAsWcAAMBnAADXZwAAA2gAADBoAABjaAAAq2gAAORoAAANaQAANmkAAF9pAACIaQAAlWkAAJppAADEaQAA7mkAABhqAAAragAANmoAAGBqAACLagAAtWoAANhqAADjagAA/WoAACZrAABPawAAeGsAAKBrAADJawAA8msAAANsAAANbAAANmwAAF9sAACJbAAAsmwAAL9sAADEbAAA7mwAABltAABDbQAAX20AAG5tAACSbQAAvG0AAOZtAAAQbgAAOm4AAFxuAABkbgAAfW4AAKZuAADQbgAA+W4AABpvAAAhbwAAOW8AAGRvAACObwAAuW8AAONvAAAEcAAACXAAACNwAABRcAAAgnAAALlwAADqcAAAFXEAAEFxAABscQAAj3EAAJhxAACycQAA23EAAARyAAAtcgAAVnIAAH9yAACocgAA0XIAAPpyAAAjcwAATXMAAHZzAACfcwAArHMAAK9zAADYcwAAAXQAACl0AABSdAAAe3QAAKR0AADMdAAA9XQAABx1AABFdQAAcnUAAJZ1AACjdQAAv3UAAOh1AAARdgAAOnYAAGN2AACMdgAAtnYAAN92AAAIdwAAMXcAAD93AABUdwAAfncAAKh3AADSdwAA+3cAACV4AABPeAAAYXgAAGx4AACVeAAAvngAAOh4AAAReQAATnkAAJJ5AAC+eQAA6XkAAAx6AAAUegAALXoAAFh6AACCegAArXoAANB6AADdegAA93oAACB7AABJewAAcnsAAJt7AADEewAA7HsAAA18AAAUfAAALHwAAFV8AAB+fAAAp3wAANF8AAACfQAANn0AAF99AACIfQAAsX0AANp9AAADfgAALH4AAD5+AABJfgAAdH4AAJ9+AADKfgAA5X4AAO9+AAARfwAAO38AAGV/AACPfwAAuX8AAM1/AADafwAABIAAAC6AAABZgAAAg4AAAK2AAADJgAAA1oAAAPiAAAAhgQAASoEAAHOBAACdgQAAxoEAAO+BAAAYggAAI4IAADaCAABiggAAjoIAALqCAADuggAAKYMAAFeDAACBgwAAq4MAANSDAAD+gwAAGoQAACeEAABJhAAAcYQAAJqEAADDhAAA7IQAABWFAAA9hQAAZoUAAI+FAAC4hQAA4YUAAPiFAAD+hQAAIIYAAEuGAAB2hgAAg4YAAJeGAADAhgAA6YYAABKHAAA7hwAAZIcAAI2HAAC2hwAA34cAAPuHAAAKiAAALYgAAFeIAACBiAAAq4gAANWIAADiiAAA9YgAAB6JAABHiQAAcIkAAJmJAADCiQAA24kAAOWJAAAKigAAN4oAAGSKAABzigAAiIoAALGKAADaigAAA4sAACyLAABViwAAfYsAAKaLAADJiwAA14sAAPSLAAAfjAAASowAAHWMAACEjAAAiYwAALOMAADcjAAABo0AADCNAAA9jQAAUY0AAH2NAACojQAA1I0AABCOAABcjgAAj44AALmOAADjjgAA9o4AAA+PAAA4jwAAYY8AAIqPAACzjwAA3I8AAAWQAAAWkAAALZAAAFeQAACBkAAArJAAAMqQAADckAAA/5AAACmRAABTkQAAfJEAAKaRAADQkQAA45EAAO6RAAAXkgAAQJIAAGqSAACTkgAAvJIAAMWSAADXkgAABZMAADSTAACKkwAA1JMAAP6TAAAolAAAUpQAAG6UAAB7lAAAnZQAAMeUAADwlAAAGpUAAEOVAABdlQAAZ5UAAIqVAAC1lQAA4JUAAAuWAAAllgAAL5YAAFOWAACBlgAAp5YAALaWAADSlgAA/ZYAACiXAABTlwAAfpcAAKGXAACrlwAAxZcAAO+XAAAZmAAAQ5gAAGaYAABwmAAAipgAALWYAADfmAAACpkAADSZAABrmQAApZkAAM+ZAAD5mQAAJJoAAE6aAAB4mgAAopoAAMSaAADOmgAA6ZoAABSbAAA/mwAAa5sAAI6bAACbmwAAtZsAAN6bAAAHnAAAMJwAAFmcAAB8nAAAjpwAAKycAADWnAAAAJ0AACqdAABUnQAAfp0AAKidAADKnQAA1p0AAPGdAAAangAAQ54AAGyeAACVngAAvp4AAOeeAAAQnwAAOZ8AAE2fAABanwAAhZ8AALCfAADbnwAABqAAABugAAA2oAAAYaAAAIugAAC2oAAA96AAAD6hAABpoQAAlKEAAL+hAADqoQAABKIAAAyiAAAuogAAWKIAAIOiAACtogAA2KIAAPOiAAD+ogAAIKMAAEqjAAB0owAAnqMAAMGjAADMowAA6KMAABOkAAA+pAAAaaQAAJSkAACjpAAAuaQAAOOkAAANpQAAN6UAAISlAADHpQAA8aUAABumAABEpgAAbqYAAJCmAACbpgAAt6YAAOKmAAANpwAAOKcAAFqnAABjpwAAfacAAKmnAADVpwAAAagAABSoAAAeqAAASKgAAHOoAACdqAAAx6gAAPGoAAAEqQAAD6kAADmpAABkqQAAjqkAALipAADiqQAA96kAAAWqAAAxqgAAXaoAAImqAADVqgAAGKsAAEKrAABrqwAAlKsAALGrAADBqwAA5KsAAA6sAAA3rAAAYKwAAIqsAACzrAAAzqwAANusAAD9rAAAJa0AAE6tAAB3rQAAoK0AAMmtAADyrQAAG64AADKuAAA4rgAAWa4AAIOuAACtrgAA164AAAGvAAArrwAAVa8AAF2vAABurwAAmq8AAMWvAADxrwAAMLAAAIKwAAC1sAAA3rAAAAixAAAxsQAAQLEAAFaxAAB/sQAAqLEAANGxAAD6sQAAI7IAAEyyAAB1sgAAjrIAAJiyAAC7sgAA5rIAABCzAAA7swAAXrMAAGqzAACFswAAsLMAANuzAAAGtAAAMbQAAFa0AABotAAAhrQAAK+0AADYtAAAArUAACu1AABVtQAAfrUAAKi1AADRtQAA+rUAABe2AAAotgAAS7YAAHS2AACetgAAx7YAAOu2AAABtwAAIrcAAE+3AAB8twAAmbcAAKa3AADItwAA8rcAABy4AABGuAAAb7gAAJm4AADDuAAA1LgAAOq4AAAUuQAAPrkAAGi5AACDuQAAj7kAALG5AADauQAAA7oAAC26AABWugAAf7oAAIS6AACUugAAwroAAOG6AADwugAAE7sAADy7AABmuwAAj7sAALm7AADiuwAADLwAACO8AAA1vAAAX7wAAIm8AACzvAAA3bwAAO28AADzvAAAHL0AAEa9AABvvQAA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&quot;},&quot;colorscale&quot;:[[0.0,&quot;#440154&quot;],[0.1111111111111111,&quot;#482878&quot;],[0.2222222222222222,&quot;#3e4989&quot;],[0.3333333333333333,&quot;#31688e&quot;],[0.4444444444444444,&quot;#26828e&quot;],[0.5555555555555556,&quot;#1f9e89&quot;],[0.6666666666666666,&quot;#35b779&quot;],[0.7777777777777778,&quot;#6ece58&quot;],[0.8888888888888888,&quot;#b5de2b&quot;],[1.0,&quot;#fde725&quot;]],&quot;opacity&quot;:0.6,&quot;showscale&quot;:false,&quot;size&quot;:4.0},&quot;mode&quot;:&quot;markers&quot;,&quot;name&quot;:&quot;Raw gaze&quot;,&quot;showlegend&quot;:true,&quot;x&quot;:{&quot;dtype&quot;:&quot;f8&quot;,&quot;bdata&quot;:&quot;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&quot;},&quot;y&quot;:{&quot;dtype&quot;:&quot;f8&quot;,&quot;bdata&quot;:&quot;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&quot;},&quot;type&quot;:&quot;scatter&quot;},{&quot;customdata&quot;:[[&quot;Fixation 1 \u00b7 165 ms \u00b7 on \u201cThe\u201d (word 0)&quot;],[&quot;Fixation 2 \u00b7 262 ms \u00b7 on \u201cscientist,\u201d (word 1)&quot;],[&quot;Fixation 3 \u00b7 248 ms \u00b7 on \u201cis\u201d (word 3)&quot;],[&quot;Fixation 4 \u00b7 213 ms \u00b7 on \u201cfamiliar\u201d (word 5)&quot;],[&quot;Fixation 5 \u00b7 211 ms \u00b7 on \u201cfamiliar\u201d (word 5)&quot;],[&quot;Fixation 6 \u00b7 128 ms \u00b7 on \u201cface\u201d (word 6)&quot;],[&quot;Fixation 7 \u00b7 225 ms \u00b7 on \u201con\u201d (word 7)&quot;],[&quot;Fixation 8 \u00b7 130 ms \u00b7 on \u201cface\u201d (word 6)&quot;],[&quot;Fixation 9 \u00b7 271 ms \u00b7 on \u201ca\u201d (word 4)&quot;],[&quot;Fixation 10 \u00b7 148 ms \u00b7 on \u201cis\u201d (word 3)&quot;],[&quot;Fixation 11 \u00b7 234 ms \u00b7 on \u201cPolish\u201d (word 8)&quot;],[&quot;Fixation 12 \u00b7 174 ms \u00b7 on \u201con\u201d (word 7)&quot;],[&quot;Fixation 13 \u00b7 294 ms \u00b7 on \u201ctelevision,\u201d (word 9)&quot;],[&quot;Fixation 14 \u00b7 179 ms \u00b7 on \u201ctelevision,\u201d (word 9)&quot;],[&quot;Fixation 15 \u00b7 168 ms \u00b7 on \u201cPolish\u201d (word 8)&quot;],[&quot;Fixation 16 \u00b7 227 ms \u00b7 on \u201cwho\u201d (word 2)&quot;],[&quot;Fixation 17 \u00b7 280 ms \u00b7 on \u201cfamiliar\u201d (word 5)&quot;],[&quot;Fixation 18 \u00b7 207 ms \u00b7 on \u201cscientist,\u201d (word 1)&quot;],[&quot;Fixation 19 \u00b7 193 ms \u00b7 on \u201cscientist,\u201d (word 1)&quot;],[&quot;Fixation 20 \u00b7 154 ms \u00b7 on \u201cfamiliar\u201d (word 5)&quot;],[&quot;Fixation 21 \u00b7 213 ms \u00b7 on \u201cfamiliar\u201d (word 5)&quot;],[&quot;Fixation 22 \u00b7 504 ms \u00b7 on \u201cface\u201d (word 6)&quot;],[&quot;Fixation 23 \u00b7 99 ms \u00b7 on \u201con\u201d (word 7)&quot;],[&quot;Fixation 24 \u00b7 105 ms \u00b7 on \u201cPolish\u201d (word 8)&quot;],[&quot;Fixation 25 \u00b7 251 ms \u00b7 on \u201cPolish\u201d (word 8)&quot;],[&quot;Fixation 26 \u00b7 167 ms \u00b7 on \u201con\u201d (word 7)&quot;],[&quot;Fixation 27 \u00b7 116 ms \u00b7 on \u201cPolish\u201d (word 8)&quot;],[&quot;Fixation 28 \u00b7 175 ms \u00b7 on \u201cwolves\u201d (word 11)&quot;],[&quot;Fixation 29 \u00b7 180 ms \u00b7 on \u201csays\u201d (word 10)&quot;],[&quot;Fixation 30 \u00b7 208 ms \u00b7 on \u201cwolves\u201d (word 11)&quot;],[&quot;Fixation 31 \u00b7 454 ms \u00b7 on \u201care\u201d (word 12)&quot;],[&quot;Fixation 32 \u00b7 145 ms \u00b7 on \u201cexceptional\u201d (word 13)&quot;],[&quot;Fixation 33 \u00b7 410 ms \u00b7 on \u201cwolves\u201d (word 11)&quot;],[&quot;Fixation 34 \u00b7 219 ms \u00b7 on \u201csays\u201d (word 10)&quot;],[&quot;Fixation 35 \u00b7 212 ms \u00b7 on \u201cwolves\u201d (word 11)&quot;],[&quot;Fixation 36 \u00b7 222 ms \u00b7 on \u201cexceptional\u201d (word 13)&quot;],[&quot;Fixation 37 \u00b7 207 ms \u00b7 on \u201cexceptional\u201d (word 13)&quot;],[&quot;Fixation 38 \u00b7 272 ms \u00b7 on \u201canimals\u201d (word 14)&quot;],[&quot;Fixation 39 \u00b7 149 ms \u00b7 on \u201care\u201d (word 16)&quot;],[&quot;Fixation 40 \u00b7 192 ms \u00b7 on \u201cthat\u201d (word 15)&quot;],[&quot;Fixation 41 \u00b7 337 ms \u00b7 on \u201ccapable\u201d (word 17)&quot;],[&quot;Fixation 42 \u00b7 204 ms \u00b7 on \u201ccapable\u201d (word 17)&quot;],[&quot;Fixation 43 \u00b7 233 ms \u00b7 on \u201cof\u201d (word 18)&quot;],[&quot;Fixation 44 \u00b7 227 ms \u00b7 on \u201cup\u201d (word 20)&quot;],[&quot;Fixation 45 \u00b7 396 ms \u00b7 on \u201cto\u201d (word 21)&quot;],[&quot;Fixation 46 \u00b7 216 ms \u00b7 on \u201c30km\u201d (word 22)&quot;],[&quot;Fixation 47 \u00b7 248 ms \u00b7 on \u201cduring\u201d (word 23)&quot;],[&quot;Fixation 48 \u00b7 225 ms \u00b7 on \u201csingle\u201d (word 25)&quot;],[&quot;Fixation 49 \u00b7 503 ms \u00b7 on \u201chunt.\u201d (word 26)&quot;],[&quot;Fixation 50 \u00b7 218 ms \u00b7 on \u201c\u201cThe\u201d (word 27)&quot;],[&quot;Fixation 51 \u00b7 265 ms \u00b7 on \u201cBeskidy\u201d (word 28)&quot;],[&quot;Fixation 52 \u00b7 435 ms \u00b7 on \u201cpack\u201d (word 29)&quot;],[&quot;Fixation 53 \u00b7 259 ms \u00b7 on \u201cis\u201d (word 30)&quot;],[&quot;Fixation 54 \u00b7 337 ms \u00b7 on \u201cstrong\u201d (word 32)&quot;],[&quot;Fixation 55 \u00b7 60 ms \u00b7 on \u201cstrong\u201d (word 32)&quot;],[&quot;Fixation 56 \u00b7 140 ms \u00b7 on \u201cunit,\u201d (word 33)&quot;],[&quot;Fixation 57 \u00b7 242 ms \u00b7 on \u201ceight\u201d (word 34)&quot;],[&quot;Fixation 58 \u00b7 332 ms \u00b7 on \u201ceight\u201d (word 34)&quot;],[&quot;Fixation 59 \u00b7 210 ms \u00b7 on \u201cor\u201d (word 35)&quot;],[&quot;Fixation 60 \u00b7 238 ms \u00b7 on \u201cnine\u201d (word 36)&quot;],[&quot;Fixation 61 \u00b7 246 ms \u00b7 on \u201cindividuals.\u201d (word 37)&quot;],[&quot;Fixation 62 \u00b7 199 ms \u00b7 on \u201cindividuals.\u201d (word 37)&quot;],[&quot;Fixation 63 \u00b7 154 ms \u00b7 on \u201cThis\u201d (word 38)&quot;],[&quot;Fixation 64 \u00b7 133 ms \u00b7 on \u201cyear,\u201d (word 39)&quot;],[&quot;Fixation 65 \u00b7 159 ms \u00b7 on \u201chave\u201d (word 41)&quot;],[&quot;Fixation 66 \u00b7 214 ms \u00b7 on \u201cwe\u201d (word 40)&quot;],[&quot;Fixation 67 \u00b7 185 ms \u00b7 on \u201chave\u201d (word 41)&quot;],[&quot;Fixation 68 \u00b7 162 ms \u00b7 on \u201cup\u201d (word 20)&quot;],[&quot;Fixation 69 \u00b7 325 ms \u00b7 on \u201chave\u201d (word 41)&quot;],[&quot;Fixation 70 \u00b7 243 ms \u00b7 on \u201crecorded\u201d (word 42)&quot;],[&quot;Fixation 71 \u00b7 319 ms \u00b7 on \u201cfive\u201d (word 43)&quot;],[&quot;Fixation 72 \u00b7 282 ms \u00b7 on \u201ccubs,\u201d (word 44)&quot;],[&quot;Fixation 73 \u00b7 133 ms \u00b7 on \u201cyearlings\u201d (word 46)&quot;],[&quot;Fixation 74 \u00b7 195 ms \u00b7 on \u201cyearlings\u201d (word 46)&quot;],[&quot;Fixation 75 \u00b7 137 ms \u00b7 on \u201cyearlings\u201d (word 46)&quot;],[&quot;Fixation 76 \u00b7 159 ms \u00b7 on \u201ctwo\u201d (word 45)&quot;],[&quot;Fixation 77 \u00b7 275 ms \u00b7 on \u201cyearlings\u201d (word 46)&quot;],[&quot;Fixation 78 \u00b7 175 ms \u00b7 on \u201cyearlings\u201d (word 46)&quot;],[&quot;Fixation 79 \u00b7 148 ms \u00b7 on \u201cyearlings\u201d (word 46)&quot;],[&quot;Fixation 80 \u00b7 232 ms \u00b7 on \u201cand\u201d (word 47)&quot;],[&quot;Fixation 81 \u00b7 176 ms \u00b7 on \u201ctwo\u201d (word 48)&quot;],[&quot;Fixation 82 \u00b7 223 ms \u00b7 on \u201cadults.\u201d (word 49)&quot;],[&quot;Fixation 83 \u00b7 104 ms \u00b7 on \u201cadults.\u201d (word 49)&quot;],[&quot;Fixation 84 \u00b7 185 ms \u00b7 on \u201ctrack\u201d (word 51)&quot;],[&quot;Fixation 85 \u00b7 524 ms \u00b7 on \u201cWe\u201d (word 50)&quot;],[&quot;Fixation 86 \u00b7 316 ms \u00b7 on \u201cWe\u201d (word 50)&quot;],[&quot;Fixation 87 \u00b7 100 ms \u00b7 on \u201crecorded\u201d (word 42)&quot;],[&quot;Fixation 88 \u00b7 391 ms \u00b7 on \u201crecorded\u201d (word 42)&quot;],[&quot;Fixation 89 \u00b7 271 ms \u00b7 on \u201cfive\u201d (word 43)&quot;],[&quot;Fixation 90 \u00b7 175 ms \u00b7 on \u201ccubs,\u201d (word 44)&quot;],[&quot;Fixation 91 \u00b7 120 ms \u00b7 on \u201cyearlings\u201d (word 46)&quot;],[&quot;Fixation 92 \u00b7 181 ms \u00b7 on \u201ctwo\u201d (word 45)&quot;],[&quot;Fixation 93 \u00b7 296 ms \u00b7 on \u201cyearlings\u201d (word 46)&quot;],[&quot;Fixation 94 \u00b7 196 ms \u00b7 on \u201cyearlings\u201d (word 46)&quot;],[&quot;Fixation 95 \u00b7 256 ms \u00b7 on \u201ctrack\u201d (word 51)&quot;],[&quot;Fixation 96 \u00b7 151 ms \u00b7 on \u201cWe\u201d (word 50)&quot;],[&quot;Fixation 97 \u00b7 211 ms \u00b7 on \u201ctrack\u201d (word 51)&quot;],[&quot;Fixation 98 \u00b7 232 ms \u00b7 on \u201cthem\u201d (word 52)&quot;],[&quot;Fixation 99 \u00b7 319 ms \u00b7 on \u201cusing\u201d (word 53)&quot;],[&quot;Fixation 100 \u00b7 165 ms \u00b7 on \u201cmotion-activated\u201d (word 54)&quot;],[&quot;Fixation 101 \u00b7 219 ms \u00b7 on \u201cnine\u201d (word 36)&quot;],[&quot;Fixation 102 \u00b7 459 ms \u00b7 on \u201cmotion-activated\u201d (word 54)&quot;],[&quot;Fixation 103 \u00b7 118 ms \u00b7 on \u201cindividuals.\u201d (word 37)&quot;],[&quot;Fixation 104 \u00b7 358 ms \u00b7 on \u201cThis\u201d (word 38)&quot;],[&quot;Fixation 105 \u00b7 199 ms \u00b7 on \u201cindividuals.\u201d (word 37)&quot;],[&quot;Fixation 106 \u00b7 235 ms \u00b7 on \u201cmotion-activated\u201d (word 54)&quot;],[&quot;Fixation 107 \u00b7 124 ms \u00b7 on \u201cmotion-activated\u201d (word 54)&quot;],[&quot;Fixation 108 \u00b7 327 ms \u00b7 on \u201ccameras\u201d (word 55)&quot;],[&quot;Fixation 109 \u00b7 162 ms \u00b7 on \u201cthe\u201d (word 57)&quot;],[&quot;Fixation 110 \u00b7 167 ms \u00b7 on \u201cin\u201d (word 56)&quot;],[&quot;Fixation 111 \u00b7 164 ms \u00b7 on \u201cforest\u201d (word 58)&quot;],[&quot;Fixation 112 \u00b7 116 ms \u00b7 on \u201cforest\u201d (word 58)&quot;],[&quot;Fixation 113 \u00b7 256 ms \u00b7 on \u201ccameras\u201d (word 55)&quot;],[&quot;Fixation 114 \u00b7 159 ms \u00b7 on \u201cmotion-activated\u201d (word 54)&quot;],[&quot;Fixation 115 \u00b7 250 ms \u00b7 on \u201cin\u201d (word 56)&quot;],[&quot;Fixation 116 \u00b7 206 ms \u00b7 on \u201cthe\u201d (word 57)&quot;],[&quot;Fixation 117 \u00b7 105 ms \u00b7 on \u201cforest\u201d (word 58)&quot;],[&quot;Fixation 118 \u00b7 157 ms \u00b7 on \u201cforest\u201d (word 58)&quot;],[&quot;Fixation 119 \u00b7 218 ms \u00b7 on \u201cand\u201d (word 59)&quot;],[&quot;Fixation 120 \u00b7 182 ms \u00b7 on \u201cfollowing\u201d (word 61)&quot;],[&quot;Fixation 121 \u00b7 114 ms \u00b7 on \u201cfollowing\u201d (word 61)&quot;],[&quot;Fixation 122 \u00b7 225 ms \u00b7 on \u201ctheir\u201d (word 62)&quot;],[&quot;Fixation 123 \u00b7 179 ms \u00b7 on \u201cprints\u201d (word 63)&quot;],[&quot;Fixation 124 \u00b7 202 ms \u00b7 on \u201cin\u201d (word 64)&quot;],[&quot;Fixation 125 \u00b7 285 ms \u00b7 on \u201cand\u201d (word 67)&quot;],[&quot;Fixation 126 \u00b7 184 ms \u00b7 on \u201cmud\u201d (word 66)&quot;],[&quot;Fixation 127 \u00b7 215 ms \u00b7 on \u201cand\u201d (word 67)&quot;],[&quot;Fixation 128 \u00b7 304 ms \u00b7 on \u201cIn\u201d (word 69)&quot;],[&quot;Fixation 129 \u00b7 359 ms \u00b7 on \u201cfamily\u201d (word 71)&quot;],[&quot;Fixation 130 \u00b7 172 ms \u00b7 on \u201cgroup,\u201d (word 72)&quot;],[&quot;Fixation 131 \u00b7 150 ms \u00b7 on \u201cIn\u201d (word 69)&quot;],[&quot;Fixation 132 \u00b7 194 ms \u00b7 on \u201cIn\u201d (word 69)&quot;],[&quot;Fixation 133 \u00b7 223 ms \u00b7 on \u201cIn\u201d (word 69)&quot;],[&quot;Fixation 134 \u00b7 189 ms \u00b7 on \u201ceach\u201d (word 70)&quot;],[&quot;Fixation 135 \u00b7 194 ms \u00b7 on \u201cfamily\u201d (word 71)&quot;],[&quot;Fixation 136 \u00b7 137 ms \u00b7 on \u201cgroup,\u201d (word 72)&quot;],[&quot;Fixation 137 \u00b7 208 ms \u00b7 on \u201cgroup,\u201d (word 72)&quot;],[&quot;Fixation 138 \u00b7 183 ms \u00b7 on \u201cone\u201d (word 74)&quot;],[&quot;Fixation 139 \u00b7 165 ms \u00b7 on \u201conly\u201d (word 73)&quot;],[&quot;Fixation 140 \u00b7 222 ms \u00b7 on \u201cone\u201d (word 74)&quot;],[&quot;Fixation 141 \u00b7 222 ms \u00b7 on \u201cpair\u201d (word 75)&quot;],[&quot;Fixation 142 \u00b7 132 ms \u00b7 on \u201creproduces,\u201d (word 76)&quot;],[&quot;Fixation 143 \u00b7 155 ms \u00b7 on \u201creproduces,\u201d (word 76)&quot;],[&quot;Fixation 144 \u00b7 259 ms \u00b7 on \u201cpair\u201d (word 75)&quot;],[&quot;Fixation 145 \u00b7 337 ms \u00b7 on \u201creproduces,\u201d (word 76)&quot;],[&quot;Fixation 146 \u00b7 283 ms \u00b7 on \u201creproduces,\u201d (word 76)&quot;],[&quot;Fixation 147 \u00b7 164 ms \u00b7 on \u201creproduces,\u201d (word 76)&quot;],[&quot;Fixation 148 \u00b7 155 ms \u00b7 on \u201creproduces,\u201d (word 76)&quot;],[&quot;Fixation 149 \u00b7 317 ms \u00b7 on \u201conce\u201d (word 77)&quot;],[&quot;Fixation 150 \u00b7 192 ms \u00b7 on \u201cyear.\u201d (word 79)&quot;],[&quot;Fixation 151 \u00b7 225 ms \u00b7 on \u201conce\u201d (word 77)&quot;],[&quot;Fixation 152 \u00b7 414 ms \u00b7 on \u201creproduces,\u201d (word 76)&quot;],[&quot;Fixation 153 \u00b7 186 ms \u00b7 on \u201conce\u201d (word 77)&quot;],[&quot;Fixation 154 \u00b7 134 ms \u00b7 on \u201cpair\u201d (word 75)&quot;],[&quot;Fixation 155 \u00b7 282 ms \u00b7 on \u201conly\u201d (word 73)&quot;],[&quot;Fixation 156 \u00b7 157 ms \u00b7 on \u201creproduces,\u201d (word 76)&quot;],[&quot;Fixation 157 \u00b7 237 ms \u00b7 on \u201cone\u201d (word 74)&quot;],[&quot;Fixation 158 \u00b7 81 ms \u00b7 on \u201cone\u201d (word 74)&quot;],[&quot;Fixation 159 \u00b7 290 ms \u00b7 on \u201creproduces,\u201d (word 76)&quot;],[&quot;Fixation 160 \u00b7 179 ms \u00b7 on \u201conce\u201d (word 77)&quot;],[&quot;Fixation 161 \u00b7 155 ms \u00b7 on \u201conce\u201d (word 77)&quot;],[&quot;Fixation 162 \u00b7 180 ms \u00b7 on \u201cAll\u201d (word 80)&quot;],[&quot;Fixation 163 \u00b7 502 ms \u00b7 on \u201cpack\u201d (word 81)&quot;],[&quot;Fixation 164 \u00b7 264 ms \u00b7 on \u201cmembers\u201d (word 82)&quot;],[&quot;Fixation 165 \u00b7 364 ms \u00b7 on \u201ccare\u201d (word 83)&quot;],[&quot;Fixation 166 \u00b7 165 ms \u00b7 on \u201cfor\u201d (word 84)&quot;],[&quot;Fixation 167 \u00b7 126 ms \u00b7 on \u201cyoung\u201d (word 86)&quot;],[&quot;Fixation 168 \u00b7 156 ms \u00b7 on \u201cthe\u201d (word 85)&quot;],[&quot;Fixation 169 \u00b7 175 ms \u00b7 on \u201cwith\u201d (word 87)&quot;],[&quot;Fixation 170 \u00b7 187 ms \u00b7 on \u201cwith\u201d (word 87)&quot;],[&quot;Fixation 171 \u00b7 232 ms \u00b7 on \u201csolidarity\u201d (word 88)&quot;],[&quot;Fixation 172 \u00b7 200 ms \u00b7 on \u201csolidarity\u201d (word 88)&quot;],[&quot;Fixation 173 \u00b7 379 ms \u00b7 on \u201cand\u201d (word 89)&quot;],[&quot;Fixation 174 \u00b7 334 ms \u00b7 on \u201cdevotion.\u201d\u201d (word 90)&quot;],[&quot;Fixation 175 \u00b7 155 ms \u00b7 on \u201cdevotion.\u201d\u201d (word 90)&quot;],[&quot;Fixation 176 \u00b7 135 ms \u00b7 on \u201csolidarity\u201d (word 88)&quot;],[&quot;Fixation 177 \u00b7 302 ms \u00b7 on \u201cMyslajek,\u201d (word 91)&quot;],[&quot;Fixation 178 \u00b7 418 ms \u00b7 on \u201cson\u201d (word 93)&quot;],[&quot;Fixation 179 \u00b7 229 ms \u00b7 on \u201ca\u201d (word 95)&quot;],[&quot;Fixation 180 \u00b7 165 ms \u00b7 on \u201cshepherd,\u201d (word 96)&quot;],[&quot;Fixation 181 \u00b7 60 ms \u00b7 on \u201cMyslajek,\u201d (word 91)&quot;],[&quot;Fixation 182 \u00b7 226 ms \u00b7 on \u201cMyslajek,\u201d (word 91)&quot;],[&quot;Fixation 183 \u00b7 209 ms \u00b7 on \u201cthe\u201d (word 92)&quot;],[&quot;Fixation 184 \u00b7 248 ms \u00b7 on \u201cson\u201d (word 93)&quot;],[&quot;Fixation 185 \u00b7 199 ms \u00b7 on \u201cof\u201d (word 94)&quot;],[&quot;Fixation 186 \u00b7 277 ms \u00b7 on \u201cshepherd,\u201d (word 96)&quot;],[&quot;Fixation 187 \u00b7 170 ms \u00b7 on \u201cshepherd,\u201d (word 96)&quot;],[&quot;Fixation 188 \u00b7 108 ms \u00b7 on \u201ca\u201d (word 95)&quot;],[&quot;Fixation 189 \u00b7 171 ms \u00b7 on \u201cMyslajek,\u201d (word 91)&quot;],[&quot;Fixation 190 \u00b7 311 ms \u00b7 on \u201cMyslajek,\u201d (word 91)&quot;],[&quot;Fixation 191 \u00b7 158 ms \u00b7 on \u201cshepherd,\u201d (word 96)&quot;],[&quot;Fixation 192 \u00b7 398 ms \u00b7 on \u201cpuzzled\u201d (word 98)&quot;],[&quot;Fixation 193 \u00b7 205 ms \u00b7 on \u201cby\u201d (word 99)&quot;],[&quot;Fixation 194 \u00b7 195 ms \u00b7 on \u201cwolves&#x27;\u201d (word 100)&quot;],[&quot;Fixation 195 \u00b7 267 ms \u00b7 on \u201cbad\u201d (word 101)&quot;],[&quot;Fixation 196 \u00b7 192 ms \u00b7 on \u201creputation.\u201d (word 102)&quot;],[&quot;Fixation 197 \u00b7 277 ms \u00b7 on \u201creputation.\u201d (word 102)&quot;],[&quot;Fixation 198 \u00b7 248 ms \u00b7 on \u201c\u201cWhy\u201d (word 103)&quot;],[&quot;Fixation 199 \u00b7 241 ms \u00b7 on \u201cdoes\u201d (word 104)&quot;],[&quot;Fixation 200 \u00b7 288 ms \u00b7 on \u201cone\u201d (word 105)&quot;],[&quot;Fixation 201 \u00b7 140 ms \u00b7 on \u201cone\u201d (word 105)&quot;],[&quot;Fixation 202 \u00b7 164 ms \u00b7 on \u201ca\u201d (word 108)&quot;],[&quot;Fixation 203 \u00b7 105 ms \u00b7 on \u201cspeak\u201d (word 106)&quot;],[&quot;Fixation 204 \u00b7 215 ms \u00b7 on \u201cspeak\u201d (word 106)&quot;],[&quot;Fixation 205 \u00b7 195 ms \u00b7 on \u201cdoes\u201d (word 104)&quot;],[&quot;Fixation 206 \u00b7 255 ms \u00b7 on \u201cdoes\u201d (word 104)&quot;],[&quot;Fixation 207 \u00b7 310 ms \u00b7 on \u201cone\u201d (word 105)&quot;],[&quot;Fixation 208 \u00b7 139 ms \u00b7 on \u201cspeak\u201d (word 106)&quot;],[&quot;Fixation 209 \u00b7 200 ms \u00b7 on \u201cspeak\u201d (word 106)&quot;],[&quot;Fixation 210 \u00b7 253 ms \u00b7 on \u201c&#x27;lone-wolf\u201d (word 109)&quot;],[&quot;Fixation 211 \u00b7 232 ms \u00b7 on \u201c&#x27;lone-wolf\u201d (word 109)&quot;],[&quot;Fixation 212 \u00b7 486 ms \u00b7 on \u201cgunman&#x27;?\u201d (word 110)&quot;],[&quot;Fixation 213 \u00b7 255 ms \u00b7 on \u201cWhy\u201d (word 111)&quot;],[&quot;Fixation 214 \u00b7 173 ms \u00b7 on \u201cdid\u201d (word 112)&quot;],[&quot;Fixation 215 \u00b7 191 ms \u00b7 on \u201cwe\u201d (word 113)&quot;],[&quot;Fixation 216 \u00b7 231 ms \u00b7 on \u201chave\u201d (word 114)&quot;],[&quot;Fixation 217 \u00b7 183 ms \u00b7 on \u201chave\u201d (word 116)&quot;],[&quot;Fixation 218 \u00b7 146 ms \u00b7 on \u201cLittle\u201d (word 117)&quot;],[&quot;Fixation 219 \u00b7 184 ms \u00b7 on \u201cLittle\u201d (word 117)&quot;],[&quot;Fixation 220 \u00b7 225 ms \u00b7 on \u201cRiding\u201d (word 119)&quot;],[&quot;Fixation 221 \u00b7 85 ms \u00b7 on \u201cHood,\u201d (word 120)&quot;],[&quot;Fixation 222 \u00b7 253 ms \u00b7 on \u201cits\u201d (word 122)&quot;],[&quot;Fixation 223 \u00b7 185 ms \u00b7 on \u201cbig\u201d (word 123)&quot;],[&quot;Fixation 224 \u00b7 270 ms \u00b7 on \u201cwith\u201d (word 121)&quot;],[&quot;Fixation 225 \u00b7 247 ms \u00b7 on \u201cits\u201d (word 122)&quot;],[&quot;Fixation 226 \u00b7 213 ms \u00b7 on \u201cbig\u201d (word 123)&quot;],[&quot;Fixation 227 \u00b7 405 ms \u00b7 on \u201cbad\u201d (word 124)&quot;],[&quot;Fixation 228 \u00b7 157 ms \u00b7 on \u201cwolf?\u201d\u201d (word 125)&quot;],[&quot;Fixation 229 \u00b7 121 ms \u00b7 on \u201cspeak\u201d (word 106)&quot;],[&quot;Fixation 230 \u00b7 228 ms \u00b7 on \u201cis\u201d (word 127)&quot;],[&quot;Fixation 231 \u00b7 195 ms \u00b7 on \u201cfascinated\u201d (word 128)&quot;],[&quot;Fixation 232 \u00b7 237 ms \u00b7 on \u201cHe\u201d (word 126)&quot;],[&quot;Fixation 233 \u00b7 131 ms \u00b7 on \u201cfascinated\u201d (word 128)&quot;],[&quot;Fixation 234 \u00b7 238 ms \u00b7 on \u201cthese\u201d (word 130)&quot;],[&quot;Fixation 235 \u00b7 207 ms \u00b7 on \u201caloof\u201d (word 131)&quot;],[&quot;Fixation 236 \u00b7 190 ms \u00b7 on \u201caloof\u201d (word 131)&quot;],[&quot;Fixation 237 \u00b7 400 ms \u00b7 on \u201ccanines\u201d (word 132)&quot;],[&quot;Fixation 238 \u00b7 1058 ms \u00b7 on \u201cwho\u201d (word 133)&quot;],[&quot;Fixation 239 \u00b7 141 ms \u00b7 on \u201cremained\u201d (word 134)&quot;],[&quot;Fixation 240 \u00b7 312 ms \u00b7 on \u201cremained\u201d (word 134)&quot;],[&quot;Fixation 241 \u00b7 149 ms \u00b7 on \u201cremained\u201d (word 134)&quot;],[&quot;Fixation 242 \u00b7 263 ms \u00b7 on \u201cin\u201d (word 135)&quot;],[&quot;Fixation 243 \u00b7 286 ms \u00b7 on \u201cwild\u201d (word 137)&quot;],[&quot;Fixation 244 \u00b7 327 ms \u00b7 on \u201cremained\u201d (word 134)&quot;],[&quot;Fixation 245 \u00b7 454 ms \u00b7 on \u201cthe\u201d (word 136)&quot;],[&quot;Fixation 246 \u00b7 321 ms \u00b7 on \u201cin\u201d (word 135)&quot;],[&quot;Fixation 247 \u00b7 235 ms \u00b7 on \u201cthe\u201d (word 136)&quot;],[&quot;Fixation 248 \u00b7 169 ms \u00b7 on \u201cwild\u201d (word 137)&quot;],[&quot;Fixation 249 \u00b7 208 ms \u00b7 on \u201c33,000\u201d (word 138)&quot;],[&quot;Fixation 250 \u00b7 228 ms \u00b7 on \u201cyears\u201d (word 139)&quot;],[&quot;Fixation 251 \u00b7 525 ms \u00b7 on \u201cago\u201d (word 140)&quot;],[&quot;Fixation 252 \u00b7 255 ms \u00b7 on \u201cwhen\u201d (word 141)&quot;],[&quot;Fixation 253 \u00b7 208 ms \u00b7 on \u201cothers\u201d (word 142)&quot;],[&quot;Fixation 254 \u00b7 299 ms \u00b7 on \u201cwhen\u201d (word 141)&quot;],[&quot;Fixation 255 \u00b7 305 ms \u00b7 on \u201cwhen\u201d (word 141)&quot;],[&quot;Fixation 256 \u00b7 213 ms \u00b7 on \u201cothers\u201d (word 142)&quot;],[&quot;Fixation 257 \u00b7 575 ms \u00b7 on \u201cwhen\u201d (word 141)&quot;],[&quot;Fixation 258 \u00b7 576 ms \u00b7 on \u201cothers\u201d (word 142)&quot;],[&quot;Fixation 259 \u00b7 582 ms \u00b7 on \u201cothers\u201d (word 142)&quot;],[&quot;Fixation 260 \u00b7 378 ms \u00b7 on \u201cdecided\u201d (word 143)&quot;],[&quot;Fixation 261 \u00b7 254 ms \u00b7 on \u201ca\u201d (word 145)&quot;],[&quot;Fixation 262 \u00b7 93 ms \u00b7 on \u201cmuch\u201d (word 146)&quot;],[&quot;Fixation 263 \u00b7 226 ms \u00b7 on \u201cmuch\u201d (word 146)&quot;],[&quot;Fixation 264 \u00b7 278 ms \u00b7 on \u201cmore\u201d (word 147)&quot;],[&quot;Fixation 265 \u00b7 317 ms \u00b7 on \u201ccomfortable\u201d (word 148)&quot;],[&quot;Fixation 266 \u00b7 188 ms \u00b7 on \u201ccomfortable\u201d (word 148)&quot;],[&quot;Fixation 267 \u00b7 264 ms \u00b7 on \u201cexistence\u201d (word 149)&quot;],[&quot;Fixation 268 \u00b7 191 ms \u00b7 on \u201cexistence\u201d (word 149)&quot;],[&quot;Fixation 269 \u00b7 103 ms \u00b7 on \u201cdomestic\u201d (word 151)&quot;],[&quot;Fixation 270 \u00b7 172 ms \u00b7 on \u201cdomestic\u201d (word 151)&quot;],[&quot;Fixation 271 \u00b7 198 ms \u00b7 on \u201cdomestic\u201d (word 151)&quot;],[&quot;Fixation 272 \u00b7 205 ms \u00b7 on \u201cdogs.\u201d (word 152)&quot;],[&quot;Fixation 273 \u00b7 265 ms \u00b7 on \u201cHe\u201d (word 126)&quot;],[&quot;Fixation 274 \u00b7 163 ms \u00b7 on \u201cothers\u201d (word 142)&quot;],[&quot;Fixation 275 \u00b7 336 ms \u00b7 on \u201cyears\u201d (word 139)&quot;],[&quot;Fixation 276 \u00b7 296 ms \u00b7 on \u201cwhen\u201d (word 141)&quot;],[&quot;Fixation 277 \u00b7 171 ms \u00b7 on \u201cyears\u201d (word 139)&quot;],[&quot;Fixation 278 \u00b7 150 ms \u00b7 on \u201cin\u201d (word 135)&quot;],[&quot;Fixation 279 \u00b7 252 ms \u00b7 on \u201cremained\u201d (word 134)&quot;],[&quot;Fixation 280 \u00b7 222 ms \u00b7 on \u201cthe\u201d (word 136)&quot;],[&quot;Fixation 281 \u00b7 196 ms \u00b7 on \u201cwild\u201d (word 137)&quot;],[&quot;Fixation 282 \u00b7 285 ms \u00b7 on \u201cyears\u201d (word 139)&quot;],[&quot;Fixation 283 \u00b7 162 ms \u00b7 on \u201caloof\u201d (word 131)&quot;],[&quot;Fixation 284 \u00b7 139 ms \u00b7 on \u201cthese\u201d (word 130)&quot;],[&quot;Fixation 285 \u00b7 160 ms \u00b7 on \u201cfascinated\u201d (word 128)&quot;],[&quot;Fixation 286 \u00b7 164 ms \u00b7 on \u201cfascinated\u201d (word 128)&quot;],[&quot;Fixation 287 \u00b7 125 ms \u00b7 on \u201cHe\u201d (word 126)&quot;],[&quot;Fixation 288 \u00b7 178 ms \u00b7 on \u201cby\u201d (word 129)&quot;],[&quot;Fixation 289 \u00b7 159 ms \u00b7 on \u201cthese\u201d (word 130)&quot;],[&quot;Fixation 290 \u00b7 141 ms \u00b7 on \u201ccanines\u201d (word 132)&quot;],[&quot;Fixation 291 \u00b7 322 ms \u00b7 on \u201ccanines\u201d (word 132)&quot;],[&quot;Fixation 292 \u00b7 164 ms \u00b7 on \u201cwho\u201d (word 133)&quot;],[&quot;Fixation 293 \u00b7 129 ms \u00b7 on \u201c&#x27;lone-wolf\u201d (word 109)&quot;],[&quot;Fixation 294 \u00b7 180 ms \u00b7 on \u201c\u201cWhy\u201d (word 103)&quot;],[&quot;Fixation 295 \u00b7 195 ms \u00b7 on \u201cRiding\u201d (word 119)&quot;],[&quot;Fixation 296 \u00b7 218 ms \u00b7 on \u201cRiding\u201d (word 119)&quot;],[&quot;Fixation 297 \u00b7 157 ms \u00b7 on \u201cits\u201d (word 122)&quot;],[&quot;Fixation 298 \u00b7 268 ms \u00b7 on \u201cbad\u201d (word 101)&quot;],[&quot;Fixation 299 \u00b7 128 ms \u00b7 on \u201creputation.\u201d (word 102)&quot;],[&quot;Fixation 300 \u00b7 132 ms \u00b7 on \u201creputation.\u201d (word 102)&quot;],[&quot;Fixation 301 \u00b7 278 ms \u00b7 on \u201cwolves&#x27;\u201d (word 100)&quot;],[&quot;Fixation 302 \u00b7 143 ms \u00b7 on \u201cshepherd,\u201d (word 96)&quot;],[&quot;Fixation 303 \u00b7 134 ms \u00b7 on \u201cshepherd,\u201d (word 96)&quot;],[&quot;Fixation 304 \u00b7 206 ms \u00b7 on \u201cis\u201d (word 97)&quot;],[&quot;Fixation 305 \u00b7 210 ms \u00b7 on \u201cpuzzled\u201d (word 98)&quot;],[&quot;Fixation 306 \u00b7 188 ms \u00b7 on \u201cWhy\u201d (word 111)&quot;],[&quot;Fixation 307 \u00b7 119 ms \u00b7 on \u201cWhy\u201d (word 111)&quot;],[&quot;Fixation 308 \u00b7 369 ms \u00b7 on \u201cwe\u201d (word 113)&quot;],[&quot;Fixation 309 \u00b7 166 ms \u00b7 on \u201chave\u201d (word 114)&quot;],[&quot;Fixation 310 \u00b7 155 ms \u00b7 on \u201chave\u201d (word 114)&quot;],[&quot;Fixation 311 \u00b7 144 ms \u00b7 on \u201chave\u201d (word 116)&quot;]],&quot;hovertemplate&quot;:&quot;%{customdata[0]}&lt;extra&gt;&lt;/extra&gt;&quot;,&quot;marker&quot;:{&quot;color&quot;:&quot;#0072B2&quot;,&quot;line&quot;:{&quot;color&quot;:&quot;#111111&quot;,&quot;width&quot;:0.5},&quot;opacity&quot;:0.35,&quot;showscale&quot;:false,&quot;size&quot;:{&quot;dtype&quot;:&quot;f8&quot;,&quot;bdata&quot;:&quot;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&quot;},&quot;symbol&quot;:&quot;circle&quot;},&quot;mode&quot;:&quot;markers&quot;,&quot;name&quot;:&quot;Fixations&quot;,&quot;showlegend&quot;:false,&quot;textfont&quot;:{&quot;color&quot;:&quot;#111111&quot;,&quot;family&quot;:&quot;monospace&quot;,&quot;size&quot;:10},&quot;textposition&quot;:&quot;top center&quot;,&quot;x&quot;:{&quot;dtype&quot;:&quot;i2&quot;,&quot;bdata&quot;:&quot;iwECAtMCLgNqAygERAQNBCED2AKZBGEEOwUZBY4ErQJXA9cBFQKWA0oD+gNKBPQElgRcBLcEOgYXBl0GCQdCB0YGFgaBBg0HXAcXCPUBmgEUAkEC2gJyA9EDKgRXBAgFcQUzBnQG7gZlB6oH9QcoCM4BkgHnATgCqAL1AqMD/QOaBGgEqwSOA30EBgWiBfQFpgbpBsEGcQbSBhwH9gaPB9wHEwjuB9IBkwGFAWYF9wSkBfYFwQaHBgMH0AaoAYQBvAEiApgC9AJoAvECGQOFA+gCcAPFA34EGgXzBGIFcQVZBJkD3AQ6BX8FgAX7BVgGxAZpB6sHCQjGAXYB/QGfAhEDrQOcApwCdwLjAjIDyAMNBHsERgSgBO0EaQV9BdgEdAWdBWcFrgVHBpsGIwZABUAG2wRfBCEFtASUBEoFTgYkBgIHWwfTB5AB+QF2AkoCHgP5AmQDmgNKBH0ElQT9A3EFRAazBgIHpAVRBeIFOgacBg4HNgexBiIFYQV3B9YHngG8AVQCzwLCAqkD9wNqBE0EIwXOBHoEEgTQAz0EegTaBHIF3AVIBvsGIgd6B+AHOAjoAZoBuwICA5oD3QNrA7ID6ANBBJoEewRNBaoFKwW0BZYG7wZIB50HBgjXAZkBzgEtAp0CxAFzAkUClQLOAjsDpwMaBGoEtgRDBHsEtQRXBMEEswRZBe8FMwZkBrUGKgdWB+8HLAjwAagB4wGPAikFrQS9A0YE5wMsArABaQLaAqMD+gajBr4FdgUUBVQGyQZcB6IHDghZBW8DjgI5ArIDUALIAvYCxQE+B+8Gtwf7B8sG0wZ2B+kHswcxCA==&quot;},&quot;y&quot;:{&quot;dtype&quot;:&quot;i2&quot;,&quot;bdata&quot;:&quot;0QDDAL8AvQC+AL0AxwDEAMAAzADJAM0A2ADWAMQAxgDDAMoAvwC7AL4AyQDJANUA2wDUANEA2ADnAOQA4gDJANEA2wDZANkA3QC9AC8BMgEhASMBIAEpAR0BGQEaARoBKwFAAUkBQQE+AUIBQgE1AY8BjAGLAYUBhAGGAYMBggGdAZgBjQF5AZEBqwGqAbEBswG6AboBsAGvAbMBtAGzAa8BrwG0ARUCDAIBAqUBqwGjAasBqgGtAakBpQEEAggC/wH3Ae8B7AHrAe8B5gHqAekB8wEJAg8CFAIYAg8CBAIQAu8BDwILAg4CCQIOAhACEQIUAh8CHQJ1AoQCdwJpAmgCcgJoAnQCcgJuAnwCewJ3An0CfwJ9AnwCeQJ6AoMCgwKBAn4CcgJ9An0CfwKIAnkCcwJ5AngCfwJ4AnwCggJ8AmcCdAKBAusC3gLXAuEC6QLjAuwC8QLsAu4C8gLuAusC5QLmAu0C0gLqAt8C5wLpAuwC7QLzAuQC3wLsAvECQgNcA1wDZgNiA2ADZgNeA18DVgNbA1wDZANkA2EDWANNA08DVANfA1QDTwNcA1sDXQPQA9wD3gPcA9AD1QPdA9wD2wPPA84DrQPIA84D0gPNA9oD1wPaA9IDyANUBF0EUQQ3BFUEUgRXBGAEUwRJBD8EUwRLBEwETwRQBFIEPgRCBD4EPgQyBCwELAQmBD0ESARIBDkEMwSyBMQEwATDBCEENQRFBEgETwRNBEsESgRXBFkE1wPXA8QDwgPQA9ID2AO+A9IDzAONA5oD1wPfA9kDZQNyA00DbQMGA/cC7gLyAnYDXwNcA2kDagNgAw==&quot;},&quot;type&quot;:&quot;scatter&quot;}],&quot;layout&quot;:{&quot;template&quot;:{&quot;data&quot;:{&quot;barpolar&quot;:[{&quot;marker&quot;:{&quot;line&quot;:{&quot;color&quot;:&quot;white&quot;,&quot;width&quot;:0.5},&quot;pattern&quot;:{&quot;fillmode&quot;:&quot;overlay&quot;,&quot;size&quot;:10,&quot;solidity&quot;:0.2}},&quot;type&quot;:&quot;barpolar&quot;}],&quot;bar&quot;:[{&quot;error_x&quot;:{&quot;color&quot;:&quot;#2a3f5f&quot;},&quot;error_y&quot;:{&quot;color&quot;:&quot;#2a3f5f&quot;},&quot;marker&quot;:{&quot;line&quot;:{&quot;color&quot;:&quot;white&quot;,&quot;width&quot;:0.5},&quot;pattern&quot;:{&quot;fillmode&quot;:&quot;overlay&quot;,&quot;size&quot;:10,&quot;solidity&quot;:0.2}},&quot;type&quot;:&quot;bar&quot;}],&quot;carpet&quot;:[{&quot;aaxis&quot;:{&quot;endlinecolor&quot;:&quot;#2a3f5f&quot;,&quot;gridcolor&quot;:&quot;#C8D4E3&quot;,&quot;linecolor&quot;:&quot;#C8D4E3&quot;,&quot;minorgridcolor&quot;:&quot;#C8D4E3&quot;,&quot;startlinecolor&quot;:&quot;#2a3f5f&quot;},&quot;baxis&quot;:{&quot;endlinecolor&quot;:&quot;#2a3f5f&quot;,&quot;gridcolor&quot;:&quot;#C8D4E3&quot;,&quot;linecolor&quot;:&quot;#C8D4E3&quot;,&quot;minorgridcolor&quot;:&quot;#C8D4E3&quot;,&quot;startlinecolor&quot;:&quot;#2a3f5f&quot;},&quot;type&quot;:&quot;carpet&quot;}],&quot;choropleth&quot;:[{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;},&quot;type&quot;:&quot;choropleth&quot;}],&quot;contourcarpet&quot;:[{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;},&quot;type&quot;:&quot;contourcarpet&quot;}],&quot;contour&quot;:[{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;},&quot;colorscale&quot;:[[0.0,&quot;#0d0887&quot;],[0.1111111111111111,&quot;#46039f&quot;],[0.2222222222222222,&quot;#7201a8&quot;],[0.3333333333333333,&quot;#9c179e&quot;],[0.4444444444444444,&quot;#bd3786&quot;],[0.5555555555555556,&quot;#d8576b&quot;],[0.6666666666666666,&quot;#ed7953&quot;],[0.7777777777777778,&quot;#fb9f3a&quot;],[0.8888888888888888,&quot;#fdca26&quot;],[1.0,&quot;#f0f921&quot;]],&quot;type&quot;:&quot;contour&quot;}],&quot;heatmap&quot;:[{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;},&quot;colorscale&quot;:[[0.0,&quot;#0d0887&quot;],[0.1111111111111111,&quot;#46039f&quot;],[0.2222222222222222,&quot;#7201a8&quot;],[0.3333333333333333,&quot;#9c179e&quot;],[0.4444444444444444,&quot;#bd3786&quot;],[0.5555555555555556,&quot;#d8576b&quot;],[0.6666666666666666,&quot;#ed7953&quot;],[0.7777777777777778,&quot;#fb9f3a&quot;],[0.8888888888888888,&quot;#fdca26&quot;],[1.0,&quot;#f0f921&quot;]],&quot;type&quot;:&quot;heatmap&quot;}],&quot;histogram2dcontour&quot;:[{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;},&quot;colorscale&quot;:[[0.0,&quot;#0d0887&quot;],[0.1111111111111111,&quot;#46039f&quot;],[0.2222222222222222,&quot;#7201a8&quot;],[0.3333333333333333,&quot;#9c179e&quot;],[0.4444444444444444,&quot;#bd3786&quot;],[0.5555555555555556,&quot;#d8576b&quot;],[0.6666666666666666,&quot;#ed7953&quot;],[0.7777777777777778,&quot;#fb9f3a&quot;],[0.8888888888888888,&quot;#fdca26&quot;],[1.0,&quot;#f0f921&quot;]],&quot;type&quot;:&quot;histogram2dcontour&quot;}],&quot;histogram2d&quot;:[{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;},&quot;colorscale&quot;:[[0.0,&quot;#0d0887&quot;],[0.1111111111111111,&quot;#46039f&quot;],[0.2222222222222222,&quot;#7201a8&quot;],[0.3333333333333333,&quot;#9c179e&quot;],[0.4444444444444444,&quot;#bd3786&quot;],[0.5555555555555556,&quot;#d8576b&quot;],[0.6666666666666666,&quot;#ed7953&quot;],[0.7777777777777778,&quot;#fb9f3a&quot;],[0.8888888888888888,&quot;#fdca26&quot;],[1.0,&quot;#f0f921&quot;]],&quot;type&quot;:&quot;histogram2d&quot;}],&quot;histogram&quot;:[{&quot;marker&quot;:{&quot;pattern&quot;:{&quot;fillmode&quot;:&quot;overlay&quot;,&quot;size&quot;:10,&quot;solidity&quot;:0.2}},&quot;type&quot;:&quot;histogram&quot;}],&quot;mesh3d&quot;:[{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;},&quot;type&quot;:&quot;mesh3d&quot;}],&quot;parcoords&quot;:[{&quot;line&quot;:{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;}},&quot;type&quot;:&quot;parcoords&quot;}],&quot;pie&quot;:[{&quot;automargin&quot;:true,&quot;type&quot;:&quot;pie&quot;}],&quot;scatter3d&quot;:[{&quot;line&quot;:{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;}},&quot;marker&quot;:{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;}},&quot;type&quot;:&quot;scatter3d&quot;}],&quot;scattercarpet&quot;:[{&quot;marker&quot;:{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;}},&quot;type&quot;:&quot;scattercarpet&quot;}],&quot;scattergeo&quot;:[{&quot;marker&quot;:{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;}},&quot;type&quot;:&quot;scattergeo&quot;}],&quot;scattergl&quot;:[{&quot;marker&quot;:{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;}},&quot;type&quot;:&quot;scattergl&quot;}],&quot;scattermap&quot;:[{&quot;marker&quot;:{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;}},&quot;type&quot;:&quot;scattermap&quot;}],&quot;scatterpolargl&quot;:[{&quot;marker&quot;:{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;}},&quot;type&quot;:&quot;scatterpolargl&quot;}],&quot;scatterpolar&quot;:[{&quot;marker&quot;:{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;}},&quot;type&quot;:&quot;scatterpolar&quot;}],&quot;scatter&quot;:[{&quot;fillpattern&quot;:{&quot;fillmode&quot;:&quot;overlay&quot;,&quot;size&quot;:10,&quot;solidity&quot;:0.2},&quot;type&quot;:&quot;scatter&quot;}],&quot;scatterternary&quot;:[{&quot;marker&quot;:{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;}},&quot;type&quot;:&quot;scatterternary&quot;}],&quot;surface&quot;:[{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;},&quot;colorscale&quot;:[[0.0,&quot;#0d0887&quot;],[0.1111111111111111,&quot;#46039f&quot;],[0.2222222222222222,&quot;#7201a8&quot;],[0.3333333333333333,&quot;#9c179e&quot;],[0.4444444444444444,&quot;#bd3786&quot;],[0.5555555555555556,&quot;#d8576b&quot;],[0.6666666666666666,&quot;#ed7953&quot;],[0.7777777777777778,&quot;#fb9f3a&quot;],[0.8888888888888888,&quot;#fdca26&quot;],[1.0,&quot;#f0f921&quot;]],&quot;type&quot;:&quot;surface&quot;}],&quot;table&quot;:[{&quot;cells&quot;:{&quot;fill&quot;:{&quot;color&quot;:&quot;#EBF0F8&quot;},&quot;line&quot;:{&quot;color&quot;:&quot;white&quot;}},&quot;header&quot;:{&quot;fill&quot;:{&quot;color&quot;:&quot;#C8D4E3&quot;},&quot;line&quot;:{&quot;color&quot;:&quot;white&quot;}},&quot;type&quot;:&quot;table&quot;}]},&quot;layout&quot;:{&quot;annotationdefaults&quot;:{&quot;arrowcolor&quot;:&quot;#2a3f5f&quot;,&quot;arrowhead&quot;:0,&quot;arrowwidth&quot;:1},&quot;autotypenumbers&quot;:&quot;strict&quot;,&quot;coloraxis&quot;:{&quot;colorbar&quot;:{&quot;outlinewidth&quot;:0,&quot;ticks&quot;:&quot;&quot;}},&quot;colorscale&quot;:{&quot;diverging&quot;:[[0,&quot;#8e0152&quot;],[0.1,&quot;#c51b7d&quot;],[0.2,&quot;#de77ae&quot;],[0.3,&quot;#f1b6da&quot;],[0.4,&quot;#fde0ef&quot;],[0.5,&quot;#f7f7f7&quot;],[0.6,&quot;#e6f5d0&quot;],[0.7,&quot;#b8e186&quot;],[0.8,&quot;#7fbc41&quot;],[0.9,&quot;#4d9221&quot;],[1,&quot;#276419&quot;]],&quot;sequential&quot;:[[0.0,&quot;#0d0887&quot;],[0.1111111111111111,&quot;#46039f&quot;],[0.2222222222222222,&quot;#7201a8&quot;],[0.3333333333333333,&quot;#9c179e&quot;],[0.4444444444444444,&quot;#bd3786&quot;],[0.5555555555555556,&quot;#d8576b&quot;],[0.6666666666666666,&quot;#ed7953&quot;],[0.7777777777777778,&quot;#fb9f3a&quot;],[0.8888888888888888,&quot;#fdca26&quot;],[1.0,&quot;#f0f921&quot;]],&quot;sequentialminus&quot;:[[0.0,&quot;#0d0887&quot;],[0.1111111111111111,&quot;#46039f&quot;],[0.2222222222222222,&quot;#7201a8&quot;],[0.3333333333333333,&quot;#9c179e&quot;],[0.4444444444444444,&quot;#bd3786&quot;],[0.5555555555555556,&quot;#d8576b&quot;],[0.6666666666666666,&quot;#ed7953&quot;],[0.7777777777777778,&quot;#fb9f3a&quot;],[0.8888888888888888,&quot;#fdca26&quot;],[1.0,&quot;#f0f921&quot;]]},&quot;colorway&quot;:[&quot;#636efa&quot;,&quot;#EF553B&quot;,&quot;#00cc96&quot;,&quot;#ab63fa&quot;,&quot;#FFA15A&quot;,&quot;#19d3f3&quot;,&quot;#FF6692&quot;,&quot;#B6E880&quot;,&quot;#FF97FF&quot;,&quot;#FECB52&quot;],&quot;font&quot;:{&quot;color&quot;:&quot;#2a3f5f&quot;},&quot;geo&quot;:{&quot;bgcolor&quot;:&quot;white&quot;,&quot;lakecolor&quot;:&quot;white&quot;,&quot;landcolor&quot;:&quot;white&quot;,&quot;showlakes&quot;:true,&quot;showland&quot;:true,&quot;subunitcolor&quot;:&quot;#C8D4E3&quot;},&quot;hoverlabel&quot;:{&quot;align&quot;:&quot;left&quot;},&quot;hovermode&quot;:&quot;closest&quot;,&quot;paper_bgcolor&quot;:&quot;white&quot;,&quot;plot_bgcolor&quot;:&quot;white&quot;,&quot;polar&quot;:{&quot;angularaxis&quot;:{&quot;gridcolor&quot;:&quot;#EBF0F8&quot;,&quot;linecolor&quot;:&quot;#EBF0F8&quot;,&quot;ticks&quot;:&quot;&quot;},&quot;bgcolor&quot;:&quot;white&quot;,&quot;radialaxis&quot;:{&quot;gridcolor&quot;:&quot;#EBF0F8&quot;,&quot;linecolor&quot;:&quot;#EBF0F8&quot;,&quot;ticks&quot;:&quot;&quot;}},&quot;scene&quot;:{&quot;xaxis&quot;:{&quot;backgroundcolor&quot;:&quot;white&quot;,&quot;gridcolor&quot;:&quot;#DFE8F3&quot;,&quot;gridwidth&quot;:2,&quot;linecolor&quot;:&quot;#EBF0F8&quot;,&quot;showbackground&quot;:true,&quot;ticks&quot;:&quot;&quot;,&quot;zerolinecolor&quot;:&quot;#EBF0F8&quot;},&quot;yaxis&quot;:{&quot;backgroundcolor&quot;:&quot;white&quot;,&quot;gridcolor&quot;:&quot;#DFE8F3&quot;,&quot;gridwidth&quot;:2,&quot;linecolor&quot;:&quot;#EBF0F8&quot;,&quot;showbackground&quot;:true,&quot;ticks&quot;:&quot;&quot;,&quot;zerolinecolor&quot;:&quot;#EBF0F8&quot;},&quot;zaxis&quot;:{&quot;backgroundcolor&quot;:&quot;white&quot;,&quot;gridcolor&quot;:&quot;#DFE8F3&quot;,&quot;gridwidth&quot;:2,&quot;linecolor&quot;:&quot;#EBF0F8&quot;,&quot;showbackground&quot;:true,&quot;ticks&quot;:&quot;&quot;,&quot;zerolinecolor&quot;:&quot;#EBF0F8&quot;}},&quot;shapedefaults&quot;:{&quot;line&quot;:{&quot;color&quot;:&quot;#2a3f5f&quot;}},&quot;ternary&quot;:{&quot;aaxis&quot;:{&quot;gridcolor&quot;:&quot;#DFE8F3&quot;,&quot;linecolor&quot;:&quot;#A2B1C6&quot;,&quot;ticks&quot;:&quot;&quot;},&quot;baxis&quot;:{&quot;gridcolor&quot;:&quot;#DFE8F3&quot;,&quot;linecolor&quot;:&quot;#A2B1C6&quot;,&quot;ticks&quot;:&quot;&quot;},&quot;bgcolor&quot;:&quot;white&quot;,&quot;caxis&quot;:{&quot;gridcolor&quot;:&quot;#DFE8F3&quot;,&quot;linecolor&quot;:&quot;#A2B1C6&quot;,&quot;ticks&quot;:&quot;&quot;}},&quot;title&quot;:{&quot;x&quot;:0.05},&quot;xaxis&quot;:{&quot;automargin&quot;:true,&quot;gridcolor&quot;:&quot;#EBF0F8&quot;,&quot;linecolor&quot;:&quot;#EBF0F8&quot;,&quot;ticks&quot;:&quot;&quot;,&quot;title&quot;:{&quot;standoff&quot;:15},&quot;zerolinecolor&quot;:&quot;#EBF0F8&quot;,&quot;zerolinewidth&quot;:2},&quot;yaxis&quot;:{&quot;automargin&quot;:true,&quot;gridcolor&quot;:&quot;#EBF0F8&quot;,&quot;linecolor&quot;:&quot;#EBF0F8&quot;,&quot;ticks&quot;:&quot;&quot;,&quot;title&quot;:{&quot;standoff&quot;:15},&quot;zerolinecolor&quot;:&quot;#EBF0F8&quot;,&quot;zerolinewidth&quot;:2}}},&quot;annotations&quot;:[{&quot;align&quot;:&quot;left&quot;,&quot;bgcolor&quot;:&quot;rgba(255,255,255,0.75)&quot;,&quot;font&quot;:{&quot;color&quot;:&quot;#000000&quot;,&quot;size&quot;:12},&quot;name&quot;:&quot;highlight_key&quot;,&quot;showarrow&quot;:false,&quot;text&quot;:&quot;&lt;span style=\&quot;color:#D55E00\&quot;&gt;\u25a0&lt;/span&gt; Highlighted: is_in_aspan (answer span)&quot;,&quot;x&quot;:0,&quot;xanchor&quot;:&quot;left&quot;,&quot;xref&quot;:&quot;paper&quot;,&quot;xshift&quot;:6,&quot;y&quot;:0,&quot;yanchor&quot;:&quot;bottom&quot;,&quot;yref&quot;:&quot;paper&quot;,&quot;yshift&quot;:6},{&quot;font&quot;:{&quot;color&quot;:&quot;#000000&quot;,&quot;family&quot;:&quot;monospace&quot;,&quot;size&quot;:10.0},&quot;name&quot;:&quot;duration_size_key&quot;,&quot;showarrow&quot;:false,&quot;text&quot;:&quot;\u226450&quot;,&quot;x&quot;:1.0,&quot;xanchor&quot;:&quot;center&quot;,&quot;xref&quot;:&quot;paper&quot;,&quot;xshift&quot;:-141.0,&quot;y&quot;:0.0,&quot;yanchor&quot;:&quot;middle&quot;,&quot;yref&quot;:&quot;paper&quot;,&quot;yshift&quot;:16.0},{&quot;font&quot;:{&quot;color&quot;:&quot;#000000&quot;,&quot;family&quot;:&quot;monospace&quot;,&quot;size&quot;:10.0},&quot;name&quot;:&quot;duration_size_key&quot;,&quot;showarrow&quot;:false,&quot;text&quot;:&quot;100&quot;,&quot;x&quot;:1.0,&quot;xanchor&quot;:&quot;center&quot;,&quot;xref&quot;:&quot;paper&quot;,&quot;xshift&quot;:-103.0,&quot;y&quot;:0.0,&quot;yanchor&quot;:&quot;middle&quot;,&quot;yref&quot;:&quot;paper&quot;,&quot;yshift&quot;:16.0},{&quot;font&quot;:{&quot;color&quot;:&quot;#000000&quot;,&quot;family&quot;:&quot;monospace&quot;,&quot;size&quot;:10.0},&quot;name&quot;:&quot;duration_size_key&quot;,&quot;showarrow&quot;:false,&quot;text&quot;:&quot;200&quot;,&quot;x&quot;:1.0,&quot;xanchor&quot;:&quot;center&quot;,&quot;xref&quot;:&quot;paper&quot;,&quot;xshift&quot;:-65.0,&quot;y&quot;:0.0,&quot;yanchor&quot;:&quot;middle&quot;,&quot;yref&quot;:&quot;paper&quot;,&quot;yshift&quot;:16.0},{&quot;font&quot;:{&quot;color&quot;:&quot;#000000&quot;,&quot;family&quot;:&quot;monospace&quot;,&quot;size&quot;:10.0},&quot;name&quot;:&quot;duration_size_key&quot;,&quot;showarrow&quot;:false,&quot;text&quot;:&quot;400 ms&quot;,&quot;x&quot;:1.0,&quot;xanchor&quot;:&quot;center&quot;,&quot;xref&quot;:&quot;paper&quot;,&quot;xshift&quot;:-27.0,&quot;y&quot;:0.0,&quot;yanchor&quot;:&quot;middle&quot;,&quot;yref&quot;:&quot;paper&quot;,&quot;yshift&quot;:16.0}],&quot;margin&quot;:{&quot;l&quot;:0,&quot;r&quot;:0,&quot;t&quot;:0.0,&quot;b&quot;:0},&quot;xaxis&quot;:{&quot;showticklabels&quot;:false,&quot;showgrid&quot;:false,&quot;zeroline&quot;:false,&quot;title&quot;:{},&quot;range&quot;:[0,2560],&quot;constrain&quot;:&quot;domain&quot;,&quot;automargin&quot;:false},&quot;yaxis&quot;:{&quot;showticklabels&quot;:false,&quot;showgrid&quot;:false,&quot;zeroline&quot;:false,&quot;title&quot;:{},&quot;range&quot;:[1440,0],&quot;constrain&quot;:&quot;domain&quot;,&quot;scaleanchor&quot;:&quot;x&quot;,&quot;scaleratio&quot;:1,&quot;automargin&quot;:false},&quot;legend&quot;:{&quot;orientation&quot;:&quot;h&quot;,&quot;yanchor&quot;:&quot;bottom&quot;,&quot;y&quot;:0.8989828391831516,&quot;xanchor&quot;:&quot;right&quot;,&quot;x&quot;:1,&quot;font&quot;:{&quot;color&quot;:&quot;#000000&quot;}},&quot;font&quot;:{&quot;family&quot;:&quot;monospace&quot;,&quot;size&quot;:16},&quot;height&quot;:540.0,&quot;width&quot;:960,&quot;autosize&quot;:false,&quot;plot_bgcolor&quot;:&quot;#ffffff&quot;,&quot;paper_bgcolor&quot;:&quot;#ffffff&quot;,&quot;shapes&quot;:[{&quot;fillcolor&quot;:&quot;rgba(0,0,0,0)&quot;,&quot;line&quot;:{&quot;color&quot;:&quot;#000000&quot;,&quot;width&quot;:1},&quot;name&quot;:&quot;__sps_layer:frame&quot;,&quot;type&quot;:&quot;rect&quot;,&quot;x0&quot;:0,&quot;x1&quot;:2560,&quot;y0&quot;:0,&quot;y1&quot;:1440},{&quot;fillcolor&quot;:&quot;rgba(120,120,120,0.35)&quot;,&quot;layer&quot;:&quot;above&quot;,&quot;line&quot;:{&quot;color&quot;:&quot;#555555&quot;,&quot;width&quot;:1},&quot;name&quot;:&quot;__sps_layer:fixations&quot;,&quot;type&quot;:&quot;circle&quot;,&quot;x0&quot;:-145.0,&quot;x1&quot;:-137.0,&quot;xanchor&quot;:1.0,&quot;xref&quot;:&quot;paper&quot;,&quot;xsizemode&quot;:&quot;pixel&quot;,&quot;y0&quot;:29.936206895084467,&quot;y1&quot;:37.93620689508447,&quot;yanchor&quot;:0.0,&quot;yref&quot;:&quot;paper&quot;,&quot;ysizemode&quot;:&quot;pixel&quot;},{&quot;fillcolor&quot;:&quot;rgba(120,120,120,0.35)&quot;,&quot;layer&quot;:&quot;above&quot;,&quot;line&quot;:{&quot;color&quot;:&quot;#555555&quot;,&quot;width&quot;:1},&quot;name&quot;:&quot;__sps_layer:fixations&quot;,&quot;type&quot;:&quot;circle&quot;,&quot;x0&quot;:-108.34479376931033,&quot;x1&quot;:-97.65520623068967,&quot;xanchor&quot;:1.0,&quot;xref&quot;:&quot;paper&quot;,&quot;xsizemode&quot;:&quot;pixel&quot;,&quot;y0&quot;:28.591413125774142,&quot;y1&quot;:39.281000664394796,&quot;yanchor&quot;:0.0,&quot;yref&quot;:&quot;paper&quot;,&quot;ysizemode&quot;:&quot;pixel&quot;},{&quot;fillcolor&quot;:&quot;rgba(120,120,120,0.35)&quot;,&quot;layer&quot;:&quot;above&quot;,&quot;line&quot;:{&quot;color&quot;:&quot;#555555&quot;,&quot;width&quot;:1},&quot;name&quot;:&quot;__sps_layer:fixations&quot;,&quot;type&quot;:&quot;circle&quot;,&quot;x0&quot;:-72.24661935646382,&quot;x1&quot;:-57.753380643536175,&quot;xanchor&quot;:1.0,&quot;xref&quot;:&quot;paper&quot;,&quot;xsizemode&quot;:&quot;pixel&quot;,&quot;y0&quot;:26.689587538620646,&quot;y1&quot;:41.18282625154829,&quot;yanchor&quot;:0.0,&quot;yref&quot;:&quot;paper&quot;,&quot;ysizemode&quot;:&quot;pixel&quot;},{&quot;fillcolor&quot;:&quot;rgba(120,120,120,0.35)&quot;,&quot;layer&quot;:&quot;above&quot;,&quot;line&quot;:{&quot;color&quot;:&quot;#555555&quot;,&quot;width&quot;:1},&quot;name&quot;:&quot;__sps_layer:fixations&quot;,&quot;type&quot;:&quot;circle&quot;,&quot;x0&quot;:-36.93620689508447,&quot;x1&quot;:-17.06379310491553,&quot;xanchor&quot;:1.0,&quot;xref&quot;:&quot;paper&quot;,&quot;xsizemode&quot;:&quot;pixel&quot;,&quot;y0&quot;:23.999999999999996,&quot;y1&quot;:43.872413790168935,&quot;yanchor&quot;:0.0,&quot;yref&quot;:&quot;paper&quot;,&quot;ysizemode&quot;:&quot;pixel&quot;}]},&quot;config&quot;:{&quot;showSendToCloud&quot;:false,&quot;displaylogo&quot;:false,&quot;responsive&quot;:false,&quot;modeBarButtonsToRemove&quot;:[&quot;zoom2d&quot;,&quot;pan2d&quot;,&quot;select2d&quot;,&quot;lasso2d&quot;,&quot;zoomIn2d&quot;,&quot;zoomOut2d&quot;,&quot;autoScale2d&quot;,&quot;resetScale2d&quot;]}}"></div></div>
+
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">In the app</label><label for="__tabbed_1_2">CLI</label><label for="__tabbed_1_3">Python</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<ol>
+<li>Select the bundled demo in Scanpath, then participant <code>l37_1129</code> and trial <code>l37_1129_2_2_2_Adv_r0</code>. Start with Reset visualization.</li>
+<li>Turn on Raw gaze and turn off Saccades.</li>
+<li>In Fixations ▾ → Marker → Opacity, choose 0.35 so the samples show through.</li>
+</ol>
+<p><a href="https://scanpath-studio.streamlit.app">Open the demo</a> · <a href="../../guides/scanpath-visualization/controls/">All controls</a></p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_2_2_Adv_r0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--sample-raw-gaze<span class="w"> </span>--fixation-opacity<span class="w"> </span><span class="m">0</span>.35<span class="w"> </span>--no-saccades<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>-o<span class="w"> </span>raw-gaze.html
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sps</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_sample_data</span><span class="p">()</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">pid</span><span class="p">,</span> <span class="n">tid</span> <span class="o">=</span> <span class="s2">"l37_1129"</span><span class="p">,</span> <span class="s2">"l37_1129_2_1_1_Ele_r0"</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">raw_gaze</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_sample_raw_gaze</span><span class="p">()</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">fig</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">plot_scanpath</span><span class="p">(</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">words</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">fixations</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="s2">"l37_1129"</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="s2">"l37_1129_2_2_2_Adv_r0"</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">raw_gaze</span><span class="o">=</span><span class="n">raw_gaze</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">fixation_opacity</span><span class="o">=</span><span class="mf">0.35</span><span class="p">,</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">show_saccades</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="p">)</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="n">sps</span><span class="o">.</span><span class="n">save_figure</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="s2">"raw-gaze.html"</span><span class="p">)</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<p><a href="../">← All examples</a></p>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+  
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+        
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../comparison/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Two readers">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Two readers
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../replay/" class="md-footer__link md-footer__link--next" aria-label="Next: Replay">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Replay
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT licensed · cite it by its DOI, <a href="https://doi.org/10.5281/zenodo.22933884">10.5281/zenodo.22933884</a>
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/lacclab/scanpath-studio" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://pypi.org/project/scanpath-studio/" target="_blank" rel="noopener" title="pypi.org" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.8 200.5c-7.7-30.9-22.3-54.2-53.4-54.2h-40.1v47.4c0 36.8-31.2 67.8-66.8 67.8H172.7c-29.2 0-53.4 25-53.4 54.3v101.8c0 29 25.2 46 53.4 54.3 33.8 9.9 66.3 11.7 106.8 0 26.9-7.8 53.4-23.5 53.4-54.3v-40.7H226.2v-13.6h160.2c31.1 0 42.6-21.7 53.4-54.2 11.2-33.5 10.7-65.7 0-108.6M286.2 444.7a20.4 20.4 0 1 1 0-40.7 20.4 20.4 0 1 1 0 40.7M167.8 248.1h106.8c29.7 0 53.4-24.5 53.4-54.3V91.9c0-29-24.4-50.7-53.4-55.6-35.8-5.9-74.7-5.6-106.8.1-45.2 8-53.4 24.7-53.4 55.6v40.7h106.9v13.6h-147c-31.1 0-58.3 18.7-66.8 54.2-9.8 40.7-10.2 66.1 0 108.6 7.6 31.6 25.7 54.2 56.8 54.2H101v-48.8c0-35.3 30.5-66.4 66.8-66.4m-6.6-183.4a20.4 20.4 0 1 1 0 40.8 20.4 20.4 0 1 1 0-40.8"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://scanpath-studio.streamlit.app" target="_blank" rel="noopener" title="Live demo" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 16.5v-9l6 4.5M12 2A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+      <div class="md-progress" data-md-component="progress" role="progressbar"></div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.instant", "navigation.instant.progress", "navigation.path", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../../assets/_markdown_exec_pyodide.js"></script>
+      
+        <script src="../../javascripts/figures.js"></script>
+      
+        <script src="../../javascripts/video.js"></script>
+      
+        <script src="../../javascripts/controls.js"></script>
+      
+    
+  </body>
+</html>

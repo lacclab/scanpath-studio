@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_constants_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-15 22:14 +0000
+            created at 2026-10-16 08:20 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -95,7 +95,7 @@
     <p class="pln"><span class="n"><a id="t13" href="#t13">13</a></span><span class="t"><span class="str">  the code &#8212; every ``aggregation.MEASURES`` entry, every drift-correction</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t14" href="#t14">14</a></span><span class="t"><span class="str">  algorithm and every similarity metric must map to an entry here, and every</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t15" href="#t15">15</a></span><span class="t"><span class="str">  entry must point at a function that exists;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t16" href="#t16">16</a></span><span class="t"><span class="str">* ``docs/computations.md`` can be generated from one source rather than</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t16" href="#t16">16</a></span><span class="t"><span class="str">* ``plans/computation-register.md`` can be generated from one source rather than</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t17" href="#t17">17</a></span><span class="t"><span class="str">  maintained in parallel with it (``python -m scanpath_studio.computations``).</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t18" href="#t18">18</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t19" href="#t19">19</a></span><span class="t"><span class="str">**Verification tiers.** ``A`` a hand-calculated synthetic oracle &#183; ``B`` an</span>&nbsp;</span><span class="r"></span></p>
@@ -1706,7 +1706,7 @@
     <p class="pln"><span class="n"><a id="t1624" href="#t1624">1624</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1625" href="#t1625">1625</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1626" href="#t1626">1626</a></span><span class="t"><span class="key">def</span> <span class="nam">to_markdown</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">str</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1627" href="#t1627">1627</a></span><span class="t">    <span class="str">&quot;&quot;&quot;Render the register as the ``docs/computations.md`` page.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1627" href="#t1627">1627</a></span><span class="t">    <span class="str">&quot;&quot;&quot;Render the register as the ``plans/computation-register.md`` page.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1628" href="#t1628">1628</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1629" href="#t1629">1629</a></span><span class="t"><span class="str">    Generated rather than hand-maintained so the documentation cannot drift</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1630" href="#t1630">1630</a></span><span class="t"><span class="str">    from the catalogue the integrity tests check.</span>&nbsp;</span><span class="r"></span></p>
@@ -1791,7 +1791,7 @@
     <p class="exc show_exc"><span class="n"><a id="t1709" href="#t1709">1709</a></span><span class="t"><span class="key">def</span> <span class="nam">main</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="key">None</span><span class="op">:</span>  <span class="com"># pragma: no cover - thin CLI wrapper</span>&nbsp;</span><span class="r"></span></p>
     <p class="exc show_exc"><span class="n"><a id="t1710" href="#t1710">1710</a></span><span class="t">    <span class="key">from</span> <span class="nam">pathlib</span> <span class="key">import</span> <span class="nam">Path</span>&nbsp;</span><span class="r"></span></p>
     <p class="exc show_exc"><span class="n"><a id="t1711" href="#t1711">1711</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="exc show_exc"><span class="n"><a id="t1712" href="#t1712">1712</a></span><span class="t">    <span class="nam">target</span> <span class="op">=</span> <span class="nam">Path</span><span class="op">(</span><span class="nam">__file__</span><span class="op">)</span><span class="op">.</span><span class="nam">resolve</span><span class="op">(</span><span class="op">)</span><span class="op">.</span><span class="nam">parents</span><span class="op">[</span><span class="num">1</span><span class="op">]</span> <span class="op">/</span> <span class="str">&quot;docs&quot;</span> <span class="op">/</span> <span class="str">&quot;computations.md&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="exc show_exc"><span class="n"><a id="t1712" href="#t1712">1712</a></span><span class="t">    <span class="nam">target</span> <span class="op">=</span> <span class="nam">Path</span><span class="op">(</span><span class="nam">__file__</span><span class="op">)</span><span class="op">.</span><span class="nam">resolve</span><span class="op">(</span><span class="op">)</span><span class="op">.</span><span class="nam">parents</span><span class="op">[</span><span class="num">1</span><span class="op">]</span> <span class="op">/</span> <span class="str">&quot;plans&quot;</span> <span class="op">/</span> <span class="str">&quot;computation-register.md&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="exc show_exc"><span class="n"><a id="t1713" href="#t1713">1713</a></span><span class="t">    <span class="nam">target</span><span class="op">.</span><span class="nam">write_text</span><span class="op">(</span><span class="nam">to_markdown</span><span class="op">(</span><span class="op">)</span><span class="op">,</span> <span class="nam">encoding</span><span class="op">=</span><span class="str">&quot;utf-8&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="exc show_exc"><span class="n"><a id="t1714" href="#t1714">1714</a></span><span class="t">    <span class="nam">print</span><span class="op">(</span><span class="fst">f&quot;</span><span class="fst">Wrote </span><span class="op">{</span><span class="nam">target</span><span class="op">}</span><span class="fst"> (</span><span class="op">{</span><span class="nam">len</span><span class="op">(</span><span class="nam">REGISTER</span><span class="op">)</span><span class="op">}</span><span class="fst"> entries)</span><span class="fst">&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1715" href="#t1715">1715</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -1807,7 +1807,7 @@
             <a class="nav" href="z_370c57a259db20f3_constants_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-15 22:14 +0000
+            created at 2026-10-16 08:20 +0000
         </p>
     </div>
 </footer>

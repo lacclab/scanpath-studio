@@ -47,7 +47,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv \
   -o replay.html
 ```
 
-HTML is interactive and needs no browser. PNG, SVG and PDF need Chrome, Chromium or Edge installed (or run `plotly_get_chrome -y` once).
+See the [FAQ](https://lacclab.github.io/scanpath-studio/faq/#export-fails) for image-export setup.
 
 ### When a column isn't recognized
 
@@ -225,7 +225,7 @@ scanpath-studio check --raw-gaze gaze_samples.csv --json
 
 ## Many trials
 
-The `render` command renders one trial per invocation; use the [Python batch pattern](https://lacclab.github.io/scanpath-studio/automation/#batch-pattern) or **Export → Export bundle** for many figures.
+The `render` command renders one trial per invocation; use the [Python batch recipe](https://lacclab.github.io/scanpath-studio/guides/exporting/#batch-pattern) or **Export → Export bundle** for many figures.
 
 `--all-screens` is the multipart exception: it writes one deterministic `__screen-001-<id>` file per screen of the selected parent trial. `--screens Title,Paragraph` writes only the screens named, each still numbered by its place in the trial.
 
@@ -265,7 +265,7 @@ Between releases the version names the build: `0.35.0.post3+g8f18219` is three c
 Generated from the parsers the commands themselves use, so every flag is here with the default and help `--help` prints.
 
 ```
-scanpath-studio 0.38.2 — visualize eye-tracking-while-reading scanpaths
+scanpath-studio 0.38.3 — visualize eye-tracking-while-reading scanpaths
 
 usage:
   scanpath-studio                  launch the interactive app (Streamlit)

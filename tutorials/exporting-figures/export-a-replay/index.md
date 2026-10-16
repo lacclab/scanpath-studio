@@ -1,12 +1,16 @@
 # Export a replay
 
-The reading as it happened, for a talk or a supplement.
+Save an animated reading for a talk or supplement.
 
-1. Choose the view as for [one figure](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-one-figure/#1-choose-the-view), then turn on **Animate** and set the speed.
-1. Open **Export → Current figure**: the replay saves as **HTML** (interactive, with its own play controls), **GIF** or **MP4**. GIF and MP4 need Chrome, Chromium or Edge; the clip runs as long as the replay plays at its speed.
+1. Select a trial in Scanpath and turn on Animate.
+1. Set the playback speed and visible layers.
+1. Open Export → Current figure and choose GIF, MP4 or HTML.
+1. Download the replay. GIF and MP4 use the selected playback speed; HTML has interactive playback controls.
 
 \[!\[
 
 \](../../../assets/workflows/replay-export_poster.webp)\](../../../assets/workflows/replay-export.mp4)
 
-*Rendering the replay to a GIF and downloading it; the wait while it renders is fast-forwarded.*
+*Exporting a GIF; the rendering wait is shortened in this recording.*
+
+For [GIF/MP4 export from Python](https://lacclab.github.io/scanpath-studio/guides/exporting/#replays-as-gif-or-mp4), see Export and share.

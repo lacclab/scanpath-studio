@@ -6,7 +6,7 @@ Scanpath Studio is an interactive Streamlit workbench, a Python API (`import sca
 
 ## Use the app
 
-- [Install](https://lacclab.github.io/scanpath-studio/install/index.md): Install, launch, and a first plot
+- [Get started](https://lacclab.github.io/scanpath-studio/install/index.md): Install, launch, and a first plot
 - [Tutorials](https://lacclab.github.io/scanpath-studio/tutorials/index.md)
 - [Analyze a corpus](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/index.md)
 - [Analyze one text](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/analyze-one-text/index.md)
@@ -26,18 +26,28 @@ Scanpath Studio is an interactive Streamlit workbench, a Python API (`import sca
 - [Export one figure](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-one-figure/index.md)
 - [Feature guides](https://lacclab.github.io/scanpath-studio/guides/index.md)
 - [Corpus Analysis](https://lacclab.github.io/scanpath-studio/guides/corpus-workspace/index.md)
+- [Export and share](https://lacclab.github.io/scanpath-studio/guides/exporting/index.md)
 - [Data management](https://lacclab.github.io/scanpath-studio/guides/loading-data/index.md)
 - [Scanpath visualization](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/index.md)
 - [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
-- [Computations & methodology](https://lacclab.github.io/scanpath-studio/computations/index.md): How every measure and derived value is computed
 - [FAQ](https://lacclab.github.io/scanpath-studio/faq/index.md)
 
-## API & CLI
+## Reference
 
-- [Overview](https://lacclab.github.io/scanpath-studio/automation/index.md): Choosing between the app, the CLI and the Python API
 - [Python API](https://lacclab.github.io/scanpath-studio/api/index.md): The Python API reference
 - [CLI reference](https://lacclab.github.io/scanpath-studio/cli/index.md): The CLI reference, every flag included
 - [For coding agents](https://lacclab.github.io/scanpath-studio/agents/index.md): Headless use by a coding agent or script
+- [Two readers](https://lacclab.github.io/scanpath-studio/gallery/comparison/index.md)
+- [Heatmap](https://lacclab.github.io/scanpath-studio/gallery/heatmap/index.md)
+- [Reading schematic](https://lacclab.github.io/scanpath-studio/gallery/illustration/index.md)
+- [Raw gaze](https://lacclab.github.io/scanpath-studio/gallery/raw-gaze/index.md)
+- [Replay](https://lacclab.github.io/scanpath-studio/gallery/replay/index.md)
+- [Saccade types](https://lacclab.github.io/scanpath-studio/gallery/saccade-types/index.md)
+- [Scanpath](https://lacclab.github.io/scanpath-studio/gallery/scanpath/index.md)
+- [Fixations by line](https://lacclab.github.io/scanpath-studio/gallery/text-lines/index.md)
+- [Time course](https://lacclab.github.io/scanpath-studio/gallery/time-course/index.md)
+- [Word profile](https://lacclab.github.io/scanpath-studio/gallery/word-profile/index.md)
+- [App recordings](https://lacclab.github.io/scanpath-studio/gallery/workflows/index.md)
 
 ## About
 

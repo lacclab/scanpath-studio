@@ -6,490 +6,399 @@ Scanpath Studio is an interactive Streamlit workbench, a Python API (`import sca
 
 # Use the app
 
-# Install
+# Get started
 
-## Download
+## Install
 
-The easiest way to work with your own data: no Python needed, your data stays on your computer, and the public corpora download in one click. Download the build for your system, then:
+Recommended for your own data. No Python needed.
 
-- **macOS** (14 or later, Apple silicon): [`ScanpathStudio-macos-arm64.dmg`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg). Open it, drag **Scanpath Studio** to **Applications**, and launch it from there. If macOS refuses to open it, go to **System Settings → Privacy & Security** and click **Open Anyway**.
-- **Windows**: [`ScanpathStudio-windows-x86_64-setup.exe`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64-setup.exe). Run it to install Scanpath Studio for your account (no administrator rights needed), then launch it from the Start menu. The installer is not code-signed, so SmartScreen warns the first time: click **More info → Run anyway**. Uninstall it from **Settings → Apps**. To run it without installing, use [`ScanpathStudio-windows-x86_64.zip`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip) instead: extract it and run `ScanpathStudio.exe`.
-- **Linux**: [`ScanpathStudio-linux-x86_64.tar.gz`](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz). Extract it and run `./ScanpathStudio/ScanpathStudio`.
+- [macOS (14+, Apple silicon)](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-macos-arm64.dmg): open the DMG, drag Scanpath Studio to Applications, then launch it. If blocked, use System Settings → Privacy & Security → Open Anyway.
+- [Windows](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64-setup.exe): run the installer, then launch from the Start menu. If SmartScreen warns, choose More info → Run anyway. Or use the [portable ZIP](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-windows-x86_64.zip).
+- [Linux](https://github.com/lacclab/scanpath-studio/releases/latest/download/ScanpathStudio-linux-x86_64.tar.gz): extract and run `./ScanpathStudio/ScanpathStudio`.
 
-The app opens in its own window. To quit, close that window on macOS, or the console window on Windows and Linux. A download there asks where to save the file. On an Intel Mac or an older macOS, use pip instead.
+On an Intel Mac or older macOS, use pip. [All downloads](https://github.com/lacclab/scanpath-studio/releases/latest).
+
+Python 3.11–3.14:
 
 ```
 pip install scanpath-studio
 scanpath-studio
 ```
 
-Needs Python 3.11–3.14. The app opens at <http://localhost:8501>.
+Opens the app at <http://localhost:8501>.
 
-Open the [live demo](https://scanpath-studio.streamlit.app) to try the app on its bundled data. Nothing to install. The demo has limited memory and can't download the public corpora, so for your own data use the desktop app or pip.
+Open the [live demo](https://scanpath-studio.streamlit.app). No installation needed.
 
-## Explore the demo
+Desktop and pip installs keep your data on your computer and download OneStop and PoTeC in one click. The online demo has limited memory and no corpus downloads.
 
-The app opens on a small bundled sample of the [OneStop](https://lacclab.github.io/scanpath-studio/guides/loading-data/#onestop) corpus.
+## Explore
 
-1. Pick a trial with the picker above the plot.
-1. Switch layers on and off in **Plot controls**: Fixations, Saccades, Stimulus (the text), Word boxes, Heatmap.
-1. Turn on **Animate** to replay the trial.
-1. Open **Export → Current figure** to download it.
-1. Load your own data: click **+** beside **Select dataset** and choose **Import files** (see [Data management](https://lacclab.github.io/scanpath-studio/guides/loading-data/index.md)).
+The app opens with a small [OneStop sample](https://lacclab.github.io/scanpath-studio/guides/loading-data/#onestop).
 
-## Updating
+1. Pick a trial above the plot.
+1. Toggle fixations, saccades, text, word boxes and heatmaps in Plot controls.
+1. Turn on Animate to replay the reading.
+1. Download a figure from Export.
+1. Add your own data with + → Import files.
 
-**Help → About** shows your version. Click **Check for updates** to see if a newer one is out. In the desktop app, **Update & restart** installs it and keeps your datasets and settings; with pip, run `pip install -U scanpath-studio`.
+## Update
+
+Open Help → About → Check for updates. For the desktop app, choose Update & restart. With pip:
+
+```
+pip install -U scanpath-studio
+```
 
 ## Next steps
 
-- [Plot gallery](https://lacclab.github.io/scanpath-studio/gallery/index.md) shows what the app draws, for ideas.
-- [Tutorials](https://lacclab.github.io/scanpath-studio/tutorials/index.md) walk through common tasks, from checking a pilot to exporting a figure.
-- [Feature guides](https://lacclab.github.io/scanpath-studio/guides/index.md) explain each part of the app.
-- [API & CLI](https://lacclab.github.io/scanpath-studio/automation/index.md) covers the Python API and the command line.
+- [Tutorials](https://lacclab.github.io/scanpath-studio/tutorials/index.md): common research tasks
+- [Feature guides](https://lacclab.github.io/scanpath-studio/guides/index.md): each view and its controls
+- [Plot gallery](https://lacclab.github.io/scanpath-studio/gallery/index.md): example figures
+- [Python API](https://lacclab.github.io/scanpath-studio/api/index.md) and [CLI reference](https://lacclab.github.io/scanpath-studio/cli/index.md): full technical references
 
 # Tutorials
 
-Each tutorial walks one research task from start to finish. New here? Start with [Install](https://lacclab.github.io/scanpath-studio/install/index.md).
+Choose a task. For installation, see [Get started](https://lacclab.github.io/scanpath-studio/install/index.md); for control reference, see the [feature guides](https://lacclab.github.io/scanpath-studio/guides/index.md).
 
 - **[Optimize data collection](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/index.md)**
 
-  Pilot your eye tracker, software, and stimulus layout (font, spacing) before you commit — for example, [compare two eye trackers on the same text](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/compare-eye-trackers/index.md). Catch calibration and setup problems that only show up in a plot, and train new experimenters to spot issues such as frequent blinking, or check their sessions as you supervise.
+  - [Check a session](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/index.md)
+  - [Compare two eye trackers](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/compare-eye-trackers/index.md)
+  - [Audit an experimenter](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/audit-an-experimenter/index.md)
 
-- **[Validate your data](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/index.md)**
+- **[Filter data](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/index.md)**
 
-  Mark trials or whole sessions for exclusion, and decide whether you need to collect more. Check that fixation detection and line assignment hold up on this dataset by viewing fixations against the raw gaze and word boxes.
-
-- **[Filter data for analysis or publication](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/index.md)**
-
-  Exclude or flag poorly calibrated, skimming, or non-reading trials, and trials with out-of-bounds, very short, or very long fixations. Annotate trials as you look through them: star them, tag them (such as `not reading`) or add notes, then filter by those tags. Find the trials a specific analysis needs — for example, participants with a given native language and good calibration — and export the marked trial IDs.
+  - [Exclude unsuitable trials](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/exclude-unsuitable-trials/index.md)
+  - [Select participants by a field](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/select-participants/index.md)
+  - [Find the trials an analysis needs](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/find-trials-for-an-analysis/index.md)
 
 - **[Export customized figures](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/index.md)**
 
-  Show a real scanpath in a paper or talk as a heatmap or a replay, and save the look as a design to reuse. Or bulk-export every trial consistently, for example as training data for models that generate scanpaths on images.
+  - [Export one figure](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-one-figure/index.md)
+  - [Export a replay](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-a-replay/index.md)
+  - [Export every trial](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-every-trial/index.md)
 
-- **[Compare and analyze](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/index.md)**
+- **[Analyze a corpus](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/index.md)**
 
-  Compare model-generated scanpaths with human ones, contrast groups and conditions, and see how reading progresses over time.
+  - [Analyze one text](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/analyze-one-text/index.md)
+  - [Compare groups or conditions](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/compare-groups/index.md)
+  - [See progression over time](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/progression-over-time/index.md)
 
-The app also has short interactive tutorials under **Help → Tutorials**. They highlight each control as you go, and never change your data or settings.
+In the app, open Help → Tutorials for guided tours of the controls.
 
 # Analyze a corpus
 
-Move from single scanpaths to a text, condition or group-level result. Each page below is one task.
-
 - **[Analyze one text](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/analyze-one-text/index.md)**
 
-  How one text was read, word by word, across its readers.
+  Compare word-by-word measures across readers.
 
 - **[Compare groups or conditions](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/compare-groups/index.md)**
 
-  Two cohorts or conditions side by side, with their difference.
+  Inspect group means and differences.
 
 - **[See progression over time](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/progression-over-time/index.md)**
 
-  How reading changes over a session, for a participant or a group.
+  Inspect trends within or across trials.
 
 ## Before you start
 
-Corpus Analysis shows the reading measures your interest-area table brings (mapped under **Reading measures** when you add or edit a dataset); it computes none itself. The bundled demo has them. With fixations alone, compute the measures with your own pipeline (EyeLink Data Viewer's interest-area report, for example), join them onto your Words (interest areas) table by participant, trial and word ID, and load that; EyeLink's `IA_*` names map themselves.
-
-**Define the pool.** Narrow the trials with the Scanpath view's filter or **Edit filters** at the top of Corpus Analysis. The line beside the dataset picker there counts the trials and participants left and names each active filter; **Clear** resets them. A text ID must identify the same stimulus across participants; a trial ID identifies one trial.
+Open a dataset and set the trial filters for your question. Word-level views need [reading measures in the Words table](https://lacclab.github.io/scanpath-studio/guides/loading-data/#reading-measures); the bundled demo includes them. For comparisons across readers, the same text must have the same text ID.
 
 ## Keep the result
 
-Select **Download this table (CSV)** beside a result, and **Download the recipe (JSON)** beside it. The recipe records how the table was made: the app version, the dataset's name, the trial filters, the view's text, screen, measure, aggregation, normalization, spread, minimum participants and group definitions, and the trial and participant counts. It names the dataset rather than copying it, and holds no figure settings. A Share link carries neither the filters nor the Corpus Analysis choices.
+Download this table (CSV) saves the values. Download the recipe (JSON) saves the dataset name, filters, analysis choices and counts. Keep the source data separately so the result can be reproduced.
+
+To draw a summary with Python or the CLI, see [Plot a summary in code](https://lacclab.github.io/scanpath-studio/guides/corpus-workspace/#plot-a-summary-in-code).
 
 # Analyze one text
 
-How was one text read — which words drew long fixations, and how do its readers differ?
+Compare how participants read the words of one text.
 
-1. [Define the pool](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/#before-you-start), then open **Corpus Analysis → Per text** and pick the text.
-1. Choose one familiar measure: total fixation duration for overall attention, first-pass reading time for initial processing, or regression rate for rereading.
-1. Read the word profile on the stimulus, or against a word property such as surprisal. Set a minimum number of participants per word, so isolated observations do not appear as stable estimates.
-1. Check how many participants contribute, and open a scanpath view to investigate surprising words.
+1. [Select the trials](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/#before-you-start), then open Corpus Analysis → Per text.
+1. Pick a text and an available reading measure.
+1. Choose a word profile on the stimulus or a plot against a word feature, such as surprisal if that column is present.
+1. Set the aggregation, spread and minimum participants per word. Check the counts before interpreting differences.
+1. [Download the table and recipe](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/#keep-the-result).
 
 \[!\[
 
 \](../../../assets/workflows/corpus-analysis_poster.webp)\](../../../assets/workflows/corpus-analysis.mp4)
 
-*One text's total fixation duration on the stimulus and then against GPT-2 surprisal.*
-
-**Then:** [download the table and its recipe](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/#keep-the-result).
+*The recording shows total fixation duration on a text, against GPT-2 surprisal, and between two groups.*
 
 # Compare groups or conditions
 
-Do two populations or conditions read differently?
+Compare a reading measure between two cohorts.
 
-1. [Define the pool](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/#before-you-start), then open **Corpus Analysis → Groups**.
-1. Define one cohort — split a field, or build a filter set — and check that it looks right.
-1. Turn on comparison, define the second cohort, and read **Group means & difference**. It compares the two cohorts' per-participant means and is descriptive: there is no significance test.
-1. Read it with its denominator: the caption says how many participants are in each cohort and how many are in both. A participant in both contributes to both means, and then the standardized difference is not shown — see [how it is computed](https://lacclab.github.io/scanpath-studio/computations/#agg-effect-size).
+1. [Select the trials](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/#before-you-start), then open Corpus Analysis → Groups.
+1. Turn on Compare a second group.
+1. Split a field or define independent filters for the two groups.
+1. Choose Group means & difference and a measure. Check the number of participants in each group and any overlap. A standardized difference is shown only for non-overlapping groups.
+1. [Download the table and recipe](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/#keep-the-result).
 
-\[!\[
-
-\](../../../assets/workflows/corpus-analysis_poster.webp)\](../../../assets/workflows/corpus-analysis.mp4)
-
-*The same measure's distribution in two groups, the Adv and Ele texts (at the end of the recording).*
-
-**Then:** [download the table and its recipe](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/#keep-the-result).
+The comparison is descriptive; it does not run a significance test. For a recorded example, see [Analyze one text](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/analyze-one-text/index.md).
 
 # See progression over time
 
-Does reading change as a session goes on — with fatigue, practice, or as a condition takes effect? In **Corpus Analysis**:
+Inspect a measure within trials or across a session.
 
-| Question                                                    | View                                              |
-| ----------------------------------------------------------- | ------------------------------------------------- |
-| How does one participant's reading change over the session? | **Per participant → Per-trial trend**             |
-| How do their fixation durations change over the session?    | **Per participant → Fixation duration over time** |
-| How does a group's reading change over time?                | **Groups → Group trend**                          |
+1. [Select the trials](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/#before-you-start) and open Corpus Analysis.
 
-The trend follows the trials in the order your data's trial index records, so map that column when you add the dataset. Narrow the pool first to the participants or condition the question is about — see [Before you start](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/#before-you-start) — and keep the result as in [Keep the result](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/#keep-the-result).
+1. Choose the view for the question:
+
+   | Scope                                                       | View                                          |
+   | ----------------------------------------------------------- | --------------------------------------------- |
+   | One participant across trials                               | Per participant → Per-trial trend             |
+   | Fixation duration within trials, pooled for one participant | Per participant → Fixation duration over time |
+   | A group across trials                                       | Groups → Group trend                          |
+
+1. Choose a measure and aggregation where offered. For across-trial trends, map the recorded trial-order column when importing; inferred order may differ from presentation order. For the within-trial view, choose fixation order or recorded onset time if available.
+
+1. [Download the table and recipe](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/#keep-the-result).
 
 # Optimize data collection
 
-Problems in eye-tracking data are cheapest to fix before and during collection. Use Scanpath Studio to:
-
-- **pilot your setup:** your eye tracker and software, and the stimulus layout (font, spacing), before you commit to them;
-- **check that the setup is correct:** calibration problems often only show up in a plot of the data, and during collection the data moves too fast to see every issue;
-- **train and supervise experimenters:** problems such as a participant blinking often are hard to notice live but easy to see in the plots, so new experimenters can learn from them and the person overseeing collection can check each session.
-
-Each page below is one task, with recordings of it in the app.
-
 - **[Check a session](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/index.md)**
 
-  Check a pilot or completed session for setup, calibration and recording problems, and record what you find.
+  Inspect a pilot or completed recording.
 
 - **[Compare two eye trackers](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/compare-eye-trackers/index.md)**
 
-  Record the same text with two trackers, or two setups, and compare.
+  Review recordings of the same text.
 
 - **[Audit an experimenter](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/audit-an-experimenter/index.md)**
 
-  Review one experimenter's sessions, or compare two experimenters'.
+  Review sessions by who collected them.
 
-For a formal retained and excluded pool afterwards, continue with [Filter data](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/index.md).
+Start with a [loaded dataset](https://lacclab.github.io/scanpath-studio/guides/loading-data/#add-your-own-data). To apply exclusion decisions after reviewing, use [Filter data](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/index.md).
 
 # Audit an experimenter
 
-When several people run sessions, check each experimenter's work: whether their participants are calibrated well, and whether problems recur in their sessions.
+Review recordings collected by one experimenter.
 
-You need to know which experimenter ran each session. Keep that as a column in your data (under **Extra fields to keep** when you add the dataset), or as a column of a participants table (**Metadata → Participants**). Either way it becomes a filter in the trial picker's filter funnel — a data column among the conditions, a participants-table column under **By participant**.
+1. Keep an experimenter field when importing the data, or attach it in a participants table if each participant has one experimenter.
+1. Open the filter button beside Select trial and choose the experimenter. Participants-table fields appear under By participant.
+1. [Inspect and replay their trials](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/#2-inspect-a-trial).
+1. Tag trials `review` in Annotations and note recurring observations.
+1. [Export the review](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/#5-save-the-review).
 
-## Review one experimenter's sessions
-
-1. Open the filter funnel beside the trial picker and pick the experimenter.
-1. Step through their trials with ◀ ▶, and [replay](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/#3-replay-the-recording) the ones that look wrong.
-1. In **Annotations**, tag what you find, such as `calibration` or `blink`, with the experimenter's name in the note, so the review is one export away.
-
-\[!\[
-
-\](../../../assets/workflows/trial-filtering_poster.webp)\](../../../assets/workflows/trial-filtering.mp4)
-
-*Narrowing the trial list by a condition and one participant — the same funnel narrows it to one experimenter.*
-
-## Compare two experimenters
-
-1. Turn on **Compare**.
-1. Narrow scanpath A's trials to one experimenter, and scanpath B's — with the filter funnel on B's own row — to the other.
-1. Pick trials of the same text, marked 📄, and compare how the two sets of recordings look: precision, missing stretches, drift.
-
-Save what you found as in [Check a session](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/#5-save-the-review).
+To compare experimenters, turn on Compare, filter each scanpath's trial list by a different experimenter, and select readings of the same text.
 
 # Check a session
 
-Check a pilot or completed session for setup, calibration and recording problems, and leave a record of which trials need attention and why.
+Inspect a recording and save the trials that need attention.
 
-## 1. Load the session
+## 1. Open the session
 
-On the **Data Management** page select **Add dataset → Import files**, upload the Words (interest areas) and Fixations tables, then check the proposed columns and the **Recording setup** — the monitor resolution the session was actually recorded at — before selecting **Add dataset**. If the dataset is already loaded, click its row in the list of datasets.
+[Import your tables](https://lacclab.github.io/scanpath-studio/guides/loading-data/#add-your-own-data), or select a loaded dataset. Check its Recording setup against the screen used in the experiment.
 
-\[!\[
+## 2. Inspect a trial
 
-\](../../../assets/workflows/add-your-data_poster.webp)\](../../../assets/workflows/add-your-data.mp4)
+Select a participant and trial in Scanpath. Turn on Word boxes and inspect:
 
-*Adding the bundled demo's EyeLink fixation and interest-area reports: the columns are detected, and the recording setup arrives filled in.*
+- whether the boxes match the stimulus screenshot, if available;
+- how fixations sit relative to the words;
+- unexpected gaps, shifts or off-screen positions.
 
-## 2. Check the setup on one trial
-
-Keep the default view first, then turn on **Word boxes** and confirm that:
-
-- the word boxes match the displayed text;
-- fixations fall on or near words rather than off the screen;
-- the first and last fixations look plausible.
-
-If every trial is shifted in the same way, the problem is the setup, not the participant: check the monitor size in the **Recording setup** and the coordinate system.
+For a consistent offset, check [coordinate units and screen setup](https://lacclab.github.io/scanpath-studio/faq/#the-fixations-dont-line-up-with-the-text).
 
 ## 3. Replay the recording
 
-A still scanpath hides timing. Turn on **Animate** and look for long missing periods, repeated points out of bounds, frequent interruptions such as a participant blinking often, or a vertical shift that grows during the trial — a sign of calibration drift.
-
-To make these stand out, open **Filters & highlights → Fixations** in the plot rail and **Highlight** short, long or out-of-bounds fixations. Highlighting keeps the whole trial visible; keep **Discard** for a later, documented filtering decision.
+Turn on Animate to inspect fixation order and timing. To mark short, long or out-of-bounds fixations, use Plot controls → Filters & highlights → Fixations and choose Highlight. Gaps and unusual scanpaths alone do not establish their cause.
 
 \[!\[
 
 \](../../../assets/workflows/replay_poster.webp)\](../../../assets/workflows/replay.mp4)
 
-*Replaying a trial fixation by fixation, then at four times real time.*
+## 4. Record the review
 
-## 4. Record what you find
-
-Open **Annotations** under the plot: star a good example, add a tag such as `calibration`, `blink`, `setup` or `review`, and write one sentence describing the evidence and the action. Move through the participant's trials with the trial picker.
-
-\[!\[
-
-\](../../../assets/workflows/favorites_poster.webp)\](../../../assets/workflows/favorites.mp4)
-
-*Starring a trial and tagging it, starring another, then showing only the starred ones.*
+In Annotations, tag a trial `review` and note what you observed. Use the trial picker's arrows to continue through the session.
 
 ## 5. Save the review
 
-Open **Data Management → Annotations** and select **Export**. The file keeps your stars, tags and notes; **Share → File** keeps the view settings beside it. To return to a trial from its note, select **Open** on its row there.
+Export stars, tags and notes from Data Management → Annotations → Export. The record includes participant and trial IDs. Use Open on an annotation row to return to that trial.
 
-**Done:** you have checked geometry and timing, marked the trials that need attention, and saved the review. For a formal retained and excluded pool, continue with [Filter data](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/index.md).
+For exclusion decisions, follow [Exclude unsuitable trials](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/exclude-unsuitable-trials/index.md).
 
 # Compare two eye trackers
 
-Choosing between two eye trackers, or two recording setups, for an experiment? Record the same text with each and compare the scanpaths.
+Review the same text recorded with two trackers or setups.
 
-1. [Load](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/#1-load-the-session) each recording as its own dataset, each with the **Recording setup** of the screen it was recorded on.
-1. Open the first tracker's dataset and select a trial.
-1. Turn on **Compare**. In scanpath B's row, choose the second tracker's dataset under **Dataset B**, then a trial of the same text — trials of the same text are marked 📄.
-1. Compare the two readings: precision, how fixations sit on the words, missing stretches. Recordings on screens of the same size can be overlaid; otherwise each is drawn on its own screen, side by side. Turn on **Animate** to replay both on one clock.
+1. [Import each recording](https://lacclab.github.io/scanpath-studio/guides/loading-data/#add-your-own-data) as a separate dataset with its own Recording setup.
+1. Open the first dataset and select a trial in Scanpath.
+1. Turn on Compare. In scanpath B's row, choose Dataset B and a trial of the same text.
+1. Compare fixation placement, spread and missing stretches. Use side-by-side views for different screen sizes; an overlay requires matching screen coordinates.
 
 \[!\[
 
 \](../../../assets/workflows/compare_poster.webp)\](../../../assets/workflows/compare.mp4)
 
-*Two readings of the same text, overlaid and then side by side. Here both come from the demo; with two trackers, scanpath B comes from the second tracker's dataset.*
+*This recording compares two readers in the demo. For two trackers, select the second recording under Dataset B.*
 
-The same steps compare two stimulus layouts, such as two fonts or line spacings, when each was recorded as its own dataset.
+Use [the session-review steps](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/#4-record-the-review) to save observations.
 
 # Filter data
 
-Decide which trials an analysis or a publication should use, and leave a record anyone can audit — without changing the data itself. Each page below is one task.
-
 - **[Exclude unsuitable trials](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/exclude-unsuitable-trials/index.md)**
 
-  Mark poorly calibrated, skimming or non-reading trials and leave them out.
+  Leave tagged trials out.
 
 - **[Select participants by a field](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/select-participants/index.md)**
 
-  Keep, for example, the native speakers of one language with good calibration, and export their trial IDs.
+  Use participant metadata.
 
 - **[Find the trials an analysis needs](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/find-trials-for-an-analysis/index.md)**
 
-  Trials with out-of-bounds, very short or very long fixations, or many blinks.
+  Select trials after inspecting fixations.
 
-## How the filters work
+## Before you start
 
-Open the **filter funnel** beside the trial picker: it holds the text and participant pickers together with the condition and annotation filters. A condition filter decides each trial as a whole, from whichever table holds the field: a difficulty level recorded only in your Words table narrows the fixations too. A trial whose Words and Fixations tables give it different values is left out, and a warning above the plot names it. If the pool becomes empty, the app names the filter that emptied it and offers to clear just that one.
+Open a dataset in Scanpath. The filter button beside Select trial selects whole trials. Plot controls → Filters & highlights changes which fixations and saccades the figure draws.
 
-## Every task ends the same way
+## Check and export the selection
 
-**Check the pool.** Look at one trial from each participant or condition, then confirm on the **Data Management** page that the counts under **What's in … → Stats** are plausible. They follow the filters; the dataset table above them counts the whole dataset.
-
-**Export it.** Use **Export → Export bundle** for the active filtered pool, with the tidy tables, `plot_config.json` and **Annotations (JSON)**. The bundle's `index.csv` lists the participant and trial of every trial it exported.
-
-\[!\[
-
-\](../../assets/workflows/export-bundle_poster.webp)\](../../assets/workflows/export-bundle.mp4)
-
-*Building a zip of every trial's figures and tables (the build is fast-forwarded).*
-
-**Keep the record.** Export the annotations from **Data Management → Annotations → Export**: each entry names its participant and trial with its star, tags and note, including trials a filter now hides. (The bundle's `annotations.json` covers only the trials it exports.) The original data stays intact.
+1. Check the remaining trial and participant counts and inspect a few trials.
+1. Follow [Export every trial](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-every-trial/index.md), choosing the active filtered pool. The bundle's `index.csv` lists its files and trial IDs.
+1. Keep a full decision record with [Data Management → Annotations → Export](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/#5-save-the-review). Bundle annotations cover only the exported trials.
 
 # Exclude unsuitable trials
 
-Mark the trials that should not be analysed — poorly calibrated, skimming, or not reading at all — and leave them out of the pool without deleting them.
+Apply your exclusion criteria and leave rejected trials out of the selection.
 
-## 1. Review each trial
+1. [Review the session](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/#2-inspect-a-trial). Judge trials against your study's criteria; a scanpath pattern alone does not establish skimming or poor calibration.
+1. In Annotations, tag rejected trials `exclude` and add a brief reason.
+1. Open the filter button beside Select trial. Under By trial annotation, enter `exclude` in Excluding tags.
+1. [Check and export the selection](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/#every-task-ends-the-same-way).
 
-Inspect the default scanpath, and turn on **Animate** when timing helps: skimming shows as long jumps and few fixations, poor calibration as fixations shifted off the lines. Open **Filters & highlights → Fixations** in the plot rail and **Highlight** out-of-bounds fixations; highlighting keeps the whole trial visible.
-
-## 2. Tag the decision
-
-In **Annotations**, apply a consistent tag vocabulary — for example `exclude`, `poor-calibration` or `skimming` — and add a brief reason.
+For trials with several screens, apply the exclusion tag to the whole trial. A screen-only annotation does not exclude its parent trial.
 
 \[!\[
 
 \](../../../assets/workflows/favorites_poster.webp)\](../../../assets/workflows/favorites.mp4)
 
-*Starring a trial and tagging it, starring another, then showing only the starred ones.*
-
-## 3. Leave the tagged trials out
-
-First save the full record ( **Data Management → Annotations → Export**). Then, in the filter funnel under **By trial annotation**, put `exclude` in **Excluding tags** — not in **With any of these tags**, which would keep only the rejected trials. The pool is now the trials you kept.
-
-On a dataset with several screens per trial, a tag on a single screen does not hide its trial; find those on **Data Management → Annotations**.
-
-**Then:** [check and export the pool](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/#every-task-ends-the-same-way).
+*The recording shows stars and tags. Use the `exclude` tag and Excluding tags for the selection above.*
 
 # Find the trials an analysis needs
 
-Some analyses need particular trials: ones with very short or very long fixations, fixations out of bounds, or many blinks.
+Locate trials containing particular fixation patterns.
 
-## 1. Make them stand out
+1. Open Plot controls → Filters & highlights → Fixations.
 
-Open **Filters & highlights → Fixations** in the plot rail and **Highlight** the category you are after: **Short** or **Long** (each with its own threshold in ms), **Out of bounds** (fixations in no word box), or **Blink** (fixations at or next to a blink — it needs a blink column in your data).
+1. Set the relevant category to Highlight:
 
-## 2. Bring them to the top
+   - Short or Long, with a duration threshold in milliseconds
+   - Out of bounds, for fixations outside every word box
+   - Blink, if your data includes a blink column
 
-Use the ⇅ trial-ordering popover beside the trial picker to sort the trials, for example by reading time to surface unusually short or long ones, and step through them with ◀ ▶.
+1. Step through the trials. In Annotations, tag those that meet your analysis criteria, for example `include`.
 
-## 3. Mark them
+1. Open the filter button beside Select trial. Under By trial annotation, enter `include` in With any of these tags.
 
-Tag the trials the analysis needs in **Annotations**, then keep only them: in the filter funnel under **By trial annotation**, put the tag in **With any of these tags**.
-
-**Then:** [check and export the pool](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/#every-task-ends-the-same-way).
+1. [Check and export the selection](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/#every-task-ends-the-same-way).
 
 # Select participants by a field
 
-Keep the participants an analysis is about — for example, the native speakers of one language whose calibration is good — and export their trial IDs.
+Select readers using metadata such as native language, age or group.
 
-## 1. Attach a participants table
+1. Attach a table with one row per participant and a participant ID column: use Metadata → Participants when adding a dataset, or Data Management → Edit dataset → Data tables & column mapping afterwards.
+1. Open the filter button beside Select trial, then By participant.
+1. Choose a field and the values or range to keep.
+1. Check the remaining participant IDs and [export the selection](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/#every-task-ends-the-same-way).
 
-Native language, age or a questionnaire score is recorded per participant, not per trial. Attach a participants table, one row per participant: under **Metadata → Participants** when you add the dataset, or later in **Data Management → Edit dataset → Data tables & column mapping**.
-
-## 2. Filter on it
-
-Its columns appear under **By participant** in the filter funnel. Pick the language, and the trial picker keeps only those participants' trials.
-
-\[!\[
-
-\](../../../assets/workflows/trial-filtering_poster.webp)\](../../../assets/workflows/trial-filtering.mp4)
-
-*Narrowing the trials to one condition and one participant: from 24 trials to 6 — participant fields narrow the same way.*
-
-## 3. Check their calibration and mark the trials
-
-Step through the remaining trials and tag the ones to keep, such as `include`, or the ones to drop — see [Exclude unsuitable trials](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/exclude-unsuitable-trials/index.md).
-
-## 4. Export the trial IDs
-
-Export the annotations ( **Data Management → Annotations → Export**): each entry names its participant and trial. Or export the filtered pool as a bundle, whose `index.csv` lists every trial in it.
-
-**Then:** [check and export the pool](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/#every-task-ends-the-same-way).
+To also apply trial-level quality criteria, follow [Exclude unsuitable trials](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/exclude-unsuitable-trials/index.md).
 
 # Export customized figures
 
-Show a real scanpath in a paper, a talk or a supplement — or export a consistent image set for downstream processing, such as training data for models that generate scanpaths on images. Each page below is one task.
-
 - **[Export one figure](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-one-figure/index.md)**
 
-  A scanpath or a heatmap for a paper or a talk, at the size the page needs.
+  A static image or interactive HTML.
 
 - **[Export a replay](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-a-replay/index.md)**
 
-  The animated reading as a GIF, an MP4 or an interactive page.
+  GIF, MP4 or interactive HTML.
 
 - **[Export every trial](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-every-trial/index.md)**
 
-  The same view across many trials, with its provenance.
+  A ZIP of figures and data tables.
+
+For installation requirements or a failed export, see the [export FAQ](https://lacclab.github.io/scanpath-studio/faq/#export-fails).
 
 # Export a replay
 
-The reading as it happened, for a talk or a supplement.
+Save an animated reading for a talk or supplement.
 
-1. Choose the view as for [one figure](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-one-figure/#1-choose-the-view), then turn on **Animate** and set the speed.
-1. Open **Export → Current figure**: the replay saves as **HTML** (interactive, with its own play controls), **GIF** or **MP4**. GIF and MP4 need Chrome, Chromium or Edge; the clip runs as long as the replay plays at its speed.
+1. Select a trial in Scanpath and turn on Animate.
+1. Set the playback speed and visible layers.
+1. Open Export → Current figure and choose GIF, MP4 or HTML.
+1. Download the replay. GIF and MP4 use the selected playback speed; HTML has interactive playback controls.
 
 \[!\[
 
 \](../../../assets/workflows/replay-export_poster.webp)\](../../../assets/workflows/replay-export.mp4)
 
-*Rendering the replay to a GIF and downloading it; the wait while it renders is fast-forwarded.*
+*Exporting a GIF; the rendering wait is shortened in this recording.*
+
+For [GIF/MP4 export from Python](https://lacclab.github.io/scanpath-studio/guides/exporting/#replays-as-gif-or-mp4), see Export and share.
 
 # Export every trial
 
-The same view across many trials — for a supplement, or as a consistent image set for downstream processing.
+Build a ZIP of static figures and data tables for a set of trials.
 
-## 1. Set the view once
-
-Choose the view as for [one figure](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-one-figure/#1-choose-the-view); every trial in the batch is drawn with it.
-
-## 2. Build the bundle
-
-In **Export → Export bundle**:
-
-1. choose this trial, the active filtered pool, or the whole dataset;
-1. select figure and table formats;
-1. preview the filename pattern;
-1. start the export and inspect one file before using the batch.
-
-For post-production, enable separable layers so text, boxes, fixations, saccades, heatmap, and stimulus image can be stacked in a vector editor.
+1. [Set the figure's design](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-one-figure/#1-choose-the-view) once. Each exported trial uses that design, without animation or a comparison partner.
+1. Open Export → Export bundle and select this trial, the active filtered pool, or the whole dataset.
+1. Choose figure and table formats and check the filename pattern. For editing individual layers later, enable separable layers.
+1. Build and download the bundle, then inspect one exported figure.
 
 \[!\[
 
 \](../../../assets/workflows/export-bundle_poster.webp)\](../../../assets/workflows/export-bundle.mp4)
 
-*Adding PNG and the fixation and word-measure tables, then building a zip of all 24 trials (fast-forwarded) and downloading it.*
+*Exporting figures and tables for the demo's trials; the build is fast-forwarded.*
 
-## 3. Keep provenance
+Keep `plot_config.json` for the design, `README.md` for the build details and `index.csv` for the file list and failures. Keep your original data and record its version and the selected trial filters separately.
 
-Keep `plot_config.json` with the batch. The bundle's `README.md` records the package version and which trials it was built from, and `index.csv` lists every file with its participant, trial and screen, and any that failed. Record the dataset version and the trial filters you used in the caption or analysis log — the export does not store them.
-
-**Done:** the exported files share one visual configuration and can be recreated. For scripted runs, see [Automation](https://lacclab.github.io/scanpath-studio/automation/index.md).
+For a [scripted batch](https://lacclab.github.io/scanpath-studio/guides/exporting/#batch-pattern), use the Python recipe in Export and share.
 
 # Export one figure
 
-A real scanpath for a paper or a talk — as a scanpath, a heatmap or a comparison — at the size the page needs.
+Save a scanpath, heatmap or comparison at the size you need.
 
 ## 1. Choose the view
 
-Set the monitor size first, under **Data Management → Edit dataset → Recording setup**; it defines the figure's coordinate system. Then choose the participant and trial, and keep only the layers that answer the question:
+Select a trial in Scanpath. Choose a design preset or adjust the layers in Plot controls. Turn on Compare if the figure needs two readings. Check that text and markers are readable and nothing is clipped.
 
-- **Fixations + saccades + text** for a conventional scanpath;
-- **Heatmap + text** for spatial concentration;
-- **Compare** for two trials of the same text.
+## 2. Set the format and size
 
-The design presets set a whole view in one click — **Scanpath**, **Heatmap**, **Illustration** — and every layer stays adjustable from there.
+Open Export → Current figure.
 
-\[!\[
+| Output             | Format     |
+| ------------------ | ---------- |
+| Image              | PNG        |
+| Vector figure      | SVG or PDF |
+| Interactive figure | HTML       |
 
-\](../../../assets/workflows/design-presets_poster.webp)\](../../../assets/workflows/design-presets.mp4)
+For a print PNG, set Width and DPI. For HTML that opens offline, tick Self-contained HTML.
 
-*One click for each design: Heatmap, Illustration and Scanpath, then a heatmap added to the scanpath.*
+## 3. Download
 
-## 2. Make it clean
-
-Check the whole canvas for clipped marks, unreadable text, and an unnecessary legend. When several figures must share identical grid marks, set a manual interval under **Figure & canvas → Axes & grid → Grid** (untick **Auto**).
-
-## 3. Export it
-
-Open **Export → Current figure** and choose:
-
-| Need                   | Format     |
-| ---------------------- | ---------- |
-| editable vector        | SVG or PDF |
-| image for slides/web   | PNG        |
-| interactive inspection | HTML       |
-
-PNG and SVG are saved by your browser from the figure on screen, and HTML needs nothing either (it loads Plotly from the internet when opened, or tick **Self-contained HTML** for a larger file that opens offline); PDF needs Chrome, Chromium or Edge. For print, give the PNG a **Width** (mm or in) and a **DPI**: 180 mm at 600 dpi is 4,252 px wide, and **Share → Code** writes the same size. Without a width, the plot's own camera button saves the same PNG.
+Use the download button for the chosen format.
 
 \[!\[
 
 \](../../../assets/workflows/export-figure_poster.webp)\](../../../assets/workflows/export-figure.mp4)
 
-*Setting the width to 180 mm at 300 dpi and downloading the PNG.*
+*Exporting a PNG at 180 mm and 300 dpi.*
 
-## 4. Save the look for next time
+## 4. Reuse the design or share the figure
 
-To give the next figure the same look, save its settings as a design: open **My designs** in the plot rail and select its save button. A saved design applies the same layers, colors and sizes to any trial in one click. **Export** writes your designs to a file, and **Import** reads one back on another computer or shares them with a colleague.
-
-## 5. Keep it reproducible
-
-Under the plot, **Share** keeps the figure reproducible: **Link** reopens the app on this trial with these settings, **Code** writes the Python or command line that redraws it, and **File** saves the settings to load again later.
-
-\[!\[
-
-\](../../../assets/workflows/share-link_poster.webp)\](../../../assets/workflows/share-link.mp4)
-
-*Looking at the code that redraws the figure, then copying a link that reopens the same trial with the same design.*
+- My designs in Plot controls saves the look for other trials.
+- Share → Link reopens the trial and settings; uploaded data must be loaded separately.
+- [Share → Code](https://lacclab.github.io/scanpath-studio/guides/exporting/#from-the-app-to-a-script) gives Python or CLI code to redraw the figure.
+- Share → File saves the settings to load again.
 
 # Feature guides
 
-For end-to-end workflows, see the [tutorials](https://lacclab.github.io/scanpath-studio/tutorials/index.md).
+Each guide covers the app, with Python and CLI examples beside the relevant features. For step-by-step workflows, see the [tutorials](https://lacclab.github.io/scanpath-studio/tutorials/index.md).
 
 - **[Scanpath visualization](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/index.md)**
 
@@ -503,95 +412,207 @@ For end-to-end workflows, see the [tutorials](https://lacclab.github.io/scanpath
 
   Per text, Per participant and Groups, from the measures your data brings.
 
+- **[Export and share](https://lacclab.github.io/scanpath-studio/guides/exporting/index.md)**
+
+  Figure downloads, share links, batch rendering and replay export.
+
 # Corpus Analysis
 
-**Corpus Analysis** summarizes many trials at once. It uses the same dataset and trial filters as the Scanpath view. The line beside the dataset picker counts what those filters keep (for example *12 of 24 trials · 1 of 2 participants*) and names each active filter. **Edit filters** opens the Scanpath view's filter panel, and **Clear** resets every filter.
+Summarize reading measures by text, participant or group. The selected dataset and trial filters apply here too.
 
-## Reading measures come from your data
+## Choose a view
 
-Corpus Analysis shows the reading measures your interest-area report provides (first fixation duration, total fixation duration, regression path, and so on). It does not compute them itself, and without any, the page says so. Which columns count as reading measures is set when the data is loaded (see [Reading measures](https://lacclab.github.io/scanpath-studio/guides/loading-data/#reading-measures)). The per-fixation measures are the fixation table's own durations, and its saccade amplitudes, or, when it has none, the distance between consecutive fixations.
+| View            | Use it to                                        |
+| --------------- | ------------------------------------------------ |
+| Per text        | Compare word-by-word reading across participants |
+| Per participant | Inspect one participant across trials            |
+| Groups          | Compare conditions or populations                |
 
-## Three views
+Choose a measure, aggregation and spread. For word profiles, set the minimum number of participants per word.
 
-| View                | Answers                                                    |
-| ------------------- | ---------------------------------------------------------- |
-| **Per text**        | How was this text read, word by word, across participants? |
-| **Per participant** | How does this participant behave across trials?            |
-| **Groups**          | How do conditions or populations differ?                   |
+## Supply reading measures
 
-The address bar names the open view (`?corpus_subtab=Per+participant`), so a bookmark or a copied link reopens it.
+Word-level analyses use the [reading measures in your data](https://lacclab.github.io/scanpath-studio/guides/loading-data/#reading-measures), such as first fixation duration or total fixation duration. Map those columns when importing. Fixation views use the fixation table.
 
-Choose a measure, how to aggregate it, and the spread to show. A line under the measure says what it is, its unit, and what each plotted value is (one word, one participant's mean, …), with a link to its definition; a line under the spread says whether it shows how values vary (SD, IQR) or how precisely the center is known (SEM, bootstrap CI). Set a minimum number of participants per word so sparse words don't look like stable estimates.
+## Compare groups
 
-**Groups** defines a cohort by splitting on a field, or with its own filters. Turn on **Compare a second group**, with the two group means and their difference — descriptive, with no significance test. Fields from attached participant, trial or text tables appear here too. A group is a set of whole trials, whichever table holds its field: its word and fixation measures come from the same trials. A trial whose Words and Fixations tables disagree about the field is left out, and the page says so.
+Split on a field or define cohorts with filters. Turn on Compare a second group to see group means and their difference. These comparisons are descriptive.
 
-## From summary to evidence
+## Save results
 
-Every result table has **⬇ Download this table (CSV)**, with **⬇ Download the recipe (JSON)** beside it: the dataset, trial filters, analysis choices and counts that produced the table, without its rows or any figure settings. When something looks odd, open the trials behind it in the Scanpath view.
+Download a result table as CSV and its analysis recipe as JSON. The recipe records the dataset, filters and analysis choices. Return to Scanpath to inspect individual trials.
+
+## Plot a summary in code
+
+Use a tidy summary table: a word profile needs `word_id` and `value`, with optional `lo` and `hi` for a band. Rename a source word ID column to `word_id` if needed. The [gallery example](https://lacclab.github.io/scanpath-studio/gallery/word-profile/index.md) includes a ready-to-render table.
+
+Python and CLI: word profile
+
+```
+import pandas as pd
+import scanpath_studio as sps
+
+profile = pd.read_csv("profile.csv")
+fig = sps.plot_corpus_figure(
+    profile, kind="profile", measure_label="Total fixation duration (ms)"
+)
+sps.save_figure(fig, "profile.html")
+```
+
+```
+scanpath-studio corpus --input profile.csv --kind profile \
+  --measure-label "Total fixation duration (ms)" -o profile.html
+```
+
+[API parameters](https://lacclab.github.io/scanpath-studio/api/#scanpath_studio.api.plot_corpus_figure) · [CLI options](https://lacclab.github.io/scanpath-studio/cli/#corpus-figures)
+
+# Export and share
+
+Save a figure, export a batch, or reuse a view in the app or in code.
+
+## In the app
+
+| Goal                                | Where                       |
+| ----------------------------------- | --------------------------- |
+| Save the figure or replay on screen | Export → Current figure     |
+| Export many trials and their tables | Export → Export bundle      |
+| Share a view or copy its code       | Share → Link or Code        |
+| Reuse the design                    | My designs, or Share → File |
+
+For step-by-step instructions, see the [export tutorials](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/index.md).
+
+## Reproduce a figure
+
+Open Share → Code and copy Python or CLI. The snippet carries the figure's settings and your column mapping; replace any placeholder file paths. [Render in code](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#render-in-code) shows a minimal example.
+
+For a print-sized PNG, Python's `save_figure` accepts `width_mm` and `dpi`; the CLI uses `--width-mm` and `--dpi`. Use `save_figure_layers` or `render --separable-layers` for editable layers.
+
+## Batch export
+
+Export → Export bundle uses the chosen trials in the app. For a scripted batch, loop over the trial list:
+
+Python: one HTML figure per trial
+
+```
+from pathlib import Path
+
+import scanpath_studio as sps
+
+words, fixations = sps.load_sample_data()
+out = Path("figures")
+out.mkdir(exist_ok=True)
+
+for pid, tid in sps.list_trials(words, fixations).itertuples(index=False):
+    fig = sps.plot_scanpath(words, fixations, pid, tid)
+    sps.save_figure(fig, out / f"{pid}_{tid}.html")
+```
+
+Use the [data loaders](https://lacclab.github.io/scanpath-studio/guides/loading-data/#load-and-inspect-in-code) for your own files. The CLI's `render` writes one trial per invocation.
+
+## Replay export
+
+With Animate on, Export → Current figure saves HTML, GIF or MP4. The CLI's `render --animate` saves interactive HTML. For a GIF or MP4 in Python:
+
+Python: save a GIF or MP4
+
+```
+from pathlib import Path
+
+import scanpath_studio as sps
+from scanpath_studio.animation_export import export_animation
+
+words, fixations = sps.load_sample_data()
+replay = sps.animate_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
+Path("replay.mp4").write_bytes(export_animation(replay, fmt="mp4"))
+```
+
+Use `fmt="gif"` and a `.gif` filename for GIF output.
+
+[Export setup and troubleshooting](https://lacclab.github.io/scanpath-studio/faq/#export-fails) · [Python save options](https://lacclab.github.io/scanpath-studio/api/#save) · [CLI options](https://lacclab.github.io/scanpath-studio/cli/#common-options)
 
 # Data management
 
+Load your own data, open a public corpus, or try the bundled sample.
+
 ## Choose a dataset
 
-Pick one in the dataset picker above the plot, or on the **Data Management** page:
+Use the dataset picker or the Data Management page:
 
-- **Bundled demo**: a small OneStop sample, for learning the app.
-- **Hand-drawn sample**: a six-word trial drawn by hand.
-- **Public corpus**: OneStop or PoTeC, downloaded once when you open it.
-- **+ → Import files**: your own tables.
-- **+ → Create manually**: type a text and place fixations on it by hand.
+- Bundled demo: a small OneStop sample
+- Hand-drawn sample: a six-word trial
+- Public corpora: OneStop and PoTeC, downloaded on your computer
+- - → Import files: your own tables
+- - → Create manually: type text and place fixations
 
-### The demo and OneStop
+### OneStop
 
-The bundled demo is a small part of [OneStop Eye Movements](https://github.com/lacclab/OneStop-Eye-Movements), an English eye-tracking-while-reading corpus of 360 participants (Berzak et al., *Scientific Data* 2025, [doi:10.1038/s41597-025-06272-2](https://doi.org/10.1038/s41597-025-06272-2)). The full corpus is four datasets, one per reading regime: ordinary reading, information seeking, repeated reading, and information seeking (repeated). Each downloads from [OSF](https://osf.io/2prdq/) the first time you open it (about 1 GB). A trial is one reading of one paragraph, and its title, paragraph, question, answers and feedback are its screens.
+The demo comes from [OneStop Eye Movements](https://github.com/lacclab/OneStop-Eye-Movements) (Berzak et al., 2025), an English corpus with 360 participants. The full corpus is available as four datasets: ordinary reading, information seeking, and their repeated-reading versions. Each downloads once from [OSF](https://osf.io/2prdq/).
 
 ## What your data needs
 
-| Table                                                            | One row per | Needs                                                                            |
-| ---------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------- |
-| **Fixations** (e.g. EyeLink's Fixation Report)                   | fixation    | trial ID, duration (ms), and x/y or a word ID                                    |
-| **Words (interest areas)** (e.g. EyeLink's Interest Area Report) | word        | trial ID, word ID, and its box: `IA_LEFT/RIGHT/TOP/BOTTOM` or `x/y/width/height` |
-| **Raw gaze**                                                     | gaze sample | participant ID, trial ID, x, y                                                   |
-| **Participants** *(optional)*                                    | participant | participant ID, plus any columns you like                                        |
-| **Trials** *(optional)*                                          | trial       | trial ID, plus any columns you like                                              |
-| **Texts** *(optional)*                                           | text        | text ID, plus any columns you like                                               |
+At least one of the first three tables below; add others as needed.
 
-A dataset needs fixations, words or raw gaze; any one of them is enough, and the others are optional. Participant ID, text ID and timestamps are optional too, and conditions and reading measures unlock more features. Columns are detected from common EyeLink, Gazepoint, Tobii, SMI and Pupil Labs names, and you can correct any guess. Any other column of any table can be kept too (each table's **Extra fields to keep**): a field with one value per trial, such as a condition, then works as a trial filter, a sort key and a chip above the plot.
+| Table                  | Contents                                                       |
+| ---------------------- | -------------------------------------------------------------- |
+| Fixations              | One row per fixation: trial ID, duration, and x/y or a word ID |
+| Words (interest areas) | One row per word: trial ID, word ID and bounding box           |
+| Raw gaze               | One row per sample: participant ID, trial ID, x and y          |
+| Participants           | One row per participant, with metadata                         |
+| Trials                 | One row per trial, with metadata                               |
+| Texts                  | One row per text, with metadata                                |
+
+Columns are detected from common eye-tracker exports; check and correct the mapping when importing. Keep condition labels and other columns with Extra fields to keep. Metadata fields are available for filtering, sorting and grouping.
 
 ### Files and units
 
-Files can be CSV, TSV, TXT, Parquet, Feather, Excel, or a `.zip` of any of these. A `.zip` holding both EyeLink reports (one folder per participant, say) can go in both rows: each row reads only its own reports and says which it left out.
-
-Times are in milliseconds; a header naming another unit (`[s]`, `[μs]`) is converted. Positions are in **pixels**: screen fractions are not converted.
-
-### Metadata tables
-
-The participants, trials and texts tables work like columns of your data: they filter trials, appear as chips, sort the trial list, group readers in Corpus Analysis, and are exported beside the data. They are never copied onto the fixations, and a participant missing from the table stays in the data.
+- CSV, TSV, TXT, Parquet, Feather, Excel, or a ZIP of these files
+- Positions in pixels
+- Times in milliseconds; headers marked `[s]` or `[μs]` are converted
+- Word boxes as `x/y/width/height` or EyeLink's `IA_LEFT/RIGHT/TOP/BOTTOM`
 
 ### Trials over several screens
 
-A trial shown over several screens maps a `screen_id` column (and optionally a `screen_index` for their order) in both tables. Each screen keeps its own coordinates, and the app shows one screen at a time.
+Map `screen_id` in your tables, and `screen_index` for their order if needed. The app displays one screen at a time.
 
 ### Reading measures
 
-Per-word reading measures (TFD, FFD, first-pass time, regression path…) are columns of the **Words** table. An EyeLink interest-area report maps them from its `IA_*` names. Corpus Analysis shows only the measures you mapped and computes none of its own; how each is defined is in [Computations & methodology](https://lacclab.github.io/scanpath-studio/computations/index.md).
+Include per-word reading measures in the Words table, such as first fixation duration or total fixation duration. EyeLink's `IA_*` columns are detected. Corpus Analysis uses the measures you supply.
 
 ## Add your own data
 
-**+ → Import files** opens the add dataset screen:
+1. Choose + → Import files and name the dataset.
+1. Upload your tables and check the column mapping.
+1. Enter the recording screen size and typography where known.
+1. Optionally attach stimulus screenshots from a local folder.
+1. Click Add dataset.
 
-1. **Name** the dataset.
-1. **Upload** the tables. The app autodetects which columns are which: check what it picked, and hover the beside a field to see its first values.
-1. **Recording setup**: the screen the data was recorded on. Each value starts as an estimate or a default and is labelled so; enter the real screen size, physical width, font size and font if you know them.
-1. **Stimulus images** (optional, on your own computer): a folder with a screenshot of each text, drawn under the scanpath.
+## Load and inspect in code
 
-Then click **Add dataset**. Anything the app cannot use is listed above the button first.
+Load the same files in a script; column names are detected automatically.
 
-## The Data Management page
+Python and CLI
 
-The page lists every dataset with its counts; click a row to open it. Under the list are the open dataset's tables, its annotations, and **Data checks**, which flag values that cannot be right (such as 0 ms fixations), without removing anything.
+```
+import scanpath_studio as sps
 
-The on a row edits the dataset: its name, column mapping, recording setup, stimulus images and metadata tables. **Download setup file** saves the mapping and setup, so the same files can be added again elsewhere. Nothing changes until you click **Save changes**. The editor works on the dataset as it was added: only the columns you mapped or chose to keep were stored (the others are listed under *dropped at import*), so it cannot map a column that was left out. To use one, add the files again.
+words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
+print(sps.list_trials(words, fixations))
+```
+
+```
+scanpath-studio render --words ia.csv --fixations fixations.csv --list-trials
+scanpath-studio check --words ia.csv --fixations fixations.csv
+```
+
+For raw gaze, metadata and explicit column mappings, see the [loaders](https://lacclab.github.io/scanpath-studio/api/#load) and [CLI input options](https://lacclab.github.io/scanpath-studio/cli/#render).
+
+## Manage datasets
+
+Click a dataset row to open it. Inspect its tables, annotations and data checks below the list.
+
+Use Edit dataset to change its name, column mapping, recording setup or metadata, then Save changes. Download setup file saves the mapping and recording setup for reuse.
+
+Only imported columns are available in the editor. To use a column left out at import, add the files again.
 
 # Scanpath visualization
 
@@ -634,13 +655,36 @@ The **Plot controls** column holds every setting of the figure. Each layer is on
 
 ## Under the plot
 
-| Tab                    | What it is for                                                                                                                                                                                                                                               |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Annotations**        | Star, tag and write notes on the trial, to find or filter it later.                                                                                                                                                                                          |
-| **Stimulus & context** | The trial's context, such as its title, question and answers, and its highlighted word spans.                                                                                                                                                                |
-| **Comparisons**        | Compare this trial with other trials that match it on a field you choose, such as other readings of the same text, shown side by side.                                                                                                                       |
-| **Export**             | Download the figure (PNG, SVG, PDF, HTML) or the video (HTML, GIF, MP4), or a zip bundle of figures and data for many trials. PDF, GIF and MP4 need Chrome, Chromium or Edge installed ([FAQ](https://lacclab.github.io/scanpath-studio/faq/#export-fails)). |
-| **Share**              | A link that reopens this view (for whoever has the same dataset loaded), the Python or command-line code that redraws the figure, or a settings file.                                                                                                        |
+| Tab                    | What it is for                                                                                                                                        |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Annotations**        | Star, tag and write notes on the trial, to find or filter it later.                                                                                   |
+| **Stimulus & context** | The trial's context, such as its title, question and answers, and its highlighted word spans.                                                         |
+| **Comparisons**        | Compare this trial with other trials that match it on a field you choose, such as other readings of the same text, shown side by side.                |
+| **Export**             | Download the figure (PNG, SVG, PDF, HTML) or the video (HTML, GIF, MP4), or a zip bundle of figures and data for many trials.                         |
+| **Share**              | A link that reopens this view (for whoever has the same dataset loaded), the Python or command-line code that redraws the figure, or a settings file. |
+
+## Render in code
+
+Set up a figure in the app, then open Share → Code for its Python or CLI recipe. For uploaded data, replace the placeholder file paths with your own.
+
+Python and CLI: render the demo
+
+```
+import scanpath_studio as sps
+
+words, fixations = sps.load_sample_data()
+fig = sps.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
+sps.save_figure(fig, "scanpath.html")
+```
+
+```
+scanpath-studio render --sample \
+  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 -o scanpath.html
+```
+
+For your own files, use the [data loaders](https://lacclab.github.io/scanpath-studio/guides/loading-data/#load-and-inspect-in-code). Figure settings are listed in the [API options](https://lacclab.github.io/scanpath-studio/api/#figure-options) and [CLI options](https://lacclab.github.io/scanpath-studio/cli/#common-options).
+
+The [gallery](https://lacclab.github.io/scanpath-studio/gallery/index.md) gives app, CLI and Python instructions for heatmaps, comparisons, replays and other views. For [batch exports and GIF/MP4](https://lacclab.github.io/scanpath-studio/guides/exporting/index.md), see Export and share.
 
 ## Back up your work
 
@@ -665,6 +709,8 @@ The page has two sets of controls:
 - The **plot controls**, the column on the right, decide *how* it is drawn: each layer of the figure, its colors and sizes, and the figure as a whole.
 
 The tabs under the plot then work with the trial on screen: annotate it, read its context, compare it, export it or share it. For how the parts fit together, see the [Scanpath visualization](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/index.md) guide.
+
+For the corresponding Python keywords and CLI flags, use the [figure options table](https://lacclab.github.io/scanpath-studio/api/#figure-options).
 
 ## Trial control bar
 
@@ -810,16 +856,16 @@ The **Word boxes** switch draws each word's interest area; its **▾** holds:
 
 The **Heatmap** switch shows where reading concentrated; its **▾** holds:
 
-| Control                                                                               | What it does                                                                                                                                                                                                                   |
-| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Style**                                                                             | Choose the heatmap style: colored word boxes, a smooth interpolated map, or fixation density.                                                                                                                                  |
-| **Blur**                                                                              | Set the heatmap blur: how far each fixation spreads, for the smooth styles; **Auto** picks it.                                                                                                                                 |
-| **Color** → **By**                                                                    | Choose what the heatmap measures: total fixation duration (dwell time), or the number of fixations.                                                                                                                            |
-| **Color** → **Colors**                                                                | Choose the heatmap colors (color scale).                                                                                                                                                                                       |
-| **Scale**                                                                             | Choose a linear or log heatmap scale.                                                                                                                                                                                          |
-| **Range**                                                                             | Set the heatmap color range: the values the colors span. Anything below the range takes the lowest color, and anything above it the highest, so a fixed range keeps colors comparable across trials. **Auto** fits each trial. |
-| **Opacity**                                                                           | Set the heatmap opacity; **Auto** uses each style's own.                                                                                                                                                                       |
-| **Color bar** → **Show**, orientation, **Angle**, **Size**, **Thickness**, **Length** | Show the heatmap color bar, and set its orientation, label angle and size, thickness and length.                                                                                                                               |
+| Control                                                                               | What it does                                                                                                                          |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Style**                                                                             | Choose the heatmap style: colored word boxes, a smooth interpolated map, or fixation density.                                         |
+| **Blur**                                                                              | Set the heatmap blur: how far each fixation spreads, for the smooth styles; **Auto** picks it.                                        |
+| **Color** → **By**                                                                    | Choose what the heatmap measures: total fixation duration (dwell time), or the number of fixations.                                   |
+| **Color** → **Colors**                                                                | Choose the heatmap colors (color scale).                                                                                              |
+| **Scale**                                                                             | Choose a linear or log heatmap scale.                                                                                                 |
+| **Range**                                                                             | For word-box heatmaps, fix the color range across trials. **Auto** fits each trial. Interpolated heatmaps use each figure's own peak. |
+| **Opacity**                                                                           | Set the heatmap opacity; **Auto** uses each style's own.                                                                              |
+| **Color bar** → **Show**, orientation, **Angle**, **Size**, **Thickness**, **Length** | Show the heatmap color bar, and set its orientation, label angle and size, thickness and length.                                      |
 
 ### Raw gaze
 
@@ -918,734 +964,6 @@ The tabs under the figure:
 |                        | **Code** → **Flavour**, **Show every option**           | Get the Python or command-line code that redraws this figure, for scripts and reproduction.                                                                                                                                                                                                                                                                                                                                                                                |
 |                        | **File** → **Download settings** / **Restore settings** | Save the plot settings to a file, or load (restore) a saved settings file.                                                                                                                                                                                                                                                                                                                                                                                                 |
 
-# Computations & methodology
-
-Register version **2** · 66 entries across 9 categories.
-
-Every operation that derives or semantically changes a value you can see, export, or fetch through the API is listed here with its formula, its units, and how far it has actually been verified. Pure layout and byte-preserving file I/O are out of scope; filtering, precedence and assignment are in, because they change *which observations* a result stands for.
-
-## How to read the status column
-
-| Status                     | Means                                                          |
-| -------------------------- | -------------------------------------------------------------- |
-| **Verified**               | A hand-calculated oracle or exact invariant exists and passes. |
-| **Partially verified**     | Tested, but without an independent reference implementation.   |
-| **Unverified**             | Exercised by tests only for execution, not for meaning.        |
-| **Intentional convention** | A choice that can only be documented, not proved.              |
-
-Verification tiers: **A** hand-calculated synthetic oracle · **B** independent reference implementation · **C** property/invariant tests · **D** cross-surface parity (UI, API, CLI, export agree).
-
-Tier B is largely absent, on purpose
-
-Comparing against an independent implementation [is planned](https://github.com/lacclab/scanpath-studio/issues/130). Scientific measures therefore read *Partially verified* even where their hand oracle is exact.
-
-Entries marked *experimental* are not in this release. They are listed so that their definitions are on record.
-
-## Normalization / inference
-
-### `norm.words` — Word table normalization
-
-Map an arbitrary word/IA export onto the canonical word columns.
-
-**Formula.** For each canonical field, `pick_column` walks a candidate list and takes the first column that exists; the user's mapping overrides it. Unmapped optional fields are dropped unless listed in `WORD_OPTIONAL_FIELDS`.
-
-|                          |                                                                       |
-| ------------------------ | --------------------------------------------------------------------- |
-| **Output**               | participant_id, trial_id, text_id, word_id, text, x, y, width, height |
-| **Missing & edge cases** | A missing *required* field raises with the columns it looked for.     |
-| **Precedence & caveats** | An explicit user mapping always beats auto-detection.                 |
-| **Verification**         | tier C, D — **Partially verified**                                    |
-
-### `norm.fixations` — Fixation table normalization
-
-Map an arbitrary fixation report onto the canonical columns.
-
-**Formula.** As `norm.words`, over the fixation candidate lists. `order_in_trial` is assigned by sorting each trial on `timestamp_ms`; `fixation_id` is synthesized per trial when the export carries none.
-
-|                          |                                                                |
-| ------------------------ | -------------------------------------------------------------- |
-| **Output**               | participant_id, trial_id, x, y, duration_ms, timestamp_ms, …   |
-| **Grouping / ordering**  | (participant_id, trial_id[, screen_id])                        |
-| **Missing & edge cases** | Rows with no coordinates survive when a word/AoI id is mapped. |
-| **Verification**         | tier C, D — **Partially verified**                             |
-
-### `norm.box_edges` — Word box from edges
-
-Convert EyeLink IA edges to origin+size.
-
-**Formula.** x = IA_LEFT · y = IA_TOP · width = IA_RIGHT − IA_LEFT · height = IA_BOTTOM − IA_TOP.
-
-|                  |                                                 |
-| ---------------- | ----------------------------------------------- |
-| **Output**       | x, y, width, height                             |
-| **Unit**         | px (screen coordinates, y increasing downwards) |
-| **Verification** | tier A, C — **Verified**                        |
-
-### `norm.trial_id_composite` — Composite trial identity
-
-Build one unique trial id from several columns.
-
-**Formula.** The mapped Trial ID columns are joined in the order given, separated by `_`, after casting each to string. A `_` or `\` inside a part is escaped with a `\` first, so two different tuples never give the same id; parts with neither compose as a plain join.
-
-|                          |                                                                    |
-| ------------------------ | ------------------------------------------------------------------ |
-| **Output**               | trial_id                                                           |
-| **Missing & edge cases** | A row missing any component keeps the literal string of that part. |
-| **Verification**         | tier C, D — **Partially verified**                                 |
-
-### `norm.flags` — Flag coercion
-
-Read EyeLink's string booleans as booleans.
-
-**Formula.** Numbers go by `!= 0`. Strings are matched case-insensitively against `{'', '.', '0', '0.0', 'false', 'f', 'no', 'n', 'na', 'nan', '-'}` → False; anything else → True.
-
-|                          |                                                                                                                                                                                                                                                   |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Output**               | bool                                                                                                                                                                                                                                              |
-| **Missing & edge cases** | NaN → False for an operational flag (blink, excluded). A supplied reading-measure flag (skip, regression in / out) keeps it missing instead — `''`, `'.'`, `'na'`, `'nan'`, `'-'` and NaN read as NA (`coerce_measure_flag`, a nullable boolean). |
-| **Reference**            | Guards the `'.'`-as-missing convention in EyeLink IA reports.                                                                                                                                                                                     |
-| **Verification**         | tier A, C — **Verified**                                                                                                                                                                                                                          |
-
-### `norm.stimulus_broadcast` — Stimulus-level word broadcast
-
-Share one stimulus' word boxes across every participant who read it.
-
-**Formula.** Words with no participant column are copied once per reading (participant × trial [× screen]) in the fixations, stamped with that reading's ids. Per reading, the boxes are those of the first words trial found by its trial ID, then its trial ID before a repeat's \_r2 suffix, then its Text ID (only a Text ID the fixations map, and never one the words give to more than one trial). A trial-ID match always stands; mapped Text IDs that disagree with it are warned about.
-
-|                          |                                                                                                                                                                                                                  |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Missing & edge cases** | No fixations for a text ⇒ its words are not broadcast. Some readings unmatched ⇒ StimulusJoinWarning with the counts; none matched, or any multipart screen unmatched ⇒ StimulusJoinError, never an empty table. |
-| **Verification**         | tier C — **Partially verified**                                                                                                                                                                                  |
-
-### `norm.aoi_center_placement` — AoI-only fixation placement
-
-Place a fixation with no x/y at its word box's center.
-
-**Formula.** x = word.x + width/2 · y = word.y + height/2.
-
-|                          |                                                                                                                                                                                                                                                                     |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unit**                 | px                                                                                                                                                                                                                                                                  |
-| **Missing & edge cases** | No matching word box, or no word id (blank, or not a number) ⇒ the fixation keeps no coordinates — a missing id never matches a box with none. No x/y mapped and a Word/IA ID column with no numbers at all ⇒ UnplacedFixationsError, never an empty figure (#412). |
-| **Precedence & caveats** | Only when x/y are absent; recorded coordinates always win.                                                                                                                                                                                                          |
-| **Verification**         | tier A, C — **Verified**                                                                                                                                                                                                                                            |
-
-### `norm.participant_metadata` — Participant metadata join
-
-Attach a participant-level table without broadcasting it.
-
-**Formula.** Left join on string `participant_id`. Duplicate ids that agree are combined field by field (each field keeps the one non-missing value the rows hold); duplicate ids that **disagree** are dropped and reported, so no `groupby.first()` winner is ever invented. A field is projected onto the per-trial frame, never onto word/fixation rows.
-
-|                          |                                                                            |
-| ------------------------ | -------------------------------------------------------------------------- |
-| **Output**               | One column per registered field, at participant grain                      |
-| **Missing & edge cases** | A participant with no row reads as missing everywhere, never as a default. |
-| **Precedence & caveats** | A real recorded column of the same name always wins.                       |
-| **Verification**         | tier A, C, D — **Verified**                                                |
-
-## Assignment / classification
-
-### `assign.fixation_to_word` — Fixation → word assignment
-
-The single highest-risk step: which word a fixation counts for.
-
-**Formula.** 1. Bounding-box containment against the trial's word boxes — the experiment's own rectangles (`geom.word_box_bounds`), so on a tiling corpus a fixation on the space *after* a word is credited to that word, as EyeLink's interest-area report credits it. Boxes are half-open, `x0 ≤ x < x1` and `y0 ≤ y < y1` (`measures.word_box_contains`), so a point on an edge two boxes share goes to the one that starts there — the next word, the line below — as EyeLink assigns it. 2. Otherwise `word_id = NaN` (out of text). There is no snapping to a nearby word.
-
-|                          |                                                                                                                                                                                                                                                                                                                                             |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Output**               | word_id                                                                                                                                                                                                                                                                                                                                     |
-| **Grouping / ordering**  | (participant_id, trial_id[, screen_id]) — never across screens                                                                                                                                                                                                                                                                              |
-| **Missing & edge cases** | Unassignable fixations keep NaN and are excluded from word measures.                                                                                                                                                                                                                                                                        |
-| **Precedence & caveats** | Runs only when the fixations carry no word id. A mapped `word_id` (on the bundled demo, EyeLink's `CURRENT_FIX_INTEREST_AREA_ID`) is used exactly as given, blanks included — nothing is computed and no blank is filled — unless `overwrite=True`. Geometry agrees with that column on all 3,208 of the demo's EyeLink-assigned fixations. |
-| **Verification**         | tier A, C — **Partially verified**                                                                                                                                                                                                                                                                                                          |
-
-### `assign.in_text` — Out-of-text flag
-
-Whether a fixation landed on any word of the stimulus.
-
-**Formula.** The fixation falls inside some word box (`word_box_bounds`, tested half-open by `word_box_contains`, as `assign.fixation_to_word` tests it). Box containment only, so a fixation the data's own `word_id` puts on a word but that lies outside every box still counts as out-of-text.
-
-|                  |                          |
-| ---------------- | ------------------------ |
-| **Output**       | bool mask                |
-| **Verification** | tier A, C — **Verified** |
-
-### `assign.line_cluster` — Visual line clustering
-
-Derive text lines from word-box geometry, not from `line_idx`.
-
-**Formula.** Word boxes are sorted by `y` and split wherever the gap between consecutive centers exceeds `tol_frac` (0.5) of the median box height. Exists because `line_idx` is a constant in many IA exports.
-
-|                  |                                    |
-| ---------------- | ---------------------------------- |
-| **Output**       | Line index per word                |
-| **Verification** | tier A, C — **Partially verified** |
-
-### `assign.runs` — Runs and passes
-
-Trial run, line run, and per-word visit/pass indices.
-
-**Formula.** Consecutive fixations on the same word form one *visit*; the n-th visit to a word is its n-th pass. Line runs break whenever the assigned line changes.
-
-|                          |                                                                                                                                                                                                                               |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Output**               | run, linerun, word_runid, word_run (the visit's pass number), word_run_fix, nrun, reread (word_run > 1)                                                                                                                       |
-| **Grouping / ordering**  | Ordered by `timestamp_ms` within a trial                                                                                                                                                                                      |
-| **Precedence & caveats** | Always recomputed: an imported column under any of these names is replaced. An imported `pass_index` (EyeLink's `reread` is renamed to it on load) is a separate column and is kept as given — nothing computes `pass_index`. |
-| **Verification**         | tier A, C — **Partially verified**                                                                                                                                                                                            |
-
-### `assign.progression` — Progression and regression flags
-
-Whether the *outgoing* saccade moves forward in the text.
-
-**Formula.** `progression = sign(next word_id − word_id)`. `is_regression = word_id < running max word_id in the trial` — i.e. relative to the furthest word reached, not to the previous fixation.
-
-|                          |                                          |
-| ------------------------ | ---------------------------------------- |
-| **Output**               | progression ∈ {−1, 0, 1}, is_regression  |
-| **Grouping / ordering**  | Per trial, in timestamp order            |
-| **Missing & edge cases** | Unassigned fixations give progression 0. |
-| **Verification**         | tier A, C — **Verified**                 |
-
-### `assign.saccade_class` — Saccade reading class
-
-Label each outgoing saccade by its reading role.
-
-**Formula.** From the word and text line of the two fixations, in this order: refixation (same word), regression (up to an earlier line, or back within a line), return sweep (down to a later line), forward (the next word on the line), skip (two or more words ahead on the line); `other` when either fixation has no assigned word.
-
-|                          |                                                                                               |
-| ------------------------ | --------------------------------------------------------------------------------------------- |
-| **Output**               | (not stored — computed for each figure)                                                       |
-| **Precedence & caveats** | Always computed; an imported `saccade_type` / `NEXT_SAC_DIRECTION` (a direction) is not used. |
-| **Verification**         | tier A, C — **Partially verified**                                                            |
-
-## Preprocessing
-
-### `pre.merge_short` — Short-fixation merging
-
-Experimental
-
-Not in this release.
-
-Fold a short fixation into a neighbour within a character distance.
-
-### `pre.exclude_short` — Short/long fixation exclusion
-
-Experimental
-
-Not in this release.
-
-Soft-exclude fixations outside a duration window.
-
-### `pre.blink_adjacent` — Blink-adjacent exclusion
-
-Experimental
-
-Not in this release.
-
-Drop fixations immediately before/after a blink.
-
-### `pre.cleaning_report` — Cleaning QA report
-
-Experimental
-
-Not in this release.
-
-What the preprocessing pass would remove, and why.
-
-### `pre.sentence_measures` — Sentence-level measures
-
-Experimental
-
-Not in this release.
-
-Per-sentence reading time and counts.
-
-### `pre.saccade_table` — Saccade table
-
-Experimental
-
-Not in this release.
-
-One row per saccade, with amplitude, angle and class.
-
-### `pre.character_grid` — Character grid
-
-Experimental
-
-Not in this release.
-
-Per-character boxes derived from word boxes.
-
-### `pre.rtl` — Right-to-left detection
-
-Whether a word's script runs right to left.
-
-**Formula.** Unicode range test over the word's characters.
-
-|                  |                          |
-| ---------------- | ------------------------ |
-| **Output**       | right_to_left            |
-| **Verification** | tier A, C — **Verified** |
-
-### `pre.sensitivity` — Measure sensitivity
-
-Experimental
-
-Not in this release.
-
-How much the word measures move under different line assignments.
-
-### `align.algorithms` — Vertical drift correction
-
-Experimental
-
-Not in this release.
-
-Line-assignment algorithms, ported natively.
-
-## Scientific measure
-
-### `measure.ffd` — First fixation duration (FFD)
-
-Experimental
-
-Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
-
-Duration of the first fixation on a word.
-
-### `measure.fprt` — First-pass gaze duration (FPRT)
-
-Experimental
-
-Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
-
-Sum of the fixations in the word's first visit.
-
-### `measure.rpd` — Regression-path duration (RPD / go-past)
-
-Experimental
-
-Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
-
-First entry to the word until the gaze passes it to the right.
-
-### `measure.tfd` — Total fixation duration (TFD)
-
-Experimental
-
-Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
-
-All time spent on a word across the whole trial.
-
-### `measure.nfix` — Fixations per word
-
-Experimental
-
-Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
-
-Count of fixations assigned to a word.
-
-### `measure.skip` — Skip flag / skip rate
-
-Experimental
-
-Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
-
-Whether a word received no first-pass fixation.
-
-### `measure.regressions` — Regression in/out flags
-
-Experimental
-
-Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
-
-Whether a word was returned to, or left backwards.
-
-### `measure.landing_position` — Initial landing position
-
-Experimental
-
-Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
-
-Where in the word the first fixation landed, in letters.
-
-### `measure.landing_distance` — Centred landing distance
-
-Experimental
-
-Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
-
-Landing position relative to the word's center.
-
-### `measure.second_pass` — Second-pass duration
-
-Experimental
-
-Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
-
-Time spent on the word during its second visit.
-
-### `measure.single_fix` — Single-fixation duration
-
-Experimental
-
-Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
-
-First-pass duration when the first pass was exactly one fixation.
-
-### `measure.reg_in_count` — Regressions into word
-
-Experimental
-
-Scanpath Studio does not compute this in this release. A value your dataset brings is shown as given, defined by the software that exported it.
-
-How many times the gaze came back to this word.
-
-### `fix.saccade_amplitude` — Saccade amplitude
-
-Distance between consecutive fixations — always pixels.
-
-**Formula.** `sqrt(dx² + dy²)` between consecutive fixations in the trial.
-
-|                          |                                                                                                                                                                                                                                                                                                         |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Output**               | saccade_amplitude                                                                                                                                                                                                                                                                                       |
-| **Unit**                 | px                                                                                                                                                                                                                                                                                                      |
-| **Grouping / ordering**  | Per trial, in timestamp order; the first fixation has none.                                                                                                                                                                                                                                             |
-| **Missing & edge cases** | First fixation of a trial ⇒ NaN.                                                                                                                                                                                                                                                                        |
-| **Precedence & caveats** | A source column literally named `saccade_amplitude` is assumed to be pixels and kept. EyeLink's **degree**-valued `NEXT_SAC_AMPLITUDE` / `PREVIOUS_SAC_AMPLITUDE` normalize to `next_/prev_saccade_amplitude_deg` and never reach this column — they are different quantities *and* different saccades. |
-| **Verification**         | tier A, C — **Verified**                                                                                                                                                                                                                                                                                |
-
-### `fix.angles` — Saccade angles
-
-Incoming and outgoing saccade direction.
-
-**Formula.** `angle_incoming = degrees(atan2(−dy, dx))` from the previous fixation; `angle_outgoing` is the next fixation's incoming angle. `−dy` because screen y grows downwards, so 0° is rightward and positive is up.
-
-|                          |                                |
-| ------------------------ | ------------------------------ |
-| **Output**               | angle_incoming, angle_outgoing |
-| **Unit**                 | degrees (−180, 180\]           |
-| **Missing & edge cases** | Trial edges ⇒ NaN.             |
-| **Verification**         | tier A, C — **Verified**       |
-
-### `fix.rebased_onsets` — Rebased fixation onsets
-
-Trial-relative onset times for animation and time series.
-
-**Formula.** Cumulative onsets rebased so the trial starts at 0, from `timestamp_ms` where present, else by accumulating durations.
-
-|                          |                                              |
-| ------------------------ | -------------------------------------------- |
-| **Output**               | Onset array                                  |
-| **Unit**                 | ms                                           |
-| **Missing & edge cases** | A backwards clock restarts the accumulation. |
-| **Verification**         | tier A, C — **Partially verified**           |
-
-## Statistical aggregation
-
-### `agg.measure_values` — Measure value extraction
-
-Pull one registered measure's values out of a frame.
-
-**Formula.** The `aggregation.MEASURES` entry names the frame (words or fixations), the column and the unit; values are coerced numeric and NaNs dropped.
-
-|                          |                                                             |
-| ------------------------ | ----------------------------------------------------------- |
-| **Missing & edge cases** | Non-numeric entries become NaN and are dropped, not zeroed. |
-| **Verification**         | tier C, D — **Partially verified**                          |
-
-### `agg.aggregate_value` — Central tendency
-
-The Aggregate selector: mean / median / sum.
-
-**Formula.** `np.nanmean` · `np.nanmedian` · `np.nansum` over the values.
-
-|                          |                                                      |
-| ------------------------ | ---------------------------------------------------- |
-| **Missing & edge cases** | NaN-skipping throughout; an all-NaN input gives NaN. |
-| **Verification**         | tier A, C — **Verified**                             |
-
-### `agg.spread` — Spread band
-
-The error band drawn around an aggregate.
-
-**Formula.** `SD` → ±1 sample std (ddof=1) · `SEM` → ±std/√n · `IQR` → the 25th and 75th percentiles · `Bootstrap CI` → `agg.bootstrap_ci`. With `agg='sum'`, SD/SEM fall back to the bootstrap: the spread of individual observations does not bracket a total.
-
-|                          |                                                |
-| ------------------------ | ---------------------------------------------- |
-| **Missing & edge cases** | Empty input or NaN center ⇒ a zero-width band. |
-| **Verification**         | tier A, C — **Verified**                       |
-
-### `agg.bootstrap_ci` — Bootstrap confidence interval
-
-Percentile bootstrap CI of the chosen aggregate.
-
-**Formula.** 1000 resamples with replacement; the CI is the 2.5th and 97.5th percentiles of the resampled statistic.
-
-|                          |                                                            |
-| ------------------------ | ---------------------------------------------------------- |
-| **Unit**                 | same as the measure                                        |
-| **Missing & edge cases** | n < 2 ⇒ a degenerate interval at the point estimate.       |
-| **Precedence & caveats** | Seeded (`seed=0`) — the same data gives the same interval. |
-| **Reference**            | Percentile bootstrap; no bias correction.                  |
-| **Verification**         | tier A, C — **Verified**                                   |
-
-### `agg.effect_size` — Group means and difference
-
-Two groups' means, their difference and Cohen's d.
-
-**Formula.** Each value is one participant's mean of the measure (pooled observations when the data names no participants). `mean_diff = mean(A) − mean(B)`. Cohen's *d* uses the pooled SD `sqrt(((nA−1)·varA + (nB−1)·varB) / (nA+nB−2))` with ddof=1, and is shown only when the groups share no participant.
-
-|                          |                                                                                                                                                 |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Output**               | mean_a, mean_b, mean_diff, cohen_d, n_a, n_b                                                                                                    |
-| **Grouping / ordering**  | One value per participant in each group                                                                                                         |
-| **Missing & edge cases** | n < 2 in either group ⇒ NaN *d*. A zero pooled SD gives **NaN**, not 0.0, so it cannot read as 'no effect' beside a non-zero mean difference.   |
-| **Reference**            | **Descriptive only** — no significance test. A participant in both groups contributes to both means, so the groups are not independent samples. |
-| **Verification**         | tier A, C — **Partially verified**                                                                                                              |
-
-### `agg.group_mask` — Group definition
-
-Which rows belong to a cohort.
-
-**Formula.** A spec maps column → allowed values; the mask is the conjunction of membership tests. Two modes: split one field, or two independent filter sets. A key may be a tuple of columns matched as one composite key: a trial-metadata field resolves to the (participant, trial) readings its rows describe, a participant field to participant ids and a text field to text ids — the tables are never joined onto the frames.
-
-|                          |                                                                                                                                                         |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Missing & edge cases** | A column (or any column of a composite key) absent from the frame contributes no constraint; a metadata selection that matches nothing selects no rows. |
-| **Verification**         | tier A, C — **Verified**                                                                                                                                |
-
-### `agg.word_profile` — Per-word cohort profile
-
-A measure per word position, aggregated across participants.
-
-**Formula.** Group the word measures by word id and apply `agg.aggregate_value`.
-
-|                          |                                                              |
-| ------------------------ | ------------------------------------------------------------ |
-| **Missing & edge cases** | A minimum-participants threshold drops thinly-sampled words. |
-| **Verification**         | tier C — **Partially verified**                              |
-
-### `agg.word_rates` — Skip / regression rate profile
-
-Rate measures per word.
-
-**Formula.** Mean of the 0/1 flag over the participants who reported it — a proportion in [0, 1]. Each rate has its own participant count (`n_skip`, `n_regression_in`) and its own minimum-participants verdict.
-
-|                          |                                                                                                                                                                                                        |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Unit**                 | proportion                                                                                                                                                                                             |
-| **Missing & edge cases** | A missing flag is no observation: it is left out of that rate and its participant count, never read as 0. A rate below the minimum participants is hidden; the word stays while its other rate stands. |
-| **Verification**         | tier A, C — **Partially verified**                                                                                                                                                                     |
-
-### `agg.reader_summary` — Per-participant summary
-
-Experimental
-
-Not in this release.
-
-One row per participant: totals, means and rates.
-
-### `agg.trial_summary` — Per-trial summary
-
-Experimental
-
-Not in this release.
-
-One row per trial: reading time, counts, rates.
-
-### `agg.normalize` — Normalized measure column
-
-Rescale a measure for cross-participant comparison.
-
-**Formula.** Per-participant z-score, `(value − participant mean) / participant SD`, when **Z-score per participant** is on.
-
-|                          |                                                                                                             |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| **Missing & edge cases** | A participant with zero variance (or one value) ⇒ 0, the participant's own mean; a missing value stays NaN. |
-| **Verification**         | tier A, C — **Partially verified**                                                                          |
-
-### `agg.landing_curve` — Landing-position curve
-
-Experimental
-
-Not in this release.
-
-Distribution of initial landing positions by word length.
-
-### `agg.over_time` — Trend over time
-
-A measure by trial index or fixation index.
-
-**Formula.** Aggregate per index position across the selection.
-
-|                          |                                                   |
-| ------------------------ | ------------------------------------------------- |
-| **Missing & edge cases** | Index positions with no data are gaps, not zeros. |
-| **Verification**         | tier C — **Partially verified**                   |
-
-## Similarity
-
-### `sim.nld` — Normalized Levenshtein distance
-
-Experimental
-
-Not in this release.
-
-Scanpath similarity over AoI sequences.
-
-### `sim.aoi_sequence` — AoI sequence
-
-Experimental
-
-Not in this release.
-
-The symbol string an NLD comparison runs on.
-
-### `sim.windowed` — NLD by fixation index / time
-
-Experimental
-
-Not in this release.
-
-Similarity restricted to a window of the scanpath.
-
-## Unit / coordinate conversion
-
-### `geom.pixels_per_degree` — Pixels per degree of visual angle
-
-The screen-geometry conversion every angular unit depends on.
-
-**Formula.** `px_per_mm = canvas_width_px / monitor_width_mm`; `mm_per_degree = 2 · viewing_distance_mm · tan(0.5°)`; `px_per_degree = px_per_mm · mm_per_degree`.
-
-|                          |                                                                                                                                                                                              |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unit**                 | px / degree                                                                                                                                                                                  |
-| **Missing & edge cases** | Any missing geometry ⇒ no conversion is offered at all.                                                                                                                                      |
-| **Precedence & caveats** | **Provenance matters more than the number.** Every built-in corpus assumes its monitor size and viewing distance, so a degree-valued result inherits that — see the *Recording setup* panel. |
-| **Verification**         | tier A, C — **Verified**                                                                                                                                                                     |
-
-### `geom.font_pt_to_px` — Font point size to pixels
-
-Typography conversion for true-scale text rendering.
-
-**Formula.** `px = pt · dpi / 72`.
-
-|                  |                          |
-| ---------------- | ------------------------ |
-| **Unit**         | px                       |
-| **Verification** | tier A, C — **Verified** |
-
-### `geom.word_box_bounds` — Word interest-area edges
-
-Where one word's interest area ends and the next begins.
-
-**Formula.** `x .. x + width` by `y .. y + height` — the experiment's own rectangles, unmodified. On a tiling corpus each box includes the space after its word.
-
-|                          |                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unit**                 | px                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| **Precedence & caveats** | The boundary *between* words, for everything that tests a point against a box or draws one: `assign.fixation_to_word`, `assign.in_text`, the drawn outlines, the word heatmaps, the critical-span frame, drift correction and the model scanpaths. A position *inside* a word goes through `geom.word_char_advance` instead, and where its letters are through `geom.word_glyph_span`; the drawn word label is centered in the box. |
-| **Verification**         | tier A, C — **Partially verified**                                                                                                                                                                                                                                                                                                                                                                                                  |
-
-### `geom.word_box_space_px` — Inter-word padding baked into each box
-
-Detects a tiling layout that carries one trailing space per box.
-
-**Formula.** Median of `width / (len(text) + 1)` across one trial's words — the advance — reported only when the boxes are consistently that wide **and** actually tile (no gaps). Anything else ⇒ `0.0`, i.e. 'these AOIs are glyph-tight — each box is its glyph run'.
-
-|                          |                                                                                                                                 |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| **Unit**                 | px                                                                                                                              |
-| **Missing & edge cases** | No usable words ⇒ 0.0 (glyph-tight), never a guess.                                                                             |
-| **Precedence & caveats** | Never moves a box edge; it only tells `geom.word_char_advance` and `geom.word_glyph_span` how many character cells a box holds. |
-| **Verification**         | tier A, C — **Verified**                                                                                                        |
-
-### `geom.word_char_advance` — Character advance within a word
-
-How wide one letter is — the scale for every within-word position.
-
-**Formula.** `width / (len(text) + 1)` when `geom.word_box_space_px` finds trailing padding, else `width / len(text)`.
-
-|                          |                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unit**                 | px / character                                                                                                                                                                                                                                                                                                                                                                                  |
-| **Missing & edge cases** | No `text`/`width` ⇒ NaN, and the letter measures report NaN.                                                                                                                                                                                                                                                                                                                                    |
-| **Precedence & caveats** | The single accessor for the letter scale, as `geom.word_box_bounds` is for the boundary between words: `measure.landing_position`, `measure.landing_distance`, `agg.landing_curve` and the saccade table's launch/landing letter all read it. Before that each derived its own `width / len(text)`, which is one advance too wide on a tiling corpus, by a factor that varied with word length. |
-| **Verification**         | tier A, C — **Verified**                                                                                                                                                                                                                                                                                                                                                                        |
-
-### `geom.word_glyph_span` — Where a word's glyphs are
-
-The glyph run inside a word's box — where its letters are.
-
-**Formula.** Starts at `x` and runs `len(text) × geom.word_char_advance`: the whole box on a glyph-tight corpus, one advance short of it on a tiling one. No `text` ⇒ the box width.
-
-|                          |                                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unit**                 | px                                                                                                                                                                                                                                                                                                                                              |
-| **Precedence & caveats** | Not an interest area: `agg.landing_curve` measures a landing across it and mirrors an RTL one. Measured against OneStop's own Experiment Builder screens: each tiling box is centered on its word, half a space either side, so the run's `x` start is half an advance early there; the label uses the box center, the landing measures do not. |
-| **Verification**         | tier A — **Partially verified**                                                                                                                                                                                                                                                                                                                 |
-
-## Display / export transformation
-
-### `disp.marker_sizes` — Fixation marker sizing
-
-Marker size encodes fixation duration on one fixed scale.
-
-**Formula.** Fixed scales (`marker_size_scale` = `sqrt`, the default; `linear`; `log`): `size = s_min + (s_max − s_min) · (f(d) − f(lo)) / (f(hi) − f(lo))`, with `d` clamped to the duration bounds `[lo, hi]` (`marker_duration_range`, default 50–600 ms) and `f` = √, identity or ln. `relative`: linear between the drawn set's own shortest and longest duration (the scale before the fixed one; older saved configs and Share links keep it). **Display only** — never a recorded value.
-
-|                          |                                                                                                                                                                                    |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unit**                 | px (marker diameter)                                                                                                                                                               |
-| **Missing & edge cases** | A missing duration is treated as 0 ms: the smallest marker.                                                                                                                        |
-| **Precedence & caveats** | One scale for single-trial figures, both comparison sides, replays and bulk exports, so a duration draws at one size in all of them; only the px range is per scanpath in Compare. |
-| **Verification**         | tier C, D — **Intentional convention**                                                                                                                                             |
-
-### `disp.axis_ranges` — Axis ranges and inversion
-
-Screen coordinates, drawn the way the screen is.
-
-**Formula.** The y axis is inverted (`y_range = [max, min]`) so the figure matches the display; ranges come from the canvas, not the data, when a canvas size is known.
-
-|                  |                                        |
-| ---------------- | -------------------------------------- |
-| **Unit**         | px                                     |
-| **Verification** | tier C, D — **Intentional convention** |
-
-### `disp.true_scale` — True-scale text rendering
-
-One line of text fills its share of the recorded line pitch.
-
-**Formula.** A word label's font is `1/line_spacing` of the line pitch (the median line-to-line distance of the word boxes), capped so the words fit their box widths (`plots._width_fit_font`; the smaller wins), in data pixels converted at the figure's display scale. When the boxes are monospace words padded alike — half the gap to each neighbour — the font is read off them instead: one character cell is the slope of box width over word length (`plots._padded_monospace_font`), over the font's advance. The figure is drawn at its exact pixel size and scaled as one block.
-
-|                  |                                     |
-| ---------------- | ----------------------------------- |
-| **Verification** | tier D — **Intentional convention** |
-
-### `disp.animation_timing` — Animation timing
-
-How recorded time maps to playback time.
-
-**Formula.** Frames sit on a uniform reading-time grid over `fix.rebased_onsets`; the frame at reading time t is on screen once t / playback speed of wall time has passed, so a replay lasts reading span / speed. The player keeps that clock itself, skipping frames a display is too slow to show, and a GIF/MP4 lasts the same. A multipart replay changes screen at the boundary and draws no connector across canvases.
-
-|                          |                                                                                                                                                                                        |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unit**                 | ms (recorded) → ms (playback)                                                                                                                                                          |
-| **Precedence & caveats** | Plotly's own frame queue is never the clock: it rounds every frame up to whole display ticks and the error accumulates. Without the player (`fig.show()`) the figure falls back to it. |
-| **Verification**         | tier C, D — **Intentional convention**                                                                                                                                                 |
-
-### `disp.illustration` — Illustration disclosure
-
-When a figure stops being a faithful record.
-
-**Formula.** Views that no longer show the data as recorded — snapped fixations, arced saccades, hidden or windowed fixations, a replay not at real time, an authored scanpath — are labeled *Illustration*.
-
-|                  |                          |
-| ---------------- | ------------------------ |
-| **Verification** | tier C, D — **Verified** |
-
 # FAQ
 
 ## Loading data
@@ -1678,7 +996,7 @@ The app limits how far a `.zip` may decompress (32 GB per file, 64 GB in total).
 
 ### Does the app compute reading measures?
 
-No. Corpus Analysis and Export show the measures your interest-area report provides, as your eye-tracking software defines them; [Computations](https://lacclab.github.io/scanpath-studio/computations/index.md) gives how Scanpath Studio would compute each.
+No. Corpus Analysis and Export show the measures your interest-area report provides, as your eye-tracking software defines them.
 
 ### Does Filters & highlights change my data?
 
@@ -1686,9 +1004,9 @@ No. It changes only what the figure draws. Your tables and measures stay as they
 
 ## Export and sharing
 
-### PDF, GIF or MP4 export fails
+### Image or video export fails
 
-These formats need Chrome, Chromium or Edge installed on the computer running the app. Installing one is enough. With a pip install you can instead run `plotly_get_chrome -y` once. HTML, and the current figure's PNG and SVG, work without a browser.
+PDF, GIF and MP4 exports, static images from Python or the CLI, and image bundles need Chrome, Chromium or Edge on the computer running Scanpath Studio. Installing one is enough. With a pip install you can instead run `plotly_get_chrome -y` once. HTML, and the current figure's PNG and SVG, work without a browser.
 
 ### Can someone else open my share link?
 
@@ -1725,90 +1043,7 @@ Scanpath Studio is in beta, so they may not. Until 1.0, any release may change t
 ### How do I cite Scanpath Studio?
 
 See [Cite](https://lacclab.github.io/scanpath-studio/cite/index.md) for BibTeX and APA entries, and for the datasets you used.
-# API & CLI
-
-# Automation
-
-Use the app for exploration, the CLI for one repeatable render, and Python for loops or analysis pipelines.
-
-## CLI: one figure
-
-```
-scanpath-studio render --sample --list-trials
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 -o scanpath.html
-```
-
-Replace `--sample` with `--words ia.csv --fixations fixations.csv`. The [CLI reference](https://lacclab.github.io/scanpath-studio/cli/index.md) has the common combinations and, at its end, every flag.
-
-## Python: one pipeline
-
-```
-import scanpath_studio as sps
-
-words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
-trials = sps.list_trials(words, fixations)  # (participant, trial), your names
-pid, tid = trials.iloc[0]
-
-fig = sps.plot_scanpath(
-    words,
-    fixations,
-    pid,
-    tid,
-    canvas_size=(2560, 1440),  # the monitor the stimulus was shown on
-)
-sps.save_figure(fig, "scanpath.html")
-```
-
-The [Python API](https://lacclab.github.io/scanpath-studio/api/index.md) lists the public functions and parameters.
-
-## From the app to a script
-
-Tune the figure in the app, open **Share → Code**, and copy the snippet (Python or CLI); it writes only the options that differ from the defaults. For a dataset you added in the app, the snippet loads your files with the column mapping you set up (`word_schema` / `fix_schema`, or `--word-schema` / `--fix-schema`), and only the tables the dataset has; the file paths are placeholders to replace. A step the loader cannot repeat, such as joining character boxes into words or columns made from the file names, is named in a note beside the snippet. The same recipe is available without the app:
-
-```
-# translate a render invocation you already have into Python
-scanpath-studio render --sample --heatmap --print-code python -o out.png
-```
-
-From Python, `sps.figure_code(...)` returns the same snippet — see [Reproduce a figure in code](https://lacclab.github.io/scanpath-studio/api/#reproduce-a-figure-in-code).
-
-## Batch pattern
-
-```
-from pathlib import Path
-import scanpath_studio as sps
-
-words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
-out = Path("figures")
-out.mkdir(exist_ok=True)
-
-for pid, tid in sps.list_trials(words, fixations).itertuples(index=False):
-    fig = sps.plot_scanpath(
-        words,
-        fixations,
-        pid,
-        tid,
-        canvas_size=(2560, 1440),  # the monitor the stimulus was shown on
-    )
-    sps.save_figure(fig, out / f"{pid}_{tid}.html")
-```
-
-HTML needs nothing else. PNG, SVG and PDF need Chrome, Chromium or Edge installed; with none, run `plotly_get_chrome -y` once, or save HTML.
-
-## Replays as GIF or MP4
-
-```
-from pathlib import Path
-
-import scanpath_studio as sps
-from scanpath_studio.animation_export import export_animation
-
-words, fixations = sps.load_sample_data()
-anim = sps.animate_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
-Path("replay.mp4").write_bytes(export_animation(anim, fmt="mp4"))  # or "gif"
-```
-
-This also needs Chrome, Chromium or Edge; ffmpeg comes with the package. The CLI's `--animate` writes interactive HTML only.
+# Reference
 
 # Python API
 
@@ -2427,7 +1662,7 @@ Every keyword the figure builders take, with the default it renders with, the va
 save_figure(fig: Figure, path: str | Path, *, scale: float = 2, width: int | None = None, height: int | None = None, width_mm: float | None = None, width_in: float | None = None, dpi: int | None = None) -> Path
 ```
 
-Save a figure by extension: `.html` (interactive, needs no browser) or `.png`/`.svg`/`.pdf` (static via Kaleido — needs Chrome, Chromium or Edge; run `plotly_get_chrome -y` once if none is installed). `width` / `height` set the image size in px (overriding the figure's own size); both ignored for `.html`. Returns the written path.
+Save a figure by extension: `.html` (interactive) or `.png`/`.svg`/`.pdf` (static via Kaleido). See the [export FAQ](https://lacclab.github.io/scanpath-studio/faq/#export-fails) for setup. `width` / `height` set the image size in px (overriding the figure's own size); both ignored for `.html`. Returns the written path.
 
 `width_mm` or `width_in` with `dpi` (default 300) sizes a PNG for print, as the app's Export → *Current figure* does: 180 mm at 600 dpi is a 4,252 px wide PNG, its height following the figure's aspect, with the dpi written into the file. They replace `scale`.
 
@@ -2485,7 +1720,7 @@ Ask GitHub whether a newer release than this build is out.
 
 The one call here that uses the network, and only when made: it reads the latest release from `api.github.com` (drafts and pre-releases excluded) and compares it with version_info. It never raises. `status` is `"up_to_date"`, `"update_available"`, `"ahead"` (a development build past the latest release) or `"error"` (offline, no answer within `timeout` seconds, rate-limited, …), and `message` says it in a sentence. With an update available, `command` is the shell command that updates this install (`pip install -U scanpath-studio`, `uv tool upgrade scanpath-studio`, `git pull`, …), `latest.url` the release notes, and in the desktop app `download` the archive for this computer. The same check is Help → About → *Check for updates* and `scanpath-studio version --check`.
 
-For a batch loop, see [Automation](https://lacclab.github.io/scanpath-studio/automation/#batch-pattern). GIF and MP4 export uses `scanpath_studio.animation_export.export_animation` and requires Kaleido plus Chrome, Chromium or Edge.
+For [batch exports](https://lacclab.github.io/scanpath-studio/guides/exporting/#batch-pattern) and [GIF/MP4 replays](https://lacclab.github.io/scanpath-studio/guides/exporting/#replays-as-gif-or-mp4), see Export and share.
 
 # CLI reference
 
@@ -2536,7 +1771,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv \
   -o replay.html
 ```
 
-HTML is interactive and needs no browser. PNG, SVG and PDF need Chrome, Chromium or Edge installed (or run `plotly_get_chrome -y` once).
+See the [FAQ](https://lacclab.github.io/scanpath-studio/faq/#export-fails) for image-export setup.
 
 ### When a column isn't recognized
 
@@ -2714,7 +1949,7 @@ scanpath-studio check --raw-gaze gaze_samples.csv --json
 
 ## Many trials
 
-The `render` command renders one trial per invocation; use the [Python batch pattern](https://lacclab.github.io/scanpath-studio/automation/#batch-pattern) or **Export → Export bundle** for many figures.
+The `render` command renders one trial per invocation; use the [Python batch recipe](https://lacclab.github.io/scanpath-studio/guides/exporting/#batch-pattern) or **Export → Export bundle** for many figures.
 
 `--all-screens` is the multipart exception: it writes one deterministic `__screen-001-<id>` file per screen of the selected parent trial. `--screens Title,Paragraph` writes only the screens named, each still numbered by its place in the trial.
 
@@ -2754,7 +1989,7 @@ Between releases the version names the build: `0.35.0.post3+g8f18219` is three c
 Generated from the parsers the commands themselves use, so every flag is here with the default and help `--help` prints.
 
 ```
-scanpath-studio 0.38.2 — visualize eye-tracking-while-reading scanpaths
+scanpath-studio 0.38.3 — visualize eye-tracking-while-reading scanpaths
 
 usage:
   scanpath-studio                  launch the interactive app (Streamlit)
@@ -3135,12 +2370,12 @@ fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
 anim = sps.animate_scanpath(words, fixations, pid, tid, playback_speed=4.0)
 pair = sps.compare_scanpaths(words, fixations, (pid, tid), (pid_b, tid_b))
 
-sps.save_figure(fig, "out.html")  # interactive, no browser needed
-sps.save_figure(fig, "out.png")  # .png/.svg/.pdf via Kaleido → needs Chrome
+sps.save_figure(fig, "out.html")  # interactive
+sps.save_figure(fig, "out.png")  # static image
 sps.save_figure_layers(fig, "layers/", fmt="svg")  # one file per layer
 ```
 
-**HTML never needs Chrome.** PNG/SVG/PDF go through Kaleido, which drives a Chrome/Chromium binary: run `plotly_get_chrome -y` once, or fall back to HTML.
+See the [FAQ](https://lacclab.github.io/scanpath-studio/faq/#export-fails) for image-export setup.
 
 ## Figure options
 
@@ -3211,7 +2446,7 @@ Without `-p` / `-t`, `render` draws the first available trial instead of raising
 | `plot_scanpath() got an unexpected keyword argument`                                   | Misspelled or unsupported option.                                                                                      | The message suggests the nearest names; `api.figure_options()` is the full list.                                                                      |
 | `color_by='…' (--color-by on the CLI) names no column` (or `highlight_column=`, words) | The option's *value* is a column the data doesn't have.                                                                | The message names the closest columns and lists them all; `color_by` also takes `'(uniform)'` and `'line'`.                                           |
 | `Options not supported by the animation:`                                              | A static-only option (heatmap, arcs, saccade types) passed to `animate_scanpath`.                                      | Drop it, or render the static figure.                                                                                                                 |
-| `Static .png export failed:`                                                           | Kaleido has no Chrome.                                                                                                 | `plotly_get_chrome -y`, or save `.html`.                                                                                                              |
+| `Static .png export failed:`                                                           | Image-export setup is missing.                                                                                         | See the [FAQ](https://lacclab.github.io/scanpath-studio/faq/#export-fails).                                                                           |
 | `Fixations … have no usable coordinates`                                               | AOI-sequence fixations with no matching word boxes.                                                                    | Supply the words table whose `word_id`s match.                                                                                                        |
 | `Fixations: the Word/IA ID column … holds no numbers`                                  | `data.UnplacedFixationsError`: the fixations map no `x`/`y` and their word ids are text (`w1`), so none can be placed. | Map `x` and `y` in `fix_schema`, or give both tables numeric word ids.                                                                                |
 
@@ -3233,6 +2468,440 @@ Path("replay.mp4").write_bytes(clip)
 
 - **Errors name the alternatives.** An unknown trial, an ambiguous selection or a misspelled option raises with the valid values listed; read the message rather than guessing again.
 - **Word boxes come from the data.** They are never computed — only the fixation → word assignment is, and only when the data maps no word/IA id (box containment, else unassigned).
+
+# Two readers
+
+Two readings of one text on the same canvas.
+
+1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization.
+1. Turn on Compare. In Trial B, select participant `l7_1090`, trial `l7_1090_2_1_1_Ele_r0`.
+1. In Compare ▾, choose Overlay. In Filters & highlights ▾, set both fixation ranges to 1–50.
+
+[Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
+
+```
+scanpath-studio render --sample \
+  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 --fix-index-range 1:50 --compare-legend \
+  -o comparison.html
+```
+
+```
+import scanpath_studio as sps
+
+words, fixations = sps.load_sample_data()
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+fig = sps.compare_scanpaths(
+    words,
+    fixations,
+    (pid, tid),
+    ("l7_1090", "l7_1090_2_1_1_Ele_r0"),
+    fix_index_range=(1, 50),
+    show_legend=True,
+)
+
+sps.save_figure(fig, "comparison.html")
+```
+
+[← All examples](https://lacclab.github.io/scanpath-studio/gallery/index.md)
+
+# Heatmap
+
+Where fixation time concentrates.
+
+1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization.
+1. Turn on Heatmap. In Heatmap ▾, choose Interpolated and weight by fixation duration.
+1. Turn off Fixations and Saccades; keep Stimulus on.
+
+[Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
+
+```
+scanpath-studio render --sample \
+  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --heatmap --heatmap-style interpolated --no-fixations --no-saccades \
+  -o heatmap.html
+```
+
+```
+import scanpath_studio as sps
+
+words, fixations = sps.load_sample_data()
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+fig = sps.plot_scanpath(
+    words,
+    fixations,
+    pid,
+    tid,
+    show_heatmap=True,
+    heatmap_style="Interpolated",
+    show_fixations=False,
+    show_saccades=False,
+)
+
+sps.save_figure(fig, "heatmap.html")
+```
+
+[← All examples](https://lacclab.github.io/scanpath-studio/gallery/index.md)
+
+# Reading schematic
+
+Snapped fixations and arced saccades; an illustration of the reading.
+
+1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization.
+1. In Filters & highlights ▾ → Fixations → Index range, choose 124–139.
+1. In Fixations ▾ → Snap, turn on To line. In Saccades ▾ → Shape, choose Arc.
+1. Keep the Illustration label: these positions and arcs are schematic.
+
+[Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
+
+```
+scanpath-studio render --sample \
+  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --snap-fixations --saccade-arcs --fix-index-range 124:139 \
+  -o illustration.html
+```
+
+```
+import scanpath_studio as sps
+
+words, fixations = sps.load_sample_data()
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+fig = sps.plot_scanpath(
+    words,
+    fixations,
+    pid,
+    tid,
+    fixation_snap_to_line=True,
+    saccade_render_mode="Arc",
+    fix_index_range=(124, 139),
+)
+
+sps.save_figure(fig, "illustration.html")
+```
+
+[← All examples](https://lacclab.github.io/scanpath-studio/gallery/index.md)
+
+# Raw gaze
+
+Samples under translucent fixations. The demo samples are synthetic.
+
+1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_2_2_Adv_r0`. Start with Reset visualization.
+1. Turn on Raw gaze and turn off Saccades.
+1. In Fixations ▾ → Marker → Opacity, choose 0.35 so the samples show through.
+
+[Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
+
+```
+scanpath-studio render --sample \
+  -p l37_1129 -t l37_1129_2_2_2_Adv_r0 \
+  --sample-raw-gaze --fixation-opacity 0.35 --no-saccades \
+  -o raw-gaze.html
+```
+
+```
+import scanpath_studio as sps
+
+words, fixations = sps.load_sample_data()
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+raw_gaze = sps.load_sample_raw_gaze()
+fig = sps.plot_scanpath(
+    words,
+    fixations,
+    "l37_1129",
+    "l37_1129_2_2_2_Adv_r0",
+    raw_gaze=raw_gaze,
+    fixation_opacity=0.35,
+    show_saccades=False,
+)
+
+sps.save_figure(fig, "raw-gaze.html")
+```
+
+[← All examples](https://lacclab.github.io/scanpath-studio/gallery/index.md)
+
+# Replay
+
+The first forty fixations, played in reading order.
+
+1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization.
+1. Turn on Animate. In Filters & highlights ▾ → Fixations → Index range, choose 1–40.
+1. Press Play. Adjust the speed in Animate ▾; save a replay from Export → Current figure.
+
+[Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
+
+```
+scanpath-studio render --sample \
+  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --animate --fix-index-range 1:40 \
+  -o replay.html
+```
+
+```
+import scanpath_studio as sps
+
+words, fixations = sps.load_sample_data()
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+fig = sps.animate_scanpath(words, fixations, pid, tid, fix_index_range=(1, 40))
+
+sps.save_figure(fig, "replay.html")
+```
+
+[← All examples](https://lacclab.github.io/scanpath-studio/gallery/index.md)
+
+# Saccade types
+
+Forward movements, skips, refixations, return sweeps and regressions.
+
+ForwardSkipRefixationReturn sweepRegressionOther
+
+1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization.
+1. Open Saccades ▾ → Line → Color and choose By type.
+1. To match this view, hide the on-figure type legend under Figure & canvas → Legends. The color key is shown below this example.
+
+[Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
+
+```
+scanpath-studio render --sample \
+  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --saccade-color-by-type --no-saccade-type-legend \
+  -o saccade-types.html
+```
+
+```
+import scanpath_studio as sps
+
+words, fixations = sps.load_sample_data()
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+fig = sps.plot_scanpath(
+    words,
+    fixations,
+    pid,
+    tid,
+    saccade_color_mode="By type",
+    saccade_type_legend=False,
+)
+
+sps.save_figure(fig, "saccade-types.html")
+```
+
+[← All examples](https://lacclab.github.io/scanpath-studio/gallery/index.md)
+
+# Scanpath
+
+Fixations and saccades over the text.
+
+1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization.
+1. Keep the Scanpath design preset, with Fixations, Saccades and Stimulus on.
+1. Use Export → Current figure to save it.
+
+[Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
+
+```
+scanpath-studio render --sample \
+  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  -o scanpath.html
+```
+
+```
+import scanpath_studio as sps
+
+words, fixations = sps.load_sample_data()
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+fig = sps.plot_scanpath(words, fixations, pid, tid)
+
+sps.save_figure(fig, "scanpath.html")
+```
+
+[← All examples](https://lacclab.github.io/scanpath-studio/gallery/index.md)
+
+# Fixations by line
+
+Color each fixation by its text line.
+
+1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization.
+1. Open Fixations ▾ → Marker → Color and choose Line.
+1. Keep Saccades and Stimulus on. The colors follow the word-box lines.
+
+[Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
+
+```
+scanpath-studio render --sample \
+  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --color-by-line \
+  -o text-lines.html
+```
+
+```
+import scanpath_studio as sps
+
+words, fixations = sps.load_sample_data()
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+fig = sps.plot_scanpath(words, fixations, pid, tid, color_by_line=True)
+
+sps.save_figure(fig, "text-lines.html")
+```
+
+[← All examples](https://lacclab.github.io/scanpath-studio/gallery/index.md)
+
+# Time course
+
+Horizontal gaze position against fixation onset time.
+
+1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization.
+1. Open Figure & canvas ▾ → Axes.
+1. Set X to Time (ms) and Y to the fixation X position. This plots fixation onset against horizontal position.
+
+[Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
+
+```
+scanpath-studio render --sample \
+  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  --x-field timestamp_ms --y-field x \
+  -o time-course.html
+```
+
+```
+import scanpath_studio as sps
+
+words, fixations = sps.load_sample_data()
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+fig = sps.plot_scanpath(
+    words, fixations, pid, tid, x_field="timestamp_ms", y_field="x"
+)
+
+sps.save_figure(fig, "time-course.html")
+```
+
+[← All examples](https://lacclab.github.io/scanpath-studio/gallery/index.md)
+
+# Word profile
+
+Mean total fixation duration across readers, with a standard-deviation band.
+
+1. Select the bundled demo and clear any trial filters.
+1. Open Corpus Analysis → Per text. Choose text `2_1_1_Ele` and Total fixation duration.
+1. Choose Cohort profile, Mean aggregation and SD spread.
+1. Download this table (CSV) saves the values.
+
+[Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
+
+[Download the example table](https://lacclab.github.io/scanpath-studio/gallery/word-profile/word-profile.csv) first.
+
+```
+scanpath-studio corpus --input word-profile.csv --kind profile \
+  --measure-label "Total fixation duration (ms)" -o word-profile.html
+```
+
+```
+import scanpath_studio as sps
+
+words, fixations = sps.load_sample_data()
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+# The demo's word table carries EyeLink's own measures (IA_DWELL_TIME, …).
+one_text = words[words["unique_paragraph_id"] == "2_1_1_Ele"]
+profile = (
+    one_text.groupby("IA_ID")
+    .agg(
+        value=("IA_DWELL_TIME", "mean"),
+        sd=("IA_DWELL_TIME", "std"),
+        word_text=("IA_LABEL", "first"),
+    )
+    .rename_axis("word_id")  # the column plot_corpus_figure reads
+    .reset_index()
+    .assign(lo=lambda d: d.value - d.sd, hi=lambda d: d.value + d.sd)
+)
+fig = sps.plot_corpus_figure(
+    profile, kind="profile", measure_label="Total fixation duration (ms)"
+)
+
+sps.save_figure(fig, "word-profile.html")
+```
+
+[← All examples](https://lacclab.github.io/scanpath-studio/gallery/index.md)
+
+# App recordings
+
+Short demonstrations on the bundled data. Choose a category, then play a clip.
+
+### Add your own data
+
+\[!\[
+
+\](../../assets/workflows/add-your-data_poster.webp)\](../../assets/workflows/add-your-data.mp4)
+
+### Find trials
+
+\[!\[
+
+\](../../assets/workflows/trial-filtering_poster.webp)\](../../assets/workflows/trial-filtering.mp4)
+
+### Star and tag trials
+
+\[!\[
+
+\](../../assets/workflows/favorites_poster.webp)\](../../assets/workflows/favorites.mp4)
+
+### Style the plot
+
+\[!\[
+
+\](../../assets/workflows/plot-controls_poster.webp)\](../../assets/workflows/plot-controls.mp4)
+
+### Ready-made designs
+
+\[!\[
+
+\](../../assets/workflows/design-presets_poster.webp)\](../../assets/workflows/design-presets.mp4)
+
+### Under the figure
+
+\[!\[
+
+\](../../assets/workflows/subtabs_poster.webp)\](../../assets/workflows/subtabs.mp4)
+
+### Replay the reading
+
+\[!\[
+
+\](../../assets/workflows/replay_poster.webp)\](../../assets/workflows/replay.mp4)
+
+### Save the replay
+
+\[!\[
+
+\](../../assets/workflows/replay-export_poster.webp)\](../../assets/workflows/replay-export.mp4)
+
+### Compare two readers
+
+\[!\[
+
+\](../../assets/workflows/compare_poster.webp)\](../../assets/workflows/compare.mp4)
+
+### Corpus Analysis
+
+\[!\[
+
+\](../../assets/workflows/corpus-analysis_poster.webp)\](../../assets/workflows/corpus-analysis.mp4)
+
+### Export a figure
+
+\[!\[
+
+\](../../assets/workflows/export-figure_poster.webp)\](../../assets/workflows/export-figure.mp4)
+
+### Export every trial
+
+\[!\[
+
+\](../../assets/workflows/export-bundle_poster.webp)\](../../assets/workflows/export-bundle.mp4)
+
+### Share a link
+
+\[!\[
+
+\](../../assets/workflows/share-link_poster.webp)\](../../assets/workflows/share-link.mp4)
+
+[← Plot gallery](https://lacclab.github.io/scanpath-studio/gallery/index.md) · [Tutorials](https://lacclab.github.io/scanpath-studio/tutorials/index.md)
 # About
 
 # Cite Scanpath Studio
@@ -3251,14 +2920,14 @@ A paper is in preparation. Until it is out, cite the software by its Zenodo DOI,
              Berzak, Yevgeni},
   title   = {{Scanpath Studio}},
   year    = {2026},
-  version = {0.38.2},
+  version = {0.38.3},
   doi     = {10.5281/zenodo.22933884},
   url     = {https://doi.org/10.5281/zenodo.22933884},
   license = {MIT},
 }
 ```
 
-Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.38.2) [Computer software]. https://doi.org/10.5281/zenodo.22933884
+Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.38.3) [Computer software]. https://doi.org/10.5281/zenodo.22933884
 
 The DOI always resolves to the latest release; the [Zenodo record](https://doi.org/10.5281/zenodo.22933884) lists a DOI for each version if you need to pin the one you used. The entry above is generated from [`CITATION.cff`](https://github.com/lacclab/scanpath-studio/blob/main/CITATION.cff), the same file behind GitHub's **Cite this repository** button and the app's **Help → About** dialog.
 

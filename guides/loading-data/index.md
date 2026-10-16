@@ -1,63 +1,83 @@
 # Data management
 
+Load your own data, open a public corpus, or try the bundled sample.
+
 ## Choose a dataset
 
-Pick one in the dataset picker above the plot, or on the **Data Management** page:
+Use the dataset picker or the Data Management page:
 
-- **Bundled demo**: a small OneStop sample, for learning the app.
-- **Hand-drawn sample**: a six-word trial drawn by hand.
-- **Public corpus**: OneStop or PoTeC, downloaded once when you open it.
-- **+ → Import files**: your own tables.
-- **+ → Create manually**: type a text and place fixations on it by hand.
+- Bundled demo: a small OneStop sample
+- Hand-drawn sample: a six-word trial
+- Public corpora: OneStop and PoTeC, downloaded on your computer
+- - → Import files: your own tables
+- - → Create manually: type text and place fixations
 
-### The demo and OneStop
+### OneStop
 
-The bundled demo is a small part of [OneStop Eye Movements](https://github.com/lacclab/OneStop-Eye-Movements), an English eye-tracking-while-reading corpus of 360 participants (Berzak et al., *Scientific Data* 2025, [doi:10.1038/s41597-025-06272-2](https://doi.org/10.1038/s41597-025-06272-2)). The full corpus is four datasets, one per reading regime: ordinary reading, information seeking, repeated reading, and information seeking (repeated). Each downloads from [OSF](https://osf.io/2prdq/) the first time you open it (about 1 GB). A trial is one reading of one paragraph, and its title, paragraph, question, answers and feedback are its screens.
+The demo comes from [OneStop Eye Movements](https://github.com/lacclab/OneStop-Eye-Movements) (Berzak et al., 2025), an English corpus with 360 participants. The full corpus is available as four datasets: ordinary reading, information seeking, and their repeated-reading versions. Each downloads once from [OSF](https://osf.io/2prdq/).
 
 ## What your data needs
 
-| Table                                                            | One row per | Needs                                                                            |
-| ---------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------- |
-| **Fixations** (e.g. EyeLink's Fixation Report)                   | fixation    | trial ID, duration (ms), and x/y or a word ID                                    |
-| **Words (interest areas)** (e.g. EyeLink's Interest Area Report) | word        | trial ID, word ID, and its box: `IA_LEFT/RIGHT/TOP/BOTTOM` or `x/y/width/height` |
-| **Raw gaze**                                                     | gaze sample | participant ID, trial ID, x, y                                                   |
-| **Participants** *(optional)*                                    | participant | participant ID, plus any columns you like                                        |
-| **Trials** *(optional)*                                          | trial       | trial ID, plus any columns you like                                              |
-| **Texts** *(optional)*                                           | text        | text ID, plus any columns you like                                               |
+At least one of the first three tables below; add others as needed.
 
-A dataset needs fixations, words or raw gaze; any one of them is enough, and the others are optional. Participant ID, text ID and timestamps are optional too, and conditions and reading measures unlock more features. Columns are detected from common EyeLink, Gazepoint, Tobii, SMI and Pupil Labs names, and you can correct any guess. Any other column of any table can be kept too (each table's **Extra fields to keep**): a field with one value per trial, such as a condition, then works as a trial filter, a sort key and a chip above the plot.
+| Table                  | Contents                                                       |
+| ---------------------- | -------------------------------------------------------------- |
+| Fixations              | One row per fixation: trial ID, duration, and x/y or a word ID |
+| Words (interest areas) | One row per word: trial ID, word ID and bounding box           |
+| Raw gaze               | One row per sample: participant ID, trial ID, x and y          |
+| Participants           | One row per participant, with metadata                         |
+| Trials                 | One row per trial, with metadata                               |
+| Texts                  | One row per text, with metadata                                |
+
+Columns are detected from common eye-tracker exports; check and correct the mapping when importing. Keep condition labels and other columns with Extra fields to keep. Metadata fields are available for filtering, sorting and grouping.
 
 ### Files and units
 
-Files can be CSV, TSV, TXT, Parquet, Feather, Excel, or a `.zip` of any of these. A `.zip` holding both EyeLink reports (one folder per participant, say) can go in both rows: each row reads only its own reports and says which it left out.
-
-Times are in milliseconds; a header naming another unit (`[s]`, `[μs]`) is converted. Positions are in **pixels**: screen fractions are not converted.
-
-### Metadata tables
-
-The participants, trials and texts tables work like columns of your data: they filter trials, appear as chips, sort the trial list, group readers in Corpus Analysis, and are exported beside the data. They are never copied onto the fixations, and a participant missing from the table stays in the data.
+- CSV, TSV, TXT, Parquet, Feather, Excel, or a ZIP of these files
+- Positions in pixels
+- Times in milliseconds; headers marked `[s]` or `[μs]` are converted
+- Word boxes as `x/y/width/height` or EyeLink's `IA_LEFT/RIGHT/TOP/BOTTOM`
 
 ### Trials over several screens
 
-A trial shown over several screens maps a `screen_id` column (and optionally a `screen_index` for their order) in both tables. Each screen keeps its own coordinates, and the app shows one screen at a time.
+Map `screen_id` in your tables, and `screen_index` for their order if needed. The app displays one screen at a time.
 
 ### Reading measures
 
-Per-word reading measures (TFD, FFD, first-pass time, regression path…) are columns of the **Words** table. An EyeLink interest-area report maps them from its `IA_*` names. Corpus Analysis shows only the measures you mapped and computes none of its own; how each is defined is in [Computations & methodology](https://lacclab.github.io/scanpath-studio/computations/index.md).
+Include per-word reading measures in the Words table, such as first fixation duration or total fixation duration. EyeLink's `IA_*` columns are detected. Corpus Analysis uses the measures you supply.
 
 ## Add your own data
 
-**+ → Import files** opens the add dataset screen:
+1. Choose + → Import files and name the dataset.
+1. Upload your tables and check the column mapping.
+1. Enter the recording screen size and typography where known.
+1. Optionally attach stimulus screenshots from a local folder.
+1. Click Add dataset.
 
-1. **Name** the dataset.
-1. **Upload** the tables. The app autodetects which columns are which: check what it picked, and hover the beside a field to see its first values.
-1. **Recording setup**: the screen the data was recorded on. Each value starts as an estimate or a default and is labelled so; enter the real screen size, physical width, font size and font if you know them.
-1. **Stimulus images** (optional, on your own computer): a folder with a screenshot of each text, drawn under the scanpath.
+## Load and inspect in code
 
-Then click **Add dataset**. Anything the app cannot use is listed above the button first.
+Load the same files in a script; column names are detected automatically.
 
-## The Data Management page
+Python and CLI
 
-The page lists every dataset with its counts; click a row to open it. Under the list are the open dataset's tables, its annotations, and **Data checks**, which flag values that cannot be right (such as 0 ms fixations), without removing anything.
+```
+import scanpath_studio as sps
 
-The on a row edits the dataset: its name, column mapping, recording setup, stimulus images and metadata tables. **Download setup file** saves the mapping and setup, so the same files can be added again elsewhere. Nothing changes until you click **Save changes**. The editor works on the dataset as it was added: only the columns you mapped or chose to keep were stored (the others are listed under *dropped at import*), so it cannot map a column that was left out. To use one, add the files again.
+words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
+print(sps.list_trials(words, fixations))
+```
+
+```
+scanpath-studio render --words ia.csv --fixations fixations.csv --list-trials
+scanpath-studio check --words ia.csv --fixations fixations.csv
+```
+
+For raw gaze, metadata and explicit column mappings, see the [loaders](https://lacclab.github.io/scanpath-studio/api/#load) and [CLI input options](https://lacclab.github.io/scanpath-studio/cli/#render).
+
+## Manage datasets
+
+Click a dataset row to open it. Inspect its tables, annotations and data checks below the list.
+
+Use Edit dataset to change its name, column mapping, recording setup or metadata, then Save changes. Download setup file saves the mapping and recording setup for reuse.
+
+Only imported columns are available in the editor. To use a column left out at import, add the files again.

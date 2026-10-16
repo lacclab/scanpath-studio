@@ -116,12 +116,14 @@ jobs:
             exit 0
           fi
           VERSION="${TAG#v}"
-          URL="https://pypi.org/project/scanpath-studio/${VERSION}/"
+          # The GitHub release the step above wrote: its notes are what the
+          # message points readers to.
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
           # The notification announces the release — version, link and how
           # many items each group holds — and leaves the notes themselves to
-          # the GitHub release and CHANGELOG.md.
+          # that release page.
           COUNTS="$(python scripts/changelog_notes.py "$VERSION" --format counts)"
-          TEXT=":rocket: *scanpath-studio ${TAG}* published to PyPI — $URL"
+          TEXT=":rocket: *scanpath-studio ${TAG}* published to PyPI — <${URL}|release notes>"
           if [ -n "$COUNTS" ]; then
             TEXT="$(printf '%s\n%s' "$TEXT" "$COUNTS")"
           fi

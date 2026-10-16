@@ -1,70 +1,4 @@
-/* Brand palette — mirrors APP_THEME / APP_THEME_DARK in
-   scanpath_studio/constants.py (#1f77b4 light, #5aa9e6 dark). */
-[data-md-color-scheme="default"] {
-  --md-primary-fg-color: #1f77b4;
-  --md-primary-fg-color--light: #5aa9e6;
-  --md-primary-fg-color--dark: #15537e;
-  --md-accent-fg-color: #15537e;
-}
-
-[data-md-color-scheme="slate"] {
-  --md-primary-fg-color: #1f77b4;
-  --md-primary-fg-color--light: #5aa9e6;
-  --md-primary-fg-color--dark: #15537e;
-  --md-accent-fg-color: #5aa9e6;
-  --md-typeset-a-color: #5aa9e6;
-}
-
 /* ---------- Landing page ---------- */
-
-.sps-hero {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  margin: 1rem 0 2rem;
-  flex-wrap: wrap;
-}
-
-.sps-hero img.sps-hero-logo {
-  width: 108px;
-  height: 108px;
-  border-radius: 22%;
-  box-shadow: 0 6px 24px rgba(31, 119, 180, 0.35);
-}
-
-.sps-hero .sps-hero-text {
-  flex: 1;
-  min-width: 16rem;
-}
-
-.sps-hero h1 {
-  margin: 0 0 0.4rem;
-  font-size: 2.2rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.sps-hero p.sps-tagline {
-  margin: 0;
-  font-size: 0.95rem;
-  color: var(--md-default-fg-color--light);
-  max-width: 34rem;
-}
-
-.sps-buttons {
-  margin: 1.2rem 0 0;
-}
-
-.sps-buttons .md-button {
-  margin: 0 0.5rem 0.5rem 0;
-}
-
-/* The three buttons share one width, so a short label (Install) does not make
-   its button the odd one out. */
-.md-typeset .sps-buttons .md-button {
-  min-width: 10rem;
-  text-align: center;
-}
 
 /* Screenshot / animation frames */
 .sps-shot {
@@ -79,18 +13,6 @@
   font-size: 0.75rem;
   text-align: center;
   color: var(--md-default-fg-color--light);
-}
-
-/* Feature grid cards: hover lift on top of Material's .grid.cards */
-.md-typeset .grid.cards > ul > li {
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-  border-radius: 0.5rem;
-}
-
-.md-typeset .grid.cards > ul > li:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 6px 18px rgba(31, 119, 180, 0.18);
-  border-color: var(--md-primary-fg-color--light);
 }
 
 /* Card title icons pick up the brand color */
@@ -262,3 +184,143 @@
   box-shadow: var(--md-shadow-z3);
 }
 .sps-shot-pop img { display: block; max-width: min(36rem, calc(100vw - 2rem)); max-height: 70vh; }
+
+/* Quiet disclosure at the end of the home page. */
+.md-typeset .sps-development-note {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.75rem;
+  margin-top: 2rem;
+}
+
+/* Home: introduction and overview recording share the first screen. */
+.sps-home-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr);
+  align-items: center;
+  gap: 2rem;
+  margin: 1rem 0 2.5rem;
+}
+
+.sps-home-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.sps-home-brand img {
+  flex: 0 0 56px;
+  border-radius: 22%;
+}
+
+.md-typeset .sps-home-brand h1 {
+  margin: 0;
+  color: var(--md-default-fg-color);
+  font-size: clamp(1.3rem, 2.7vw, 1.8rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.md-typeset .sps-home-headline {
+  margin: 1rem 0 0.5rem;
+  font-size: 1.3rem;
+  line-height: 1.3;
+}
+
+.sps-home-intro > p:not(.sps-home-headline) {
+  color: var(--md-default-fg-color--light);
+}
+
+.sps-home-intro .sps-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 1rem 0 0;
+}
+
+.md-typeset .sps-home-intro .md-button {
+  min-width: 0;
+  margin: 0;
+  padding: 0.45em 0.75em;
+  font-size: 0.7rem;
+}
+
+.md-typeset .sps-home-features {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.md-typeset .sps-home-features > ul > li > ul {
+  margin-bottom: 0;
+}
+
+.sps-home-links {
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+  margin-top: 1.5rem;
+  padding-top: 0.5rem;
+}
+
+@media (max-width: 60em) {
+  .sps-home-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .md-typeset .sps-home-features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 34em) {
+  .md-typeset .sps-home-features {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The gallery index is a catalogue; each example opens on its own page. */
+.sps-gallery-grid,
+.sps-recording-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.md-typeset .sps-gallery-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  overflow: hidden;
+  padding: 0.7rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.5rem;
+  transition: border-color 0.15s ease;
+}
+
+.md-typeset .sps-gallery-card:hover,
+.md-typeset .sps-gallery-card:focus-visible {
+  border-color: var(--md-primary-fg-color);
+}
+
+.sps-gallery-card .sps-figure {
+  margin: 0 0 0.35rem;
+}
+
+.sps-gallery-card .sps-plot {
+  pointer-events: none;
+}
+
+.sps-gallery-card > span {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.75rem;
+}
+
+.sps-recording-grid h3 {
+  margin-top: 0;
+}
+
+@media (max-width: 40em) {
+  .sps-gallery-grid,
+  .sps-recording-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

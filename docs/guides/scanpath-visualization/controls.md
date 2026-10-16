@@ -16,6 +16,9 @@ The tabs under the plot then work with the trial on screen: annotate it, read
 its context, compare it, export it or share it. For how the parts fit
 together, see the [Scanpath visualization](index.md) guide.
 
+For the corresponding Python keywords and CLI flags, use the
+[figure options table](../../api.md#figure-options).
+
 ## Trial control bar
 
 <a class="sps-ctl sps-ctl--wide" href="../../../assets/screenshots/controls/trial-row.webp" title="Open full size"><img src="../../../assets/screenshots/controls/trial-row.webp" alt="The trial control bar" loading="lazy"></a>

@@ -51,8 +51,7 @@ total). The error names the setting that raises it, for example
 ### Does the app compute reading measures?
 
 No. Corpus Analysis and Export show the measures your interest-area report
-provides, as your eye-tracking software defines them; [Computations](computations.md)
-gives how Scanpath Studio would compute each.
+provides, as your eye-tracking software defines them.
 
 ### Does :material/filter_list: Filters & highlights change my data?
 
@@ -61,10 +60,10 @@ they are.
 
 ## Export and sharing
 
-### PDF, GIF or MP4 export fails { #export-fails }
+### Image or video export fails { #export-fails }
 
-These formats need Chrome, Chromium or Edge installed on the computer running
-the app. Installing one is enough. With a pip install you can instead run
+PDF, GIF and MP4 exports, static images from Python or the CLI, and image
+bundles need Chrome, Chromium or Edge on the computer running Scanpath Studio. Installing one is enough. With a pip install you can instead run
 `plotly_get_chrome -y` once. HTML, and the current figure's PNG and SVG, work
 without a browser.
 

@@ -1,47 +1,34 @@
 # Tutorials
 
-Each tutorial walks one research task from start to finish. New here? Start
-with [Install](../install.md).
+Choose a task. For installation, see [Get started](../install.md); for control
+reference, see the [feature guides](../guides/index.md).
 
 <div class="grid cards" markdown>
 
 - :material-clipboard-pulse:{ .lg .middle } **[Optimize data collection](data-collection/index.md)**
 
-    Pilot your eye tracker, software, and stimulus layout (font, spacing)
-    before you commit — for example, [compare two eye trackers on the same
-    text](data-collection/compare-eye-trackers.md). Catch
-    calibration and setup problems that only show up in a plot, and train new
-    experimenters to spot issues such as frequent blinking, or check their
-    sessions as you supervise.
+    - [Check a session](data-collection/check-a-session.md)
+    - [Compare two eye trackers](data-collection/compare-eye-trackers.md)
+    - [Audit an experimenter](data-collection/audit-an-experimenter.md)
 
-- :material-check-decagram:{ .lg .middle } **[Validate your data](data-collection/check-a-session.md)**
+- :material-filter:{ .lg .middle } **[Filter data](data-filtering/index.md)**
 
-    Mark trials or whole sessions for exclusion, and decide whether you need
-    to collect more. Check that fixation detection and line assignment hold up
-    on this dataset by viewing fixations against the raw gaze and word boxes.
-
-- :material-filter:{ .lg .middle } **[Filter data for analysis or publication](data-filtering/index.md)**
-
-    Exclude or flag poorly calibrated, skimming, or non-reading trials, and
-    trials with out-of-bounds, very short, or very long fixations. Annotate
-    trials as you look through them: star them, tag them (such as
-    `not reading`) or add notes, then filter by those tags. Find the
-    trials a specific analysis needs — for example, participants with a given
-    native language and good calibration — and export the marked trial IDs.
+    - [Exclude unsuitable trials](data-filtering/exclude-unsuitable-trials.md)
+    - [Select participants by a field](data-filtering/select-participants.md)
+    - [Find the trials an analysis needs](data-filtering/find-trials-for-an-analysis.md)
 
 - :material-file-export:{ .lg .middle } **[Export customized figures](exporting-figures/index.md)**
 
-    Show a real scanpath in a paper or talk as a heatmap or a replay, and
-    save the look as a design to reuse. Or bulk-export every trial
-    consistently, for example as training data for models that generate
-    scanpaths on images.
+    - [Export one figure](exporting-figures/export-one-figure.md)
+    - [Export a replay](exporting-figures/export-a-replay.md)
+    - [Export every trial](exporting-figures/export-every-trial.md)
 
-- :material-chart-box:{ .lg .middle } **[Compare and analyze](corpus-analysis/index.md)**
+- :material-chart-box:{ .lg .middle } **[Analyze a corpus](corpus-analysis/index.md)**
 
-    Compare model-generated scanpaths with human ones, contrast groups and
-    conditions, and see how reading progresses over time.
+    - [Analyze one text](corpus-analysis/analyze-one-text.md)
+    - [Compare groups or conditions](corpus-analysis/compare-groups.md)
+    - [See progression over time](corpus-analysis/progression-over-time.md)
 
 </div>
 
-The app also has short interactive tutorials under :material/help: **Help → :material/explore: Tutorials**.
-They highlight each control as you go, and never change your data or settings.
+In the app, open Help → Tutorials for guided tours of the controls.

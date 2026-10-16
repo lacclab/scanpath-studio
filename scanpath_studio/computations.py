@@ -13,7 +13,7 @@ This module is data, not behaviour. It exists so that
   the code — every ``aggregation.MEASURES`` entry, every drift-correction
   algorithm and every similarity metric must map to an entry here, and every
   entry must point at a function that exists;
-* ``docs/computations.md`` can be generated from one source rather than
+* ``plans/computation-register.md`` can be generated from one source rather than
   maintained in parallel with it (``python -m scanpath_studio.computations``).
 
 **Verification tiers.** ``A`` a hand-calculated synthetic oracle · ``B`` an
@@ -1624,7 +1624,7 @@ def anchor(entry_id: str) -> str:
 
 
 def to_markdown() -> str:
-    """Render the register as the ``docs/computations.md`` page.
+    """Render the register as the ``plans/computation-register.md`` page.
 
     Generated rather than hand-maintained so the documentation cannot drift
     from the catalogue the integrity tests check.
@@ -1709,7 +1709,7 @@ def to_markdown() -> str:
 def main() -> None:  # pragma: no cover - thin CLI wrapper
     from pathlib import Path
 
-    target = Path(__file__).resolve().parents[1] / "docs" / "computations.md"
+    target = Path(__file__).resolve().parents[1] / "plans" / "computation-register.md"
     target.write_text(to_markdown(), encoding="utf-8")
     print(f"Wrote {target} ({len(REGISTER)} entries)")
 

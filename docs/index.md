@@ -4,24 +4,28 @@ hide:
   - toc
 ---
 
-<div class="sps-hero" markdown>
-<img class="sps-hero-logo" src="assets/icon.png" alt="Scanpath Studio icon" />
-<div class="sps-hero-text" markdown>
+<div class="sps-home-hero" markdown>
+<div class="sps-home-intro" markdown>
+<div class="sps-home-brand" markdown>
+<img src="assets/icon.png" alt="" width="56" height="56" />
 
 # Scanpath Studio
 
-<p class="sps-tagline">
-Inspect, compare, analyze, and export eye-tracking-while-reading scanpaths.
-</p>
+</div>
+
+<p class="sps-home-headline">See how people read.</p>
+
+A free, open-source tool for visualizing eye movements in reading.
+Bring your own data, or start with the bundled demo.
 
 <div class="sps-buttons" markdown>
-[:material-play-circle: Try the demo](https://scanpath-studio.streamlit.app){ .md-button .md-button--primary }
-[:material-download: Install](install.md#install){ .md-button }
+[:material-play-circle: Try online](https://scanpath-studio.streamlit.app){ .md-button .md-button--primary }
+[:material-download: Download](install.md#install){ .md-button }
 [:material-school: Tutorials](tutorials/index.md){ .md-button }
 </div>
 
 </div>
-</div>
+<div class="sps-home-preview" markdown>
 
 <video class="sps-shot" controls muted loop playsinline preload="metadata"
        poster="assets/app_demo_poster.webp" data-autoplay
@@ -29,68 +33,84 @@ Inspect, compare, analyze, and export eye-tracking-while-reading scanpaths.
   <source src="assets/app_demo.mp4" type="video/mp4">
 </video>
 
-## With Scanpath Studio you can:
+</div>
+</div>
 
-<div class="grid cards" markdown>
+## From recording to publication
 
-- :material-clipboard-pulse:{ .lg .middle } **[Optimize data collection](tutorials/data-collection/index.md)**
+<div class="grid cards sps-home-features" markdown>
 
-    Pilot your eye tracker, software, and stimulus layout (font, spacing)
-    before you commit — for example, [compare two eye trackers on the same
-    text](tutorials/data-collection/compare-eye-trackers.md). Catch
-    calibration and setup problems that only show up in a plot, and train new
-    experimenters to spot issues such as frequent blinking, or check their
-    sessions as you supervise.
+- :material-database-import:{ .lg .middle } **[Bring your own data](guides/loading-data/index.md)**
 
-- :material-check-decagram:{ .lg .middle } **[Validate your data](tutorials/data-collection/check-a-session.md)**
+    - Load words, fixations and raw gaze
+    - Add participant, trial and text metadata
 
-    Mark trials or whole sessions for exclusion, and decide whether you need
-    to collect more. Check that fixation detection and line assignment hold up
-    on this dataset by viewing fixations against the raw gaze and word boxes.
+- :material-eye:{ .lg .middle } **[Inspect and replay](guides/scanpath-visualization/index.md)**
 
-- :material-filter:{ .lg .middle } **[Filter data for analysis or publication](tutorials/data-filtering/index.md)**
+    - View scanpaths, word boxes and heatmaps
+    - Replay a reading at your chosen speed
 
-    Exclude or flag poorly calibrated, skimming, or non-reading trials, and
-    trials with out-of-bounds, very short, or very long fixations. Annotate
-    trials as you look through them: star them, tag them (such as
-    `not reading`) or add notes, then filter by those tags. Find the
-    trials a specific analysis needs — for example, participants with a given
-    native language and good calibration — and export the marked trial IDs.
+- :material-filter:{ .lg .middle } **[Filter and annotate](tutorials/data-filtering/index.md)**
 
-- :material-file-export:{ .lg .middle } **[Export customized figures](tutorials/exporting-figures/index.md)**
+    - Select participants, conditions and trials
+    - Star, tag and write notes on trials
 
-    Show a real scanpath in a paper or talk as a heatmap or a replay, and
-    save the look as a design to reuse. Or bulk-export every trial
-    consistently, for example as training data for models that generate
-    scanpaths on images.
+- :material-compare-horizontal:{ .lg .middle } **[Compare readings](guides/scanpath-visualization/controls.md#compare)**
 
-- :material-chart-box:{ .lg .middle } **[Compare and analyze](tutorials/corpus-analysis/index.md)**
+    - Overlay trials or place them side by side
+    - Compare readers and datasets
 
-    Compare model-generated scanpaths with human ones, contrast groups and
-    conditions, and see how reading progresses over time.
+- :material-chart-box:{ .lg .middle } **[Analyze a corpus](guides/corpus-workspace/index.md)**
+
+    - Summarize measures by text, reader or group
+    - Plot them against word features
+
+- :material-file-export:{ .lg .middle } **[Export and share](guides/exporting/index.md)**
+
+    - Save figures, replays or every trial at once
+    - Share a view or get its Python / CLI code
 
 </div>
 
-## What the app includes
+## See it in action
 
-- **Scanpath visualization:** true-position text, fixations, saccades, raw gaze,
-  heatmaps, replay, and comparison — including two trials from different
-  datasets.
-- **Flexible loading:** your own word, fixation, and raw-gaze tables.
-- **Corpus analysis:** per-text, per-participant, and group summaries
-  of the reading measures in your data.
-- **Reproducible output:** static and animated figures, bulk exports, share
-  links, and restorable configurations.
+=== "Add your data"
 
-See the [Plot gallery](gallery.md) for what it draws, the
-[feature guides](guides/index.md) for the controls, or
-[Automation](automation.md) for Python and the CLI.
+    <video class="sps-shot" controls muted loop playsinline preload="none"
+           poster="assets/workflows/add-your-data_poster.webp" data-autoplay
+           aria-label="Adding EyeLink fixation and interest-area reports">
+      <source src="assets/workflows/add-your-data.mp4" type="video/mp4">
+    </video>
 
-!!! note "AI-assisted software"
-    Scanpath Studio was built with AI assistance. Cross-check results before
-    publishing. If something looks wrong — or if you have a feature request or
-    suggestion — [report it](https://github.com/lacclab/scanpath-studio/issues).
+=== "Compare readings"
 
-## Citing
+    <video class="sps-shot" controls muted loop playsinline preload="none"
+           poster="assets/workflows/compare_poster.webp" data-autoplay
+           aria-label="Two readers of one text side by side">
+      <source src="assets/workflows/compare.mp4" type="video/mp4">
+    </video>
 
-If you use Scanpath Studio in your research, please [cite it](cite.md).
+=== "Analyze a corpus"
+
+    <video class="sps-shot" controls muted loop playsinline preload="none"
+           poster="assets/workflows/corpus-analysis_poster.webp" data-autoplay
+           aria-label="A reading measure on the text, against surprisal and between groups">
+      <source src="assets/workflows/corpus-analysis.mp4" type="video/mp4">
+    </video>
+
+More examples in the [plot gallery](gallery.md).
+
+<div class="sps-home-links" markdown>
+
+[Python & CLI](guides/scanpath-visualization/index.md#render-in-code) · [FAQ](faq.md) · [Cite Scanpath Studio](cite.md) · [Feedback](https://github.com/lacclab/scanpath-studio/issues)
+
+</div>
+
+<div class="sps-development-note" markdown>
+
+Scanpath Studio was developed with AI assistance. As with any research
+software, cross-check its results before relying on them in published work.
+Found a bug, or have a feature request?
+[Open an issue](https://github.com/lacclab/scanpath-studio/issues).
+
+</div>

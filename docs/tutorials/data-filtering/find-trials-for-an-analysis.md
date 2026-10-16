@@ -1,26 +1,16 @@
 # Find the trials an analysis needs
 
-Some analyses need particular trials: ones with very short or very long
-fixations, fixations out of bounds, or many blinks.
+Locate trials containing particular fixation patterns.
 
-## 1. Make them stand out
+1. Open Plot controls → Filters & highlights → Fixations.
+2. Set the relevant category to Highlight:
 
-Open **:material/filter_list: Filters & highlights → :material/blur_on:
-Fixations** in the plot rail and **Highlight** the category you are after:
-**Short** or **Long** (each with its own threshold in ms), **Out of bounds**
-(fixations in no word box), or **Blink** (fixations at or next to a blink — it
-needs a blink column in your data).
+    - Short or Long, with a duration threshold in milliseconds
+    - Out of bounds, for fixations outside every word box
+    - Blink, if your data includes a blink column
 
-## 2. Bring them to the top
-
-Use the ⇅ trial-ordering popover beside the trial picker to sort the trials,
-for example by reading time to surface unusually short or long ones, and step
-through them with ◀ ▶.
-
-## 3. Mark them
-
-Tag the trials the analysis needs in **Annotations**, then keep only them: in
-the filter funnel under **By trial annotation**, put the tag in **With any of
-these tags**.
-
-**Then:** [check and export the pool](index.md#every-task-ends-the-same-way).
+3. Step through the trials. In Annotations, tag those that meet your analysis
+   criteria, for example `include`.
+4. Open the filter button beside Select trial. Under By trial annotation,
+   enter `include` in With any of these tags.
+5. [Check and export the selection](index.md#every-task-ends-the-same-way).

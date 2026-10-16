@@ -3624,10 +3624,10 @@ def save_figure(
     width_in: float | None = None,
     dpi: int | None = None,
 ) -> Path:
-    """Save a figure by extension: ``.html`` (interactive, needs no browser) or
-    ``.png``/``.svg``/``.pdf`` (static via Kaleido — needs Chrome, Chromium or
-    Edge; run ``plotly_get_chrome -y`` once if none is installed). ``width`` /
-    ``height`` set the image size in px (overriding the figure's own size);
+    """Save a figure by extension: ``.html`` (interactive) or
+    ``.png``/``.svg``/``.pdf`` (static via Kaleido). See the
+    [export FAQ](https://lacclab.github.io/scanpath-studio/faq/#export-fails)
+    for setup. ``width`` / ``height`` set the image size in px (overriding the figure's own size);
     both ignored for ``.html``. Returns the written path.
 
     ``width_mm`` or ``width_in`` with ``dpi`` (default 300) sizes a PNG for

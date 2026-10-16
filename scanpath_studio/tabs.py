@@ -113,11 +113,9 @@ from scanpath_studio.compare_source import (
     snapshot_for,
     source_has_raw_gaze,
 )
-from scanpath_studio.computations import anchor as computation_anchor
 from scanpath_studio.computations import measure_entry
 from scanpath_studio.constants import (
     AUTHOR_CHOICE,
-    CITATION,
     DATASET_EDITOR_OPEN_KEY,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
@@ -8864,8 +8862,6 @@ def _measure_picker(
     return MEASURES[labels[chosen]]
 
 
-_COMPUTATIONS_URL = f"{CITATION['docs_url']}computations/"
-
 #: Corpus Analysis views whose numbers the app computes from the fixations
 #: (reading speed, regression rate, landing positions, the summary tables)
 #: rather than reading them from the dataset. Held back with
@@ -8907,23 +8903,19 @@ def _views_phrase(views) -> str:
 def _measure_note(host, measure: Measure, observation: str) -> None:
     """One caption under the measure picker: what the measure is and its unit
     (quoted from the computation register, VAL-5), what each plotted value
-    is, and a link to the measure's full definition."""
+    is."""
     entry = measure_entry(measure.column)
     if entry is None:
-        about, url = (
-            "As recorded in the data.",
-            f"{CITATION['docs_url']}guides/loading-data/#reading-measures",
-        )
+        about = "As recorded in the data."
         unit = measure.unit or "count"
     else:
         # The register's summaries can end in a tracker id ("(BUG-25)").
         about = re.sub(r"\s*\([A-Z]+-\d+\)(?=\.?$)", "", entry.summary)
-        url = f"{_COMPUTATIONS_URL}#{computation_anchor(entry.id)}"
         unit = entry.unit or measure.unit or "count"
     if measure.column in UNFIXATED_BLANK_MEASURES:
         # #374 F1: a skipped word has no value here, not a 0 ms one.
         about += " Skipped words are left out."
-    host.caption(f"{about} Unit: {unit}. {observation} [Definition ↗]({url})")
+    host.caption(f"{about} Unit: {unit}. {observation}")
 
 
 #: Appended to a measure note when the values are z-scored (AN-25).
@@ -8960,7 +8952,7 @@ def _spread_note(host, spread: str, agg: str | None = None) -> None:
     if agg == "sum" and spread in ("SD", "SEM"):
         note = "With Sum, SD and SEM are drawn as a 95% bootstrap interval of the sum."
     if note:
-        host.caption(f"{note} [Details ↗]({_COMPUTATIONS_URL}#agg-spread)")
+        host.caption(note)
 
 
 def _normalize_toggle(host, *, key, disabled=False):
@@ -17011,11 +17003,7 @@ def render_data_health(
             + (" · whole dataset, before the trial filters" if filtered else "")
         )
         if not findings:
-            st.caption(
-                "No fixation lasts 0 ms or less, every duration, onset and "
-                "position is a finite number, every word box has an area, and "
-                "every screen's recorded size is usable."
-            )
+            st.caption("No issues found in the data checks.")
             return
         lines: dict[str, list[str]] = {"warning": [], "note": []}
         for finding in findings:
@@ -17033,10 +17021,7 @@ def render_data_health(
         if lines["note"]:
             st.caption("  \n".join(lines["note"]))
         with st.expander("What the data checks found", expanded=False):
-            st.caption(
-                "Nothing is removed or changed: these rows stay in every table "
-                "and export. What each one does in the app:"
-            )
+            st.caption("Flagged rows are kept. Details and examples:")
             for finding in findings:
                 names = active(st.session_state, finding.table)
                 st.markdown(f"**{finding.title}**")

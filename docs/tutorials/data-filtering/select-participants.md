@@ -1,38 +1,14 @@
 # Select participants by a field
 
-Keep the participants an analysis is about — for example, the native speakers
-of one language whose calibration is good — and export their trial IDs.
+Select readers using metadata such as native language, age or group.
 
-## 1. Attach a participants table
+1. Attach a table with one row per participant and a participant ID column:
+   use Metadata → Participants when adding a dataset, or Data Management →
+   Edit dataset → Data tables & column mapping afterwards.
+2. Open the filter button beside Select trial, then By participant.
+3. Choose a field and the values or range to keep.
+4. Check the remaining participant IDs and
+   [export the selection](index.md#every-task-ends-the-same-way).
 
-Native language, age or a questionnaire score is recorded per participant, not
-per trial. Attach a participants table, one row per participant: under
-**Metadata → Participants** when you add the dataset, or later in
-**:material/database: Data Management → Edit dataset → Data tables & column
-mapping**.
-
-## 2. Filter on it
-
-Its columns appear under **By participant** in the filter funnel. Pick the
-language, and the trial picker keeps only those participants' trials.
-
-<video class="sps-shot" controls muted loop playsinline preload="none"
-       poster="../../../assets/workflows/trial-filtering_poster.webp" data-autoplay
-       aria-label="Narrowing the trials by condition and participant">
-  <source src="../../../assets/workflows/trial-filtering.mp4" type="video/mp4">
-</video>
-
-*Narrowing the trials to one condition and one participant: from 24 trials to 6 — participant fields narrow the same way.*
-
-## 3. Check their calibration and mark the trials
-
-Step through the remaining trials and tag the ones to keep, such as `include`,
-or the ones to drop — see [Exclude unsuitable trials](exclude-unsuitable-trials.md).
-
-## 4. Export the trial IDs
-
-Export the annotations (**:material/database: Data Management → Annotations →
-Export**): each entry names its participant and trial. Or export the filtered
-pool as a bundle, whose `index.csv` lists every trial in it.
-
-**Then:** [check and export the pool](index.md#every-task-ends-the-same-way).
+To also apply trial-level quality criteria, follow
+[Exclude unsuitable trials](exclude-unsuitable-trials.md).

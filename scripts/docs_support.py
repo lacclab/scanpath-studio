@@ -354,7 +354,9 @@ def saccade_class_legend() -> list[tuple[str, str]]:
     ]
 
 
-def embed(fig, *, caption: str | None = None, legend=None) -> str:
+def embed(
+    fig, *, caption: str | None = None, legend=None, preview: bool = False
+) -> str:
     """A figure for a docs page, drawn the way the app draws it.
 
     The figure's own JSON rides in the page, in its ``data-figure`` attribute,
@@ -363,6 +365,7 @@ def embed(fig, *, caption: str | None = None, legend=None) -> str:
     word labels keep the size they were fitted to. Plotly itself is loaded only
     on a page that has a figure, from the site's own copy (``mkdocs_hooks.on_post_build``), never a CDN.
     ``legend`` is ``[(label, colour), …]``, drawn as swatches under the figure.
+    ``preview`` disables hover and the toolbar for linked gallery thumbnails.
     A replay also carries the app's player, so its ▶ Play keeps real time, and
     its frames packed, as the app's page does (PERF-17).
     """
@@ -377,7 +380,7 @@ def embed(fig, *, caption: str | None = None, legend=None) -> str:
     # script rebuilds the frames the spec leaves out (PERF-17). It waits for ▶
     # rather than autoplaying: a page draws its figures before they scroll into
     # view.
-    page = replay_page(fig)
+    page = None if preview else replay_page(fig)
     if page is None:
         spec = json.loads(fig.to_json())
     else:
@@ -385,7 +388,7 @@ def embed(fig, *, caption: str | None = None, legend=None) -> str:
         spec = json.loads(to_json_plotly(figure_dict))
         spec["player"] = player
         spec["layout"]["meta"]["scanpath_autoplay"] = False
-    spec["config"] = _PLOT_CONFIG
+    spec["config"] = {**_PLOT_CONFIG, "staticPlot": True} if preview else _PLOT_CONFIG
     # An attribute, not a `<script type="application/json">`: Material's instant
     # navigation re-creates every inline script in the new page from its text
     # alone, dropping the type, so the JSON ran as JavaScript and the figure was

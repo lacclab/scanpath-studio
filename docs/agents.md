@@ -192,13 +192,12 @@ fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
 anim = sps.animate_scanpath(words, fixations, pid, tid, playback_speed=4.0)
 pair = sps.compare_scanpaths(words, fixations, (pid, tid), (pid_b, tid_b))
 
-sps.save_figure(fig, "out.html")  # interactive, no browser needed
-sps.save_figure(fig, "out.png")  # .png/.svg/.pdf via Kaleido → needs Chrome
+sps.save_figure(fig, "out.html")  # interactive
+sps.save_figure(fig, "out.png")  # static image
 sps.save_figure_layers(fig, "layers/", fmt="svg")  # one file per layer
 ```
 
-**HTML never needs Chrome.** PNG/SVG/PDF go through Kaleido, which drives a
-Chrome/Chromium binary: run `plotly_get_chrome -y` once, or fall back to HTML.
+See the [FAQ](faq.md#export-fails) for image-export setup.
 
 ## Figure options
 
@@ -324,7 +323,7 @@ raising. Every flag is in the [CLI reference](cli.md).
 | `plot_scanpath() got an unexpected keyword argument` | Misspelled or unsupported option. | The message suggests the nearest names; `api.figure_options()` is the full list. |
 | `color_by='…' (--color-by on the CLI) names no column` (or `highlight_column=`, words) | The option's *value* is a column the data doesn't have. | The message names the closest columns and lists them all; `color_by` also takes `'(uniform)'` and `'line'`. |
 | `Options not supported by the animation:` | A static-only option (heatmap, arcs, saccade types) passed to `animate_scanpath`. | Drop it, or render the static figure. |
-| `Static .png export failed:` | Kaleido has no Chrome. | `plotly_get_chrome -y`, or save `.html`. |
+| `Static .png export failed:` | Image-export setup is missing. | See the [FAQ](faq.md#export-fails). |
 | `Fixations … have no usable coordinates` | AOI-sequence fixations with no matching word boxes. | Supply the words table whose `word_id`s match. |
 | `Fixations: the Word/IA ID column … holds no numbers` | `data.UnplacedFixationsError`: the fixations map no `x`/`y` and their word ids are text (`w1`), so none can be placed. | Map `x` and `y` in `fix_schema`, or give both tables numeric word ids. |
 

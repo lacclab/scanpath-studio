@@ -429,10 +429,12 @@ PARAM_LEGACY_COLORBAR = (
 # Every public corpus on the deep link.
 #
 # `?source=corpus` says the data source is one entry of
-# `app.public_dataset_registry()` — the public corpora, a catalogue that varies
-# per machine and so cannot have one `?source=` token each. `?corpus=` names
-# which, by a slug of the entry's *stable identifier* (its registry `short`) —
-# never of its display label, which is copy and will be reworded.
+# `app.public_dataset_registry()` — the built-in public corpora **and** each
+# harmonised benchmark corpus the user added, which is a catalogue that varies
+# per machine and so cannot have one `?source=` token each. `?corpus=`
+# names which, by a slug of the entry's *stable identifier* (a prepared corpus'
+# manifest name, a built-in's registry `short`) — never of its display label,
+# which is copy and will be reworded.
 #
 # OneStop's regimes keep tokens of their own (`onestop_<regime>`) and are
 # emitted in preference to this pair.
@@ -453,6 +455,12 @@ PARAM_DATASET = "dataset"
 # `_build_share_query` never see them.
 CORPUS_SUBTAB = "corpus_subtab"
 URL_BOUND_WIDGET_KEYS = frozenset({CORPUS_SUBTAB})
+
+# The bundle *directory* is deliberately NOT here and never goes in a link: it is
+# a local filesystem path, so putting it on the wire would leak the sender's
+# directory layout to the recipient (and name a path that means nothing on their
+# machine). A link names the corpus; where the recipient keeps their bundle is
+# theirs to say. `eyegenbench_dir` therefore stays an ordinary session key.
 
 # Where `?source=` lands. Written by `app.main`'s source dispatch — every
 # `?source=` token resolves to `data_source_choice` there, and

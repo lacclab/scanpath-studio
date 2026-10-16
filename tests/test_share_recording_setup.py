@@ -517,10 +517,10 @@ def _boot_link(**params):
     [
         # A link with no `source=` at all.
         {"canvas_width": "1920", "canvas_height": "1080"},
-        # A corpus this app does not offer — the app stays on the demo.
+        # A corpus the recipient has no bundle for — the app stays on the demo.
         {
             "source": "corpus",
-            "corpus": "nothing-here",
+            "corpus": "harmonised-nothing-here",
             "canvas_width": "1920",
             "canvas_height": "1080",
         },

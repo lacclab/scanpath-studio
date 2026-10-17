@@ -1,11 +1,11 @@
 """Split comparisons size each panel's word labels from its final subplot space.
 
-Round-8 review, finding 5: the side-by-side / stacked builder sized each
-panel's labels from a preliminary fit, then gave the figure the widest /
-tallest fit of the pair. With two different screens the smaller one renders
-its boxes at a larger scale than its text was sized for — A at 800×600 and B
-at 1600×1200 both got 8 px labels, though A's boxes were drawn at twice B's
-scale. The labels now follow the scale each panel's axes actually get.
+The side-by-side / stacked builder gives the figure the widest / tallest fit
+of the pair, so a panel's labels cannot be sized from a preliminary fit: with
+two different screens the smaller one renders its boxes at a larger scale than
+that fit — A at 800×600 and B at 1600×1200 would both get 8 px labels, though
+A's boxes are drawn at twice B's scale. The labels follow the scale each
+panel's axes actually get.
 """
 
 from __future__ import annotations
@@ -110,15 +110,15 @@ def test_manual_font_follows_each_panels_final_scale(layout, canvas_b):
         assert fonts[idx] == pytest.approx(BASE_FONT * _panel_scale(fig, idx))
 
 
-def test_the_reviewed_pair_keeps_each_panels_text_to_its_boxes():
-    """The review's case: the same 20-px AOI renders 19.2 px high in A and
+def test_two_screens_keep_each_panels_text_to_its_boxes():
+    """Two screens a factor of two apart: the same 20-px AOI renders 19.2 px high in A and
     9.6 px in B, so A's 16-px font is drawn twice the size of B's."""
     fig = _figure("side_by_side", (1600, 1200))
     assert (fig.layout.width, fig.layout.height) == (1600, 600)
     fonts = _label_fonts(fig)
     assert fonts[0] == pytest.approx(2 * fonts[1])
-    # 15.36 / 7.68 on the full height; the A/B panel titles' band (#374 F26)
-    # takes a little of it.
+    # 15.36 / 7.68 on the full height; the A/B panel titles' band takes a
+    # little of it.
     assert fonts[0] == pytest.approx(15.36, rel=0.03)
 
 

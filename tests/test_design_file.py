@@ -1,7 +1,6 @@
-"""UX-179: the saved-design library's own file — My designs → Export / Import.
+"""The saved-design library's own file — My designs → Export / Import.
 
-It replaced the 💾 Session backup's ``design_presets`` section, which was the
-only portable copy of the library.
+It is the portable copy of the library.
 """
 
 from __future__ import annotations
@@ -51,7 +50,7 @@ def test_only_plot_settings_come_in():
 
 
 def test_compare_settings_come_in_with_the_design():
-    """VIZ-47 widened a design past `global_*` (Compare, fixation windows,
+    """A design holds more than `global_*` keys (Compare, fixation windows,
     replay speed); an imported one must keep those too."""
     text = json.dumps(
         {
@@ -146,7 +145,7 @@ def test_a_bad_file_says_so_and_changes_nothing():
 
 
 def test_invalid_values_are_skipped_and_reported():
-    """Round 11 #2: a value no widget can take never reaches the library."""
+    """A value no widget can take never reaches the library."""
     report: list[str] = []
     text = json.dumps(
         {
@@ -204,7 +203,7 @@ def test_applying_a_design_with_a_bad_value_does_not_raise():
 
 
 def test_every_design_key_has_a_rule():
-    """Round 11: `sanitize_design` promises no bad value reaches a widget, so
+    """`sanitize_design` promises no bad value reaches a widget, so
     every key a design can hold must reject a value no widget writes — and
     accept its own default."""
     from scanpath_studio import url_state

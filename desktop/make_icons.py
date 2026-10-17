@@ -1,4 +1,4 @@
-"""Generate the desktop app icons (ENG-15).
+"""Generate the desktop app icons.
 
 Draws a scanpath motif — four fixation dots joined across compact word blocks,
 including a return sweep — on a rounded dark tile, then writes the
@@ -29,8 +29,8 @@ SACCADE = APP_THEME_DARK["primaryColor"]
 FIXATION = CURRENT_FIX_OUTLINE
 FIXATION_RING = APP_THEME_DARK["textColor"]
 
-# VIZ-29: four bold targets form a simple reading/return-sweep silhouette. The
-# previous eight-point path crossed itself and collapsed into noise at 16 px.
+# Four bold targets form a simple reading/return-sweep silhouette; a longer
+# path that crosses itself collapses into noise at 16 px.
 FIXATIONS = (
     (120, 142, 36),
     (382, 142, 42),

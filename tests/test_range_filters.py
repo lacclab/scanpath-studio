@@ -1,9 +1,9 @@
-"""UX-49: narrowing the trial pool by a *continuous* variable.
+"""Narrowing the trial pool by a *continuous* variable.
 
-Every filter before this one was categorical — a multiselect over a column's
-distinct values — which on a numeric column meant one option per distinct float.
-The change is that the panel now parses a numeric trial-level column *as
-numeric*: a two-ended slider, and a mask that keeps trials with no value.
+A categorical filter — a multiselect over a column's distinct values — on a
+numeric column means one option per distinct float. So the panel parses a
+numeric trial-level column *as numeric*: a two-ended slider, and a mask that
+keeps trials with no value.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ class TestFilterTrialsRanges:
         assert set(f["participant_id"]) == {"p1", "p3"}
 
     def test_a_missing_value_survives(self):
-        """Settled call (4). A range is a *narrowing* control, so a reader with
+        """A range is a *narrowing* control, so a reader with
         no comprehension score is not what the user asked to exclude — and
         pandas compares NaN as False, so a bare `.between()` would drop every
         one of them silently."""
@@ -105,7 +105,7 @@ class TestWhichColumnsGetASlider:
 
     def test_a_column_that_varies_inside_a_trial_does_not(self):
         """It would filter *rows*, not trials — silently cutting a scanpath in
-        half. That is PRE-2's render-layer territory."""
+        half. That is the render layer's job (the figure's 🧹 Filter)."""
         fields = self._fields(_words(), _fixations(), ["duration_ms"])
         assert "duration_ms" not in fields
 
@@ -176,7 +176,7 @@ class TestReadingTheSliderBack:
     def test_a_narrowed_slider_becomes_a_range(self):
         result = self._compute((0.3, 0.9))
         assert result["ranges"] == {"comprehension_score": (0.3, 0.9)}
-        # UX-7's per-filter clear needs the key, already prefixed.
+        # The per-filter clear needs the key, already prefixed.
         assert result["metadata_keys"]["comprehension_score"] == (
             "filter_comprehension_score_range"
         )
@@ -242,9 +242,9 @@ def test_has_active_trial_filters_notices_a_range():
 
 
 class TestTheBundledDemoOffersOne:
-    """UX-49 shipped with an all-categorical offered field set, so the slider was
-    invisible on every bundled and public corpus — nothing to look at, and
-    nothing to catch a regression either. `TRIAL_INDEX` is the presentation
+    """Without a numeric field in the offered set the slider would be invisible
+    on every bundled and public corpus — nothing to look at, and nothing to
+    catch a regression either. `TRIAL_INDEX` is the presentation
     order: universal on EyeLink exports, genuinely worth filtering on (drop the
     start or the tail of a session), and whole-numbered, so it also exercises the
     integer-slider path end to end.
@@ -267,8 +267,8 @@ class TestTheBundledDemoOffersOne:
     def test_the_demo_actually_carries_it_as_a_trial_level_column(self):
         """Offered is not the same as present: the field list is intersected
         with the normalized frames, so a name that doesn't survive
-        normalization shows nothing (which is how `TRIAL_DWELL_TIME` was ruled
-        out — it is dropped as an unregistered passthrough)."""
+        normalization shows nothing (as `TRIAL_DWELL_TIME` does — it is dropped
+        as an unregistered passthrough)."""
         words, fixations = self._demo_frames()
         assert "TRIAL_INDEX" in words.columns
         assert "TRIAL_INDEX" in controls._trial_level_columns(words, fixations)
@@ -282,8 +282,8 @@ class TestTheBundledDemoOffersOne:
         assert low < high
 
     def test_its_two_trial_index_sliders_have_different_titles(self):
-        """UX-149: `TRIAL_INDEX` and `trial_index` once both humanized to
-        "Trial Index". DATA-66 titles each by its own name, so they differ.
+        """`TRIAL_INDEX` and `trial_index` would both humanize to "Trial
+        Index"; each is titled by its own name, so they differ.
         `trial_index` is not a default filter field, so it is offered the way
         an upload offers it: picked in the wizard."""
         words, fixations = self._demo_frames()
@@ -295,7 +295,7 @@ class TestTheBundledDemoOffersOne:
         assert labels["trial_index"] == "trial_index"
 
     def test_a_filter_is_titled_by_the_datasets_own_name(self):
-        """DATA-66: a column the user's file names `COND` reads `COND`."""
+        """A column the user's file names `COND` reads `COND`."""
         words, fixations = self._demo_frames()
         st.session_state["wizard_filter_fields"] = ["TRIAL_INDEX"]
         names = cn.ColumnNames({"TRIAL_INDEX": cn.SourceName(("Trial no.",))})

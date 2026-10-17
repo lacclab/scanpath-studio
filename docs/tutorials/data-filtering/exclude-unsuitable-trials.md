@@ -11,7 +11,7 @@ Apply your exclusion criteria and leave rejected trials out of the selection.
    not establish skimming or poor calibration.
 2. In Annotations, tag rejected trials `exclude` and add a brief reason.
 3. Open the filter button beside Select trial. Under By trial annotation,
-   enter `exclude` in Excluding tags.
+   choose `exclude` in Excluding tags.
 4. [Check and export the selection](index.md#every-task-ends-the-same-way).
 
 For trials with several screens, apply the exclusion tag to the whole trial.

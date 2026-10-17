@@ -1,8 +1,8 @@
-"""UX-135: VIZ-7's fixation-index window on the deep-link / Share surface.
+"""The fixation-index window on the deep-link / Share surface.
 
-The window reached the UI, ``render --fix-index-range`` and ``api``'s
-``fix_index_range``, but not a link — so a shared "fixations 5–20" view opened
-as the whole trial and nothing said so. The awkward half is the *write* side:
+The window reaches a link as well as the UI, ``render --fix-index-range`` and
+``api``'s ``fix_index_range`` — otherwise a shared "fixations 5–20" view would
+open as the whole trial and nothing would say so. The awkward half is the *write* side:
 ``single_fix_range`` is set to the trial's own full range the moment the slider
 renders, so a generic range emitter would stamp ``fix_range`` onto every link
 ever copied and re-window every recipient. Two conditions gate it, and both are
@@ -112,7 +112,7 @@ class TestTheWriter:
         assert "fix_range" not in params
 
     def test_a_multipart_screens_own_full_range_is_respected(self):
-        """BUG-47: `order_in_trial` is parent-global, so a later screen's full
+        """`order_in_trial` is parent-global, so a later screen's full
         range starts at 509 — the published range, not a hard-coded 1."""
         params = _share(window=(509, 578), user_set=True, full=(509, 578))
         assert "fix_range" not in params

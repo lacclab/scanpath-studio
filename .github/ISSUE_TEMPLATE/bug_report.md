@@ -7,9 +7,8 @@ labels: ["area:bug"]
 ---
 
 <!--
-Maintainers: add it to the "Scanpath Studio" project board and set its Status.
-The issue's own #N is its ID — no [BUG-N] prefix in the title (CLAUDE.md →
-Tracking work).
+Maintainers: add it to the "Scanpath Studio" project board and set its Status
+(CLAUDE.md → Tracking work).
 -->
 
 ## Request

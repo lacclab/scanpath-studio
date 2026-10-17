@@ -16,5 +16,5 @@ Locate trials containing particular fixation patterns.
 3. Step through the trials. In Annotations, tag those that meet your analysis
    criteria, for example `include`.
 4. Open the filter button beside Select trial. Under By trial annotation,
-   enter `include` in With any of these tags.
+   choose `include` in With any of these tags.
 5. [Check and export the selection](index.md#every-task-ends-the-same-way).

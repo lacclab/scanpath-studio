@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 VIDEOS = ROOT / "docs/assets/workflows"
 STILLS = ROOT / "assets/workflow-sources"
 FONT = "Arial"
-# (source, start, duration, caption); time ranges omit the extra trial steps,
-# replay-speed adjustment, and the original click-count closing cards.
+# (source, start, duration, caption); time ranges omit the source clips' extra
+# trial steps, replay-speed adjustment, and click-count closing cards.
 EDITS = {
     "home-replay": [
         ("replay", 0, 4.8, "Replay the reading"),
@@ -60,7 +60,8 @@ def main() -> None:
                 filters = (
                     "scale=1280:800:force_original_aspect_ratio=decrease,"
                     "pad=1280:800:(ow-iw)/2:(oh-ih)/2:white,setsar=1,fps=20,"
-                    # Replace the old counts rather than imply a new count.
+                    # Cover the source clip's counts rather than imply a count
+                    # for the montage.
                     "drawbox=x=600:y=0:w=680:h=50:color=white:t=fill,"
                     f"drawtext=font='{FONT}':text='{caption}':"
                     "fontsize=17:fontcolor=0x1c65a3:x=w-tw-18:y=10"

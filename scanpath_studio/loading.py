@@ -1,4 +1,4 @@
-"""UX-165: loading cards that keep the page whole, say what is happening, and
+"""Loading cards that keep the page whole, say what is happening, and
 can be cancelled.
 
 Three pieces, all built on :mod:`scanpath_studio.progress`:
@@ -14,7 +14,7 @@ Three pieces, all built on :mod:`scanpath_studio.progress`:
   the new page has drawn its controls, and a region card opening releases it.
 * :func:`run_scope` — wraps each script run, so no timer outlives its run.
 
-Mechanics, proved by the UX-165 spike: the **script thread** draws each card
+Mechanics: the **script thread** draws each card
 hidden when it opens — its Cancel button included, since a widget must be
 created on the script thread and once per run — and a **timer thread**
 carrying the script-run context reveals it and rewrites only its text
@@ -224,7 +224,7 @@ def selector_row_tracks() -> str:
     """The skeleton's `grid-template-columns` for the selector row.
 
     Each track takes the real row's weight and the floor `styles.py` gives it
-    (UX-181), so the skeleton draws the row the page is about to show.
+    so the skeleton draws the row the page is about to show.
     """
     return " ".join(
         f"minmax({selector_track_floor(i)}, {w}fr)"
@@ -652,8 +652,8 @@ class Card:
         Only a task that did real work (`progress.Task.worked` — something
         reported) *and* took at least `DELAY_S` records its duration: the
         dataset card opens on every run, and a plain rerun's 0.04 s would
-        otherwise overwrite the real load's time, so a slow load read "last
-        load 0.0 s" — nor is a plain rerun that happened to be slow, all cache
+        otherwise overwrite the real load's time, so a slow load would read
+        "last load 0.0 s" — nor is a plain rerun that happened to be slow, all cache
         checks on a big corpus, a load. A task that is already finished —
         retired by `Page.release` when something else interrupted the load, an
         inline download say — records nothing either.
@@ -871,7 +871,7 @@ def run_scope() -> Iterator[None]:
     is re-raised as Streamlit's own `StopException`, which Streamlit treats as
     a premature stop and so skips its stale-widget sweep — the state of every
     widget the run never reached is kept, where a normal finish would drop it.
-    Today only an abandoned run ever computes a cancelled task
+    Only an abandoned run ever computes a cancelled task
     (`progress.begin` never joins one), so its page is gone and Streamlit drops
     whatever it sends either way; the stop is what keeps a cut-short run from
     ending as a successful one, should a cancel ever reach a run on screen.

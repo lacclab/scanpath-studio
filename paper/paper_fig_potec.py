@@ -5,7 +5,7 @@ Loads one reader's reading of one PoTeC textbook text from a local PoTeC clone
 measures from raw fixations, and renders the scanpath over the German text at
 PoTeC's 1680x1050 presentation size.
 
-Run from the app repo:  cd app && uv run python paper/paper_fig_potec.py
+Run from the repo root:  uv run python paper/paper_fig_potec.py
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ def _figures_dir() -> Path:
 
     Defaults to ``paper/figures/`` inside the software repo so an archived
     release is self-contained; set ``PAPER_FIGURES_DIR`` to write straight into
-    the manuscript tree (e.g. ``PAPER_FIGURES_DIR=../../overleaf/figures``).
+    the manuscript tree (e.g. ``PAPER_FIGURES_DIR=../overleaf/figures``).
     """
     env = os.environ.get("PAPER_FIGURES_DIR")
     out = Path(env) if env else Path(__file__).resolve().parent / "figures"

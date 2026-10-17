@@ -1,11 +1,11 @@
-"""#422 — a color picked in a popover sticks when the popover is dismissed.
+"""A color picked in a popover sticks when the popover is dismissed.
 
 Streamlit's color picker sends its value when its own small dialog closes: on
 a click outside it, on Escape, or on a second click on its swatch. Every rail
 color sits inside an ``st.popover``, and a click on the page outside that
 popover closes the popover on the same click — which unmounts the picker
-before its own click handler runs. The swatch showed the new color, and it was
-dropped without a rerun: "changing the box fill color doesn't change it".
+before its own click handler runs, so the swatch shows the new color while the
+value is dropped without a rerun.
 
 So the press that starts any click outside an open picker (``pointerdown``,
 which comes before both handlers' ``click``) first clicks the picker's swatch:

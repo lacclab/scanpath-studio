@@ -1,4 +1,4 @@
-"""End-to-end test of the desktop app's own updater (#385).
+"""End-to-end test of the desktop app's own updater.
 
 Usage:
     python desktop/update_e2e.py <installed ScanpathStudio.app | executable> <archive>
@@ -10,8 +10,8 @@ the payload, relaunches the app, and the relaunched launcher reports in
 (``result.json`` says ``updated``); the old copy is cleaned away; and on
 Windows the installer's uninstaller survives. The relaunched app is stopped at
 the end so ``smoke_test.py`` can boot the installed copy next. What CI cannot
-reproduce — Gatekeeper and SmartScreen on a real machine — is a manual check
-in #385's review.
+reproduce — Gatekeeper and SmartScreen on a real machine — has to be checked by
+hand.
 """
 
 from __future__ import annotations

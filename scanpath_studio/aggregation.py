@@ -72,23 +72,23 @@ def text_read_counts(words: pd.DataFrame, text_col: str) -> pd.DataFrame:
 
 
 # =============================================================================
-# Question-oriented analysis sections (AN-1 … AN-28)
+# Question-oriented analysis sections
 # =============================================================================
 #
 # Everything below is pure pandas/numpy feeding ``plots.make_*`` builders, one
-# tidy DataFrame per view. The shared cross-cutting controls — measure picker
-# (AN-23), aggregation/spread (AN-24), within-reader normalization (AN-25), and
-# the min-observations guard (AN-26) — are expressed here so the figures and the
-# CSV downloads (AN-27) all read the same numbers.
+# tidy DataFrame per view. The shared cross-cutting controls — measure picker,
+# aggregation/spread, within-reader normalization, and the min-observations
+# guard — are expressed here so the figures and the CSV downloads all read the
+# same numbers.
 
 
 @dataclass(frozen=True)
 class Measure:
-    """One selectable eye-movement measure (the shared measure picker, AN-23).
+    """One selectable eye-movement measure (the shared measure picker).
 
     ``frame`` is ``"words"`` (a per-word reading measure, keyed by ``word_id``)
     or ``"fixations"`` (a per-fixation measure). ``per_word`` marks the
-    word-level measures that support the per-word *profile* views (AN-1/2/3/…);
+    word-level measures that support the per-word *profile* views;
     ``is_rate`` marks boolean flags aggregated as a 0–1 rate (skip / regression).
     """
 
@@ -204,7 +204,7 @@ MEASURES: dict[str, Measure] = {
         Measure(
             "fix_dur", "Fixation duration", "fixations", "duration_ms", "ms", False
         ),
-        # BUG-25: "px" is honest now — `saccade_amplitude` is always the pixel
+        # "px" is right: `saccade_amplitude` is always the pixel
         # distance between consecutive fixations. EyeLink's degree-valued
         # amplitudes normalize to `next_/prev_saccade_amplitude_deg` and never
         # reach this measure, so the axis label can't disagree with the data.
@@ -219,7 +219,7 @@ MEASURES: dict[str, Measure] = {
     )
 }
 
-# Bundled per-word linguistic features (AN-5). label → (column, is_categorical).
+# Bundled per-word linguistic features. label → (column, is_categorical).
 LINGUISTIC_FEATURES: dict[str, tuple[str, bool]] = {
     "GPT-2 surprisal": ("gpt2_surprisal", False),
     "Word frequency (wordfreq)": ("wordfreq_frequency", False),
@@ -243,7 +243,7 @@ def available_measures(
 
 
 def available_features(words: pd.DataFrame) -> dict[str, tuple[str, bool]]:
-    """Linguistic features present in this words frame (AN-5)."""
+    """Linguistic features present in this words frame."""
     if words is None or words.empty:
         return {}
     return {
@@ -253,7 +253,7 @@ def available_features(words: pd.DataFrame) -> dict[str, tuple[str, bool]]:
     }
 
 
-# --- Aggregation + spread primitives (AN-24) ---------------------------------
+# --- Aggregation + spread primitives ----------------------------------------
 
 _AGG_FUNCS = {"mean": np.nanmean, "median": np.nanmedian, "sum": np.nansum}
 
@@ -275,7 +275,7 @@ def bootstrap_ci(
     ci: float = 95.0,
     seed: int = 0,
 ) -> tuple[float, float]:
-    """Percentile bootstrap CI of the ``agg`` statistic (AN-24 spread option)."""
+    """Percentile bootstrap CI of the ``agg`` statistic (a spread option)."""
     arr = np.asarray(values, dtype="float64")
     arr = arr[~np.isnan(arr)]
     if arr.size < 2:
@@ -320,7 +320,7 @@ def add_normalized_column(
     by: str = "participant_id",
     out_col: str | None = None,
 ) -> pd.DataFrame:
-    """Return ``frame`` with ``col`` z-scored within each ``by`` group (AN-25).
+    """Return ``frame`` with ``col`` z-scored within each ``by`` group.
 
     Slow and fast readers then compare on *shape*, not absolute level. Groups of
     one (or zero variance) map to 0. ``out_col`` defaults to overwriting ``col``.
@@ -345,24 +345,25 @@ def add_normalized_column(
     # right) and a genuinely missing observation, which would re-enter the
     # distribution as an exactly-average data point. Keep the first, restore NaN
     # for the second — so normalizing doesn't change how many observations there
-    # are (ENG-1).
+    # are.
     out[out_col] = z.fillna(0.0).where(vals.notna())
     return out
 
 
 #: Sentinel for "every screen" — only :func:`text_screen_options` passes it, to
 #: enumerate the screens *before* one has been picked. It is deliberately not
-#: part of the public helpers' contract: pooling across screens is the defect
-#: BUG-26 fixed, so there is no user-reachable way back to it.
+#: part of the public helpers' contract: pooling across screens mixes words
+#: that only share an id (see :func:`_text_subset`), so there is no
+#: user-reachable way to it.
 _ALL_SCREENS = object()
 
 
 def text_screen_options(frame: pd.DataFrame, text_col: str, text_id) -> list[str]:
-    """The screens one text is spread over, in reading order (BUG-26).
+    """The screens one text is spread over, in reading order.
 
-    Empty for a single-screen dataset — which is every corpus without DATA-21
+    Empty for a single-screen dataset — which is every corpus without
     screen identity, so callers can treat "no options" as "there is nothing to
-    pick". Ordered by ``screen_index`` when present (MultiplEYE ranks it by first
+    pick". Ordered by ``screen_index`` when present (it can be ranked by first
     fixation onset, i.e. the order the reader actually went through the pages),
     else by first appearance.
     """
@@ -388,15 +389,15 @@ def _text_subset(
 ) -> pd.DataFrame:
     """One text's rows, scoped to **one screen** when the frame has screens.
 
-    BUG-26: ``word_id`` is unique only *within* a screen (which is why
+    ``word_id`` is unique only *within* a screen (which is why
     :func:`multipart.grouping_columns` appends ``screen_id``), so a per-text
-    aggregation keyed on ``(text_id, word_id)`` pools page 1's word 0 with page
-    2's — and, on MultiplEYE since DATA-24, with each comprehension-question
-    screen's first word as well.
+    aggregation keyed on ``(text_id, word_id)`` would pool page 1's word 0 with
+    page 2's — and, on MultiplEYE, with each comprehension-question screen's
+    first word as well.
 
     ``screen_id=None`` therefore does **not** mean "all screens": on a frame with
     screen identity it scopes to the *first* screen in reading order, so a caller
-    that hasn't been updated gets a coherent single-screen answer rather than a
+    that names no screen gets a coherent single-screen answer rather than a
     silently pooled one. Frames without screen identity ignore the argument
     entirely, which is every dataset that is not multipart.
     """
@@ -436,7 +437,7 @@ def _measure_series(frame: pd.DataFrame, measure: Measure) -> pd.Series:
     return pd.to_numeric(s, errors="coerce")
 
 
-# --- Per text: one text, many readers (AN-1 … AN-6) --------------------------
+# --- Per text: one text, many readers ----------------------------------------
 
 
 def per_reader_word_measure(
@@ -449,10 +450,10 @@ def per_reader_word_measure(
     normalize: bool = False,
     screen_id=None,
 ) -> pd.DataFrame:
-    """Tidy ``[participant_id, word_id, value, word_text]`` for one text (AN-1/2).
+    """Tidy ``[participant_id, word_id, value, word_text]`` for one text.
 
     One row per (reader, word). ``agg`` collapses any repeated readings; values
-    are optionally z-scored within reader first (AN-25). ``screen_id`` picks the
+    are optionally z-scored within reader first. ``screen_id`` picks the
     screen on a multipart text — see :func:`_text_subset` for why there is no
     "all screens".
     """
@@ -489,12 +490,12 @@ def cohort_word_profile(
     min_readers: int = 1,
     screen_id=None,
 ) -> pd.DataFrame:
-    """Per-word cohort centre + spread band across readers (AN-3 / AN-15).
+    """Per-word cohort centre + spread band across readers.
 
     Returns ``[word_id, value, lo, hi, n, enough, word_text]`` where ``value`` is
     the ``agg`` across readers of each reader's per-word value, ``lo``/``hi`` the
     ``spread`` band, ``n`` the contributing reader count and ``enough`` the
-    min-readers guard (AN-26).
+    min-readers guard.
     """
     per = per_reader_word_measure(
         words,
@@ -544,11 +545,11 @@ def word_box_aggregate(
     screen_id=None,
 ) -> pd.DataFrame:
     """One-row-per-word frame: word-box geometry + a ``value`` column = the
-    ``measure`` aggregated across readers (AN-4 stimulus tint).
+    ``measure`` aggregated across readers (the stimulus tint).
 
     Carries the canonical geometry (x/y/width/height/text/line_idx) + a synthetic
     participant/trial so it feeds straight into ``plots.make_scanpath_figure``'s
-    words-only path. One screen only (BUG-26): the boxes are measured against
+    words-only path. One screen only: the boxes are measured against
     their own screen's origin, so two screens' geometry would draw on top of each
     other however the values were keyed.
     """
@@ -583,7 +584,7 @@ def word_measure_vs_feature(
     screen_id=None,
 ) -> pd.DataFrame:
     """Per-word ``[word_id, value, feature, word_text]`` for a measure vs a
-    bundled linguistic feature (AN-5). ``value`` is the cross-reader aggregate;
+    bundled linguistic feature. ``value`` is the cross-reader aggregate;
     ``feature`` is the per-word feature (constant across readers)."""
     per = per_reader_word_measure(
         words,
@@ -631,7 +632,7 @@ def word_rate_profile(
     min_readers: int = 1,
     screen_id=None,
 ) -> pd.DataFrame:
-    """Per-word skip / regression-in rates across readers (AN-6).
+    """Per-word skip / regression-in rates across readers.
 
     Returns ``[word_id, skip_rate, regression_in_rate, n_skip, n_regression_in,
     enough_skip, enough_regression_in, word_text]``. Each rate has its own
@@ -663,7 +664,7 @@ def word_rate_profile(
     # Collapse to one row per (word, reader) FIRST, the way per_reader_word_measure
     # does. Without it `n` counts rows, so a reader who read the text twice counts
     # as two readers and clears a min_readers guard they shouldn't — and the rates
-    # below are row-weighted, over-counting whoever re-read (ENG-1).
+    # below are row-weighted, over-counting whoever re-read.
     if "participant_id" in sub.columns:
         work["participant_id"] = sub["participant_id"].to_numpy()
         text_by_word = (
@@ -696,7 +697,7 @@ def word_rate_profile(
     return out[cols].sort_values("word_id").reset_index(drop=True)
 
 
-# --- Per reader: one reader, many trials (AN-7 … AN-13) ----------------------
+# --- Per reader: one reader, many trials ------------------------------------
 
 
 def measure_values(
@@ -713,7 +714,7 @@ def measure_values(
 
 
 def reader_means(frame: pd.DataFrame, measure: Measure) -> np.ndarray | None:
-    """One value per reader — the mean of their observations (AN-21, BUG-82).
+    """One value per reader — the mean of their observations.
 
     The unit the Groups summary compares. Every word or fixation of one reader
     is correlated with that reader's others, so pooling the observations
@@ -737,7 +738,7 @@ def reader_vs_cohort_values(
     *,
     normalize: bool = False,
 ) -> dict[str, np.ndarray]:
-    """``{"This participant": …, "Cohort": …}`` value arrays for a measure (AN-7)."""
+    """``{"This participant": …, "Cohort": …}`` value arrays for a measure."""
     if frame is None or frame.empty or "participant_id" not in frame.columns:
         return {}
     work = frame.copy()
@@ -882,7 +883,7 @@ def _run_summary(fixations: pd.DataFrame, n_words: int) -> dict[str, float]:
 
 
 def trial_summary_table(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
-    """One export-ready summary row per trial screen (or legacy trial) (AN-30).
+    """One export-ready summary row per trial screen (per trial on single-screen data).
 
     Includes the standard reading totals plus run-derived refixation and
     first-pass/rereading measures. Missing source concepts stay absent/NaN
@@ -902,7 +903,7 @@ def trial_summary_table(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Data
         selected = dict(zip(key_columns, identity))
 
         # `selected` bound as a default: the closure is called inside this
-        # same iteration, so late binding is harmless today, but binding it
+        # same iteration, so late binding would be harmless, but binding it
         # makes that a property of the code rather than of the call order.
         def _slice(frame: pd.DataFrame, selected=selected) -> pd.DataFrame:
             if (
@@ -954,10 +955,10 @@ def trial_summary_table(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Data
                     .fillna(0)
                     .astype(bool)
                 )
-                # BUG-68: "forward" is not simply "not a regression" — the sweep
+                # "forward" is not simply "not a regression" — the sweep
                 # back to the start of the next line advances in reading order
-                # but is a line-length leftward jump, and counting it put the
-                # demo's mean forward saccade at 270 px instead of 172.
+                # but is a line-length leftward jump, and counting it would put
+                # the demo's mean forward saccade at 270 px instead of 172.
                 # `saccade_amplitude` is the saccade *into* each fixation, while
                 # `classify_saccades` labels the one *out of* it, hence the shift.
                 progressive = ~regression
@@ -1025,7 +1026,7 @@ def trial_summary_table(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Data
 def reader_summary(
     words: pd.DataFrame, fixations: pd.DataFrame, participant_id
 ) -> dict[str, float]:
-    """Compact reading-profile stats for one reader (AN-8).
+    """Compact reading-profile stats for one reader.
 
     WPM, mean fixation duration, fixation count, regression rate, skip rate,
     mean saccade amplitude, trial count — computed from whatever columns exist.
@@ -1066,9 +1067,9 @@ def _summary_row(words, fixations, pid) -> dict[str, float]:
             )
         rt = _trial_reading_time_ms(fx)
         total_ms = float(pd.to_numeric(rt["reading_time_ms"], errors="coerce").sum())
-        # BUG-67: a word is identified by its screen too — MultiplEYE restarts
-        # `word_id` on every page, so (trial, word) folded a trial's pages
-        # onto each other and under-counted the words read per minute.
+        # A word is identified by its screen too — MultiplEYE restarts
+        # `word_id` on every page, so (trial, word) alone would fold a trial's
+        # pages onto each other and under-count the words read per minute.
         n_words = (
             int(wd.groupby(grouping_columns(wd, include_word=True)).ngroups)
             if not wd.empty and {"trial_id", "word_id"} <= set(wd.columns)
@@ -1122,7 +1123,7 @@ def cohort_summary_table(
     *,
     participants: Sequence | None = None,
 ) -> pd.DataFrame:
-    """One summary row per reader (AN-16 / AN-8 cohort percentiles)."""
+    """One summary row per reader."""
     pids: list = []
     for frame in (fixations, words):
         if frame is not None and not frame.empty and "participant_id" in frame.columns:
@@ -1143,10 +1144,9 @@ def reader_summary_table(
     *,
     participants: Sequence | None = None,
 ) -> pd.DataFrame:
-    """First-class per-reader summary table (AN-30).
+    """First-class per-reader summary table.
 
-    Kept as an explicit public name rather than forcing callers to know the
-    older ``cohort_summary_table`` terminology.
+    The public name for :func:`cohort_summary_table`.
     """
     return cohort_summary_table(words, fixations, participants=participants)
 
@@ -1158,7 +1158,7 @@ def metric_over_time(
     participant_id=None,
     by: str = "order_in_trial",
 ) -> pd.DataFrame:
-    """Mean of a per-fixation measure vs within-trial index (AN-9).
+    """Mean of a per-fixation measure vs within-trial index.
 
     Returns ``[x, value, sem, n]``. ``by`` is ``order_in_trial`` (default) or
     ``timestamp_ms``. Filtered to ``participant_id`` when given.
@@ -1189,7 +1189,7 @@ def metric_over_time(
 def saccade_vs_duration(
     fixations: pd.DataFrame, *, participant_id=None
 ) -> pd.DataFrame:
-    """``[duration_ms, saccade_amplitude]`` rows for the oculomotor scatter (AN-10)."""
+    """``[duration_ms, saccade_amplitude]`` rows for the oculomotor scatter."""
     need = {"duration_ms", "saccade_amplitude"}
     if fixations.empty or not need <= set(fixations.columns):
         return pd.DataFrame(columns=["duration_ms", "saccade_amplitude"])
@@ -1210,7 +1210,7 @@ def saccade_vs_duration(
 def progressive_regressive_counts(
     fixations: pd.DataFrame, *, participant_id=None
 ) -> pd.DataFrame:
-    """Per-trial progressive / regressive saccade counts + share (AN-11).
+    """Per-trial progressive / regressive saccade counts + share.
 
     Returns ``[trial_id, progressive, regressive, regression_share]``.
     """
@@ -1241,7 +1241,7 @@ def ensure_fixation_enrichment(
     """Add ``is_regression`` / ``saccade_amplitude`` to ``fixations`` if missing.
 
     The pre-aggregated OneStop path keeps the EyeLink IA measures on *words* and
-    never enriches the fixation stream, so derived per-fixation columns (AN-11)
+    never enriches the fixation stream, so derived per-fixation columns
     aren't there. When ``word_id`` is present we run the same native enrichment
     (``measures.enrich_fixations``) the computed path uses; otherwise the frame
     is returned unchanged. Cheap and idempotent.
@@ -1265,7 +1265,7 @@ def landing_positions(
     participant_id=None,
     as_fraction: bool = True,
 ) -> np.ndarray:
-    """Within-word landing positions of the first fixation on each word (AN-12).
+    """Within-word landing positions of the first fixation on each word.
 
     Prefers the pre-computed ``first_fix_x`` on ``words``. When that's absent —
     the pre-aggregated OneStop path — it derives the landing from ``fixations``:
@@ -1274,15 +1274,15 @@ def landing_positions(
     default, else the px distance from where the word starts.
 
     The fraction is ``(x_fix − x) / width`` — 0 at the box's leading edge, 1 at
-    its trailing edge — over the experiment's own box (BUG-83). It is the same
+    its trailing edge — over the experiment's own box. It is the same
     quantity as ``initial_landing_position``, in different units: that letter
     position minus one, over the box's ``width / advance`` character cells. On a
     glyph-tight corpus the box *is* the glyph run, so 0 is the first letter's
     edge and 1 the last's. On a tiling corpus the box's last cell is the space
     after the word, so the glyphs fill ``[0, n / (n + 1))`` and a first fixation
     on that space — which belongs to this word, as in EyeLink's report — reads
-    between ``n / (n + 1)`` and 1, where it used to be clipped onto 1.0 (15% of
-    the demo's landings piled up there). Right-to-left words are mirrored the
+    between ``n / (n + 1)`` and 1 rather than being clipped onto 1.0. Right-to-left
+    words are mirrored the
     way the letter position is: counted from where the glyphs end.
 
     Not clipped: a first fixation the word got although it lies outside the box
@@ -1336,9 +1336,9 @@ def landing_positions(
         box_keys = [k for k in keys if k in words.columns]
         extra = ["right_to_left"] if "right_to_left" in words else []
         # Dedup to one row per word *first*, then measure. `words` here is the
-        # whole filtered corpus — one row per word per reader — so the glyph run
-        # was being computed for every repetition of every box. `layout=` is what
-        # makes that safe: tiling detection still sees the full frame, which it
+        # whole filtered corpus — one row per word per reader — so measuring first
+        # would compute the glyph run for every repetition of every box. `layout=`
+        # is what makes that safe: tiling detection still sees the full frame, which it
         # has to, since a deduped subset's holes read as glyph-tight gaps.
         # `text` rides along because the glyph run is counted from it — without
         # it an RTL landing would be mirrored across the padded box instead.
@@ -1368,7 +1368,8 @@ def landing_positions(
 def per_participant_trend(
     frame: pd.DataFrame, metric: str, *, agg: str = "mean"
 ) -> pd.DataFrame:
-    """Per-participant per-trial-index trend (faint lines behind AN-17).
+    """Per-participant per-trial-index trend (the faint per-reader lines behind
+    :func:`metric_by_trial_index`).
 
     Returns ``[participant_id, trial_index, value]``.
     """
@@ -1390,7 +1391,7 @@ def per_participant_trend(
     return out.sort_values(["participant_id", "trial_index"]).reset_index(drop=True)
 
 
-# --- Groups + group comparison (AN-14 … AN-22) -------------------------------
+# --- Groups + group comparison ----------------------------------------------
 
 
 def group_mask(frame: pd.DataFrame, spec: Mapping[str, Sequence]) -> pd.Series:
@@ -1402,14 +1403,14 @@ def group_mask(frame: pd.DataFrame, spec: Mapping[str, Sequence]) -> pd.Series:
     filter sets* are specs with several columns. An empty spec selects all rows.
 
     A key may also be a **tuple of columns**, whose values are tuples: a
-    composite key the row must match as a whole (AN-31 — a trial-metadata
+    composite key the row must match as a whole (a trial-metadata
     cohort is a set of ``(participant_id, trial_id)`` readings, which two
     independent column constraints cannot express: reader p1's trial t1 and
     reader p2's trial t2 are not p1's t2).
 
-    #412: a column the frame does not carry selects **nothing** on it. It used
-    to constrain nothing, so a group defined on a field of the Words table took
-    every fixation, and both groups of a comparison pooled the same ones. A
+    A column the frame does not carry selects **nothing** on it: were it to
+    constrain nothing, a group defined on a field of the Words table would take
+    every fixation, and both groups of a comparison would pool the same ones. A
     spec over fields of either table is resolved to readings first
     (:func:`resolve_group_spec`), and those every table carries.
     """
@@ -1435,7 +1436,7 @@ def _spec_columns(column) -> tuple:
 
 
 #: The reading key every table carries — the composite a group's fields
-#: resolve to (AN-31's trial-metadata cohorts use it too).
+#: resolve to (trial-metadata cohorts use it too).
 READING_KEY = ("participant_id", "trial_id")
 #: A reading no dataset holds, standing in for an empty set of readings: an
 #: empty value list is "no constraint" to :func:`group_mask`.
@@ -1444,7 +1445,7 @@ _NO_READING = ("\x00__no_such_reading__", "\x00__no_such_reading__")
 
 @dataclass(frozen=True)
 class GroupResolution:
-    """A group spec resolved to readings (#412) — see :func:`resolve_group_spec`.
+    """A group spec resolved to readings — see :func:`resolve_group_spec`.
 
     ``spec`` constrains only the reading key, so :func:`group_mask` selects the
     same readings from every table. ``missing`` names the fields neither table
@@ -1468,13 +1469,14 @@ def resolve_group_spec(
     fixations: pd.DataFrame | None,
 ) -> GroupResolution:
     """``spec``'s field constraints as the ``(participant_id, trial_id)`` readings
-    they select, decided across both tables (#412).
+    they select, decided across both tables.
 
     A field may be on the Words table only, the Fixations table only, or both;
     each is decided per reading from the tables that carry it — the trial
     filters' rule (`data.select_readings`): a reading the tables disagree on is
     left out, one no table has a value for is not in the group. Constraints on
-    the reading key itself (a participant pick, AN-31's readings) stay as they
+    the reading key itself (a participant pick, a trial-metadata cohort's
+    readings) stay as they
     are; the field constraints become one more set of readings, intersected
     with any already there. A spec with no field constraint comes back as is.
     """
@@ -1513,9 +1515,9 @@ def _composite_mask(frame: pd.DataFrame, columns: tuple, values) -> np.ndarray:
 
     Matched per distinct key rather than per row: the frame's rows are codes
     into its distinct keys (`data.distinct_key_codes`, remembered per frame
-    across reruns), so a mask is one lookup per key — a cohort of #412's
-    readings is matched several times a rerun, where a row-level
-    ``MultiIndex.isin`` against thousands of readings took ~140 ms per million
+    across reruns), so a mask is one lookup per key — a cohort of resolved
+    readings is matched several times a rerun, and a row-level
+    ``MultiIndex.isin`` against thousands of readings costs ~140 ms per million
     rows each time.
     """
     # Imported here, as in `resolve_group_spec`: `data` carries the app's caches.
@@ -1537,12 +1539,12 @@ def apply_group(frame: pd.DataFrame, spec: Mapping[str, Sequence]) -> pd.DataFra
 
 
 def _shared_screen(words: pd.DataFrame, text_col: str, text_id, screen_id):
-    """The one screen both cohorts of a word comparison describe (BUG-114).
+    """The one screen both cohorts of a word comparison describe.
 
     Resolved on the frame *before* it is split: left to each cohort,
-    :func:`_text_subset` picks each one's own first screen, so a cohort that
-    never saw page 1 compared its page 2 against the other's page 1, word id
-    for word id. A cohort without the chosen screen then contributes nothing.
+    :func:`_text_subset` would pick each one's own first screen, so a cohort that
+    never saw page 1 would compare its page 2 against the other's page 1, word id
+    for word id. A cohort without the chosen screen contributes nothing.
     """
     if screen_id is not None:
         return screen_id
@@ -1551,10 +1553,10 @@ def _shared_screen(words: pd.DataFrame, text_col: str, text_id, screen_id):
 
 
 def distinct_group_labels(label_a: str, label_b: str) -> tuple[str, str]:
-    """The two cohorts' labels, told apart when they read the same (BUG-111).
+    """The two cohorts' labels, told apart when they read the same.
 
     The charts key their series by label, so two cohorts both named "Control"
-    became one: B's values replaced A's without a word. Equal labels get a
+    would become one, B's values replacing A's without a word. Equal labels get a
     visible ``(A)`` / ``(B)``.
     """
     if str(label_a).strip() == str(label_b).strip():
@@ -1572,7 +1574,7 @@ def two_group_values(
     label_b: str = "Group B",
     normalize: bool = False,
 ) -> dict[str, np.ndarray]:
-    """``{label_a: values, label_b: values}`` for overlaid distributions (AN-18)."""
+    """``{label_a: values, label_b: values}`` for overlaid distributions."""
     label_a, label_b = distinct_group_labels(label_a, label_b)
     out: dict[str, np.ndarray] = {}
     a = measure_values(apply_group(frame, spec_a), measure, normalize=normalize)
@@ -1596,10 +1598,10 @@ def group_word_difference(
     min_readers: int = 1,
     screen_id=None,
 ) -> pd.DataFrame:
-    """Per-word A−B difference profile for one text (AN-19).
+    """Per-word A−B difference profile for one text.
 
     On multipart data both cohorts describe ``screen_id`` — the text's first
-    screen when it is ``None`` (BUG-114). Returns
+    screen when it is ``None``. Returns
     ``[word_id, a, b, diff, n_a, n_b, enough, word_text]``.
     """
     cols = ["word_id", "a", "b", "diff", "n_a", "n_b", "enough", "word_text"]
@@ -1652,7 +1654,7 @@ def two_group_word_profiles(
     label_b: str = "Group B",
     screen_id=None,
 ) -> pd.DataFrame:
-    """Long ``[group, word_id, value]`` for the stacked two-group heatmap (AN-22).
+    """Long ``[group, word_id, value]`` for the stacked two-group heatmap.
 
     Both cohorts describe one screen, as in :func:`group_word_difference`."""
     label_a, label_b = distinct_group_labels(label_a, label_b)
@@ -1687,16 +1689,16 @@ def paired_group_summary(
     fixations: pd.DataFrame | None = None,
     normalize: bool = False,
 ) -> pd.DataFrame:
-    """Per-measure group summaries for the paired bars (AN-20).
+    """Per-measure group summaries for the paired bars.
 
     Returns ``[measure, group, value, n_observations]``: ``value`` is ``agg``
     over every word or fixation of the group pooled across participants, and
-    ``n_observations`` counts those pooled values. No error bars this release
-    (#374): a spread over pooled words from the same few participants reads as
-    a precision the data does not have. ``measures`` may mix word- and
+    ``n_observations`` counts those pooled values. No error bars: a spread
+    over pooled words from the same few participants reads as a precision the
+    data does not have. ``measures`` may mix word- and
     fixation-level measures; pass ``words``/``fixations`` so each reads its
     backing frame (``frame`` is the fallback) — and then each group is
-    resolved to readings across the two (:func:`resolve_group_spec`, #412),
+    resolved to readings across the two (:func:`resolve_group_spec`),
     so a field one table lacks narrows the other's measures too.
     """
     label_a, label_b = distinct_group_labels(label_a, label_b)

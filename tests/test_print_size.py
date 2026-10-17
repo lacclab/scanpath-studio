@@ -1,5 +1,5 @@
-"""#374 F28 — Export → Current figure's Width (mm or in) + DPI, on every
-surface: the app's PNG, `save_figure`, `render`, Share → Code and the link."""
+"""Export → Current figure's Width (mm or in) + DPI, on every surface: the
+app's PNG, `save_figure`, `render`, Share → Code and the link."""
 
 from __future__ import annotations
 
@@ -152,7 +152,7 @@ def test_the_bundle_readme_says_its_local_time_and_offset():
     ("width", "dpi"), [(0.5, 300), (2500.0, 300), (180.0, 10), (180.0, 10000)]
 )
 def test_a_print_size_outside_the_links_bounds_is_refused(width, dpi):
-    """#374: render / save_figure accept what a link or the Width box accepts."""
+    """render / save_figure accept what a link or the Width box accepts."""
     from scanpath_studio.export import print_width_px
 
     with pytest.raises(ValueError):

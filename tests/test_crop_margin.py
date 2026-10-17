@@ -1,8 +1,7 @@
-"""#422 — Crop to data's margin is a setting, on every surface.
+"""Crop to data's margin is a setting, on every surface.
 
-It used to be fixed: 5% of the data's extent on each axis, at least 20 px. That
-stays the default (``crop_margin=None`` / *Auto*), so nothing changes unless a
-margin is chosen; a number is that many screen px on every side.
+The default (``crop_margin=None`` / *Auto*) is 5% of the data's extent on each
+axis, at least 20 px; a number is that many screen px on every side.
 """
 
 from __future__ import annotations
@@ -68,7 +67,7 @@ def test_the_api_takes_it_and_defaults_to_auto():
     assert x_range(fit_to_monitor=False, crop_margin=30) == pytest.approx(
         (tight[0] - 30, tight[1] + 30)
     )
-    # Auto is the 5% margin it always was; the whole monitor ignores a margin.
+    # Auto is the 5% margin; the whole monitor ignores a margin.
     auto = x_range(fit_to_monitor=False)
     width = tight[1] - tight[0]
     assert auto == pytest.approx((tight[0] - 0.05 * width, tight[1] + 0.05 * width))

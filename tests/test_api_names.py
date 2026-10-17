@@ -1,4 +1,4 @@
-"""DATA-66 phase 4: the API and CLI speak the dataset's own column names."""
+"""The API and CLI speak the dataset's own column names."""
 
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ class TestEveryFunctionTakesEitherKind:
             fixation_hover_fields=["duration_ms"],
         )
         text = fig.to_json()
-        # #374 F5: a mapped role is named by its role, not its source column.
+        # A mapped role is named by its role, not its source column.
         assert "Duration (ms)" in text
         assert "CURRENT_FIX_DURATION" not in text
 
@@ -110,7 +110,7 @@ class TestEveryFunctionTakesEitherKind:
             words, fixations, *demo_trial, word_hover_fields=["IA_ID"]
         )
         (labels,) = (trace for trace in fig.data if trace.name == "words")
-        # #374 F5: the word id is a role, named as one.
+        # The word id is a role, named as one.
         assert "Word #:" in labels.hovertemplate
         assert "CURRENT_FIX_INTEREST_AREA_ID" not in labels.hovertemplate
 
@@ -129,7 +129,7 @@ class TestEveryFunctionTakesEitherKind:
             show_heatmap_colorbar=True,
             column_names=data.column_names,
         )
-        # The file's name picks the column; the figure names its role (#374 F5).
+        # The file's name picks the column; the figure names its role.
         assert "Duration (ms)" in fig.to_json()
 
     def test_a_misspelt_heatmap_metric_is_refused(self, demo, demo_trial):

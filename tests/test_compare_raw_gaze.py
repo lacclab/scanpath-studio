@@ -1,4 +1,4 @@
-"""VIZ-48: Compare mode draws each reading's raw gaze under its scanpath."""
+"""Compare mode draws each reading's raw gaze under its scanpath."""
 
 from __future__ import annotations
 
@@ -165,7 +165,7 @@ def test_the_missing_samples_note_names_the_reading(a, b, expected):
 
 def test_the_note_outside_compare_names_this_trial():
     assert _raw_gaze_missing_note(False, trial_has_raw_gaze=False) == ""
-    # VIZ-50 reworded it; tests/test_raw_gaze_provenance.py pins the wording.
+    # tests/test_raw_gaze_provenance.py pins the wording.
     assert "this trial" in _raw_gaze_missing_note(True, trial_has_raw_gaze=False)
 
 
@@ -184,7 +184,7 @@ def test_compare_raw_gaze_needs_compare_with(tmp_path):
 
 
 def test_the_rail_peeks_at_bs_dataset_for_samples():
-    """VIZ-48: the rail is drawn before B loads, so whether B's dataset has
+    """The rail is drawn before B loads, so whether B's dataset has
     raw gaze is read without loading it."""
     import streamlit as st
 

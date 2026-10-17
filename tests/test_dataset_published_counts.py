@@ -1,8 +1,8 @@
-"""The dataset table's count columns, filled before anything is loaded (DATA-36).
+"""The dataset table's count columns, filled before anything is loaded.
 
-A public corpus is not read until it is opened, so its row on 🗂️ Data used to be
-blank — which is most of the table on a fresh session. Each dataset now declares
-the figures its own documentation (or its bundle manifest) publishes, and the
+A public corpus is not read until it is opened, so without published figures its
+row on 🗂️ Data would be blank — which is most of the table on a fresh session.
+Each dataset declares the figures its own documentation publishes, and the
 table shows those until the dataset is actually loaded, at which point what
 loaded takes over.
 
@@ -91,7 +91,7 @@ class TestDeclaredFigures:
 
     def test_the_source_is_reachable_through_the_one_about_lookup(self):
         """`dataset_about` is the single lookup over both halves of the
-        catalogue (DATA-35); the figures ride it rather than a second one."""
+        catalogue; the figures ride it rather than a second one."""
         for token in _declaring_entries():
             about = app.dataset_about(token)
             assert about.get("published_counts")
@@ -203,31 +203,12 @@ class TestTheLookup:
         assert app.published_dataset_counts(DEMO_CHOICE)["Participants"] == 2
 
 
-class TestPreparedBenchmarkCorpora:
-    """Their figures are already in the bundle manifest — per column, not prose."""
-
-    def test_manifest_counts_become_table_counts(self):
-        entry = {"name": "Provo", "n_readers": 84, "n_texts": 55, "n_fixations": 219556}
-        counts = app.benchmark_published_counts(entry)
-        assert counts == {"Participants": 84, "Texts": 55, "Fixations": 219556}
-
-    def test_an_unreadable_count_is_left_out_rather_than_read_as_zero(self):
-        """`entry_count` returns `None` for a value it cannot parse and `0` for
-        one that is absent; publishing either as a count would assert a corpus
-        with no readers (the overclaim `entry_count` warns about)."""
-        entry = {"name": "Provo", "n_readers": "many", "n_texts": 0, "n_fixations": 12}
-        assert app.benchmark_published_counts(entry) == {"Fixations": 12}
-
-    def test_a_corpus_with_no_counts_publishes_nothing(self):
-        assert app.benchmark_published_counts({"name": "Provo"}) == {}
-
-
 class TestTrialsAreTrialsNotTrialIds:
     """A trial is a (participant, trial) pair — what the trial picker lists.
 
     PoTeC names its trials after the text, so all 75 readers share the same
-    twelve ``trial_id`` values: counting distinct ids reported **12 trials** for
-    a corpus whose own README says 900 (75 participants × 12 texts).
+    twelve ``trial_id`` values: counting distinct ids would report **12 trials**
+    for a corpus whose own README says 900 (75 participants × 12 texts).
     """
 
     @staticmethod
@@ -266,8 +247,8 @@ class TestTrialsAreTrialsNotTrialIds:
 
 
 class TestTextsAreCountedFromEveryTable:
-    """DATA-50: the Texts figure read the words table only, so a fixations-only
-    dataset whose fixations name twelve texts said there were none."""
+    """The Texts figure reads the fixations too, so a fixations-only dataset
+    whose fixations name twelve texts does not say there are none."""
 
     fixations = pd.DataFrame(
         {
@@ -308,15 +289,15 @@ def test_the_packaged_sources_publish_figures(token):
 
 
 def test_the_public_corpora_publish_figures():
-    """The rows this item exists for: opened by nobody, and no longer blank."""
+    """A corpus nobody has opened still has a filled row."""
     assert app.published_dataset_counts("PoTeC — Potsdam Textbook Corpus")
 
 
 @pytest.mark.parametrize("regime", list(app.ONESTOP_REGIME_CHOICES))
 def test_a_onestop_regime_publishes_only_its_own_measured_figures(regime):
-    """DATA-63: the corpus publishes whole-release figures, not per regime, so a
-    regime never quotes them. DATA-65 pinned the reports, which makes a regime's
-    own count stable enough to publish: a counted regime shows exactly what was
+    """The corpus publishes whole-release figures, not per regime, so a regime
+    never quotes them. The reports are pinned to one OSF version, which makes a
+    regime's own count stable enough to publish: a counted regime shows exactly what was
     measured, and one not yet counted says *Not counted* until it is opened."""
     published = app.published_dataset_counts(app.ONESTOP_REGIME_CHOICES[regime])
     assert published == app._ONESTOP_REGIME_COUNTS.get(regime, {})
@@ -365,18 +346,9 @@ class TestTheTableItself:
         assert row["Participants"] == 1
         assert row["Fixations"] > 0
 
-    def test_a_source_that_publishes_nothing_stays_blank(self, table):
-        """MultiplEYE reads whatever session folders are on this machine, so no
-        figure would be true of the next person's copy."""
-        row = table.set_index("Dataset").loc["MultiplEYE"]
-        assert row["Counts"] == ""
-        assert pd.isna(row["Participants"])
-        # UX-174: and the cell says why, rather than showing a blank or a 0.
-        assert row["_cells"]["Participants"] == "Not counted"
-
 
 class TestWhatTheDataPageSays:
-    """UX-177: one sentence per dataset, a note only where it matters."""
+    """One sentence per dataset, a note only where it matters."""
 
     def _catalogue(self):
         registry = app.public_dataset_registry()

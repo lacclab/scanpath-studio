@@ -1,6 +1,6 @@
 """Optional reading-data preprocessing and derived analysis tables.
 
-The stage is deliberately pure and disabled by default (PRE-1). It soft-marks
+The stage is deliberately pure and disabled by default. It soft-marks
 excluded rows, preserves originals for any changed value, and exposes the same
 functions to the UI, CLI, public API, and bulk export.
 """
@@ -39,7 +39,7 @@ def detect_right_to_left(text: str) -> bool:
 
 
 def add_text_direction(words: pd.DataFrame) -> pd.DataFrame:
-    """Attach ``right_to_left`` unless the dataset already supplies it (PRE-6)."""
+    """Attach ``right_to_left`` unless the dataset already supplies it."""
     if words.empty or "right_to_left" in words or "text" not in words:
         return words
     out = words.copy()
@@ -47,13 +47,10 @@ def add_text_direction(words: pd.DataFrame) -> pd.DataFrame:
     if keys:
         # Detect ONCE PER TRIAL and let `transform` broadcast the scalar, rather
         # than materialising the whole trial's joined text on every row and then
-        # scanning it per row. The old form was quadratic in trial length — for a
-        # 500-word trial it scanned ~500x more characters than it needed to, and
-        # on an ordinary upload it was the single slowest step of the load
-        # (measured 18.3s -> 0.30s on 144k words), all of it *after* the wizard
-        # had already said "Dataset added" — so it read as the app hanging.
-        # `dropna` (BUG-53): a frame that did not come through `normalize_words`
-        # can still carry a missing word, and `" ".join` raises on the float.
+        # scanning it per row — that is quadratic in trial length, and on an
+        # ordinary upload it would be the slowest step of the load.
+        # `dropna`: a frame that did not come through `normalize_words` can
+        # still carry a missing word, and `" ".join` raises on the float.
         out["right_to_left"] = out.groupby(keys, sort=False)["text"].transform(
             lambda values: detect_right_to_left(" ".join(values.dropna().astype(str)))
         )
@@ -65,15 +62,15 @@ def add_text_direction(words: pd.DataFrame) -> pd.DataFrame:
 
 
 def _character_width(words: pd.DataFrame, word_id) -> float:
-    """One character's width for this word — BUG-27's shared letter scale.
+    """One character's width for this word — the shared letter scale.
 
     This scales the *merge distance*, which the user sets in **characters** and
     which travels on the share link and the saved config
-    (`session_keys.GLOBAL_PREPROC_MERGE_DISTANCE_CHARS`). It used to divide by
-    `len(text)`, so on a tiling corpus "merge within 1 character" silently meant
-    1.25 characters for a four-letter word and 1.07 for a fifteen-letter one —
-    the same length-dependent error BUG-27 fixed in the landing measures, on a
-    setting whose whole point is to mean one thing.
+    (`session_keys.GLOBAL_PREPROC_MERGE_DISTANCE_CHARS`). It goes through
+    :func:`measures.word_char_advance`, never `width / len(text)`: on a tiling
+    corpus that would make "merge within 1 character" mean 1.25 characters for
+    a four-letter word and 1.07 for a fifteen-letter one, on a setting whose
+    whole point is to mean one thing.
     """
     from .measures import word_char_advance
 
@@ -95,7 +92,7 @@ def merge_short_fixations(
     distance_chars: float = 1.0,
     discard_unmerged: bool | str = False,
 ) -> tuple[pd.DataFrame, int, int]:
-    """Merge short-and-close fixations into a temporal neighbour (PRE-14)."""
+    """Merge short-and-close fixations into a temporal neighbour."""
     if fixations.empty:
         return fixations.copy(), 0, 0
     out = fixations.sort_values(
@@ -174,7 +171,7 @@ def preprocess_fixations(
     *,
     settings: Mapping | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Run the optional PRE-1 stage and return ``(fixations, QA report)``.
+    """Run the optional preprocessing stage and return ``(fixations, QA report)``.
 
     When disabled, the original dataframe is returned byte-for-byte and the
     report is empty. Enabled rows are never hard-dropped; ``excluded`` and
@@ -231,7 +228,7 @@ def preprocess_fixations(
 def cleaning_report(
     fixations: pd.DataFrame, *, short_policy: str = "Off", high_word_fixations: int = 12
 ) -> pd.DataFrame:
-    """One exportable QA/provenance row per trial (PRE-15)."""
+    """One exportable QA/provenance row per trial."""
     if fixations.empty:
         return pd.DataFrame()
     keys = grouping_columns(fixations)
@@ -293,14 +290,14 @@ def infer_sentence_ids(words: pd.DataFrame) -> pd.DataFrame:
 
 
 def sentence_measures(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
-    """First-class per-sentence reading table derived from run structure (PRE-11)."""
+    """First-class per-sentence reading table derived from run structure."""
     words = infer_sentence_ids(words)
     if words.empty:
         return pd.DataFrame()
     identity = grouping_columns(words)
     word_keys = [*identity, "word_id"]
-    # A word with no id joins no fixation: pandas matches NaN to NaN, which put
-    # every off-text fixation in that word's sentence (#412).
+    # A word with no id joins no fixation: pandas matches NaN to NaN, which
+    # would put every off-text fixation in that word's sentence.
     join = words[[*word_keys, "sentence_id"]].dropna(subset=["word_id"])
     join = join.drop_duplicates()
     fix = materialize_runs(fixations).merge(join, on=word_keys, how="left")
@@ -459,7 +456,7 @@ def sentence_measures(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFr
 
 
 def character_grid(words: pd.DataFrame) -> pd.DataFrame:
-    """Expand word AOIs to comparable letter-position geometry (PRE-19)."""
+    """Expand word AOIs to comparable letter-position geometry."""
     rows = []
     words = infer_sentence_ids(words)
     if words.empty:
@@ -491,9 +488,9 @@ def character_grid(words: pd.DataFrame) -> pd.DataFrame:
                 global_position += 1
             words_seen[line_id] = words_seen.get(line_id, 0) + 1
             line_positions.setdefault(line_id, 0)
-            # BUG-27: one advance, not `width / len(text)` — on a tiling corpus
-            # the latter stretches the glyph row across the trailing padding, so
-            # every character box after the first sat progressively too far right.
+            # One advance, not `width / len(text)` — on a tiling corpus the
+            # latter stretches the glyph row across the trailing padding, so
+            # every character box after the first sits progressively too far right.
             char_width = advances.get(word.Index, float(word.width))
             rtl = bool(getattr(word, "right_to_left", False))
             for physical_offset in range(len(text)):
@@ -541,7 +538,7 @@ def duration_mass_table(
     *,
     sigma_chars: float = 1.0,
 ) -> pd.DataFrame:
-    """Distribute fixation duration over nearby character centres (PRE-8).
+    """Distribute fixation duration over nearby character centres.
 
     Each fixation contributes a Gaussian kernel whose weights sum to its
     duration. The returned character table is therefore a reproducible support
@@ -601,18 +598,17 @@ def _word_letter_geometry(
     """``(identity…, word_id) -> (x, glyph run, character advance, right_to_left)``.
 
     Built once per :func:`saccade_table` call so the per-saccade letter-position
-    lookup is a dict hit rather than a scan of the whole words frame (PERF-3).
-    The first row wins for a duplicated key, which is what the old
-    ``target.iloc[0]`` did.
+    lookup is a dict hit rather than a scan of the whole words frame. The first
+    row wins for a duplicated key.
 
-    BUG-27: the advance comes from :func:`measures.word_char_advance` rather than
-    the local ``width / len(text)`` this used to divide by — the same accessor
-    the per-word landing measures use, so a saccade's launch/landing letter and
-    the word's landing position are on one scale (they disagreed by the
-    inter-word padding on a tiling corpus). The second slot is the **glyph run**
-    (``n × advance``) and not the box ``width`` for the same reason: it is only
-    read to mirror an RTL offset, and the padded width would put an RTL landing
-    one whole advance late.
+    The advance comes from :func:`measures.word_char_advance`, never
+    ``width / len(text)`` — the same accessor the per-word landing measures use,
+    so a saccade's launch/landing letter and the word's landing position are on
+    one scale (``width / len(text)`` differs by the inter-word padding on a
+    tiling corpus). The second slot is the **glyph run** (``n × advance``) and
+    not the box ``width`` for the same reason: it is only read to mirror an RTL
+    offset, and the padded width would put an RTL landing one whole advance
+    late.
     """
     if words is None or words.empty or "word_id" not in words:
         return {}
@@ -683,12 +679,10 @@ def saccade_table(
     if "excluded" in analysis:
         analysis = analysis.loc[~analysis["excluded"].fillna(False).astype(bool)]
     keys = grouping_columns(analysis)
-    # PERF-3: the letter-position of a saccade's launch and landing used to be
-    # resolved by scanning the WHOLE words frame per fixation — a `to_numeric`
-    # over every word id plus a boolean mask, twice per saccade. On the bundled
-    # demo that was ~19 s of a rerun on its own, and it grew with corpus × trial
-    # count. Index the geometry once instead: (identity…, word_id) → the four
-    # numbers the formula needs.
+    # Index the word geometry once — (identity…, word_id) → the four numbers
+    # the letter-position formula needs — rather than scanning the WHOLE words
+    # frame per fixation (a `to_numeric` over every word id plus a boolean
+    # mask, twice per saccade), which grows with corpus × trial count.
     word_geometry = _word_letter_geometry(words, keys)
     for identity, chunk in analysis.groupby(keys, sort=False, dropna=False):
         identity = identity if isinstance(identity, tuple) else (identity,)
@@ -759,7 +753,7 @@ def measure_sensitivity(
     fixations: pd.DataFrame,
     methods: tuple[str, ...] = ("attach", "slice", "consensus"),
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Word-measure spread under several line assignments (PRE-18)."""
+    """Word-measure spread under several line assignments."""
     from . import alignment
     from .measures import compute_per_word_measures
 

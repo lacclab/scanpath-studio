@@ -6,14 +6,10 @@ browser. This module bridges that gap: a :class:`logging.Handler` captures log
 records into a capped buffer in ``st.session_state`` so they can be rendered
 inside the app, behind a debug toggle.
 
-Activation is a single toggle (**UX-37**), in the dialog the nav's ❓ Help →
-🐛 **Debug** entry opens (**UX-179** — it was a block of the retired 💾 Session
-dialog). Switching it on adds the log panel under it: a level filter, an
-app/session-state snapshot, and a JSON export. It used to be two-stage and the
-first stage was a URL param — ``?debug=1`` revealed the toggle — which meant the
-whole feature was reachable only by someone who already knew it existed. The
-param is still honoured as a *seed* so old links keep working, but it is no
-longer the way in.
+Activation is a single toggle, in the 🐛 **Debug** drawer that a button at the
+foot of ❓ Help → About opens. Switching it on adds the log panel under it: a
+level filter, an app/session-state snapshot, and a JSON export. A ``?debug=1``
+URL param is honoured as a *seed* of the toggle, so old links keep working.
 """
 
 from __future__ import annotations
@@ -40,8 +36,8 @@ _BUFFER_KEY = "_debug_log_records"
 #: :func:`debug_enabled` reads nothing else.
 DEBUG_STATE_KEY = "_debug_mode_on"
 
-#: The legacy URL param. Kept as a one-shot seed for links already in the world;
-#: see :func:`seed_debug_mode`.
+#: The URL param old links carry, read as a one-shot seed of the toggle; see
+#: :func:`seed_debug_mode`.
 DEBUG_URL_PARAM = "debug"
 
 #: The package's own logger. Everything the app logs is a child of this, which is
@@ -139,9 +135,9 @@ class _AppRecordsOnly(logging.Filter):
 
     The handler sits on the *root* logger, so without a filter the panel fills
     with third-party chatter — tornado logs a line per websocket frame, watchdog
-    per filesystem event, urllib3 per connection. That is what made the panel
-    unreadable (UX-37 follow-up: "each log entry shows up identical like a
-    hundred times"), and none of it answers "what did the app just do?".
+    per filesystem event, urllib3 per connection. That would make the panel
+    unreadable — the same entry a hundred times over — and none of it answers
+    "what did the app just do?".
 
     ``WARNING`` and above is kept whatever its source: a library that failed is
     exactly what a bug report needs, and those arrive one at a time.
@@ -203,8 +199,8 @@ class _SessionStateHandler(logging.Handler):
                 }
             )
         except (Exception, StopException):
-            # UX-166: an abandoned run's session state raises StopException on
-            # any access. Escaping here, it threw away the finished result of
+            # An abandoned run's session state raises StopException on any
+            # access. Escaping here, it would throw away the finished result of
             # every cached build that logs through `timed()` — the log line comes
             # after the value is computed. A stop stays requested, so the run
             # still stops at its next yield point; logging must never crash its
@@ -217,7 +213,7 @@ class _SessionStateHandler(logging.Handler):
 
 
 class _TerminalHandler(logging.StreamHandler):
-    """The app logger's own stderr handler (BUG-100), marked so it is added once."""
+    """The app logger's own stderr handler, marked so it is added once."""
 
 
 def install_log_capture(level: int = logging.INFO) -> None:
@@ -225,28 +221,28 @@ def install_log_capture(level: int = logging.INFO) -> None:
 
     Idempotent, and idempotent at the right scope: the guard reads the root
     logger's own handler list, not ``st.session_state``. The root logger is
-    process-wide while session state is not, so a session-scoped flag let every
-    new session add another handler — N sessions meant N handlers, each record
-    appended N times to whichever session's buffer was live, and handlers piling
-    up for the process's lifetime (S10). One handler is enough: it resolves the
-    buffer per script-run context, so each session still sees only its own
-    records. Call this early in ``main()``.
+    process-wide while session state is not, so a session-scoped flag would let
+    every new session add another handler — N sessions would mean N handlers,
+    each record appended N times to whichever session's buffer was live, and
+    handlers piling up for the process's lifetime. One handler is enough: it
+    resolves the buffer per script-run context, so each session still sees only
+    its own records. Call this early in ``main()``.
 
     The level is raised on the **app's** logger, not the root one. Raising root
     to INFO switches on every library that hasn't set its own level — tornado,
-    watchdog, urllib3, PIL, streamlit's internals — and they, not the app, were
-    what flooded the panel. A record's level is tested where it is logged, and
+    watchdog, urllib3, PIL, streamlit's internals — and they, not the app,
+    would flood the panel. A record's level is tested where it is logged, and
     propagation to an ancestor's *handlers* ignores the ancestor's level, so
     scoping it here still delivers every ``scanpath_studio`` INFO line to this
-    handler; WARNING and up also go to the terminal (BUG-100).
+    handler; WARNING and up also go to the terminal.
     """
     app_logger = logging.getLogger(_APP_LOGGER)
     if app_logger.level == logging.NOTSET or app_logger.level > level:
         app_logger.setLevel(level)
-    # BUG-100: a handler anywhere on the chain switches off logging's
-    # ``lastResort`` — the stderr fallback that used to print the app's warnings
-    # — so the handler below made every app warning and traceback (a dataset
-    # whose normalization failed, say) vanish from the server terminal. Put the
+    # A handler anywhere on the chain switches off logging's ``lastResort`` —
+    # the stderr fallback that prints warnings when no handler exists — so with
+    # only the handler below, every app warning and traceback (a dataset whose
+    # normalization failed, say) would vanish from the server terminal. Put the
     # terminal back, for WARNING and up: INFO stays in the in-app panel.
     if not any(isinstance(h, _TerminalHandler) for h in app_logger.handlers):
         terminal = _TerminalHandler()
@@ -265,9 +261,9 @@ def install_log_capture(level: int = logging.INFO) -> None:
 
 
 def seed_debug_mode() -> None:
-    """Honour a legacy ``?debug=1`` link by pre-arming the toggle, once.
+    """Honour an old ``?debug=1`` link by pre-arming the toggle, once.
 
-    ``setdefault`` rather than a write: the toggle is the gate now, so a user who
+    ``setdefault`` rather than a write: the toggle is the gate, so a user who
     turns debug mode *off* on a ``?debug=1`` URL must stay off for the rest of
     the session instead of having the param switch it back on every rerun. Call
     from ``main`` before :func:`debug_enabled` is read.
@@ -281,14 +277,12 @@ def debug_enabled() -> bool:
     return bool(st.session_state.get(DEBUG_STATE_KEY))
 
 
-#: UX-100 — the toggle's own widget key, mirrored into :data:`DEBUG_STATE_KEY`.
-#: The two used to be the same key, which was fine while the toggle rendered on
-#: every run; it now lives in the Debug **dialog**, whose body is a fragment
-#: that runs only while the modal is open — and Streamlit drops a widget's key at
-#: the end of any run in which it did not render, so debug mode switched itself
-#: off the moment the modal was dismissed. Splitting them makes the durable flag
-#: the source of truth and the widget a view of it, exactly as the persistence
-#: pause toggle already worked.
+#: The toggle's own widget key, mirrored into :data:`DEBUG_STATE_KEY`. The
+#: toggle lives in the Debug **dialog**, whose body is a fragment that runs only
+#: while the modal is open — and Streamlit drops a widget's key at the end of any
+#: run in which it did not render, so with one key debug mode would switch
+#: itself off the moment the modal was dismissed. Two keys make the durable flag
+#: the source of truth and the widget a view of it.
 _DEBUG_TOGGLE_KEY = "_debug_mode_toggle"
 
 
@@ -300,7 +294,7 @@ def _mirror_debug_toggle() -> None:
 def render_debug_toggle(host=None) -> None:
     """Render the "🐛 Debug mode" toggle into the ❓ Help → About → Debug dialog.
 
-    The single gate (**UX-37**). Flipping it on shows the log panel under it
+    The single gate. Flipping it on shows the log panel under it
     in the same dialog run (:func:`_debug_dialog`).
 
     Seeded rather than passed a ``value=``: the widget key is a mirror of
@@ -347,7 +341,7 @@ def _state_snapshot() -> list[dict[str, str]]:
 
 
 def render_debug_panel(host=None) -> None:
-    """Render the debug panel into the 🐛 Debug menu popover.
+    """Render the debug panel into the 🐛 Debug drawer.
 
     No-op unless the Debug toggle is on. The panel is the captured-log view, a
     state snapshot and a JSON download, drawn under the toggle in
@@ -397,7 +391,7 @@ def render_debug_panel(host=None) -> None:
             for r in reversed(shown):  # newest first
                 color = _LEVEL_COLOR.get(r["level"], "#888")
                 # Collapsed repeats carry their tally; a one-off shows nothing,
-                # so the common case reads exactly as it did before.
+                # so the common case reads as a plain log line.
                 repeats = int(r.get("count", 1))
                 tally = (
                     f' <span style="color:#888">× {repeats}</span>'
@@ -446,10 +440,9 @@ def render_debug_panel(host=None) -> None:
         )
 
 
-#: UX-179 — the Debug drawer's request flag. #374 F31 moved its way in from a
-#: ❓ Help nav entry to a button at the foot of About: one dialog cannot open
-#: another, so the button sets this and reruns, and ``app.main`` serves it
-#: early, beside FAQ and About.
+#: The Debug drawer's request flag. Its way in is a button at the foot of About:
+#: one dialog cannot open another, so the button sets this and reruns, and
+#: ``app.main`` serves it early, beside FAQ and About.
 _DEBUG_DIALOG_KEY = "_debug_dialog_requested"
 
 
@@ -472,7 +465,7 @@ def _debug_dialog() -> None:
     A right-side drawer (Streamlit 1.65) rather than a centred modal, so the
     view the log describes stays in sight beside it; the user can widen it.
 
-    The toggle is the whole of the feature's switch (UX-37), so it sits here
+    The toggle is the whole of the feature's switch, so it sits here
     even while it is off; the panel under it appears in the same fragment run
     that turns it on, because the toggle's ``on_change`` mirrors the gate before
     this body re-runs.

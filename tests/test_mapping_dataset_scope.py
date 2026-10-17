@@ -1,18 +1,18 @@
-"""BUG-32 — a column mapping does not carry over between two datasets.
+"""A column mapping does not carry over between two datasets.
 
-`controls.forget_mapping_for_other_table` decided whether a stored `col_map_*`
-pick still applied by the table's **column universe** alone. Two datasets that
-share an AOI file — or an upload in the same EyeLink/OneStop format as the
-bundled demo — have identical headers by construction, so the second silently
-inherited the first one's picks, and nothing was cleared or said because every
-pick still named a real column. The user's call (2026-09-02, #111): scope the
-signature to the dataset too, and keep DATA-24's within-dataset behaviour.
+`controls.forget_mapping_for_other_table` decides whether a stored `col_map_*`
+pick still applies by the table's **column universe** and its dataset. Two
+datasets that share an AOI file — or an upload in the same EyeLink/OneStop
+format as the bundled demo — have identical headers by construction, so under
+a columns-only signature the second would silently inherit the first one's
+picks, with nothing cleared or said because every pick still names a real
+column. Within one dataset, a table that grows a column keeps its picks.
 
-The reproduction the fix is built on is the first test: the add-dataset wizard
-maps its tables under the same `col_map_*` keys the 🗂️ Data page uses for the
-demo, its field widgets persist, and going back to the demo did not reset them
-(`_colmap_seeded_for` still named the demo) — so a Duration picked for the
-upload became the demo's Duration.
+The first test is the end-to-end case: the add-dataset wizard maps its tables
+under the same `col_map_*` keys the 🗂️ Data page uses for the demo, its field
+widgets persist, and going back to the demo must reset them — even though
+`_colmap_seeded_for` still names the demo, so the source-change reset does not
+fire — or a Duration picked for the upload becomes the demo's Duration.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ def test_a_pick_made_while_adding_a_dataset_does_not_carry_into_the_demo(
     from scanpath_studio.constants import DEMO_CHOICE
 
     # The upload is the demo's own two tables, so every header matches — the
-    # shape of the report (one AOI file shared by two datasets).
+    # shape of one AOI file shared by two datasets.
     raw_words, raw_fix = data.load_sample_data()
     monkeypatch.setattr(
         app,
@@ -152,15 +152,14 @@ def test_the_same_dataset_keeps_the_pick():
 
 
 def test_the_same_dataset_growing_a_column_keeps_the_pick():
-    """DATA-24's case: the wizard appends `file_part_N` to its own frame."""
+    """The wizard appends `file_part_N` to its own frame."""
     at = _mapped("dataset A")
     at.session_state["_grown"] = True
     assert _rerun(at)["duration"] == "CURRENT_FIX_END"
 
 
 def test_a_mapping_restored_for_a_dataset_is_kept_by_it():
-    """The cost the user accepted — restored configs breaking — is not paid:
-    the restore claims the keys for the dataset it is restoring into, so that
+    """A restored config does not break: the restore claims the keys for the dataset it is restoring into, so that
     dataset's first table keeps them instead of clearing them as another's."""
     at = _mapped("dataset A")
     at.session_state["_dataset"] = "dataset B"

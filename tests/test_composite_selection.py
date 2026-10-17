@@ -1,13 +1,12 @@
 """A composite trial id gets **no picker of its own** — trial selection is always
 the standard selectbox + scrubbing slider + ◀ ▶ arrows.
 
-BUG-23, round 3. The composite mapping used to fork the picker: first one selector
-per raw component (minus UX-5's pruning of the ones that were also trial-filter
-columns), then a Participant → Text cascade. Both made the shape of the *mapping*
-visible in the UI and neither offered the slider or the step buttons, so stepping
-through trials worked on some datasets and not others. Participant and Text are
-what the **Narrow by** row is for; the joined id is shown part by part, in the
-picker (UX-187) and by the trial chips.
+A picker forked by the composite mapping (one selector per raw component, or a
+Participant → Text cascade) would make the shape of the *mapping* visible in the
+UI and offer neither the slider nor the step buttons, so stepping through trials
+would work on some datasets and not others. Participant and Text are what the
+**Narrow by** row is for; the joined id is shown part by part, in the picker and
+by the trial chips.
 """
 
 from __future__ import annotations
@@ -55,9 +54,9 @@ def _picker_app():
 @pytest.mark.timeout(60)
 class TestCompositeTrialPicker:
     def test_composite_mapping_gets_the_standard_picker(self):
-        # The whole point of round 3: one picker for every dataset. No cascade
-        # selectors, no "Reading" fallback — just **Select Trial** (plus the ⇅
-        # popover's own "Sort trials by" selectbox).
+        # One picker for every dataset. No cascade selectors, no "Reading"
+        # fallback — just **Select Trial** (plus the ⇅ popover's own "Sort
+        # trials by" selectbox).
         at = AppTest.from_function(_picker_app)
         at.run(timeout=15)
         assert not at.exception
@@ -69,8 +68,8 @@ class TestCompositeTrialPicker:
         assert "repeated_reading_trial" not in labels, labels
 
     def test_composite_picker_has_the_slider_and_arrows(self):
-        # The reported symptom was two bare dropdowns: no slider, no ◀ ▶. Both
-        # must be there for a composite mapping like any other.
+        # Not two bare dropdowns: the slider and ◀ ▶ must be there for a
+        # composite mapping like any other.
         at = AppTest.from_function(_picker_app)
         at.run(timeout=15)
         assert not at.exception
@@ -86,13 +85,13 @@ class TestCompositeTrialPicker:
         assert not at.exception
         stepped = at.session_state["_picked"][1]
         assert stepped != first
-        # Options are the joined ids, in data order (UX-171).
+        # Options are the joined ids, in data order.
         assert [first, stepped] == ["A_p1_False", "B_p1_False"]
 
     def test_condition_beyond_participant_and_text_is_just_another_trial(self):
         # A trial id carrying a *condition* (repeated_reading_trial) beyond the two
-        # identities used to need a "Reading (multiple trials available)" fallback
-        # under the cascade. In one flat picker it is simply one more option.
+        # identities needs no "Reading (multiple trials available)" fallback: in
+        # one flat picker it is simply one more option.
         at = AppTest.from_function(_picker_app)
         at.run(timeout=15)
         picker = next(s for s in at.selectbox if s.label.startswith("Select trial"))
@@ -105,7 +104,7 @@ class TestCompositeTrialPicker:
 
     def test_single_composite_trial_degrades_without_slider(self):
         # A composite mapping is exactly the shape that narrows to ONE trial, so
-        # this path is now hit often: a one-option st.select_slider throws
+        # this path is hit often: a one-option st.select_slider throws
         # `RangeError` in the browser (invisible to AppTest), so the picker must
         # fall back to the selectbox alone.
         def _one_trial_app():
@@ -136,10 +135,11 @@ class TestCompositeTrialPicker:
         assert at.session_state["_picked"][1] == "A_p1"
 
     def test_select_trial_takes_no_prune_list(self):
-        # The behavioural tests above can't catch a reintroduced prune on their
-        # own: UX-5's version fired only when the caller passed the More-filter
-        # column list, so a test that doesn't pass one passes either way. Pin the
-        # decision at the seam instead — the picker takes no such input.
+        # The behavioural tests above can't catch a pruning of the picker by
+        # trial-filter columns on their own: a prune that fires only when the
+        # caller passes the More-filter column list passes a test that doesn't
+        # pass one. Pin the decision at the seam instead — the picker takes no
+        # such input.
         import inspect
 
         from scanpath_studio.utils import select_trial
@@ -148,11 +148,11 @@ class TestCompositeTrialPicker:
         assert "filter_cols" not in params, params
 
     def test_onestop_composite_shape_is_one_standard_picker(self):
-        # BUG-23, the reported shape: Trial ID maps to participant + the four
+        # A OneStop-shaped mapping: Trial ID maps to participant + the four
         # columns that jointly ARE the paragraph identity (paragraph_id,
         # article_id, article_batch, difficulty_level), and Text ID maps to those
         # same four. Five mapped columns, one picker — labelled **Select Trial**,
-        # listing the joined ids (shown part by part since UX-187).
+        # listing the joined ids (shown part by part).
         def _onestop_app():
             import pandas as pd
             import streamlit as st
@@ -191,7 +191,7 @@ class TestCompositeTrialPicker:
         assert not at.exception
         picker = next(s for s in at.selectbox if s.label.startswith("Select trial"))
         assert "Participant" not in [s.label for s in at.selectbox]
-        # UX-187: shown part by part, from the composite's own columns.
+        # Shown part by part, from the composite's own columns.
         assert list(picker.options) == [
             "l10_338 · 1 · 10 · 3 · Adv",
             "l10_338 · 1 · 10 · 3 · Ele",
@@ -242,7 +242,7 @@ class TestCompositeTrialPicker:
 
 @pytest.mark.timeout(60)
 def test_annotation_markers_compose():
-    """UX-6: ★ favorite · 🏷️ tagged · 📝 noted compose independently (zero, one,
+    """★ favorite · 🏷️ tagged · 📝 noted compose independently (zero, one,
     two, or all three), and an un-annotated trial gets no markers."""
 
     def _markers_app():
@@ -276,7 +276,7 @@ def test_annotation_markers_compose():
 
 def test_restore_selection_seeds_the_trial_id_for_a_composite_mapping(monkeypatch):
     """A deep link / saved config must seed the key the picker really reads. There
-    is now one such key for every dataset (`<prefix>_trial_id`); a leftover
+    is one such key for every dataset (`<prefix>_trial_id`); a leftover
     `_composite_*` key reads nothing, and the link would land on whatever trial the
     picker defaulted to instead of the requested one."""
     import pandas as pd
@@ -310,7 +310,7 @@ def test_restore_selection_seeds_the_trial_id_for_a_composite_mapping(monkeypatc
     assert ok is True
     state = fake.session_state
     assert state["single_trial_id"] == reading_key("p1", "p1_1_Ele")
-    # No `_composite_*` keys at all — the cascade they fed is gone.
+    # No `_composite_*` keys at all — there is no cascade for them to feed.
     assert not [k for k in state if k.startswith("single_composite")], state
 
 

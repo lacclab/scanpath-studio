@@ -1,4 +1,4 @@
-"""Tests for the column-mapping sidebar UI (controls.column_mapping_ui).
+"""Tests for the column-mapping UI (controls.column_mapping_ui).
 
 The Trial ID field is multi-capable: selecting several columns means "build a
 unique trial ID on the fly by joining their values" (see data.trial_id_series).
@@ -138,9 +138,9 @@ class TestFixationFieldSpecs:
         assert any("X, Y" in p or "Word/IA" in p for p in problems)
 
     def test_fixation_extras_are_kept_not_mapped(self):
-        # pass_index / saccade_type / saccade_amplitude / eye are no longer
-        # explicit mapping fields — they ride the optional-keep registry instead
-        # (auto-detected, kept, colour-by-able). noise_flag is gone entirely.
+        # pass_index / saccade_type / saccade_amplitude / eye are not explicit
+        # mapping fields — they ride the optional-keep registry (auto-detected,
+        # kept, colour-by-able). noise_flag is in neither.
         from scanpath_studio.controls import FIX_FIELD_SPECS
         from scanpath_studio.data import FIX_OPTIONAL_FIELDS
 
@@ -154,16 +154,16 @@ class TestFixationFieldSpecs:
 
 
 class TestSwitchingToAnotherTable:
-    """DATA-24: a mapping made for one dataset must not govern the next one.
+    """A mapping made for one dataset must not govern the next one.
 
     A mapping widget owns its key once it has rendered, and an existing key beats
     the ``index=`` auto-detection computes — that is what makes an override
     stick. But the app switches data sources *in place*, so those keys outlive
     the table they describe. Opening the bundled demo (no screen columns, so
-    *Screen ID* = ``(none)``) and then switching to MultiplEYE left the field on
-    ``(none)`` while the caption under it still read "✨ auto-detected ``page``"
-    — the proposal had found the column and only the widget was stale, so the
-    multipart trial never saw its own screens.
+    *Screen ID* = ``(none)``) and then switching to a multipart corpus must not
+    leave the field on ``(none)`` while the caption under it reads
+    "✨ auto-detected ``page``" — a stale widget would hide the screens the
+    proposal found, so the multipart trial would never see its own screens.
     """
 
     @staticmethod
@@ -205,8 +205,8 @@ class TestSwitchingToAnotherTable:
             "it as the screen id, so the field must not stay on the (none) left "
             "behind by the first table"
         )
-        # UX-88 removed the *Screen name* field, so `screen_index` is no longer
-        # part of a mapping at all — the column is derived downstream instead.
+        # There is no *Screen name* field, so `screen_index` is not part of a
+        # mapping at all — the column is derived downstream.
         assert "screen_index" not in at.session_state["_mapping"]
 
     def test_a_pick_that_still_applies_survives_the_switch(self):
@@ -227,10 +227,9 @@ class TestSwitchingToAnotherTable:
         """Within one table the widget stays authoritative, so a field the user
         deliberately cleared is not quietly re-detected on the next rerun.
 
-        Uses ``screen_id``, not ``screen_index`` (UX-88 removed *Screen name*
-        from every mapping surface — there is no widget of its own for a "None
-        stays None" check to apply to; `screen_id` exercises the identical
-        mechanism and is still rendered)."""
+        Uses ``screen_id``, not ``screen_index``: no mapping surface has a
+        *Screen name* field, so there is no widget for a "None stays None" check
+        to apply to; `screen_id` exercises the identical mechanism."""
         at = AppTest.from_function(self._switch_app)
         at.session_state["_multipart"] = True
         at.run(timeout=30)
@@ -292,13 +291,13 @@ class TestSwitchingToAnotherTable:
 
 
 class TestConfirmingAnAutoDetectedField:
-    """UX-92 — clicking the ✨ flag is "I chose this", and clears the amber.
+    """Clicking the ✨ flag is "I chose this", and clears the amber.
 
     Re-picking the value a select already holds fires no ``on_change``:
-    Streamlit dedupes it in the frontend and does not rerun at all. Since
-    UX-53 r10 the value lives in the widget key with ``index=None`` (which is
-    what makes the ✕ clear work), so the detected column *is* the widget's
-    value and confirming it by hand is invisible to Python by construction.
+    Streamlit dedupes it in the frontend and does not rerun at all. The value
+    lives in the widget key with ``index=None`` (which is what makes the ✕
+    clear work), so the detected column *is* the widget's value and confirming
+    it by hand is invisible to Python by construction.
     The flag button is the signal that case has instead.
     """
 

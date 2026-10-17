@@ -17,10 +17,9 @@ just the UI. Follow the matching recipe, then close out with the checklist.
 1. Compute it in `measures.compute_per_word_measures` per trial.
 2. Add it to `WORD_OPTIONAL_FIELDS` in `data.py` if it can come
    pre-computed from EyeLink IA columns.
-3. Add a `computations.py` register entry (VAL-5) — formula, unit, grouping
-   keys, missing behaviour and precedence — and regenerate
-   `docs/computations.md` (`python -m scanpath_studio.computations`). A
-   `MEASURES` entry with no register row fails `tests/test_computations.py`.
+3. Add a `computations.py` register entry — formula, unit, grouping keys,
+   missing behaviour and precedence. A `MEASURES` entry with no register row
+   fails `tests/test_computations.py`.
 4. Surface it in `controls.color_field_options` (if useful for coloring)
    and register it in `aggregation.MEASURES` (feeds the measure pickers via
    `aggregation.available_measures`).
@@ -30,7 +29,8 @@ just the UI. Follow the matching recipe, then close out with the checklist.
 1. Add a `make_*_figure` function in `plots.py` using the helpers
    `_compute_axis_ranges`, `_compute_marker_sizes`, `_saccade_segments`,
    `_add_word_label_trace`.
-2. Wire it into a tab via `tabs.py`.
+2. Wire it into a view via `tabs.py` (spatial figures through
+   `tabs._render_true_scale_chart`).
 3. Add a smoke test in `tests/test_smoke.py` building it against the bundled
    sample.
 
@@ -50,12 +50,16 @@ Optional passthrough columns go through the `WORD_OPTIONAL_FIELDS` /
 2. **Deep link / Share** — `url_state.py`: `_URL_PRESETS` +
    `_apply_url_preset` (read) and `_build_share_query` (write); add to
    `_URL_BOUNDED` if it needs clamping. Without this the Share widget won't
-   round-trip it.
+   round-trip it. A plot setting also goes into the settings file
+   (🔗 Share → File).
 3. **CLI** — a `render` flag in `cli.py` (follow the per-layer `--no-*`
    pattern).
 4. **Headless API** — a parameter on the relevant `api.py` builder
-   (`plot_scanpath` / `animate_scanpath`) plus a default in
-   `CANONICAL_FIGURE_DEFAULTS`, so headless output matches the app.
+   (`plot_scanpath` / `animate_scanpath` / `compare_scanpaths`) plus a default
+   in `CANONICAL_FIGURE_DEFAULTS`, so headless output matches the app.
+
+Every figure option also needs a `code_snippet` emitter, so Share → Code can
+reproduce it; `tests/test_render_every_option.py` fails on one it cannot.
 
 ## Close-out checklist (verify each, report each)
 
@@ -65,13 +69,13 @@ Optional passthrough columns go through the `WORD_OPTIONAL_FIELDS` /
 - [ ] A changelog fragment, `changelog.d/<issue>.<group>.md` (or
       `<slug>.<group>.md` with no issue), one line of plain text — never an edit to `CHANGELOG.md` (`changelog.d/README.md`)
 - [ ] Docs page updated if user-visible behavior changed (`docs/`)
-- [ ] Tracker item updated → `Review` (use the `track` skill)
+- [ ] Issue updated → `Review` (use the `track` skill)
 
 ## Gotchas
 
 - The spatial plot must stay on `tabs._render_true_scale_chart` (the cached
-  replay on its two halves, `_true_scale_plot_html` + `_render_true_scale_plot`
-  — PERF-16) — never switch it to `st.plotly_chart`.
+  replay on its two halves, `_true_scale_plot_html` + `_render_true_scale_plot`)
+  — never switch it to `st.plotly_chart`.
 - Verify behavior headlessly with
   `AppTest.from_file("streamlit_app.py")`; the live preview is slow. If a
   code change doesn't show in a running server, restart it — Streamlit

@@ -1,16 +1,15 @@
-"""BUG-83: word boxes are used exactly as the experiment defined them.
+"""Word boxes are used exactly as the experiment defined them.
 
 EyeLink-style exports tile the line: each box is one character cell wider than
-its word and carries the following space as trailing padding. BUG-11 used to
-pull every such boundary back half a space; that reassigned 7.4% of the demo's
-fixations relative to EyeLink's own interest-area assignment, so it was
-reverted. The boxes are now ``x .. x + width`` everywhere a point is tested
-against one or one is drawn, and a fixation on the space after a word belongs to
-that word.
+its word and carries the following space as trailing padding. The boxes are
+``x .. x + width`` everywhere a point is tested against one or one is drawn, and
+a fixation on the space after a word belongs to that word, as in EyeLink's own
+interest-area assignment. Pulling every such boundary back half a space would
+reassign 7.4% of the demo's fixations relative to EyeLink's.
 
 The layout's *shape* still matters inside a word: `word_box_space_px` detects the
-trailing space so the letter scale (BUG-27) and the glyph run stay on the
-letters, which is what the second half of this module pins.
+trailing space so the letter scale and the glyph run stay on the letters, which
+is what the second half of this module pins.
 """
 
 from __future__ import annotations
@@ -83,7 +82,7 @@ def _fixation(x: float, **extra) -> pd.DataFrame:
 
 
 class TestSpaceInference:
-    """The detector survives BUG-83 — the letter scale and the labels need it."""
+    """The trailing-space detector stays — the letter scale and the labels need it."""
 
     def test_detects_the_trailing_space_in_a_tiling_layout(self):
         assert word_box_space_px(_tiling_words()) == pytest.approx(ADVANCE)
@@ -126,7 +125,7 @@ class TestWordBoxBounds:
     """`word_box_bounds` is THE accessor, and it returns the data's own boxes."""
 
     def test_returns_the_experiments_edges_on_a_tiling_layout(self):
-        """BUG-11 returned 348.5 → 481.5 here, half a space left of the box."""
+        """358 → 491, not shifted half a space left (348.5 → 481.5)."""
         words = _tiling_words()
         x0, y0, x1, y1 = word_box_bounds(words)
         assert list(x0) == list(words["x"])
@@ -141,7 +140,7 @@ class TestWordBoxBounds:
         assert list(x1) == list(words["x"] + words["width"])
 
     def test_a_subset_gets_the_same_edges_as_the_whole_line(self):
-        """With no correction there is nothing for a subset to fail to detect."""
+        """No tiling correction is applied, so there is nothing for a subset to fail to detect."""
         words = _tiling_words()
         span = words.iloc[[0, 3]]
         assert list(word_box_bounds(span)[0]) == list(word_box_bounds(words)[0][[0, 3]])
@@ -163,7 +162,8 @@ class TestAssignment:
 
     def test_the_space_after_a_word_belongs_to_that_word(self):
         """'Robert' glyphs end at 472 and its box at 491, so the whole space is
-        Robert's — as EyeLink assigns it. BUG-11 gave 485 to 'Myslajek'."""
+        Robert's — as EyeLink assigns it. A half-space shift would give 485 to
+        'Myslajek'."""
         words = _tiling_words()
         assert self._assign_at(words, 475.0) == 0
         assert self._assign_at(words, 485.0) == 0
@@ -178,7 +178,7 @@ class TestAssignment:
     def test_a_shared_edge_belongs_to_the_box_that_starts_there(self):
         """491 is both Robert's right edge and Myslajek's left one. Boxes are
         half-open, ``[x, x + width)``, so it is Myslajek's — where EyeLink put
-        every such fixation in the demo. A closed test gave it to Robert."""
+        every such fixation in the demo. A closed test would give it to Robert."""
         words = _tiling_words()
         assert self._assign_at(words, 491.0) == 1
         assert self._assign_at(words, 490.0) == 0
@@ -200,8 +200,8 @@ class TestInTextMask:
         return bool(fixation_in_text_mask(_fixation(x), words).iloc[0])
 
     def test_the_text_starts_at_the_first_box(self):
-        """BUG-11 reached half a space into the left margin; the first box
-        starts at the first glyph, so 352 is off the text."""
+        """The first box starts at the first glyph, so 352 is off the text —
+        the box does not reach half a space into the left margin."""
         words = _tiling_words()
         assert self._mask_at(words, 352.0) is False
         assert self._mask_at(words, 360.0) is True
@@ -251,7 +251,7 @@ class TestDependentConsumers:
 
     def test_a_fixation_on_a_shared_edge_is_counted_once(self):
         """The heatmap bins with the assignment's rule. A closed test per word
-        counted a fixation at 491 towards both Robert and Myslajek."""
+        would count a fixation at 491 towards both Robert and Myslajek."""
         from scanpath_studio import plots
 
         words = _tiling_words()
@@ -293,7 +293,7 @@ class TestDependentConsumers:
 
 
 class TestTheGlyphsStayWhereTheStimulusHadThem:
-    """What BUG-83 deliberately keeps: rendering and the letter scale."""
+    """Where the glyph run still counts: rendering and the letter scale."""
 
     def test_the_glyph_span_stops_one_advance_short_of_a_tiling_box(self):
         start, run = word_glyph_span(_tiling_words())
@@ -307,9 +307,9 @@ class TestTheGlyphsStayWhereTheStimulusHadThem:
         assert list(run) == pytest.approx(list(words["width"]))
 
     def test_the_label_is_centred_in_the_box(self):
-        """#BUG-97: the label sits in the middle of the box the data defines —
-        'Robert', 358 → 491, at 424.5 — not on its glyph run (BUG-30's 415),
-        which drew every tiling word flush left in its box."""
+        """The label sits in the middle of the box the data defines — 'Robert',
+        358 → 491, at 424.5 — not on its glyph run (415), which would draw every
+        tiling word flush left in its box."""
         from scanpath_studio import plots
 
         words = _tiling_words()
@@ -319,7 +319,7 @@ class TestTheGlyphsStayWhereTheStimulusHadThem:
         assert trace.x[0] == pytest.approx(424.5)
 
     def test_snapping_a_fixation_keeps_its_x(self):
-        """#422: render-only, like the label, and vertical only — the
+        """Render-only, like the label, and vertical only — the
         linear-reading schematic moves the dot onto its line (the top edge by
         default) and leaves it where it landed along the line."""
         from scanpath_studio import plots
@@ -334,13 +334,13 @@ class TestTheGlyphsStayWhereTheStimulusHadThem:
         assert middle["y"].iloc[0] == pytest.approx(115.0)
 
     def test_a_landing_on_the_trailing_space_is_not_clipped(self):
-        """#BUG-83: the fraction is over the experiment's box.
+        """The fraction is over the experiment's box.
 
         'Robert' is seven 19 px cells, 358 → 491: six glyphs and its trailing
         space, so a first fixation at 400 is 42/133 of the box. 'Myslajek' is
         nine, 491 → 662, with its glyphs ending at 643; a first fixation at 655
         is on its space — Myslajek's, as in EyeLink — and reads 164/171, where
-        the glyph-run fraction (164/152) used to be clipped onto exactly 1.0.
+        the glyph-run fraction (164/152) would be clipped onto exactly 1.0.
         """
         from scanpath_studio.aggregation import landing_positions
 
@@ -355,7 +355,7 @@ class TestTheGlyphsStayWhereTheStimulusHadThem:
 
 
 def test_the_bundled_demo_is_recognised_as_a_tiling_layout():
-    """Regression guard for the measured repro (2026-07-03)."""
+    """The bundled demo is detected as tiling, with a 19 px space."""
     from scanpath_studio.data import (
         infer_word_schema,
         load_sample_data,
@@ -375,12 +375,13 @@ def demo():
 
 
 class TestTheBundledDemoAgreesWithEyeLink:
-    """The acceptance numbers for BUG-83, on the corpus that motivated it."""
+    """The bundled demo's geometry agrees with EyeLink's own assignment."""
 
     def test_geometry_assigns_fixations_as_eyelink_did(self, demo):
         """`CURRENT_FIX_INTEREST_AREA_ID` is EyeLink's own assignment against the
-        same rectangles. The half-space shift disagreed on 7.4% of them, and a
-        closed containment test on the 0.9% that sit exactly on a shared edge."""
+        same rectangles. A half-space shift would disagree on 7.4% of them, and
+        a closed containment test on the 0.9% that sit exactly on a shared
+        edge."""
         words, fix = demo
         eyelink = pd.to_numeric(fix["word_id"], errors="coerce")
         ours = pd.to_numeric(
@@ -392,8 +393,9 @@ class TestTheBundledDemoAgreesWithEyeLink:
         assert (ours[assigned] == eyelink[assigned]).all()
 
     def test_no_landing_fraction_piles_up_at_the_end_of_the_word(self, demo):
-        """15% of the demo's first-fixation landings read exactly 1.0 — the
-        trailing space, clipped onto the last letter's edge."""
+        """Measured over the glyph run, 15% of the demo's first-fixation
+        landings would read exactly 1.0 — the trailing space, clipped onto the
+        last letter's edge."""
         from scanpath_studio.aggregation import landing_positions
         from scanpath_studio.measures import compute_per_word_measures
 

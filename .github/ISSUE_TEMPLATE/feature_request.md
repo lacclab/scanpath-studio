@@ -8,8 +8,7 @@ type: Feature
 <!--
 Maintainers: pick the area:* label, add it to the "Scanpath Studio" project
 board and set Status; switch the type to Task if it is a chore rather than a
-capability. The issue's own #N is its ID — no [AREA-N] prefix in the title
-(CLAUDE.md → Tracking work).
+capability (CLAUDE.md → Tracking work).
 -->
 
 ## Request
@@ -20,5 +19,5 @@ the current version make you do instead?
 
 ## Background
 
-Related issues or tracker IDs, prior art in other tools (eyekit, EyeLink Data
+Related issues, prior art in other tools (eyekit, EyeLink Data
 Viewer, …), and any references worth reading.

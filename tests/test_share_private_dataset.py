@@ -1,4 +1,4 @@
-"""#374 F14: a Share link to a dataset the sender added.
+"""A Share link to a dataset the sender added.
 
 Its files can't travel in a URL, so the link names the dataset (`?dataset=`).
 A recipient who holds a dataset of that name lands on it; one who doesn't is
@@ -95,7 +95,7 @@ def test_a_missing_dataset_is_named_and_the_view_is_not_applied():
         else None
     )
     assert colorscale != "Greens"
-    # …and the trial-pool miss it used to fall into is not shown instead.
+    # …and the trial-pool miss is not shown instead.
     assert not any("couldn't be opened" in w.value for w in at.warning)
     # The notice stays on the next run (the link's params are gone by then).
     at.run(timeout=120)

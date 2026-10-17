@@ -1,6 +1,6 @@
 """Canonical identity and validation for trials made of ordered screens.
 
-Legacy Scanpath Studio data identifies one coordinate space with
+Single-screen data identifies one coordinate space with
 ``(participant_id, trial_id)``.  Multipart trials retain that logical parent
 identity and add ``screen_id`` plus a 1-based ``screen_index`` on every row.
 This module is deliberately pandas-only so ingestion, measures, UI, API, CLI,
@@ -33,7 +33,7 @@ def has_screen_identity(frame: pd.DataFrame | None) -> bool:
 def grouping_columns(frame: pd.DataFrame, *, include_word: bool = False) -> list[str]:
     """Identity columns for a scientific operation on ``frame``.
 
-    Single-screen frames keep the historical parent key. Multipart frames add
+    Single-screen frames keep the parent key. Multipart frames add
     ``screen_id`` so assignment, saccades, runs, passes, and measures can never
     connect two coordinate spaces accidentally.
     """
@@ -55,7 +55,7 @@ def _parent_columns(frame: pd.DataFrame) -> list[str]:
 
 
 def normalize_screen_identity(frame: pd.DataFrame) -> pd.DataFrame:
-    """Normalize/validate screen columns, preserving legacy frame shape.
+    """Normalize/validate screen columns, preserving single-screen frame shape.
 
     ``screen_id`` alone is enough: order is derived from first appearance
     within each logical trial. ``screen_index`` alone is also accepted and its
@@ -78,21 +78,20 @@ def normalize_screen_identity(frame: pd.DataFrame) -> pd.DataFrame:
             )
         out[SCREEN_ID] = numeric_index.astype(int).astype(str)
     else:
-        # `stable_id`, not a plain `.astype(str)` — BUG-44's hazard applies here
-        # too: a whole-number screen_id reads as float64 the moment any OTHER
-        # row anywhere in that column is missing, so one report's `"1"` becomes
-        # another's `"1.0"` and `validate_matching_parts` below rejects every
-        # screen as an orphan even though both sides recorded the same one.
+        # `stable_id`, not a plain `.astype(str)`: a whole-number screen_id
+        # reads as float64 the moment any OTHER row anywhere in that column is
+        # missing, so one report's `"1"` becomes another's `"1.0"` and
+        # `validate_matching_parts` below rejects every screen as an orphan
+        # even though both sides recorded the same one.
         # Imported locally — `data.py` imports from this module, so a
         # module-level import would cycle.
         from .data import stable_id
 
         # A missing/blank cell is tolerated exactly as `trial_id_series` (via
-        # `stable_id`) already tolerates one in a trial id — no proactive
-        # `isna()` check here either. Rejecting it outright meant a screen_id
-        # column with a stray blank cell (the same dtype-coercion quirk
-        # BUG-44 fixed for identity columns generally) failed the whole
-        # mapping instead of just reading that one blank cell as "nan".
+        # `stable_id`) tolerates one in a trial id — no proactive `isna()`
+        # check here either. Rejecting it outright would fail the whole
+        # mapping over one stray blank cell instead of reading that cell as
+        # "nan".
         out[SCREEN_ID] = stable_id(out[SCREEN_ID])
 
     if not has_index:
@@ -143,7 +142,8 @@ def part_catalog(*frames: pd.DataFrame | None) -> pd.DataFrame:
     """One ordered row per screen across ``frames``.
 
     Metadata conflicts between words and fixations are rejected rather than
-    resolved with a silent ``first()``. Legacy data returns an empty catalogue.
+    resolved with a silent ``first()``. Single-screen data returns an empty
+    catalogue.
     """
     rows: list[pd.DataFrame] = []
     metadata = [SCREEN_INDEX, CANVAS_WIDTH, CANVAS_HEIGHT, "text_id"]
@@ -166,8 +166,8 @@ def part_catalog(*frames: pd.DataFrame | None) -> pd.DataFrame:
             dropna=True
         )
         if (conflicts > 1).any():
-            # tabs.py matches this text exactly (the screen_index case), so it
-            # keeps its wording until that check reads something sturdier (#374).
+            # tabs.py matches this text exactly (the screen_index case), so
+            # keep its wording.
             raise ValueError(f"Multipart metadata {column!r} conflicts across tables.")
     catalog = (
         combined.groupby(list(PART_KEY), as_index=False, dropna=False)

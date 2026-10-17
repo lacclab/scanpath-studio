@@ -1,9 +1,9 @@
-"""UX-203 — the Data Management page says which counts follow the trial filters.
+"""The Data Management page says which counts follow the trial filters.
 
 📊 Stats and the raw tables count the filtered pool while 📂 Available datasets
-and *Available with this dataset* count the whole dataset. Before this nothing
-on the page said which was which. One ``AppTest`` flow on the bundled demo
-(2 readers × 12 trials) pins both states.
+and *Available with this dataset* count the whole dataset, and the page says
+which is which. One ``AppTest`` flow on the bundled demo (2 readers × 12
+trials) pins both states.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def test_the_data_page_names_the_scope_of_its_counts():
     assert not _captions(at, "before the trial filters")
 
     # Set on the Scanpath view, where the filter panel publishes the result
-    # `app.main` filters with on the following run (as in UX-198's test).
+    # `app.main` filters with on the following run.
     pin_view(at, "Scanpath")
     at.run(timeout=90)
     at.session_state["filter_participants"] = ["l7_1090"]

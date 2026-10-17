@@ -1,8 +1,8 @@
-"""The frames handed out by the load cache are never mutated in place (PERF-6).
+"""The frames handed out by the load cache are never mutated in place.
 
 ``st.cache_data`` hands every caller a private *copy* of its result, which at
 corpus scale costs ~1.15 s and ~1.2 GB of churn on every rerun — paid on each
-widget touch, for data the app already had. Handing out the shared object
+widget touch, for data the app already has. Handing out the shared object
 instead is only safe while nothing downstream writes into it, and the failure
 mode if that stops being true is silent: a later rerun quietly reads an altered
 frame.
@@ -11,9 +11,6 @@ So the invariant gets a test rather than a comment. This captures the words and
 fixations frames at the moment the loader yields them, runs a full app render on
 top, and asserts they come back byte-identical — same values, index, columns and
 dtypes. A change that starts mutating them in place fails here.
-
-The static half of the audit is an AST sweep for writes into an un-rebound
-frame parameter; it is clean, and this is the half that stays clean.
 """
 
 from __future__ import annotations

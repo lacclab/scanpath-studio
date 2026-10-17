@@ -1,13 +1,12 @@
-"""UX-137: what the 🗂️ Data page says about the open dataset, and how loudly.
+"""What the 🗂️ Data page says about the open dataset, and how loudly.
 
-The page opened with a full **ℹ️ About the `<name>` dataset** section — a second
-subheader, the description, the corpus home link, a coordinate-provenance
-sentence and a six-row published-vs-loaded table — all standing above the counts
-that are the reason to visit. One sentence stays; the rest moved behind a ❔.
+No **ℹ️ About** section stands above the counts that are the reason to visit:
+the overview is one sentence under the heading, with the corpus home page on the
+same line.
 
-The per-metric spread went the same way: a four-column table where Mean, Std,
-Min and Max carried equal weight became three `st.metric`s matching the headline
-counts directly above them, with the spread on each metric's own hover.
+The per-metric spread is three `st.metric`s matching the headline counts
+directly above them, with Mean, Std, Min and Max on each metric's own hover
+rather than in a table of equal weight.
 """
 
 from __future__ import annotations
@@ -81,14 +80,14 @@ class TestThePage:
         captions = [c.value for c in at.caption]
         overview = [c for c in captions if "OneStop Eye Movements" in c]
         assert overview, captions[:8]
-        # One sentence, then the home page on the same line (UX-177).
+        # One sentence, then the home page on the same line.
         text, _, link = overview[0].partition(" [Home page ↗](")
         assert text.count(".") == 1, overview[0]
         assert link.startswith("https://"), overview[0]
 
     def test_the_popover_and_its_technicalities_are_gone(self):
-        """UX-177: *About this dataset* carried maintainer provenance; the
-        demo keeps only the note that changes how a figure is read."""
+        """The page carries no maintainer provenance; the demo keeps only the
+        note that changes how a figure is read."""
         at = self._data_page()
         text = " ".join(str(m.value) for m in (*at.markdown, *at.caption))
         assert "Where the coordinates come from" not in text
@@ -156,7 +155,7 @@ class TestTheSpreadMetrics:
             "Words per trial",
         ):
             assert expected in labels, labels
-        # Rounded on the user's call — these count things.
+        # Rounded — these count things.
         by_label = {m.label: m.value for m in at.metric}
         assert "." not in by_label["Fixations per trial"]
         assert "." not in by_label["Words per trial"]

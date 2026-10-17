@@ -1,15 +1,12 @@
-# Setting up macOS signing (ENG-21)
+# Setting up macOS signing
 
 One-time setup so the `Desktop builds` workflow signs and notarizes the macOS
 app. Until these secrets exist the workflow still runs and still produces a
 `.dmg` — it just logs a warning and ships an unsigned build, which users cannot
 open without a trip to System Settings.
 
-Rationale and the technical design are in
-[`../plans/eng-21-signing-notarization.md`](../plans/eng-21-signing-notarization.md).
-
 **Nobody but the account holder should do steps 1–4** — they involve an Apple
-account password and a private key. Steps 5's commands read files you exported
+account password and a private key. Step 5's commands read files you exported
 and never print their contents.
 
 ---
@@ -123,17 +120,19 @@ gh workflow run desktop.yml -R lacclab/scanpath-studio && sleep 5 && gh run list
 On the macOS leg, confirm the log shows `Notarization accepted` and that the
 `Re-verify the stapled bundle` step passed.
 
-**A new team's first submission is slow.** Ours took 41 minutes (2026-09-30),
-past the workflow's 30-minute wait, so that run failed with `Timeout of 1800
-second(s) was reached` — which is not a rejection. Apple keeps processing it;
-ask for its status with the submission id from the log, and re-run the
-workflow once it says `Accepted` (later submissions take minutes):
+**A new team's first submission is slow.** It can outlast the workflow's
+30-minute wait, and the run then fails with `Timeout of 1800 second(s) was
+reached` — which is not a rejection. Apple keeps processing it; ask for its
+status with the submission id from the log, and re-run the workflow once it
+says `Accepted` (later submissions take minutes):
 
 ```bash
 xcrun notarytool info <submission-id> --key ~/Downloads/AuthKey_XXXXXXXXXX.p8 --key-id <KEY_ID> --issuer <ISSUER_ID>
-``` A *partial* set of secrets fails the
-job loudly, but **all seven missing only logs a warning** and still ships an
-unsigned bundle — so a green run is not by itself proof the build was signed.
+```
+
+A *partial* set of secrets fails the job loudly, but **all seven missing only
+logs a warning** and still ships an unsigned bundle — so a green run is not by
+itself proof the build was signed.
 
 Then the only test that really counts: download the `.dmg` from the run's
 artifacts onto a Mac that has never seen it, confirm it is quarantined, and open

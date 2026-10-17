@@ -1,8 +1,7 @@
 """The app's header: the native top nav, the title row and the notices strip.
 
-What replaced the sidebar (UX-38 → UX-100). Nothing in the app writes to
-``st.sidebar``, so Streamlit draws no sidebar chrome and the main content gets
-the full page width.
+Nothing in the app writes to ``st.sidebar``, so Streamlit draws no sidebar
+chrome and the main content gets the full page width.
 
 **The nav** (:func:`render_nav`) is Streamlit's own
 ``st.navigation(position="top")``: three **views** — 🗺️ Scanpath · 📊 Corpus
@@ -10,16 +9,14 @@ Analysis · 🗂️ Data — and a ❓ Help section of **action** entries (Tutor
 FAQ, About; Debug opens from the foot of About). Selecting an action arms a dialog and bounces the router
 straight back to the view you were on, so the modal opens over your work.
 
-**UX-179 retired 💾 Session**, the last top-level action entry. Its four blocks
-went where each is used: Debug to ❓ Help, the recovery cache and *Reset
-everything* to the foot of the Data page (``app._render_saved_here_section``),
-and the settings file to 🗺️ Scanpath → 🔗 Share → File
-(``tabs.render_settings_file``) — its annotations having already got their own
-export on 🗂️ Data → Annotations.
+Session-wide tools are not on the bar but where each is used: what the
+recovery cache holds at the foot of the Data page
+(``app._render_saved_here_section``), the settings file on 🗺️ Scanpath →
+🔗 Share → File (``tabs.render_settings_file``), and the annotations' export on
+🗂️ Data → Annotations.
 
-**DATA-26 took ⚙️ Configure and 🧹 Preprocessing off the bar** and made them
-sections of the Data page. Their widgets keep every-run execution: the page
-container is built every run and hidden off-screen when another view is active
+The Data page's sections run on every run: the page container is built every
+run and hidden off-screen when another view is active
 (``constants.DATA_PAGE_OFFSCREEN_KEY`` + the ``display: none`` rule in
 ``styles.py``), because Streamlit drops the state of a widget that does not
 render and several of them drive ``app.prepare_data``.
@@ -49,35 +46,31 @@ NAV_SELECTOR = '[data-testid="stTopNavLinkContainer"]'
 
 #: Nav entries: view constant → (label, icon, url path). The labels are short —
 #: "Scanpath", not "Scanpath Visualization" — because the nav sits in Streamlit's
-#: header strip beside the toolbar, where a long label crowds it. UX-201 is the
-#: one exception: beta testers looked for the page by its header, *Data
-#: Management*, so the nav says that too.
-#: **Data comes last** (DATA-26) even though setting a dataset up comes first in
-#: time: it is visited occasionally, while the two analysis views are where the
-#: work happens, and moving them rightwards to make room for a setup page would
-#: cost every existing user their aim.
+#: header strip beside the toolbar, where a long label crowds it. The exception
+#: is *Data Management*, which matches the page's own header.
+#: **Data comes last** even though setting a dataset up comes first in time: it
+#: is visited occasionally, while the two analysis views are where the work
+#: happens.
 _NAV_PAGES = {
     _VIEW_SCANPATH: ("Scanpath", ICONS["view_scanpath"], "scanpath"),
     _VIEW_CORPUS: ("Corpus Analysis", ICONS["view_corpus"], "corpus-analysis"),
     _VIEW_DATA: ("Data Management", ICONS["view_data"], "data"),
 }
 
-#: UX-65 — the ❓ Help *section* of the nav: entry id → (label, icon, url path).
-#: These are not views. Each one opens the dialog that used to sit behind a
-#: button on the Help page, over whatever you were already looking at — see
-#: :func:`render_nav` for the bounce that makes that work. Documentation is
-#: absent on purpose: ``st.Page`` cannot be a URL, and the UX-62 wordmark beside
-#: this nav already links to the docs site.
+#: The ❓ Help *section* of the nav: entry id → (label, icon, url path).
+#: These are not views. Each one opens a dialog over whatever you were already
+#: looking at — see :func:`render_nav` for the bounce that makes that work.
+#: Documentation is absent on purpose: ``st.Page`` cannot be a URL, and the
+#: wordmark beside this nav already links to the docs site.
 _HELP_PAGES = {
     "help_tutorials": ("Tutorials", ICONS["tutorials"], "help-tutorials"),
     "help_faq": ("FAQ", ICONS["faq"], "help-faq"),
     "help_about": ("About", ICONS["about"], "help-about"),
-    # #374 F31: Debug is no longer an entry here — a developer tool listed
-    # beside Tutorials and FAQ read as something every user should open. It
-    # is a small button at the foot of About (`app._about_dialog`).
+    # Debug is not listed here: it is a developer tool, opened from a small
+    # button at the foot of About (`app._about_dialog`).
 }
 
-#: The nav section heading the four entries above collapse under.
+#: The nav section heading the entries above collapse under.
 HELP_SECTION = f"{ICONS['help']} Help"
 
 #: This run's ``st.Page`` objects, view constant → Page. Rebuilt every run (an
@@ -92,9 +85,8 @@ _PAGES: dict[str, object] = {}
 _MIRROR_KEY = "_nav_mirrored"
 
 #: Keyed wrapper around the main-area strip just under the bar, where load-time
-#: warnings land. They used to be ``st.sidebar.warning`` calls in an
-#: always-visible column; a warning inside a *closed* popover would be invisible,
-#: so these stay in the page where the user can't miss them.
+#: warnings land. A warning inside a *closed* popover would be invisible, so
+#: these stay in the page where the user can't miss them.
 NOTICES_KEY = "top_menu_notices"
 
 
@@ -113,8 +105,8 @@ def close_open_popovers() -> None:
     """Dismiss whichever menu popover is open, client-side.
 
     A popover's open/closed state lives in the browser, so a server callback can
-    arm a dialog but cannot close the ❓ Help popover the button was inside —
-    leaving the popover panel floating on top of the modal it just opened. Call
+    arm a dialog but cannot close a popover the button was inside — leaving the
+    popover panel floating on top of the modal it just opened. Call
     this from a dialog body: it clicks the expanded trigger, which toggles it
     shut. Retried, because a click during React hydration is silently lost.
 
@@ -154,7 +146,7 @@ def _unused_page_body() -> None:  # pragma: no cover - never executed
     """Placeholder body for the ``st.Page`` objects.
 
     ``st.navigation`` is used here only to *render* the nav and report which
-    entry is selected — we never call ``.run()``, because ``app.main`` still owns
+    entry is selected — we never call ``.run()``, because ``app.main`` owns
     the dispatch (it has to: the view bodies close over frames the long prelude
     computes, and the epilogue — ``save_local_state``, then the Data page's
     *Saved on this computer* — has to run *after* the body). So these never execute.
@@ -165,7 +157,7 @@ def _unused_page_body() -> None:  # pragma: no cover - never executed
 def switch_to_view(view: str) -> None:
     """Navigate to ``view`` programmatically. Reruns; does not return.
 
-    The router owns the selection now, so writing ``main_nav`` is not enough on
+    The router owns the selection, so writing ``main_nav`` is not enough on
     its own — this is what actually moves the nav. Not callable from a widget
     callback (Streamlit forbids ``st.switch_page`` there); callbacks should write
     ``main_nav`` and let :func:`render_nav`'s reconciliation do the switch on the
@@ -177,12 +169,11 @@ def switch_to_view(view: str) -> None:
 
 
 def _arm_help_action(entry: str) -> None:
-    """Arm the dialog a nav *action* entry stands for (UX-65, UX-100).
+    """Arm the dialog a nav *action* entry stands for.
 
-    The dialogs themselves are untouched — this only sets the request flag each
-    ``maybe_show_*`` already serves in ``app.main``, which is exactly what the
-    Help *buttons* did through their ``on_click`` callbacks. Imports are local
-    because ``app`` imports this module.
+    This only sets the request flag each ``maybe_show_*`` serves in
+    ``app.main``; the dialog itself is drawn there. Imports are local because
+    ``app`` imports this module.
     """
     from scanpath_studio import tour
 
@@ -206,13 +197,12 @@ def render_nav() -> str:
     height and looks like Streamlit rather than like an app control.
 
     **``main_nav`` is kept as a mirror, not the source of truth.** The router
-    owns the selection, but several places still *write* ``main_nav`` to request
+    owns the selection, but several places *write* ``main_nav`` to request
     a view (``url_state._go_scanpath`` / ``_go_data``, ``tour`` when a step drives the
     app to another view, and ``persistence`` restoring the view you were last
     on) — including from ``on_click`` callbacks, where ``st.switch_page`` is not
-    allowed. So each run reconciles, then writes the resolved view back, and
-    every existing reader of ``main_nav`` — the tour, ``persistence`` — keeps
-    working unchanged.
+    allowed. So each run reconciles, then writes the resolved view back for
+    every reader of ``main_nav`` — the tour, ``persistence``.
 
     The reconciliation turns on ``_nav_mirrored``: the value this function wrote
     last run. Without it the two directions are indistinguishable and the nav
@@ -233,7 +223,7 @@ def render_nav() -> str:
             url_path=url_path,
             default=view == _VIEW_SCANPATH,
         )
-    # UX-65: a *dict* of sections. The entries under the empty-string key are
+    # A *dict* of sections. The entries under the empty-string key are
     # drawn first, at the top level; every other key becomes a collapsible item
     # — Streamlit's own documented behaviour for `position="top"`, so ❓ Help
     # opens a menu with no CSS of ours.

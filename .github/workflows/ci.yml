@@ -75,13 +75,13 @@ jobs:
       # pyproject.toml ([tool.coverage.report] fail_under), so this step and a
       # local `pytest --cov` gate on the same value. So does the measurement
       # core: `[tool.coverage.run] core = "sysmon"` is what keeps this leg near
-      # the plain ones on 3.12 instead of 2.7x slower (ENG-81).
+      # the plain ones on 3.12 instead of 2.7x slower.
       - name: Run pytest with coverage
         run: pytest -q -n auto --cov
 
       # The number in the PR, without needing a third-party service: the Docs
       # workflow publishes the browsable report + the README badge with each
-      # release (ENG-37).
+      # release.
       - name: Summarize
         if: always()
         run: |
@@ -148,8 +148,8 @@ jobs:
   docs:
     # The docs build runs code — the gallery's figures, the printed examples,
     # the CLI and figure-option references are generated from the package at
-    # build time (ENG-78, ENG-79) — so a change that breaks them has to fail
-    # here, not after the merge in docs.yml's deploy.
+    # build time — so a change that breaks them has to fail here, not after
+    # the merge in docs.yml's deploy.
     name: Docs build
     runs-on: ubuntu-latest
     env:

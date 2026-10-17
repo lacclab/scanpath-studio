@@ -1,12 +1,11 @@
-"""UX-190 / UX-195: the chips above the plot, drawn as a table.
+"""The chips above the plot, drawn as a table.
 
-UX-190 replaced Compare mode's two chip strips: two strips of ``Field = Value``
-chips put A's value and B's in different rows at different horizontal offsets,
-so comparing them meant searching. The table gives each field one column — A's
-value directly above B's — and writes a value the two readings share in both
-rows, muted (it was once one cell spanning both rows, which read as B's cell
-left blank). UX-195 drew the single trial's chips the same way, as a
-one-row table.
+In Compare mode the table gives each field one column — A's value directly
+above B's — so the two can be compared at a glance, which two strips of
+``Field = Value`` chips at different horizontal offsets would not allow. A value
+the two readings share is written in both rows, muted (one cell spanning both
+rows would read as B's cell left blank). The single trial's chips are drawn the
+same way, as a one-row table.
 """
 
 from __future__ import annotations
@@ -205,7 +204,7 @@ class TestTheEntries:
 
 
 class TestOneReading:
-    """UX-195: the single trial's chips are the same table with one row."""
+    """The single trial's chips are the same table with one row."""
 
     @staticmethod
     def _one(entries, order):

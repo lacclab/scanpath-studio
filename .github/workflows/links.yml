@@ -1,6 +1,6 @@
 name: Links
 
-# The docs' *external* links, checked once a week (ENG-79). Internal links and
+# The docs' *external* links, checked once a week. Internal links and
 # anchors already fail `mkdocs build --strict` in docs.yml. This is deliberately
 # not a pull-request gate: a link rots on someone else's server, not in a pull
 # request, and one flaky remote host must not red a branch that changed nothing.

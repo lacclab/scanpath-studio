@@ -1,7 +1,7 @@
-"""Planning an uploaded table's read (PERF-6, decision 2a).
+"""Planning an uploaded table's read.
 
 The wizard is the one path where the columns a plan would drop are still
-*offerable*: each table's own "Extra fields to keep" picker (UX-114) lists
+*offerable*: each table's own "Extra fields to keep" picker lists
 exactly the columns nothing claims, and its mapping dropdowns list every
 column in the file. So the plan has to fold in what the user has already
 named, and the picker has to keep reading the file's header rather than the
@@ -46,9 +46,9 @@ class TestColumnsChosenInState:
         assert _columns_chosen_in_state(state, HEADER) == {"NEXT_SAC_ANGLE"}
 
     def test_finds_the_per_table_keep_picker(self):
-        """UX-114: one picker per table (`wizard_keep_<prefix>`) replaced the
-        old single cross-table `wizard_keep_extra` — the sweep matches the
-        prefix, not the exact old name, so either shape is found."""
+        """Each table has its own picker (`wizard_keep_<prefix>`); the sweep
+        matches the prefix, not an exact name, so both it and the single
+        cross-table `wizard_keep_extra` are found."""
         state = {"wizard_keep_col_map_words": ["NEXT_SAC_ANGLE"]}
         assert _columns_chosen_in_state(state, HEADER) == {"NEXT_SAC_ANGLE"}
 

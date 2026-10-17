@@ -1,12 +1,10 @@
-"""#412 — one trial pool for every surface: each trial any table has.
+"""One trial pool for every surface: each trial any table has.
 
-A dataset whose Words and Fixations tables cover different trials loaded fine,
-but the surfaces disagreed about which trials it held: the app's picker listed
-the fixations' trials (and dropped a trial only the words had), while
-`api.list_trials` intersected the two tables — so the API could list nothing
-and `plot_scanpath` refused both trials. The user's call: the **union**. A
-trial is listed when any table has it, once however many have it, and a table
-that lacks it draws as an empty layer. A stimulus-level Words table adds no
+When a dataset's Words and Fixations tables cover different trials, every
+surface — the app's picker, `api.list_trials`, `plot_scanpath` — holds the
+**union** of them, not one table's trials or the intersection (which can be
+empty). A trial is listed when any table has it, once however many have it,
+and a table that lacks it draws as an empty layer. A stimulus-level Words table adds no
 phantom readings: its rows only count once they have been broadcast onto a
 real reading.
 """
@@ -52,7 +50,7 @@ EVERY = [("p", "both"), ("p", "fix_only"), ("p", "words_only")]
 
 
 def _raw() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """The review's probe, plus a trial both tables have."""
+    """A trial only the words have, one only the fixations have, and one both have."""
     words = pd.DataFrame(
         {
             "participant_id": ["p", "p"],

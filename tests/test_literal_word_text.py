@@ -1,10 +1,9 @@
 """Stimulus words render as their own characters, never as Plotly markup.
 
-Round-8 review, finding 6: word strings went straight into Plotly's rich-text
-fields, so a code or markup stimulus token ``<b>bold</b>`` drew bold with its
-tags gone and ``x<br>y`` broke onto two lines, out of its box. Every figure
-that draws word labels (static, replay, the three comparison layouts) now
-escapes the data — and only the data — where it enters the figure, while the
+Plotly's text fields are rich text, so a raw code or markup stimulus token
+``<b>bold</b>`` would draw bold with its tags gone and ``x<br>y`` would break
+onto two lines, out of its box. Every figure that draws word labels (static,
+replay, the three comparison layouts) escapes the data — and only the data — where it enters the figure, while the
 tables and what is exported from them keep the original strings.
 """
 
@@ -176,7 +175,7 @@ def test_exported_words_keep_the_original_strings():
     assert exported["text"].tolist() == SOURCE
 
 
-# Round 9, finding 3: the figure's chrome — title, caption and the names of the
+# The figure's chrome — title, caption and the names of the
 # two compared scanpaths — is user text too, and is drawn as written.
 LABELS = ("<b>Scanpath A</b>", "Scanpath<br>B %{x}")
 LABELS_LITERAL = ("&lt;b&gt;Scanpath A&lt;/b&gt;", "Scanpath&lt;br&gt;B &#37;{x}")
@@ -202,7 +201,7 @@ def test_compare_labels_are_drawn_as_written(layout):
     assert not any(label in template for label in LABELS for template in templates)
     assert any(LABELS_LITERAL[1] in template for template in templates)
     if layout != "overlay":
-        # #374 F26: each panel title leads with its side, "A · …" / "B · …".
+        # Each panel title leads with its side, "A · …" / "B · …".
         titles = {a.text.split(" · ", 1)[-1] for a in fig.layout.annotations}
         assert set(LABELS_LITERAL) <= titles
 
@@ -224,7 +223,7 @@ def test_illustration_text_and_word_heatmap_title_are_drawn_as_written():
     plots.add_illustration_label(fig, ["snapped"], text="<b>Schematic</b>")
     texts = {a.text for a in fig.layout.annotations}
     assert "&lt;b&gt;Schematic&lt;/b&gt;" in texts
-    # The words-only heatmap (AN-4's "word difficulty on the stimulus").
+    # The words-only heatmap ("word difficulty on the stimulus").
     fig = _static(
         words,
         fixations.iloc[0:0],

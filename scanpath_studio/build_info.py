@@ -1,4 +1,4 @@
-"""Which build of Scanpath Studio this is (#139).
+"""Which build of Scanpath Studio this is.
 
 Releases are cut by hand: ``scanpath_studio.__release__`` is the number
 ``/release`` bumps and ``publish.yml`` checks a tag against. Between releases
@@ -174,8 +174,8 @@ def read_checkout(
     if done.returncode != 0:
         return None
     # `describe --dirty` would refresh and rewrite .git/index, which can make
-    # another session's `git commit` fail; `status` with optional locks off
-    # does not.
+    # a concurrent `git commit` fail; `status` with optional locks off does
+    # not.
     try:
         status = run(
             ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"],

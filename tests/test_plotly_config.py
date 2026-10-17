@@ -1,4 +1,4 @@
-"""No figure offers Plotly Cloud's "Share chart…" upload (BUG-101).
+"""No figure offers Plotly Cloud's "Share chart…" upload.
 
 plotly.js 3 turns `showSendToCloud` on by default, which puts a modebar button
 on every figure that serializes it — words, coordinates, hover fields — and

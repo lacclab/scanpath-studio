@@ -11,10 +11,11 @@ columns are stamped by a separate, external rendering step. When regenerating
 those, place each page at data origin ``(image_x=368, image_y=186)`` — where the
 experiment itself drew the paragraph image (the ``IMGLOAD`` origin in each
 trial's Experiment Builder ``.vcl`` view file). Each word box is then centred on
-its word, half a space either side (BUG-97); ``(358, 184)`` put the text flush
-left in the boxes, and ``image_y=148`` sat the page ~36 px too high. ``tests/test_smoke.py::TestStimulusImageAlignment``
-asserts the shipped origin keeps every PNG line on its word boxes, so a bad
-origin fails CI regardless of which script emitted it.
+its word, half a space either side; ``(358, 184)`` would put the text flush
+left in the boxes, and ``image_y=148`` would sit the page ~36 px too high.
+``tests/test_smoke.py::TestStimulusImageAlignment`` asserts the shipped origin
+keeps every PNG line on its word boxes, so a bad origin fails CI regardless of
+which script emitted it.
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ DEFAULT_OUTPUT_DIR = DATA_DIR / "sample_data"
 
 # Search for the demo slice in at most this many rows of each giant source CSV;
 # large enough to span many participants and trials while staying
-# memory-friendly. The readers it picks are then read in full (DATA-43).
+# memory-friendly. The readers it picks are then read in full.
 DEFAULT_MAX_ROWS = 300_000
 
 IA_KEEP_COLUMNS = [
@@ -85,8 +86,8 @@ IA_KEEP_COLUMNS = [
     # Critical-/distractor-span columns enable the Hunting-condition overlay
     # in plots.py / tabs.py. Bool flags drive the per-word coloring; the
     # ind_* + indices columns are normalized through but not yet read by the
-    # app — they're kept for parity with the OneStop server bundle so reviewers
-    # comparing demo vs production see the same metadata table.
+    # app — they're kept for parity with the OneStop server bundle, so the demo
+    # and a server bundle carry the same metadata table.
     "question_preview",
     "is_in_aspan",
     "is_in_dspan",
@@ -117,7 +118,7 @@ FIXATION_KEEP_COLUMNS = [
     "CURRENT_FIX_DURATION",
     "CURRENT_FIX_X",
     "CURRENT_FIX_Y",
-    # BUG-8: in the OneStop fixation report this column is numbered 1..N while
+    # In the OneStop fixation report this column is numbered 1..N while
     # ia.csv's IA_ID runs 0..N-1, so a fixation's pre-assigned word id points at
     # the *next* word. It is copied through verbatim (the bundled sample is a
     # faithful subset of the source export, offset and all); the fix lives on the
@@ -167,13 +168,13 @@ def load_participants(
     participants: Iterable[str],
     chunksize: int = 500_000,
 ) -> pd.DataFrame:
-    """Every row of ``participants`` in ``source_csv``, read in chunks (DATA-43).
+    """Every row of ``participants`` in ``source_csv``, read in chunks.
 
     ``load_subset``'s row cap bounds the *search* for a demo slice; the slice
     itself has to be read whole. Capped, the IA and fixation reports stop at
     different readers — an IA row per word, a fixation row per fixation — so a
-    reader could land inside one cap and outside the other, and the demo shipped
-    a reader with word boxes and no fixations."""
+    reader could land inside one cap and outside the other, leaving the demo a
+    reader with word boxes and no fixations."""
     source_csv = _resolve_csv_path(source_csv)
     available_cols = pd.read_csv(source_csv, nrows=0, low_memory=False).columns
     use_cols = [col for col in preferred_columns if col in available_cols]
@@ -190,9 +191,8 @@ def load_participants(
 def check_fixations_cover_words(ia: pd.DataFrame, fixations: pd.DataFrame) -> None:
     """Raise unless every ``(participant, trial)`` in ``ia`` has fixations.
 
-    A trial with word boxes and no fixations is counted on the 🗂️ Data page and
-    cannot be opened (DATA-43); a demo that ships one is a broken demo, so the
-    build stops instead of writing it."""
+    A trial with word boxes and no fixations has no scanpath to show; a demo
+    that ships one is a broken demo, so the build stops instead of writing it."""
     keys = ["participant_id", "unique_trial_id"]
     have = set(map(tuple, fixations[keys].astype(str).drop_duplicates().to_numpy()))
     need = set(map(tuple, ia[keys].astype(str).drop_duplicates().to_numpy()))
@@ -528,7 +528,7 @@ def main() -> None:
         )
     )
 
-    # DATA-43: only a reader both capped reads reached can be picked…
+    # Only a reader both capped reads reached can be picked…
     ia_full = ia_full[
         ia_full["participant_id"]
         .astype(str)
@@ -562,7 +562,8 @@ def main() -> None:
     # Synthesize a raw-gaze overlay sample tied to one of these trials.
     regenerate_raw_gaze_from_bundle(args.output_dir, seed=args.seed)
 
-    # Drop the legacy *_full CSVs so they don't bloat the wheel.
+    # Remove any *_full CSVs an older build left behind, so they don't bloat
+    # the wheel.
     for legacy in [
         args.output_dir / "ia_full.csv",
         args.output_dir / "fixations_full.csv",

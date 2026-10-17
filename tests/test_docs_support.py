@@ -1,10 +1,10 @@
-"""The docs' generated content (ENG-77, ENG-78, ENG-79).
+"""The docs' generated content.
 
 ``scripts/docs_support.py`` writes the parts of the site that are read from
 the code rather than restated: the CLI and figure-option references, the Cite
-and Changelog pages, the gallery's figures. The docs
-build runs it too (``mkdocs build --strict`` fails on an exception), but these
-catch a break in the ordinary test run, before anyone builds the site.
+and Changelog pages, the gallery's figures. The docs build runs it too
+(``mkdocs build --strict`` fails on an exception), but these catch a break in
+the ordinary test run, before anyone builds the site.
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def test_a_figure_option_without_a_section_fails_the_build():
 
 
 def test_the_published_references_leave_out_drift_correction(monkeypatch):
-    # The site is built without SCANPATH_EXPERIMENTAL, so the held-back
+    # The site is built without SCANPATH_EXPERIMENTAL, so the experimental
     # feature's options and flags stay off it.
     monkeypatch.delenv("SCANPATH_EXPERIMENTAL", raising=False)
     assert "## Drift correction" not in docs_support.figure_options_reference()
@@ -122,7 +122,7 @@ def _heading_anchors(page: Path) -> set[str]:
 
 @pytest.mark.parametrize("tutorial", tour.TUTORIALS, ids=lambda t: t.id)
 def test_every_in_app_tutorial_links_a_page_and_heading_that_exist(tutorial):
-    # ENG-88: the "Matching written tutorial" button opens the docs page that
+    # The "Matching written tutorial" button opens the docs page that
     # covers the task, so a renamed page or heading must fail here, not 404.
     url, _, fragment = tutorial.docs_url.partition("#")
     base = tour.DOCS_URL
@@ -151,7 +151,7 @@ def test_the_citation_is_the_cff():
 
 
 def test_an_embedded_figure_cannot_leave_its_attribute():
-    # ENG-92: the JSON is an attribute, not an inline script, which Material's
+    # The JSON is an attribute, not an inline script, which Material's
     # instant navigation would re-run as JavaScript.
     import html
     import json
@@ -169,7 +169,7 @@ def test_an_embedded_figure_cannot_leave_its_attribute():
 
 
 def test_an_embedded_replay_carries_the_replay_player():
-    # BUG-93: the Gallery's ▶ Play keeps real time on the app's own player —
+    # The Gallery's ▶ Play keeps real time on the app's own player —
     # figures.js runs it against the drawn plot — and a static figure has none.
     import html
     import json
@@ -187,7 +187,7 @@ def test_an_embedded_replay_carries_the_replay_player():
         found = re.search(r'data-figure="([^"]*)"', page)
         return json.loads(html.unescape(found.group(1)))
 
-    # PERF-17: the spec leaves the frames out; the script ahead of the player
+    # The spec leaves the frames out; the script ahead of the player
     # rebuilds them (`plots.replay_page`).
     assert payload(replay)["player"].endswith(animation_player_post_script(replay))
     assert payload(replay)["player"] == replay_page(replay)[1]

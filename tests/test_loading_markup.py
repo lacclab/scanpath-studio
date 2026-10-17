@@ -1,4 +1,4 @@
-"""UX-165: the loading card's markup and the plot-size bookkeeping."""
+"""The loading card's markup and the plot-size bookkeeping."""
 
 from __future__ import annotations
 
@@ -76,8 +76,8 @@ def test_the_head_carries_title_time_and_last_load_and_escapes_the_title():
 
 def test_the_live_region_announces_the_title_and_step_not_the_clock():
     """The head repaints about four times a second. A live region around the
-    elapsed time had a screen reader read the clock out on every tick; around
-    the title and the current step, it speaks once per step."""
+    elapsed time would have a screen reader read the clock out on every tick;
+    around the title and the current step, it speaks once per step."""
     html = loading.head_html(_snap(), last=6.0)
     live = _LiveRegions()
     live.feed(html)
@@ -148,7 +148,7 @@ def test_the_scanpath_skeleton_follows_the_selector_grid_and_plot_height():
     html = loading.skeleton_html("scanpath", plot_height=640)
     tracks = loading.selector_row_tracks()
     assert f"grid-template-columns:{tracks}" in html
-    # UX-181: each track carries the real row's floor as well as its weight;
+    # Each track carries the real row's floor as well as its weight;
     # the actions track above all, whose weight is nominal.
     assert f"minmax(0, {SELECTOR_ROW_GRID[2]}fr)" in tracks
     assert (

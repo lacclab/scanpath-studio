@@ -1,4 +1,4 @@
-"""#422: the saccade lines' opacity — one setting, on every figure.
+"""The saccade lines' opacity — one setting, on every figure.
 
 ↗️ Saccades ▾ → *Opacity* (`global_saccade_opacity` → `saccade_opacity`) fades
 the saccade lines and their direction arrows together, on the static figure,

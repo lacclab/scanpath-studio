@@ -1,15 +1,15 @@
-"""UX-69: the Scanpath subtabs read `label | field`, not label-above.
+"""The Scanpath subtabs read `label | field`, not label-above.
 
 The sibling [`test_rail_label_rows.py`](test_rail_label_rows.py) pins the row
-itself (key + label + collapsed visibility + the folded-in tooltip). What is new
-here is *reach*: the row moved down into :mod:`scanpath_studio.fields` so the
+itself (key + label + collapsed visibility + the folded-in tooltip). What is
+pinned here is *reach*: the row lives in :mod:`scanpath_studio.fields` so the
 three modules that render these subtabs — `annotations`, `export`, `url_state` —
 can use it, and `controls` (which imports two of them, and so cannot be imported
-back) now delegates to the same code.
+back) delegates to the same code.
 
-So these cover the two things that pass could break and a rendered page would
-not show: that the delegation kept `controls`' own row intact, and that each
-converted subtab field still carries its real label and key while hiding them.
+So these cover two things a rendered page would not show: that the delegation
+keeps `controls`' own row intact, and that each subtab field still carries its
+real label and key while hiding them.
 """
 
 from __future__ import annotations

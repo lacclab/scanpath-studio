@@ -1,4 +1,4 @@
-"""AN-34: the analysis recipe — how one Corpus Analysis table was made.
+"""The analysis recipe — how one Corpus Analysis table was made.
 
 A small JSON file downloaded beside each Corpus Analysis table. It records what
 the table cannot say about itself: the app version, the dataset it was read

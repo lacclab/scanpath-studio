@@ -1,4 +1,4 @@
-"""BUG-15: a viz widget that first renders on a later run must show its value.
+"""A viz widget that first renders on a later run must show its value.
 
 Two things go wrong when a control renders only sometimes — its layer toggle was
 off at load, or its whole panel lives on a view the user isn't on:
@@ -11,11 +11,10 @@ off at load, or its whole panel lives on a view the user isn't on:
    ``st.segmented_control``, black on a colour picker — while the figure keeps
    drawing the value the state actually holds.
 
-Both used to be worked around from Python, by re-asserting every stored value on
-every run (``controls._pin(rewrite=True)``). Streamlit 1.61 handles both itself:
-``persist_state="session"`` preserves the value while the widget is unmounted
-*and* marks it changed on remount so the frontend adopts it (ENG-36). ``_pin`` is
-back to a plain default-if-absent.
+Streamlit handles both itself: ``persist_state="session"`` preserves the value
+while the widget is unmounted *and* marks it changed on remount so the frontend
+adopts it. ``controls._pin`` is a plain default-if-absent; nothing re-asserts
+every stored value on every run.
 
 So these tests pin the outcome (a value survives a run without its widget) and
 the contract that produces it (every wire-format widget declares
@@ -54,7 +53,7 @@ _NO_PERSIST_STATE = {
 def _late_mount_app():
     """Render the saccade-style picker on every run *except* the second.
 
-    That gap is the whole bug: run 2 is a rerun where the widget's popover is
+    That gap is the whole hazard: run 2 is a rerun where the widget's popover is
     closed (its layer toggle is off), which is when Streamlit prunes the key.
     """
     import pandas as pd
@@ -81,11 +80,11 @@ def _late_mount_app():
 
 
 def test_a_value_survives_a_run_whose_widget_did_not_render():
-    """The outcome BUG-15 is about, whatever mechanism delivers it.
+    """The outcome that matters, whatever mechanism delivers it.
 
     Without it the key is pruned on run 2 and ``_seed_viz_state`` writes the
-    factory default over the user's setting on run 3 — permanently, since it now
-    looks like their choice.
+    factory default over the user's setting on run 3 — permanently, since it
+    then looks like their choice.
     """
     at = AppTest.from_function(_late_mount_app)
     at.session_state["_fix"] = _FIX
@@ -100,7 +99,7 @@ def test_a_value_survives_a_run_whose_widget_did_not_render():
 
 
 def test_every_wire_format_widget_declares_persist_state():
-    """The contract that replaced the re-assert-every-run workaround (ENG-36).
+    """The contract that keeps a conditionally rendered widget's value.
 
     A widget on a share-link / saved-config key can render conditionally, and one
     without ``persist_state="session"`` silently loses the user's value the first
@@ -166,9 +165,9 @@ def test_no_pinned_widget_passes_a_default():
     A ``value=``/``index=``/``default=`` beside a pinned ``key=`` would fight the
     stored value *and* make Streamlit log its "default value but also had its
     value set via Session State API" warning. (The colour pickers that do pass
-    ``value=`` — the compare styles and the VIZ-8 class colours — are the older,
-    per-widget workaround for this same desync; they are keyless or unpinned, so
-    they don't collide.)
+    ``value=`` — the compare styles and the saccade class colours — work around
+    the same desync per widget; they are keyless or unpinned, so they don't
+    collide.)
     """
     import ast
     import inspect
@@ -198,9 +197,9 @@ def test_no_wire_format_widget_passes_a_default():
     """The same invariant, for every module — not just ``controls.py``.
 
     ``test_no_pinned_widget_passes_a_default`` only scans ``controls.py`` for
-    keys in ``_VIZ_WIDGET_DEFAULTS``, so the identical bug went unnoticed in
-    ``app.py``: the PRE-1 ``global_preproc_*`` widgets each passed ``value=``
-    beside a key that ``url_state`` writes pre-widget, and Streamlit logged
+    keys in ``_VIZ_WIDGET_DEFAULTS``, so it cannot see the same bug in another
+    module — e.g. a ``global_preproc_*`` widget in ``app.py`` passing ``value=``
+    beside a key that ``url_state`` writes pre-widget, which makes Streamlit log
     "was created with a default value but also had its value set via the Session
     State API" on every run of a restored session.
 
@@ -241,20 +240,18 @@ def test_no_wire_format_widget_passes_a_default():
 
 
 def test_canvas_settings_survive_a_corpus_analysis_round_trip():
-    """VIZ-31: the canvas panel renders only in the Scanpath rail — it must not
-    lose its settings on a view that doesn't render it.
+    """The canvas panel renders only in the Scanpath rail — it must not lose
+    its settings on a view that doesn't render it.
 
     Streamlit drops a widget's key from session state at the end of any run in
-    which the widget did not render. Once VIZ-31 moved the monitor / typography /
-    background panel out of the always-present sidebar and into the Scanpath
-    rail, a single trip through **Corpus Analysis** pruned all fourteen of its
-    keys — and because `app.seed_canvas_state` seeded them with ``setdefault``,
-    the *next* Corpus run wrote the factory default over the user's settings and
-    kept it (canvas 1234 → 700, font 33 → 16, text colour → #343a40), including
-    six keys that are share-link / saved-config wire format. The seeder now uses
-    ``persist_state="session"`` on each of those widgets, which is what keeps the
-    keys alive across a view that never renders them (ENG-36; before 1.61 this
-    was a hand-rolled re-assert-every-run in ``controls._pin``).
+    which the widget did not render. A single trip through **Corpus Analysis**
+    would prune all fourteen of the monitor / typography / background panel's
+    keys — and since `app.seed_canvas_state` seeds them with ``setdefault``, the
+    *next* Corpus run would write the factory default over the user's settings
+    and keep it (canvas 1234 → 700, font 33 → 16, text colour → #343a40),
+    including six keys that are share-link / saved-config wire format. Each of
+    those widgets takes ``persist_state="session"``, which is what keeps the
+    keys alive across a view that never renders them.
 
     Two Corpus runs matter: the first is the one that prunes, the second is the
     one that would re-seed a default over the gap.
@@ -288,23 +285,22 @@ def test_canvas_settings_survive_a_corpus_analysis_round_trip():
     survived = {key: at.session_state[key] for key in edits}
     assert survived == edits, (
         "a canvas / typography setting was reset by a trip through Corpus "
-        "Analysis — app.seed_canvas_state must _pin(rewrite=True) these keys, "
-        "not setdefault them, because only the Scanpath rail renders their "
-        f"widgets: {survived}"
+        "Analysis — their widgets must take persist_state='session', because "
+        f"only the Scanpath rail renders them: {survived}"
     )
 
 
 def test_the_selected_trial_survives_a_trip_to_another_view():
-    """BUG-80: the trial picker renders only on the Scanpath view, and Streamlit
-    drops an unrendered widget's key at the end of the run — so every trip to
-    Corpus Analysis or the 🗂️ Data page came back on trial 1 (in Compare, with A
-    and B left on different texts)."""
+    """The trial picker renders only on the Scanpath view, and Streamlit drops
+    an unrendered widget's key at the end of the run — so a trip to Corpus
+    Analysis or the 🗂️ Data page must not come back on trial 1 (in Compare,
+    with A and B left on different texts)."""
     from tests.conftest import pin_view
 
     at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
     at.run()
     picker = next(s for s in at.selectbox if s.key == "single_trial_id")
-    # The options are the ids as shown (UX-187 / UX-202).
+    # The options are the ids as shown.
     from tests.conftest import picked_trial_id, picker_trial_id
 
     chosen = picker_trial_id(picker.options[3])
@@ -320,10 +316,9 @@ def test_the_selected_trial_survives_a_trip_to_another_view():
 
 
 def test_a_rerun_with_animate_on_does_not_rebuild_the_replay(monkeypatch):
-    """PERF-13: every click while 🎬 Animate was on rebuilt every frame of the
-    replay (~3 s on the demo, 22 s at the finest smoothness). PERF-15: so did
-    moving the playback speed or flipping Autoplay, which since BUG-93 only
-    re-time the frames."""
+    """A click while 🎬 Animate is on must not rebuild every frame of the replay
+    (~3 s on the demo, 22 s at the finest smoothness) — nor may moving the
+    playback speed or flipping Autoplay, which only re-time the frames."""
     from scanpath_studio import tabs
 
     calls = []
@@ -352,7 +347,7 @@ def test_a_rerun_with_animate_on_does_not_rebuild_the_replay(monkeypatch):
 def test_seeded_highlight_column_follows_the_dataset(monkeypatch):
     """A highlight column the app seeded is re-derived for each dataset.
 
-    #374 F6: only the bundled demo is seeded (its answer span). Another dataset
+    Only the bundled demo is seeded (its answer span). Another dataset
     opens with nothing highlighted — not its first yes/no column (``IA_SKIP``),
     and not ``is_in_aspan`` either when it happens to have one. A column the
     user picked stays put."""
@@ -391,7 +386,7 @@ def test_seeded_highlight_column_follows_the_dataset(monkeypatch):
 
 
 def test_a_highlight_draws_a_key_naming_it():
-    """#374 F6: whenever words are highlighted, the figure says by what."""
+    """Whenever words are highlighted, the figure says by what."""
     import scanpath_studio as sps
 
     words, fixations = sps.load_sample_data(names="canonical")

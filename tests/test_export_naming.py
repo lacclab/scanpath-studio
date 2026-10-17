@@ -1,4 +1,4 @@
-"""EXP-1 / EXP-2 — export path patterns, and titles/captions on the figure."""
+"""Export path patterns, and titles/captions on the figure."""
 
 from __future__ import annotations
 
@@ -157,7 +157,7 @@ class TestPathResolution:
 
 
 class TestTheBundlesOwnNames:
-    """#412 — a pattern that names a trial's file like one of the bundle's own
+    """A pattern that names a trial's file like one of the bundle's own
     files gets the next free name; the bundle's file keeps its own."""
 
     @pytest.mark.parametrize(
@@ -238,7 +238,7 @@ def _figure() -> go.Figure:
 
 
 class TestAnnotateFigure:
-    """EXP-2 must not shrink the equal-aspect plot — that would break the
+    """A title or caption must not shrink the equal-aspect plot — that would break the
     true-to-scale word labels, which are sized for the un-shrunk figure."""
 
     def _plot_height(self, fig) -> float:
@@ -316,7 +316,7 @@ def _naming_panel():
 
 
 def test_the_example_shows_the_name_a_clashing_pattern_gets():
-    """#412: the pattern is accepted, and its example says what it becomes."""
+    """The pattern is accepted, and its example says what it becomes."""
     streamlit_testing = pytest.importorskip("streamlit.testing.v1")
     at = streamlit_testing.AppTest.from_function(_naming_panel).run(timeout=30)
     assert not at.exception, at.exception

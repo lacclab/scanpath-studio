@@ -1,8 +1,7 @@
-# Desktop build (ENG-15, signed under ENG-21)
+# Desktop build
 
 Standalone per-OS bundles of the app (PyInstaller onedir + a Chromium app
-window, or the default browser without one — ENG-85). Design + rationale: [`plans/eng-15-desktop-app.md`](https://github.com/lacclab/scanpath-studio/blob/v0.31.2/plans/eng-15-desktop-app.md) (at `v0.31.2`)
-and [`plans/eng-21-signing-notarization.md`](../plans/eng-21-signing-notarization.md).
+window, or the default browser without one).
 
 ```bash
 pip install . pyinstaller                             # non-editable install
@@ -18,13 +17,13 @@ released.
 
 - `launcher.py` — frozen entry point: Streamlit server on a free port, branded
   theme, opens the app after the health check — `--app=<url>` in Chrome / Edge /
-  Brave / Chromium when installed, else `webbrowser.open` (ENG-85;
-  `SCANPATH_DESKTOP_BROWSER=default` forces the tab); `--selfcheck` for CI. In the
+  Brave / Chromium when installed, else `webbrowser.open`
+  (`SCANPATH_DESKTOP_BROWSER=default` forces the tab); `--selfcheck` for CI. In the
   macOS `.app` it also redirects output to `~/Library/Logs/Scanpath Studio/` and
   quits once the last app window or tab has been closed for `IDLE_EXIT_GRACE_S`
   (150s — just past Streamlit's own two-minute session-retention window), since
   a bundle with no Cocoa run loop cannot answer Cmd-Q. `--update` runs About's
-  *Update & restart* headless (#385).
+  *Update & restart* headless.
 - Launch environment variables: `SCANPATH_DESKTOP_PORT` pins the server port
   (default: a free one), `SCANPATH_DESKTOP_NO_BROWSER=1` opens nothing,
   `SCANPATH_DESKTOP_BROWSER=default` uses a default-browser tab,
@@ -35,11 +34,14 @@ released.
   offers the fresh build through.
 - `update_e2e.py` — CI's end-to-end check of the in-app updater: offers the
   fresh build back as a newer release and requires the swap, the relaunch and
-  the boot report (#385).
+  the boot report.
 - `scanpath_studio.spec` — the PyInstaller build definition.
-- `entitlements.plist` — hardened-runtime entitlements (one key; the reasoning
-  for each omission is in `plans/eng-21-signing-notarization.md` → *Entitlements*.
-  No XML comments in it: `codesign` rejects a `--` inside one).
+- `entitlements.plist` — hardened-runtime entitlements: one key, `allow-jit`,
+  as insurance against a libffi built without static trampolines. The keys
+  Python-bundle guides usually add (`allow-unsigned-executable-memory`,
+  `disable-library-validation`, `network.*`) are left out on purpose: signing
+  every nested binary is what satisfies library validation. No XML comments in
+  it: `codesign` rejects a `--` inside one.
 - `smoke_test.py` — verifies a built bundle (used by CI and locally).
 - `make_icons.py` → `icons/` — generates the committed app icons.
 - `windows_installer.iss` — the Inno Setup script CI compiles into

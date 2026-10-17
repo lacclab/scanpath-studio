@@ -1,10 +1,9 @@
 """Release notes must fit where they are posted.
 
-`v0.29.0`'s changelog section is 172,795 characters — six months of work in one
-release — and GitHub rejects a release body over 125,000, so the tag published
-to PyPI and then failed to produce a release. Slack's ceiling is lower still.
+GitHub rejects a release body over 125,000 characters, and a changelog section
+can be longer (`v0.29.0`'s is 172,795). Slack's ceiling is lower still.
 
-The changelog's two-tier shape (ENG-34) is what makes this recoverable: a
+The changelog's two-tier shape is what makes this recoverable: a
 headline list per group, then a `### Details` subsection. The headlines are the
 half written to be pasted somewhere, so when the whole section will not fit,
 they are what survives.

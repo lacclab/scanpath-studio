@@ -27,7 +27,7 @@ def test_citation_cff_version_matches_package():
 
 
 def test_citation_cff_doi_matches_in_app_citation():
-    """ENG-75: the Zenodo concept DOI is written twice — CITATION.cff (GitHub's
+    """The Zenodo concept DOI is written twice — CITATION.cff (GitHub's
     "Cite this repository") and `constants.CITATION` (the About BibTeX and the
     bulk-export README) — so a change to one must reach the other."""
     from scanpath_studio.constants import CITATION

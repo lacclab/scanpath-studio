@@ -139,7 +139,7 @@ def test_select_keys_filters():
     assert select_keys(store, keys) == keys
 
 
-# --- 🗂️ Data → Annotations (UX-174 r2) ---------------------------------------
+# --- 🗂️ Data → Annotations ---------------------------------------------------
 
 
 def _store_of_two_datasets():
@@ -186,7 +186,7 @@ def test_drop_records_removes_exactly_the_named_entries():
     assert set(store) == {("p1", "t1"), ("p9", "t9")}
 
 
-# --- DATA-48: the annotations belong to a dataset ------------------------------
+# --- The annotations belong to a dataset ---------------------------------------
 
 KEY = annotations_mod.ANNOTATIONS_STATE_KEY
 STAR = {"star": True, "tags": ["A tag"], "note": "A's note."}
@@ -205,7 +205,7 @@ class TestPerDatasetStore:
         annotations_mod.activate_dataset(session, "A")
         session[KEY][("p1", "t1")] = dict(STAR)
         annotations_mod.activate_dataset(session, "B")
-        # The repro: the same ids on another dataset show nothing.
+        # The same ids on another dataset show nothing.
         assert _live(session) == {}
         assert select_keys(_live(session), [("p1", "t1")], favorites_only=True) == []
         session[KEY][("p1", "t1")] = dict(NOTE)
@@ -239,7 +239,8 @@ class TestPerDatasetStore:
 
     def test_the_first_activation_adopts_what_the_store_holds(self):
         """A session with no owner yet — its first run, or a restored cache
-        from before DATA-48 — hands what it has to the dataset it opens on."""
+        written before annotations were kept per dataset — hands what it has
+        to the dataset it opens on."""
         session = {KEY: {("p1", "t1"): dict(STAR)}}
         annotations_mod.activate_dataset(session, "A")
         assert _live(session) == {("p1", "t1"): STAR}
@@ -307,7 +308,7 @@ class TestPerDatasetStore:
         assert annotations_mod.store_for(session, "never opened") == {}
 
     def test_compare_b_reads_its_own_datasets_store(self, monkeypatch):
-        """CMP-8's B filters (the ``cmp`` prefix) narrow by B's dataset."""
+        """Compare's B filters (the ``cmp`` prefix) narrow by B's dataset."""
         from types import SimpleNamespace
 
         from scanpath_studio.session_keys import COMPARE_SOURCE_STATE_KEY
@@ -422,8 +423,8 @@ class TestCachePayload:
         session[KEY][("p1", "t1")] = dict(STAR)
         assert set(annotations_mod.dataset_records(session)) == {"A", "B"}
 
-    def test_a_pre_data48_flat_list_is_adopted_by_the_dataset_opened_first(self):
-        """The one-time migration: the old manifest's records name no dataset."""
+    def test_a_flat_list_is_adopted_by_the_dataset_opened_first(self):
+        """The one-time migration: an old manifest's records name no dataset."""
         legacy = [
             {"participant_id": "p1", "trial_id": "t1", "star": True},
             "not a record",
@@ -473,7 +474,7 @@ class TestCachePayload:
 
     @staticmethod
     def _restored_with_upload() -> dict:
-        """A pre-DATA-48 cache restored beside upload ``U``, whose trials do
+        """An old, flat cache restored beside upload ``U``, whose trials do
         not include the old star — so it is the demo's (or a corpus')."""
         import pandas as pd
 
@@ -715,9 +716,9 @@ def _colliding_ids_app():
 
 
 class TestEditorKeysAreTheStoreKeys:
-    """BUG-110: the editor's widget keys joined the ids with ``__`` and wrote the
-    parent scope as ``parent``, so two distinct store keys could share widgets —
-    and opening the second copied the first's star into it."""
+    """Joining the ids with ``__`` and writing the parent scope as ``parent``
+    would let two distinct store keys share widgets — and opening the second
+    would copy the first's star into it."""
 
     def test_a_screen_named_parent_is_not_its_trials_parent(self):
         from streamlit.testing.v1 import AppTest

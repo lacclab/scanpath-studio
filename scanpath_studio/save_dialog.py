@@ -1,10 +1,10 @@
-"""#439 — downloads from the desktop app's own window open a Save-as dialog.
+"""Downloads from the desktop app's own window open a Save-as dialog.
 
-The desktop app opens in a Chrome / Edge ``--app`` window (ENG-85). Current
-Chromium reports a download in the toolbar's download bubble, and an app window
-has no toolbar, so a download there either saves silently or shows up in some
+The desktop app opens in a Chrome / Edge ``--app`` window. Current Chromium
+reports a download in the toolbar's download bubble, and an app window has no
+toolbar, so a download there would either save silently or show up in some
 other browser window: clicking ⬇ Download GIF (or HTML, or anything else)
-looked like it did nothing.
+would look like it did nothing.
 
 Every download in the app ends in a click on an ``<a download>`` the page made
 — ``st.download_button`` on a ``/media/…`` URL, the figure's PNG/SVG button

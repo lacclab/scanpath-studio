@@ -8,7 +8,7 @@
 ;
 ; Per-user, no admin prompt: installs to %LOCALAPPDATA%\Programs\Scanpath Studio,
 ; adds a Start-menu entry and an "Apps" uninstall entry. The datasets and
-; settings the app saves (ENG-26) live outside {app} and survive an uninstall.
+; settings the app saves live outside {app} and survive an uninstall.
 
 #ifndef AppVersion
   #error Pass /DAppVersion=<version>

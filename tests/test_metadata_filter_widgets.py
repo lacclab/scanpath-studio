@@ -1,8 +1,8 @@
 """The metadata filter controls, drawn by the real widgets.
 
 A numeric metadata field with one value over the loaded data has no range to
-pick. Streamlit refuses a slider whose ends are equal, and a trial table built
-that way — a one-row table, or a pilot whose trials share a value — used to stop
+pick. Streamlit refuses a slider whose ends are equal, so a trial table built
+that way — a one-row table, or a pilot whose trials share a value — would stop
 the whole Scanpath view. Each grain must draw such a field without a slider.
 """
 
@@ -82,7 +82,7 @@ def test_a_varying_numeric_field_still_gets_its_slider(grain):
 
 
 def test_the_full_app_survives_a_one_row_trial_table():
-    """The review's reproduction: a one-row trial table for the open reading."""
+    """A one-row trial table for the open reading."""
     from tests.conftest import APP_SCRIPT
 
     at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()

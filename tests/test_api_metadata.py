@@ -1,10 +1,10 @@
-"""ENG-37: `api.load_*_metadata` — the headless door onto the three grains.
+"""`api.load_*_metadata` — the headless door onto the three grains.
 
 The app resolves the id column through a picker; a script has only these three
 functions, and their whole job is to guess the column and then say clearly what
-happened. That guess-and-report path was untested, which matters because both
-failure modes are quiet: an unguessable column raises (fine, loud), but a column
-guessed *wrongly* still joins — it just means something else.
+happened. These tests pin that guess-and-report path: an unguessable column
+raises (fine, loud), but a column guessed *wrongly* still joins quietly — it
+just means something else.
 """
 
 from __future__ import annotations

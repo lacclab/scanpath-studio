@@ -1,4 +1,4 @@
-"""Check for updates (#139): the GitHub lookup and the comparison."""
+"""Check for updates: the GitHub lookup and the comparison."""
 
 from __future__ import annotations
 
@@ -113,8 +113,8 @@ def test_the_default_opener_verifies_tls_with_a_context(monkeypatch):
 
     monkeypatch.setattr(updates.urllib.request, "urlopen", fake_urlopen)
     assert updates.latest_release(2.0).version == "0.36.0"
-    # Verified against the OS certificate store, as dataset downloads are
-    # (#391) — not OpenSSL's CA list, which a python.org Python on macOS ships
+    # Verified against the OS certificate store, as dataset downloads are —
+    # not OpenSSL's CA list, which a python.org Python on macOS ships
     # empty and a TLS-inspecting proxy's root is never in.
     assert isinstance(seen["context"], truststore.SSLContext)
     assert seen["timeout"] == 2.0
@@ -525,7 +525,8 @@ def _about_with_last_update(monkeypatch, result, build, at=None):
 
 @pytest.mark.parametrize(("days_ago", "shown"), [(1, True), (8, False)])
 def test_about_lets_the_last_update_go_after_a_week(monkeypatch, days_ago, shown):
-    # #394: "Updated from v…" used to stay until the next update.
+    # "Updated from v…" goes after a week rather than staying until the next
+    # update.
     at = _about_with_last_update(
         monkeypatch, ("updated", ""), "0.36.0", at=time.time() - days_ago * 86400
     )

@@ -19,16 +19,17 @@ present/missing:
    `_collect_viz_settings`.
 2. **Deep link / Share** — `url_state.py`: seeded in `_URL_PRESETS` /
    `_apply_url_preset`, emitted by `_build_share_query`, clamped via
-   `_URL_BOUNDED` if numeric; plus the 💾 Save & restore config if it's a
-   plot setting.
+   `_URL_BOUNDED` if numeric; plus the settings file (🔗 Share → File) if it's
+   a plot setting.
 3. **CLI** — a `render` flag in `cli.py`.
 4. **Headless API** — a parameter on the `api.py` builder plus a default in
    `CANONICAL_FIGURE_DEFAULTS`.
 
 A missing surface is a finding unless the diff/commit message explicitly
 scopes it out. Also check: new viz settings appear in the "Which viz settings
-apply in which render path" table in `scanpath_studio/CLAUDE.md`, and mode
-gating (`controls._mode_gate`) covers builders that ignore the setting.
+apply in which render path" table in `AGENTS.md`, mode gating
+(`controls._mode_gate`) covers builders that ignore the setting, and a new
+figure option has a `code_snippet` emitter (`tests/test_render_every_option.py`).
 
 ## 2. Wire-format stability
 
@@ -43,14 +44,14 @@ gating (`controls._mode_gate`) covers builders that ignore the setting.
 ## 3. Render-path invariants
 
 - Spatial plots stay on `tabs._render_true_scale_chart` (the cached replay on
-  its two halves, `_true_scale_plot_html` + `_render_true_scale_plot` —
-  PERF-16) — flag any new `st.plotly_chart` call on a spatial/scanpath figure.
+  its two halves, `_true_scale_plot_html` + `_render_true_scale_plot`) — flag
+  any new `st.plotly_chart` call on a spatial/scanpath figure.
 - New top-level traces in `make_scanpath_figure` with a non-fixation name are
-  added to `plots._trace_layer` (VIZ-5 separable layers).
+  added to `plots._trace_layer` (separable-layer export).
 - No `st.select_slider` that can receive a single option (browser throws).
 - Word-box geometry goes through the `measures` accessors, never ad-hoc
   `x/width` arithmetic: `word_box_bounds` for the edges (the experiment's own
-  boxes, BUG-83), `word_box_contains` for "is this point in the box",
+  boxes, used as given), `word_box_contains` for "is this point in the box",
   `word_char_advance` / `word_glyph_span` for positions inside a word.
 
 ## Report

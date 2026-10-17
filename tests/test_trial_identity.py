@@ -1,6 +1,6 @@
-"""VAL-7: warn when a trial id is under-specified.
+"""Warn when a trial id is under-specified.
 
-The inverse of BUG-23. A Trial ID mapping that doesn't fully identify a reading
+A Trial ID mapping that doesn't fully identify a reading
 concatenates several readings into one `trial_id`, and the result renders as an
 ordinary scanpath with a lot of regressions — plausible, and wrong. These tests
 pin the three signals, the column that names the fix, and the two ways the check
@@ -172,7 +172,7 @@ class TestMultipartIsNotAFalsePositive:
 
 
 class TestOnTheBundledDemo:
-    """The measurement the item was written from, as a regression."""
+    """The bundled demo, mapped correctly and under-specified."""
 
     @staticmethod
     def _normalized(trial_columns=None):
@@ -233,10 +233,9 @@ def test_data_inspection_reports_the_verdict():
     pin_data_view(at)
     at.run(timeout=90)
     assert not at.exception, at.exception
-    # UX-52 round 3 promoted this back to a section of its own on the Data page
-    # (round 1 had demoted it to an h5 inside "What's in this dataset"): it
-    # carries a verdict, and the fix it names is an edit to the column mapping
-    # right above it. UX-135 then made every editor section one of the add
+    # A section of its own on the Data page, not a heading inside "What's in
+    # this dataset": it carries a verdict, and the fix it names is an edit to
+    # the column mapping right above it. Every editor section is one of the add
     # screen's numbered parts, so the heading is a `.sps-wiz-part` headline
     # rather than an `st.subheader`. The evidence table stays folded into "What
     # was checked"; the verdict itself is in the open.
@@ -251,10 +250,10 @@ def test_data_inspection_reports_the_verdict():
 
 
 class TestTheVerdictIsRaisedWhereTheMappingIsChosen:
-    """The verdict used to ride a page-wide ⚠️ banner, above every view, on every
-    run, for as long as the dataset stayed loaded — a permanent warning about a
-    decision that is made exactly twice: when a dataset is added, and when its
-    mapping is edited. It is now a modal raised at those two moments.
+    """The verdict is a modal raised at the two moments the decision is made:
+    when a dataset is added, and when its mapping is edited — not a page-wide
+    ⚠️ banner above every view, on every run, for as long as the dataset stays
+    loaded.
     """
 
     def test_adding_a_dataset_asks_for_the_check(self):
@@ -291,13 +290,13 @@ class TestTheVerdictIsRaisedWhereTheMappingIsChosen:
 
         from scanpath_studio import app
 
-        # UX-166: `main` wraps the run in a loading scope; `_run_app` is the run.
+        # `main` wraps the run in a loading scope; `_run_app` is the run.
         source = inspect.getsource(app._run_app)
         assert "_trial_identity_alert_dialog(" in source
         assert "TRIAL_IDENTITY_CHECK_KEY" in source
-        # The banner it replaced (`menu.notices.warning(f"{identity_warning} …")`).
-        # Pinned by what it said rather than by `menu.notices.warning` itself:
-        # BUG-32's "no fixation has word boxes" is a banner there on purpose —
+        # No banner (`menu.notices.warning(f"{identity_warning} …")`), pinned
+        # by what it would say rather than by `menu.notices.warning` itself:
+        # "no fixation has word boxes" is a banner there on purpose —
         # a state where every trial draws without text, not a verdict to raise
         # once where the mapping is chosen.
         assert "{identity_warning}" not in source
@@ -313,7 +312,7 @@ class TestTheVerdictIsRaisedWhereTheMappingIsChosen:
         assert "trial_identity_alert_keep" in source
         # Return values, never `on_click`: a dialog body is a fragment, so a
         # callback here would rerun the modal and leave the page behind it
-        # untouched (the BUG-36 trap `_leave_dataset_editor_dialog` fell into).
+        # untouched.
         assert "on_click=" not in source
         # Editing means the ✏️ Edit dataset screen, focused on the mapping.
         assert "_open_mapping_editor()" in source

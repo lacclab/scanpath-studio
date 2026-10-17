@@ -1,4 +1,4 @@
-"""UX-199: the first upload on a deployment that saves nothing says so, in the
+"""The first upload on a deployment that saves nothing says so, in the
 notices strip on every view, until it is dismissed for the session."""
 
 from __future__ import annotations

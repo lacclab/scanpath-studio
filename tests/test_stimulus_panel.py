@@ -163,7 +163,7 @@ class TestDetection:
         assert _is_boolish(pd.Series([True, False, True]))
 
     def test_numeric_column_matching_a_qa_hint_is_not_treated_as_qa(self):
-        # UX-32: a generic upload's unrelated numeric column (a timing/count/id
+        # A generic upload's unrelated numeric column (a timing/count/id
         # field) can still match a QA name hint by coincidence — e.g. a
         # `response_time_ms` column matches "response". It must not render as
         # bogus question/answer text ("Response time ms: 120").
@@ -232,7 +232,7 @@ class TestRender:
         at.run()
         assert not at.exception, at.exception
         md = " ".join(m.value for m in at.markdown)
-        # The dataset's own column names (DATA-66) — no OneStop names required.
+        # The dataset's own column names — no OneStop names required.
         assert "q_prompt" in md
         assert "Pick the target" in md
         assert "response" in md
@@ -240,7 +240,7 @@ class TestRender:
 
 
 def _unhinted_panel_app():
-    """A corpus whose columns match no name hint at all — the UX-32 case."""
+    """A corpus whose columns match no name hint at all."""
     import pandas as pd
 
     from scanpath_studio.tabs import _render_paragraph_panel
@@ -257,11 +257,11 @@ def _unhinted_panel_app():
 
 
 class TestFieldPicker:
-    """UX-32: name-hint detection supplies the defaults, the picker overrides it.
+    """Name-hint detection supplies the defaults, the picker overrides it.
 
-    The panel was "generic when the column *names* cooperate" — a corpus whose
-    critical span is called `focus_region` and whose question is `probe_text` got
-    nothing at all out of it. Exposing the fields is what makes it actually
+    Name hints alone make the panel generic only when the column *names*
+    cooperate — a corpus whose critical span is called `focus_region` and whose
+    question is `probe_text` would get nothing at all out of it. Exposing the fields is what makes it actually
     corpus-generic.
     """
 
@@ -353,11 +353,11 @@ class TestFieldPickerSurvivesAViewSwitch:
 
     Streamlit drops a widget's key at the end of any run in which the widget did
     not render, and this panel exists only in the Scanpath view — so without
-    `persist_state="session"` one trip through Corpus Analysis silently and
-    *permanently* stripped every span highlight and the whole Q&A block,
-    including the defaults the user never touched. The signature guard couldn't
-    recover it either: that key is a plain one and survives the pruning, so it
-    saw "nothing changed" and never re-seeded. Same shape as
+    `persist_state="session"` one trip through Corpus Analysis would silently
+    and *permanently* strip every span highlight and the whole Q&A block,
+    including the defaults the user never touched. The signature guard could
+    not recover it either: that key is a plain one and survives the pruning, so
+    it would see "nothing changed" and never re-seed. Same shape as
     `test_canvas_settings_survive_a_corpus_analysis_round_trip`.
     """
 
@@ -366,7 +366,7 @@ class TestFieldPickerSurvivesAViewSwitch:
         from tests.conftest import APP_SCRIPT
 
         at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
-        # The panel renders only while its tab is open (round 11).
+        # The panel renders only while its tab is open.
         at.session_state["single_subtab"] = tabs.SUBTAB_STIMULUS
         at.run()
         assert not at.exception, at.exception
@@ -389,7 +389,8 @@ class TestFieldPickerKeepsChoicesAcrossTrials:
     The re-seed guard keys on the dataset's *column set*, not on the derived
     option pools: those are computed from one trial's slice, so a trial whose
     critical span happens to be empty classifies that column into the other
-    bucket — and keying on them reset the user's picks on exactly that trial.
+    bucket — and keying on them would reset the user's picks on exactly that
+    trial.
     """
 
     def _app():
@@ -413,12 +414,12 @@ class TestFieldPickerKeepsChoicesAcrossTrials:
 
 
 # ---------------------------------------------------------------------------
-# Round 11 — the panel's data is input, not markup or a trusted shape.
+# The panel's data is input, not markup or a trusted shape.
 # ---------------------------------------------------------------------------
 
 
 class TestComprehensionQuestionShape:
-    """#3: valid JSON of the wrong shape is skipped, never raised on."""
+    """Valid JSON of the wrong shape is skipped, never raised on."""
 
     @pytest.mark.parametrize(
         "raw",
@@ -489,7 +490,7 @@ class TestComprehensionQuestionShape:
 
 
 class TestStringBooleans:
-    """#4: "False" means false wherever a flag is read."""
+    """The string "False" means false wherever a flag is read."""
 
     def test_span_mask_reads_false_as_false(self):
         from scanpath_studio.tabs import _flag_mask
@@ -532,7 +533,7 @@ class TestStringBooleans:
 
 
 class TestImageOrigin:
-    """#5: a zero origin is an origin."""
+    """A zero origin is an origin."""
 
     @pytest.mark.parametrize(
         ("words_xy", "fix_xy", "expected"),
@@ -565,7 +566,7 @@ class TestImageOrigin:
 
 
 class TestValuesRenderLiterally:
-    """#7: dataset values never reach the Markdown renderer as syntax."""
+    """Dataset values never reach the Markdown renderer as syntax."""
 
     def test_question_values_are_escaped(self, monkeypatch):
         import json
@@ -613,7 +614,8 @@ class TestValuesRenderLiterally:
 
 
 def test_the_context_fields_are_one_block():
-    """#374 F17: one element per field drew the lines on top of each other."""
+    """The fields are lines of one block; one element per field would draw
+    them on top of each other."""
     from scanpath_studio import tabs
 
     block = tabs._context_block_html(["<b>a:</b> 1", "<b>b:</b> 2"])

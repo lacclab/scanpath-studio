@@ -1,9 +1,9 @@
-"""BUG-9: direction arrowheads must sit on the drawn saccade, arc or straight.
+"""Direction arrowheads sit on the drawn saccade, arc or straight.
 
-In VIZ-9's ``saccade_render_mode="Arc"`` each saccade is drawn as an upward
-quadratic Bézier arch (``plots._arch_points``), but the arrowheads used to come
-from the straight chord, so they floated below the curve. ``_saccade_arrow_markers``
-now takes the same ``arch_frac`` the segment builders take.
+In ``saccade_render_mode="Arc"`` each saccade is drawn as an upward quadratic
+Bézier arch (``plots._arch_points``), so arrowheads placed on the straight chord
+would float below the curve. ``_saccade_arrow_markers`` takes the same
+``arch_frac`` the segment builders take.
 """
 
 from __future__ import annotations
@@ -108,7 +108,7 @@ class TestArcAware:
 
         B'(0.5) == P1 - P0 for any quadratic Bézier, whatever the control point,
         so the arc-aware arrowhead keeps the straight-chord angle by construction
-        (it is the *position* that was wrong) — for the horizontal saccade whose
+        (only the *position* moves onto the arc) — for the horizontal saccade whose
         apex tangent is plainly horizontal, and for a vertically-offset one too.
         """
         for x0, y0, x1, y1 in [
@@ -266,13 +266,12 @@ def _view_top(fig: go.Figure) -> float:
 
 
 class TestSnappedArcFitsTheView:
-    """Arc + Snap used to reserve headroom from the recorded fixations but draw
-    from the snapped ones, so the apex left the plot (round-8 review, finding 3)."""
+    """Arc + Snap reserves headroom from the snapped fixations it draws from,
+    not the recorded ones, so the apex stays inside the plot."""
 
     def test_wide_boxes_near_shared_edge(self):
-        # The review's repro: two 250-px boxes, fixations 2 px apart at their
-        # shared edge. #422: the snap keeps their x and lifts both to the line's
-        # top edge.
+        # Two 250-px boxes, fixations 2 px apart at their shared edge. The snap
+        # keeps their x and lifts both to the line's top edge.
         words, fix = _snap_trial(
             [100.0, 350.0], [100.0, 100.0], [250.0, 250.0], [349.0, 351.0], [110, 110]
         )
@@ -304,7 +303,7 @@ class TestSnappedArcFitsTheView:
         )
 
     def test_unassigned_fixations_take_the_nearest_line(self):
-        # word_id NaN and outside every box: #422 snaps each onto the line
+        # word_id NaN and outside every box: the snap puts each onto the line
         # nearest its y (here the one line, top edge 100) and keeps its x; the
         # arc's headroom follows the snapped ends.
         words, fix = _snap_trial(

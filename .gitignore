@@ -32,7 +32,7 @@ MANIFEST
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
-# …but the desktop build spec is source, not generated (ENG-15)
+# …but the desktop build spec is source, not generated
 !desktop/*.spec
 
 # Installer logs
@@ -187,21 +187,18 @@ uv.lock
 
 # Stray OneStop CSV exports dropped at the repo root (raw source data)
 /*.csv.zip
-.claude/skills/developing-with-streamlit
 
 # Subagent-driven-development scratch (ledger, briefs, review packages).
 .superpowers/
 
-# DATA-27: EyeGenBench preprocessing venv (torch/lightning); never the app venv.
-.venv-eyegenbench/
-
 # Local-only config and scratch that must never be committed: Streamlit
-# secrets (ENG-68 puts deployment settings there), Claude Code's per-user
-# settings and worktrees, editor folders, agent-skill symlinks into the venv,
-# and the paper scripts' default output folder.
+# secrets (deployment settings live there), Claude Code's per-user settings
+# and worktrees, editor folders, agent-skill symlinks into the venv, and the
+# paper scripts' default output folder.
 .streamlit/secrets.toml
 .claude/settings.local.json
 .claude/worktrees/
+.claude/skills/developing-with-streamlit
 .agents/
 .vscode/
 .idea/

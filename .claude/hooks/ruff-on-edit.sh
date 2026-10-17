@@ -14,7 +14,7 @@ esac
 [ -f "$f" ] || exit 0
 
 # Run the ruff pinned in the edited checkout's own pyproject `lint` extra, not
-# whatever is on PATH (ENG-48, ENG-69): ruff 0.16 enables ~413 rules where 0.14
+# whatever is on PATH: ruff 0.16 enables ~413 rules where 0.14
 # enables a handful, so a stale PATH ruff passes edits that CI's pinned ruff
 # rejects. `uvx` runs the pin in its own cached tool environment, so the hook
 # never syncs a project venv or writes a lock file — a worktree's edit must not

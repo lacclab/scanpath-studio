@@ -23,7 +23,8 @@ def test_a_fragment_gets_a_document_around_it(embedded):
 
 def test_a_script_carrier_cannot_scroll(embedded):
     # A zero-height carrier is drawn 1 px tall in a frame `st.iframe` always
-    # lets scroll: with the body's default margin it drew a scrollbar sliver.
+    # lets scroll: with the body's default margin it would draw a scrollbar
+    # sliver.
     html_embed.embed_html_iframe("<script>1</script>", height=0)
     assert embedded == [
         '<!doctype html><html><body style="margin:0;overflow:hidden">'
@@ -44,8 +45,8 @@ def test_a_whole_document_goes_in_as_it_is(embedded, document):
 
 
 def test_text_deep_inside_a_fragment_does_not_make_it_a_document(embedded):
-    # PERF-16: the check reads the first bytes, not the whole string — a replay's
-    # markup runs to 55 MB, and lower-casing all of it took 0.2 s a rerun. It
+    # The check reads the first bytes, not the whole string — a replay's
+    # markup runs to 55 MB, and lower-casing all of it costs 0.2 s a rerun. It
     # also stops a "<body" in the figure's own text from dropping the wrapper.
     fragment = "<div>" + "x" * 100_000 + "<body>" + "</div>"
     html_embed.embed_html_iframe(fragment, height=10)

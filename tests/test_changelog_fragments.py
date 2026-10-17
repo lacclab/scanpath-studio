@@ -1,4 +1,4 @@
-"""Unreleased changelog entries are one file each in ``changelog.d/`` (ENG-86)."""
+"""Unreleased changelog entries are one file each in ``changelog.d/``."""
 
 from __future__ import annotations
 

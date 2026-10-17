@@ -1,7 +1,7 @@
-"""UX-198 — Corpus Analysis names the pool it reads and the filters behind it.
+"""Corpus Analysis names the pool it reads and the filters behind it.
 
-The trial filters set on the Scanpath view narrow Corpus Analysis too; before
-this the page said neither how far nor why. The pure parts (the count line and
+The trial filters set on the Scanpath view narrow Corpus Analysis too, so the
+page says how far and why. The pure parts (the count line and
 the filter descriptions) are tested as units, and one ``AppTest`` flow pins the
 bar on the bundled demo: 2 readers × 12 trials.
 """
@@ -71,7 +71,7 @@ class TestFilterDescriptions:
                 "filter_participants": ["p1"],
                 "filter_TRIAL_INDEX_range": (3, 10),
                 "filter_favorites": True,
-                # An emptied multiselect no longer narrows — not listed.
+                # An emptied multiselect does not narrow — not listed.
                 "filter_text_id": [],
             },
             lambda key: key.removeprefix("filter_"),

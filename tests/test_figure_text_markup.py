@@ -1,9 +1,9 @@
-"""BUG-75 (SEC6): a share link cannot put a clickable link in the recipient's figure.
+"""A share link cannot put a clickable link in the recipient's figure.
 
 Plotly draws a small HTML subset in a figure's title and caption, and ``<a href>``
 is part of it, so ``?show_title_caption=1&title_pattern=<a href="https://…">Session
-expired — sign in again</a>`` drew a working link to anywhere across the top of
-the recipient's scanpath. Markup is stripped from figure text that arrives from
+expired — sign in again</a>`` would draw a working link to anywhere across the top
+of the recipient's scanpath. Markup is stripped from figure text that arrives from
 someone else — a link or a saved config; what a user types into the box
 themselves is left alone.
 """
@@ -86,7 +86,7 @@ def test_a_restored_config_loses_its_markup_too():
 
 
 def test_the_recipients_figure_carries_no_link(monkeypatch):
-    """End to end, as the audit's PoC: the embedded figure has no `href`."""
+    """End to end, from a hostile link: the embedded figure has no `href`."""
     import streamlit as st
 
     embedded: list[str] = []

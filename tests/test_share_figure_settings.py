@@ -1,15 +1,14 @@
-"""EXP-18: a share link reopens the figure the sender was looking at.
+"""A share link reopens the figure the sender was looking at.
 
-The pre-beta audit round-tripped a link from a sender with non-default settings
-and found figure-changing settings that never rode it: the stimulus-image layer
-and *Show full monitor* (which `session_keys` claimed round-tripped), the PRE-2
-fixation flags (with *Discard* the recipient saw different fixations, and no
+A link from a sender with non-default settings carries every figure-changing
+setting: the stimulus-image layer and *Show full monitor*, the fixation flags
+(with *Discard* the recipient would otherwise see different fixations, and no
 Illustration label), the replay speed (a non-1× speed stamps one), the colour-bar
 styling, the span border colour and Compare's A/B legend. These drive the writer
 into the reader, then the whole app from a sender to a recipient.
 
-Canvas size, base font size and Compare's per-scanpath styles joined the link in
-EXP-19 — see ``tests/test_share_recording_setup.py``.
+Canvas size, base font size and Compare's per-scanpath styles are pinned in
+``tests/test_share_recording_setup.py``.
 """
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ from tests.conftest import APP_SCRIPT
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
 
-#: Every setting EXP-18 put on the link, at a value that differs from its default.
+#: Every setting pinned here, at a value that differs from its default.
 SENT = {
     "global_show_stimulus_image": True,
     "global_fit_to_monitor": False,
@@ -155,6 +154,6 @@ def test_the_whole_app_reopens_the_senders_figure():
     assert not recipient.exception, [e.message for e in recipient.exception]
     got = {key: recipient.session_state[key] for key in SENT}
     assert got == SENT
-    # *Discard* changes which fixations are drawn — the reason this mattered.
+    # *Discard* changes which fixations are drawn, so it has to travel.
     flags = recipient.session_state["_snippet_state"].settings["fixation_flags"]
     assert flags["short"]["mode"] == "Discard"

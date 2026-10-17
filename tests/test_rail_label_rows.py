@@ -1,13 +1,13 @@
-"""UX-51: the Scanpath rail's controls read `label | field`, not label-above.
+"""The Scanpath rail's controls read `label | field`, not label-above.
 
-Moving a control's title into a column of its own changes the widget tree, and
-almost all of what the change must NOT break is invisible in the rendered page:
+Putting a control's title in a column of its own changes the widget tree, and
+almost all of what that must NOT break is invisible in the rendered page:
 
 * the widget keeps its **key** — every `global_*` / `single_*` / `filter_*` key
   is share-link and saved-config wire format, so a layout change that renamed or
   dropped one would silently break users' old links;
 * it keeps its **label**, merely collapsed, so the accessible name (and every
-  `AppTest` lookup by label) survives the move;
+  `AppTest` lookup by label) survives;
 * the `?` help icon folds into the title as its own hover tooltip, with the
   title text repeated at the head of it — that repetition is the escape hatch
   for a label the shared-width column had to truncate.
@@ -28,7 +28,7 @@ from tests.conftest import APP_SCRIPT
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
 
-#: A widget whose title moved into the label column hides its own label rather
+#: A widget whose title is drawn in the label column hides its own label rather
 #: than losing it — the accessible name (and every AppTest label lookup) stays.
 COLLAPSED = LabelVisibility.LabelVisibilityOptions.COLLAPSED
 
@@ -96,7 +96,7 @@ def _gated_row_app():
 
 
 def _slider_app():
-    """The UX-9 slider + typed box, in its UX-51 `label | slider | box` form."""
+    """The slider + typed box, in its `label | slider | box` form."""
     import streamlit as st
 
     from scanpath_studio.controls import _numeric_slider
@@ -115,7 +115,7 @@ def _slider_app():
 
 
 def _label_markup(at) -> list[str]:
-    """Every UX-51 row label rendered this run, as raw markdown."""
+    """Every `label | field` row label rendered this run, as raw markdown."""
     return [m.value for m in at.markdown if "sps-flabel" in (m.value or "")]
 
 
@@ -140,7 +140,7 @@ class TestOneRow:
         assert ">Color fixations by</span>" in labels[0]
 
     def test_the_help_folds_into_the_title_tooltip(self):
-        """The `?` icon's replacement — hovering the title shows the help.
+        """In place of a `?` icon, hovering the title shows the help.
 
         The markdown emphasis is stripped: the tooltip is plain text, so
         `**hue**` would otherwise reach the user as literal asterisks.
@@ -197,9 +197,9 @@ class TestOneRow:
         assert "&lt;b&gt;Size&lt;/b&gt;" in label
 
     def test_a_two_paragraph_help_does_not_break_out_of_the_tag(self):
-        """UX-68: every `_gated_help` string is two paragraphs, and a **blank
-        line** ends a raw HTML block in markdown — so an un-collapsed one split
-        the opening `<span …>` and printed the rest of the tag as page text."""
+        """Every `_gated_help` string is two paragraphs, and a **blank line**
+        ends a raw HTML block in markdown — so an un-collapsed one would split
+        the opening `<span …>` and print the rest of the tag as page text."""
         at = AppTest.from_function(_gated_row_app)
         at.run(timeout=30)
         assert not at.exception, at.exception
@@ -216,7 +216,8 @@ class TestOneRow:
 
 class TestSliderRow:
     def test_the_slider_still_owns_the_canonical_key(self):
-        """UX-9's contract survives the extra column (the box keeps the shadow)."""
+        """The slider + box contract survives the extra column (the box keeps
+        the shadow)."""
         at = AppTest.from_function(_slider_app)
         at.session_state["global_fixation_opacity"] = 0.7
         at.run(timeout=30)
@@ -243,10 +244,10 @@ class TestSliderRow:
 
 
 def test_a_tooltip_with_no_room_below_opens_upward():
-    """#422: a popover's last row opened its tooltip past the popover's bottom
-    edge, which made the popover scroll while it showed — and a scrollbar that
-    takes room narrowed the rows, slid the title from under the pointer and
-    shook the popover for as long as the pointer rested there.
+    """A tooltip on a popover's last row must not open past the popover's
+    bottom edge: the popover would scroll while it shows — and a scrollbar that
+    takes room narrows the rows, slides the title from under the pointer and
+    shakes the popover for as long as the pointer rests there.
 
     The page installs a hover listener that marks such a title `sps-tip-up`,
     and the stylesheet draws that tooltip above the title instead."""
@@ -306,7 +307,7 @@ class TestTheRealRail:
         at.session_state["data_source_choice"] = "Synthetic test trial"
         at.run()
         labels = " ".join(_label_markup(at))
-        assert labels, "no UX-51 row labels rendered anywhere in the rail"
+        assert labels, "no `label | field` row labels rendered anywhere in the rail"
         for title in (
             "Marker",
             "Drift correction",

@@ -1,9 +1,9 @@
 """Deep links, plot-config save/restore, share links, and view-nav state.
 
-Split out of ``app.py`` so the URL/deep-link contract, the plot-config
-save/restore round-trip, the Share-link builder/widget, and the
-Corpus⇄Scanpath view toggle live in one focused module. ``app.py`` imports
-these; nothing here imports back from ``app`` (no cycle).
+The URL/deep-link contract, the plot-config save/restore round-trip, the
+Share-link builder/widget, and the Corpus⇄Scanpath view toggle live in this one
+focused module. ``app.py`` imports these; nothing here imports back from
+``app`` (no cycle).
 """
 
 from __future__ import annotations
@@ -26,9 +26,7 @@ from .code_snippet import (
     INSTALL_COMMAND,
     SNIPPET_STATE_KEY,
     SOURCE_AUTHOR,
-    SOURCE_BENCHMARK,
     SOURCE_DEMO,
-    SOURCE_MULTIPLEYE,
     SOURCE_ONESTOP,
     SOURCE_POTEC,
     SOURCE_RAW_GAZE,
@@ -64,7 +62,6 @@ from .constants import (
     MANUAL_SAMPLE_CHOICE,
     MARKER_DURATION_BOUNDS,
     MARKER_SIZE_SCALES,
-    MULTIPLEYE_BUNDLE_CHOICE,
     ONESTOP_CHOICE,
     ONESTOP_PART_LABELS,
     ONESTOP_REGIME_CHOICES,
@@ -142,10 +139,10 @@ from .utils import (
 # external tool with a deep link.
 #
 # Selection prefixes — the trial pickers a URL deep link seeds so the link lands
-# on the requested trial. There's only the Scanpath view's `single` picker now:
-# the Comparisons subtab (ENG-8) reuses that same selection instead of rendering
-# its own `select_trial`, so there's no second `multi` picker to seed. Keep this list
-# in sync with the `key_prefix=` values passed to `select_trial` in tabs.py.
+# on the requested trial. There's only the Scanpath view's `single` picker: the
+# Comparisons subtab reuses that same selection instead of rendering its own
+# `select_trial`, so there's no second picker to seed. Keep this list in sync
+# with the `key_prefix=` values passed to `select_trial` in tabs.py.
 _SELECTION_PREFIXES = ("single",)
 
 
@@ -164,12 +161,12 @@ def _parse_float_range(v) -> tuple:
 
 
 def _parse_field_list(v) -> list[str]:
-    """Comma-separated hover fields carried by a Share link (VIZ-26)."""
+    """Comma-separated hover fields carried by a Share link."""
     return [part.strip() for part in str(v).split(",") if part.strip()]
 
 
 def _parse_saccade_classes(v) -> list[str]:
-    """VIZ-31 saccade reading-class filter carried by a Share link.
+    """The saccade reading-class filter carried by a Share link.
 
     Comma-separated class names (``regression,return_sweep``). An unknown name
     raises, so a link written against a build with different classes surfaces the
@@ -220,17 +217,17 @@ def _parse_marker_size_scale(v) -> str:
 
 
 #: The one colour spelling every `st.color_picker` holds and every figure
-#: builder accepts. The saved-config reader has always checked colours against
-#: it; the deep link now does too (BUG-69).
+#: builder accepts. The saved-config reader and the deep link both check
+#: colours against it.
 _HEX_COLOR = re.compile(r"#[0-9A-Fa-f]{6}")
 
 
 def _parse_hex_color(v) -> str:
-    """A colour param → ``#rrggbb``, raising on anything else (BUG-69).
+    """A colour param → ``#rrggbb``, raising on anything else.
 
     A colour reaches Plotly straight from session state on the render path, so
-    ``?order_font_color=zzz`` used to raise inside the figure builder — before
-    the picker that would have coerced it ever rendered. Raising here instead
+    ``?order_font_color=zzz`` would raise inside the figure builder — before
+    the picker that would have coerced it ever renders. Raising here instead
     turns a mangled link into the reader's "Ignored the link's invalid …" warning.
     """
     text = str(v).strip()
@@ -247,7 +244,7 @@ _MARKUP_TAG = re.compile(r"</?[A-Za-z][^<>]*>")
 
 
 def _strip_markup(v) -> str:
-    """``v`` with every markup tag removed (SEC6 / BUG-75).
+    """``v`` with every markup tag removed.
 
     For figure text that arrives from someone else — a share link, a saved
     config — which must not be able to put a clickable link to anywhere in the
@@ -272,7 +269,7 @@ def compare_value(participant, trial) -> str:
 
     A colon or backslash inside the participant is written ``\\:`` / ``\\\\``,
     so the first unescaped colon is always the separator, whatever the ids
-    hold (round 10); everything after it is the trial, colons and all. An id
+    hold; everything after it is the trial, colons and all. An id
     without either reads exactly as before, so older links still restore."""
     escaped = str(participant).replace("\\", "\\\\").replace(":", "\\:")
     return f"{escaped}:{trial}"
@@ -296,7 +293,7 @@ def parse_compare_value(raw) -> tuple[str, str] | None:
 
 
 def _parse_playback_speed(v) -> float:
-    """A replay speed → the ⚙ Playback slider's own option (EXP-18).
+    """A replay speed → the ⚙ Playback slider's own option.
 
     It is an `st.select_slider`, which raises on a value outside its options,
     so ``?playback_speed=3.3`` is rejected here (the "Ignored the link's invalid …"
@@ -312,7 +309,7 @@ def _parse_playback_speed(v) -> float:
     raise ValueError(f"not a playback speed the slider offers: {v!r}")
 
 
-# #374 F28: Export → Current figure's Width and DPI boxes take
+# Export → Current figure's Width and DPI boxes take
 # `PRINT_WIDTH_BOUNDS` / `PRINT_DPI_BOUNDS` (from export, shared by every surface).
 
 
@@ -333,7 +330,7 @@ def _parse_fixclass_symbol(v) -> str:
 
 
 def _parse_saccade_style_label(v) -> str:
-    """A per-scanpath line style → the selectbox's own label (EXP-19).
+    """A per-scanpath line style → the selectbox's own label.
 
     Not `_parse_choice`, which reads a hyphen as a space for the compare layout's
     sake and so could never match *Dash-dot*."""
@@ -345,8 +342,8 @@ def _parse_saccade_style_label(v) -> str:
 
 
 def _parse_heatmap_style(value) -> str:
-    """A heatmap style; the retired *Duration mass* opens as *Interpolated*,
-    the smoothed style it was a variant of."""
+    """A heatmap style; an older link's *Duration mass* opens as
+    *Interpolated*, the smoothed style it was a variant of."""
     if value == "Duration mass":
         return "Interpolated"
     if value not in ("Word boxes", "Interpolated"):
@@ -359,13 +356,13 @@ def _parse_colorbar_orientation(v) -> str:
 
 
 def _parse_align_algorithm(v) -> str:
-    """PRE-3 drift-correction algorithm name → the picker's exact spelling.
+    """Drift-correction algorithm name → the picker's exact spelling.
 
     The widget stores ``"Off"`` or a title-cased algorithm (``"Warp"``), and the
     selectbox raises if session state holds anything else — so an unknown name
     must be rejected here (the caller turns a ``ValueError`` into the "Ignored
     bad URL param" warning) rather than wedging the rail. Matching is
-    case-insensitive, as ``cli.render --drift-correction`` is (ENG-22).
+    case-insensitive, as ``cli.render --drift-correction`` is.
     """
     name = str(v).strip()
     for option in _ALIGN_OPTIONS:
@@ -377,11 +374,11 @@ def _parse_align_algorithm(v) -> str:
 # --- Share-link parameter groups -------------------------------------------
 # The Share link round-trips the rail's figure settings — the layers, colours,
 # sizes, fixation flags, colour bars and labels, plus the font family, line
-# spacing and background — and the replay speed. Since EXP-19 it also carries
-# what used to travel in the 💾 saved config alone: the recording setup (canvas,
-# base font size, monitor mm, viewing distance, DPI, the point-size font) and
-# Compare's per-scanpath `cmp{idx}_*` styles, as `cmp_a_*` / `cmp_b_*`. Those two
-# groups (`session_keys.SETUP_PARAMS` / `COMPARE_STYLE_PARAMS`) are written only
+# spacing and background — and the replay speed. It also carries the
+# recording setup (canvas, base font size, monitor mm, viewing distance, DPI,
+# the point-size font) and Compare's per-scanpath `cmp{idx}_*` styles, as
+# `cmp_a_*` / `cmp_b_*`. Those two groups (`session_keys.SETUP_PARAMS` /
+# `COMPARE_STYLE_PARAMS`) are written only
 # when they differ from what the recipient would resolve anyway — see
 # `_link_defaults`. Each group maps a short URL key → the session_state key it
 # reads/writes.
@@ -391,7 +388,7 @@ def _parse_align_algorithm(v) -> str:
 # so a link opened on a different trial degrades gracefully; an explicit colour
 # range is the sender's endpoints and is kept as given (`_explicit_pair`).
 #
-# EXP-19's per-scanpath styles are spelled per side: `cmp_a_<field>` is the first
+# The per-scanpath styles are spelled per side: `cmp_a_<field>` is the first
 # scanpath's `cmp0_<field>`, `cmp_b_<field>` the second's `cmp1_<field>`.
 _CMP_STYLE_SIDES = (("a", 0), ("b", 1))
 
@@ -404,8 +401,8 @@ def _cmp_style_params(*fields: str) -> dict[str, str]:
     }
 
 
-# #422: the design choices that used to be fixed — link param → (session key,
-# bounds). The param is the key without `global_`; the settings file's `design`
+# The finer design choices — link param → (session key, bounds). The param
+# is the key without `global_`; the settings file's `design`
 # section keeps them under the same names. Bounds `None` is a switch, "color" a
 # colour; an int pair is a whole number.
 _DESIGN_PARAMS = {
@@ -462,28 +459,28 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "preproc_blink_adjacent": "global_preproc_blink_adjacent",
     "show_words": "global_show_words",
     "show_labels": "global_show_labels",
-    # UX-128: the 📄 Stimulus section's master switch (default on, so always
-    # emitted — a link/config that predates this toggle restores as "on").
+    # The 📄 Stimulus section's master switch (default on, so always
+    # emitted — a link/config without it restores as "on").
     "show_stimulus": "global_show_stimulus",
     "show_fixations": "global_show_fix",
     "show_order": "global_show_order",
     "show_saccades": "global_show_saccades",
     "show_saccade_arrows": "global_show_saccade_arrows",
-    # VIZ-8: saccade-type colour key (default on, so always emitted).
+    # The saccade-type colour key (default on, so always emitted).
     "saccade_type_legend": "global_saccade_type_legend",
     "show_color_legend": "global_show_color_legend",
     "show_highlight_legend": "global_show_highlight_legend",
     # The fixed duration scale's size key (default on, so always emitted).
     "duration_size_legend": "global_duration_size_legend",
-    # #422: Snap to line (its *Position* is a float below). The param kept its
-    # name when the snap moved from "above the word" to "onto the line", so an
-    # older link that snapped still snaps.
+    # Snap to line (its *Position* is a float below). The param has the name
+    # the older "snap above the word" had, so an older link that snapped still
+    # snaps.
     "snap_fixations": "global_fixation_snap_to_line",
-    # PRE-3 / ENG-23: the drift-correction connector layer. Its algorithm rides
+    # The drift-correction connector layer. Its algorithm rides
     # in `_SHARE_VALUE_PARAMS` below — both, or a shared corrected view reopens
     # uncorrected.
     "align_connectors": "global_align_connectors",
-    # VIZ-10: autoplay the animated replay on load (default on, so always emitted).
+    # Autoplay the animated replay on load (default on, so always emitted).
     "anim_autoplay": "global_anim_autoplay",
     "show_heatmap": "global_show_heatmap",
     "show_raw_gaze": "global_show_raw_gaze",
@@ -494,30 +491,30 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "heatmap_sigma_auto": "global_heatmap_sigma_auto",
     "coordinate_grid": "global_show_coordinate_grid",
     "coordinate_grid_auto": "global_coordinate_grid_auto",
-    # #422: Crop to data's margin — automatic, or the px below.
+    # Crop to data's margin — automatic, or the px below.
     "crop_margin_auto": "global_crop_margin_auto",
     "hollow_fixations": "global_hollow_fixations",
     "scale_text_to_boxes": "global_scale_text_to_boxes",
-    # EXP-5: title and caption on the figure — each off by default. The one
+    # Title and caption on the figure — each off by default. The one
     # switch they shared before, `show_title_caption`, is read below.
     "show_title": "global_show_title",
     "show_caption": "global_show_caption",
-    # EXP-18: three switches that change the figure and never rode the link —
-    # the stimulus-image layer, Show full monitor, and Compare's A/B legend.
+    # Three switches that change the figure: the stimulus-image layer, Show
+    # full monitor, and Compare's A/B legend.
     "show_stimulus_image": "global_show_stimulus_image",
     "fit_to_monitor": "global_fit_to_monitor",
     "show_compare_legend": "global_show_compare_legend",
-    # EXP-19: the point-size font switch, and the per-scanpath hollow markers
-    # (no widget since VIZ-6, but a saved config still sets them).
+    # The point-size font switch, and the per-scanpath hollow markers (no
+    # widget, but a saved config still sets them).
     "use_stimulus_font_pt": "global_use_stimulus_font_pt",
     **_cmp_style_params("hollow"),
-    # #373: the chips above the plot, shown or hidden. Not part of the figure,
-    # so the settings file leaves it out (UX-179) — only the link carries it.
+    # The chips above the plot, shown or hidden. Not part of the figure, so
+    # the settings file leaves it out — only the link carries it.
     "show_chips": "single_show_chips",
 }
 _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
     **_design_params("color"),
-    # #374 F28: Export → Current figure's print size (only while a width is set).
+    # Export → Current figure's print size (only while a width is set).
     "export_width_unit": "export_figure_width_unit",
     "preproc_short_policy": "global_preproc_short_policy",
     "color_by": "global_color_by",
@@ -535,12 +532,12 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "marker_size_scale": "global_marker_size_scale",
     "illustration_label": "global_illustration_label",
     "illustration_text": "global_illustration_text",
-    # PRE-3 / ENG-23: vertical drift correction ("Off" or a Carr et al. (2021)
-    # algorithm). Since VIZ-23 it applies on all three render paths, so a link
-    # that dropped it reopened a visibly different figure.
+    # Vertical drift correction ("Off" or a Carr et al. (2021) algorithm). It
+    # applies on all three render paths, so a link without it would reopen a
+    # visibly different figure.
     "align_algorithm": "global_align_algorithm",
-    # VIZ-15 marker shape · VIZ-17 uniform fixation colour · VIZ-18 palette. The
-    # palette is a *preset* — the colours it implies ride in the individual params
+    # Marker shape · uniform fixation colour · palette. The palette is a
+    # *preset* — the colours it implies ride in the individual params
     # below — so it's expanded first and any explicit colour in the same link
     # wins (see `_apply_url_palette`).
     "fixation_symbol": "global_fixation_symbol",
@@ -549,19 +546,19 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "fixation_colorscale": "global_fixation_colorscale",
     "heatmap_colorscale": "global_heatmap_colorscale",
     "saccade_color": "global_saccade_color",
-    # UX-86: raw gaze's own style.
+    # Raw gaze's own style.
     "raw_gaze_color": "global_raw_gaze_color",
     # ⬚ Word boxes' outline and fill colours (the fill's opacity is a float).
     "word_box_color": "global_word_box_color",
     "word_box_fill_color": "global_word_box_fill_color",
-    # VIZ-8: colour-by-reading-type mode + the five class colours.
+    # Colour-by-reading-type mode + the five class colours.
     "saccade_color_mode": "global_saccade_color_mode",
     "saccade_color_forward": "global_saccade_class_color_forward",
     "saccade_color_skip": "global_saccade_class_color_skip",
     "saccade_color_refixation": "global_saccade_class_color_refixation",
     "saccade_color_return_sweep": "global_saccade_class_color_return_sweep",
     "saccade_color_regression": "global_saccade_class_color_regression",
-    # VIZ-31: the reading-class *filter* (which classes are drawn at all), as a
+    # The reading-class *filter* (which classes are drawn at all), as a
     # comma-separated list — the generic writer below already joins a list value,
     # and `_URL_PRESETS` overrides the read side with a validating parser.
     "saccade_classes": "global_saccade_classes",
@@ -574,21 +571,20 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "word_hover_measure": "global_word_hover_measure",
     "word_hover_fields": "global_word_hover_fields",
     "fixation_hover_fields": "global_fixation_hover_fields",
-    # EXP-5: the pattern strings themselves — meaningless while
-    # `show_title_caption` is off, but carried unconditionally like every other
-    # value param (the reader only applies them once the toggle is on).
+    # The pattern strings themselves — meaningless while their switch
+    # (`show_title` / `show_caption`) is off, but carried unconditionally like
+    # every other value param (the reader only applies them once it is on).
     "title_pattern": "global_title_pattern",
     "caption_pattern": "global_caption_pattern",
-    # CMP-11: compare mode's own two settings. CMP-8 put `compare=<pid>:<trial>`
-    # and `cmp_source` on the link but neither of these, so a shared comparison
-    # always reopened as Overlay — and, cross-dataset, immediately resolved away
-    # from it. Both read sides are overridden in `_URL_PRESETS` with validating
-    # parsers, since each is a closed vocabulary.
+    # Compare mode's own two settings — without them a shared comparison
+    # would always reopen as Overlay. Both read sides are overridden in
+    # `_URL_PRESETS` with validating parsers, since each is a closed
+    # vocabulary.
     "cmp_layout": "single_compare_layout",
     "cmp_stimulus": "single_compare_stimulus",
-    # EXP-18: colour-bar orientation, the span's border colour, and the PRE-2
-    # fixation flags. *Discard* changes which fixations are drawn at all, so a
-    # link without it showed the recipient a different scanpath — and without
+    # Colour-bar orientation, the span's border colour, and the fixation
+    # flags. *Discard* changes which fixations are drawn at all, so a link
+    # without it would show the recipient a different scanpath — and without
     # the Illustration label the sender's figure carried.
     "fixation_colorbar_orientation": "global_fixation_colorbar_orientation",
     "heatmap_colorbar_orientation": "global_heatmap_colorbar_orientation",
@@ -598,7 +594,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
         for cat in ("short", "long", "oob", "blink")
         for part in ("mode", "symbol", "color")
     },
-    # EXP-19: Compare's per-scanpath colours, line style and legend label.
+    # Compare's per-scanpath colours, line style and legend label.
     **_cmp_style_params(
         "fix_color",
         "saccade_color",
@@ -609,7 +605,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
         "raw_gaze_color",
         "heatmap_colorscale",
     ),
-    # CMP-24: scanpath B's own filters — which classes it draws, and each fixation
+    # Scanpath B's own filters — which classes it draws, and each fixation
     # flag's mode. A's are the ordinary `saccade_classes` / `fixclass_*` above.
     "cmp_b_saccade_classes": "cmp1_saccade_classes",
     **{
@@ -618,7 +614,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     },
 }
 #: The `_SHARE_VALUE_PARAMS` that carry a colour — read through
-#: `_parse_hex_color` rather than `str` (BUG-69).
+#: `_parse_hex_color` rather than `str`.
 _SHARE_COLOR_PARAMS = (
     *_design_params("color"),
     "fixation_color",
@@ -648,23 +644,23 @@ _SHARE_INT_PARAMS = {
     **_design_params("int"),
     "export_dpi": "export_figure_dpi",
     "order_font_size": "global_order_font_size",
-    # VIZ-11 follow-up: the animation frame grid. Worth sharing — a link that
+    # The animation frame grid. Worth sharing — a link that
     # says "look at this replay" should reproduce the same smoothness.
     "anim_grid_step_ms": "global_anim_grid_step_ms",
     "anim_max_frames": "global_anim_max_frames",
-    # EXP-18: colour-bar tick styling and the two fixation-flag thresholds.
+    # Colour-bar tick styling and the two fixation-flag thresholds.
     "fixation_colorbar_tickangle": "global_fixation_colorbar_tickangle",
     "fixation_colorbar_tickfont_size": "global_fixation_colorbar_tickfont_size",
     "heatmap_colorbar_tickangle": "global_heatmap_colorbar_tickangle",
     "heatmap_colorbar_tickfont_size": "global_heatmap_colorbar_tickfont_size",
     "fixclass_short_threshold_ms": "global_fixclass_short_threshold_ms",
     "fixclass_long_threshold_ms": "global_fixclass_long_threshold_ms",
-    # EXP-19: the pixel canvas and the base font — the recording setup's half
+    # The pixel canvas and the base font — the recording setup's half
     # that every figure is drawn at.
     "canvas_width": "global_canvas_width",
     "canvas_height": "global_canvas_height",
     "base_font_size": "global_base_font_size",
-    # CMP-24: B's two fixation-flag thresholds.
+    # B's two fixation-flag thresholds.
     "cmp_b_fixclass_short_threshold_ms": "cmp1_fixclass_short_threshold_ms",
     "cmp_b_fixclass_long_threshold_ms": "cmp1_fixclass_long_threshold_ms",
 }
@@ -675,32 +671,32 @@ _SHARE_FLOAT_PARAMS = {
     "preproc_merge_distance_chars": "global_preproc_merge_distance_chars",
     "line_spacing": "global_line_spacing",
     "saccade_width": "global_saccade_width",
-    # #422: the saccade lines' and arrows' opacity.
+    # The saccade lines' and arrows' opacity.
     "saccade_opacity": "global_saccade_opacity",
     "fixation_opacity": "global_fixation_opacity",
-    # #422: where on its line a snapped fixation sits, in line heights.
+    # Where on its line a snapped fixation sits, in line heights.
     "snap_position": "global_fixation_snap_position",
     # The Interpolated heatmap's fixed blur σ (px); its Auto switch is a toggle.
     "heatmap_sigma_px": "global_heatmap_sigma_px",
-    # VIZ-4: image-stimulus opacity (applies to dataset images too, so worth
+    # Image-stimulus opacity (applies to dataset images too, so worth
     # sharing; the uploaded image itself can't ride a link).
     "stimulus_image_opacity": "global_stimulus_image_opacity",
-    # VIZ-4: manual image alignment — origin nudge + size scale (apply to dataset
+    # Manual image alignment — origin nudge + size scale (apply to dataset
     # images, so they round-trip; an uploaded image is re-uploaded on the far end).
     "stimulus_image_offset_x": "global_stimulus_image_offset_x",
     "stimulus_image_offset_y": "global_stimulus_image_offset_y",
     "stimulus_image_scale": "global_stimulus_image_scale",
     "coordinate_grid_spacing": "global_coordinate_grid_spacing",
     "crop_margin": "global_crop_margin_px",
-    # UX-86: raw gaze's own style.
+    # Raw gaze's own style.
     "raw_gaze_marker_size": "global_raw_gaze_marker_size",
     "raw_gaze_opacity": "global_raw_gaze_opacity",
     "word_box_line_opacity": "global_word_box_line_opacity",
     "word_box_fill_opacity": "global_word_box_fill_opacity",
-    # EXP-18: the replay speed. A non-1× speed stamps an Illustration label, so
-    # a link without it reopened a figure that disclosed something else.
+    # The replay speed. A non-1× speed stamps an Illustration label, so a
+    # link without it would reopen a figure that disclosed something else.
     "playback_speed": "single_playback_speed",
-    # EXP-19: the physical half of the recording setup (px/degree, and the
+    # The physical half of the recording setup (px/degree, and the
     # point-to-pixel conversion of a font given in points), plus Compare's
     # per-scanpath line width and marker opacity.
     "monitor_width_mm": "global_monitor_width_mm",
@@ -714,15 +710,15 @@ _SHARE_FLOAT_PARAMS = {
 _SHARE_INT_RANGE_PARAMS = {
     "marker_size_range": "global_marker_size_range",
     "marker_duration_range": "global_marker_duration_range",
-    # VIZ-40 (UX-135) closed VIZ-7's last surface gap: the window is now
-    # linkable. Read like any other "lo,hi" range — `controls`' slider already
-    # treats a value present before it first renders as explicit and clamps it
-    # to the recipient's own trial. The **write** side is not generic, though:
-    # see the `FIX_RANGE_PARAM` block in `_build_share_query`.
+    # The fixation-index window. Read like any other "lo,hi" range —
+    # `controls`' slider treats a value present before it first renders as
+    # explicit and clamps it to the recipient's own trial. The **write** side
+    # is not generic, though: see the `FIX_RANGE_PARAM` block in
+    # `_build_share_query`.
     FIX_RANGE_PARAM: "single_fix_range",
-    # EXP-19.
+    # Per-scanpath compare styles.
     **_cmp_style_params("marker_size_range"),
-    # CMP-24 — B's own window. Written on A's terms: see the
+    # B's own window. Written on A's terms: see the
     # `COMPARE_FIX_RANGE_PARAM` block in `_build_share_query`.
     COMPARE_FIX_RANGE_PARAM: "single_compare_fix_range",
 }
@@ -731,7 +727,7 @@ _SHARE_FLOAT_RANGE_PARAMS = {
     "heatmap_color_range": "global_heatmap_color_range",
 }
 
-#: PRE-21: URL params that belong to a gated feature. Each maps to the predicate
+#: URL params that belong to a gated feature. Each maps to the predicate
 #: that says whether it is exposed; while it isn't, the param is neither read nor
 #: emitted. Kept *in* the contract (`session_keys.py` still pins it, the parser
 #: still knows how to read it) — this is a visibility gate, not a wire-format
@@ -763,35 +759,36 @@ _URL_PRESETS = {
     **{k: (s, _parse_float_range) for k, s in _SHARE_FLOAT_RANGE_PARAMS.items()},
     # Validated choice (must come after the generic `str` sweep above, which
     # covers the same param): the drift-correction picker rejects any value
-    # outside its options, so the link's spelling is checked here (ENG-23).
+    # outside its options, so the link's spelling is checked here.
     "align_algorithm": ("global_align_algorithm", _parse_align_algorithm),
     "word_hover_fields": ("global_word_hover_fields", _parse_field_list),
     "fixation_hover_fields": ("global_fixation_hover_fields", _parse_field_list),
-    # VIZ-31 saccade reading-class filter — validated like `align_algorithm`
+    # The saccade reading-class filter — validated like `align_algorithm`
     # above, and for the same reason: the multiselect raises on a value outside
     # its options, so an unknown class name has to be rejected here rather than
     # wedging the rail.
     "saccade_classes": ("global_saccade_classes", _parse_saccade_classes),
     "cmp_b_saccade_classes": ("cmp1_saccade_classes", _parse_saccade_classes),
-    # CMP-11 — same rule again: both are `st.segmented_control` options.
+    # Same rule again: both are `st.segmented_control` options.
     "cmp_layout": ("single_compare_layout", _parse_compare_layout),
     "cmp_stimulus": ("single_compare_stimulus", _parse_compare_stimulus),
     "marker_size_scale": ("global_marker_size_scale", _parse_marker_size_scale),
-    # BUG-69 — and for every colour, which Plotly rejects outright.
+    # And for every colour, which Plotly rejects outright.
     **{k: (_SHARE_VALUE_PARAMS[k], _parse_hex_color) for k in _SHARE_COLOR_PARAMS},
-    # BUG-75 — figure text from a link is text, never markup.
+    # Figure text from a link is text, never markup.
     "title_pattern": ("global_title_pattern", _strip_markup),
     "caption_pattern": ("global_caption_pattern", _strip_markup),
     "illustration_text": ("global_illustration_text", _strip_markup),
     "heatmap_style": ("global_heatmap_style", _parse_heatmap_style),
-    # #374 F28 — a closed vocabulary, like the rest.
+    # The print width's unit — a closed vocabulary, like the rest.
     "export_width_unit": ("export_figure_width_unit", _parse_print_unit),
     # Compare's per-scanpath heatmap colour scale: an app colour scale only.
     **{
         param: (key, _parse_colorscale)
         for param, key in _cmp_style_params("heatmap_colorscale").items()
     },
-    # EXP-18 — the settings that joined the link, each a closed vocabulary.
+    # The replay speed, colour-bar orientations and fixation flags — each a
+    # closed vocabulary.
     "playback_speed": ("single_playback_speed", _parse_playback_speed),
     **{
         f"{bar}_colorbar_orientation": (
@@ -808,7 +805,7 @@ _URL_PRESETS = {
             ("symbol", _parse_fixclass_symbol),
         )
     },
-    # CMP-24 — B's flag modes, the same closed vocabulary as A's.
+    # B's flag modes, the same closed vocabulary as A's.
     **{
         f"cmp_b_fixclass_{cat}_mode": (
             f"cmp1_fixclass_{cat}_mode",
@@ -816,8 +813,8 @@ _URL_PRESETS = {
         )
         for cat in ("short", "long", "oob", "blink")
     },
-    # EXP-19 — the per-scanpath line style is a selectbox (raises on anything
-    # else), and the legend label is figure text from someone else (BUG-75).
+    # The per-scanpath line style is a selectbox (raises on anything else),
+    # and the legend label is figure text from someone else.
     **{
         param: (state_key, _parse_saccade_style_label)
         for param, state_key in _cmp_style_params("saccade_style").items()
@@ -861,20 +858,20 @@ _URL_BOUNDED = {
     "global_fixation_opacity": (0.1, 1.0),
     "global_fixation_snap_position": SNAP_POSITION_BOUNDS,
     "global_stimulus_image_opacity": (0.1, 1.0),
-    # VIZ-4: image-alignment nudge — clamp a hand-crafted link to sane ranges.
+    # Image-alignment nudge — clamp a hand-crafted link to sane ranges.
     "global_stimulus_image_offset_x": (-5000.0, 5000.0),
     "global_stimulus_image_offset_y": (-5000.0, 5000.0),
     "global_stimulus_image_scale": (0.25, 3.0),
     "global_coordinate_grid_spacing": (10.0, 5000.0),
     "global_crop_margin_px": CROP_MARGIN_BOUNDS,
-    # UX-86 put raw gaze's style on the link without its bounds (BUG-69), so
-    # `?raw_gaze_opacity=5` crashed the slider. Mirrors controls.py's widgets.
+    # Raw gaze's style — unclamped, `?raw_gaze_opacity=5` would crash the
+    # slider. Mirrors controls.py's widgets.
     "global_raw_gaze_marker_size": (1.0, 12.0),
     "global_raw_gaze_opacity": (0.1, 1.0),
     # 0 is a real choice for both — outlines only / fill only.
     "global_word_box_line_opacity": (0.0, 1.0),
     "global_word_box_fill_opacity": (0.0, 1.0),
-    # EXP-18: the colour-bar tick sliders, and the fixation-flag thresholds —
+    # The colour-bar tick sliders, and the fixation-flag thresholds —
     # a `number_input` with only a minimum, capped at a minute here so a link
     # cannot carry a number no fixation reaches.
     **{
@@ -889,16 +886,16 @@ _URL_BOUNDED = {
     "global_fixclass_long_threshold_ms": (1, 60_000),
     "cmp1_fixclass_short_threshold_ms": (1, 60_000),
     "cmp1_fixclass_long_threshold_ms": (1, 60_000),
-    # EXP-19: the recording setup and the per-scanpath styles, which used to be
-    # saved-config only and clamped by `_CONFIG_BOUNDED` alone. Mirrors the
-    # widgets (`app.render_canvas_controls`, `controls._render_compare_*`).
+    # The recording setup and the per-scanpath styles (the saved-config
+    # reader clamps by this table too). Mirrors the widgets
+    # (`app.render_canvas_controls`, `controls._render_compare_*`).
     "global_canvas_width": _CANVAS_BOUNDS,
     "global_canvas_height": _CANVAS_BOUNDS,
     "global_base_font_size": _FONT_BOUNDS,
     "global_monitor_width_mm": (100.0, 3000.0),
     "global_viewing_distance_mm": (100.0, 3000.0),
     "global_display_dpi": (20.0, 1000.0),
-    # #374 F28 — mirrors the Export subtab's number boxes.
+    # Mirrors the Export subtab's number boxes.
     "export_figure_width": PRINT_WIDTH_BOUNDS,
     "export_figure_dpi": PRINT_DPI_BOUNDS,
     "global_stimulus_font_pt": (4.0, 144.0),
@@ -913,7 +910,7 @@ _URL_BOUNDED = {
 }
 
 
-#: EXP-19 — the settings a source's own declared monitor or typeface overwrites
+#: The settings a source's own declared monitor or typeface overwrites
 #: the first time that source is seeded (`app.seed_canvas_state`: the canvas
 #: pair, and `app._FONT_SNAP_KEYS`). A link that carries one names it under
 #: `LINK_SETUP_STATE_KEY`, so the snap keeps the sender's value. A recording
@@ -953,11 +950,10 @@ _SHAREABLE_SOURCES = {
     MANUAL_SAMPLE_CHOICE: "author",
     DEMO_CHOICE: "demo",
     ONESTOP_CHOICE: "onestop",
-    MULTIPLEYE_BUNDLE_CHOICE: "multipleye",
     SYNTHETIC_CHOICE: "synthetic",
-    # DATA-3: the public OneStop corpus (OSF download-on-demand) is shareable too.
-    # DATA-63: one dataset per regime, each its own token (`onestop_<regime>`).
-    # A DATA-3 link (`onestop_public` + `onestop_regime`) is read by `app.main`.
+    # The public OneStop corpus (OSF download-on-demand) is shareable too: one
+    # dataset per regime, each its own token (`onestop_<regime>`). An older
+    # link (`onestop_public` + `onestop_regime`) is read by `app.main`.
     **{
         ONESTOP_REGIME_CHOICES[regime]: token
         for regime, token in ONESTOP_REGIME_SOURCE_TOKENS.items()
@@ -968,7 +964,7 @@ _SHAREABLE_SOURCES = {
 def _source_choice_for_param(value) -> str | None:
     """Invert `_SHAREABLE_SOURCES`: a ``?source=``-style token → the data choice.
 
-    Used by CMP-8's `cmp_source`, which names scanpath **B's** corpus in the
+    Used by `cmp_source`, which names scanpath **B's** corpus in the
     same vocabulary. An unknown token returns ``None`` — the link then simply
     doesn't move the comparison dataset, which is a safe degrade rather than a
     wedged picker.
@@ -983,34 +979,17 @@ def _source_choice_for_param(value) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# DATA-27 (Task 12): every public corpus on the link — `?source=corpus&corpus=…`
+# Every public corpus on the link — `?source=corpus&corpus=…`
 #
 # `_SHAREABLE_SOURCES` above works for sources whose *identity is the token*.
-# The public corpora can't: `app.public_dataset_registry()` is the built-in
-# corpora **∪ one entry per harmonised benchmark corpus the user added**, a
-# catalogue that varies per machine, so there is no fixed token per corpus to
-# freeze. One generic token names the kind and a second param names the corpus.
-#
-# Deliberately generic (R42): a benchmark-only branch would have to re-derive
-# which registry entry produced the picker's collapsed choice, duplicating
-# `app.resolve_data_source`'s healing logic — and "these corpora are
-# special" is the assumption this plan has been bitten by repeatedly. A built-in
-# corpus and a prepared one are the same kind of thing here.
+# The public corpora can't: `app.public_dataset_registry()` is a catalogue that
+# varies per machine, so there is no fixed token per corpus to freeze. One
+# generic token names the kind and a second param names the corpus.
 CORPUS_SOURCE_TOKEN = "corpus"
 
-# What gets slugged is the entry's **stable identifier** — a prepared corpus'
-# manifest `name`, a built-in's registry `short` — never its display label, which
-# carries em-dashes and "(harmonised benchmark)" and is the thing most likely to
-# be reworded. A link has to survive a rewording.
-#
-# Prepared corpora are namespaced with this prefix because the two identifier
-# spaces overlap: PoTeC and OneStop each ship *both* natively and harmonised, and
-# both entries are kept on purpose, so bare slugs would collide and a link would
-# silently open the wrong corpus — the worst failure this feature can have. The
-# prefix is a constant in code, so it is unaffected by any relabelling, and it
-# names the property that actually differs (a re-derived harmonisation of the
-# publisher's release) rather than the pipeline that produced it.
-_PREPARED_CORPUS_SLUG_PREFIX = "harmonised-"
+# What gets slugged is the entry's **stable identifier** — its registry `short`
+# — never its display label, which carries em-dashes and is the thing most
+# likely to be reworded. A link has to survive a rewording.
 
 
 def _slugify_corpus(value: str) -> str:
@@ -1021,18 +1000,10 @@ def _slugify_corpus(value: str) -> str:
 def corpus_slug(label: str, spec) -> str:
     """The ``?corpus=`` slug for one `public_dataset_registry()` entry, or ``""``.
 
-    Empty for an identifier with nothing sluggable in it. A manifest ``name``
-    written in a non-Latin script slugifies to ``""``, and returning the bare
-    namespace prefix for it would give *every* such corpus the same slug **and**
-    one the reader can never match (it re-slugifies its input, which strips the
-    trailing hyphen). Not shareable is honest, and is already a supported state;
-    a slug naming several corpora is the failure this scheme exists to prevent.
+    Empty for an identifier with nothing sluggable in it (one written in a
+    non-Latin script): not shareable is honest, and is already a supported
+    state.
     """
-    # `benchmark_dataset` is the manifest `name`, put on the spec by Task 11R
-    # precisely as the stable identifier for this wire format.
-    if dataset := str(spec.get("benchmark_dataset") or "").strip():
-        slug = _slugify_corpus(dataset)
-        return f"{_PREPARED_CORPUS_SLUG_PREFIX}{slug}" if slug else ""
     return _slugify_corpus(str(spec.get("short") or label))
 
 
@@ -1041,20 +1012,14 @@ def registry_corpus_slugs() -> dict[str, str]:
 
     A slug **two** entries would claim is dropped from both — so it is neither
     emitted nor resolvable, and the link degrades onto the existing "doesn't move
-    the picker" path. The namespace prefix stops the collision this catalogue is
-    known to have (PoTeC and OneStop each ship natively *and* harmonised) from
-    arising at all, but avoidance is not detection, and three ways in remain:
-    `_slugify_corpus` is not injective (``ZuCo-1`` and ``ZuCo 1`` slug alike, and
-    near-identical names are the norm here — ``MECOL1W1``/``MECOL1W2``/
-    ``MECOL2W1``/``MECOL2W2``, ``ZuCo1``/``ZuCo2``); nothing reserves the prefix
-    against a future built-in whose ``short`` is "Harmonised Foo"; and a bundle
-    can hold two corpora whose names differ only in punctuation. Refusing to
-    answer costs the recipient one link. Picking a winner opens the wrong
-    corpus, silently, which is the worst failure this feature can have.
+    the picker" path: `_slugify_corpus` is not injective (``ZuCo-1`` and
+    ``ZuCo 1`` slug alike). Refusing to answer costs the recipient one link.
+    Picking a winner opens the wrong corpus, silently, which is the worst
+    failure this feature can have.
 
     Reads `app.public_dataset_registry()` — the *function*, never the static
-    `PUBLIC_DATASET_REGISTRY` dict, which answers for the three built-ins only.
-    The import is inside the function because `app` imports this module.
+    `PUBLIC_DATASET_REGISTRY` dict. The import is inside the function because
+    `app` imports this module.
     """
     from scanpath_studio.app import public_dataset_registry
 
@@ -1068,10 +1033,9 @@ def registry_corpus_slugs() -> dict[str, str]:
 def corpus_choice_for_slug(value) -> str | None:
     """A ``?corpus=`` slug → its registry label, or ``None``.
 
-    ``None`` covers "this reader's bundle doesn't hold that corpus" (the common
-    case — the recipient has no bundle, or a different subset of one), an unknown
-    slug, and a slug two entries would answer to (`registry_corpus_slugs` has
-    already dropped that one). All degrade the way `_source_choice_for_param`
+    ``None`` covers an unknown slug (a corpus this app does not offer) and a
+    slug two entries would answer to (`registry_corpus_slugs` has already
+    dropped that one). All degrade the way `_source_choice_for_param`
     does: the link simply doesn't move the picker. Never guess a near match — a
     slug resolving to the wrong corpus opens the wrong data silently.
     """
@@ -1092,8 +1056,7 @@ def _selected_corpus(data_choice: str) -> tuple[str, dict]:
     `app.resolve_data_source` collapses **any** registry label to
     `PUBLIC_DATASETS_CHOICE` and stashes the label on `public_dataset_choice`, so
     that is where the answer lives for a link built from the running app. A
-    caller holding the label itself (the tests, and anything predating the
-    collapse) is honoured as-is.
+    caller holding the label itself (the tests do) is honoured as-is.
     """
     from scanpath_studio.app import public_dataset_registry
 
@@ -1163,7 +1126,7 @@ def _legend_query(params: dict) -> None:
 
 
 def _apply_url_palette(qp) -> None:
-    """Expand a ``?palette=<name>`` deep link into its colour session keys (VIZ-18).
+    """Expand a ``?palette=<name>`` deep link into its colour session keys.
 
     A palette is a preset over the ordinary colour keys, so it must be applied
     *before* the generic ``_URL_PRESETS`` loop — and any colour the same link
@@ -1191,8 +1154,7 @@ def _apply_url_preset() -> str | None:
                                    (also demo / synthetic / upload — see main())
         ?source=corpus&corpus=potec
                                  → a public corpus: one entry of
-                                   `app.public_dataset_registry()`, built-in or
-                                   locally prepared (`corpus=harmonised-potec`).
+                                   `app.public_dataset_registry()`.
                                    Resolved in main(); an unresolvable slug
                                    leaves the picker alone and says so.
         &participant=p001        → preselect participant (Participant mode)
@@ -1201,16 +1163,13 @@ def _apply_url_preset() -> str | None:
                                    (applied after combos build — see
                                    _apply_url_trial_selection; emitted by Share)
         &screen=intro            → open this child screen of a multipart trial
-        &tab=animation           → pre-tick the Animate toggle (legacy; there's
-                                   no separate Animated Scanpath tab anymore)
+        &tab=animation           → pre-tick the Animate toggle (legacy; Animate
+                                   is a toggle, not a tab)
         &heatmap_colorscale=Greens
         &hide_fixation_numbers=1
         &show_saccades=1
         &show_heatmap=1
         ...etc — see _URL_PRESETS above
-
-    Bonus side-effect: when any colorscale is set via URL, also forces the
-    "Advanced styling" expander open so the value is visible/editable.
 
     External tools can deep-link into this app via the URL schema above to
     land on a specific trial with the reviewer's preferred viz settings.
@@ -1251,10 +1210,10 @@ def _apply_url_preset() -> str | None:
     for url_key, (state_key, coerce) in _URL_PRESETS.items():
         if url_key not in qp:
             continue
-        # PRE-21: a link naming a gated-off feature is ignored *silently* — no
-        # "unavailable in this build" warning. The app hasn't been released, so
-        # no such link exists in the world yet; this only has to not crash, and
-        # not leave a value the rail can't show but the Share writer would emit.
+        # A link naming a gated-off feature is ignored *silently* — no
+        # "unavailable in this build" warning. Only a session with the feature
+        # on writes such a param; this only has to not crash, and not leave a
+        # value the rail can't show but the Share writer would emit.
         if url_key in _GATED_URL_PARAMS and not _GATED_URL_PARAMS[url_key]():
             continue
         raw = qp[url_key]
@@ -1271,11 +1230,11 @@ def _apply_url_preset() -> str | None:
         st.session_state.setdefault(state_key, value)
 
     # A link carrying layer toggles but no `marker_size_scale` opens on the
-    # relative scale. Share has emitted the scale since the fixed scale became
-    # the default, and the toggles always, so that is a link copied before it,
-    # drawn relative. `duration_size_legend` is left out of the check: it came
-    # in with the scale. A hand-written `?trial_id=` link carries no toggle and
-    # gets the new default.
+    # relative scale. Share writes the scale beside the toggles, so such a link
+    # predates the fixed duration scale and was drawn relative.
+    # `duration_size_legend` is left out of the check: it only travels with the
+    # scale. A hand-written `?trial_id=` link carries no toggle and gets the
+    # current default.
     if "marker_size_scale" not in qp and any(
         k in qp
         for k in _SHARE_TOGGLE_PARAMS
@@ -1285,7 +1244,7 @@ def _apply_url_preset() -> str | None:
             "global_marker_size_scale", LEGACY_MARKER_SIZE_SCALE
         )
 
-    # EXP-19: a source that declares its own monitor or typeface snaps the canvas
+    # A source that declares its own monitor or typeface snaps the canvas
     # and font controls to it the first time it is seeded — on a recipient's
     # first run, that is, *after* this link has seeded them — so without a word
     # from here the sender's canvas would be replaced by the corpus default the
@@ -1297,8 +1256,8 @@ def _apply_url_preset() -> str | None:
             LINK_SETUP_STATE_KEY, {"keys": sorted(snapped_from_link), "choice": None}
         )
 
-    # DATA-22 §7 surface 2 (read side): badge the values this link is carrying
-    # with how the *sender* knew them, so an assumed monitor arrives labelled as
+    # Badge the values this link is carrying with how the *sender* knew
+    # them, so an assumed monitor arrives labelled as
     # assumed instead of looking measured. Parsing is deliberately forgiving —
     # unknown groups and unknown provenance words are dropped, never raised on —
     # because a mangled param should cost the recipient badges, not the link.
@@ -1344,22 +1303,17 @@ def _apply_url_preset() -> str | None:
             st.session_state.setdefault("global_show_title", both)
             st.session_state.setdefault("global_show_caption", both)
 
-    # Heatmap / fixation colorscale only render under the Advanced expander —
-    # auto-open it so the URL value is exposed in the rail.
-    if "heatmap_colorscale" in qp or "fixation_colorscale" in qp:
-        st.session_state.setdefault("global_advanced", True)
-
-    # Animation is now a checkbox in the Scanpath Visualization tab (no separate
-    # tab), so a legacy `?tab=animation` deep link just pre-ticks it.
+    # Animate is a toggle on the Scanpath view, not a tab, so a legacy
+    # `?tab=animation` deep link just pre-ticks it.
     if (qp.get("tab") or "").lower() == "animation":
         st.session_state.setdefault("single_animate", True)
     if qp.get("screen") not in (None, ""):
         st.session_state.setdefault("single_screen_id", str(qp["screen"]))
 
-    # CMP-8 §7: `?compare=<participant>:<trial>` turns Compare on and parks B's
-    # ids for the picker to consume once its candidate list exists (the picker's
-    # own key holds a render-time *label*, so a link can't seed it directly —
-    # the same reason ENG-36's trial jump parks a request). `cmp_source` names
+    # `?compare=<participant>:<trial>` turns Compare on and parks B's ids for
+    # the picker to consume once its candidate list exists (the picker's own
+    # key holds a render-time *label*, so a link can't seed it directly — the
+    # same reason `request_trial` parks a request). `cmp_source` names
     # B's corpus; an unknown name is dropped rather than honoured, which falls
     # back to "B is in this dataset" instead of wedging the picker.
     compare_ids = parse_compare_value(qp.get(COMPARE_PARAM))
@@ -1380,8 +1334,8 @@ def _apply_url_preset() -> str | None:
                 SINGLE_COMPARE_SCREEN_ID, str(qp[COMPARE_SCREEN_PARAM])
             )
 
-    # DATA-3: the public OneStop source options (variant / regime / parts) ride
-    # the deep link too, seeded before the loader's widgets render. Validate each
+    # The public OneStop source options (variant / regime / parts) an older
+    # link carries, seeded before the loader's widgets render. Validate each
     # against its known domain so a hand-edited link can't wedge the widget.
     if qp.get("onestop_variant") in ONESTOP_VARIANT_LABELS:
         st.session_state.setdefault("onestop_variant", qp["onestop_variant"])
@@ -1399,9 +1353,9 @@ def _apply_url_preset() -> str | None:
             st.session_state.setdefault("author_text", str(qp["author_text"]))
         if "author_events" in qp:
             # The whole build — parse, shape check, table, normalization — sits
-            # inside the boundary: a hand-edited `[{"x":100},1]` used to pass
-            # the list check and raise from `pd.DataFrame` before the app drew
-            # anything. The text is kept either way.
+            # inside the boundary: a hand-edited `[{"x":100},1]` passes a list
+            # check and raises from `pd.DataFrame`, which would stop the app
+            # before it drew anything. The text is kept either way.
             try:
                 events = event_records_frame(json.loads(str(qp["author_events"])))
             except (ValueError, TypeError, RecursionError):
@@ -1420,7 +1374,7 @@ def _apply_url_preset() -> str | None:
 
 
 def link_sets(state_key: str) -> bool:
-    """Whether the open deep link carries a value for ``state_key`` (VIZ-45).
+    """Whether the open deep link carries a value for ``state_key``.
 
     For a setting whose default depends on the dataset — the raw-gaze layer —
     rather than on a source's declared screen, so it is not scoped the way
@@ -1440,7 +1394,7 @@ def link_sets(state_key: str) -> bool:
 
 
 def linked_state_keys() -> frozenset[str]:
-    """The session keys the open deep link carries a value for (#374 F25).
+    """The session keys the open deep link carries a value for.
 
     What the rail's design highlight is recomputed from on a link's first run:
     a link built from a customized view opens on Custom, not on the design
@@ -1461,7 +1415,7 @@ def linked_state_keys() -> frozenset[str]:
     )
 
 
-#: #374 F14 — a link to an added dataset this session doesn't hold, kept so the
+#: A link to an added dataset this session doesn't hold, kept so the
 #: notice stays up (the link's params are dropped once it is read) until
 #: another dataset is opened: ``{"message": str, "choice": str | None}``.
 LINK_DATASET_MISSING_KEY = "_link_dataset_missing"
@@ -1487,7 +1441,7 @@ def missing_dataset_message(
 
 
 def resolve_link_dataset(seeded: Iterable[str], current: str | None) -> str | None:
-    """Open the added dataset a link names (`?dataset=`, #374 F14).
+    """Open the added dataset a link names (`?dataset=`).
 
     Returns the dataset to open when this session holds one of that name. When
     it doesn't, the link's view is **not** applied to whatever else is open:
@@ -1535,12 +1489,12 @@ def link_dataset_notice(current: str | None) -> str | None:
 
 
 def scope_link_setup(choice: str | None) -> None:
-    """Tie the keys a link seeded (EXP-19) to the data source it resolved to.
+    """Tie the recording-setup keys a link seeded to the data source it resolved to.
 
     Called by `app.main` once its `?source=` dispatch has run, with the choice
     the link landed on — or ``None`` when it named no source this app can open
-    (an uploaded dataset, a corpus the recipient has no bundle for, a server
-    bundle with no data directory). Then there is nothing to protect: the
+    (an uploaded dataset, a corpus this app does not offer, a server bundle
+    with no data directory). Then there is nothing to protect: the
     recipient is on whatever source they already had, and it snaps to its own
     monitor exactly as if no link had been opened."""
     marker = st.session_state.get(LINK_SETUP_STATE_KEY)
@@ -1569,11 +1523,11 @@ def link_setup_keys_for(source_key: tuple) -> frozenset:
 
 
 # plot-config layer key → viz-control session_state key. The inverse of the
-# `layers` block written by `tabs._render_plot_config_expander`.
+# `layers` block written by `plot_config.build_plot_config`.
 _PLOT_CONFIG_LAYER_KEYS = {
     "words": "global_show_words",
     "word_labels": "global_show_labels",
-    # UX-128: the 📄 Stimulus section's master switch.
+    # The 📄 Stimulus section's master switch.
     "stimulus": "global_show_stimulus",
     "fixations": "global_show_fix",
     "order_labels": "global_show_order",
@@ -1587,19 +1541,19 @@ _PLOT_CONFIG_LAYER_KEYS = {
 }
 
 
-# --- Seeding a stored session value (BUG-71) --------------------------------
+# --- Seeding a stored session value ----------------------------------------
 #
 # The recovery cache (`persistence.restore_state`) seeds session state straight
 # from a JSON file on disk, one key at a time, before any widget renders — the
 # same position a deep link is in, without the link's parsers. A value a widget
 # refuses (an opacity of 7, a size range of "abc") or one Plotly refuses (a
-# colour of "zzz") stopped the app on every launch. `sanitize_session_value`
+# colour of "zzz") would stop the app on every launch. `sanitize_session_value`
 # holds a stored value to the rules the two readers above already apply:
-# `_URL_BOUNDED` (which since EXP-19 also holds the widget bounds a saved config
-# alone used to need), the `#rrggbb` colour check, and the closed vocabularies
-# whose widgets raise on anything else.
+# `_URL_BOUNDED` (the widget bounds both the link and the saved config use), the
+# `#rrggbb` colour check, and the closed vocabularies whose widgets raise on
+# anything else.
 _FIXCLASS_CATEGORIES = ("short", "long", "oob", "blink")
-#: Every session key that holds a colour — all of them on the link since EXP-19.
+#: Every session key that holds a colour — all of them on the link.
 _COLOR_STATE_KEYS = frozenset(_SHARE_VALUE_PARAMS[p] for p in _SHARE_COLOR_PARAMS)
 #: Keys whose widget is a toggle or checkbox: a stored non-bool is not a setting.
 _BOOL_STATE_KEYS = frozenset(
@@ -1747,7 +1701,7 @@ def _bounded_number(value, lo, hi):
 def sanitize_session_value(key: str, value):
     """A stored session value as it may be seeded, or ``ValueError``/``TypeError``.
 
-    For the recovery cache (BUG-71), which has no parser of its own: the caller
+    For the recovery cache, which has no parser of its own: the caller
     drops a value this rejects rather than seeding it, so one bad entry costs the
     user that one setting, never the launch. Numbers and ranges are clamped to
     their widget's bounds (a range comes back as a sorted tuple, the shape the
@@ -1805,7 +1759,7 @@ def sanitize_session_value(key: str, value):
     return value
 
 
-# --- Settings-file schema versioning (ENG-11) -------------------------------
+# --- Settings-file schema versioning --------------------------------------
 #
 # Single source of truth for the 🔗 Share → File settings-file schema version. The
 # writer (`tabs._build_studio_config`) stamps this onto every saved config; the
@@ -1815,10 +1769,10 @@ def sanitize_session_value(key: str, value):
 #   schema 1 — the original plot-config-only format (no `schema` key at all,
 #              no annotations / provenance / text / highlighting sections).
 #   schema 2 — config + annotations + text/highlighting + provenance.
-#   schema 3 — the VIZ-34 coordinate-grid axes fields.
-#   schema 4 — UX-179: the figure only. Annotations, the column mapping, the
-#              metadata tables and the saved designs left the file (each has
-#              its own export now); the reader no longer applies them.
+#   schema 3 — the coordinate-grid axes fields.
+#   schema 4 — the figure only. Annotations, the column mapping, the
+#              metadata tables and the saved designs are not in the file (each
+#              has its own export); the reader ignores them in an older one.
 #   schema 5 — the fixed duration scale (`sizing.marker_size_scale`,
 #              `marker_duration_range`, `duration_size_legend`). Older files
 #              were drawn on the relative scale and are migrated to it.
@@ -1829,7 +1783,7 @@ def sanitize_session_value(key: str, value):
 #   v6 -> v7 : the fixations' and the heatmap's colour bars got their own
 #              settings, and title and caption their own switch; each shared
 #              value moves to both (`_migrate_config_6_to_7`).
-#   v7 -> v8 : #422 — "Snap above words" became Snap to line
+#   v7 -> v8 : "Snap above words" became Snap to line
 #              (`coloring.fixation_snap_to_word` → `fixation_snap_to_line`),
 #              so a file that snapped still snaps (`_migrate_config_7_to_8`).
 #
@@ -1867,8 +1821,8 @@ def _migrate_config_1_to_2(config: dict) -> dict:
     already treats an absent section as "keep the default", so a schema-1 config
     needs no key translation: this migration is intentionally an identity beyond
     the version stamp applied by `_migrate_plot_config`. It stays registered so the
-    migration chain is exercised (and so a future schema-3 has a worked example to
-    copy) rather than special-casing "no migration needed"."""
+    migration chain is exercised rather than special-casing "no migration
+    needed"."""
     return config
 
 
@@ -1892,15 +1846,15 @@ def _has_plot_section(config: dict) -> bool:
 
 
 def _migrate_config_2_to_3(config: dict) -> dict:
-    """Upgrade to the optional VIZ-34 coordinate-grid axes fields.
+    """Upgrade to the optional coordinate-grid axes fields.
 
     Stamp explicit defaults so a v1/v2 file restores the complete current
     settings contract without changing its rendered result — but only a file
-    that *has* plot settings. BUG-73: an annotations-only backup
-    (``{"schema": 2, "annotations": [...]}``) came out of this with an ``axes``
-    section, which made the reader take it for a full plot config and pin the
-    defaults of every section it lacked: restoring your notes reset your grid,
-    illustration label, preprocessing and title to factory settings.
+    that *has* plot settings. An annotations-only backup
+    (``{"schema": 2, "annotations": [...]}``) must not come out of this with an
+    ``axes`` section: the reader would take it for a full plot config and pin
+    the defaults of every section it lacks, so restoring notes would reset the
+    grid, illustration label, preprocessing and title to factory settings.
     """
     migrated = dict(config)
     if "axes" in config and not isinstance(config.get("axes"), dict):
@@ -1916,11 +1870,11 @@ def _migrate_config_2_to_3(config: dict) -> dict:
 
 
 def _migrate_config_3_to_4(config: dict) -> dict:
-    """UX-179: nothing to translate — schema 4 only *dropped* sections.
+    """Nothing to translate — schema 4 only *dropped* sections.
 
     A v3 file's annotations, column mapping, metadata tables and designs are
-    simply not read any more (the reader ignores keys it does not know), so an
-    old session backup restores as the figure it described.
+    not read (the reader ignores keys it does not know), so an old session
+    backup restores as the figure it described.
     """
     return config
 
@@ -1929,11 +1883,11 @@ def _migrate_config_4_to_5(config: dict) -> dict:
     """Keep an older figure on the scale it was drawn with.
 
     Before schema 5 every figure sized its markers relative to its own
-    shortest and longest fixation; the default is now a fixed duration scale.
+    shortest and longest fixation; the default is a fixed duration scale.
     Stamping ``marker_size_scale: "relative"`` makes an old file restore the
     figure it saved rather than silently resizing it. Only a file with plot
     settings is touched — an annotations-only backup gains no ``sizing``
-    section (BUG-73's rule, as in the 2→3 step).
+    section (the same rule as in the 2→3 step).
     """
     migrated = dict(config)
     if not _has_plot_section(config):
@@ -1994,11 +1948,11 @@ def _migrate_config_6_to_7(config: dict) -> dict:
 
 
 def _migrate_config_7_to_8(config: dict) -> dict:
-    """#422: "Snap above words" became Snap to line. The old switch moved a
-    fixation onto its word, sideways too; the new one moves it only up or down,
-    onto its line, and draws it where the old one did vertically by default
-    (its position, absent here, falls back to that). Without this an old file
-    that snapped restored unsnapped, silently."""
+    """Read "Snap above words" as Snap to line. The old switch moved a
+    fixation onto its word, sideways too; Snap to line moves it only up or
+    down, onto its line, and draws it where the old one did vertically by
+    default (its position, absent here, falls back to that). Without this an
+    old file that snapped would restore unsnapped, silently."""
     migrated = dict(config)
     coloring = migrated.get("coloring")
     if isinstance(coloring, dict) and "fixation_snap_to_word" in coloring:
@@ -2116,16 +2070,16 @@ def _restore_selection(
     trial)``. Returns True when that reading is found in the current
     (filtered) data — see :func:`_match_selection` for what counts as found,
     and for the reason when it is not. Mirrors the key scheme of
-    ``utils.select_trial`` for the given ``key_prefix``, which is now one
-    scheme for every dataset (BUG-23 — a composite trial id no longer gets a
-    picker, or keys, of its own)."""
+    ``utils.select_trial`` for the given ``key_prefix``, which is one scheme
+    for every dataset (a composite trial id gets no picker, or keys, of its
+    own)."""
     row, _reason = _match_selection(selection, combos)
     if row is None:
         return False
     st.session_state[f"{key_prefix}_select_trial_mode"] = "Trial"
     # The picker renders a single dropdown keyed `<prefix>_trial_id` whose
     # *options* are readings — `utils.reading_key` of the participant and the
-    # trial_field value (`unique_trial_id` when present), #412 — so seed that
+    # trial_field value (`unique_trial_id` when present) — so seed that
     # one key with this row's reading key, not a `<prefix>_<trial_field>` key,
     # which no widget reads. The slider (`<prefix>_trial_pos`) needs no
     # seeding: the picker mirrors it onto the selectbox's value before it
@@ -2208,7 +2162,7 @@ def apply_pending_preprocessing() -> None:
 def request_trial(
     participant: str | None, trial_id: str | None, *, screen_id: str | None = None
 ) -> None:
-    """Ask the app to open ``trial_id`` in the Scanpath view (ENG-36).
+    """Ask the app to open ``trial_id`` in the Scanpath view.
 
     ``screen_id`` also opens that screen of a multipart trial — Data
     Management → Annotations' **Open** on a screen annotation.
@@ -2260,16 +2214,15 @@ def _apply_pending_trial_selection(combos: pd.DataFrame) -> str | None:
 
 
 def _settle_picker_selection(combos: pd.DataFrame) -> str | None:
-    """Turn a trial id alone in the picker's key into the reading it names (#412).
+    """Turn a trial id alone in the picker's key into the reading it names.
 
-    ``{prefix}_trial_id`` holds a reading key (``utils.reading_key``) since
-    #412; one saved before — a recovery cache from an older version — is a
-    trial id alone. It becomes the one reading with that id. When several
-    readers have the id it names none of them: the key is cleared, so the
-    picker opens where it would without it, and the sentence returned says why
-    for the page notices — where the picker used to open the first reader's.
-    A trial the filters left out is left to the picker, as before. ``None``
-    when nothing needed saying."""
+    ``{prefix}_trial_id`` holds a reading key (``utils.reading_key``); one from
+    an older version's recovery cache is a trial id alone. It becomes the one
+    reading with that id. When several readers have the id it names none of
+    them: the key is cleared, so the picker opens where it would without it,
+    and the sentence returned says why for the page notices, rather than the
+    picker opening the first reader's. A trial the filters left out is left to
+    the picker. ``None`` when nothing needed saying."""
     if combos is None or combos.empty:
         return None
     trial_field = (
@@ -2302,29 +2255,28 @@ def _settle_picker_selection(combos: pd.DataFrame) -> str | None:
 def _seed_column_mapping(
     mapping, *, overwrite: bool = False, dataset: object = None
 ) -> None:
-    """Seed the ``col_map_*`` session keys from a saved config's ``column_mapping``
-    so a restored config pre-fills the wizard mapping + kept-field choices (and
+    """Seed the ``col_map_*`` session keys from a setup file's ``column_mapping``
+    so a restored setup pre-fills the wizard mapping + kept-field choices (and
     the user skips re-mapping). Stale values that don't match the current data are
     tolerated by the mapping widgets (selectbox index fallback / multiselect
-    cleanup). Old configs used ``*_paragraph`` keys (now ``*_text_id``) — these
+    cleanup). Old files used ``*_paragraph`` keys (now ``*_text_id``) — these
     are translated for backward compatibility.
 
-    ``overwrite`` controls the write semantics. The plot-config restore runs
-    *before* any widget renders, so ``setdefault`` (overwrite=False) is correct —
-    it never clobbers a value a later widget will set. The wizard's "Restore a
+    ``overwrite`` controls the write semantics. Before any widget renders,
+    ``setdefault`` (overwrite=False) is the safe write — it never clobbers a
+    value a later widget will set. The wizard's "Restore a
     saved setup" step, however, runs *after* the mapping widgets were created on a
     previous render, so those keys already exist; ``setdefault`` would be a no-op
     and the restore would silently do nothing. There, pass ``overwrite=True`` so
     an explicit restore wins (the step reruns afterwards, and it runs before the
     mapping widgets re-instantiate, so writing the keys is safe).
 
-    BUG-32: the mapping is scoped to a dataset, so a caller restoring keys *for*
+    The mapping is scoped to a dataset, so a caller restoring keys *for*
     a dataset whose table has not been read yet names it as ``dataset`` — the
     wizard's *Start from* — and the keys are claimed for it
     (``controls.claim_mapping``): its first table keeps them, another dataset
-    meeting them first drops them. Without ``dataset`` (the 💾 plot-config
-    restore) the keys describe whatever those prefixes already map, and the
-    marker is left alone."""
+    meeting them first drops them. Without ``dataset`` the keys describe
+    whatever those prefixes already map, and the marker is left alone."""
     if not isinstance(mapping, dict):
         return
     written: set[str] = set()
@@ -2405,11 +2357,11 @@ def _restore_plot_config(
     widgets render with the saved settings. Returns ``(applied, skipped)`` where
     ``skipped`` lists human-readable labels that didn't fit the current data.
 
-    Inverse of the config built in ``tabs._render_plot_config_expander``. Runs
+    Inverse of the config built by ``plot_config.build_plot_config``. Runs
     before any widget renders (see ``_apply_uploaded_plot_config``); data-
     dependent fields are validated against the loaded data and skipped when they
     don't apply, so a config shared with a different dataset degrades gracefully."""
-    # ENG-11: upgrade an older (or flag a newer) saved config to the current
+    # Upgrade an older (or flag a newer) saved config to the current
     # schema before reading its fields, so configs keep loading across versions.
     config, migration_note = _migrate_plot_config(config)
     if migration_note:
@@ -2444,7 +2396,7 @@ def _restore_plot_config(
         )
     elif "illustration" not in config and has_valid_plot_section:
         put("global_illustration_label", "Auto")
-    # BUG-75: figure text from a config is text, never markup. Absent in a
+    # Figure text from a config is text, never markup. Absent in a
     # config saved before it existed, which leaves the automatic wording.
     if isinstance(illustration.get("text"), str):
         put("global_illustration_text", _strip_markup(illustration["text"]))
@@ -2494,7 +2446,7 @@ def _restore_plot_config(
         put("global_preproc_merge_distance_chars", 1.0)
 
     coloring = section("coloring")
-    # VIZ-18: the palette goes FIRST — it presets the individual colour keys, and
+    # The palette goes FIRST — it presets the individual colour keys, and
     # every explicit colour saved alongside it (below) must overwrite that preset,
     # not the other way round. Same ordering rule as the `?palette=` deep link.
     palette = coloring.get("palette")
@@ -2590,7 +2542,7 @@ def _restore_plot_config(
             *_URL_BOUNDED["global_saccade_opacity"],
             "saccade opacity",
         )
-    # VIZ-9: linear-reading mode (arced saccades + #422's snap to line).
+    # Linear-reading mode (arced saccades + snap to line).
     if "saccade_render_mode" in coloring:
         put_valid(
             coloring["saccade_render_mode"] in ("Straight", "Arc"),
@@ -2607,11 +2559,10 @@ def _restore_plot_config(
             *SNAP_POSITION_BOUNDS,
             "snap position",
         )
-    # PRE-3 / ENG-23: vertical drift correction. Validated like the deep link —
-    # an algorithm the build no longer ships must not reach the selectbox.
-    # PRE-21: and skipped entirely while the feature is gated off, silently, for
-    # the same reason the deep link is (there is no such config in the world yet
-    # — this only has to not crash).
+    # Vertical drift correction. Validated like the deep link — an algorithm
+    # this build does not ship must not reach the selectbox. Skipped entirely
+    # while the feature is gated off, silently, for the same reason the deep
+    # link is (this only has to not crash).
     if drift_correction_enabled():
         if "drift_correction" in coloring:
             put_valid(
@@ -2622,11 +2573,11 @@ def _restore_plot_config(
             )
         if "drift_connectors" in coloring:
             put("global_align_connectors", bool(coloring["drift_connectors"]))
-    # VIZ-8: colour-by-reading-type mode + per-class palette + optional legend.
+    # Colour-by-reading-type mode + per-class palette + optional legend.
     mode = coloring.get("saccade_color_mode")
     if mode is not None:
         put_valid(
-            mode in SACCADE_COLOR_MODES,  # VIZ-19 added "Forward / regression"
+            mode in SACCADE_COLOR_MODES,  # includes "Forward / regression"
             "global_saccade_color_mode",
             mode,
             "saccade color mode",
@@ -2643,8 +2594,8 @@ def _restore_plot_config(
             col = class_colors.get(cls_name)
             if isinstance(col, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", col):
                 put(f"global_saccade_class_color_{cls_name}", col)
-    # VIZ-31: the reading-class filter. Unknown names are dropped rather than
-    # rejecting the whole config — a class this build no longer classifies would
+    # The reading-class filter. Unknown names are dropped rather than
+    # rejecting the whole config — a class this build does not classify would
     # crash the multiselect, and silently widening the filter is the safe way to
     # be wrong (it shows more saccades, never fewer than the file asked for).
     saccade_classes = coloring.get("saccade_classes")
@@ -2652,7 +2603,7 @@ def _restore_plot_config(
         kept = [cls for cls in SACCADE_CLASS_ORDER if cls in set(saccade_classes)]
         if kept:
             put("global_saccade_classes", kept)
-    # VIZ-15 marker shape · VIZ-17 uniform fixation colour.
+    # Marker shape · uniform fixation colour.
     symbol = coloring.get("fixation_symbol")
     if symbol is not None:
         put_valid(
@@ -2674,7 +2625,7 @@ def _restore_plot_config(
             1.0,
             "fixation opacity",
         )
-    if "stimulus_image_opacity" in coloring:  # VIZ-4
+    if "stimulus_image_opacity" in coloring:
         put_float(
             coloring["stimulus_image_opacity"],
             "global_stimulus_image_opacity",
@@ -2682,7 +2633,7 @@ def _restore_plot_config(
             1.0,
             "stimulus image opacity",
         )
-    # VIZ-4: manual image alignment (origin nudge + size scale).
+    # Manual image alignment (origin nudge + size scale).
     if "stimulus_image_offset_x" in coloring:
         put_float(
             coloring["stimulus_image_offset_x"],
@@ -2728,7 +2679,7 @@ def _restore_plot_config(
             if value is not None:
                 put_int(value, f"global_{bar}_{name}", lo, hi, f"{bar} {label}")
     # Store them even when their layer is off — the rail draws them as given
-    # (`controls._explicit_pair`). VIZ-46: a stored range means
+    # (`controls._explicit_pair`). A stored range means
     # *explicit*, so a config saved while the range was auto (`null`) restores
     # as auto rather than keeping whatever range this session happened to hold.
     # The writer records the figure's *gated* range, though, so `null` says
@@ -2816,7 +2767,7 @@ def _restore_plot_config(
             "figure font size",
         )
 
-    # VIZ-11 follow-up: the animation frame grid.
+    # The animation frame grid.
     animation = section("animation")
     if "grid_step_ms" in animation:
         put_int(
@@ -2834,7 +2785,7 @@ def _restore_plot_config(
             2000,
             "animation frame cap",
         )
-    # BUG-72: the replay speed, against the ⚙ Playback slider's own options.
+    # The replay speed, against the ⚙ Playback slider's own options.
     if "playback_speed" in animation:
         try:
             put(
@@ -2844,7 +2795,7 @@ def _restore_plot_config(
         except (TypeError, ValueError):
             skipped.append("playback speed")
 
-    # #374 F28 — Export → Current figure's print size; a blank width is the
+    # Export → Current figure's print size; a blank width is the
     # screen-size PNG.
     export = section("export")
     if "width" in export:
@@ -2871,17 +2822,17 @@ def _restore_plot_config(
         )
 
     setup = section("experimental_setup")
-    # DATA-2: write all five keys even for a pre-experimental-setup config. This
+    # Write all five keys even for a pre-experimental-setup config. This
     # keeps schema-1/2 restores deterministic and makes the saved-state contract
     # explicit (rather than hiding the key names behind a dynamic loop).
     #
-    # DATA-22 review: "all five" means all five of *this* section's keys, and
-    # only for a full plot config. The wizard's setup file now also carries an
+    # "All five" means all five of *this* section's keys, and only for a full
+    # plot config. The wizard's setup file also carries an
     # `experimental_setup` — a `SetupSnapshot`, which has no `display_dpi` /
     # `stimulus_font_pt` / `use_stimulus_font_pt` — and loading one through the
-    # settings-file uploader used to flip this branch on and overwrite
-    # those three with the reader's own fallbacks. A section that never mentions
-    # a setting must not restate it.
+    # settings-file uploader must not overwrite those three with the reader's
+    # own fallbacks. A section that never mentions a setting must not restate
+    # it.
     full_config = isinstance(config.get("canvas_px"), dict)
     setup_context = isinstance(config.get("experimental_setup"), dict) or full_config
 
@@ -2955,8 +2906,8 @@ def _restore_plot_config(
             5000.0,
             "coordinate grid spacing",
         )
-    # #422: Crop to data's margin. Additive (ENG-11): a config saved before it
-    # says nothing, and the margin stays as it is.
+    # Crop to data's margin. Additive: a config saved without it says
+    # nothing, and the margin stays as it is.
     if "crop_margin_auto" in axes:
         put("global_crop_margin_auto", bool(axes["crop_margin_auto"]))
     if axes.get("crop_margin_px") is not None:
@@ -3002,18 +2953,18 @@ def _restore_plot_config(
     ):
         put("global_fixation_hover_fields", fixation_hover_fields)
 
-    # EXP-5: title/caption on the figure, moved here from being Export-only.
+    # Title/caption on the figure.
     labels = section("labels")
     for cfg_key in ("show_title", "show_caption"):
         if cfg_key in labels:
             put(f"global_{cfg_key}", bool(labels[cfg_key]))
-    # BUG-75: a config can come from someone else, like a link — no markup.
+    # A config can come from someone else, like a link — no markup.
     if isinstance(labels.get("title_pattern"), str):
         put("global_title_pattern", _strip_markup(labels["title_pattern"]))
     if isinstance(labels.get("caption_pattern"), str):
         put("global_caption_pattern", _strip_markup(labels["caption_pattern"]))
     elif "labels" not in config and has_valid_plot_section:
-        # Pre-EXP-5 configs have no labels block; pin the off defaults so the
+        # Older configs have no labels block; pin the off defaults so the
         # frozen state-key set is still fully written.
         put("global_show_title", False)
         put("global_show_caption", False)
@@ -3036,11 +2987,10 @@ def _restore_plot_config(
         # The rail's `_drop_stale` clears this if it isn't a column in the
         # restored-onto data, so it needs no validation against words here.
         put("global_highlight_column", highlighting["highlight_column"])
-    # Fixation classification (PRE-2): short/long/out-of-bounds highlight or discard.
+    # Fixation classification: short/long/out-of-bounds highlight or discard.
     flags = highlighting.get("fixation_flags")
     if isinstance(flags, dict):
-        # BUG-72: `blink` too — the writer has always saved all four categories,
-        # and the reader used to drop the fourth.
+        # `blink` too — the writer saves all four categories.
         for cat in _FIXCLASS_CATEGORIES:
             spec = flags.get(cat)
             if not isinstance(spec, dict):
@@ -3081,8 +3031,8 @@ def _restore_plot_config(
     if isinstance(sbc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", sbc):
         put("global_span_border_color", sbc)
 
-    # #422: the design choices that used to be fixed. Additive (ENG-11): a
-    # file saved before them has no `design` section and changes none of them.
+    # The finer design choices. Additive: a file with no `design` section
+    # changes none of them.
     design = section("design")
     for name, (state_key, bounds) in _DESIGN_PARAMS.items():
         if name not in design:
@@ -3104,7 +3054,7 @@ def _restore_plot_config(
         else:
             put_float(value, state_key, *bounds, label)
 
-    # VIZ-43 — raw gaze's own style. The section's `available` / `points`
+    # Raw gaze's own style. The section's `available` / `points`
     # describe the trial the config was saved on, not a setting. Absent in a
     # config saved before this existed, which keeps the seeded defaults.
     raw_gaze = section("raw_gaze")
@@ -3135,14 +3085,14 @@ def _restore_plot_config(
         if cfg_key in word_boxes:
             put_float(word_boxes[cfg_key], state_key, *_URL_BOUNDED[state_key], label)
 
-    # CMP-11 — the compare *view* (layout + whose stimulus an overlay draws).
+    # The compare *view* (layout + whose stimulus an overlay draws).
     # Validated against the segmented controls' exact options for the same
     # reason the URL params are: seeding a value outside them makes the widget
-    # raise. An absent section keeps the seeded defaults, so a pre-CMP-11 config
-    # restores unchanged and no schema bump is needed.
+    # raise. An absent section keeps the seeded defaults, so an older config
+    # without it restores unchanged and no schema bump is needed.
     compare_view = config.get("compare_view")
     if isinstance(compare_view, dict):
-        # BUG-72: the A/B legend switch rides in the same section.
+        # The A/B legend switch rides in the same section.
         if "legend" in compare_view:
             put("global_show_compare_legend", bool(compare_view["legend"]))
         for field, options, label in (
@@ -3248,11 +3198,11 @@ def _restore_plot_config(
                     1.0,
                     f"scanpath {idx + 1} opacity",
                 )
-            # UX-31: the A/B legend label override.
+            # The A/B legend label override.
             if isinstance(entry.get("label_pattern"), str):
-                # BUG-75: legend text is figure text too.
+                # Legend text is figure text too.
                 put(f"cmp{idx}_label_pattern", _strip_markup(entry["label_pattern"]))
-            # CMP-24: scanpath B's own filters ride its entry. A's are the
+            # Scanpath B's own filters ride its entry. A's are the
             # config's ordinary `fixation_flags` / `saccade_classes`, so an
             # entry-level copy on the first scanpath is not read.
             if idx == 1:
@@ -3424,7 +3374,7 @@ def _build_share_query(
     ``_apply_url_preset`` / ``_apply_url_trial_selection`` parse, so opening the
     link reopens the app on this trial with these settings.
 
-    ``include_participant`` / ``include_trial`` (S3) let the caller leave the
+    ``include_participant`` / ``include_trial`` let the caller leave the
     identifying half out of the link — a URL lands in browser history, proxy
     logs, ``Referer`` headers and chat previews, so naming a participant there
     is opt-out-able. Dropping only the participant still lands on the
@@ -3442,15 +3392,14 @@ def _build_share_query(
     caveats: list = []
 
     source = _SHAREABLE_SOURCES.get(data_choice)
-    # DATA-27 (Task 12): which public corpus this is, if any. Resolved only when
+    # Which public corpus this is, if any. Resolved only when
     # the choice isn't already a token of its own, so the ordinary sources never
     # pay for a registry lookup. `corpus_label` is the *registry label*, which is
     # what the picker collapsed away — see `_selected_corpus`.
-    corpus_label, corpus_spec = ("", {}) if source else _selected_corpus(data_choice)
+    corpus_label, _ = ("", {}) if source else _selected_corpus(data_choice)
     if corpus_label and not source:
-        # A corpus reachable by both tokens keeps emitting its own: OneStop's
-        # regimes (`onestop_<regime>`, DATA-63; `onestop_public` before it)
-        # have had one since DATA-3. The generic token is additive.
+        # A corpus reachable by both tokens emits its own: OneStop's regimes
+        # (`onestop_<regime>`). The generic token is additive.
         source = _SHAREABLE_SOURCES.get(corpus_label)
     # Read through `registry_corpus_slugs`, not `corpus_slug` directly, so a slug
     # another entry would also answer to is never emitted: the reader refuses it,
@@ -3465,18 +3414,6 @@ def _build_share_query(
     elif corpus_slug_out:
         params["source"] = CORPUS_SOURCE_TOKEN
         params[PARAM_CORPUS] = corpus_slug_out
-        # Sharing "you'd need this corpus" beats sharing nothing, which is what a
-        # public corpus got before this. The recipient's bundle is theirs — and
-        # is the one thing a link can't carry — so the caveat names the corpus
-        # and says what to do about it rather than the link quietly not working.
-        if prepared := str(corpus_spec.get("benchmark_dataset") or ""):
-            caveats.append(
-                f"**{prepared}** is a locally prepared corpus. The link names it, "
-                "but the data can't travel in a URL: the recipient needs their "
-                "own harmonised bundle holding that corpus, with the app's "
-                "benchmark data directory pointed at it. Everything else in the "
-                "link still applies."
-            )
     else:
         # A link carries settings, never files — so for a dataset the user added
         # there is nothing a URL could do that would save the recipient the
@@ -3484,11 +3421,10 @@ def _build_share_query(
         # re-mapping, which is a real second half of "load the same data": the
         # column mapping and recording setup are exportable as JSON from the
         # add-dataset screen's ⬇️ Download setup file, and re-applied from that screen's
-        # *Start from → A setup file*. The caveat used to stop at "load the same
-        # data" and leave the mapping to be redone by hand.
+        # *Start from → A setup file*, so the caveat points there.
         #
-        # #374 F14: the link names the dataset, so the recipient's app can open
-        # one of that name and say which is missing when it has none.
+        # The link names the dataset, so the recipient's app can open one of
+        # that name and say which is missing when it has none.
         if data_choice in (st.session_state.get("_datasets") or {}):
             params[PARAM_DATASET] = str(data_choice)
         caveats.append(
@@ -3522,11 +3458,12 @@ def _build_share_query(
     if include_trial and screen_id not in (None, ""):
         params["screen"] = str(screen_id)
 
-    # CMP-8 §7: the second scanpath. Gated on `include_trial` for the same reason
-    # A's trial is — lower-level callers may omit identity from a URL even though
-    # the app's Share panel always includes it. B's source rides along only when it is one a URL
-    # can rebuild; an uploaded dataset lives in session state, so the link says so
-    # rather than silently dropping half the comparison.
+    # The second scanpath. Gated on `include_trial` for the same reason A's
+    # trial is — lower-level callers may omit identity from a URL even though
+    # the app's Share panel always includes it. B's source rides along only
+    # when it is one a URL can rebuild; an uploaded dataset lives in session
+    # state, so the link says so rather than silently dropping half the
+    # comparison.
     compare = selection.get("compare") if include_trial else None
     if isinstance(compare, dict) and compare.get("trial_id") not in (None, ""):
         participant_b = compare.get("participant_id")
@@ -3561,13 +3498,13 @@ def _build_share_query(
     # *off* is shared as off (the URL coercion reads "0" as False).
     for url_key, state_key in _SHARE_TOGGLE_PARAMS.items():
         if url_key in _GATED_URL_PARAMS and not _GATED_URL_PARAMS[url_key]():
-            continue  # PRE-21
+            continue  # gated off
         if state_key in st.session_state:
             params[url_key] = "1" if st.session_state[state_key] else "0"
     # Strings / choices / colours / numbers — emit only when set.
     for url_key, state_key in {**_SHARE_VALUE_PARAMS, **_SHARE_INT_PARAMS}.items():
         if url_key in _GATED_URL_PARAMS and not _GATED_URL_PARAMS[url_key]():
-            continue  # PRE-21: don't put a gated setting on a link.
+            continue  # don't put a gated setting on a link
         value = st.session_state.get(state_key)
         if value not in (None, ""):
             params[url_key] = (
@@ -3587,16 +3524,16 @@ def _build_share_query(
         value = st.session_state.get(state_key)
         if isinstance(value, (list, tuple)) and len(value) == 2:
             params[url_key] = f"{value[0]},{value[1]}"
-    # CMP-11: the two compare-view params describe a comparison, so they only
-    # travel when one does. Both widgets carry `persist_state="session"`, so the
+    # The two compare-view params describe a comparison, so they only travel
+    # when one does. Both widgets carry `persist_state="session"`, so the
     # generic value sweep above would otherwise stamp `cmp_layout`/`cmp_stimulus`
-    # onto every later link — including ones where `compare=` was deliberately
-    # withheld by the identity picker or dropped because B's corpus can't be
-    # rebuilt. They restore nothing on their own.
+    # onto every later link — including ones where `compare=` was withheld
+    # (`include_trial=False` / `include_participant=False`) or dropped because
+    # B's corpus can't be rebuilt. They restore nothing on their own.
     if COMPARE_PARAM not in params:
         params.pop(COMPARE_LAYOUT_PARAM, None)
         params.pop(COMPARE_STIMULUS_PARAM, None)
-    # VIZ-40 — VIZ-7's fixation window travels only when it *is* a window, for
+    # The fixation window travels only when it *is* a window, for
     # the same shape of reason as the two compare params above: `single_fix_range`
     # is set to the trial's own full range the moment the slider renders (and
     # re-expanded on every trial change), so the generic range sweep would stamp
@@ -3629,7 +3566,7 @@ def _build_share_query(
             int(v) for v in full
         ):
             params.pop(FIX_RANGE_PARAM, None)
-    # CMP-24 — B's window on exactly the terms of A's, against B's own flag and
+    # B's window on exactly the terms of A's, against B's own flag and
     # B's own full range (`compare_full_fix_range`), and only beside the
     # `compare=` that names the trial it indexes into.
     window_b = st.session_state.get("single_compare_fix_range")
@@ -3645,7 +3582,7 @@ def _build_share_query(
             int(v) for v in full_b
         ):
             params.pop(COMPARE_FIX_RANGE_PARAM, None)
-    # EXP-19 — the recording setup and Compare's per-scanpath styles travel only
+    # The recording setup and Compare's per-scanpath styles travel only
     # when they say something the recipient's own session would not: the
     # generic sweeps above stamp every seeded key, and a demo link that restated
     # the demo's 2560x1440 would pin that canvas even where the source is later
@@ -3657,8 +3594,9 @@ def _build_share_query(
             continue
         # The recording setup is the *source's*: a link that cannot name the
         # source (an uploaded dataset) would pin its canvas on whatever the
-        # recipient happens to have open. It travels in the dataset's own ⬇️ Save
-        # setup JSON instead, which the source caveat above already points at.
+        # recipient happens to have open. It travels in the dataset's own setup
+        # file (⬇️ Download setup file) instead, which the source caveat above
+        # already points at.
         orphaned = (
             url_key in COMPARE_STYLE_PARAMS and COMPARE_PARAM not in params
         ) or (url_key in SETUP_PARAMS and "source" not in params)
@@ -3668,7 +3606,7 @@ def _build_share_query(
         if orphaned or restated:
             params.pop(url_key)
     _legend_query(params)
-    # #374 F28 — the print size travels only while a width is set; without
+    # The print size travels only while a width is set; without
     # one the PNG is drawn at the screen size, which needs nothing said.
     if not st.session_state.get(EXPORT_PARAMS["export_width"]):
         for url_key in EXPORT_PARAMS:
@@ -3676,9 +3614,9 @@ def _build_share_query(
     if st.session_state.get("single_animate"):
         params["tab"] = "animation"
 
-    # DATA-22 §7 surface 2: a compact provenance badge for the recording setup.
-    # Since EXP-19 the link carries the setup's *values* too, wherever they
-    # differ from the corpus' own — but it also carries how the sender's setup
+    # A compact provenance badge for the recording setup. The link carries
+    # the setup's *values* wherever they differ from the corpus' own — but it
+    # also carries how the sender's setup
     # was known: without this the recipient cannot tell a monitor the sender
     # measured from one the app assumed on their behalf. Metadata about
     # settings, not a setting — it takes no input and changes no figure, which
@@ -3690,7 +3628,7 @@ def _build_share_query(
     if snapshot is not None:
         params[SETUP_PROVENANCE_PARAM] = format_provenance_param(snapshot)
 
-    # EXP-22: a `{trials.font_size}`-style field reads a metadata table, and
+    # A `{trials.font_size}`-style field reads a metadata table, and
     # the tables belong to the sender's dataset — they never ride a link. The
     # pattern travels; its value only resolves where the same table is attached.
     if any(
@@ -3712,7 +3650,7 @@ def _build_share_query(
 
 def _restore_compare_b_filters(entry: dict, put) -> None:
     """Seed scanpath B's filter keys from its saved-config ``compare`` entry
-    (CMP-24) — the same validation A's ``fixation_flags`` / ``saccade_classes``
+    — the same validation A's ``fixation_flags`` / ``saccade_classes``
     get, onto B's ``cmp1_*`` keys. B saves no marker or colour (it draws with
     A's), so only each category's mode and threshold are read."""
     flags = entry.get("fixation_flags")
@@ -3739,7 +3677,7 @@ def _restore_compare_b_filters(entry: dict, put) -> None:
 
 
 def _link_defaults(data_choice: str) -> dict:
-    """EXP-19 — what a recipient's own session resolves for the settings a link
+    """What a recipient's own session resolves for the settings a link
     carries only when they differ, as ``{session key: value}``.
 
     A key missing from the result has no default the sender can know, so it
@@ -3773,7 +3711,7 @@ def _link_defaults(data_choice: str) -> dict:
 
     defaults = dict(SETUP_DEFAULTS)
     if _FONT_SNAP_RESTORE_KEY in st.session_state:
-        # The source declares its typeface (MultiplEYE), so its first seeding
+        # The source declares its typeface, so its first seeding
         # snaps the base font to *that* — a sender who chose the factory 16
         # there has to say so, or the recipient gets the corpus' size.
         defaults.pop("global_base_font_size")
@@ -3801,7 +3739,7 @@ def _link_defaults(data_choice: str) -> dict:
 
 
 def _same_setting(value, default) -> bool:
-    """Whether a session value restates ``default`` (EXP-19's elision test).
+    """Whether a session value restates ``default`` (the link's elision test).
 
     Colours compare case-blind (the pickers hand back lowercase hex, the
     constants are upper-case), numbers numerically (an int canvas against a
@@ -3915,21 +3853,20 @@ def _render_share_link_widget(query: str) -> None:
         }})();
         </script>
         """,
-        # One control row plus the transient copy-status line. The previous
-        # 110 px frame reserved a visibly empty block before the note below.
+        # One control row plus the transient copy-status line; a taller frame
+        # leaves a visibly empty block before the note below.
         height=76,
         alt="Shareable link with a copy button",
-        # #374 F19: its Copy button must be reachable from the keyboard.
+        # Its Copy button must be reachable from the keyboard.
         focusable=True,
     )
 
 
 # -----------------------------------------------------------------------------
-# EXP-7 — the API / CLI code that reproduces the figure on screen
+# The API / CLI code that reproduces the figure on screen
 # -----------------------------------------------------------------------------
-#: The Share subtab's two snippet controls. UI-only, exactly like
-#: `share_identity_mode`: they govern how the *recipe* is written, not what the
-#: figure is, so neither belongs on the wire — a deep link carrying "show me the
+#: The Share subtab's two snippet controls. UI-only: they govern how the
+#: *recipe* is written, not what the figure is, so neither belongs on the wire — a deep link carrying "show me the
 #: CLI form" would be describing the reader's pane, not the view. If either is
 #: ever persisted into a saved config it has to join
 #: `session_keys.PLOT_CONFIG_STATE_KEYS` first.
@@ -3948,8 +3885,8 @@ _SNIPPET_OUTPUT = {
 
 
 def _with_stimulus_folder(source: SnippetSource) -> SnippetSource:
-    """``source`` with the local folder the app matched its stimulus pages from
-    (#420): the snippet then loads them with `attach_stimulus_images`, which it
+    """``source`` with the local folder the app matched its stimulus pages
+    from: the snippet then loads them with `attach_stimulus_images`, which it
     writes when the figure draws a page through ``show_stimulus_image``."""
     from scanpath_studio.app import active_stimulus_folder
 
@@ -3970,13 +3907,12 @@ def _with_stimulus_folder(source: SnippetSource) -> SnippetSource:
 def _snippet_source(data_choice: str) -> SnippetSource:
     """Describe the loaded data the way a script would have to load it.
 
-    Dispatches on the registry entry's **stable identifier** (`short` for a
-    built-in, `benchmark_dataset` for a prepared corpus), not the display label
-    — the same rule `corpus_slug` follows for the share link, and for the same
-    reason: the label is copy and can be reworded.
+    Dispatches on the registry entry's **stable identifier** (its `short`), not
+    the display label — the same rule `corpus_slug` follows for the share link,
+    and for the same reason: the label is copy and can be reworded.
 
     A corpus root is a *local path*, which is why it is emitted only when the
-    path box is the user's own (S2 `local_filesystem_enabled`). On a shared
+    path box is the user's own (`local_filesystem_enabled`). On a shared
     deployment the location comes from the server's configuration and the user
     never sees it, so quoting it back in a copyable snippet would hand every
     visitor the server's layout. There the snippet carries a placeholder.
@@ -3986,7 +3922,7 @@ def _snippet_source(data_choice: str) -> SnippetSource:
     def root(key: str, placeholder: str, *, downloadable: bool = False) -> str:
         if not local_filesystem_enabled():
             return placeholder
-        # UX-184: before its box renders, a downloadable corpus is where the
+        # Before its box renders, a downloadable corpus is where the
         # Download folder puts it — the folder the snippet's reader has it in.
         fallback = _download_target(placeholder) if downloadable else placeholder
         return str(st.session_state.get(key) or fallback)
@@ -4009,15 +3945,6 @@ def _snippet_source(data_choice: str) -> SnippetSource:
         )
 
     corpus_label, spec = _selected_corpus(data_choice)
-    if spec.get("benchmark_dataset"):
-        return SnippetSource(
-            kind=SOURCE_BENCHMARK,
-            label=corpus_label,
-            options={
-                "root": root("eyegenbench_dir", "data/eyegenbench"),
-                "dataset": str(spec["benchmark_dataset"]),
-            },
-        )
     short = str(spec.get("short") or "")
     if short == "PoTeC":
         return SnippetSource(
@@ -4025,25 +3952,8 @@ def _snippet_source(data_choice: str) -> SnippetSource:
             label=corpus_label,
             options={"root": root("potec_dir", "data/PoTeC", downloadable=True)},
         )
-    if short == "MultiplEYE":
-        fixation_source = str(
-            st.session_state.get("multipleye_fixation_source") or "scanpaths"
-        )
-        return SnippetSource(
-            kind=SOURCE_MULTIPLEYE,
-            label=corpus_label,
-            options={
-                "root": root("multipleye_dir", "data/MultiplEYE"),
-                "fixation_source": fixation_source,
-            },
-            # `render --source multipleye` has no fixation-source flag, so the
-            # non-default reading of the corpus can only be said in Python.
-            cli_unsupported=(
-                () if fixation_source == "scanpaths" else ("fixation_source",)
-            ),
-        )
     if regime := onestop_regime_for_choice(corpus_label or data_choice):
-        # DATA-63: one regime's dataset — every part, from the public release.
+        # One regime's dataset — every part, from the public release.
         from scanpath_studio import datasets
 
         return SnippetSource(
@@ -4083,18 +3993,9 @@ def _snippet_source(data_choice: str) -> SnippetSource:
                 "folder — point it at your reports if the two differ."
             ),
         )
-    if data_choice == MULTIPLEYE_BUNDLE_CHOICE:
-        # Unlike OneStop's, this bundle loader *is* `multipleye_raw_frames` over
-        # the configured root — the same call `load_multipleye` makes — so the
-        # snippet reproduces it exactly and needs no caveat.
-        return SnippetSource(
-            kind=SOURCE_MULTIPLEYE,
-            label=MULTIPLEYE_BUNDLE_CHOICE,
-            options={"root": root("multipleye_dir", "data/MultiplEYE")},
-        )
     stored = (st.session_state.get("_datasets") or {}).get(data_choice)
     if isinstance(stored, dict) and _samples_only(stored):
-        # VIZ-45: an uploaded dataset recorded as raw gaze alone. Its snippet
+        # An uploaded dataset recorded as raw gaze alone. Its snippet
         # loads the samples (under a placeholder path — an upload has none the
         # server could quote) and hands the builder no words or fixations,
         # rather than the generic two-table loader it could never have run.
@@ -4124,7 +4025,7 @@ def _has_rows(frame) -> bool:
 
 
 def _samples_only(stored: dict) -> bool:
-    """A stored dataset whose only table is raw gaze (VIZ-45)."""
+    """A stored dataset whose only table is raw gaze."""
 
     def empty(frame) -> bool:
         return frame is None or getattr(frame, "empty", True)
@@ -4189,7 +4090,7 @@ def _render_code_snippet_body(data_choice: str) -> None:
         state,
         explicit=bool(explicit),
         output=output,
-        # #374 F28: the PNG Export → Current figure writes, at its pixel size.
+        # The PNG Export → Current figure writes, at its pixel size.
         save_kwargs=_snippet_save_kwargs() if output.endswith(".png") else None,
     )
     # Inspectable from AppTest without re-deriving it (same trick as
@@ -4212,7 +4113,7 @@ def _render_code_snippet_body(data_choice: str) -> None:
         st.code(f"# {INSTALL_COMMAND}\n{code.python}", language="python")
 
 
-#: UX-179 — the Share subtab's three ways to pass a figure on, as the options of
+#: The Share subtab's three ways to pass a figure on, as the options of
 #: one switch. A segmented control rather than a nested ``st.tabs``: the app
 #: keeps one tab bar per page, and only the chosen part is drawn.
 SHARE_LINK = "Link"
@@ -4231,8 +4132,8 @@ def _render_share_body(
       visualization settings). Streamlit reruns after every relevant control
       change, so the query handed to the embedded **Refresh & Copy** button
       already reflects the current view when the user clicks it.
-    - **Code** — EXP-7's API / CLI snippet that reproduces the figure.
-    - **File** — a settings file to download or restore (UX-179), drawn by
+    - **Code** — the API / CLI snippet that reproduces the figure.
+    - **File** — a settings file to download or restore, drawn by
       ``settings_file``: a zero-argument callable from ``app.main``, which holds
       the resolved figure settings it writes. ``None`` where there is no figure
       to describe, and the option says so rather than vanishing. It runs only

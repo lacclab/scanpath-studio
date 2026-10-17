@@ -1,4 +1,4 @@
-"""DATA-66 phase 1: the dataset's own column names, behind the canonical ones."""
+"""The dataset's own column names, behind the canonical ones."""
 
 from __future__ import annotations
 
@@ -346,7 +346,7 @@ def _stored_upload() -> dict:
 
 def test_an_edit_dataset_save_keeps_the_users_names():
     """✏️ Edit dataset maps fields onto the stored canonical columns; the save
-    used to overwrite the dataset's record of its own names with that identity."""
+    must not overwrite the dataset's record of its own names with that identity."""
     import streamlit as st
 
     from scanpath_studio import tabs
@@ -513,7 +513,7 @@ class TestLabels:
         names = from_schema("words", schema, raw.columns)
         assert names.label("width") == "R − L"
         assert names.label("x") == "L"
-        # The identity stays the source columns — what later phases rename by.
+        # The identity stays the source columns, whatever the label says.
         assert names.display("width") == "R + L"
 
     def test_option_labels_are_unique(self):
@@ -554,7 +554,7 @@ def test_the_rail_shows_the_demos_own_column_names(demo_raw):
     at.run()
     assert not at.exception, at.exception
     color = at.selectbox(key="global_color_by")
-    # #374 F5: a mapped role is named by its role, the dataset's own extra
+    # A mapped role is named by its role, the dataset's own extra
     # columns by their own names.
     assert "Duration (ms)" in color.options, color.options
     assert duration not in color.options
@@ -585,8 +585,8 @@ def test_a_table_header_shows_the_users_name():
 
 @pytest.mark.timeout(240)
 def test_the_keep_picker_lists_the_files_own_names(monkeypatch):
-    """The add screen showed `reduced_pos` for a column the file calls
-    `Reduced_POS` — a canonical name, before anything had been normalized."""
+    """The add screen lists a column by the file's own name, `Reduced_POS`, not
+    the canonical `reduced_pos` — nothing has been normalized yet."""
     from scanpath_studio import app
     from tests.conftest import APP_SCRIPT
 
@@ -641,7 +641,7 @@ def test_the_edit_screen_offers_columns_by_their_users_names():
 
 
 def test_an_alias_of_the_same_source_column_is_hidden():
-    """`unique_trial_id` mirrors `trial_id` (BUG-58): when both come from one
+    """`unique_trial_id` mirrors `trial_id`: when both come from one
     column of the user's file, a table shows that column once."""
     names = ColumnNames(
         {
@@ -664,7 +664,7 @@ def test_the_axis_and_highlight_pickers_skip_internal_columns():
     assert controls.highlight_column_options(frame) == ["flag"]
 
 
-# --- Phase 2b: chips, filters, sort, figure text -----------------------------
+# --- Chips, filters, sort, figure text ---------------------------------------
 
 
 def test_across_tables_prefers_fixations_then_words_then_raw_gaze():
@@ -748,7 +748,7 @@ def test_figure_labels_name_the_users_columns_and_leave_the_apps():
     labels = names.figure_labels(
         ["duration_ms", "gpt2_surprisal", "is_regression", "fixation_id"]
     )
-    # #374 F5/F7: a role keeps the figure's own plain word ("Duration").
+    # A role keeps the figure's own plain word ("Duration").
     assert labels == {"gpt2_surprisal": "gpt2_surprisal"}
 
 
@@ -815,13 +815,14 @@ class TestFigureText:
         )
         by_name = {trace.name: str(trace.hovertemplate) for trace in fig.data}
         assert "IA_ID: " in by_name["words"]
-        # #374 F7: a fixation names its word in the lead line, by its text.
+        # A fixation names its word in the lead line, by its text.
         fixation = next(t for t in fig.data if t.name == "Fixations")
         assert "FIX_IA" not in str(fixation.hovertemplate)
         assert any("(word " in str(row[0]) for row in fixation.customdata)
 
     def test_the_fixation_hover_reads_like_a_sentence(self, demo):
-        """#374 F7: "Fixation 3 · 200 ms · on “word” (word 2)", no column names."""
+        """The lead line reads "Fixation 3 · 200 ms · on “word” (word 2)", with
+        no column names."""
         fig = self._figure(self._assigned(demo))
         fixation = next(t for t in fig.data if t.name == "Fixations")
         assert str(fixation.hovertemplate).startswith("%{customdata[0]}")
@@ -848,7 +849,7 @@ class TestFigureText:
         assert words_only == {"IA_X": "IA_X"}
 
     def test_a_role_is_never_a_formula_in_a_figure(self):
-        """#374 F7: a shifted word id is labelled by the figure, not as
+        """A shifted word id is labelled by the figure, not as
         ``CURRENT_FIX_INTEREST_AREA_ID − 1``."""
         fixations = ColumnNames(
             {"word_id": SourceName(("FIX_IA",), cn.CONVERTED, "FIX_IA − 1")}
@@ -861,7 +862,7 @@ class TestFigureText:
         assert fixations.source_tooltip("word_id") == "from FIX_IA − 1"
 
     def test_without_labels_a_figure_is_unchanged(self, demo):
-        """The API passes none (phase 4), and its figures keep today's text."""
+        """The API passes none, and its figures keep their default text."""
         assert (
             self._figure(demo, color_by="duration_ms").to_json()
             == self._figure(demo, color_by="duration_ms", column_labels={}).to_json()
@@ -912,7 +913,7 @@ def test_a_converted_duration_is_named_by_its_source_in_a_figure():
         }
     )
     labels = names.figure_labels(["duration_ms", "width", "_text_id_mapped"])
-    # #374 F5: both are roles, which a figure names in its own words.
+    # Both are roles, which a figure names in its own words.
     assert labels == {}
 
 

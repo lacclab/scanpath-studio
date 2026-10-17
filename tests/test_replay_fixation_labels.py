@@ -1,9 +1,10 @@
 """The replay numbers fixations by their index in the trial, like everything else.
 
-The replay built its visible labels as 1..n over whatever reached it, while its
-hover and the static figure showed ``order_in_trial``: a later screen of a
-multipart trial, a fixation window or a *Discard* renumbered the survivors in
-the replay alone. These pin the three surfaces to one number per fixation.
+The replay's visible labels, its hover and the static figure all show
+``order_in_trial``, never 1..n over whatever reached the replay: a later screen
+of a multipart trial, a fixation window or a *Discard* must not renumber the
+survivors in the replay alone. These pin the three surfaces to one number per
+fixation.
 """
 
 from __future__ import annotations
@@ -84,7 +85,7 @@ def _replay_labels(fig) -> list[list[str]]:
 
 def _replay_hover(fig, name: str = "Scanpath A") -> list[int]:
     trail = next(t for t in fig.data if t.name == name)
-    # #374 F7: the hover's lead line reads "Fixation 41 · …".
+    # The hover's lead line reads "Fixation 41 · …".
     return [
         int(str(row[0]).split(" · ")[0].removeprefix("Fixation "))
         for row in np.asarray(trail.customdata)

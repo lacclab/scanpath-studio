@@ -1,10 +1,10 @@
-"""#374 F3: a ZIP holding both EyeLink reports gives each table its own.
+"""A ZIP holding both EyeLink reports gives each table its own.
 
 The common lab layout is one folder per participant, each with an Interest Area
-Report and a Fixation Report. Read whole, the archive concatenated both into
-whichever table it was uploaded as — a "fixation" at every word centre. These
-tests pin the split: each row reads only its kind, says what it left out, and
-the trial-identity warning no longer recommends `source_file` for it.
+Report and a Fixation Report. Read whole, the archive would concatenate both
+into whichever table it was uploaded as — a "fixation" at every word centre.
+These tests pin the split: each row reads only its kind, says what it left out,
+and the trial-identity warning does not recommend `source_file` for it.
 """
 
 from __future__ import annotations
@@ -145,9 +145,9 @@ def test_same_shape_files_keep_the_source_file_advice():
 
 
 class TestNonTableMembers:
-    """A README or notes file shipped beside the data is not a table: it was
-    read as one, its first line taken for a header, and the whole upload failed
-    with a tokenizing error (2026-10-09)."""
+    """A README or notes file shipped beside the data is not a table: read as
+    one, its first line would be taken for a header, and the whole upload would
+    fail with a tokenizing error."""
 
     @staticmethod
     def _zip(members: dict[str, str]) -> io.BytesIO:

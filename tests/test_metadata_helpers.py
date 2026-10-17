@@ -1,7 +1,7 @@
-"""ENG-37: `metadata.py`'s three grains, through their pure helpers.
+"""`metadata.py`'s three grains, through their pure helpers.
 
-`tests/test_metadata.py` drives the participant table end to end. What was
-untested is the surface each of the three grains exposes to the rest of the app
+`tests/test_metadata.py` drives the participant table end to end. These cover
+the surface each of the three grains exposes to the rest of the app
 — id inference, key extraction, the option/bounds readers the filter widgets are
 built from, the payload round-trip that save & restore rides, and `rejoin_*`,
 which re-derives a report against a *different* pool.
@@ -90,12 +90,12 @@ class TestIdInference:
     def test_every_name_the_data_maps_keys_a_metadata_table(
         self, metadata_list, data_list
     ):
-        """DATA-44: the metadata lists drifted from `data`'s — the text list lost
-        `unique_paragraph_id`. They lead with `data`'s names, in its order."""
+        """The metadata id lists lead with `data`'s names, in its order, so they
+        cannot drift from it (a text list without `unique_paragraph_id`)."""
         assert list(metadata_list[: len(data_list)]) == list(data_list)
 
     def test_the_demo_text_id_keys_a_texts_table(self):
-        """DATA-44 repro: a Texts table keyed by the demo's own text id."""
+        """A Texts table keyed by the demo's own text id."""
         frame = pd.DataFrame({"unique_paragraph_id": ["t1"], "topic": ["x"]})
         assert md.infer_text_id_column(frame) == "unique_paragraph_id"
 

@@ -1,4 +1,4 @@
-"""#439: in the desktop app's window, a download opens a Save-as dialog.
+"""In the desktop app's window, a download opens a Save-as dialog.
 
 The hook runs under node against a stand-in page: a ``display-mode`` the test
 picks, a fake ``showSaveFilePicker`` and ``fetch``, and an ``<a>`` whose own

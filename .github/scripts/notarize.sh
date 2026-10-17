@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# ENG-21: submit one artifact to Apple's notary service, wait, and fail loudly.
+# Submit one artifact to Apple's notary service, wait, and fail loudly.
 #
 # Usage: .github/scripts/notarize.sh path/to/artifact.{zip,dmg,pkg}
 #
-# Factored out of the workflow for two reasons. First, `notarytool submit --wait`
-# does not have a trustworthy exit code: a transient CFNetwork timeout while it
-# polls for status makes it exit non-zero while Apple is still processing
-# happily, so the JSON `status` field is what decides. Second, when a submission
-# really is rejected the only useful detail lives in `notarytool log`, which
-# nobody remembers to fetch by hand from a failed release build.
+# A script rather than inline workflow steps, for two reasons. First,
+# `notarytool submit --wait` does not have a trustworthy exit code: a transient
+# CFNetwork timeout while it polls for status makes it exit non-zero while Apple
+# is still processing happily, so the JSON `status` field is what decides.
+# Second, when a submission really is rejected the only useful detail lives in
+# `notarytool log`, which nobody remembers to fetch by hand from a failed
+# release build.
 #
 # Credentials come from the environment (App Store Connect API key):
 #   APPLE_API_KEY_ID, APPLE_API_ISSUER_ID, and the .p8 at

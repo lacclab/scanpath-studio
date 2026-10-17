@@ -7,9 +7,7 @@ description: Add or update a work item in GitHub Issues and on the Scanpath Stud
 
 Work lives in **GitHub Issues** on `lacclab/scanpath-studio`, arranged on the
 **[Scanpath Studio board](https://github.com/orgs/lacclab/projects/5)** (project
-5) and driven with `gh`. The in-repo tracker (`tracker/`) was migrated on
-2026-08-20 (ENG-32) and removed on 2026-09-30 (ENG-84); everything closed before
-the migration is still at the `v0.31.2` tag (`git show v0.31.2:tracker/data.js`).
+5) and driven with `gh`.
 
 **Prefer GitHub's structured fields to labels.** Status, priority and kind are
 native fields, so they are deliberately *not* also labels — two vocabularies for
@@ -18,19 +16,15 @@ GitHub has no field for either.
 
 Arguments: free-form — e.g. `"chips reset on rerun" compare` (new issue),
 `update 117`, `approve 117` (sign-off), `close 117 <reason>` (close without
-implementing). An old ID (`update VIZ-37`) is found with
-`gh issue list --state all --search VIZ-37`.
+implementing). An issue with an older `[VIZ-37]`-style ID in its title is
+found with `gh issue list --state all --search VIZ-37`.
 
 ## Conventions (non-negotiable)
 
-- **GitHub's `#N` is the ID** (since 2026-10-03). New issues get a plain
-  title — no `[PREFIX-N]` — and commits, PRs, changelog fragments and prose cite
-  `#N`. Nothing is allocated by hand, so parallel sessions cannot collide.
-  The `[VIZ-37]`-style IDs of the old tracker are retired: **never mint one.**
-  Those already written down stay — in the changelog, docs, `plans/`, code
-  comments, git history and the titles of the issues that carry one — and
-  `gh issue list --state all --search VIZ-37` still finds them. Leave old
-  citations alone; write `#N` in new text.
+- **GitHub's `#N` is the ID.** Issues get a plain title — no `[PREFIX-N]` —
+  and commits, PRs and changelog fragments cite `#N`. Nothing is allocated by
+  hand, so parallel sessions cannot collide. Never mint a `[VIZ-37]`-style ID.
+  Code comments and docs cite no issue at all: they explain the code as it is.
 - **Not every change gets an issue.** One finished inside a session is cited by
   its PR: its changelog fragment takes a slug name
   (`changelog.d/trial-picker-ids.changed.md`) and the release reads the PR
@@ -59,7 +53,7 @@ implementing). An old ID (`update VIZ-37`) is found with
   gh api -X PATCH repos/lacclab/scanpath-studio/issues/117 -f type=Task
   ```
 
-- **`area:*` labels** mirror the old groups: `area:ux`,
+- **`area:*` labels**: `area:ux`,
   `area:compare`, `area:viz`, `area:data`, `area:perf`, `area:analysis`,
   `area:preprocessing`, `area:export`, `area:validation`, `area:bug`,
   `area:engineering`.
@@ -77,7 +71,7 @@ Four markdown sections, in this order, optionally under a `>` blockquote lede
 carrying the status / "update as of ⟨date⟩" line:
 
 ```markdown
-> **In progress.** The visualization half shipped 2026-06-23.
+> **In progress.** The visualization half has shipped.
 
 ### ⚖ Waiting on you
 
@@ -152,7 +146,7 @@ gh issue edit 117 --add-label waiting-on-you --body-file body.md
 # then move the board card to Review
 
 # Sign-off, on the user's explicit approval only
-gh issue close 117 --comment "Approved 2026-08-20."
+gh issue close 117 --comment "Approved."
 
 # Closed without implementing
 gh issue close 117 --reason "not planned" --comment "<why>"

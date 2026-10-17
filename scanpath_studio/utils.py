@@ -29,8 +29,8 @@ from .data import (
 from .fields import labeled
 from .styles import widen_menu
 
-# Annotation markers shown beside a trial in the pickers (UX-6). Independent of
-# the same-text/same-participant markers (UX-4) and of each other — a trial can
+# Annotation markers shown beside a trial in the pickers. Independent of
+# the same-text/same-participant markers and of each other — a trial can
 # carry any combination, so they compose. ★ favorite · 🏷️ tagged · 📝 noted.
 FAVORITE_MARKER = "★"
 TAGGED_MARKER = "🏷️"
@@ -40,7 +40,7 @@ NOTE_MARKER = "📝"
 def annotation_markers(participant_id, trial_id, *, store=None) -> str:
     """Composable annotation markers (★ favorite · 🏷️ tagged · 📝 noted) for a
     trial, or ``""`` when it carries no annotations. Reads the session store —
-    the open dataset's — or ``store``, another dataset's (DATA-48)."""
+    the open dataset's — or ``store``, another dataset's."""
     if participant_id is None or trial_id is None:
         return ""
     entry = (
@@ -84,19 +84,17 @@ def combo_source(
 ) -> pd.DataFrame:
     """The frame the trial picker's combos are built from.
 
-    **Every trial any table has** (#412) — `data.trial_pool`'s rule, which the
+    **Every trial any table has** — `data.trial_pool`'s rule, which the
     API's `list_trials`, the CLI and the export share: the fixations' trials,
-    then the trials only the words table has, then those only the raw gaze has
-    (VIZ-45). The picker used to list the first non-empty table and nothing
-    else, so a trial with words but no fixations was unpickable in a dataset
-    that had fixations for others, while the API listed only trials both
-    tables had. A trial a table lacks draws without that layer. A
-    stimulus-level words table not yet broadcast onto the readings adds none
-    (`data.names_readings`).
+    then the trials only the words table has, then those only the raw gaze has.
+    So a trial with words but no fixations is pickable in a dataset that has
+    fixations for others, and the picker lists what the API lists. A trial a
+    table lacks draws without that layer. A stimulus-level words table not yet
+    broadcast onto the readings adds none (`data.names_readings`).
 
     Returns the first non-empty frame itself whenever the others add no trial
-    (the common case), so `build_combo_options` keys its cache on the same
-    object as before. Otherwise it returns a small frame of identity rows —
+    (the common case), so `build_combo_options` keys its cache on that frame
+    itself. Otherwise it returns a small frame of identity rows —
     the first frame's, in their order, then each other table's own trials' —
     which is all `build_combo_options` reads.
     """
@@ -131,7 +129,7 @@ def _combo_source_union(
     # each table's distinct readings (`distinct_key_codes`, remembered per
     # frame, so a table the filters or a group already keyed costs nothing).
     # Only a table that does add trials is deduplicated on every identity
-    # column (PERF: three full scans at 5M samples was ~0.8 s).
+    # column (three full scans at 5M samples cost ~0.8 s).
     known = distinct_key_codes(_primary)[1]
     adding = []
     for other in _others:
@@ -188,7 +186,7 @@ def build_combo_options_for(
 ) -> tuple[pd.DataFrame, list[str], dict[str, tuple[str, str]]]:
     """`build_combo_options` for a frame that is **not** the active dataset.
 
-    CMP-8 §2: a comparison source has its own composite-trial columns, so the
+    A comparison source has its own composite-trial columns, so the
     session-state read in `build_combo_options` would answer for the wrong
     dataset. Everything else — the cache key, the cached core — is shared.
     """
@@ -200,7 +198,7 @@ def build_combo_options_for(
     )
 
 
-# UX-166: the dataset card lists this step.
+# The dataset card lists this step.
 @st.cache_data(show_spinner=False)
 def _build_combo_options_cached(
     _fixations: pd.DataFrame,
@@ -214,7 +212,7 @@ def _build_combo_options_cached(
     )
     # The text/passage column is optional. Normalized frames carry a text_id (it
     # falls back to trial_id when no text is mapped), but a frame may arrive with
-    # only the source name (e.g. unique_paragraph_id — the pre-rename text id, and
+    # only the source name (e.g. unique_paragraph_id — the text id's older name,
     # which can also be a composite-trial component). Detect it via the same
     # priority list normalization uses, and *copy* it to text_id rather than
     # renaming so a shared composite component column survives for the picker.
@@ -237,15 +235,14 @@ def _build_combo_options_cached(
     for col in ["unique_trial_id", "unique_text_id", "TRIAL_INDEX", "trial_index"]:
         if col in fixations.columns and col not in combo_cols:
             combo_cols.append(col)
-    # Carry the composite trial id's component columns through, so the trial
-    # picker can detect a composite id and cascade on identity (see select_trial).
+    # Carry the composite trial id's component columns through, so the pickers
+    # can spell a composite id out part by part (`trial_id_layout`).
     for col in composite_cols:
         if col in fixations.columns and col not in combo_cols:
             combo_cols.append(col)
 
-    # UX-24: preserve each trial's first appearance before the historical
-    # participant/id sort. The visible pool may still default to Trial ID, but
-    # the ⇅ menu can now reconstruct source-file order exactly.
+    # Preserve each trial's first appearance before the participant/id sort,
+    # so the ⇅ menu's data order reconstructs source-file order exactly.
     combos = fixations[combo_cols].drop_duplicates().copy()
     combos["_data_order"] = np.arange(len(combos), dtype=int)
     combos = combos.rename(columns={trial_col: "trial_id"})
@@ -312,17 +309,17 @@ def extract_trial(frame: pd.DataFrame, participant_id, trial_id) -> pd.DataFrame
 # Trial selection UI
 # -----------------------------------------------------------------------------
 
-# #412 — the trial picker names a *reading*, ``(participant_id, trial_id)``. Many
+# The trial picker names a *reading*, ``(participant_id, trial_id)``. Many
 # datasets give every reader the same Trial IDs, and a picker keyed on the id
-# alone offered only the first reader's reading of each — and opened that one
+# alone would offer only the first reader's reading of each — and open that one
 # under a link that named the second. So its options, its state
 # (``{prefix}_trial_id``), its sort keys, its per-dataset memory and what a link
 # seeds are all reading keys; only the labels are written for people.
 
 #: Between the participant and the trial id in a reading key. A control
 #: character, so no id a dataset writes holds it, and a value without it is a
-#: trial id alone — what ``{prefix}_trial_id`` held before #412 (a recovery cache
-#: saved then), resolved only when it names one reading.
+#: trial id alone — what an older recovery cache holds in ``{prefix}_trial_id``
+#: — resolved only when it names one reading.
 READING_KEY_SEP = "\x1f"
 
 
@@ -342,7 +339,7 @@ def split_reading_key(value) -> tuple[str | None, str | None]:
 
 def reading_order(value) -> tuple[str, str]:
     """Where a picker value sorts in *Trial ID* order: by its trial id, then its
-    participant — a trial id alone sorts exactly as it always has."""
+    participant — a trial id alone sorts by the id."""
     # Inlined rather than through `split_reading_key`: a sort calls it once per
     # trial in the pool, every rerun.
     participant, sep, trial = str(value).partition(READING_KEY_SEP)
@@ -392,22 +389,22 @@ def combo_reading_keys(combos: pd.DataFrame, trial_field: str) -> pd.Series:
     )
 
 
-# UX-10 · sorting the trial pool.
+# Sorting the trial pool.
 #
-# The picker listed trials in data order, so finding "the slowest reader", "the
-# one with the most fixations" or "the trials this reader got wrong" meant
-# scrolling the whole list. These build a sort key per trial from three sources:
+# In data order alone, finding "the slowest reader", "the one with the most
+# fixations" or "the trials this reader got wrong" would mean scrolling the
+# whole list. These build a sort key per trial from three sources:
 # computed per-trial stats, reader/text properties, and any trial-level column
 # the dataset carries. Pure and frame-driven, so they're testable without the UI.
 TRIAL_SORT_DEFAULT = "Trial ID"
-#: UX-171: the order the trials appear in the data — the picker's default when
+#: The order the trials appear in the data — the picker's default when
 #: the combos carry it. ``Trial ID`` (sorted by id, so ``1, 10, 100, 2`` for
 #: numeric ids) stays in the menu as a choice.
 TRIAL_SORT_DATA_ORDER = "Data order"
 # Computed stat label → (frame it needs, how to aggregate it per trial).
 # "fixations" / "words" name which frame the aggregation runs on.
-# DATA-66: these are the app's, not columns of the dataset, so they say so and
-# are listed after the dataset's own columns.
+# These are the app's, not columns of the dataset, so they say so and are
+# listed after the dataset's own columns.
 _TRIAL_SORT_STATS = {
     "Fixation count (computed)": ("fixations", "size"),
     "Total fixation time, s (computed)": ("fixations", "duration_sum_s"),
@@ -428,8 +425,6 @@ _TRIAL_SORT_PREFERRED_COLS = (
     "is_correct",
     "genre",
     "session",
-    "pp_age",
-    "pp_gender",
     "TRIAL_INDEX",
     "trial_index",
 )
@@ -552,7 +547,7 @@ def _looks_like_free_text(series: pd.Series) -> bool:
 
 def _by_reading(values: pd.Series, by_trial: dict[str, list[str]] | None) -> pd.Series:
     """``values`` — indexed by ``(participant_id, trial id)`` pairs, or by trial
-    ids alone for a table with no readers — re-indexed by reading key (#412).
+    ids alone for a table with no readers — re-indexed by reading key.
 
     A trial id alone gives its value to every reading of it in the pool
     (``by_trial``); without a pool it keeps the trial id."""
@@ -584,8 +579,8 @@ def _trial_level_columns_from_frame(
     consumes.
 
     Grouped per reading (participant and trial id), so readers who share a
-    Trial ID each keep their own value (#412) — they used to be merged, and
-    the column dropped when they disagreed. A table with no participant column
+    Trial ID each keep their own value — merged, the column would be dropped
+    whenever they disagreed. A table with no participant column
     gives each trial id's value to every reading of it (``by_trial``).
     """
     identity = _effective_trial_field(frame, trial_field, picker_ids)
@@ -719,11 +714,11 @@ def _per_reading_stats(
 ) -> dict[str, pd.Series]:
     """Each computed stat in ``hows`` per reading, as a Series indexed by
     reading key — per participant and trial id, so two readers who share a
-    Trial ID are not counted as one trial (#412). A table with no participant
+    Trial ID are not counted as one trial. A table with no participant
     column gives each trial id's stat to every reading of it (``by_trial``).
 
     One group-by serves them all: the frame is corpus-sized, and grouping it
-    once per stat cost more than the stats themselves."""
+    once per stat would cost more than the stats themselves."""
     if frame is None or frame.empty or trial_field not in frame.columns:
         return {}
     group_cols = [
@@ -760,11 +755,11 @@ def trial_sort_keys(
     fixations: pd.DataFrame | None = None,
     label_of: Callable[[str], str] = str,
 ) -> dict[str, pd.Series]:
-    """Available sort keys (UX-10): label → Series indexed by reading key
-    (:func:`reading_key`, #412 — one value per participant's trial).
+    """Available sort keys: label → Series indexed by reading key
+    (:func:`reading_key` — one value per participant's trial).
 
     The dataset's own trial-level columns come first, each under ``label_of``
-    (the dataset's own name, DATA-66 — `ColumnNames.label`), then the statistics
+    (the dataset's own name — `ColumnNames.label`), then the statistics
     Scanpath Studio computes per trial, marked as computed.
 
     Offers a computed stat only when the frame it needs is present, and a column
@@ -926,9 +921,8 @@ def _trial_display_label(trial_id) -> str:
     A per-page trial id reads cleanly — ``Lit_Alchemist_4__page_07`` →
     ``Lit_Alchemist_4 · page 7`` (the id stays zero-padded so it sorts
     numerically; only the display drops the padding). Any other id passes
-    through unchanged, so this is a no-op for every other corpus. MultiplEYE
-    used to be the one producing those ids; since DATA-24 its pages are screens
-    inside one trial, so this is now generic dressing for whatever ships them."""
+    through unchanged, so this is a no-op for every corpus that does not name
+    its trials by page."""
     text = str(trial_id)
     stim, sep, page = text.rpartition("__page_")
     if sep and page.isdigit():
@@ -936,7 +930,7 @@ def _trial_display_label(trial_id) -> str:
     return text
 
 
-# --- UX-187: a trial id spelled out part by part ------------------------------
+# --- A trial id spelled out part by part --------------------------------------
 # A trial id is usually several ids joined with "_" — OneStop's
 # `l37_1129_2_2_1_Adv_r0` is reader `l37_1129`, text `2_2_1_Adv`, first reading.
 # The pickers show it with " · " between the parts so you can tell where one
@@ -946,14 +940,13 @@ def _trial_display_label(trial_id) -> str:
 # matches none of them is shown exactly as it is. Only the display changes: the
 # selection, the deep link and every export keep the id itself.
 #
-# UX-202: the text id is one part, as it is everywhere else in the app (it was
-# split into OneStop's batch · article · paragraph · level), and a first reading
-# (`r0`) is not shown — only a repeated one says which reading it is.
+# The text id is one part, as it is everywhere else in the app, and a first
+# reading (`r0`) is not shown — only a repeated one says which reading it is.
 
 #: What the pickers put between the parts of a trial id.
 TRIAL_ID_PART_SEPARATOR = " · "
 
-#: UX-202 — the reading number a first reading carries, which the display leaves
+#: The reading number a first reading carries, which the display leaves
 #: out. OneStop composes `_r0` / `_r1`; `data._disambiguate_repeated_readings`
 #: leaves a first reading unsuffixed and numbers the next `_r2`.
 FIRST_READING = "r0"
@@ -1002,7 +995,7 @@ def trial_id_parts(
 
 
 def shown_parts(parts: list[tuple[str, str]]) -> list[tuple[str, str]]:
-    """The parts the display writes: all but a first reading (UX-202)."""
+    """The parts the display writes: all but a first reading."""
     return [
         (name, value)
         for name, value in parts
@@ -1013,7 +1006,7 @@ def shown_parts(parts: list[tuple[str, str]]) -> list[tuple[str, str]]:
 def trial_id_display(parts: list[tuple[str, str]]) -> str:
     """A trial id as the pickers show it: its parts, `TRIAL_ID_PART_SEPARATOR`-joined.
 
-    A first reading is left out (UX-202), and an id that does not split still
+    A first reading is left out, and an id that does not split still
     has a trailing reading number set off by the separator, not an underscore.
     """
     parts = shown_parts(parts)
@@ -1120,13 +1113,13 @@ def _render_trial_sort_popover(
     words: pd.DataFrame | None,
     fixations: pd.DataFrame | None,
 ) -> tuple[pd.Series | None, bool, str]:
-    """The ⇅ sort control beside the trial picker (UX-10).
+    """The ⇅ sort control beside the trial picker.
 
     Lives in a popover rather than inline: the picker row is already a selectbox,
     a slider and two step buttons wide, and sorting is a "set it once" choice, not
     a per-trial one. Returns ``(key_series, descending, choice)`` for
-    :func:`sort_trial_options` — ``(None, False, TRIAL_SORT_DEFAULT)`` for the
-    default id order. The chosen key's *name* comes back too, because the picker
+    :func:`sort_trial_options` — ``(None, False, TRIAL_SORT_DEFAULT)`` for
+    *Trial ID* order. The chosen key's *name* comes back too, because the picker
     labels the ordering it's showing.
     """
     keys = trial_sort_keys(
@@ -1138,7 +1131,7 @@ def _render_trial_sort_popover(
     )
     if not keys:
         return None, False, TRIAL_SORT_DEFAULT
-    # UX-171: data order leads and is the default; Trial ID follows it.
+    # Data order leads and is the default; Trial ID follows it.
     default = TRIAL_SORT_DATA_ORDER if TRIAL_SORT_DATA_ORDER in keys else None
     options = [
         *([default] if default else []),
@@ -1148,7 +1141,7 @@ def _render_trial_sort_popover(
     state_key = f"{key_prefix}_trial_sort"
     if st.session_state.get(state_key) not in options:
         st.session_state[state_key] = options[0]
-    # UX-200: named for screen readers; `styles.py` draws ⇅ alone.
+    # Named for screen readers; `styles.py` draws ⇅ alone.
     with host.popover(
         "Sort the trial list",
         width="content",
@@ -1177,16 +1170,16 @@ def _render_trial_sort_popover(
     return keys[choice], bool(descending), choice
 
 
-# --- CMP-13: one ◀ ▶ that advances both compared trials ----------------------
+# --- One ◀ ▶ that advances both compared trials -------------------------------
 # The two pickers are built in different modules (A here, B in `tabs.py`), so the
 # linked step is a callback on one side writing the *other* side's selection. It
 # needs the other list, which is why each picker publishes what it just rendered.
-# Both directions clamp independently: per the settled call, a side that has run
-# out simply stays put while the other keeps stepping.
+# Both directions clamp independently: a side that has run out simply stays put
+# while the other keeps stepping.
 
 #: The ⚙️ Compare options checkbox that arms the link. UI-only — a navigation
 #: control, not a render setting, so it is deliberately not on the share link or
-#: in a saved config (same call as ``share_identity_mode``).
+#: in a saved config.
 COMPARE_STEP_LINK_KEY = "single_compare_step_linked"
 
 #: Scanpath B's canonical selection (a *label*; see the snapshot note below).
@@ -1203,7 +1196,7 @@ def trial_options_snapshot_key(key_prefix: str) -> str:
 
 
 def compare_step_linked() -> bool:
-    """True when ◀ ▶ should advance scanpath A **and** B (CMP-13).
+    """True when ◀ ▶ should advance scanpath A **and** B.
 
     Both halves matter: the checkbox only exists while compare mode is on, and
     Streamlit drops an unrendered widget's key, so a stale ``True`` must not
@@ -1282,7 +1275,7 @@ def step_linked_compare(delta: int) -> None:
     }
 
 
-#: #374 F34 — ``{"<key prefix>|<dataset>": trial id}``: the trial each
+#: ``{"<key prefix>|<dataset>": trial id}``: the trial each
 #: dataset's picker was last on.
 _TRIAL_BY_DATASET_KEY = "_trial_by_dataset"
 
@@ -1319,14 +1312,14 @@ def _select_trial_none_mode(
     trailing_renderer=None,
 ) -> tuple[str | None, str | None, str | None]:
     """The trial picker: **dataset + selectbox + scrubbing slider + ◀ ▶ steps + ⇅
-    sort + 🔎 filters**, all on one row (UX-64). The slider thumb shows ``index/TOTAL · id``
+    sort + 🔎 filters**, all on one row. The slider thumb shows ``index/TOTAL · id``
     (index first). The pool is narrowed upstream (the "Narrow by" multiselects +
     the "More" filters), so this just picks one trial from it and orders it.
 
     Creates its own row of columns, so call it where columns are allowed (the
     Scanpath/Corpus body), not nested inside another column. ``picker_host``
     (when given) is the container to render into; defaults to the current one.
-    ``words`` / ``fixations`` (optional) unlock the computed sort keys (UX-10);
+    ``words`` / ``fixations`` (optional) unlock the computed sort keys;
     without them only column-based orderings are offered.
 
     ``trailing_renderer`` (optional) is handed a slot in one more column at
@@ -1334,9 +1327,9 @@ def _select_trial_none_mode(
     only draw once the trial is resolved, so it keeps the slot and fills it
     later. The row's ⇅ 🔎 ✏️ then move after it (``row_tail``)."""
     host = picker_host if picker_host is not None else st
-    # #412: one option per *reading*, never one per trial id — the pool used to
-    # be cut to the first reader of each id, so a dataset that gives every
-    # reader the same Trial IDs offered one reader's readings alone.
+    # One option per *reading*, never one per trial id: cut to the first reader
+    # of each id, a dataset that gives every reader the same Trial IDs would
+    # offer one reader's readings alone.
     available_trials = combos.dropna(subset=[trial_field]).drop_duplicates(
         subset=["participant_id", trial_field]
     )
@@ -1356,7 +1349,7 @@ def _select_trial_none_mode(
     # only inside the popover that set it.
     sort_values: dict[str, str] = {}
 
-    # UX-187: each id shown part by part, and the help says what the parts are.
+    # Each id shown part by part, and the help says what the parts are.
     id_display, id_part_names = trial_id_layout(
         available_trials,
         trial_field,
@@ -1376,7 +1369,7 @@ def _select_trial_none_mode(
         base_labels[key] = _allocate_label(shown, f"{shown} [{trial}]", used_labels)
 
     # Read once: a picker lists every trial in the pool, and going through the
-    # session for each one cost ~0.3 s a rerun at OneStop scale.
+    # session for each one costs ~0.3 s a rerun at OneStop scale.
     store = store_for_prefix()
 
     def _option_label(value: str) -> str:
@@ -1390,8 +1383,8 @@ def _select_trial_none_mode(
         participant, trial = reading_of[key]
         marks = annotation_markers(participant, trial, store=store)
         base = base_labels[key]
-        # #374 F27: the badges follow the trial, so a narrow picker cuts the
-        # badges rather than the trial.
+        # The badges follow the trial, so a narrow picker cuts the badges
+        # rather than the trial.
         label = f"{base} {marks}" if marks else base
         shown = sort_values.get(key)
         return f"{label}  ·  {shown}" if shown else label
@@ -1413,16 +1406,16 @@ def _select_trial_none_mode(
     # Save-&-restore code seeds it (`_restore_selection`). The slider mirrors it
     # and ◀ ▶ step it; all stay in sync via the reading key.
     raw_value = st.session_state.get(trial_id_key) if trial_id_key else None
-    # #374 F34: the trial each dataset was last on, so switching away and back
-    # returns to it rather than to the first trial.
+    # The trial each dataset was last on, so switching away and back returns
+    # to it rather than to the first trial.
     dataset = annotations_dataset(st.session_state)
     remembered = st.session_state.setdefault(_TRIAL_BY_DATASET_KEY, {})
     last_dataset_key = f"{_TRIAL_BY_DATASET_KEY}_{key_prefix}"
     previous = st.session_state.get(last_dataset_key, dataset)
     st.session_state[last_dataset_key] = dataset
-    # A reading key names its reading; a trial id alone (a value saved before
-    # #412) names it only when one reader has that id — never the first of
-    # several (`url_state._settle_picker_selection` says so on the page).
+    # A reading key names its reading; a trial id alone (an older saved value)
+    # names it only when one reader has that id — never the first of several
+    # (`url_state._settle_picker_selection` says so on the page).
     current_label = resolve_reading(raw_value, position, by_trial)[0]
     # A trial carried over from the dataset left behind is not a choice; one a
     # link or a restored settings file put there with the switch is.
@@ -1438,7 +1431,7 @@ def _select_trial_none_mode(
     if trial_id_key and back_to in position and (carried or current_label is None):
         current_label = back_to
     # Seeded rather than chosen: re-seeded to the *sorted* list's first trial
-    # once the ⇅ order is known (UX-171 — data order's first, not the id's).
+    # once the ⇅ order is known (data order's first, not the id's).
     seeded = current_label is None
     if seeded:
         current_label = trial_options[0]
@@ -1462,7 +1455,7 @@ def _select_trial_none_mode(
             if not trial_id_key:
                 return
             step_within(trial_options, trial_id_key, delta)
-            # CMP-13: while the link is armed, the same ±1 also moves scanpath B.
+            # While the link is armed, the same ±1 also moves scanpath B.
             if compare_step_linked():
                 step_linked_compare(delta)
 
@@ -1471,17 +1464,17 @@ def _select_trial_none_mode(
             # so a separate "Trial X / N" caption is redundant.
             return f"{idx_of.get(value, 0) + 1}/{n_trials}  ·  {_format_option(value)}"
 
-        # UX-64 — ONE row for everything: [dataset] [trial] [slider] [◀ ▶ ⇅ 🔎].
-        # The Narrow-by row above it is gone; its filters live in the 🔎 popover
-        # at the end of this row. The dataset picker keeps its width on purpose
-        # (you may be comparing two datasets, and the label is what tells them
-        # apart) — the slider gives up the room instead, and the filter is an
-        # icon, which is what makes six controls fit.
+        # ONE row for everything: [dataset] [trial] [slider] [◀ ▶ ⇅ 🔎]. The
+        # trial filters live in the 🔎 popover at the end of this row. The
+        # dataset picker keeps its width on purpose (you may be comparing two
+        # datasets, and the label is what tells them apart) — the slider gives
+        # up the room instead, and the filter is an icon, which is what makes
+        # six controls fit.
         #
-        # The three triggers share ONE trailing column as a `railbtn_*` cluster
-        # (UX-27), which styles.py packs right at a uniform 3px spacing. A column
-        # each put a full gutter between them, so a prev/next *pair* didn't read
-        # as a pair.
+        # The three triggers share ONE trailing column as a `railbtn_*` cluster,
+        # which styles.py packs right at a uniform 3px spacing. A column each
+        # would put a full gutter between them, so a prev/next *pair* would not
+        # read as a pair.
         lead_col, sel_col, slider_col, trail_col, *extra = host.columns(
             SELECTOR_ROW_GRID + ([SELECTOR_SCREEN_TRACK] if trailing_renderer else []),
             vertical_alignment="bottom",
@@ -1505,17 +1498,16 @@ def _select_trial_none_mode(
         sort_col = cluster.container(key=f"railbtn_{key_prefix}_sort")
         filter_col = cluster.container(key=f"railbtn_{key_prefix}_filter")
         # Filled by the caller, which owns the filter widgets — but created here,
-        # in display order, so 🔎 lands after ⇅ in the cluster (UX-64).
+        # in display order, so 🔎 lands after ⇅ in the cluster.
         if filter_renderer is not None:
             filter_renderer(filter_col)
-        # UX-10: order the pool *before* the widgets read `trial_options`, so the
+        # Order the pool *before* the widgets read `trial_options`, so the
         # selectbox, the slider and the ◀ ▶ steps all walk the same order. The
         # canonical selection is a reading key, so re-sorting never changes which
         # trial is selected — only where it sits in the list.
-        # UX-27: each of the three step/sort triggers goes in a `railbtn_*`
-        # container so styles.py can give the whole cluster above the plot one
-        # button shape — these were square (each `width="stretch"` inside its own
-        # narrow column) beside pill-shaped labelled buttons on the rows above
+        # Each of the three step/sort triggers goes in a `railbtn_*` container
+        # so styles.py can give the whole cluster above the plot one button
+        # shape, matching the pill-shaped labelled buttons on the rows above
         # and below.
         sort_key, sort_desc, sort_choice = _render_trial_sort_popover(
             sort_col,
@@ -1530,7 +1522,7 @@ def _select_trial_none_mode(
                 trial_options, sort_key, descending=sort_desc
             )
             idx_of = {opt: i for i, opt in enumerate(trial_options)}
-            # UX-171: data order is the default and its values are bare ranks,
+            # Data order is the default and its values are bare ranks,
             # so it carries no per-option value and names itself only reversed.
             if sort_choice != TRIAL_SORT_DATA_ORDER:
                 lookup = _series_lookup(sort_key)
@@ -1549,9 +1541,9 @@ def _select_trial_none_mode(
         current_idx = trial_options.index(current_label)
     else:
         # A one-trial pool has no slider (`st.select_slider` throws on a single
-        # option — BUG-23) and nothing to step through, but it still needs the
-        # dataset picker and the filters: a pool of one is *usually the result of
-        # a filter*, so this is exactly when the user reaches for them. UX-64.
+        # option) and nothing to step through, but it still needs the dataset
+        # picker and the filters: a pool of one is *usually the result of a
+        # filter*, so this is exactly when the user reaches for them.
         lead_col, sel_col, trail_col, *extra = host.columns(
             SELECTOR_ROW_TRIO + ([SELECTOR_SCREEN_TRACK] if trailing_renderer else []),
             vertical_alignment="bottom",
@@ -1570,16 +1562,17 @@ def _select_trial_none_mode(
                 )
             )
 
-    # CMP-13: publish the list as rendered (post-sort), so the *Compare To*
-    # picker's linked ◀ ▶ can step this picker without rebuilding its ordering.
+    # Publish the list as rendered (post-sort), so the *Compare To* picker's
+    # linked ◀ ▶ can step this picker without rebuilding its ordering.
     if trial_id_key:
         st.session_state[trial_options_snapshot_key(key_prefix)] = list(trial_options)
-        # #374 F10: the browser identifies the picked option by its *label*, and
-        # a label carries the trial's ★ 🏷️ 📝 marks. Written only when it moved,
-        # the browser kept the label from that run; a tag added later renamed the
-        # option, the old label matched nothing, and the view fell back to trial
-        # 1. Written every run (as the slider is), the browser always holds the
-        # label it was last shown, which the next run can still read back.
+        # Written every run (as the slider is): the browser identifies the
+        # picked option by its *label*, and a label carries the trial's ★ 🏷️ 📝
+        # marks. Written only when it moved, the browser would keep the label
+        # from that run; a tag added later renames the option, the old label
+        # matches nothing, and the view falls back to trial 1. Written every
+        # run, the browser always holds the label it was last shown, which the
+        # next run can still read back.
         st.session_state[trial_id_key] = current_label
         remembered[f"{key_prefix}|{dataset}"] = current_label
 
@@ -1591,11 +1584,11 @@ def _select_trial_none_mode(
         picker_label,
         options=trial_options,
         key=trial_id_key,
-        # BUG-80: the picker renders only on the Scanpath view, and Streamlit
-        # drops an unrendered widget's key at the end of the run — so a trip to
-        # Corpus Analysis or 🗂️ Data came back on trial 1 (and, in Compare,
-        # left A and B on different texts). A value the pool no longer holds is
-        # still reset above, before this renders.
+        # The picker renders only on the Scanpath view, and Streamlit drops an
+        # unrendered widget's key at the end of the run — without this a trip
+        # to Corpus Analysis or 🗂️ Data would come back on trial 1 (and, in
+        # Compare, leave A and B on different texts). A value the pool no
+        # longer holds is still reset above, before this renders.
         persist_state="session",
         format_func=_format_option,
         help=" ".join(
@@ -1635,7 +1628,7 @@ def _select_trial_none_mode(
         # lays out as a flex ROW (a Streamlit vertical block stacks its children
         # by default).
         steps = step_col
-        # CMP-13: linked, a button stays live until BOTH sides have run out — a
+        # Linked, a button stays live until BOTH sides have run out — a
         # side at the end of its own list just stays put while the other keeps
         # stepping. `at_list_end` answers False for a list it can't see, so the
         # worst case is a click that moves only one scanpath.
@@ -1649,7 +1642,7 @@ def _select_trial_none_mode(
             else []
         )
         step_help = " Linked: also steps the compared trial." if linked else ""
-        # UX-200: `spoken` names the glyph buttons for screen readers.
+        # `spoken` names the glyph buttons for screen readers.
         steps.button(
             f"◀ {spoken('Previous trial')}",
             key=f"{key_prefix}_prev_trial" if key_prefix else "prev_trial",
@@ -1693,36 +1686,33 @@ def select_trial(
 ) -> tuple[str | None, str | None, str, str | None]:
     """Pick a specific trial from the (already-narrowed) pool.
 
-    There are no Browse-by modes anymore, and no per-mapping variants either: the
-    pool is narrowed by the inline **Narrow by** Text / Participant multiselects +
-    the **More** filters (``controls.render_narrow_by`` /
+    The pool is narrowed by the inline **Narrow by** Text / Participant
+    multiselects + the **More** filters (``controls.render_narrow_by`` /
     ``render_trial_filters``), and this always picks one trial via the same
     selectbox + slider + ◀ ▶ arrows — whatever the Trial ID mapping looks like.
 
-    BUG-23: a composite trial id (built from several mapped columns) used to get a
-    picker of its own — first one selector per mapped component, then a Participant
-    → Text cascade. Both made the *shape of the mapping* visible in the UI, and
-    neither offered the slider or the step buttons, so stepping through trials
-    worked on some datasets and not others. Participant and Text are what **Narrow
-    by** is for; the composite flag now only tells the chip strip to spell the
-    joined id out (``tabs._render_trial_condition_chips``).
+    A composite trial id (built from several mapped columns) gets no picker of
+    its own: one would make the *shape of the mapping* visible in the UI, and
+    stepping through trials must work the same on every dataset. Participant
+    and Text are what **Narrow by** is for; the composite flag only tells the
+    chip strip to spell the joined id out (``tabs._render_trial_condition_chips``).
 
-    #412: each option is a *reading* — :func:`reading_key` of its participant and
+    Each option is a *reading* — :func:`reading_key` of its participant and
     trial id — and so is ``{key_prefix}_trial_id``, the state a link or a settings
     file seeds. Readers who share a Trial ID are each an option, labelled
-    ``<id> [<participant>]``; one per Trial ID used to drop all but the first.
+    ``<id> [<participant>]``.
 
     ``picker_host`` is the container to render into (defaults to the current one);
     the picker builds its own row of columns, so call it where columns are allowed.
 
     ``words`` / ``fixations`` (optional) are the frames ``combos`` was built from;
-    passing them unlocks the UX-10 ⇅ sort popover's computed keys (fixation count,
+    passing them unlocks the ⇅ sort popover's computed keys (fixation count,
     reading time). Without them the sort still offers the column-based orderings.
 
     Returns:
         Tuple of (participant_id, trial_id, selection_mode, selected_text).
-        ``selection_mode`` is always ``"Trial"`` (kept for the comparison-options
-        builder, which still supports the other modes when called directly).
+        ``selection_mode`` is always ``"Trial"`` (kept for
+        :func:`build_comparison_options`' signature, which ignores it).
     """
     if combos.empty:
         st.warning(
@@ -1741,7 +1731,7 @@ def select_trial(
         text_field,
         key_prefix,
         picker_host=picker_host,
-        # UX-64: the row's lead cell (the dataset picker) and its 🔎 filter
+        # The row's lead cell (the dataset picker) and its 🔎 filter
         # popover are filled by the caller, which owns those widgets.
         leading_renderer=leading_renderer,
         filter_renderer=filter_renderer,
@@ -1806,16 +1796,16 @@ def safe_summary(series: pd.Series) -> dict:
 
 # Markers shown beside comparison-trial options.
 SAME_TEXT_MARKER = (
-    "📄"  # same stimulus text as the primary trial (★ reserved for favorites, UX-6)
+    "📄"  # same stimulus text as the primary trial (★ is the favorite marker)
 )
 SAME_PARTICIPANT_MARKER = "👤"  # same participant as the primary trial
 
 
 def _allocate_label(label: str, qualified: str, used_labels: set[str]) -> str:
     """``label`` if unused, else ``qualified``, else ``qualified (n)`` for the
-    first free ``n`` — always a label no earlier option holds (round 11: the
-    qualified form itself could already be taken, by a trial id that reads
-    like it, and the later option then overwrote the earlier one's identity)."""
+    first free ``n`` — always a label no earlier option holds (the qualified
+    form itself can already be taken, by a trial id that reads like it, and
+    the later option would then overwrite the earlier one's identity)."""
     candidate = label if label not in used_labels else qualified
     n = 2
     while candidate in used_labels:
@@ -1894,23 +1884,22 @@ def build_comparison_options(
     Returns ``(participant_id, trial_id, label, markers)`` tuples, where
     ``markers`` leads with the relation icons ``"📄"`` (same text) / ``"👤"`` (same
     participant) and then the trial's annotation markers ``★`` (favorite) / ``🏷️``
-    (tagged) / ``📝`` (noted) when present (UX-6), and ``label`` is
+    (tagged) / ``📝`` (noted) when present, and ``label`` is
     ``"<markers> <trial_id>"``. Ordered: same-text (📄) first, then same-participant
     (👤), then the rest. A trial that is BOTH same-text and same-participant sorts
     with the 📄 group (text-matches lead) and shows both markers.
 
-    ``cross_dataset`` (CMP-8 §5.1) says ``combos`` describes a *different*
+    ``cross_dataset`` says ``combos`` describes a *different*
     dataset, and degrades the three id-based signals that would otherwise lie:
     two corpora do not share readers, so 👤 never fires; a foreign trial's ★ /
     🏷️ / 📝 are read from *its* dataset's annotations, never the active
-    dataset's, whose matching-looking ids name other trials (DATA-48 — they
-    were dropped altogether before annotations were per dataset); and the
+    dataset's, whose matching-looking ids name other trials; and the
     primary trial is not in this pool, so a
     coincidentally identical ``(participant, trial)`` is a real candidate rather
     than the trial being compared. 📄 survives — a text id that matches across
     corpora is exactly the pairing this feature exists for.
 
-    ``include_primary`` (CMP-22) keeps the selected trial itself in the pool, so
+    ``include_primary`` keeps the selected trial itself in the pool, so
     B's picker lists every trial A's does and the two position readouts agree.
     It is only a *candidate*: the picker defaults B to the first trial that is
     not A. Pass ``False`` to ask "is there anything else to compare with?" —
@@ -1949,8 +1938,8 @@ def build_comparison_options(
             }
         )
 
-    # ★ group first, then 👤 group, then the rest. same_text is the primary sort
-    # key so a both-★-👤 trial leads the ★ group. Stable sort preserves combos
+    # 📄 group first, then 👤 group, then the rest. same_text is the primary sort
+    # key so a both-📄-👤 trial leads the 📄 group. Stable sort preserves combos
     # order within a group.
     rows.sort(
         key=lambda r: (0 if r["same_text"] else 1, 0 if r["same_participant"] else 1)
@@ -1967,9 +1956,9 @@ def build_comparison_options(
 
 
 # -----------------------------------------------------------------------------
-# Cross-dataset comparison frames (CMP-8 · promoted from tabs.py for CMP-9)
+# Cross-dataset comparison frames
 # -----------------------------------------------------------------------------
-# These live here, not in tabs.py, because three surfaces now build a
+# These live here, not in tabs.py, because three surfaces build a
 # cross-dataset comparison — the app, `api.compare_scanpaths` and
 # `cli.render --compare-*` — and the namespacing rule below is the one piece of
 # it that must not be re-derived per surface. `tests/test_compare_cross_dataset.py`
@@ -2002,9 +1991,9 @@ def qualify_for_compare(frame: pd.DataFrame, dataset: str) -> pd.DataFrame:
 
 
 def separate_self_compare(frame: pd.DataFrame, participant: str) -> pd.DataFrame:
-    """A copy of B's single-trial ``frame`` renamed apart from A's (CMP-22).
+    """A copy of B's single-trial ``frame`` renamed apart from A's.
 
-    B may now be A's own trial. `plots.make_comparison_figure` slices its merged
+    B may be A's own trial. `plots.make_comparison_figure` slices its merged
     frame by ``(participant_id, trial_id)``, so two copies of one trial would hand
     *each* side both copies (and a duplicated index the word-line clustering
     rejects). Giving B's copy `self_compare_participant`'s id keeps the halves
@@ -2031,7 +2020,7 @@ def unqualify_for_export(frame: pd.DataFrame, participant: str) -> pd.DataFrame:
 
     The namespace exists so `make_comparison_figure` can slice two colliding
     ``(participant, trial)`` pairs apart. An exported table must carry the id the
-    corpus actually uses, or it won't join back to anything (CMP-8 §6). The
+    corpus actually uses, or it won't join back to anything. The
     stamped ``dataset`` column is kept — that is what disambiguates the rows.
     """
     if frame is None or frame.empty or "dataset" not in frame.columns:
@@ -2053,8 +2042,8 @@ def align_compare_columns(
 
     The third element is the columns both frames carry *as the same kind* —
     numeric in both, or categorical in both: what a cross-dataset figure may
-    legitimately colour by (CMP-8 §5.4; categorical since Compare colours by a
-    category too). A column present in only one corpus would colour one panel
+    legitimately colour by (categorical too, since Compare colours by a
+    category as well). A column present in only one corpus would colour one panel
     and blank the other, and one numeric on one side only would be a scale on
     one panel and a palette on the other.
     """

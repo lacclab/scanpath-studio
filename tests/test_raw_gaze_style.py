@@ -1,10 +1,10 @@
-"""VIZ-43: raw gaze's colour, marker size and opacity reach the figure — and last.
+"""Raw gaze's colour, marker size and opacity reach the figure — and last.
 
-UX-86 gave the 🔵 Raw gaze layer its own style controls, and the headless API
-has always honoured the three settings, but `tabs._build_figure_settings` never
-handed them on: every app figure drew the builder's ``#888888`` / 4 / 0.6
-whatever the rail said. They were also missing from the saved config, and so from
-the recovery cache, which saves exactly the keys the config restores.
+The 🔵 Raw gaze layer's style controls go through `tabs._build_figure_settings`,
+as the headless API's three settings do, so an app figure draws what the rail
+says rather than the builder's ``#888888`` / 4 / 0.6. They are also in the
+saved config, and so in the recovery cache, which saves exactly the keys the
+config restores.
 """
 
 from __future__ import annotations

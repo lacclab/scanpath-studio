@@ -73,9 +73,9 @@ class TestSampleDataPipeline:
         )
 
     def test_every_reader_and_trial_with_word_boxes_has_fixations(self):
-        """DATA-43: the demo shipped a reader (`l25_1042`) with word boxes and
-        no fixations — counted on the 🗂️ Data page, unreachable in the trial
-        picker. Checked on the raw files, both formats, before any join."""
+        """A demo reader with word boxes and no fixations would be counted on
+        the 🗂️ Data page but unreachable in the trial picker. Checked on the raw
+        files, both formats, before any join."""
         from scanpath_studio.update_sample_data import (
             DEFAULT_OUTPUT_DIR,
             check_fixations_cover_words,
@@ -153,9 +153,8 @@ class TestPipelineFigures:
         assert len(fig.data) >= 1, "Expected at least one trace"
 
     def test_saccades_collapsed_into_single_trace(self, normalized_demo):
-        """Regression: the per-saccade-trace explosion (one trace per saccade)
-        was a known perf bug. A trial with N fixations should now yield at
-        most a small constant number of traces, not O(N)."""
+        """Saccades are never one trace per saccade: a trial with N fixations
+        yields at most a small constant number of traces, not O(N)."""
         words, fixations = normalized_demo
         biggest = fixations.groupby(["participant_id", "trial_id"]).size().idxmax()
         pid, tid = biggest
@@ -197,12 +196,12 @@ class TestPipelineFigures:
     def test_layout_shapes_are_validated_about_once(
         self, normalized_demo, monkeypatch, compare
     ):
-        """#422: Plotly re-validates every layout shape on each addition — an
+        """Plotly re-validates every layout shape on each addition — an
         `add_shape`, or `update_layout(shapes=existing + new)`, which also
         merges each existing shape into itself — so adding the word boxes, the
-        heatmap rects, the frame and the size key one after another built each
-        shape five or six times: 1.3 s for a PoTeC page with both layers on,
-        5 s for a comparison. The builders now set them in one go; the size
+        heatmap rects, the frame and the size key one after another would build
+        each shape five or six times: 1.3 s for a PoTeC page with both layers
+        on, 5 s for a comparison. The builders set them in one go; the size
         key, added after the figure is laid out, costs one more pass."""
         words, fixations = normalized_demo
         trials = list(
@@ -258,7 +257,7 @@ class TestPipelineFigures:
             base_font_size=14,
             font_family="monospace",
         )
-        # VIZ-11: frames sit on a uniform time grid (not one per fixation), so a
+        # Frames sit on a uniform time grid (not one per fixation), so a
         # long reading is bounded to the grid cap rather than the fixation count.
         assert 1 <= len(fig.frames) <= 360, "Animation should have grid frames"
 
@@ -462,13 +461,13 @@ class TestStimulusImageAlignment:
     """The bundled demo ships per-trial stimulus PNGs placed at data
     (``image_x``, ``image_y``). Those origins are *external* metadata (rendered by
     a separate script, not by ``update_sample_data.py``), so this guards against a
-    regenerated origin drifting the page off the AOI boxes / fixations — the
-    ``image_y=148`` (~36 px too high) bug. Aligns the PNG's own text lines to the
+    regenerated origin drifting the page off the AOI boxes / fixations (e.g.
+    ``image_y=148``, ~36 px too high). Aligns the PNG's own text lines to the
     word boxes; a wrong origin fails here regardless of which script produced it.
 
     Correct origin for the OneStop demo is ``(image_x=368, image_y=186)`` — where
     the experiment's own Experiment Builder drew the paragraph image (its
-    ``.vcl`` view commands, BUG-97). Each word box is then centred on its
+    ``.vcl`` view commands). Each word box is then centred on its
     word: half a space of margin on each side, and the line centers coincide.
     """
 
@@ -501,17 +500,17 @@ class TestStimulusImageAlignment:
                 f"lines but the boxes cluster into {len(box_centers)}"
             )
             diffs = [abs(p - b) for p, b in zip(png_centers, box_centers)]
-            # A correct origin lands every line within a few px; the historical
-            # 36 px misplacement (or any future regen drift) blows past this.
+            # A correct origin lands every line within a few px; a 36 px
+            # misplacement (or any regen drift) blows past this.
             assert max(diffs) < 12.0, (
                 f"{os.path.basename(image_path)}: stimulus image misaligned "
                 f"vertically (max line-center diff {max(diffs):.1f}px, image_y={image_y})"
             )
 
-            # Horizontal: the boxes are centred on their words (BUG-97), so the
-            # page's left ink edge sits half a space inside the leftmost box —
-            # image_x + first-ink-col ≈ min box x + advance / 2. The old,
-            # flush-left origin (358) lands ~10 px off and fails.
+            # Horizontal: the boxes are centred on their words, so the page's
+            # left ink edge sits half a space inside the leftmost box —
+            # image_x + first-ink-col ≈ min box x + advance / 2. A flush-left
+            # origin (358) lands ~10 px off and fails.
             first = boxes.loc[boxes["x"].idxmin()]
             half_space = float(first["width"]) / (len(str(first["text"])) + 1) / 2
             left_edge = image_x + _png_first_ink_col(image_path)
@@ -563,7 +562,7 @@ def test_true_scale_html_small_multiples_have_no_zoom() -> None:
 
 
 def test_true_scale_html_offers_fullscreen() -> None:
-    """VIZ-37 — the control has to live in this embed, not on the chart wrapper.
+    """The control has to live in this embed, not on the chart wrapper.
 
     Streamlit 1.61 adds a fullscreen button to `st.plotly_chart`, but the
     spatial figures deliberately do not go through it: a responsive re-layout

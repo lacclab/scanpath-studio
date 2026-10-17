@@ -1,9 +1,9 @@
-"""#374 — the Scanpath trial picker keeps its trial.
+"""The Scanpath trial picker keeps its trial.
 
-F10: annotating a trial renamed its option in the picker (★ 🏷️ 📝 marks), and
-the browser, which names the picked option by its label, still held the label
-from before. The next rerun matched nothing and the view fell back to trial 1,
-so the next note was typed into trial 1.
+Annotating a trial renames its option in the picker (★ 🏷️ 📝 marks), and the
+browser names the picked option by its label. Were it still holding the label
+from before, the next rerun would match nothing and the view would fall back to
+trial 1, so the next note would be typed into trial 1.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ def test_the_browser_is_told_the_current_label_every_run():
 
 
 def test_switching_datasets_away_and_back_restores_the_trial():
-    """F34: Dataset → another → back lands on the trial you left, not trial 1."""
+    """Dataset → another → back lands on the trial you left, not trial 1."""
     from scanpath_studio.constants import DEMO_CHOICE
 
     at = _boot()

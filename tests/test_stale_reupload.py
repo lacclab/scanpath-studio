@@ -1,10 +1,10 @@
-"""A corrected re-upload is never served the old file's results (BUG-103).
+"""A corrected re-upload is never served the old file's results.
 
-Until BUG-103 a table over 200,000 rows was keyed on ~384 sampled rows. A
-corrected file of the same shape, edited in a row the sample skipped, matched
-the original, so the normalization handed back the *old* tables — which the
-add-dataset screen then stored, and the recovery cache wrote to disk, as the
-new dataset. These tests run that sequence through the real upload reader and
+A table over 200,000 rows must not be keyed on a sample of its rows (say ~384):
+a corrected file of the same shape, edited in a row the sample skipped, would
+match the original, so the normalization would hand back the *old* tables —
+which the add-dataset screen would then store, and the recovery cache write to
+disk, as the new dataset. These tests run that sequence through the real upload reader and
 the real normalization.
 """
 
@@ -20,7 +20,7 @@ from scanpath_studio import app
 from scanpath_studio.data import adopt_source, frame_fingerprint, propose_fix_schema
 
 ROWS = 200_001
-#: Past the first 64 rows and between two of the old stride's sampled rows.
+#: Past the first 64 rows and between two rows a strided ~384-row sample picks.
 EDITED_ROW = 100
 
 

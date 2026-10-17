@@ -1,32 +1,37 @@
-"""UX-39 — the app's one easter egg: triple-click the title and eyes pop up.
+"""The app's one easter egg: triple-click the About heading and eyes pop up.
 
-Triple-click the "Scanpath Studio" heading and a pair of oversized googly eyes
-pops up beside it, blinks once, follows the cursor for a few seconds, and fades
-out on its own. That is all it does.
+Triple-click "About Scanpath Studio", the heading of ❓ Help → About, and a
+pair of oversized googly eyes pops up beside it, blinks once, follows the
+cursor for a few seconds, and fades out on its own. That is all it does.
+
+The header's wordmark would be the natural target, but it is a link that opens
+the docs: the first click of a triple-click has already opened them.
 
 It lives entirely in the browser because it is deliberately **not** a feature: a
 same-origin ``st.iframe`` script (the technique ``tour.py`` uses to reach the
 parent document) binds one ``click`` listener keyed on ``event.detail >= 3``, so
 there is no session-state key, no rerun, and nothing to expose on the deep link
 / CLI / headless API (``AGENTS.md`` → *Exposing a feature on every surface*).
+The About dialog draws the script (:func:`render_easter_egg`), so it runs only
+while the heading is on screen.
 
 Four details that are load-bearing rather than decorative:
 
-- **It anchors to the heading's text, not its element.** ``st.title`` renders an
-  ``h1`` that spans the whole 4/5-width header column, so the eyes are placed
-  against a ``Range`` over its contents instead — otherwise they would land far
-  out to the right of "Studio", next to nothing.
+- **It anchors to the heading's text, not its element.** The dialog's ``h2``
+  spans the dialog's width, so the eyes are placed against a ``Range`` over its
+  contents instead — otherwise they would land far out to the right of
+  "Studio", next to nothing.
 - **It re-measures every frame.** A ``requestAnimationFrame`` loop re-anchors the
   overlay (``position: fixed``) and aims the pupils, so scrolling, a resize, or a
   rerun reflow can't leave the eyes stranded mid-page.
-- **It cleans up after a removed iframe.** Streamlit re-mounts this embed on
-  every rerun, killing the old JS context mid-animation, which would orphan its
-  nodes in the parent DOM forever. The script drops any leftover ``.sps-egg``
-  before wiring itself, and marks the heading (``dataset.spsEggWired``) so the
-  re-mount doesn't stack a second listener on a surviving node.
+- **It survives a removed iframe.** Streamlit re-mounts this embed on every
+  rerun of the dialog and removes it when the dialog closes, killing its JS
+  context mid-animation. The fade is pure CSS, so eyes orphaned that way still
+  disappear; the next mount drops any leftover ``.sps-egg`` and replaces the
+  heading's click handler (``__spsEgg``), whose old copy died with its frame.
 - **It never blocks the app.** The overlay is ``pointer-events: none`` so it
-  cannot swallow a click meant for the Corpus Analysis button beside it, and the
-  handler clears the text selection a triple-click makes for free.
+  cannot swallow a click meant for a control beneath it, and the handler
+  clears the text selection a triple-click makes for free.
 """
 
 from __future__ import annotations
@@ -37,14 +42,16 @@ import streamlit as st
 
 from scanpath_studio.html_embed import embed_html_iframe
 
-# The app title in the *parent* document: `app._render_about_panel` wraps the
-# header in `st.container(key="about_header")`, which Streamlit renders as
-# `.st-key-about_header`.
-TITLE_SELECTOR = ".st-key-about_header h1"
+#: The container the script is drawn in. It sits in the About dialog's body,
+#: which is how the selector below tells that dialog's heading from another's.
+EGG_KEY = "about_egg"
 
-# Below the spotlight tour's card (999990) and backdrop (999980) — a tour step
-# that dims the app must stay on top of a stray pair of eyes.
-_Z_INDEX = 999950
+#: The About dialog's heading, in the *parent* document.
+TITLE_SELECTOR = f'[data-testid="stDialog"]:has(.st-key-{EGG_KEY}) h2'
+
+# Above Streamlit's dialog (z-index 1000059), which holds the heading. A running
+# tour or tutorial suppresses the egg, so nothing of theirs has to cover it.
+_Z_INDEX = 1000100
 
 # How long the eyes stay before they fade, and how long the fade takes.
 _LIFETIME_MS = 4200
@@ -59,9 +66,10 @@ _CSS = """
     pointer-events: none;
     transform-origin: 50% 100%;
     filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.35));
-    animation: sps-egg-pop 420ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+    animation:
+        sps-egg-pop 420ms cubic-bezier(0.2, 1.5, 0.4, 1) both,
+        sps-egg-away __FADE__ms ease-in __LIFETIME__ms forwards;
 }
-.sps-egg--out { animation: sps-egg-away __FADE__ms ease-in both; }
 .sps-egg__eye {
     position: relative;
     width: var(--sps-egg-size, 48px);
@@ -106,7 +114,9 @@ _CSS = """
     40%, 60% { transform: scaleY(0.08); }
 }
 @media (prefers-reduced-motion: reduce) {
-    .sps-egg, .sps-egg__eye { animation: none !important; }
+    .sps-egg__eye { animation: none !important; }
+    /* No motion, but still gone on time: an instant fade, not none. */
+    .sps-egg { animation: sps-egg-away 1ms linear __LIFETIME__ms forwards !important; }
 }
 """
 
@@ -165,12 +175,10 @@ _JS = """
         const place = () => {
             const rect = textRect(title);
             const width = wrap.offsetWidth || size * 2;
-            // Beside the heading when its own column has room. The header's other
-            // column holds the Corpus Analysis button, and eyes parked over the
-            // app's only nav control read as a rendering bug rather than a joke —
-            // so when it's tight they peek over the top of the title instead,
-            // where the page has nothing but padding. Never shrink to fit: "big"
-            // is the whole idea.
+            // Beside the heading when its own column has room; when it's tight
+            // they peek over the top of the title instead, where the page has
+            // nothing but padding, rather than spill into the header's other
+            // column. Never shrink to fit: "big" is the whole idea.
             const colRight = Math.min(
                 title.getBoundingClientRect().right, win.innerWidth
             );
@@ -198,15 +206,13 @@ _JS = """
         };
         place();
 
+        // The CSS fades the eyes out; this only removes them once it has.
         const teardown = () => {
             win.cancelAnimationFrame(frame);
             doc.removeEventListener("mousemove", onMove);
             wrap.remove();
         };
-        win.setTimeout(() => {
-            wrap.classList.add("sps-egg--out");
-            win.setTimeout(teardown, __FADE__);
-        }, __LIFETIME__);
+        win.setTimeout(teardown, __LIFETIME__ + __FADE__);
     };
 
     let tries = 0;
@@ -217,13 +223,16 @@ _JS = """
             if (++tries < 30) win.setTimeout(wire, 100);
             return;
         }
-        if (title.dataset.spsEggWired) return;
-        title.dataset.spsEggWired = "1";
-        title.addEventListener("click", (ev) => {
+        // A rerun of the dialog re-mounts this script on a heading that
+        // survives it, and the previous mount's handler died with its frame:
+        // replace it, rather than stacking a second or keeping a dead one.
+        if (title.__spsEgg) title.removeEventListener("click", title.__spsEgg);
+        title.__spsEgg = (ev) => {
             if (ev.detail < 3) return;
             doc.getSelection()?.removeAllRanges();  // triple-click selects the text
             pop(title);
-        });
+        };
+        title.addEventListener("click", title.__spsEgg);
     })();
 })();
 """
@@ -231,7 +240,11 @@ _JS = """
 
 def egg_script() -> str:
     """The same-origin ``<script>`` that arms the triple-click easter egg."""
-    css = _CSS.replace("__Z__", str(_Z_INDEX)).replace("__FADE__", str(_FADE_MS))
+    css = (
+        _CSS.replace("__Z__", str(_Z_INDEX))
+        .replace("__FADE__", str(_FADE_MS))
+        .replace("__LIFETIME__", str(_LIFETIME_MS))
+    )
     body = (
         _JS.replace("__CSS__", json.dumps(css))
         .replace("__MARKUP__", json.dumps(_MARKUP))
@@ -259,7 +272,12 @@ def egg_suppressed(query_params, session_state=None) -> bool:
 
 
 def render_easter_egg() -> None:
-    """Arm the easter egg for this run, unless the session suppresses it."""
+    """Arm the easter egg, unless the session suppresses it.
+
+    Called from the About dialog's body: the keyed container it draws is what
+    `TITLE_SELECTOR` finds that dialog by.
+    """
     if egg_suppressed(st.query_params, st.session_state):
         return
-    embed_html_iframe(egg_script(), height=0)
+    with st.container(key=EGG_KEY):
+        embed_html_iframe(egg_script(), height=0)

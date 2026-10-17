@@ -1,4 +1,4 @@
-"""UX-168: corpus downloads report bytes and stop cleanly on Cancel."""
+"""Corpus downloads report bytes and stop cleanly on Cancel."""
 
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ def test_a_download_reads_what_has_arrived_and_times_out(monkeypatch, tmp_path, 
     returns — and ``read(n)`` waits for all *n* bytes: ~10 s for a MiB at
     100 KB/s. ``read1`` returns whatever has arrived. A connection that stalls
     outright times out instead of hanging for good, as the `OSError` both
-    download buttons already report."""
+    download buttons report."""
     response, opened = _Response(b"z" * 10), []
     monkeypatch.setattr(datasets.urllib.request, "urlopen", _serving(response, opened))
     if fetch == "to_file":
@@ -90,7 +90,7 @@ def test_a_download_reads_what_has_arrived_and_times_out(monkeypatch, tmp_path, 
     assert timeout == datasets._DOWNLOAD_TIMEOUT_S
     # HTTPS is verified against the OS certificate store, not OpenSSL's CA
     # list — which a python.org Python on macOS ships empty, so every download
-    # failed there with CERTIFICATE_VERIFY_FAILED.
+    # would fail there with CERTIFICATE_VERIFY_FAILED.
     assert isinstance(context, truststore.SSLContext)
     assert response.reads and set(response.reads) == {"read1"}
 
@@ -197,7 +197,7 @@ def test_an_archive_without_the_fixation_files_fails_with_a_clear_message(
     assert not list((tmp_path / "eyetracking_data").glob(".*.part"))
 
 
-# UX-168 / FR-1 — a download cut short is an error, never a file.
+# A download cut short is an error, never a file.
 
 
 def test_a_download_that_ends_early_is_an_error_and_leaves_no_file(
@@ -205,8 +205,9 @@ def test_a_download_that_ends_early_is_an_error_and_leaves_no_file(
 ):
     """`read1` returns ``b""`` on an early EOF — a server, proxy or load balancer
     closing the connection mid-body — just as it does at the real end, so the
-    loop alone can't tell them apart. Committed, the half file passed for the
-    report: the ⬇ button went away and every load failed until a manual delete."""
+    loop alone can't tell them apart. Committed, the half file would pass for
+    the report: the ⬇ button would go away and every load fail until a manual
+    delete."""
     monkeypatch.setattr(datasets, "_DOWNLOAD_CHUNK", 32)
     monkeypatch.setattr(
         datasets.urllib.request,
@@ -253,12 +254,12 @@ def test_a_chunked_body_cut_short_is_a_connection_error(monkeypatch, tmp_path, f
 
 
 def test_an_archive_that_is_not_a_zip_is_a_value_error(monkeypatch, tmp_path):
-    """A damaged archive raised `zipfile.BadZipFile`, which neither ⬇ button
-    catches; a `ValueError` naming the archive is reported like the rest."""
+    """A damaged archive raises a `ValueError` naming it, reported like the
+    rest — not `zipfile.BadZipFile`, which neither ⬇ button catches."""
     monkeypatch.setattr(
         datasets, "_fetch_bytes", lambda url, *, detail: b"<html>not a zip</html>"
     )
-    # Past DATA-65's size pin, so the unpack is what is tested.
+    # Past the size pin, so the unpack is what is tested.
     monkeypatch.setattr(datasets, "_check_download_size", lambda *a: None)
     with pytest.raises(ValueError, match="PoTeC archive") as raised:
         datasets.download_potec(tmp_path)

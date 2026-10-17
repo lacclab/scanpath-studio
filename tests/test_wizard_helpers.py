@@ -1,4 +1,4 @@
-"""Unit tests for the setup-wizard's pure helper functions (Group B/C).
+"""Unit tests for the setup-wizard's pure helper functions.
 
 These are deterministic and dependency-light, so they're tested directly instead
 of through the heavy AppTest path.
@@ -6,12 +6,10 @@ of through the heavy AppTest path.
 
 from __future__ import annotations
 
-import pathlib
-
 import pandas as pd
 import pytest
 
-from scanpath_studio import app, wizard, wizard_shell
+from scanpath_studio import app, wizard
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
@@ -118,119 +116,6 @@ class TestSafeDatasetName:
         assert wizard._safe_dataset_name("  My data  ") == "My data"
 
 
-class TestWizardAccordion:
-    """DATA-22 replaced DATA-19's one-shot ``_wizard_keep_open`` marker with a
-    shell that owns the open flag outright. These cover the shell's contract;
-    the "an edit inside a step doesn't collapse it" half is a *frontend*
-    property (AppTest never echoes an expander's open state back — a programmatic
-    write reverts on the very next bare rerun regardless of app code), so it is
-    verified in a real browser instead of here."""
-
-    def test_go_to_step_opens_exactly_one(self):
-        import streamlit as st
-
-        target = wizard_shell.STEPS[0].id
-        wizard_shell.go_to_step(target)
-        opened = {
-            s.id: st.session_state[wizard_shell.open_key(s.id)]
-            for s in wizard_shell.STEPS
-        }
-        assert opened[target] is True
-        assert not any(v for k, v in opened.items() if k != target)
-
-    def test_open_keys_stay_clear_of_the_column_mapping_sweep(self):
-        # tabs._collect_column_mapping sweeps every `col_map_*` key into the
-        # saved config; an accordion flag must never land in a user's config.
-        assert all(
-            not wizard_shell.open_key(s.id).startswith("col_map_")
-            for s in wizard_shell.STEPS
-        )
-
-    def test_a_changing_header_would_collapse_a_keyed_expander(self):
-        """Why the status badge is not on the step header.
-
-        Streamlit remounts a keyed expander at its default — collapsed — on the
-        next run after its **label or icon** changes, whatever its key holds.
-        With the badge passed as ``icon=``, an upload flipped step 1 from
-        *action* to *done* and the step slammed shut the instant the file
-        finished parsing: the DATA-19 symptom arriving through a new door,
-        invisible to every test that only checked who *writes* the flag.
-
-        The control case (a stable header) is what makes this a real finding
-        rather than the known AppTest blind spot: it survives the run the
-        varying one dies on. It still flips a run later, because AppTest has no
-        frontend to echo the open state back — see the class docstring.
-        """
-        varying = AppTest.from_function(_varying_header_expander_app)
-        stable = AppTest.from_function(_stable_header_expander_app)
-        seen = {"varying": [], "stable": []}
-        for name, at in (("varying", varying), ("stable", stable)):
-            for _ in range(2):
-                at.run()
-                assert not at.exception, at.exception
-                seen[name].append(at.session_state["wiz_open_probe"])
-
-        assert seen["varying"] == [True, False], seen
-        # Same two runs, header untouched → still open. The difference between
-        # the two lists IS the bug.
-        assert seen["stable"] == [True, True], seen
-
-    def test_the_active_step_header_never_carries_the_status(self):
-        """Structural guard for the above: `step_panel`'s expander call must not
-        pass a status-derived ``icon=`` or interpolate the badge into its label."""
-        source = pathlib.Path(wizard_shell.__file__).read_text(encoding="utf-8")
-        body = source.split("def step_panel(", 1)[1].split("\ndef ", 1)[0]
-        call = body.split("host.expander(", 1)[1]
-        assert "icon=" not in call, "a changing icon remounts the expander closed"
-        assert "badge(" not in call, "a changing label remounts the expander closed"
-
-    def test_no_step_body_writes_an_open_flag(self):
-        """The single rule the fix rests on: only the shell moves the accordion.
-
-        A step body that wrote ``wiz_open_*`` would reintroduce exactly the
-        DATA-19 bug (a step collapsing in response to its own edit), so this is
-        asserted structurally rather than left to review.
-        """
-        source = pathlib.Path(wizard.__file__).read_text(encoding="utf-8")
-        offenders = [
-            stripped
-            for line in source.splitlines()
-            for stripped in [line.strip()]
-            # Comments may name the key; only real code is an offender.
-            if wizard_shell.OPEN_KEY_PREFIX in stripped
-            and not stripped.startswith("#")
-            and "wizard_shell." not in stripped
-        ]
-        assert not offenders, f"wizard.py writes accordion keys directly: {offenders}"
-
-
-def _varying_header_expander_app():
-    """A keyed expander whose icon changes on run 2 — the shipped-then-fixed bug."""
-    import streamlit as st
-
-    n = st.session_state.get("_n", 0) + 1
-    st.session_state["_n"] = n
-    if n == 1:
-        st.session_state["wiz_open_probe"] = True
-    st.expander(
-        "1. Your data",
-        key="wiz_open_probe",
-        icon="🔵" if n == 1 else "✅",
-        on_change="rerun",
-    )
-
-
-def _stable_header_expander_app():
-    """The control: identical, but the header never changes."""
-    import streamlit as st
-
-    n = st.session_state.get("_n", 0) + 1
-    st.session_state["_n"] = n
-    if n == 1:
-        st.session_state["wiz_open_probe"] = True
-    st.expander("1. Your data", key="wiz_open_probe", on_change="rerun")
-
-
 def _seed_overwrite_app():
     import streamlit as st
 
@@ -271,8 +156,9 @@ def _remove_dataset_app():
 
 class TestWizardRestoreSeeding:
     def test_overwrite_replaces_existing_widget_keys(self):
-        # Regression: the wizard's setup restore silently did nothing
-        # because setdefault no-ops on keys the mapping widgets already created.
+        # The wizard's setup restore must overwrite: setdefault no-ops on keys
+        # the mapping widgets already created, so the restore would silently
+        # do nothing.
         at = AppTest.from_function(_seed_overwrite_app)
         at.run()
         assert not at.exception, at.exception
@@ -366,7 +252,7 @@ class TestRestoreSetupOncePerUpload:
 
 
 def _copy_setup_app():
-    """*Start from → A dataset you added*: copy, then Undo (2026-10-09)."""
+    """*Start from → A dataset you added*: copy, then Undo."""
     import streamlit as st
 
     from scanpath_studio import wizard
@@ -475,7 +361,7 @@ def _empty_wizard_setup_app():
 
 class TestAnEmptyAddScreenLeavesTheFigureAlone:
     """Opening ➕ Add dataset and cancelling must not leave the dataset you
-    came from with the setup lines' own starting answers (2026-10-09)."""
+    came from with the setup lines' own starting answers."""
 
     def test_its_starting_answers_write_no_figure_setting(self):
         at = AppTest.from_function(_empty_wizard_setup_app)

@@ -1,10 +1,10 @@
-"""UX-138: the app's icon vocabulary lives in one registry, `constants.ICONS`.
+"""The app's icon vocabulary lives in one registry, `constants.ICONS`.
 
 Two guards. Every entry must name a real Material Symbols icon — Streamlit ships
 the list it validates against, so a typo fails here rather than as a blank box
 in the browser. And no ``icon=`` argument may take a raw emoji again: that slot
 is chrome by definition, which is exactly what the registry is for, and literals
-there are how the app ended up speaking two icon languages at once.
+there would have the app speaking two icon languages at once.
 """
 
 from __future__ import annotations
@@ -84,7 +84,7 @@ def test_a_row_tooltip_never_spells_out_a_shortcode():
 
 
 def test_a_greyed_rows_caption_tooltip_never_spells_out_a_shortcode():
-    # #374 F36: a switched-off layer's popover rows printed
+    # A switched-off layer's popover rows must not print
     # "Color — :material_warning: :material_arrow_outward: Saccades is off …".
     host = _Host()
     controls._sub_caption(
@@ -116,9 +116,9 @@ def test_subtab_labels_are_built_from_the_registry():
 
 
 def test_the_rail_heading_is_sized_by_its_key_not_its_text():
-    # BUG-88: Streamlit derives a heading's id from its text, the icon's name
-    # included, so the icon turned `#plot-controls` into `#tune-plot-controls`
-    # and the size pin silently stopped matching — a 36px heading, two lines.
+    # Streamlit derives a heading's id from its text, the icon's name included,
+    # so an icon turns `#plot-controls` into `#tune-plot-controls` and the size
+    # pin silently stops matching — a 36px heading, two lines.
     css = styles.get_app_css()
     assert ".st-key-plot_controls_header h2" in css
     assert "#plot-controls" not in css

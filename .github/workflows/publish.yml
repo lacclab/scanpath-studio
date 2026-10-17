@@ -21,10 +21,10 @@ jobs:
           # deployment-only commits. Git needs both histories for the merge.
           fetch-depth: 0
 
-      # ENG-62: a tag pushed without bumping the version rebuilt the old one,
-      # `skip-existing` below let PyPI skip it without a word, and the job went
-      # on to cut a GitHub release and post "published" to Slack with a link
-      # that 404s. Refuse up front instead.
+      # A tag pushed without bumping the version would rebuild the old one,
+      # `skip-existing` below would let PyPI skip it without a word, and the job
+      # would go on to cut a GitHub release and post "published" to Slack with a
+      # link that 404s. Refuse up front instead.
       - name: Tag matches the package version
         run: |
           VERSION="$(sed -n 's/^__release__ = "\(.*\)"$/\1/p' scanpath_studio/__init__.py)"
@@ -62,11 +62,11 @@ jobs:
         run: |
           VERSION="${TAG#v}"
           NOTES_FILE="$(mktemp)"
-          # GitHub rejects a release body over 125,000 characters, and a
-          # release that bundles months of work overruns that (v0.29.0's
-          # section was 172,795) — which published to PyPI and then failed
-          # here. Over the cap the changelog's headline half is kept and the
-          # rest is linked; leave headroom for the intro prepended below.
+          # GitHub rejects a release body over 125,000 characters, which a
+          # release that bundles months of work can overrun — after PyPI has
+          # already published. Over the cap the changelog's headline half is
+          # kept and the rest is linked; leave headroom for the intro prepended
+          # below.
           python scripts/changelog_notes.py "$VERSION" --format markdown \
             --max-chars 120000 \
             --details-url "https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md" \
@@ -116,12 +116,14 @@ jobs:
             exit 0
           fi
           VERSION="${TAG#v}"
-          URL="https://pypi.org/project/scanpath-studio/${VERSION}/"
+          # The GitHub release the step above wrote: its notes are what the
+          # message points readers to.
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
           # The notification announces the release — version, link and how
           # many items each group holds — and leaves the notes themselves to
-          # the GitHub release and CHANGELOG.md.
+          # that release page.
           COUNTS="$(python scripts/changelog_notes.py "$VERSION" --format counts)"
-          TEXT=":rocket: *scanpath-studio ${TAG}* published to PyPI — $URL"
+          TEXT=":rocket: *scanpath-studio ${TAG}* published to PyPI — <${URL}|release notes>"
           if [ -n "$COUNTS" ]; then
             TEXT="$(printf '%s\n%s' "$TEXT" "$COUNTS")"
           fi

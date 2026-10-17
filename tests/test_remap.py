@@ -320,12 +320,12 @@ def test_remap_proposed_always_seeds_text_id():
 
 
 class TestStimulusLevelWordsRemap:
-    """DATA-39 — a per-*text* AOI table (no participant column) is broadcast onto
-    the readers at import, so the stored words carry real reader ids while their
+    """A per-*text* AOI table (no participant column) is broadcast onto the
+    readers at import, so the stored words carry real reader ids while their
     schema maps no Participant. ✅ Save changes on the ✏️ Edit dataset screen —
-    which attaching a metadata table there requires — re-derived those words onto
-    the ``""`` placeholder reader and never broadcast them back, so every
-    scanpath lost its AOIs and its text."""
+    which attaching a metadata table there requires — re-derives those words
+    onto the ``""`` placeholder reader, so it must broadcast them back, or every
+    scanpath loses its AOIs and its text."""
 
     _WORD_SCHEMA = {
         "trial": "tr",
@@ -424,8 +424,8 @@ class TestStimulusLevelWordsRemap:
         assert self._boxes(words) == before
 
     def test_a_dataset_saved_before_the_fix_is_repaired_by_the_next_save(self):
-        """The broken shape the bug stored — every word on the ``""`` reader,
-        still flagged — is broadcast back rather than kept broken."""
+        """A broken stored shape — every word on the ``""`` reader, still
+        flagged — is broadcast back rather than kept broken."""
         from scanpath_studio.data import STIMULUS_WORDS_FLAG
 
         words, fixations = self._stored()
@@ -517,7 +517,7 @@ class TestStimulusLevelWordsRemap:
         assert self._boxes(reloaded) == self._boxes(saved["words"])
 
     def test_save_changes_applies_the_name_typed_on_the_editor(self):
-        """UX-178 — the editor's **Name** is applied by ✅ Save changes, after
+        """The editor's **Name** is applied by ✅ Save changes, after
         the entry is saved under the name its widgets were keyed by."""
         import streamlit as st
 
@@ -539,7 +539,7 @@ class TestStimulusLevelWordsRemap:
         assert tabs.EDITOR_PENDING_NAME_KEY not in st.session_state
 
     def test_a_fixations_table_added_to_a_words_only_dataset_gets_the_boxes(self):
-        """UX-104 — adding the missing fixations on the edit screen harmonizes
+        """Adding the missing fixations on the edit screen harmonizes
         the added table with the words itself. Harmonizing the words against
         the (still empty) fixations *first* would stamp them with the synthetic
         reader and leave nothing to broadcast onto the added readers."""
@@ -621,8 +621,8 @@ class TestStimulusLevelWordsRemap:
         assert self._boxes(saved["words"]) == self._boxes(words)
 
     def test_a_text_joined_dataset_survives_a_new_fixation_trial_pick(self):
-        """DATA-49 review: once joined by Text ID, the stored boxes carry each
-        reading's own trial id. The save must collapse them back to one copy
+        """Once joined by Text ID, the stored boxes carry each reading's own
+        trial id. The save must collapse them back to one copy
         per *text*, or changing the fixations' Trial ID pick finds every text
         naming several trials and refuses a dataset that still joins."""
         from scanpath_studio.data import harmonize_frames
@@ -686,10 +686,10 @@ class TestStimulusLevelWordsRemap:
             assert extract_trial(saved["words"], reader, trial)["text"].tolist() == text
 
     def test_a_trial_pick_that_matches_nothing_is_refused_without_a_text_id(self):
-        """DATA-49 round 4: with no Text ID mapped on the fixations, their
-        ``text_id`` is only their own trial id, which names no text — so it
-        cannot stand in for a Trial pick the fixations do not share, and the
-        save is refused rather than guessed. (With a real Text ID it saves:
+        """With no Text ID mapped on the fixations, their ``text_id`` is only
+        their own trial id, which names no text — so it cannot stand in for a
+        Trial pick the fixations do not share, and the save is refused rather
+        than guessed. (With a real Text ID it saves:
         ``TestStimulusProvenanceOnRemap``.)"""
         words, fixations = self._stored()
         words = words.assign(item=["zz"] * len(words))
@@ -699,10 +699,10 @@ class TestStimulusLevelWordsRemap:
         assert problems and "words" in problems
         assert saved is entry
 
-    # -- datasets the bug already saved --------------------------------------
+    # -- datasets already stored in the broken shape -------------------------
 
     def _stranded(self):
-        """What the old ✅ Save changes stored: every word on the ``""``
+        """What an older ✅ Save changes stored: every word on the ``""``
         placeholder reader, the broadcast flag still set."""
         from scanpath_studio.data import STIMULUS_WORDS_FLAG
 
@@ -1106,9 +1106,9 @@ class TestEditorSetupExport:
 
 
 class TestStimulusProvenanceOnRemap:
-    """DATA-49 review, round 3: a broadcast copy carries the AOI trial it came
-    from (`data.AOI_TRIAL_ID`), so ✏️ Edit dataset gets the stimulus table back
-    exactly — one copy per AOI trial — whatever route each reading took."""
+    """A broadcast copy carries the AOI trial it came from (`data.AOI_TRIAL_ID`),
+    so ✏️ Edit dataset gets the stimulus table back exactly — one copy per AOI
+    trial — whatever route each reading took."""
 
     _EDGE = {
         "word_id": "wid",
@@ -1209,7 +1209,7 @@ class TestStimulusProvenanceOnRemap:
         return extract_trial(words, reader, trial)[column].tolist()
 
     def test_a_kept_column_that_differs_between_identical_trials_survives(self):
-        """F1: two AOI trials with the same text and boxes but a different
+        """Two AOI trials with the same text and boxes but a different
         `cond` stay two trials; an unchanged save rewrites neither."""
         raw_w = self._aoi(
             ["t4", "t5"], ["T", "T"], ["same", "same"], cond=["easy", "hard"]
@@ -1229,7 +1229,7 @@ class TestStimulusProvenanceOnRemap:
             assert self._cells(saved["words"], reader, "t5", "cond") == ["hard"]
 
     def test_a_mixed_route_dataset_survives_a_new_fixation_trial_pick(self):
-        """F2: one reading joined by trial id, one by Text ID; a new fixations
+        """One reading joined by trial id, one by Text ID; a new fixations
         Trial ID pick re-joins both by text instead of refusing."""
         raw_w = self._aoi(["A", "B"], ["tA", "tB"], ["a", "b"])
         raw_f = self._fix(["p1", "p2"], ["A", "p2_B"], ["tA", "tB"], alt=["X1", "X2"])
@@ -1247,7 +1247,7 @@ class TestStimulusProvenanceOnRemap:
 
     def _repeat_case(self, **kwargs):
         raw_w = self._aoi(["a1p1", "a1p2"], ["a1", "a1"], ["first", "second"])
-        # The raw paragraph column the repro re-picks, kept as an extra field.
+        # The raw paragraph column a re-pick uses, kept as an extra field.
         raw_w["paragraph"] = raw_w["item"]
         raw_f = self._fix(
             ["r1", "r1", "r1"],
@@ -1265,7 +1265,7 @@ class TestStimulusProvenanceOnRemap:
         )
 
     def test_a_repeat_keeps_one_copy_of_its_boxes_under_the_default_proposal(self):
-        """F3, the editor's own proposal: the fixations' Trial ID stays the
+        """The editor's own proposal: the fixations' Trial ID stays the
         stored (suffixed) `trial_id`, so `_base_trial_id` must survive it."""
         before, problems, saved = self._repeat_case()
         assert not problems
@@ -1278,7 +1278,7 @@ class TestStimulusProvenanceOnRemap:
             assert self._cells(saved["words"], "r1", trial) == text, trial
 
     def test_a_repeat_keeps_one_copy_after_re_picking_the_words_trial_id(self):
-        """F3, the repro: re-pick the words' Trial ID to the raw paragraph column —
+        """Re-pick the words' Trial ID to the raw paragraph column —
         `a1p1` must not get its boxes twice, nor `a1p1_r2` none."""
         _before, problems, saved = self._repeat_case(words_pick="paragraph")
         assert not problems
@@ -1290,7 +1290,7 @@ class TestStimulusProvenanceOnRemap:
             assert self._cells(saved["words"], "r1", trial) == text, trial
 
     def test_a_partial_join_during_a_save_is_shown_on_the_page(self):
-        """F5: the warning is raised inside the button's callback, so it is
+        """The warning is raised inside the button's callback, so it is
         parked for the screen the save returns to."""
         import warnings
 
@@ -1314,9 +1314,8 @@ class TestStimulusProvenanceOnRemap:
 
 
 class TestLegacyStoredRepeats:
-    """DATA-49 round 4: a dataset stored before the join recorded provenance
-    (v0.32.0 — no `_aoi_trial_id`, no `_base_trial_id`) with a repeated
-    reading. Its repeat's copy of the boxes carries the `_r2` id; the save
+    """A dataset stored before the join recorded provenance (v0.32.0 — no
+    `_aoi_trial_id`, no `_base_trial_id`) with a repeated reading. Its repeat's copy of the boxes carries the `_r2` id; the save
     must fold it back into the trial it copied, or it becomes a phantom AOI
     trial that makes its text ambiguous for good — and a later save that
     re-joins by Text ID then leaves 3 of 4 readings without boxes."""

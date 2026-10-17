@@ -1,10 +1,10 @@
-"""Reproducible timing profile of the VAL-5 computation register.
+"""Reproducible timing profile of the computation register.
 
 Walks the pipeline in dependency order — normalize → assign → measure →
 preprocess → aggregate, then the per-trial similarity, drift-correction and
 figure builders — and times each stage against a real corpus, mapping every
 stage back to the ``computations.py`` entry ids it exercises so the output can
-be read next to ``docs/computations.md``.
+be read next to the register.
 
 The default run uses the bundled demo. The numbers that matter come from a big
 corpus: point it at the OneStop EyeLink reports and cap the participant count,

@@ -1,5 +1,5 @@
-"""A text-grain metadata table — the third grain, sibling of DATA-20's
-participant table and DATA-29's trial table.
+"""A text-grain metadata table — the third grain, sibling of the participant
+table and the trial table.
 
 Flat like the participant table (one dimension, ``text_id``, never paired with
 a reader — a text is a stimulus, not something one reader owns), but its id
@@ -89,7 +89,7 @@ class TestFiltering:
         assert matching == {"a"}
 
     def test_a_range_keeps_the_unmeasured(self):
-        """UX-49's rule, this grain too: a range narrows, it does not exclude."""
+        """The range filters' rule, this grain too: a range narrows, it does not exclude."""
         built = metadata.build_text_metadata(_table(), "text", keys=KEYS)
         matching = metadata.texts_matching(built, {}, {"word_count": (0.0, 500.0)})
         # b is in range; c has no row at all — both kept; a is out of range.
@@ -132,11 +132,11 @@ class TestControlsAndRoundTrip:
 
 
 class TestChips:
-    """DATA-45: a text field put in the chips renders its value above the plot.
+    """A text field put in the chips renders its value above the plot.
 
-    `tabs._chip_value_and_uniqueness` fell back to the participant and trial
-    tables but had no branch for the text table, so the value resolved to None
-    and the chip was skipped without a word.
+    `tabs._chip_value_and_uniqueness` resolves a chip's value from the text
+    table as well as the participant and trial tables; without that branch the
+    value would resolve to None and the chip be skipped without a word.
     """
 
     @staticmethod

@@ -1,4 +1,4 @@
-"""The README and docs link each desktop bundle directly (ENG-76).
+"""The README and docs link each desktop bundle directly.
 
 ``releases/latest/download/<name>`` resolves only while the release carries an
 asset of exactly that name, and the names come from the ``archive:`` (and

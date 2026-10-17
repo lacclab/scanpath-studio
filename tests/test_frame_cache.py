@@ -1,4 +1,4 @@
-"""The no-copy frame cache (PERF-6).
+"""The no-copy frame cache.
 
 ``st.cache_data`` hands every caller a private deep copy of its result. For the
 corpus-scale frames that costs ~1.15 s and ~1.2 GB of churn on every rerun — on
@@ -6,13 +6,12 @@ data the app already has, and never writes to (see
 ``tests/test_frame_immutability.py``). ``frame_cache`` keeps the last result per
 slot and hands back *the object itself*.
 
-UX-166 added `_shared_build` (a rerun joins a build already in flight instead
-of starting a second). Its fix rounds added "latest request wins" (T5-1): a
-build that finishes only publishes into the shared cache while its key is
-still the slot's most recently *requested* one, so a superseded build's late
-finish can never clobber a newer result; and (T5-5, fix round 2) made the
-owner branch exception-safe end to end — a raising `lookup`/`publish` must
-never leak the in-flight registry entry or hang a waiter forever.
+`_shared_build` lets a rerun join a build already in flight instead of starting
+a second. "Latest request wins": a build that finishes only publishes into the
+shared cache while its key is still the slot's most recently *requested* one,
+so a superseded build's late finish can never clobber a newer result. The owner
+branch is exception-safe end to end — a raising `lookup`/`publish` must never
+leak the in-flight registry entry or hang a waiter forever.
 """
 
 from __future__ import annotations
@@ -33,7 +32,7 @@ from scanpath_studio.data import _shared_build, frame_cache
 #: Every threaded test below is fully deterministic (Event-based, no sleeps)
 #: and should finish in well under a second; this is a backstop only — a
 #: regression that reintroduces a hang fails the test instead of the whole
-#: suite (UX-166 fix-round-2, Minor #2 of Ruling T5-5).
+#: suite.
 _THREAD_TEST_TIMEOUT = 30
 
 
@@ -49,7 +48,7 @@ class _FlagWaitEvent(threading.Event):
     """A `threading.Event` that flags when a caller is actually blocked in
     `wait()` — deterministic tests need to know a waiter has genuinely reached
     `entry.done.wait()` before releasing the owner, rather than guessing with
-    a sleep (UX-166 fix-round-1, Minor #4)."""
+    a sleep."""
 
     def __init__(self):
         super().__init__()
@@ -71,11 +70,10 @@ class _FlagWaitInFlight:
 
 
 def _run_daemon(target) -> threading.Thread:
-    """Start `target` as a **daemon** thread (UX-166 fix-round-2, Minor #2):
-    a regression that leaves it parked forever must not also block pytest —
-    or the whole process — from exiting. Every caller still joins it with a
-    bounded timeout and asserts it actually finished; the daemon flag is the
-    second line of defense, not the only one."""
+    """Start `target` as a **daemon** thread: a regression that leaves it parked
+    forever must not also block pytest — or the whole process — from exiting. Every
+    caller still joins it with a bounded timeout and asserts it actually finished;
+    the daemon flag is the second line of defense, not the only one."""
     thread = threading.Thread(target=target, daemon=True)
     thread.start()
     return thread
@@ -92,9 +90,9 @@ def _wait_or_fail(event: threading.Event, *, timeout: float = 5, msg: str) -> No
 
 @contextlib.contextmanager
 def _released_afterward(release: threading.Event):
-    """`release.set()` always runs on the way out (UX-166 fix-round-2,
-    Minor #2): an owner thread parked on `release.wait()` must never be left
-    hanging just because an assertion inside the block failed first."""
+    """`release.set()` always runs on the way out: an owner thread parked on
+    `release.wait()` must never be left hanging just because an assertion
+    inside the block failed first."""
     try:
         yield
     finally:
@@ -132,7 +130,7 @@ class TestFrameCache:
         assert frame_cache("t_evict", "k1", _frame) is not first
 
     def test_keep_two_serves_the_previous_entry_back(self):
-        """PERF-18: switching A → B → A must not rebuild A."""
+        """Switching A → B → A must not rebuild A."""
         a = frame_cache("t_keep", "A", _frame, keep=2)
         b = frame_cache("t_keep", "B", _frame, keep=2)
         assert frame_cache("t_keep", "A", _must_not_run, keep=2) is a
@@ -196,11 +194,10 @@ class TestClearFrameCache:
 
 
 class TestFingerprintsOutliveTheRun:
-    """PERF-10 → BUG-103: a frame `frame_cache` hands back as the same object
-    run after run is named by its slot and key, which decide its content — it is
-    never hashed at all. The per-run memo reset used to force a full re-hash of
-    the normalized pair on every rerun (~0.5 s of a 1.9 s rerun at 50× the
-    demo)."""
+    """A frame `frame_cache` hands back as the same object run after run is
+    named by its slot and key, which decide its content — it is never hashed at
+    all. Re-hashing the normalized pair after every per-run memo reset would
+    cost ~0.5 s of a 1.9 s rerun at 50× the demo."""
 
     def _counting(self, monkeypatch):
         from scanpath_studio import data
@@ -259,7 +256,7 @@ class TestFingerprintsOutliveTheRun:
 
 
 class TestSourceLabels:
-    """BUG-103: a cached loader's frames are named by the load they came from.
+    """A cached loader's frames are named by the load they came from.
 
     `st.cache_data` hands out a fresh copy per call, so the label rides in
     `attrs` (which survive the copy) and `adopt_source` moves it onto the object.
@@ -285,9 +282,8 @@ class TestSourceLabels:
         assert fp(first[0])[0] == "assigned"
 
     def test_another_load_of_the_same_content_is_a_new_source(self):
-        """The case BUG-103 is about: a re-upload must not match the old file —
-        even when its content happens to be identical, which only costs a
-        recompute."""
+        """A re-upload must not match the old file — even when its content happens
+        to be identical, which only costs a recompute."""
         a, b = self._cache_copy(self._load()), self._cache_copy(self._load())
         data_module.adopt_source(*a)
         data_module.adopt_source(*b)
@@ -309,7 +305,7 @@ class TestSourceLabels:
 
 
 class TestDerivedFingerprints:
-    """BUG-103: a filtered pool is named by its inputs and its settings."""
+    """A filtered pool is named by its inputs and its settings."""
 
     def _parents(self):
         words, fixations = _frame(4), _frame(6)
@@ -350,9 +346,9 @@ class TestDerivedFingerprints:
 
 @pytest.mark.timeout(_THREAD_TEST_TIMEOUT)
 class TestSharedBuild:
-    """UX-166: a rerun joins a build already in flight instead of starting one.
+    """A rerun joins a build already in flight instead of starting one.
 
-    Deterministic throughout (UX-166 fix-round-1, Minor #4): every test
+    Deterministic throughout: every test
     monkeypatches `data._InFlight` so the owner's build blocks on a `release`
     Event, and waits for `entry.done.waiting` — set only once a second caller
     has genuinely reached `entry.done.wait()` — before releasing it. A
@@ -362,7 +358,7 @@ class TestSharedBuild:
     anything there. Every wait/join is bounded and asserted, `release` always
     fires (even if an earlier assertion in the block failed), and threads are
     daemons — a regression that reintroduces a hang fails fast instead of
-    parking the test suite (fix-round-2, Minor #2).
+    parking the test suite.
     """
 
     def test_two_callers_share_one_build(self, monkeypatch):
@@ -449,10 +445,9 @@ class TestSharedBuild:
     def test_an_ordinary_error_is_re_raised_in_the_waiter_not_rebuilt(
         self, monkeypatch
     ):
-        """Minor #5 (fix-round-1): an ordinary `Exception` is not a
-        cancellation — re-running the owner's build would just fail again the
-        same way, so every waiter gets the SAME exception instead of
-        rebuilding."""
+        """An ordinary `Exception` is not a cancellation — re-running the owner's
+        build would just fail again the same way, so every waiter gets the SAME
+        exception instead of rebuilding."""
         monkeypatch.setattr(data_module, "_InFlight", _FlagWaitInFlight)
         registered = threading.Event()
         release = threading.Event()
@@ -499,12 +494,11 @@ class TestSharedBuild:
         assert waiter_errors == [boom]
 
     def test_a_waiter_gets_its_own_publish_opportunity(self, monkeypatch):
-        """Minor #1 of Ruling T5-5 (fix-round-2): the owner's own `publish`
-        decides against whatever key was latest *at its own decision time* —
-        a joined waiter's request can itself be the latest again by the time
-        it wakes, so it gets an independent, guarded shot at publishing too.
-        Proven here by giving the owner and the waiter two DIFFERENT publish
-        callbacks and asserting both actually ran with the shared value."""
+        """The owner's own `publish` decides against whatever key was latest *at its
+        own decision time* — a joined waiter's request can itself be the latest
+        again by the time it wakes, so it gets an independent, guarded shot at
+        publishing too. Proven here by giving the owner and the waiter two DIFFERENT
+        publish callbacks and asserting both actually ran with the shared value."""
         monkeypatch.setattr(data_module, "_InFlight", _FlagWaitInFlight)
         ident = ("s", "waiter-publish")
         registered = threading.Event()
@@ -546,12 +540,10 @@ class TestSharedBuild:
     def test_a_raising_publish_does_not_leak_the_entry_or_hang_a_waiter(
         self, monkeypatch, caplog
     ):
-        """Ruling T5-5 (fix-round-2): a24e105's try/finally always popped the
-        entry and signalled `done`; the "latest request wins" fix (T5-1) lost
-        that by writing the cleanup out per path, so a raising `publish`
-        (reproduced by the reviewer via `_vouch_for_frames` racing another
-        session's concurrent insert) leaked the `_INFLIGHT` entry and hung
-        every waiter — already joined or not — forever. Both failures are
+        """The entry is always popped and `done` always signalled, even when
+        `publish` raises (as `_vouch_for_frames` can, racing another session's
+        concurrent insert) — otherwise the `_INFLIGHT` entry leaks and every
+        waiter, already joined or not, hangs forever. Both failures are
         WARNINGs: swallowed, a publish that keeps failing would show only as
         every rerun rebuilding."""
         caplog.set_level(logging.DEBUG, logger=data_module.__name__)
@@ -614,8 +606,8 @@ class TestSharedBuild:
         assert record.levelno == logging.DEBUG
 
     def test_a_raising_lookup_still_builds_and_cleans_up(self, monkeypatch):
-        """Ruling T5-5 (fix-round-2): a raising `lookup` is treated as a miss
-        — logged, then built normally — never left to skip the cleanup."""
+        """A raising `lookup` is treated as a miss — logged, then built normally —
+        never left to skip the cleanup."""
         monkeypatch.setattr(data_module, "_InFlight", _FlagWaitInFlight)
         ident = ("s", "raising-lookup")
         calls = []
@@ -634,7 +626,7 @@ class TestSharedBuild:
         assert ident not in data_module._INFLIGHT
 
     def test_waiting_on_a_build_in_flight_counts_as_work(self, monkeypatch):
-        """UX-166: a rerun that lands on another run's build waits for it, and
+        """A rerun that lands on another run's build waits for it, and
         the owner's reports go to the owner's task — so the waiter reports once
         itself, or a gated card over the wait (the Corpus measures) never shows."""
         monkeypatch.setattr(data_module, "_InFlight", _FlagWaitInFlight)
@@ -745,9 +737,9 @@ class TestSharedBuild:
 
 @pytest.mark.timeout(_THREAD_TEST_TIMEOUT)
 class TestFrameCacheSharesInFlightBuilds:
-    """Minor #8 (fix-round-1): `frame_cache` itself — not just `_shared_build`
-    directly — shares one build in flight across two threads asking for the
-    same slot and key, in the same bare-mode session store."""
+    """`frame_cache` itself — not just `_shared_build` directly — shares one build
+    in flight across two threads asking for the same slot and key, in the same
+    bare-mode session store."""
 
     def test_two_threads_share_one_build(self, monkeypatch):
         monkeypatch.setattr(data_module, "_InFlight", _FlagWaitInFlight)
@@ -786,10 +778,9 @@ class TestFrameCacheSharesInFlightBuilds:
 
 
 def test_a_stopped_sessions_build_still_lands_in_the_store(monkeypatch):
-    """Minor #8 (fix-round-1), end to end with the debug_log fix: `timed()`'s
-    log line runs *after* the build finishes, and used to let an abandoned
-    run's StopException throw the just-finished result away before
-    `frame_cache` could store it (UX-166's first bug)."""
+    """End to end: `timed()`'s log line runs *after* the build finishes, and an
+    abandoned run's StopException raised there must not throw the
+    just-finished result away before `frame_cache` can store it."""
     from streamlit.runtime.scriptrunner import StopException
 
     from scanpath_studio import debug_log
@@ -816,9 +807,9 @@ def test_a_stopped_sessions_build_still_lands_in_the_store(monkeypatch):
 
 @pytest.mark.timeout(_THREAD_TEST_TIMEOUT)
 class TestLatestRequestWins:
-    """UX-166 fix-round-1 (T5-1): a build a newer request already superseded
-    must not clobber that newer result when it finally finishes — its own
-    caller still gets its value, but the shared store does not."""
+    """A build a newer request already superseded must not clobber that newer result
+    when it finally finishes — its own caller still gets its value, but the shared
+    store does not."""
 
     def test_a_slow_earlier_build_does_not_clobber_a_newer_one(self, monkeypatch):
         """K_A is slow and in flight; K_B is requested (a fresh, independent

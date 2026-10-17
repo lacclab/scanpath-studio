@@ -3,7 +3,8 @@
 The *Scanpath A* / *Scanpath B* rows of the ⬚ Word boxes popover carry an
 opacity each for line and fill. Like their colours, they follow the figure's
 opacity until one is set, and setting the figure's value again goes back to
-following it — so a session that never touches them draws as before.
+following it — so a session that never touches them draws both scanpaths at
+the figure's opacity.
 """
 
 from __future__ import annotations

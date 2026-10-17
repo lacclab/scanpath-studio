@@ -1,9 +1,9 @@
-"""ENG-64: the in-app figure loads plotly.js from this app's own server.
+"""The in-app figure loads plotly.js from this app's own server.
 
-It used to be ``fig.to_html(include_plotlyjs="cdn")``, so every figure asked
-``cdn.plot.ly`` for the library and drew blank without a network — the desktop
-app included. The installed plotly package's own ``plotly.min.js`` is now served
-through Streamlit's custom-component route, and these tests pin each link of that
+With ``fig.to_html(include_plotlyjs="cdn")`` every figure would ask
+``cdn.plot.ly`` for the library and draw blank without a network — the desktop
+app included. Instead the installed plotly package's own ``plotly.min.js`` is
+served through Streamlit's custom-component route, and these tests pin each link of that
 chain: the file is the installed build, the URL is the relative one the route
 answers, the route really serves it, and the embedded figure asks for nothing else.
 """

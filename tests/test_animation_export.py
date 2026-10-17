@@ -113,7 +113,7 @@ class TestStaticBase:
         assert base.layout.margin.t == ae._STATIC_TOP_MARGIN_PX
         assert base.layout.margin.l == anim_fig.layout.margin.l
         assert int(base.layout.height) < int(anim_fig.layout.height)
-        # BUG-93: the replay's clock is for the live player, not every raster.
+        # The replay's clock is for the live player, not every raster.
         assert base.layout.meta is None
 
     def test_does_not_mutate_original(self, anim_fig):
@@ -242,10 +242,10 @@ class TestEncodeGif:
             encode_gif([], 100.0)
 
     def test_streams_instead_of_decoding_every_frame_up_front(self):
-        # SEC1 / BUG-74: the old encoder decoded the whole clip into a list of RGB
-        # images before writing one byte — ~10 MB a frame at 2×, ~4.6 GB for a
-        # capped hosted export. Count the live decoded images while the encoder
-        # pulls frames: streaming keeps a constant handful, not one per frame.
+        # Decoding the whole clip into a list of RGB images before writing one
+        # byte would cost ~10 MB a frame at 2×, ~4.6 GB for a capped hosted
+        # export. Count the live decoded images while the encoder pulls frames:
+        # streaming keeps a constant handful, not one per frame.
         import gc
 
         def live_images() -> int:
@@ -292,9 +292,9 @@ class TestEncodeGif:
 
     @pytest.mark.parametrize("frame_ms", [26.667, 37.5, 97.6, 136.1])
     def test_delays_add_up_to_the_clip(self, frame_ms):
-        # BUG-93: GIF stores whole centiseconds and Pillow truncates the rest, so
-        # a 26.7 ms frame was written as 20 ms and the clip ran 25 % fast. Each
-        # delay is rounded against the running total instead.
+        # GIF stores whole centiseconds and Pillow truncates the rest, so a
+        # 26.7 ms frame would be written as 20 ms and the clip would run 25 %
+        # fast. Each delay is rounded against the running total instead.
         data = encode_gif(_solid_frames(30), frame_ms)
         img = Image.open(io.BytesIO(data))
         delays = []
@@ -306,7 +306,7 @@ class TestEncodeGif:
 
 
 class TestGifPixelBudget:
-    """SEC1 / BUG-74: a GIF too large for this server is refused up front."""
+    """A GIF too large for this server is refused up front."""
 
     def test_under_budget_passes(self):
         ae.check_gif_budget(250, 960, 524, 2.0, budget=ae.GIF_PIXEL_BUDGET_HOSTED)
@@ -390,10 +390,10 @@ class TestExportAnimationValidation:
 
 
 def test_the_missing_browser_hint_works_in_the_desktop_app_too():
-    """BUG-85: the hint's fixes were `kaleido_get_chrome`, `plotly_get_chrome`
-    and a Python one-liner — none of which exists in the frozen desktop bundle.
-    What both installs can do is install a browser `chromium_browser_path`
-    finds; the one command it keeps is labelled as the pip install's."""
+    """The hint offers no `kaleido_get_chrome`, `plotly_get_chrome` or Python
+    one-liner — none of which exists in the frozen desktop bundle. What both
+    installs can do is install a browser `chromium_browser_path` finds; the one
+    command it gives is labelled as the pip install's."""
     hint = ae.CHROME_INSTALL_HINT
     for browser in ("Chrome", "Chromium", "Edge"):
         assert browser in hint
@@ -453,7 +453,7 @@ class TestDownsampleDurationPreserved:
 
 
 class TestRealTimeClip:
-    """BUG-93: a clip lasts what the on-screen replay lasts — the reading span
+    """A clip lasts what the on-screen replay lasts — the reading span
     over the speed — however fast that replay is."""
 
     def _capture(self, monkeypatch, fmt):
@@ -530,7 +530,7 @@ class TestEndToEnd:
         data = self._export(anim_fig, "gif")
         assert data[:6] in (b"GIF87a", b"GIF89a")
         img = Image.open(io.BytesIO(data))
-        # PIL coalesces identical consecutive frames (the uniform time grid, VIZ-11,
+        # PIL coalesces identical consecutive frames (the uniform time grid
         # yields identical frames during the final dwell) — runtime is preserved by
         # summing their durations, so the GIF frame count is ≤ the figure's.
         assert 1 <= getattr(img, "n_frames", 1) <= len(anim_fig.frames)
@@ -571,8 +571,9 @@ class TestEndToEnd:
 # Kaleido's server thread dies with the browser, which is the point.
 @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
 def test_a_browser_that_closes_at_once_fails_the_render_instead_of_hanging():
-    """The frozen desktop app's hung "Render GIF": Kaleido's warm server thread
-    died with the browser, and ``calc_fig_sync`` waited for it forever."""
+    """When Kaleido's warm server thread dies with the browser, the render fails
+    rather than ``calc_fig_sync`` waiting for it forever (a hung "Render GIF"
+    in the frozen desktop app)."""
     import kaleido
 
     fig = go.Figure(go.Scatter(x=[1], y=[1]))

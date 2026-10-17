@@ -1,19 +1,19 @@
-"""PERF-8: one filesystem probe per placeholder tuple, not per row.
+"""One filesystem probe per placeholder tuple, not per row.
 
-`data.resolve_stimulus_image_paths` is VIZ-14's headless surface — the app's
-local stimulus-folder controls, `render --stimulus-image-root` and
-`api.load_scanpath_data` all go through it. It resolved and stat'd a path for
-*every row*: two syscalls each, on every rerun that had a folder attached, over
-the unfiltered frames. A pattern only reads a couple of columns, so on OneStop
-that was millions of syscalls for a few hundred distinct answers.
+`data.resolve_stimulus_image_paths` is the stimulus images' headless surface —
+the app's local stimulus-folder controls, `render --stimulus-image-root` and
+`api.load_scanpath_data` all go through it. Resolving and stat'ing a path for
+*every row* would cost two syscalls each, on every rerun that has a folder
+attached, over the unfiltered frames. A pattern only reads a couple of columns,
+so on OneStop that would be millions of syscalls for a few hundred distinct
+answers.
 
-The per-row form also had a bug that only showed on some tables.
-`DataFrame.apply(axis=1)` hands the callback each row as a Series of ONE dtype,
-so an integer `trial_id` stringified as ``"7.0"`` whenever any *other* column in
-the frame happened to be a float — and as ``"7"`` otherwise. A normalized
-fixations frame always carries float `x`/`y`, so ``{trial_id}.png`` matched the
-words table and missed the fixations table, from the same folder, in the same
-call. Reading each column at its own dtype is both the fast way and the correct
+A per-row read is also wrong on some tables. `DataFrame.apply(axis=1)` hands
+the callback each row as a Series of ONE dtype, so an integer `trial_id`
+stringifies as ``"7.0"`` whenever any *other* column in the frame happens to be
+a float — and as ``"7"`` otherwise. A normalized fixations frame always carries
+float `x`/`y`, so ``{trial_id}.png`` would match the words table and miss the
+fixations table, from the same folder, in the same call. Reading each column at its own dtype is both the fast way and the correct
 one; :class:`TestOneColumnAtATime` is what pins it.
 """
 
@@ -84,12 +84,12 @@ class TestProbesAreDeduped:
 
 
 class TestOneColumnAtATime:
-    """Each column keeps its own dtype — the `apply(axis=1)` row-upcast bug."""
+    """Each column keeps its own dtype — no `apply(axis=1)` row upcast."""
 
     def test_an_int_id_is_not_stringified_through_float(self, images):
         # `x` is a float, as it is on every normalized fixations frame. The row
-        # Series `apply(axis=1)` built was therefore float64 throughout, and
-        # `{trial_id}` came out "7.0".
+        # Series `apply(axis=1)` builds is therefore float64 throughout, and
+        # `{trial_id}` would come out "7.0".
         frame = pd.DataFrame({"trial_id": [7], "x": [1.5]})
 
         resolved = resolve_stimulus_image_paths(frame, images, "{trial_id}.png")
@@ -131,8 +131,8 @@ class TestTheFallbackIsPerRow:
         # The third row had no prior value to keep, and how "no value" comes
         # back out of a column depends on the pandas major: 2 returns the None
         # it was given, 3 normalizes it to NaN. The claim under test is that
-        # the row stays *empty* — asserting the literal None pinned the
-        # storage detail instead, and broke on pandas 3.
+        # the row stays *empty*; asserting the literal None would pin the
+        # storage detail instead, and break on pandas 3.
         assert pd.isna(paths[2])
 
     def test_a_frame_with_no_image_path_column_gets_one(self, images):
@@ -176,9 +176,8 @@ class TestMissingPlaceholders:
     def test_a_nullable_id_column_is_a_float_column_and_formats_like_one(self, images):
         # Not a quirk of the dedup — it is what the column *is*. pandas has no
         # integer dtype carrying a NaN, so `1` beside a missing value really is
-        # `1.0`, and the pattern writes `a_1.0.png`. The per-row form agreed
-        # (its row Series was float64 too). Pinned so nobody "fixes" it into a
-        # guess about which floats were meant to be ints.
+        # `1.0`, and the pattern writes `a_1.0.png`. Pinned so nobody "fixes"
+        # it into a guess about which floats were meant to be ints.
         frame = pd.DataFrame({"text_id": ["a", "a"], "trial_id": [1, np.nan]})
 
         resolved = resolve_stimulus_image_paths(

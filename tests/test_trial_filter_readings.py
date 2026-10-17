@@ -1,12 +1,12 @@
-"""#412 — a trial filter decides each *reading*, from the table that has its field.
+"""A trial filter decides each *reading*, from the table that has its field.
 
 A condition such as ``difficulty_level`` may be on the Words table only, the
-Fixations table only, or both. `data.filter_trials` used to filter each table
-by its own column, so with the field on Words alone, choosing **Adv** dropped
-the Ele word rows and kept the Ele fixations — and the trial pool, built from
-every table, kept offering the Ele reading. Each condition is now resolved to
-``(participant_id, trial_id)`` readings once, and that answer narrows every
-table; readings the two tables disagree on are left out and reported.
+Fixations table only, or both. Filtering each table by its own column would,
+with the field on Words alone, make **Adv** drop the Ele word rows but keep the
+Ele fixations — and the trial pool, built from every table, would keep offering
+the Ele reading. So each condition is resolved to ``(participant_id, trial_id)``
+readings once, and that answer narrows every table; readings the two tables
+disagree on are left out and reported.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ LEVELS = ["Adv", "Adv", "Ele", "Ele"]
 
 class TestTheFieldNarrowsEveryTable:
     def test_a_field_on_the_words_table_only(self):
-        """The review's repro: Ele's fixations used to survive."""
+        """Choosing Adv drops Ele's fixations as well as its words."""
         w, f = filter_trials(
             _words(difficulty_level=LEVELS),
             _fixations(),

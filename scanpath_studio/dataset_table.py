@@ -1,4 +1,4 @@
-"""UX-174: the row model behind 📂 Available datasets.
+"""The row model behind 📂 Available datasets.
 
 Pure — no Streamlit, no pandas — so what a row *says* can be tested without
 booting the app. `app.render_dataset_table` builds one :class:`DatasetRow` per
@@ -16,9 +16,9 @@ dataset and draws it; everything that decides a cell's text lives here:
   be opened right now, and how fast — *Loaded*, *Available*, *Needs download*
   or *Needs setup*
   (:attr:`DatasetRow.status_label`) — and every row says it the same way,
-  whichever dataset is open (BUG-113). Where a row's numbers came from
-  (DATA-36's *loaded* vs *published*) is a different question, which the
-  count columns' header explains (:data:`COUNTS_EXPLANATION`).
+  whichever dataset is open. Where a row's numbers came from (*loaded* vs
+  *published*) is a different question, which the count columns' header
+  explains (:data:`COUNTS_EXPLANATION`).
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 #: The dataset table's count fields, in display order — and the only field names
-#: a catalogue entry may publish figures under (DATA-36). A typo would otherwise
+#: a catalogue entry may publish figures under. A typo would otherwise
 #: be dropped in silence; `tests/test_dataset_published_counts.py` checks every
 #: declaration against this tuple.
 DATASET_COUNT_FIELDS: tuple[str, ...] = (
@@ -73,14 +73,11 @@ _NOT_APPLICABLE_WHEN_LOADED: Mapping[str, str] = {
     "Gaze points": "This dataset has no raw-gaze samples.",
 }
 
-#: BUG-113 — the **Status** column's three values. It used to say *Loaded* /
-#: *Not loaded*, which is where the counts came from, and computed *Needs setup*
-#: for the open dataset only — so a corpus whose files had gone read *Loaded*
-#: until you opened it, and *Needs setup* the moment you did. Every row now says
-#: whether its dataset can be opened.
-#: Its data being here splits in two: already read this session (opens at
-#: once) or still to be read (opening reads its files, which takes a while on
-#: a large corpus).
+#: The **Status** column's values: whether a row's dataset can be opened now,
+#: asked of every row alike — never where its counts came from, which says
+#: nothing about whether its files are still here. A dataset whose data is here
+#: is either already read this session (opens at once) or still to be read
+#: (opening reads its files, which takes a while on a large corpus).
 LOADED = "Loaded"
 AVAILABLE = "Available"
 NEEDS_DOWNLOAD = "Needs download"
@@ -97,7 +94,7 @@ STATUS_EXPLANATIONS: Mapping[str, str] = {
     "and set its **Data directory** to their folder.",
 }
 
-#: Where a row's numbers come from (DATA-36), for the count columns' header.
+#: Where a row's numbers come from, for the count columns' header.
 COUNTS_EXPLANATION = (
     "Counted from a dataset's own rows once it has been opened; until then, the "
     "figures the corpus publishes for itself."
@@ -116,15 +113,15 @@ def format_count(value: int) -> str:
 class DatasetRow:
     """What one dataset's row of the table shows.
 
-    ``source`` is DATA-36's ``"loaded"`` / ``"published"`` / ``""``, and
+    ``source`` is ``"loaded"`` / ``"published"`` / ``""``, and
     ``counts`` holds only that source's numbers (a row never mixes the two).
     ``measured`` says whether the session ever counted this dataset at all,
-    which is what tells *Not loaded* from *Unknown* on a row with no numbers.
+    which is what tells *Not counted* from *Unknown* on a row with no numbers.
     ``status`` is whether the dataset can be opened now — blank when it can
     (then ``loaded`` says :data:`LOADED` or :data:`AVAILABLE`), else
     :data:`NEEDS_DOWNLOAD` / :data:`NEEDS_SETUP` — deliberately a
     field of its own: it says what the app can do with the dataset right now,
-    which is a different question from where its numbers came from (BUG-113).
+    which is a different question from where its numbers came from.
     ``order`` is the row's place in the unsorted list, so the list returns to
     it and does not move when the open dataset changes.
     """
@@ -175,7 +172,7 @@ class DatasetRow:
         """The **Status** cell — :data:`LOADED` / :data:`AVAILABLE` unless a
         missing-files state says otherwise.
 
-        Never derived from :attr:`source` (BUG-113): whether the numbers were
+        Never derived from :attr:`source`: whether the numbers were
         counted or published says nothing about whether the files are here —
         and counts are remembered across sessions, so neither do they say
         whether this session has read the dataset (``loaded``).
@@ -258,7 +255,8 @@ def row_record(row: DatasetRow) -> dict:
     """``row`` as a flat record — the table's inspection seam for tests.
 
     Keys follow the columns' names; a count is the integer or ``None`` (the
-    *value*, never its formatted cell), and ``Counts`` is DATA-36's badge word.
+    *value*, never its formatted cell), and ``Counts`` is the source's badge
+    word.
     """
     record = {
         "Kind": row.kind,

@@ -4,11 +4,10 @@ This file is deliberately short: a second copy of the house rules drifts. The
 sources of truth are
 
 - [`AGENTS.md`](../AGENTS.md) — the architecture map: modules, pipeline,
-  canonical columns, code style, the "adding a new …" recipes, releasing;
+  canonical columns, code style, gotchas, the "adding a new …" recipes,
+  releasing;
 - [`CLAUDE.md`](../CLAUDE.md) — the working agreements: commits, changelog,
   tracking work, the approval gate;
-- [`scanpath_studio/CLAUDE.md`](../scanpath_studio/CLAUDE.md) — the per-module
-  reference and gotchas;
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) — setup and the checks CI gates on.
 
 Read them before changing code. The rules most worth repeating:
@@ -29,8 +28,8 @@ Read them before changing code. The rules most worth repeating:
 - **Cite the issue's `#N`** in the commit subject, and add a changelog
   fragment, `changelog.d/<issue>.<group>.md` — or `<slug>.<group>.md` with no
   issue, which the release resolves to the PR (never an edit to
-  `CHANGELOG.md`). Don't mint `[VIZ-37]`-style IDs; they are retired
-  (`CLAUDE.md` → *Tracking work*).
+  `CHANGELOG.md`). Comments describe the code as it is now — no issue
+  numbers, dates or history (`CLAUDE.md` → *Building features*).
 - **`main` is protected** — land work through a branch and a pull request. No AI
   co-author trailers in commit messages.
 - **Don't edit** `uv.lock`, `site/` or `*.egg-info`.

@@ -1,11 +1,11 @@
-"""EXP-20: `render` has a flag for every figure option.
+"""`render` has a flag for every figure option.
 
-EXP-7's reproduce-in-code block names, rather than drops, any setting the CLI
-cannot say (`ReproductionCode.cli_unsupported`) — and that list used to be long:
-fixation opacity, the text and background colours, colour-bar styling, raw gaze
-(input and style), *Show full monitor*, the x/y fields, line spacing, Compare's
-per-scanpath styles and legend. Every one has a flag now, and an emitter, so the
-printed command draws the figure.
+The reproduce-in-code block names, rather than drops, any setting the CLI
+cannot say (`ReproductionCode.cli_unsupported`). Every figure option — fixation
+opacity, the text and background colours, colour-bar styling, raw gaze (input
+and style), *Show full monitor*, the x/y fields, line spacing, Compare's
+per-scanpath styles and legend, … — has a flag and an emitter, so the printed
+command draws the figure.
 
 Three things are pinned here:
 
@@ -14,7 +14,7 @@ Three things are pinned here:
   option `api.figure_options` lists, so a future option without a flag fails
   here by name rather than quietly being named in the app;
 * **each flag reaches the builder** under the keyword it stands for;
-* **the round trip** (EXP-12's check): render with `--print-code cli`, run the
+* **the round trip**: render with `--print-code cli`, run the
   printed command, and the two figures' JSON is identical.
 """
 
@@ -85,7 +85,7 @@ NON_DEFAULT = {
     "fixation_snap_to_line": True,
     "fixation_snap_position": 0.25,
     "fixation_flags": {"short": {"mode": "Discard", "threshold_ms": 90.0}},
-    # CMP-24 — the co-animation's B flags (`--compare-fixation-flag`).
+    # The co-animation's B flags (`--compare-fixation-flag`).
     "fixation_flags_b": {"long": {"mode": "Highlight", "threshold_ms": 700.0}},
     "fixation_hover_fields": ["duration_ms"],
     "word_hover_fields": ["text"],
@@ -96,7 +96,7 @@ NON_DEFAULT = {
     "saccade_style": "dash",
     "saccade_width": 3.0,
     "saccade_opacity": 0.5,
-    # #422 — the design choices that used to be fixed.
+    # The finer design choices (sizes, outlines, frame, fonts, fills).
     "saccade_arrow_size": 18.0,
     "heatmap_opacity": 0.8,
     "fixation_outline_width": 1.5,
@@ -155,7 +155,7 @@ NON_DEFAULT = {
     "anim_grid_step_ms": 50.0,
     "anim_max_frames": 200,
     # The comparison's (and the co-animation's).
-    "show_legend": False,  # on by default since #374 F26
+    "show_legend": False,  # on by default
     "compare_stimulus": "b",
     "label_a": "A",
     "label_b": "B",
@@ -216,8 +216,8 @@ def test_the_table_names_every_figure_option(kind):
 
 @pytest.mark.parametrize("kind", cs.KINDS)
 def test_every_non_default_option_has_a_render_flag(kind):
-    """The EXP-20 promise: with every option changed, nothing is left for the
-    CLI form to name instead of saying."""
+    """With every option changed, nothing is left for the CLI form to name
+    instead of saying."""
     state = _maximal_state(kind)
     defaults = api.figure_options(kind)
     unchanged = [
@@ -238,7 +238,7 @@ def test_every_non_default_option_has_a_render_flag(kind):
 def test_a_palette_is_named_only_when_the_figure_wears_it():
     """Every colour has a flag, so a palette is named only when it saves
     flags — and only when each colour it writes that the figure draws is the
-    figure's (#374 F29)."""
+    figure's."""
     settings = {**api.figure_options("static"), "text_color": "#333333"}
     # *Print / greyscale*'s text colour, and nothing else of it: naming it would
     # turn the fixations, saccades and colour scales grey.
@@ -257,8 +257,8 @@ def test_a_palette_is_named_only_when_the_figure_wears_it():
         "fixation_color": api.figure_options("static")["fixation_color"],
     }
     command, _ = cs.cli_snippet(DEMO, cs.FigureState(kind="static", settings=settings))
-    # #374 F29: a palette one of whose colours the figure no longer wears is
-    # not named — its colours are spelt out instead.
+    # A palette one of whose colours the figure does not wear is not named —
+    # its colours are spelt out instead.
     assert "--palette" not in command
     assert "--text-color" in command
     settings["fixation_color"] = greyscale["fixation_color"]
@@ -568,10 +568,10 @@ def _round_trip(monkeypatch, capsys, flags: list[str]):
     return first, second, printed
 
 
-#: Every new single-trial option, at once, on the demo trial the raw gaze covers.
+#: Single-trial options, all at once, on the demo trial the raw gaze covers.
 STATIC_FLAGS = [
-    # The layers the styling below applies to (#374 F21/F29: a layer that is off
-    # takes no styling flags).
+    # The layers the styling below applies to (a layer that is off takes no
+    # styling flags).
     "--word-boxes",
     "--heatmap",
     "--fixation-index",
@@ -700,7 +700,7 @@ def test_every_new_comparison_option_round_trips(monkeypatch, capsys, tmp_path):
 
 
 def test_the_co_animation_round_trips(monkeypatch, capsys):
-    """`--compare-with` is now written for the two-reading replay too: the
+    """`--compare-with` is written for the two-reading replay too: the
     labels, the stimulus and the legend are refused without it."""
     first, second, printed = _round_trip(
         monkeypatch,
@@ -726,7 +726,7 @@ def test_the_co_animation_round_trips(monkeypatch, capsys):
 
 def test_a_palette_with_one_class_colour_changed_round_trips(monkeypatch):
     """A palette with one class colour changed: the command spells the
-    colours out (#374 F29), and `render` draws the same figure from it."""
+    colours out, and `render` draws the same figure from it."""
     from scanpath_studio.constants import palette_settings
 
     palette = palette_settings("High contrast")
@@ -746,7 +746,7 @@ def test_a_palette_with_one_class_colour_changed_round_trips(monkeypatch):
         canvas=(2560, 1440),
     )
     command, unsupported = cs.cli_snippet(DEMO, state, output="x.html")
-    # #374 F29: the figure no longer wears the palette, so it is spelt out.
+    # The figure does not wear the palette, so it is spelt out.
     assert "--palette" not in command and not unsupported
     (from_cli,) = _figures(
         monkeypatch, [shlex.split(command.replace(" \\\n", " "))[1:]]
@@ -764,7 +764,8 @@ def test_a_palette_with_one_class_colour_changed_round_trips(monkeypatch):
 
 def test_an_integer_flag_is_printed_as_an_integer():
     """`--order-font-size` and the two colour-bar tick flags are `type=int`, so
-    a settings dict holding `12.0` printed a command `render` refused."""
+    a settings dict holding `12.0` must print `12`, or `render` refuses the
+    command."""
     command = api.figure_code(
         flavor="cli",
         show_order=True,
@@ -786,8 +787,9 @@ def test_an_integer_flag_is_printed_as_an_integer():
 
 
 def test_no_hover_measure_is_an_empty_flag_not_a_missing_one(monkeypatch):
-    """`word_hover_measure=None` (no measure on hover) is off its default, and
-    `_valued` dropped `None` — so the command showed the default measure."""
+    """`word_hover_measure=None` (no measure on hover) is off its default, so
+    the command writes it as an empty flag — dropping `None` would show the
+    default measure."""
     command = api.figure_code(flavor="cli", word_hover_measure=None)
     assert "--word-hover-measure ''" in command
     seen = _spy(monkeypatch, "plot_scanpath")

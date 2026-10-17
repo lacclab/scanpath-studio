@@ -1,8 +1,7 @@
-"""CMP-9 — compare mode's headless surface.
+"""Compare mode's headless surface.
 
-Compare mode existed only in the UI and the share link: there was no way to
-build a two-scanpath figure from a script or a Makefile. `compare_scanpaths` is
-that surface, and the cross-dataset half of it is where the sharp edges are —
+`compare_scanpaths` builds a two-scanpath figure from a script or a Makefile,
+and the cross-dataset half of it is where the sharp edges are —
 the participant-namespacing rule that `tests/test_compare_cross_dataset.py`
 guards for the app has to hold here too, from a completely different caller.
 """
@@ -90,7 +89,7 @@ class TestSameDataset:
 
     @pytest.mark.parametrize("layout", ["overlay", "side_by_side"])
     def test_a_trial_compared_with_itself_draws_each_side_once(self, layout):
-        """CMP-22: the figure slices by (participant, trial), so two copies of one
+        """The figure slices by (participant, trial), so two copies of one
         trial must be renamed apart or each side draws both copies. Same fixation
         count as p1-vs-p2 (three each) means one copy per side."""
         words, fixations = _pair()
@@ -111,8 +110,8 @@ class TestSameDataset:
     @pytest.mark.parametrize("layout", ["side_by_side", "stacked"])
     @pytest.mark.parametrize("show_legend", [True, False])
     def test_split_panels_are_always_titled_a_and_b(self, layout, show_legend):
-        """#374 F26: each panel says which scanpath it is, legend or not — and
-        the top band is reserved for it (BUG-90 clipped the upper title)."""
+        """Each panel says which scanpath it is, legend or not — and the top
+        band is reserved for it, so the upper title is not clipped."""
         words, fixations = _pair()
         fig = api.compare_scanpaths(
             words,
@@ -165,7 +164,8 @@ class TestSameDataset:
 
 
 class TestCrossDataset:
-    """B arrives as its own pair of frames — the CMP-8 §3 rule, headless."""
+    """B arrives as its own pair of frames, its participant ids namespaced
+    apart from A's — the app's cross-dataset rule, headless."""
 
     def test_colliding_ids_still_render_two_distinct_scanpaths(self):
         """Both corpora hold ``(p1, t1)``; un-namespaced, one reading draws twice."""
@@ -226,8 +226,8 @@ class TestCrossDataset:
             )
         message = str(excinfo.value)
         assert "1680" in message
-        # BUG-85: it says what this surface does — nothing was drawn — and how
-        # to ask for the split here, not the app's "shown side by side instead".
+        # It says what this surface does — nothing was drawn — and how to ask
+        # for the split here, not the app's "shown side by side instead".
         assert "side by side instead" not in message
         assert "layout='side_by_side'" in message
         # The surface-neutral reason rides along, so `render` can word the same
@@ -239,7 +239,7 @@ class TestCrossDataset:
         assert "read off" not in message
 
     def test_an_unstated_screen_names_the_parameter_that_states_it(self):
-        """CMP-21: the reason says "recorded on different screens", but B's was
+        """The reason says "recorded on different screens", but B's was
         only the extent of its data (400x300 here), so the refusal says so and
         names ``setup_b=``."""
         with pytest.raises(ValueError) as excinfo:
@@ -274,7 +274,7 @@ class TestCrossDataset:
         assert fig.data
 
     def test_disjoint_columns_do_not_break_the_merge(self):
-        """Two corpora rarely ship the same measure set (CMP-8 §5.4)."""
+        """Two corpora rarely ship the same measure set."""
         fig = api.compare_scanpaths(
             _words("p1", "t1"),
             _fixations("p1", "t1").assign(gpt2_surprisal=[1.0, 2.0, 3.0]),
@@ -333,9 +333,9 @@ class TestFigureOptions:
     def test_comparison_kind_is_answerable(self):
         """`_reject_unknown_options` points callers at `figure_options()`.
 
-        It said "api.figure_options() lists them with their defaults" while
-        `figure_options("comparison")` raised — so the error message sent you
-        somewhere that did not exist.
+        The error message says "api.figure_options() lists them with their
+        defaults", so `figure_options("comparison")` must answer rather than
+        raise.
         """
         options = api.figure_options("comparison")
         assert "compare_stimulus" not in options  # a named parameter, not a kwarg
@@ -353,9 +353,8 @@ class TestDualCoAnimationAcceptsCompareStimulus:
     def test_animate_scanpath_takes_compare_stimulus(self):
         """`_render_scanpath_animation` reads it, so the option set must allow it.
 
-        It was excluded alongside `layout`/`style_a`/`canvas_b`, which the
-        animation builder genuinely never reads — but this one it does, so the
-        exclusion made a reachable dual co-animation setting unreachable.
+        Unlike `layout`/`style_a`/`canvas_b`, which the animation builder never
+        reads, it is a reachable dual co-animation setting.
         """
         words, fixations = _pair()
         fig = api.animate_scanpath(
@@ -372,12 +371,13 @@ class TestDualCoAnimationAcceptsCompareStimulus:
 
 
 class TestCoAnimationDrawsOneSecondReading:
-    """BUG-85: `animate_scanpath` drew whatever B frames it was handed.
+    """`animate_scanpath` draws one reading of the B frames it is handed.
 
     `compare_scanpaths` takes B's *corpus* plus a `trial_b` pair, so frames
-    passed the same way to the co-animation drew every fixation in them — 3,209
-    on the demo, where B's trial has 89. `trial_b` now picks the reading, as it
-    does there, and B frames holding several trials refuse rather than guess.
+    passed the same way to the co-animation would otherwise draw every fixation
+    in them — 3,209 on the demo, where B's trial has 89. `trial_b` picks the
+    reading, as it does there, and B frames holding several trials refuse
+    rather than guess.
     """
 
     _A = ("l37_1129", "l37_1129_2_1_1_Ele_r0")
@@ -422,8 +422,8 @@ class TestCoAnimationDrawsOneSecondReading:
     def test_an_in_place_edit_between_calls_still_finds_bs_reading(self):
         """B must be sliced fresh, as A is. Through `utils.extract_trial`'s
         position cache — keyed by the frame's identity, which an in-place edit
-        keeps — a second call after `sort_values(inplace=True)` returned the
-        same *positions*: as many rows, from somebody else's trials."""
+        keeps — a second call after `sort_values(inplace=True)` would return
+        the same *positions*: as many rows, from somebody else's trials."""
         words, fixations = api.load_sample_data(names="canonical")
         fixations = fixations.copy()
         api._second_reading(words, fixations, None, None, self._B)
@@ -463,10 +463,10 @@ class TestCoAnimationDrawsOneSecondReading:
 
 
 class TestCoAnimationAcrossTwoDatasets:
-    """CMP-21: a co-animation draws both readings in A's coordinates — an
-    overlay on one clock — so a reading from another dataset is held to the
-    overlay's screen gate. The API checked nothing, and `render` checked only
-    when `--compare-canvas` stated B's screen."""
+    """A co-animation draws both readings in A's coordinates — an overlay on
+    one clock — so a reading from another dataset is held to the overlay's
+    screen gate, in the API and in `render`, whether or not `--compare-canvas`
+    states B's screen."""
 
     @staticmethod
     def _animate(**kwargs):
@@ -501,8 +501,8 @@ class TestCoAnimationAcrossTwoDatasets:
         assert "layout=" not in excinfo.value.reason
 
     def test_a_screen_nobody_stated_is_read_off_the_data(self):
-        """The gap itself: B's screen is inferred, as the static overlay infers
-        it (400x300 for these frames), never assumed to be A's."""
+        """B's screen is inferred, as the static overlay infers it (400x300 for
+        these frames), never assumed to be A's."""
         from scanpath_studio.experimental_setup import IncomparableScreensError
 
         with pytest.raises(IncomparableScreensError, match="400×300") as excinfo:
@@ -575,9 +575,9 @@ class TestCoAnimationAcrossTwoDatasets:
 
 @pytest.mark.parametrize("layout", ["overlay", "side_by_side", "stacked"])
 def test_the_default_comparison_draws_the_apps_marker_opacity(monkeypatch, layout):
-    """CMP-20: the app seeds each scanpath's `cmp{idx}_opacity` at 0.7, while
-    the builder's own fallback — all a headless caller ever got — was 1.0. Both
-    now read one constant, so the default figures agree."""
+    """The app seeds each scanpath's `cmp{idx}_opacity` from the same constant
+    the builder falls back to, so the app's and a headless caller's default
+    figures agree."""
     from scanpath_studio import controls
 
     seeded: dict = {}

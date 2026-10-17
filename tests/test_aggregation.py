@@ -6,10 +6,9 @@ min-readers guard, the raw-vs-z-scored normalization toggle, and the two-group
 difference + effect size. Figure builders are smoke-tested separately in
 ``tests/test_analysis_figures.py``.
 
-Two of these started life as ``xfail(strict=True)`` against real defects found
-while writing them — a min-readers guard that counted rows rather than readers,
-and a normalization step that turned an unfixated word into an exactly-average
-observation. Both helpers are fixed; the tests are ordinary regression tests now.
+Two of them guard against easy mistakes: the min-readers guard must count
+readers, not rows, and normalization must not turn an unfixated word into an
+exactly-average observation.
 """
 
 from __future__ import annotations
@@ -152,7 +151,7 @@ def _trend_frame() -> pd.DataFrame:
 
 def test_layout_is_glyph_tight():
     """The fixture's boxes leave real gaps, so each box is its glyph run and a
-    landing fraction is over the letters as well as the box (BUG-83)."""
+    landing fraction is over the letters as well as the box."""
     assert word_box_space_px(_tidy_words()) == 0.0
 
 
@@ -322,7 +321,7 @@ class TestMeasureRegistry:
         assert available_features(pd.DataFrame()) == {}
         assert available_features(None) == {}
         # A frame carrying every registered column gets the whole registry —
-        # pins the four labels the AN-5 feature picker offers.
+        # pins the four labels the linguistic-feature picker offers.
         rich = _tidy_words().assign(wordfreq_frequency=1.0, word_length=3)
         assert available_features(rich) == {
             "GPT-2 surprisal": ("gpt2_surprisal", False),
@@ -790,8 +789,9 @@ class TestMeasureValues:
 
 
 class TestGroupTestUnit:
-    """BUG-82: a group test on pooled words counted one reader's words as that
-    many subjects — two readers gave n = 1 307 each and p ≈ 0."""
+    """The unit of a group test is the reader: pooled words would count one
+    reader's words as that many subjects (two readers giving n = 1 307 each
+    and p ≈ 0)."""
 
     def test_one_value_per_reader(self):
         vals = reader_means(_tidy_fixations(), MEASURES["fix_dur"])
@@ -823,7 +823,7 @@ class TestReaderViews:
         assert p1["question_correct"] == 1.0
 
     def test_mean_forward_saccade_leaves_out_the_return_sweep(self):
-        """BUG-68: the sweep to the next line advances in reading order but is a
+        """The sweep to the next line advances in reading order but is a
         line-length leftward jump — "not a regression" is not "forward"."""
         words = pd.DataFrame(
             {
@@ -856,8 +856,9 @@ class TestReaderViews:
         assert row["mean_saccade_px"] == pytest.approx((100 + 141.4 + 100) / 3)
 
     def test_words_per_minute_counts_every_screens_words(self):
-        """BUG-67: MultiplEYE restarts ``word_id`` on each page, so counting
-        (trial, word) folded two 3-word pages into 3 words."""
+        """MultiplEYE restarts ``word_id`` on each page, so words are counted
+        per screen: counting (trial, word) would fold two 3-word pages into 3
+        words."""
         words = pd.DataFrame(
             {
                 "participant_id": ["p1"] * 6,
@@ -1090,10 +1091,10 @@ class TestLandingPositions:
         )
 
     def test_a_landing_outside_the_box_is_not_clipped_onto_its_edge(self):
-        """BUG-83: a first fixation the word got although it lies beside the box
-        (an imported ``word_id``) keeps its
-        position. Clipping piled every such landing onto 0 or 1, where it read
-        as a fixation on the first or last letter."""
+        """A first fixation the word got although it lies beside the box
+        (an imported ``word_id``) keeps its position. Clipping would pile every
+        such landing onto 0 or 1, where it reads as a fixation on the first or
+        last letter."""
         w = _tidy_words().head(2).copy()
         w["first_fix_x"] = [-5.0, 33.0]  # boxes 0 → 10 and 20 → 30
         assert list(landing_positions(w)) == pytest.approx([-0.5, 1.3])
@@ -1119,13 +1120,13 @@ class TestGroupSelection:
         # Values are compared as strings, so a numeric column takes "0".
         assert group_mask(w, {"word_id": ["0"]}).sum() == 3
         # An empty value list constrains nothing; a column the frame lacks
-        # selects nothing (#412) — it used to select every row.
+        # selects nothing, not every row.
         assert group_mask(w, {"text_id": []}).all()
         assert not group_mask(w, {"nope": ["x"]}).any()
         assert group_mask(pd.DataFrame(), {"text_id": ["A"]}).empty
 
     def test_a_composite_key_matches_the_pair_not_each_part(self):
-        """AN-31: a trial-metadata cohort is a set of (reader, trial) readings.
+        """A trial-metadata cohort is a set of (reader, trial) readings.
 
         p1's t1 and p2's t2 must not also admit p1's t2 — which is what two
         independent column constraints would do."""
@@ -1149,7 +1150,7 @@ class TestGroupSelection:
             False,
             True,
         ]
-        # A frame missing a key column selects nothing, like a column (#412).
+        # A frame missing a key column selects nothing, like a missing column.
         assert not group_mask(w.drop(columns=["trial_id"]), pairs).any()
         assert group_mask(w, {("participant_id", "trial_id"): []}).all()
 
@@ -1289,7 +1290,7 @@ class TestGroupComparison:
             label_a="Adv",
             label_b="Ele",
         )
-        # #374 F2: no spread columns — a pooled-word SEM overstated precision.
+        # No spread columns: a pooled-word SEM would overstate precision.
         assert list(out.columns) == ["measure", "group", "value", "n_observations"]
         assert list(out["measure"]) == ["Fixation duration", "Fixation duration"]
         assert list(out["group"]) == ["Adv", "Ele"]
@@ -1365,14 +1366,14 @@ class TestGroupComparison:
 
 
 # -----------------------------------------------------------------------------
-# BUG-26 — per-text views are scoped to ONE screen
+# Per-text views are scoped to ONE screen
 # -----------------------------------------------------------------------------
 
 
 def _multipart_words() -> pd.DataFrame:
     """One text spread over two screens, word ids restarting on each.
 
-    This is the MultiplEYE shape after DATA-24: ``text_id`` is the stimulus, a
+    This is the MultiplEYE shape: ``text_id`` is the stimulus, a
     trial is the whole reading, and each page (and each comprehension-question
     screen) is a ``screen_id`` with its own ``word_id`` space **and its own
     coordinate space** — note that word 0 sits at x=0 on both screens.
@@ -1423,7 +1424,8 @@ def _multipart_words() -> pd.DataFrame:
 
 class TestScreenScoping:
     """A ``word_id`` is unique only within a screen, so a per-text aggregate keyed
-    on ``(text_id, word_id)`` pooled page 1's word 0 with the question screen's.
+    on ``(text_id, word_id)`` would pool page 1's word 0 with the question
+    screen's.
     """
 
     MEASURE = MEASURES["tfd"]
@@ -1440,8 +1442,8 @@ class TestScreenScoping:
         assert text_screen_options(_tidy_words(), "text_id", "A") == []
 
     def test_the_default_is_the_first_screen_not_every_screen(self):
-        """The load-bearing half of the fix: a caller that never learned about
-        screens gets one coherent screen, not a silently pooled average."""
+        """A caller that names no screen gets one coherent screen, not a
+        silently pooled average."""
         out = per_reader_word_measure(
             _multipart_words(), "text_id", "A", self.MEASURE, agg="mean"
         )
@@ -1465,7 +1467,7 @@ class TestScreenScoping:
         assert p1.loc[1] == pytest.approx(2000.0)
 
     def test_one_row_per_word_per_reader_not_one_per_screen(self):
-        """The visible symptom: two screens' worth of rows under one word axis."""
+        """Never two screens' worth of rows under one word axis."""
         out = per_reader_word_measure(
             _multipart_words(), "text_id", "A", self.MEASURE, agg="mean"
         )
@@ -1482,8 +1484,8 @@ class TestScreenScoping:
             _multipart_words(), "text_id", "A", self.MEASURE, screen_id="question_9"
         )
         assert list(question["text"]) == ["Q1", "opt"]
-        # One box per word on each screen — the defect showed up as one row per
-        # word with a value averaged across two unrelated boxes.
+        # One box per word on each screen — never one row per word with a
+        # value averaged across two unrelated boxes.
         assert len(page) == len(question) == 2
 
     def test_the_cohort_band_and_rates_scope_too(self):
@@ -1515,8 +1517,8 @@ class TestScreenScoping:
 
 
 def test_equal_group_labels_keep_both_groups():
-    """BUG-111: the charts key series by label, so two cohorts both called
-    "Control" became one — B's values replaced A's."""
+    """The charts key series by label, so two cohorts both called "Control"
+    must stay two: merged, B's values would replace A's."""
     words = pd.DataFrame(
         {
             "participant_id": ["p1", "p2"],
@@ -1551,8 +1553,8 @@ def _aoi_only_groups_app():
 
 
 def test_aoi_only_cohorts_count_their_readers():
-    """BUG-112: readers were counted on the fixations alone, so a dataset of
-    word measures read "0 reader(s)" beside charts drawn from its readers."""
+    """Readers are not counted on the fixations alone, so a dataset of word
+    measures does not read "0 reader(s)" beside charts drawn from its readers."""
     from streamlit.testing.v1 import AppTest
 
     at = AppTest.from_function(_aoi_only_groups_app).run(timeout=60)
@@ -1567,8 +1569,8 @@ def test_aoi_only_cohorts_count_their_readers():
 
 
 def test_cohort_word_comparisons_share_one_screen():
-    """BUG-114: each cohort chose its own first screen, so A's page 1 and B's
-    page 2 were compared as the same word id."""
+    """Both cohorts share one screen: if each chose its own first screen, A's
+    page 1 and B's page 2 would be compared as the same word id."""
     words = pd.DataFrame(
         {
             "participant_id": ["p1", "p2", "p2"],

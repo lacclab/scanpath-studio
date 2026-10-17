@@ -1,4 +1,4 @@
-"""Reading only the columns normalization keeps (PERF-6).
+"""Reading only the columns normalization keeps.
 
 An EyeLink IA report ships 174 columns and a fixation report 300; the mapping
 plus the optional-field registry claim 27 and 17 of them, and ``normalize_*``

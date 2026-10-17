@@ -18,7 +18,7 @@ def test_substantive_transformations_trigger_label_but_cosmetics_do_not():
 
 
 def test_the_snap_and_the_arcs_count_only_on_a_layer_that_is_drawn():
-    """#422: with the Fixations layer off the snap moves nothing, and with the
+    """With the Fixations layer off the snap moves nothing, and with the
     Saccades layer off the arcs bend nothing — so neither labels the figure."""
     snap_and_arc = {"fixation_snap_to_line": True, "saccade_render_mode": "Arc"}
     assert illustration_reasons({**snap_and_arc, "show_fixations": False}) == [
@@ -36,7 +36,7 @@ def test_the_snap_and_the_arcs_count_only_on_a_layer_that_is_drawn():
 
 
 def test_the_replay_and_the_comparison_draw_neither():
-    """Only the static figure draws the snap or the arcs (VIZ-9)."""
+    """Only the static figure draws the snap or the arcs."""
     snap_and_arc = {"fixation_snap_to_line": True, "saccade_render_mode": "Arc"}
     assert illustration_reasons(snap_and_arc, static=False) == []
     # Other reasons still count there.

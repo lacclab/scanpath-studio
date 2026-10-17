@@ -1,4 +1,4 @@
-"""EXP-7 — the API / CLI code that reproduces the figure on screen.
+"""The API / CLI code that reproduces the figure on screen.
 
 The load-bearing tests here are the two round-trips: the emitted Python is
 *executed* and its figure compared against the one the settings describe, and
@@ -94,7 +94,7 @@ def test_an_uploaded_stimulus_image_becomes_a_placeholder():
 
 
 def test_the_demos_raw_gaze_is_loaded_not_faked():
-    """EXP-20: raw gaze is a third *frame*, not a keyword — so the snippet
+    """Raw gaze is a third *frame*, not a keyword — so the snippet
     loads the table and hands it over, rather than writing `show_raw_gaze=`
     (which draws nothing without one) or leaving the layer off."""
     state = _state(figure={"show_raw_gaze": True})
@@ -133,7 +133,7 @@ def test_an_uploaded_raw_gaze_table_is_a_placeholder_and_a_caveat():
 
 
 def test_a_replay_has_no_raw_gaze_layer_to_load():
-    """The replay draws no raw gaze (VIZ-49); the rail greys the switch there,
+    """The replay draws no raw gaze; the rail greys the switch there,
     so the figure on screen has no layer to rebuild."""
     code = cs.reproduction_code(
         DEMO, _state("animation", figure={"show_raw_gaze": True})
@@ -144,7 +144,7 @@ def test_a_replay_has_no_raw_gaze_layer_to_load():
 
 
 def test_a_comparison_loads_its_raw_gaze():
-    """VIZ-48: `compare_scanpaths` takes the samples, like `plot_scanpath`."""
+    """`compare_scanpaths` takes the samples, like `plot_scanpath`."""
     state = _state(
         "comparison",
         figure={"show_raw_gaze": True},
@@ -162,7 +162,7 @@ def test_a_comparison_loads_its_raw_gaze():
     ("paths", "named"), [(("b_gaze.csv",), "b_gaze.csv"), ((), "B_RAW_GAZE")]
 )
 def test_a_second_datasets_raw_gaze_is_loaded_as_b(paths, named):
-    """VIZ-48: B's own samples, by path when there is one, else a placeholder
+    """B's own samples, by path when there is one, else a placeholder
     that the caveats own up to."""
     state = _state(
         "comparison",
@@ -187,10 +187,10 @@ def test_an_uploaded_dataset_says_it_cannot_name_the_files():
 
 
 def test_settings_with_no_render_flag_are_named_not_dropped(monkeypatch):
-    """EXP-20 left no figure option without a flag, so the mechanism is driven
-    by taking one away — it is what a future option without a flag hits."""
+    """Every figure option has a flag, so the mechanism is driven by taking
+    one away — it is what a future option without a flag hits."""
     monkeypatch.delitem(cs._CLI_EMITTERS, "fixation_color_range")
-    # A colour range is drawn only on fixations coloured by a value (#374 F29).
+    # A colour range is drawn only on fixations coloured by a value.
     state = _state(
         figure={"fixation_color_range": (1.0, 5.0), "color_by": "duration_ms"}
     )
@@ -201,9 +201,9 @@ def test_settings_with_no_render_flag_are_named_not_dropped(monkeypatch):
 
 
 def test_the_fixation_index_window_reaches_both_forms():
-    """VIZ-7 used to be a `plot_scanpath` parameter with no `render` flag, so the
-    CLI form could only *name* it. `--fix-index-range START:END` closed that gap,
-    and the two forms now describe the same figure."""
+    """`fix_index_range` has a `render` flag, `--fix-index-range START:END`, so
+    the CLI form draws it rather than naming it, and the two forms describe the
+    same figure."""
     code = cs.reproduction_code(DEMO, _state(fix_index_range=(3, 9)))
     assert "fix_index_range=(3, 9)" in code.python
     assert "--fix-index-range 3:9" in code.cli
@@ -218,7 +218,7 @@ def test_the_replay_takes_the_fixation_index_window_too():
 
 
 def test_the_critical_span_pair_reaches_the_cli():
-    """`highlight_column` + `critical_span_style` used to be Python-only."""
+    """`highlight_column` + `critical_span_style` have `render` flags too."""
     code = cs.reproduction_code(
         DEMO,
         _state(
@@ -263,7 +263,7 @@ def test_the_fixation_flags_reach_the_cli_one_category_per_flag():
 
 
 def test_the_replay_takes_the_span_column_it_can_draw():
-    """VIZ-23 gave the replay `highlight_column` as a text channel; there is no
+    """The replay takes `highlight_column` as a text channel; there is no
     border overlay there, so `critical_span_style` is not one of the animation
     builder's options at all and never reaches either form."""
     code = cs.reproduction_code(
@@ -365,18 +365,6 @@ def test_an_animation_carries_its_playback_settings():
             "--onestop-regime repeated",
         ),
         (
-            cs.SnippetSource(kind=cs.SOURCE_MULTIPLEYE, options={"root": "d/MPE"}),
-            "load_multipleye(",
-            "--source multipleye --export d/MPE",
-        ),
-        (
-            cs.SnippetSource(
-                kind=cs.SOURCE_BENCHMARK, options={"root": "d/b", "dataset": "ZuCo"}
-            ),
-            "load_eyegenbench(",
-            "--eyegenbench-dataset ZuCo",
-        ),
-        (
             cs.SnippetSource(
                 kind=cs.SOURCE_FILES,
                 options={"words": ["w.csv"], "fixations": ["f1.csv", "f2.csv"]},
@@ -412,7 +400,7 @@ def test_every_cli_emitter_names_a_real_figure_option():
 
 
 def test_every_render_flag_for_a_published_option_has_an_emitter():
-    """The inverse of the table test above, which round two needed and lacked.
+    """The inverse of the table test above.
 
     A key that reaches `settings` but has no `_CLI_EMITTERS` entry is dropped
     from the command *and* reported as unsupported — a false warning next to a
@@ -445,7 +433,7 @@ def test_every_flag_a_snippet_can_emit_is_a_real_render_flag():
             for key, value in api.figure_options("static").items()
             if key not in cs._DERIVED_SETTINGS
         },
-        # PRE-21's gated pair: emitted only when `_render_parser` also has them.
+        # The experimental pair: emitted only when `_render_parser` also has them.
         drift_correction="warp",
         drift_connectors=True,
     )
@@ -476,8 +464,8 @@ def test_every_keyword_a_snippet_emits_is_one_its_builder_accepts(kind):
     """The failure this catches is a snippet that raises on its first line.
 
     `compare_scanpaths` takes no `drift_connectors` — the connector layer is
-    the static builder's alone — so a state carrying it used to emit a call
-    that `_reject_unknown_options` refuses. Both builders that draw a B take
+    the static builder's alone — so emitting it from a state carrying it would
+    make a call that `_reject_unknown_options` refuses. Both builders that draw a B take
     its `screen_b`."""
     state = _state(
         kind,
@@ -606,9 +594,8 @@ def test_the_cli_snippet_parses_and_runs(tmp_path, demo_trial):
 def test_an_animation_cli_snippet_replays_the_same_figure(
     tmp_path, monkeypatch, demo_trial
 ):
-    """EXP-10: the snippet emitted every animation option it was given, but
-    `render --animate` forwarded a hand-kept subset of them — so the marker
-    shape and flat colour were dropped and `--color-by` was refused. Executed,
+    """`render --animate` forwards every animation option the snippet names —
+    the marker shape, the flat colour and `--color-by` among them. Executed,
     the command has to hand the replay what the snippet names."""
     _words, _fixations, participant, trial = demo_trial
     changed = {
@@ -668,7 +655,7 @@ def test_the_cli_prints_the_recipe_for_its_own_invocation(tmp_path, capsys):
 # The headless API
 # ---------------------------------------------------------------------------
 def test_figure_code_matches_the_module_it_wraps():
-    # EXP-14: `figure_code` fills in the demo's own monitor, the canvas `render
+    # `figure_code` fills in the demo's own monitor, the canvas `render
     # --sample` assumes, so the module call it is compared with names it too.
     python = api.figure_code(participant="p1", trial="t1", show_heatmap=False)
     assert python == cs.python_snippet(
@@ -679,10 +666,9 @@ def test_figure_code_matches_the_module_it_wraps():
 
 
 def test_figure_code_with_no_trial_draws_what_render_draws(tmp_path, monkeypatch):
-    """EXP-14: with no ids the Python half quoted `participant=''` (no such
-    trial — it raised) and no canvas (960×480 estimated from the data), while
-    the CLI half rendered the first trial at 2560×1440. Both halves now draw
-    the same figure."""
+    """With no ids, both halves draw the same figure: the Python half names the
+    trial and the canvas the CLI half renders (the first trial at 2560×1440),
+    not `participant=''` (no such trial) and a canvas estimated from the data."""
     figures: list = []
 
     def capture(fig, path, **_kwargs):
@@ -709,8 +695,8 @@ def test_figure_code_names_a_trial_half_given(monkeypatch):
 
 
 def test_figure_code_writes_an_animation_to_html(tmp_path, monkeypatch):
-    """`render --animate` refuses anything but HTML, and `figure_code` wrote
-    `scanpath.png` for every kind."""
+    """`render --animate` refuses anything but HTML, so `figure_code` cannot
+    write `scanpath.png` for every kind."""
     command = api.figure_code(kind="animation", flavor="cli")
     assert command.rstrip().endswith("-o scanpath.html")
     monkeypatch.chdir(tmp_path)
@@ -761,11 +747,11 @@ def _rendered_figures(monkeypatch, argv_list) -> list:
 def test_a_palette_choice_reproduces_through_the_cli(
     tmp_path, monkeypatch, capsys, palette
 ):
-    """EXP-12: a palette rewrites the five class colours, and the CLI form
-    spelled them as `--saccade-type-color` flags — which imply *By type*, so
-    every palette choice printed a command that recoloured saccades by type
-    (and named `text_color` / `highlight_text_color` unsupported). The CLI form
-    names the palette instead, and executed it draws the same figure."""
+    """A palette rewrites the five class colours. Spelled as
+    `--saccade-type-color` flags they would imply *By type*, printing a command
+    that recolours saccades by type (and names `text_color` /
+    `highlight_text_color` unsupported), so the CLI form names the palette
+    instead, and executed it draws the same figure."""
     original = [
         "render",
         "--sample",
@@ -780,7 +766,7 @@ def test_a_palette_choice_reproduces_through_the_cli(
     printed = capsys.readouterr().out
     assert "--saccade-type-color" not in printed
     assert "No `render` flag" not in printed
-    assert f"--palette {palette_slug(palette)}" in printed  # #374: no quotes
+    assert f"--palette {palette_slug(palette)}" in printed  # a slug: no quotes
     replay = shlex.split(printed.strip().replace(" \\\n", " "))[1:]
     first, second = _rendered_figures(
         monkeypatch, [original[:-4] + original[-2:], replay]
@@ -802,10 +788,10 @@ def test_class_colours_a_uniform_figure_does_not_draw_are_not_emitted():
 
 
 def test_two_way_class_colours_reach_the_cli_beside_the_fold(tmp_path, monkeypatch):
-    """The two-way fold draws the forward and regression colours, and
-    `--saccade-type-color` used to switch it to the five-way split — so those
-    two colours had no flag and were named instead. Beside
-    `--saccade-color-by-direction` the flag now recolours the fold (EXP-20)."""
+    """The two-way fold draws the forward and regression colours. Beside
+    `--saccade-color-by-direction`, `--saccade-type-color` recolours the fold
+    rather than switching to the five-way split, so those two colours have a
+    flag and are not named as unsupported."""
     colors = {"regression": "#abcdef", "forward": "#123456"}
     state = _state(
         figure={
@@ -913,7 +899,7 @@ def test_the_panel_switches_flavour():
 
 
 def test_the_panel_names_what_the_cli_cannot_say(monkeypatch):
-    # EXP-20 gave every option a flag; the caption is for the next one without.
+    # Every option has a flag; the caption is for a future one without.
     monkeypatch.delitem(cs._CLI_EMITTERS, "fixation_color_range")
     state = cs.FigureState(
         kind="static",
@@ -1060,9 +1046,9 @@ def test_the_app_publishes_every_option_its_builder_accepts(label, session):
 
     That skip is silent, so an option the app applies *after* the publish —
     the comparison's per-scanpath `style_a` / `style_b` / `show_legend`, the
-    animation's frame budget — reproduced at its default instead: a Compare
-    figure hand-coloured in the rail came back in the stock palette. Each
-    branch now amends the published settings with the ones it actually built
+    animation's frame budget — would reproduce at its default: a Compare
+    figure hand-coloured in the rail would come back in the stock palette. Each
+    branch amends the published settings with the ones it actually built
     from; this pins that they stay complete."""
     from streamlit.testing.v1 import AppTest
 
@@ -1122,7 +1108,7 @@ def test_an_uploaded_dataset_maps_to_the_unnameable_source():
 
 
 def test_a_onestop_regime_carries_its_regime_and_every_part():
-    """DATA-63: the dataset is the regime, whatever the session's leftover keys."""
+    """The dataset is the regime, whatever the session's leftover keys."""
     from scanpath_studio import datasets
     from scanpath_studio.constants import ONESTOP_REGIME_CHOICES
 
@@ -1148,7 +1134,7 @@ def test_the_onestop_server_bundle_says_which_loader_it_is_not():
 
 
 def test_a_shared_deployment_never_quotes_the_servers_data_path(monkeypatch):
-    """S2: on a hosted app the path box isn't the user's, so the snippet must
+    """On a hosted app the path box isn't the user's, so the snippet must
     not hand every visitor the server's layout."""
     from scanpath_studio.constants import ONESTOP_REGIME_CHOICES
 
@@ -1161,10 +1147,10 @@ def test_a_shared_deployment_never_quotes_the_servers_data_path(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# What a copied command must not do (review follow-ups)
+# What a copied command must not do
 # ---------------------------------------------------------------------------
 def test_the_drift_command_carries_the_variable_its_flags_need():
-    """PRE-21 gates both flags behind SCANPATH_EXPERIMENTAL=1.
+    """Both flags are gated behind SCANPATH_EXPERIMENTAL=1.
 
     Gating the *emission* on that variable would be no check at all — the
     settings collector already forces `align_algorithm` to "Off" unless it is
@@ -1248,8 +1234,8 @@ def test_the_raster_geometry_reaches_both_flavours():
 
 
 def test_a_dual_animation_names_scanpath_b_in_both_forms():
-    """CMP-11: Animate + Compare is one figure with two readings, so `kind` is
-    "animation" and B rides in `compare`. BUG-85 gave `animate_scanpath` the
+    """Animate + Compare is one figure with two readings, so `kind` is
+    "animation" and B rides in `compare`. `animate_scanpath` takes the
     `trial_b=` pair `compare_scanpaths` takes, so the Python form names B too
     instead of replaying A alone."""
     state = _state(
@@ -1268,9 +1254,9 @@ def _one_line(command: str) -> str:
 
 @pytest.mark.parametrize("kind", ["comparison", "animation"])
 def test_a_second_datasets_b_is_named_in_its_own_tables(kind):
-    """EXP-21: both halves load B's tables and name B in them. The CLI half used
-    to write `--compare-with` alone, which looks B's reader up in A's corpus —
-    an error, or somebody else's reading where the ids collide."""
+    """Both halves load B's tables and name B in them. `--compare-with` alone
+    would look B's reader up in A's corpus — an error, or somebody else's
+    reading where the ids collide."""
     state = _state(
         kind=kind,
         compare=cs.CompareTarget(participant="p2", trial="t2", dataset="PoTeC"),
@@ -1515,7 +1501,7 @@ def test_the_illustration_disclosure_choice_reaches_both_snippets():
 
 
 def test_a_cross_dataset_comparison_says_whose_reader_b_is():
-    """CMP-8: B's participant id belongs to *its* corpus, not the loaded one."""
+    """B's participant id belongs to *its* corpus, not the loaded one."""
     state = _state(
         kind="comparison",
         compare=cs.CompareTarget(participant="reader_07", trial="t9", dataset="PoTeC"),
@@ -1532,7 +1518,7 @@ def test_a_cross_dataset_comparison_says_whose_reader_b_is():
 
 
 def test_a_second_datasets_co_animation_note_names_its_screen_too():
-    """CMP-21: with `dataset_b=` the co-animation checks the two screens, and a
+    """With `dataset_b=` the co-animation checks the two screens, and a
     screen nobody states is read off that trial's data — so the note on how to
     finish the snippet names B's screen too, or following it gets the figure
     refused."""
@@ -1548,14 +1534,14 @@ def test_a_second_datasets_co_animation_note_names_its_screen_too():
 
 
 # ---------------------------------------------------------------------------
-# EXP-8 §3 — a stock figure must emit nothing it was not asked for
+# A stock figure must emit nothing it was not asked for
 # ---------------------------------------------------------------------------
 def test_the_materialized_rail_dicts_normalize_to_the_api_defaults():
     """`controls._collect_viz_settings` always builds `fixation_flags` (four
     categories at Off) and the stock `saccade_class_colors`, while
-    `api.figure_options` reports `None` for both — so an untouched figure looked
-    *changed* in both, and the CLI half carried a permanent "no flag for
-    fixation_flags" warning about a setting nobody had set."""
+    `api.figure_options` reports `None` for both — so unless they normalize, an
+    untouched figure looks *changed* in both, and the CLI half carries a
+    permanent "no flag for fixation_flags" warning about a setting nobody set."""
     from scanpath_studio.constants import SACCADE_CLASS_COLORS
     from scanpath_studio.tabs import _snippet_settings_at_api_defaults
 
@@ -1604,7 +1590,7 @@ def test_a_stock_figure_writes_no_settings_at_all():
 
 
 # ---------------------------------------------------------------------------
-# EXP-8 — the fidelity gaps EXP-7's review rounds found and left
+# Fidelity: labels, caveats and derived settings
 # ---------------------------------------------------------------------------
 def _compare_state(**compare) -> cs.FigureState:
     """A comparison state with B named, plus whatever `CompareTarget` fields."""
@@ -1614,7 +1600,7 @@ def _compare_state(**compare) -> cs.FigureState:
 
 
 def test_hand_set_comparison_labels_reach_both_flavours():
-    """EXP-8 §1 — the gap: a comparison labelled in the rail came back auto-labelled.
+    """A comparison labelled in the rail reproduces with its labels.
 
     `compare_scanpaths` takes them as a named `labels=` parameter, so
     `api._COMPARISON_FIGURE_PARAMS` subtracts them and the settings merge can
@@ -1639,10 +1625,10 @@ def test_auto_labels_are_written_by_neither_flavour():
 
 
 def test_the_co_animations_labels_are_no_longer_cli_unsupported():
-    """EXP-8 §1's other half. CMP-11's two-reading animation names them
-    `label_a` / `label_b` as loose keywords, and `render` had no flag for
-    either — so an animation snippet dropped them *and* warned about them.
-    One flag pair now serves the comparison and the co-animation alike."""
+    """The two-reading animation names them `label_a` / `label_b` as loose
+    keywords. One `render` flag pair serves the comparison and the
+    co-animation alike, so an animation snippet neither drops them nor warns
+    about them."""
     state = _state(
         "animation",
         figure={"label_a": "A", "label_b": "B"},
@@ -1652,8 +1638,8 @@ def test_the_co_animations_labels_are_no_longer_cli_unsupported():
     flat = code.cli.replace(" \\\n ", " ")
     assert "--label-a A" in flat
     assert "--label-b B" in flat
-    # EXP-20: `render` refuses the labels without the second reading, so the
-    # command names it — before, the pair was written and the copy then failed.
+    # `render` refuses the labels without the second reading, so the command
+    # names it — without it, the copied command would fail.
     assert "--compare-with p2:t2" in flat
     assert not code.cli_unsupported
 
@@ -1728,11 +1714,11 @@ def test_figure_code_carries_the_labels_across_the_headless_seam():
 
 
 def test_figure_code_writes_the_caveats_it_used_to_throw_away():
-    """EXP-8 §2 — `figure_code` appended only `cli_unsupported`, so the headless
-    surface was the one that stayed silent about what neither form can promise.
-    The UI shows these as ⚠️ captions and `render --print-code` prints them as
-    `Note:` on stderr; that also made `compare_dataset=` inert, since the CMP-8
-    note is the only thing that argument produces."""
+    """`figure_code` writes the caveats, not only `cli_unsupported`, so the
+    headless surface is not silent about what neither form can promise. The UI
+    shows these as ⚠️ captions and `render --print-code` prints them as `Note:`
+    on stderr; without them `compare_dataset=` would be inert, since the
+    second-dataset note is the only thing that argument produces."""
 
     def notes(flavor):
         out = api.figure_code(
@@ -1766,7 +1752,7 @@ def _amended(
     """Run `_amend_snippet_settings` inside a Streamlit run and hand back state.
 
     A bare script rather than the whole app: the merge is what is under test,
-    and driving `connector_y` through the real app would need PRE-21's
+    and driving `connector_y` through the real app would need the
     experimental gate and a drift-corrected trial to say anything about it."""
     from streamlit.testing.v1 import AppTest
 
@@ -1796,11 +1782,11 @@ _amend_snippet_settings(
 
 
 def test_the_merge_parks_no_per_fixation_data_in_session_state():
-    """EXP-8 §4 — `connector_y` is a builder keyword *and* a `FigureSettings`
-    field, so it passed both of the merge's filters, copying one float per
-    fixation into session state on every rerun that drift correction and
-    connectors were on. `_DERIVED_SETTINGS` already kept it out of the snippet's
-    text; `UNPUBLISHED_SETTINGS` keeps it out of the state as well."""
+    """`connector_y` is a builder keyword *and* a `FigureSettings` field, so it
+    passes both of the merge's filters and would copy one float per fixation
+    into session state on every rerun that drift correction and connectors are
+    on. `_DERIVED_SETTINGS` keeps it out of the snippet's text;
+    `UNPUBLISHED_SETTINGS` keeps it out of the state as well."""
     state = _amended(
         {"connector_y": tuple(float(i) for i in range(500)), "show_connectors": True}
     )
@@ -1840,11 +1826,11 @@ def test_an_animation_merge_parks_no_trial_frames_in_session_state():
 
 @pytest.mark.timeout(600)
 def test_the_running_app_publishes_the_labels_the_comparison_drew():
-    """The seam for EXP-8 §1: every unit test above would pass on an amender
-    that is never called, which is the failure mode worth pinning.
+    """The seam for the comparison labels: every unit test above would pass on
+    an amender that is never called, which is the failure mode worth pinning.
 
     The labels are resolved in `_render_comparison_figure`, *below*
-    `_publish_snippet_state`, because UX-31's `cmp{idx}_label_pattern` renders
+    `_publish_snippet_state`, because the `cmp{idx}_label_pattern` renders
     against each side's own trial frames — so only the amend can carry them."""
     from streamlit.testing.v1 import AppTest
 
@@ -1859,8 +1845,8 @@ def test_the_running_app_publishes_the_labels_the_comparison_drew():
     )
     auto = state.compare.labels
 
-    # UX-31: a hand-set pattern overrides A's label, and has to reach the
-    # snippet — reproducing under the auto label is the gap EXP-8 §1 names.
+    # A hand-set pattern overrides A's label, and has to reach the snippet
+    # rather than reproducing under the auto label.
     at.session_state["cmp0_label_pattern"] = "MINE-{participant_id}"
     at.run(timeout=250)
     assert not at.exception, at.exception
@@ -1875,7 +1861,7 @@ def test_the_running_app_publishes_the_labels_the_comparison_drew():
 # ---------------------------------------------------------------------------
 # A dataset added in the app: its mapping travels with the snippet
 # ---------------------------------------------------------------------------
-#: The review's repro: a lab export whose every column needs mapping by hand.
+#: A lab export whose every column needs mapping by hand.
 _MANUAL_WORDS = {
     "who": ["p", "p"],
     "episode": ["t", "t"],
@@ -1963,10 +1949,10 @@ def _manual_state() -> cs.FigureState:
 
 
 def test_an_added_dataset_carries_its_manual_mapping(tmp_path, monkeypatch):
-    """Share → Code wrote `load_scanpath_data("words.csv", "fixations.csv")`
-    with no mapping, so a dataset mapped by hand failed to load from its own
-    files. The snippet now carries both schemas — run against files with the
-    manual column names, it loads."""
+    """Share → Code carries both schemas, so a dataset mapped by hand loads
+    from its own files: run against files with the manual column names, the
+    snippet loads where a bare `load_scanpath_data("words.csv", "fixations.csv")`
+    fails."""
     _manual_files(tmp_path, monkeypatch)
     # Without the mapping, the files cannot be read at all.
     with pytest.raises(ValueError):
@@ -2020,11 +2006,6 @@ def test_what_the_loader_cannot_replay_is_named():
     # The paths are placeholders, and the caveat says so — without implying
     # they are all there is to change.
     assert "`words.csv`" in source.note and "fixations.csv" not in source.note
-
-    preset = cs.upload_source(
-        "MPE", {"steps": ["multipleye_preset"]}, words=True, fixations=True
-    )
-    assert "MultiplEYE" in preset.note and "word_schema" not in preset.options
 
 
 def test_an_edited_mapping_is_restated_in_the_files_names():
@@ -2093,7 +2074,6 @@ def test_render_args_hand_their_schemas_to_the_snippet_source():
     args = argparse.Namespace(
         authoring=None,
         potec=None,
-        eyegenbench=None,
         onestop=None,
         source=None,
         words=["w.csv"],

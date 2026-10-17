@@ -14,7 +14,7 @@ How it stays faithful to what the user sees on screen:
   figure and rendered to PNG, so word boxes, true-to-scale labels, saccades,
   order numbers and the orange current-fixation highlight all match the live view.
 * **Same clock.** The on-screen replay takes ``reading span / playback speed``
-  (BUG-93's wall-clock player); the clip spreads that over its frames, so its
+  (the wall-clock player); the clip spreads that over its frames, so its
   runtime equals the playback time quoted on screen (``animation_playback_ms``).
   A replay faster than the format can show drops frames to stay on time, as the
   player does between display ticks (:func:`clip_frame_count`).
@@ -44,11 +44,11 @@ from .export_status import ExportStage, StatusCallback, emit_status
 # The interactive formats live elsewhere; these are the rasterized clip formats.
 VIDEO_FORMATS: tuple[str, ...] = ("gif", "mp4")
 
-# SEC1 (BUG-74): a GIF's cost grows with its raster pixels — every frame is
-# decoded, palette-quantized and written whole (``disposal=2`` stores full frames,
-# not deltas), and the finished file is held in memory for the download. The
-# encoder streams since BUG-74, so a frame no longer costs its decoded size for the
-# whole encode, but the rendered PNGs and the output still scale with
+# A GIF's cost grows with its raster pixels — every frame is decoded,
+# palette-quantized and written whole (``disposal=2`` stores full frames, not
+# deltas), and the finished file is held in memory for the download. The encoder
+# streams, so a frame does not cost its decoded size for the whole encode, but the
+# rendered PNGs and the output still scale with
 # frames × width × height × scale². So a GIF over this budget is refused before
 # Kaleido starts. A server other machines can reach gets the lower figure: it is
 # shared, and one visitor's 2000-frame, 2× clip is everyone's outage. Locally the
@@ -91,9 +91,9 @@ ProgressCallback = Callable[[int, int], None]
 # renders overlapping on it can each collect the other's bytes, and one's stop can
 # strand the other. Every warm-server span in the app holds this lock for its whole
 # start → render → stop, so overlapping exports queue instead. Two sessions on one
-# server could always overlap; since UX-150 one session can too, because the
-# current-figure download renders on a worker thread while the script thread is
-# free to start a bundle. Re-entrant in case a span ever opens inside another.
+# server can overlap, and so can one session: the current-figure download renders
+# on a worker thread while the script thread is free to start a bundle.
+# Re-entrant in case a span ever opens inside another.
 KALEIDO_LOCK = threading.RLock()
 
 
@@ -106,7 +106,7 @@ class AnimationExportError(RuntimeError):
 
 
 class AnimationBudgetError(AnimationExportError):
-    """The requested GIF is over this server's pixel budget (SEC1 / BUG-74).
+    """The requested GIF is over this server's pixel budget.
 
     Raised before anything is rendered. A subclass so a caller that already
     handles :class:`AnimationExportError` keeps working, and one that wants to can
@@ -116,10 +116,10 @@ class AnimationBudgetError(AnimationExportError):
 
 
 # Actionable remediation when Kaleido can't find a Chrome/Chromium binary — the
-# usual cause of a failed GIF/MP4 (or static PNG/SVG/PDF) export (ENG-10).
-# BUG-85: worded for both installs. The frozen desktop bundle has no
-# `kaleido_get_chrome` / `plotly_get_chrome` and no Python prompt, but
-# `chromium_browser_path` finds an installed Chrome, Chromium or Edge there too.
+# usual cause of a failed GIF/MP4 (or static PNG/SVG/PDF) export. Worded for
+# both installs: the frozen desktop bundle has no `kaleido_get_chrome` /
+# `plotly_get_chrome` and no Python prompt, but `chromium_browser_path` finds an
+# installed Chrome, Chromium or Edge there too.
 CHROME_INSTALL_HINT = (
     "Image export needs Chrome, Chromium or Edge, and none was found. Install one "
     "of them and try again — or, with a pip install, run `plotly_get_chrome -y`. "
@@ -242,7 +242,7 @@ def _static_base(fig: go.Figure) -> go.Figure:
     strip; a slim margin remains for the "Elapsed" annotation. Only the control
     band is reclaimed: the other margins hold a title, a caption, a color bar or
     the coordinate-grid ticks, and are kept as they are. The replay's clock
-    on ``layout.meta`` (BUG-93) goes too — only the live player reads it, and it
+    on ``layout.meta`` goes too — only the live player reads it, and it
     would otherwise ride into every frame Kaleido renders.
     """
     base = go.Figure(fig)
@@ -322,7 +322,7 @@ def _served_to_other_machines() -> bool:
 def check_gif_budget(
     n_frames: int, width: int, height: int, scale: float, *, budget: int | None = None
 ) -> None:
-    """Refuse a GIF whose frames would exceed the pixel budget (SEC1 / BUG-74).
+    """Refuse a GIF whose frames would exceed the pixel budget.
 
     ``width``/``height`` are the clip's pixels at 1×; Kaleido multiplies both by
     ``scale``. ``budget`` defaults to :data:`GIF_PIXEL_BUDGET_HOSTED` inside a
@@ -358,7 +358,7 @@ def clip_frame_count(
     A frame shorter than the format can hold — one video frame at ``_MP4_FPS``,
     or ``_GIF_MIN_FRAME_MS`` for a GIF — would be held that long anyway and
     stretch the clip, so a fast replay keeps only as many frames as fit its
-    runtime, each held a little longer (BUG-93). ``max_frames`` caps it further.
+    runtime, each held a little longer. ``max_frames`` caps it further.
     Never fewer than two, so the clip still ends on the whole scanpath.
     """
     shortest = _GIF_MIN_FRAME_MS if fmt.lower() == "gif" else 1000.0 / _MP4_FPS
@@ -486,11 +486,11 @@ def encode_gif(
 ) -> bytes:
     """Encode PNG frames into an animated GIF with a uniform per-frame delay.
 
-    **Streams** (SEC1 / BUG-74): each PNG is decoded, quantized to a 256-color
-    palette and written before the next is read, so memory holds one decoded frame
-    and one palette frame, not the whole clip. Pillow's ``save(save_all=True)``
-    cannot do that — it keeps every normalized frame until the end to diff them —
-    and handing it the decoded list on top cost ~10 MB per frame at 2× (measured
+    **Streams**: each PNG is decoded, quantized to a 256-color palette and
+    written before the next is read, so memory holds one decoded frame and one
+    palette frame, not the whole clip. Pillow's ``save(save_all=True)`` cannot
+    do that — it keeps every normalized frame until the end to diff them — and
+    handing it the decoded list on top costs ~10 MB per frame at 2× (measured
     ~4.6 GB for the default 250-frame cap at a large figure). The bytes written
     are Pillow's own multi-frame layout for this input: the global header comes
     from frame one, every later frame carries its own palette, each is stored
@@ -500,7 +500,7 @@ def encode_gif(
 
     GIF stores delays in whole centiseconds and Pillow truncates the rest, so each
     frame's delay is rounded against the running total instead: the clip keeps
-    its length rather than losing up to 10 ms a frame (BUG-93).
+    its length rather than losing up to 10 ms a frame.
     """
     from PIL import GifImagePlugin, Image, ImageChops
 
@@ -688,7 +688,7 @@ def export_animation(
     )
     try:
         if fmt == "gif" and indices:
-            # SEC1: refuse before Chrome starts, not after the frames are made.
+            # Refuse before Chrome starts, not after the frames are made.
             check_gif_budget(
                 len(indices), int(fig.layout.width or 900), _static_height(fig), scale
             )

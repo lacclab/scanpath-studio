@@ -67,8 +67,7 @@ def test_a_cached_session_or_design_moves_the_renamed_keys():
 
 
 def test_a_cached_snap_above_words_becomes_snap_to_line():
-    """#422: a recovery-cache session or a saved design that snapped still
-    snaps."""
+    """A recovery-cache session or a saved design that snapped still snaps."""
     from scanpath_studio.session_keys import rename_legacy_keys
 
     out = rename_legacy_keys({"global_fixation_snap_to_word": True})

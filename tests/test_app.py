@@ -67,7 +67,7 @@ class TestBuildComboOptions:
 
 
 class TestComputeCanvasSize:
-    """Tests for compute_canvas_size (replaces removed clamp_canvas_size)."""
+    """Tests for compute_canvas_size."""
 
     def test_canvas_size_uses_data_extent(
         self, normalized_words_df, normalized_fixations_df
@@ -210,7 +210,7 @@ class _FakeSt:
 @pytest.fixture
 def fake_st(monkeypatch):
     fake = _FakeSt()
-    # The share/deep-link helpers live in url_state now; patch its module-level
+    # The share/deep-link helpers live in url_state; patch its module-level
     # `st` (and app's, for any app-side callers) so the link logic runs headless.
     from scanpath_studio import url_state as url_state_module
 
@@ -253,8 +253,8 @@ class TestBuildShareQuery:
     def test_compared_ids_round_trip_whatever_they_hold(
         self, fake_st, participant, trial, screen
     ):
-        """Round 10, finding 2: B's ids travel in one `compare=` value, so a
-        colon inside one must not move the split."""
+        """B's ids travel in one `compare=` value, so a colon inside one must
+        not move the split."""
         from scanpath_studio.url_state import PENDING_COMPARE_STATE_KEY
 
         compare = {"participant_id": participant, "trial_id": trial}
@@ -410,7 +410,7 @@ class TestBuildShareQuery:
         assert "global_fixation_color_range" not in ss
 
     def test_animation_frame_grid_round_trips(self, fake_st):
-        # VIZ-11 follow-up: a link that says "look at this replay" has to
+        # A link that says "look at this replay" has to
         # reproduce the same smoothness, so the grid rides the URL.
         fake_st.session_state = {
             "_share_selection": {"participant_id": "p1", "trial_id": "t1"},
@@ -440,7 +440,7 @@ class TestBuildShareQuery:
         assert fake_st.session_state["global_anim_max_frames"] == 30
 
     def test_a_onestop_regime_shares_as_its_own_token(self, fake_st):
-        # DATA-3 + DATA-63: each regime is its own dataset and its own token;
+        # Each OneStop regime is its own dataset and its own token;
         # the session's leftover regime/parts keys don't ride along.
         from scanpath_studio.constants import ONESTOP_REGIME_CHOICES
 
@@ -606,9 +606,9 @@ class TestApplyUrlTrialSelection:
         assert fake_st.session_state["_url_trial_applied"] is True
 
     def test_seeds_every_selection_prefix(self, fake_st):
-        # The Scanpath ("single") picker is seeded from the link. Generations now
-        # reuses that same selection (ENG-8), so there's no second "multi" picker
-        # to seed — _SELECTION_PREFIXES is just ("single",).
+        # The Scanpath ("single") picker is seeded from the link. Comparisons
+        # reuse that same selection, so there's no second "multi" picker to
+        # seed — _SELECTION_PREFIXES is just ("single",).
         fake_st.query_params = {"trial_id": "t2"}
         _apply_url_trial_selection(self._combos())
         assert fake_st.session_state["single_trial_id"] == reading_key("p1", "t2")
@@ -665,7 +665,7 @@ class TestApplyUrlTrialSelection:
     def test_a_link_naming_the_second_reader_of_a_shared_id_seeds_that_reading(
         self, fake_st
     ):
-        """#412: the picker's key names the reading, not the id both share."""
+        """The picker's key names the reading, not the id both share."""
         fake_st.query_params = {"participant": "p2", "trial_id": "t1"}
         combos = pd.DataFrame({"participant_id": ["p1", "p2"], "trial_id": ["t1"] * 2})
         assert _apply_url_trial_selection(combos) is None
@@ -674,8 +674,8 @@ class TestApplyUrlTrialSelection:
 
 
 class TestSettlePickerSelection:
-    """#412: a trial id alone in the picker's key — saved before it held
-    readings — opens its reading only when one reader has that id."""
+    """A trial id alone in the picker's key — as an older session saved it —
+    opens its reading only when one reader has that id."""
 
     _COMBOS = pd.DataFrame(
         {"participant_id": ["p1", "p2", "p1"], "trial_id": ["shared", "shared", "own"]}
@@ -778,9 +778,10 @@ class TestResolveDataDir:
         assert app_module._resolve_data_dir(p) == p
 
     def test_an_installed_copy_anchors_to_a_user_data_home(self, monkeypatch, tmp_path):
-        """ENG-59: installed, the folder above the package is `site-packages`,
-        so ⬇ Download wrote corpora into the environment. A source checkout is
-        recognised by the `pyproject.toml` beside the package."""
+        """Installed, the folder above the package is `site-packages`, so data
+        dirs anchor to a user data home instead, or ⬇ Download would write
+        corpora into the environment. A source checkout is recognised by the
+        `pyproject.toml` beside the package."""
         package = tmp_path / "site-packages" / "scanpath_studio"
         package.mkdir(parents=True)
         monkeypatch.setattr(app_module, "__file__", str(package / "app.py"))
@@ -814,16 +815,15 @@ class TestResolveDataDir:
 
 
 class TestForceLtrLocaleScript:
-    """UX-109 follow-up: `get_app_css`'s `direction: ltr` doesn't reach
-    react-aria's own RTL detection — Streamlit's Slider (`Slider.*.js`) reads
-    `navigator.language` directly and flips its thumb's percentage for a RTL
-    locale, independent of the page's CSS `direction`. Confirmed live: setting
-    `navigator.language = "he"` and dispatching `languagechange` moved the
-    trial-position slider's thumb to the *mirrored* position while its filled
-    track (styled in this app's own CSS, unaffected) stayed put — the exact
-    mismatch reported. This script overrides the browser's reported locale on
-    the parent window (same-origin) and re-dispatches `languagechange`, which
-    is what react-aria's own locale cache listens for to invalidate itself."""
+    """`get_app_css`'s `direction: ltr` doesn't reach react-aria's own RTL
+    detection — Streamlit's Slider (`Slider.*.js`) reads `navigator.language`
+    directly and flips its thumb's percentage for a RTL locale, independent of
+    the page's CSS `direction`. Under `navigator.language = "he"` the
+    trial-position slider's thumb would sit at the *mirrored* position while
+    its filled track (styled in this app's own CSS) stays put. This script
+    overrides the browser's reported locale on the parent window (same-origin)
+    and re-dispatches `languagechange`, which is what react-aria's own locale
+    cache listens for to invalidate itself."""
 
     def test_overrides_the_parent_windows_navigator_language(self):
         script = app_module._FORCE_LTR_LOCALE_SCRIPT
@@ -844,10 +844,9 @@ class TestForceLtrLocaleScript:
 
 
 class TestNormalizePairUncachedReportsItsParts:
-    """UX-166 fix-round-1 (T5-3, spec gap): the spec's step table names
-    normalization's three parts (words, fixations, cross-checks) so a
-    cancelled normalization has a checkpoint partway through instead of only
-    at the very end — on a real corpus this stage alone is a ~20 s wait."""
+    """Normalization reports its three parts (words, fixations, cross-checks),
+    so a cancelled normalization has a checkpoint partway through instead of
+    only at the very end — on a real corpus this stage alone is a ~20 s wait."""
 
     def _schemas_and_frames(self):
         from scanpath_studio import data as data_module

@@ -1,6 +1,6 @@
 """*Keep unknown values* — the explicit choice beside a numeric range filter.
 
-A range narrows, it does not exclude the unmeasured (UX-49): a trial with no
+A range narrows, it does not exclude the unmeasured: a trial with no
 value stays in the pool whatever the range. That stays the default. Unticking
 *Keep unknown values* asks the other question — "only trials with a measured
 value in this range" — for ordinary numeric trial fields and for the
@@ -152,7 +152,7 @@ LOADED = {("p1", "t1"), ("p2", "t1"), ("p3", "t1"), ("p4", "t1")}
 
 
 def _paired_trials():
-    """The round-7 example: p1 10, p2 90, p3 missing, p4 no row."""
+    """Four readers: p1 10, p2 90, p3 missing, p4 no row."""
     return md.build_trial_metadata(
         pd.DataFrame(
             {
@@ -321,7 +321,8 @@ def test_the_empty_pool_diagnosis_names_and_applies_the_choice():
 def test_the_metadata_ranges_are_not_recounted_on_every_rerun(monkeypatch):
     """The numeric metadata filters' extents and *Keep unknown values* counts
     are cached on the table and the pool: a rerun that changes neither does
-    not walk them again (they were several passes per field per rerun)."""
+    not walk them again (uncached, that is several passes per field per
+    rerun)."""
     calls = []
     for name in ("numeric_extent", "unknown_count"):
         real = getattr(md, name)

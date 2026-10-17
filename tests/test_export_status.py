@@ -1,4 +1,4 @@
-"""EXP-6 shared export stages, signatures, durable UI state, and cleanup."""
+"""Shared export stages, signatures, durable UI state, and cleanup."""
 
 from __future__ import annotations
 
@@ -162,7 +162,7 @@ def _fake_warm_kaleido(monkeypatch, on_render=lambda: None):
 
 
 def test_warm_kaleido_server_is_held_under_the_process_lock(monkeypatch):
-    """UX-150: a download on a worker thread must not share the server mid-export."""
+    """A download on a worker thread must not share the server mid-export."""
     _fake_warm_kaleido(monkeypatch)
 
     with export._figure_renderer(True):
@@ -374,7 +374,7 @@ def _static_export_run(fmt: str):
 
 @pytest.mark.parametrize(("fmt", "scale"), [("PNG", 3), ("SVG", 1)])
 def test_png_and_svg_are_saved_by_the_browser(monkeypatch, fmt, scale):
-    """UX-152: drawn from the plot on screen — no server render, no Chrome needed."""
+    """Drawn from the plot on screen — no server render, no Chrome needed."""
     from scanpath_studio import tabs
 
     def must_not_render(*args, **kwargs):
@@ -426,7 +426,7 @@ def test_the_browser_image_button_mounts():
 
 
 def test_pdf_downloads_in_one_click(monkeypatch):
-    """UX-150: one download button, no Render step, and nothing renders per rerun."""
+    """One download button, no Render step, and nothing renders per rerun."""
     from scanpath_studio import tabs
 
     def must_not_render(*args, **kwargs):
@@ -458,7 +458,7 @@ def _true_scale_chart_app():
 
 
 def test_the_plot_camera_saves_the_export_png(monkeypatch):
-    """UX-152: the modebar's camera gives the Export PNG, not a 1× newplot.png."""
+    """The modebar's camera gives the Export PNG, not a 1× newplot.png."""
     import json
     import re
 
@@ -598,7 +598,7 @@ def _animation_clip_app():
     from scanpath_studio.tabs import _render_animation_export, _ReplayView
 
     # Three frames whose clock says the replay lasts 10 s of reading at ×2 —
-    # what `make_scanpath_animation` stamps (BUG-93).
+    # what `make_scanpath_animation` stamps.
     fig = go.Figure(
         go.Scatter(x=[0, 1], y=[0, 1]),
         frames=[
@@ -658,7 +658,7 @@ def _unloaded_replay_export_app():
 
 @pytest.mark.parametrize("fmt", ["HTML", "GIF", "MP4"])
 def test_the_export_panel_does_not_load_the_replay_on_a_rerun(monkeypatch, fmt):
-    # PERF-16: unpickling the replay costs 9 s at 2,000 frames, so the panel
+    # Unpickling the replay costs ~9 s at 2,000 frames, so the panel
     # works from the cached view — frame count, clip length, size, signature —
     # and loads the figure only on a click that exports it.
     AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
@@ -673,9 +673,9 @@ def test_the_export_panel_does_not_load_the_replay_on_a_rerun(monkeypatch, fmt):
 
 
 def test_the_clip_lasts_what_the_figures_own_replay_does(monkeypatch):
-    # BUG-93: the GIF/MP4 took a playback time the tab measured on its own, from
-    # fixations the builder's Discard flags had not dropped yet, so a clip could
-    # outlast the replay it was made from. It reads the figure's clock now.
+    # The GIF/MP4 reads the figure's own clock: a playback time the tab measured
+    # on its own, from fixations the builder's Discard flags had not dropped yet,
+    # would let a clip outlast the replay it was made from.
     AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
     from scanpath_studio import tabs
 
@@ -711,7 +711,7 @@ def test_animation_html_carries_the_replay_player():
         frames=[go.Frame(name="0", data=[go.Scatter(x=[0], y=[0])], traces=[0])],
     )
     bare = tabs._animation_html(fig)
-    # BUG-93: a replay built by `make_scanpath_animation` stamps its clock, and
+    # A replay built by `make_scanpath_animation` stamps its clock, and
     # the download keeps time with the same wall-clock player as the app.
     fig.update_layout(
         meta={

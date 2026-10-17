@@ -1,4 +1,4 @@
-"""ENG-4 — widget-driven end-to-end flows through ``streamlit.testing.v1.AppTest``.
+"""Widget-driven end-to-end flows through ``streamlit.testing.v1.AppTest``.
 
 ``tests/test_apptest.py`` boots the app and asserts that surfaces *render*.
 ``test_column_mapping.py`` / ``test_filters.py`` / ``test_export.py`` cover the
@@ -16,8 +16,8 @@ across a sequence of interactions instead of booting per assertion.
 Facts about the bundled demo used as expectations below:
 
 - 2 readers × 12 trials = **24**, every one with fixations, so the words table
-  and the trial picker (built from fixations) agree (DATA-43 dropped a third
-  reader who had word rows only). Half of them are ``Adv``, half ``Ele``.
+  and the trial picker (built from fixations) agree. Half of them are ``Adv``,
+  half ``Ele``.
 - ``universal_pos`` holds the 15 Universal-POS tags listed in ``_POS_TAGS``.
 """
 
@@ -82,11 +82,11 @@ def _boot(
     """Boot the app. ``synthetic=True`` picks the 6-word synthetic trial (one
     trial, no raw gaze) instead of the bundled demo.
 
-    ``subtab`` opens one of the per-trial subtabs: since PERF-3 the expensive
-    ones render only when they are the selected tab, so a flow that reads Export
-    content has to open it, exactly as a user does. ``view`` switches top-level
-    page — DATA-26 moved the dataset's tables and stats onto the 🗂️ Data page,
-    so a flow reading those asks for ``VIEW_DATA`` instead of a subtab.
+    ``subtab`` opens one of the per-trial subtabs: the expensive ones render
+    only when they are the selected tab, so a flow that reads Export content
+    has to open it, exactly as a user does. ``view`` switches top-level page —
+    the dataset's tables and stats are on the 🗂️ Data page, so a flow reading
+    those asks for ``VIEW_DATA`` instead of a subtab.
     """
     at = AppTest.from_file(APP_SCRIPT)
     if synthetic:
@@ -121,8 +121,8 @@ def _clean(at: AppTest, note: str = "") -> None:
 def _trial_ids(at: AppTest) -> list[str]:
     """The trial ids currently offered by the picker (the live trial pool).
 
-    Favorited trials are labelled ``<id> ★``. The options are the ids as shown
-    (UX-187 / UX-202); `picker_trial_id` gives each id back.
+    Favorited trials are labelled ``<id> ★``. The options are the ids as shown;
+    `picker_trial_id` gives each id back.
     """
     from tests.conftest import picker_trial_id
 
@@ -140,7 +140,7 @@ def _metric(at: AppTest, label: str) -> str | None:
 
 
 def _dataset_names(at: AppTest) -> list[str]:
-    """The names 📂 Available datasets lists (UX-174's rows seam)."""
+    """The names 📂 Available datasets lists (its rows seam)."""
     from scanpath_studio.app import DATASET_TABLE_ROWS_KEY
 
     return [row["Dataset"] for row in at.session_state[DATASET_TABLE_ROWS_KEY]]
@@ -175,7 +175,7 @@ def _word_labels(at: AppTest) -> set[str]:
 
 @pytest.mark.timeout(120)
 class TestColumnMappingOverrideFlow:
-    """The Column-mapping panel is editable for the bundled demo (DATA-8).
+    """The Column-mapping panel is editable for the bundled demo.
     Overriding a field there must re-normalize the data the whole app renders,
     not just relabel the mapping table."""
 
@@ -197,13 +197,12 @@ class TestColumnMappingOverrideFlow:
             at.session_state["_active_column_mapping"]["words"]["text"]
             == "universal_pos"
         )
-        # DATA-26: mode A of the one Column mapping section is the *editable*
-        # panel, so the selectbox itself is the report — a read-only table
-        # repeating it underneath is the duplication the page exists to remove.
+        # The Column mapping section's editable panel is its own report — the
+        # selectbox itself; no read-only table repeats it underneath.
         assert at.selectbox(key="col_map_words_text").value == "universal_pos"
-        # The panel says the auto-detected pick was overridden (ENG-9). UX-53 r4
-        # moved that sentence off the page and onto the ✨ flag's tooltip, so it
-        # is the `data-tip` that carries it now, not a caption.
+        # The panel says the auto-detected pick was overridden — on the ✨
+        # flag's tooltip, so it is the `data-tip` that carries it, not a
+        # caption.
         assert any(
             "IA_LABEL" in m.value and "overridden" in m.value for m in at.markdown
         ), "the ✨ flag should report the overridden auto-detection on hover"
@@ -282,14 +281,13 @@ class TestColumnMappingOverrideFlow:
 class TestTrialFilterFlow:
     """Condition + annotation filters, driven through their widgets, must narrow
     the pool every downstream surface sees — and emptying it must land on the
-    UX-7 guidance state."""
+    empty-pool guidance state."""
 
     def test_condition_then_annotation_filter_narrow_the_pool(self):
-        # DATA-26 split this flow across two pages: the filter widgets, the
-        # picker and the star live on Scanpath, while the counts and the raw
-        # tables that prove the narrowing reached the *data* are the 🗂️ Data
-        # page's. So the interactions run here and the evidence is read on one
-        # hop over, below.
+        # This flow spans two pages: the filter widgets, the picker and the
+        # star live on Scanpath, while the counts and the raw tables that prove
+        # the narrowing reached the *data* are the 🗂️ Data page's. So the
+        # interactions run here and the evidence is read one hop over, below.
         at = _boot()
         assert len(_trial_ids(at)) == DEMO_TRIALS_IN_PICKER
 
@@ -335,9 +333,9 @@ class TestTrialFilterFlow:
 
         # (3) Favorites-only narrows to exactly the starred trial.
         # AppTest cannot replay a selectbox whose format_func reads Streamlit
-        # session state outside a script run. Now that the marker correctly
-        # appears immediately, start a fresh tree for the next interaction and
-        # seed the persisted annotation store into it.
+        # session state outside a script run. The marker appears immediately,
+        # so start a fresh tree for the next interaction and seed the persisted
+        # annotation store into it.
         saved_store = dict(store)
         at = _boot()
         at.session_state["trial_annotations"] = saved_store
@@ -363,12 +361,12 @@ class TestTrialFilterFlow:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
         # Guidance, not a plot: what happened, which filter did it, and a way out.
-        # It is ONE panel now, not a warning banner plus loose markdown — the
-        # three-block version read as three unrelated messages.
+        # It is ONE panel, not a warning banner plus loose markdown, which would
+        # read as three unrelated messages.
         assert [w.value for w in at.warning] == []
         body = " ".join(m.value for m in at.markdown)
         assert "No trials match your filters" in body
-        # The count has to say what it counts; "(dataset has 1)" did not.
+        # The count has to say what it counts — not a bare "(dataset has 1)".
         assert "**0** of the **1 trial** in this dataset get through." in body
         assert "★ Favorites only" in body
         assert _trial_ids(at) == []
@@ -401,15 +399,15 @@ class TestTrialFilterFlow:
         assert at.session_state["_trial_filters"] == {
             "participants": None,
             "metadata": {},
-            "ranges": {},  # UX-49's continuous filters, likewise unconstrained
+            "ranges": {},  # the continuous filters, likewise unconstrained
             # …and none of them leaves out the trials with no value.
             "ranges_drop_unknown": (),
             "metadata_keys": {},
-            # DATA-20: the widget keys behind a participant-grain metadata
+            # The widget keys behind a participant-grain metadata
             # narrowing. Empty here — nothing was attached — and it must reset
             # with the rest, or a cleared filter would still claim a cause.
             "participant_filter_keys": (),
-            # DATA-29: the trial-grain sibling. `None` is "no constraint" — an
+            # The trial-grain sibling. `None` is "no constraint" — an
             # empty set would mean a constraint nothing satisfies, which is the
             # opposite of cleared.
             "trial_keys": None,
@@ -430,14 +428,14 @@ class TestBulkExportFlow:
     """The Export subtab, driven end to end: pick formats, press Build export,
     get a zip whose contents match the trial pool and the live plot settings.
 
-    Streamlit 1.59 made ``st.download_button`` drivable from ``AppTest``, and the
-    test clicks the real one — but the bytes it serves still live in Streamlit's
-    media-file manager, not in the element tree, so there is no way to *read* the
-    zip back from the click. The payload is therefore still captured at the
-    ``tabs.bulk_export`` seam by a wrapper that calls the real function.
-    Everything up to and including the button press — the options collected from
-    the widgets, the scope, the trial pool, the figure settings — is the real UI
-    path; only the *inspection* of the bytes is substituted (ENG-36).
+    ``st.download_button`` is drivable from ``AppTest``, and the test clicks the
+    real one — but the bytes it serves live in Streamlit's media-file manager,
+    not in the element tree, so there is no way to *read* the zip back from the
+    click. The payload is therefore captured at the ``tabs.bulk_export`` seam by
+    a wrapper that calls the real function. Everything up to and including the
+    button press — the options collected from the widgets, the scope, the trial
+    pool, the figure settings — is the real UI path; only the *inspection* of
+    the bytes is substituted.
     """
 
     @staticmethod
@@ -450,7 +448,7 @@ class TestBulkExportFlow:
             return set(zf.namelist())
 
     def test_combine_trials_toggle_replaces_the_mega_table(self, monkeypatch):
-        """EXP-23: no *Mega-table* pill; a table choice reveals *Combine all
+        """No *Mega-table* pill; a table choice reveals *Combine all
         trials into one file*, and the build then writes `aggregate/` only."""
         from scanpath_studio import tabs
 
@@ -501,7 +499,7 @@ class TestBulkExportFlow:
 
         at = _boot(subtab=SUBTAB_EXPORT)
         # No zip to download yet. The Current figure's "⬇ Download PNG" is always
-        # there since UX-150 (it renders on click), so look for the zip by label.
+        # there (it renders on click), so look for the zip by label.
         assert "⬇ Download bundle (zip)" not in self._download_labels(at), (
             "the zip download button must only appear after a build"
         )
@@ -519,7 +517,7 @@ class TestBulkExportFlow:
         at.pills(key="bulk_export_tabular").set_value(["Fixations"])
         # Word boxes on, so the figure settings threaded into the export are
         # demonstrably the live ones rather than a default snapshot. (Their own
-        # rail section's switch, out of 📄 Stimulus.)
+        # rail section's switch, not 📄 Stimulus.)
         at.toggle(key="global_show_words").set_value(True)
         at.run(timeout=60)
         _clean(at, "after choosing export artifacts:")
@@ -540,7 +538,7 @@ class TestBulkExportFlow:
         assert options.include_fixations is True
         assert options.export_unfiltered is False
 
-        # DATA-66: the demo's column-name map travels with its tables.
+        # The demo's column-name map travels with its tables.
         expected = {"README.md", "index.csv", "columns.json"}
         for trial in pool:
             expected.add(f"per_trial/l7_1090__{trial}/fixations.csv")
@@ -570,7 +568,7 @@ class TestBulkExportFlow:
         assert expected_rows > 0
         assert len(fix_csv) == expected_rows
         assert set(fix_csv["participant_id"].unique()) == {"l7_1090"}
-        # Under the demo's own names (DATA-66): its file calls the trial id
+        # Under the demo's own names: its file calls the trial id
         # `unique_trial_id` and the duration `CURRENT_FIX_DURATION`.
         assert set(fix_csv["unique_trial_id"].unique()) == {pool[0]}
         assert sorted(fix_csv["CURRENT_FIX_DURATION"]) == sorted(
@@ -581,10 +579,10 @@ class TestBulkExportFlow:
             ]
         )
 
-        # The rendered download button is the real delivery path — and since
-        # Streamlit 1.59 it is drivable, so click it rather than only asserting
-        # it exists: that is what proves the button is wired to a live payload
-        # and that the app survives serving it (ENG-36).
+        # The rendered download button is the real delivery path — and it is
+        # drivable, so click it rather than only asserting it exists: that is
+        # what proves the button is wired to a live payload and that the app
+        # survives serving it.
         zip_button = [
             b for b in at.download_button if b.label == "⬇ Download bundle (zip)"
         ]
@@ -679,7 +677,7 @@ class TestBulkExportFlow:
     def test_a_missing_browser_is_said_and_a_partial_build_counts_its_failures(
         self, monkeypatch
     ):
-        """EXP-24: with no browser on the server, picking PNG says so before the
+        """With no browser on the server, picking PNG says so before the
         build; the build reports how many figures it made and how many failed,
         keeps the HTML it could make downloadable — and when it made none, the
         error list opens by itself."""
@@ -729,18 +727,18 @@ class TestBulkExportFlow:
 
 @pytest.mark.timeout(180)
 class TestRecoveryCachePanelFlow:
-    """ENG-30 → UX-179 — 🗂️ Data → *Saved on this computer* is the on-device
-    cache's only in-app surface, so it has to report the real store. #374 F33
-    gave it one control back: *Clear what is saved…*, behind a confirmation.
+    """🗂️ Data → *Saved on this computer* is the on-device cache's only in-app
+    surface, so it has to report the real store. Its one control is *Clear
+    what is saved…*, behind a confirmation.
     """
 
     @staticmethod
     def _boot_local(tmp_path, monkeypatch) -> AppTest:
         """Boot on the Data page with persistence on, in a throwaway folder.
 
-        ``st.context.url`` is empty under AppTest, so the loopback check would
-        otherwise report a hosted deployment; the env override is the supported
-        way in. ``SCANPATH_STUDIO_STATE_DIR`` keeps the test off the real
+        Under AppTest neither the server address nor ``st.context.url`` reads
+        as loopback, so the persistence gate would otherwise report a hosted
+        deployment; the env override is the supported way in. ``SCANPATH_STUDIO_STATE_DIR`` keeps the test off the real
         ``~/.cache`` folder.
         """
         monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
@@ -762,14 +760,14 @@ class TestRecoveryCachePanelFlow:
         # Working in the app writes the cache — the panel's own claim.
         assert (tmp_path / "manifest.json").is_file()
         assert persistence.cache_status(tmp_path)["settings"] > 0
-        # UX-179: no saving toggle, no Reset.
+        # No saving toggle, no Reset.
         assert not [t for t in at.toggle if t.key == "persist_local_saving"]
         labels = {p.proto.popover.label for p in at.get("popover")}
         gone = {"Clear recovery cache", "Reset everything", "What's saved, and where"}
         assert not labels & gone, labels
 
     def test_clear_what_is_saved_lists_then_starts_over(self, tmp_path, monkeypatch):
-        """#374 F33: the confirmation names what goes, and a confirmed clear
+        """The confirmation names what goes, and a confirmed clear
         starts the app over — the session is emptied too, so the run that
         follows cannot write the old work back."""
         at = self._boot_local(tmp_path, monkeypatch)
@@ -807,8 +805,8 @@ class TestRecoveryCachePanelFlow:
         assert "**Saved here:**" not in body
 
     def test_an_attached_metadata_table_survives_a_refresh(self, tmp_path, monkeypatch):
-        """DATA-38 — the reported bug end to end: attach a table, refresh, and
-        its field is still in the filter funnel. A fresh ``AppTest`` is a fresh
+        """End to end: attach a table, refresh, and its field is still in the
+        filter funnel. A fresh ``AppTest`` is a fresh
         browser session on the same machine, which is what a refresh is."""
         from scanpath_studio import metadata as md
 
@@ -846,7 +844,7 @@ class TestRecoveryCachePanelFlow:
         assert md.SESSION_KEY in refreshed.session_state
 
     def test_panel_says_nothing_is_stored_on_a_hosted_deployment(self, monkeypatch):
-        # No override and no loopback URL under AppTest == the hosted case.
+        # No override, and nothing loopback under AppTest == the hosted case.
         monkeypatch.delenv("SCANPATH_STUDIO_PERSIST", raising=False)
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
@@ -874,7 +872,7 @@ class TestRecoveryCachePanelFlow:
 
 
 class TestAddDatasetMenu:
-    """UX-143: creation actions and placeholders cannot become real sources."""
+    """Creation actions and placeholders cannot become real sources."""
 
     @pytest.mark.parametrize("source", [AUTHOR_CHOICE, "Synthetic sample"])
     def test_authoring_cancel_and_save_dataset(self, source):
@@ -989,7 +987,7 @@ class TestAddDatasetMenu:
         assert at.file_uploader
 
     def test_the_picker_offers_only_datasets(self):
-        """#374 F31: no "More coming soon!" entry; its help says it instead."""
+        """No "More coming soon!" entry; its help says it instead."""
         at = _boot()
         picker = at.selectbox(key="data_source_picker")
         assert "More coming soon!" not in picker.options
@@ -998,16 +996,16 @@ class TestAddDatasetMenu:
 
 @pytest.mark.timeout(180)
 class TestAuthoringEditorFlow:
-    """BUG-19 — the ✏️ Author a scanpath grid, driven the way a browser drives it.
+    """The ✏️ Author a scanpath grid, driven the way a browser drives it.
 
     ``st.data_editor`` keeps its edits as a *delta* against the frame it was
-    handed, and the browser re-sends that delta on every rerun. The editor used
-    to feed its own return value back in as the next run's input, so the delta
-    was applied twice; after a row deletion the frame also picked up a gapped
+    handed, and the browser re-sends that delta on every rerun. Feeding the
+    editor's return value back in as the next run's input would apply the
+    delta twice; after a row deletion the frame would also pick up a gapped
     index, which ``num_rows="dynamic"`` cannot add rows to. From there edits
-    landed on the wrong rows and rows disappeared — the reported "some rows can't
-    be edited". The base frame must stay stable and range-indexed no matter how
-    many reruns a live edit survives.
+    would land on the wrong rows and rows would disappear. The base frame must
+    stay stable and range-indexed no matter how many reruns a live edit
+    survives.
     """
 
     #: One edit, one added row and one deletion — what the browser holds after a
@@ -1095,8 +1093,8 @@ class TestAuthoringEditorFlow:
         return at.run(timeout=60)
 
     def test_a_malformed_authored_link_warns_and_keeps_the_text(self):
-        """A mixed event list used to raise from `pd.DataFrame` before the app
-        drew its navigation — now it is ignored with the existing warning."""
+        """A mixed event list is ignored with the existing warning, rather than
+        raising from `pd.DataFrame` before the app draws its navigation."""
         at = self._linked('[{"x":100},1]')
         _clean(at, "with a malformed authored link:")
         assert any("unreadable hand-made scanpath" in str(w.value) for w in at.warning)
@@ -1113,9 +1111,9 @@ class TestAuthoringEditorFlow:
 
 @pytest.mark.timeout(180)
 def test_co_animating_two_readings_of_one_text_renders():
-    """Animate + Compare on two readings in one coordinate space reaches the
-    same-text check, which called a two-argument helper with one argument —
-    a second `_trial_text_id` had shadowed the first — and stopped the view."""
+    """Animate + Compare on two readings in one coordinate space renders
+    through the same-text check, which calls the two-argument `_trial_text_id`
+    — a second, shadowing definition of it would stop the view."""
     from scanpath_studio.session_keys import (
         PENDING_COMPARE_STATE_KEY,
         SINGLE_ANIMATE,
@@ -1154,7 +1152,7 @@ def test_co_animating_two_readings_of_one_text_renders():
 
 @pytest.mark.timeout(180)
 class TestCrossDatasetCompareFlow:
-    """CMP-8 — pick scanpath B out of a *different* dataset and render it.
+    """Pick scanpath B out of a *different* dataset and render it.
 
     Driven through the real widgets: turn Compare on, pick the second dataset,
     and assert the figure builds without an error and the two panels describe
@@ -1200,19 +1198,18 @@ class TestCrossDatasetCompareFlow:
         at.run(timeout=90)
         assert not at.exception, at.exception
         assert [e.value for e in at.error] == []
-        # §5.3: resolved for this render, but the user's stored choice stands so
-        # a same-dataset pair gets Overlay straight back.
+        # Resolved for this render, but the user's stored choice stands so a
+        # same-dataset pair gets Overlay straight back.
         assert at.session_state["single_compare_layout"] == "Overlay"
-        # BUG-85: the gate's reason no longer carries the app's fallback, so the
-        # app says it where it resolves Overlay away — once.
+        # The gate's reason does not carry the app's fallback, so the app says
+        # it where it resolves Overlay away — once.
         captions = " ".join(str(caption.value) for caption in at.caption)
         assert captions.count("They are shown side by side instead.") == 1
 
     def test_an_animated_pair_on_two_screens_says_it_shows_one_scanpath(self):
-        """UX-144: the co-replay has no split layout and shows A alone, so its
-        warning must not borrow the static figure's "shown side by side
-        instead". It used to trim that off the gate's reason; BUG-85 took it out
-        of the reason, so nothing is left here to trim — or to forget to."""
+        """The co-replay has no split layout and shows A alone, so its warning
+        must not borrow the static figure's "shown side by side instead" (which
+        the gate's reason does not carry)."""
         from scanpath_studio.compare_source import COMPARE_SOURCE_KEY
 
         at = _boot()

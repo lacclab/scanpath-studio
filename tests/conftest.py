@@ -11,18 +11,19 @@ from scanpath_studio.constants import _VIEW_DATA
 from tests.synthetic_data import make_synthetic_fixations, make_synthetic_words
 
 #: Absolute path to the app entry point driven by ``AppTest.from_file``.
-#: Streamlit 1.61 resolves a *relative* script path against the file that calls
-#: ``from_file`` (previously the process CWD), so ``"streamlit_app.py"`` would
-#: look for ``tests/streamlit_app.py``. Always pass this constant.
+#: ``from_file`` resolves a *relative* script path against the file that calls
+#: it, not the process CWD, so ``"streamlit_app.py"`` would look for
+#: ``tests/streamlit_app.py``. Always pass this constant.
 APP_SCRIPT = str(Path(__file__).resolve().parents[1] / "streamlit_app.py")
 
 
 @pytest.fixture(autouse=True, scope="session")
 def _experimental_features_on():
-    """Run the suite with PRE-21's gated features **exposed**.
+    """Run the suite with the experimental features **exposed**.
 
-    Vertical drift correction and the NLD similarity scoring are hidden by
-    default ahead of publication, but they still work and are still covered —
+    The features behind ``SCANPATH_EXPERIMENTAL`` (vertical drift correction,
+    NLD similarity scoring, the app's computed measures and others) are hidden
+    by default, but they still work and are still covered —
     hiding them must not quietly delete their test coverage. So the whole suite
     runs with ``SCANPATH_EXPERIMENTAL=1``, and the tests that assert the *hidden*
     build (``tests/test_experimental_gate.py``) unset it themselves. Every gate
@@ -37,7 +38,7 @@ def _experimental_features_on():
 def _local_filesystem_on():
     """Run the suite as a local install sees it: the path box, picker and ⬇ on.
 
-    ENG-66 made the default follow the server's bind address, and an AppTest's
+    Unset, the gate follows the server's bind address, and an AppTest's
     ``server.address`` is unset — every interface, which reads as a shared
     deployment — so without this every Data-page test would see the hosted
     build. The gate's own tests (``tests/test_deployment_gate.py``) unset it.
@@ -49,34 +50,8 @@ def _local_filesystem_on():
 
 @pytest.fixture
 def experimental_off(monkeypatch):
-    """Force PRE-21's gated features **hidden**, as a default build sees them."""
+    """Force the experimental features **hidden**, as a default build sees them."""
     monkeypatch.delenv("SCANPATH_EXPERIMENTAL", raising=False)
-
-
-def add_benchmark_corpora(monkeypatch, root, names=None) -> None:
-    """Stand in for DATA-56's add flow: list the corpora at ``root`` as added.
-
-    DATA-55 retired discovery, so a benchmark corpus reaches the registry only
-    through `app.added_benchmark_datasets`, which is empty in the app. This
-    replaces it with the manifest entries at ``root`` — all of them, or those
-    named in ``names`` — read on every call, as the registry is rebuilt on every
-    call. It also points each module's `EYEGENBENCH_DEFAULT_DIR` at ``root``, so
-    the corpus' loader and Compare read the bundle that was added: each module
-    does its own ``from .constants import EYEGENBENCH_DEFAULT_DIR``, so each
-    holds a separate binding and patching `constants` alone reaches none of them.
-    """
-    from scanpath_studio import app, compare_source, constants
-    from scanpath_studio.eyegenbench import entry_name, eyegenbench_datasets
-
-    def added() -> tuple:
-        entries = tuple(eyegenbench_datasets(root))
-        if names is None:
-            return entries
-        return tuple(entry for entry in entries if entry_name(entry) in names)
-
-    monkeypatch.setattr(app, "added_benchmark_datasets", added)
-    for module in (constants, app, compare_source):
-        monkeypatch.setattr(module, "EYEGENBENCH_DEFAULT_DIR", str(root))
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -187,11 +162,11 @@ def normalized_fixations_df():
 
 
 #: Labels of the Scanpath view's per-trial subtabs, and the session key that
-#: selects one. PERF-3 made the four expensive panels render only when their tab
-#: is open (`st.tabs(key=…)` + `tab.open`), so a test that wants Export or Data
-#: Inspection must open it first, exactly as a user does.
-#: Re-exported from ``tabs`` rather than repeated, since PRE-21 made the set
-#: conditional (📐 Line assignment is offered only while drift correction is).
+#: selects one. The expensive panels render only when their tab is open
+#: (`st.tabs(key=…)` + `tab.open`), so a test that wants Export must open it
+#: first, exactly as a user does.
+#: Re-exported from ``tabs`` rather than repeated, since the set is conditional
+#: (📐 Line assignment is offered only while drift correction is).
 SUBTAB_KEY = "single_subtab"
 SUBTAB_ANNOTATIONS = tabs.SUBTAB_ANNOTATIONS
 SUBTAB_COMPARISONS = tabs.SUBTAB_COMPARISONS
@@ -199,28 +174,25 @@ SUBTAB_LINE_ASSIGNMENT = tabs.SUBTAB_LINE_ASSIGNMENT
 SUBTAB_EXPORT = tabs.SUBTAB_EXPORT
 SUBTAB_SHARE = tabs.SUBTAB_SHARE
 
-#: DATA-26: 🔎 Data Inspection is no longer a subtab of the Scanpath view — its
-#: content is the lower half of the 🗂️ **Data** page, a third top-level view.
-#: Reaching it is a nav switch, not a tab click.
+#: 🔎 Data Inspection is not a subtab of the Scanpath view — its content is
+#: part of the 🗂️ **Data** page, a top-level view. Reaching it is a nav switch,
+#: not a tab click.
 NAV_KEY = "main_nav"
 NAV_MIRROR_KEY = "_nav_mirrored"
 VIEW_DATA = _VIEW_DATA
 
 
 def pin_view(at, view: str) -> None:
-    """Ask for ``view`` on the *next* run, without running (DATA-26).
+    """Ask for ``view`` on the *next* run, without running.
 
     Clearing ``menu._MIRROR_KEY`` alongside the request is what makes this work
     twice. ``render_nav`` honours a ``main_nav`` request only when it differs
     from what it last mirrored — the check that stops a nav *click* reading as
-    "go back" — and it relies on the router remembering the selected page across
-    reruns, which a browser does through the URL and ``AppTest`` does not. So a
-    second ``main_nav = Data`` on an app already showing Data is ignored, the
-    router falls back to its default page, and the assertions land on Scanpath.
+    "go back" — so without the clear, a second ``main_nav = Data`` on an app
+    already showing Data is ignored and the assertions land on another page.
 
-    Since Streamlit 1.66 ``AppTest`` does remember the page a run finished on,
-    the way a browser's URL does, and a ``st.switch_page`` inside a run does
-    not move it. So the remembered page is dropped too, and the run starts on
+    ``AppTest`` remembers the page a run finished on, the way a browser's URL
+    does, and a ``st.switch_page`` inside a run does not move it. So the remembered page is dropped too, and the run starts on
     the default page, from which ``render_nav`` switches to the request.
     """
     at.session_state[NAV_KEY] = view
@@ -237,7 +209,7 @@ def pin_data_view(at) -> None:
 
 def picked_trial_id(value) -> str | None:
     """The trial id in the trial picker's value (``single_trial_id``), which
-    names a reading — participant and trial — since #412."""
+    names a reading — participant and trial."""
     from scanpath_studio.utils import split_reading_key
 
     return split_reading_key(value)[1]
@@ -246,12 +218,12 @@ def picked_trial_id(value) -> str | None:
 def picker_trial_id(option: str) -> str:
     """The trial id behind a trial-picker option, as ``AppTest`` shows it.
 
-    The picker displays an id part by part (UX-187) and leaves a first reading
-    out (UX-202), and ``AppTest`` exposes only the displayed text — so rejoin
-    the parts with ``_`` and put back the ``r0`` a split id no longer shows. An
-    id that did not split is shown as it is.
+    The picker displays an id part by part and leaves out a first reading's
+    ``r0``, and ``AppTest`` exposes only the displayed text — so rejoin the
+    parts with ``_`` and put back the ``r0`` a split id does not show. An id
+    that did not split is shown as it is.
     """
-    # #374 F27: the badges follow the trial.
+    # The annotation badges (★) follow the trial id; strip them first.
     shown = str(option).removesuffix(" ★").strip()
     parts = shown.split(" · ")
     if len(parts) == 1:
@@ -262,7 +234,7 @@ def picker_trial_id(option: str) -> str:
 
 
 def arm_debug_dialog(at) -> None:
-    """Ask for the ❓ Help → About → Debug modal on the *next* run (UX-179).
+    """Ask for the ❓ Help → About → Debug modal on the *next* run.
 
     Call it before **every** ``at.run()`` in a flow that drives the dialog, not
     just the first. In a browser an interaction inside a dialog reruns only the
@@ -276,13 +248,13 @@ def arm_debug_dialog(at) -> None:
 
 
 def open_data_view(at, timeout: int = 60):
-    """Switch to the 🗂️ Data page and rerun, so its body renders (DATA-26)."""
+    """Switch to the 🗂️ Data page and rerun, so its body renders."""
     pin_data_view(at)
     return at.run(timeout=timeout)
 
 
 def answer_setup_step(at, *, screen=None, geometry=None, text=None):
-    """Answer the wizard's Recording-setup step (DATA-22 step 4).
+    """Answer the add-dataset wizard's Recording-setup step.
 
     ``Add dataset`` is gated on all three groups being answered — deliberately,
     so an uploaded dataset can never inherit a silent 2560x1440 / 597 mm / 16 px
@@ -304,77 +276,3 @@ def answer_setup_step(at, *, screen=None, geometry=None, text=None):
     at.session_state[_SETUP_MODE_KEYS["geometry"]] = geometry or _GEOM_DEFAULT
     at.session_state[_SETUP_MODE_KEYS["text"]] = text or _TEXT_DEFAULT
     return at
-
-
-def _write_benchmark_corpus(
-    root, name: str, *, readers=("r1",), paragraphs=("p1",), fix_leftovers=None
-) -> None:
-    """Write one prepared benchmark corpus (DATA-27) under ``root/<name>/``.
-
-    The frames match `eyegenbench.EYEGENBENCH_WORD_SCHEMA` / `_FIX_SCHEMA` —
-    trivial single-column frames fail schema mapping, and `main()` returns early
-    on an unmapped source (`_render_unmapped_view`) without reaching most of what
-    these tests assert on.
-
-    ``fix_leftovers`` is a ``{column: value}`` mapping stamped onto every
-    fixation row, and it exists because the idealized default hid two real bugs
-    for a whole branch. A real prepared corpus carries the **publisher's** ~190
-    columns through beside the harmonised ones, and the app's auto-detection
-    seizes on them: EMTeC ships a `TRIAL_ID` that outranks `unique_paragraph_id`
-    (so the words broadcast to zero rows, silently), and Provo/SBSAT ship a
-    `page` that reads as a multipart screen on the fixations only (so the pair
-    is rejected outright). Pass the leftovers when a test needs the shape the
-    bundle actually has rather than the shape the schema describes.
-    """
-    import pandas as pd
-
-    directory = root / name
-    directory.mkdir(parents=True)
-    n = len(paragraphs)
-    pd.DataFrame(
-        {
-            "unique_paragraph_id": [p for p in paragraphs for _ in (0, 1)],
-            "ia_index": [0, 1] * n,
-            "ia_label": ["ab", "cd"] * n,
-            "line": [0, 0] * n,
-            "start_x": [10.0, 70.0] * n,
-            "end_x": [60.0, 120.0] * n,
-            "start_y": [20.0, 20.0] * n,
-            "end_y": [40.0, 40.0] * n,
-        }
-    ).to_parquet(directory / "words.parquet")
-    rows = [
-        (reader, paragraph, fix_index)
-        for reader in readers
-        for paragraph in paragraphs
-        for fix_index in (0, 1)
-    ]
-    fixations = pd.DataFrame(
-        {
-            "eyegenbench_trial_id": [f"t_{p}" for _, p, _ in rows],
-            "unique_participant_id": [r for r, _, _ in rows],
-            "unique_paragraph_id": [p for _, p, _ in rows],
-            "fix_index": [i for _, _, i in rows],
-            "ia_index": [i for _, _, i in rows],
-            "fix_duration": [200 if i == 0 else 180 for _, _, i in rows],
-            "x": [35.0 if i == 0 else 95.0 for _, _, i in rows],
-            "y": [30.0 for _ in rows],
-        }
-    )
-    for column, value in (fix_leftovers or {}).items():
-        fixations[column] = value
-    fixations.to_parquet(directory / "fixations.parquet")
-    pd.DataFrame(
-        {
-            "unique_participant_id": list(readers),
-            "participant_language": ["xx"] * len(readers),
-        }
-    ).to_parquet(directory / "participants.parquet")
-
-
-def _write_benchmark_manifest(root, entries) -> None:
-    """Write the bundle manifest. ``entries`` are real manifest rows — in
-    particular ``language`` is an **ISO code** ('de'), never a name."""
-    import json
-
-    (root / "manifest.json").write_text(json.dumps({"datasets": list(entries)}))

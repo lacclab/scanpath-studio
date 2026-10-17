@@ -1,4 +1,4 @@
-"""Tests for the vertical drift-correction algorithms (PRE-3).
+"""Tests for the vertical drift-correction algorithms.
 
 Two layers:
 
@@ -178,10 +178,11 @@ def test_word_order_methods_run_without_word_xy_arg(method):
 
 
 def test_app_modules_do_not_import_scipy():
-    """ENG-91: Windows Smart App Control blocked one of scipy's compiled
-    extensions in the desktop bundle, and because `controls` imported
-    `alignment`, which imported scipy at module level, every app run failed.
-    scipy stays a lazy import, loaded only by the paths that use it."""
+    """scipy stays a lazy import, loaded only by the paths that use it.
+
+    Windows Smart App Control can block one of scipy's compiled extensions in
+    the desktop bundle, and `controls` imports `alignment`, so a module-level
+    scipy import there would make every app run fail."""
     code = (
         "import sys\n"
         "import scanpath_studio.alignment, scanpath_studio.controls, "

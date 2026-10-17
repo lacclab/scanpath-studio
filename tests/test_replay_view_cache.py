@@ -1,10 +1,10 @@
-"""PERF-16: with 🎬 Animate on, a rerun shows the replay without reloading it.
+"""With 🎬 Animate on, a rerun shows the replay without reloading it.
 
-PERF-13 cached the replay as a `go.Figure`, so every rerun still paid to unpickle
-it — plotly re-validates every frame, 9 s at 2,000 frames — and then to serialize
-it into the page with `to_html`, 12 s more; with the Export tab on GIF/MP4 the
-export signature added `fig.to_json()`, 12 s again. `tabs._cached_replay_view`
-now caches what a rerun shows: the embed's HTML and the finished figure as
+A replay cached as a `go.Figure` would make every rerun pay to unpickle it —
+plotly re-validates every frame, 9 s at 2,000 frames — and then to serialize it
+into the page with `to_html`, 12 s more; with the Export tab on GIF/MP4 the
+export signature would add `fig.to_json()`, 12 s again. So
+`tabs._cached_replay_view` caches what a rerun shows: the embed's HTML and the finished figure as
 compressed bytes, keyed on everything that goes into the figure. The figure is
 unpickled only when an export needs it, and the export is signed from those
 inputs rather than from the figure's JSON.
@@ -122,7 +122,7 @@ class TestARerunShowsTheCachedView:
         monkeypatch.setattr(tabs, "_true_scale_plot_html", spy)
         _render()
         _render()
-        # What PERF-13's path embedded for that same finished figure.
+        # What the figure path embeds for that same finished figure.
         tabs._render_true_scale_chart(
             finished[0],
             key="single_anim",
@@ -151,7 +151,7 @@ class TestARerunShowsTheCachedView:
 
 
 class TestTheSaccadeOpacityRebuildsNoFrame:
-    """#422: the saccades' opacity is a trace attribute no frame restates, so
+    """The saccades' opacity is a trace attribute no frame restates, so
     it is stamped onto the cached replay, like the speed — dragging it is a
     new view, never a new set of frames."""
 
@@ -237,7 +237,7 @@ class TestTheExportReadsTheView:
 
 
 class TestTheTitleStyleIsAViewOfTheSameFrames:
-    """#422: the title/caption styling is stamped on the cached replay, so a
+    """The title/caption styling is stamped on the cached replay, so a
     new size is a new view — never a stale one, and never a new set of frames."""
 
     def test_a_new_title_size_is_a_new_view(self, page, monkeypatch):

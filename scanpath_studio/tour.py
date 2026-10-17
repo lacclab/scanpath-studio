@@ -2,11 +2,11 @@
 
 Two interchangeable styles, both introducing the app's main surfaces (data
 sources, filters, viz controls, tabs, annotations) the first time a session
-opens the app, re-playable any time from the ❓ Help menu's tutorial button:
+opens the app, replayable any time from ❓ Help → Tutorials:
 
 - ``"spotlight"`` (default): a floating card that walks through the *actual*
   UI — each step scrolls the target section into view and pulses an outline
-  around it. Rendered by ``render_spotlight_tour()`` at the end of ``main()``.
+  around it. Rendered by ``render_spotlight_tour()`` early in ``main()``.
 - ``"dialog"``: a self-contained multi-step ``st.dialog`` modal.
 
 Switch styles with the ``TOUR_STYLE`` constant below.
@@ -26,9 +26,9 @@ Mechanics worth knowing before editing:
   (``_dismiss_listener_script``) hides them instantly on click; the button's
   native click still clears ``tour_mode`` once Streamlit catches up.
 - Spotlight targets are ``.st-key-tour_grp_*`` classes from keyed wrapper
-  containers around the page + menu sections (app.py / controls.py /
-  annotations.py) plus Streamlit's stable ``data-testid``/``data-baseweb``
-  attributes for the tab strip. Keep ``_SPOTLIGHT_STEPS`` in sync with them.
+  containers around the page sections (app.py / tabs.py / controls.py) plus
+  Streamlit's stable ``data-testid`` for the nav (``menu.NAV_SELECTOR``). Keep
+  ``_SPOTLIGHT_STEPS`` in sync with them.
 - ``tour_seen`` is set **before** the tour is shown, not when it's finished.
   For the dialog style, setting it on Done only would make an X-dismissal
   re-open the modal on the very next widget interaction (any full rerun
@@ -36,14 +36,14 @@ Mechanics worth knowing before editing:
 - The tour is suppressed for embeds (``?embed=true``) and deep links
   (``?source=…&participant=…``): those sessions arrive mid-workflow from an
   external tool and shouldn't be greeted by a tutorial.
-- **"Don't show this again" (UX-12)** persists in a first-party *cookie*, not
+- **"Don't show this again"** persists in a first-party *cookie*, not
   session state — there are no user accounts, and session state dies with the
   tab. A cookie is the one browser-side store Python can also *read*
   (``st.context.cookies``); ``localStorage`` would need a bidirectional custom
   component to get the value back to the server. The checkbox writes it via a
   same-origin script (``_tour_optout_script``); ``tour_opted_out()`` reads it.
-  The replay button ignores the opt-out entirely, so the tour is never lost.
-- **The FAQ (UX-15)** is the other half of the ❓ Help menu group: a short
+  Replaying the tour ignores the opt-out entirely, so it is never lost.
+- **The FAQ** is another ❓ Help entry: a short
   ``st.dialog`` of recurring questions (``_faq_dialog``), deliberately kept to a
   handful of answers with the complete version on the docs site
   (``docs/faq.md``). It is armed exactly like the tour — the ❓ Help nav entry
@@ -78,7 +78,7 @@ from .constants import (
     spoken,
 )
 
-# UX-12: name of the first-party cookie holding the "don't show the welcome tour
+# Name of the first-party cookie holding the "don't show the welcome tour
 # again" opt-out ("1" = opted out). One year, path=/, SameSite=Lax — no personal
 # data, just a UI preference.
 TOUR_OPTOUT_COOKIE = "sps_tour_optout"
@@ -89,11 +89,11 @@ _TOUR_OPTOUT_MAX_AGE = 365 * 24 * 60 * 60
 # code; this only picks which one auto-opens / the replay button launches.
 TOUR_STYLE = "spotlight"
 
-# UX-101: the trial filters live behind one funnel since UX-64, and a *closed*
-# Streamlit popover renders no body — so `tour_grp_narrow_by` is absent from the
-# page until the funnel is clicked, and a step aimed at it silently spotlighted
-# nothing. A step that points inside a popover names the trigger that opens it
-# here, and the spotlight opens it (see `_popover_script`).
+# The trial filters live behind one funnel, and a *closed* Streamlit popover
+# renders no body — so `tour_grp_narrow_by` is absent from the page until the
+# funnel is clicked, and a step aimed at it would silently spotlight nothing. A
+# step that points inside a popover names the trigger that opens it here, and
+# the spotlight opens it (see `_popover_script`).
 #
 # Two selectors because the picker row has two layouts: `select_trial` drops the
 # slider for a pool of one and gives the funnel its own trailing column
@@ -113,20 +113,20 @@ class TutorialStep:
     selector: str
     view: str = _VIEW_SCANPATH
     subtab: str | None = None
-    #: PERF-9 made the Corpus Analysis subtabs lazy (only the open one renders),
-    #: so a step aimed at a control inside one has to open it, as ``subtab``
+    #: The Corpus Analysis subtabs are lazy (only the open one renders), so a
+    #: step aimed at a control inside one has to open it, as ``subtab``
     #: does for the Scanpath view. A label from ``tabs.CORPUS_SUBTABS``.
     corpus_subtab: str | None = None
-    #: DATA-35 — the step's target lives on the 🗂️ Data page's **✏️ Edit dataset**
+    #: The step's target lives on the 🗂️ Data page's **✏️ Edit dataset**
     #: screen rather than its overview, so opening the view is not enough: the
     #: editor has to be raised too, or the spotlight aims at a hidden container.
     dataset_editor: bool = False
-    #: UX-101 — the step's target is built inside a popover, so it is not in the
+    #: The step's target is built inside a popover, so it is not in the
     #: page until that popover's trigger is clicked. The selector of the trigger;
     #: the spotlight opens it before it looks for the target (`_popover_script`).
     popover: str = ""
     optional: bool = False
-    #: PRE-22 — a step about a feature this build may not show. ``"preprocessing"``
+    #: A step about a feature this build may not show. ``"preprocessing"``
     #: is the only value so far; a step whose gate is closed is dropped from the
     #: tutorial entirely (`steps_of`), so it never spotlights a surface that is
     #: not there or counts toward "step 3 of 7".
@@ -148,12 +148,12 @@ class TutorialDefinition:
     steps: tuple[TutorialStep, ...]
 
 
-# Each tutorial's "Matching written tutorial" button opens the docs page that
-# covers the same task (ENG-88), not a copy of these steps.
+# Each tutorial's "Read this in the docs" button opens the docs page that
+# covers the same task, not a copy of these steps.
 DOCS_URL = CITATION["docs_url"]
 DOCS_TUTORIALS_URL = f"{DOCS_URL}tutorials/"
 
-# PRE-21 hides NLD similarity scoring unless SCANPATH_EXPERIMENTAL=1, so the
+# NLD similarity scoring is hidden unless SCANPATH_EXPERIMENTAL=1, so the
 # comparison tutorial must not promise a ranking this build does not show —
 # the same honesty rule `faq_items()` applies to the drift-correction answers.
 # The flag is an environment variable, fixed for the life of the process, so
@@ -353,10 +353,8 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         availability="has_corpus_variation",
         completion_test="Corpus Analysis opened",
         docs_url=f"{DOCS_TUTORIALS_URL}corpus-analysis/",
-        # UX-40 round 2: this was two steps where the others are four or five,
-        # and it named the three subtabs without answering anything. It now walks
-        # one real question end to end — the user's own example — because "here
-        # are three subtabs" is a menu, not a tutorial.
+        # Walks one real question end to end, because a list of the subtabs is
+        # a menu, not a tutorial.
         steps=(
             TutorialStep(
                 "Switch analysis level",
@@ -403,15 +401,15 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
 
 _TUTORIAL_BY_ID = {tutorial.id: tutorial for tutorial in TUTORIALS}
 
-#: PRE-22 — which builds show a gated step. Read at *call* time, not at import,
+#: Which builds show a gated step. Read at *call* time, not at import,
 #: so a test (or a session started with the env var) sees the current answer.
 _STEP_GATES = {"preprocessing": preprocessing_enabled}
 
 
 def steps_of(tutorial: TutorialDefinition) -> tuple[TutorialStep, ...]:
-    """The tutorial's steps this build can honestly walk (PRE-22).
+    """The tutorial's steps this build can honestly walk.
 
-    A step about a feature held back from the release is dropped rather than
+    A step about a feature this build does not show is dropped rather than
     shown-and-skipped: it would otherwise spotlight a surface that does not
     exist, and count toward "step 3 of 7" for something the reader cannot do.
     """
@@ -484,16 +482,16 @@ def _close_dialog_clientside() -> None:
 def tour_opted_out() -> bool:
     """True when this browser asked never to be shown the welcome tour again.
 
-    Reads the ``sps_tour_optout`` cookie (UX-12). Within a session
+    Reads the ``sps_tour_optout`` cookie. Within a session
     ``_tour_dismissed`` — a plain data flag, not any checkbox's own widget
-    key (UX-110) — wins, so ticking either the tour's own checkbox or the 🧭
+    key — wins, so ticking either the tour's own checkbox or the 🧭
     Tutorials picker's copy of it takes effect immediately rather than
     waiting for the browser to hand the cookie back on the next load. The
-    legacy ``tour_dont_show`` key (the tour's own checkbox, or a value parked
-    there directly before either checkbox has rendered) is still honoured as
-    a fallback, so setting it directly — as tests, and any future caller that
-    predates UX-110, do — keeps working. Defensive about ``st.context``
-    because bare-mode / AppTest runs have no request behind them.
+    ``tour_dont_show`` key (the tour's own checkbox, or a value parked there
+    directly before either checkbox has rendered) is honoured as a fallback,
+    so setting it directly — as tests do — works. Defensive about
+    ``st.context`` because bare-mode / AppTest runs have no request behind
+    them.
     """
     if "_tour_dismissed" in st.session_state:
         return bool(st.session_state["_tour_dismissed"])
@@ -525,9 +523,8 @@ def _tour_optout_script(opted_out: bool) -> str:
 def _render_tour_optout(host=st, *, key_suffix: str = "") -> None:
     """The "Don't show this again" checkbox + the cookie write that backs it.
 
-    Two call sites (UX-110): the welcome tour's own first/last step
-    (``host=st``, ``key_suffix=""`` — the original ``tour_dont_show`` key,
-    unchanged, so existing links/tests keep working) and the 🧭 Tutorials
+    Two call sites: the welcome tour's own first/last step (``host=st``,
+    ``key_suffix=""`` — the ``tour_dont_show`` key) and the 🧭 Tutorials
     picker's Welcome tour card (``host=<that card's container>``,
     ``key_suffix="_picker"``). Both can be on screen in the same run — the
     picker can be reopened while the tour it started is still settling onto
@@ -617,18 +614,18 @@ def _tour_dialog() -> None:
 # Spotlight steps: (selector, title, body). ``selector`` is what gets the
 # pulsing outline + scroll-into-view; None for the selector-less welcome step.
 # Bodies are markdown, kept short — the card is ~400 px wide.
-# Walks the whole Scanpath screen in reading order (UX-2): the plot → the
+# Walks the whole Scanpath screen in reading order: the plot → the
 # selection/controls above it → the chips → the rail (view modes + controls) →
-# the bottom panel → the top menu bar. There is no `in_sidebar` flag any more:
-# every target is in the page or on the menu bar, so no step has to expand a
-# panel before it can scroll to it. Keep selectors in sync with the keyed
-# wrappers in tabs.py / app.py / menu.py.
+# the bottom panel → the nav. Every target is in the page or on the nav bar, so
+# no step has to expand a panel before it can scroll to it — except one inside a
+# popover, which names its trigger (``"popover"``). Keep selectors in sync with
+# the keyed wrappers in tabs.py / app.py / controls.py and `menu.NAV_SELECTOR`.
 _SPOTLIGHT_STEPS = [
     {
         "selector": None,
         "title": f"{ICONS['app']} Welcome to Scanpath Studio",
-        # #374 F32: the dataset sentence is `_welcome_body`'s, from the one
-        # actually open — "A demo dataset is loaded" greeted users' own data.
+        # The sentence naming the open dataset is added by `_welcome_body`,
+        # from the dataset actually open.
         "body": "Visualize **eye movements in reading** — scanpaths drawn "
         "true-to-scale over the text. **Next** for a quick tour, or **Skip "
         "tour** to start exploring.",
@@ -649,10 +646,8 @@ _SPOTLIGHT_STEPS = [
     },
     # Picking comes before narrowing: the picker is the control a new reader
     # reaches for first, and narrowing only means something once they have seen
-    # the pool it narrows. (UX-34 walked them the other way round, top-to-bottom
-    # by screen position; the workflow order reads better in the tour.) Each step
-    # targets its own container — they used to share one wrapper, so both lit up
-    # the whole block.
+    # the pool it narrows. Each step targets its own container, so each lights
+    # up only its own control.
     {
         "selector": ".st-key-tour_grp_trial_picker",
         "title": f"{ICONS['pick_trial']} Pick a trial",
@@ -702,11 +697,6 @@ _SPOTLIGHT_STEPS = [
         f"**{ICONS['share']} Share** (link, code or settings file).",
     },
     {
-        # UX-100 merged the old "📚 The menu bar" step into this one. It named
-        # `.st-key-top_menu`, a container that stopped being created when
-        # #UX-63 emptied the settings row — so it had been highlighting nothing
-        # (`tests/test_tour.py` now catches that) — and its two subjects are
-        # nav entries themselves, which makes this the same target.
         "selector": NAV_SELECTOR,
         "title": f"{ICONS['nav']} The nav",
         "body": f"**{ICONS['view_scanpath']} Scanpath** is this view. "
@@ -732,8 +722,8 @@ _CARD_CSS = """
     padding: 1rem 1.25rem 0.6rem;
 }
 /* The card title is an <h2> for a valid page heading outline (see the title
-   render in render_spotlight_tour); pin it back to the original <h4> size so
-   the card looks unchanged. */
+   render in render_spotlight_tour), sized like an <h4> so the card stays
+   compact. */
 .st-key-tour_card h2 {
     font-size: 24px !important;
     line-height: 1.3 !important;
@@ -762,7 +752,7 @@ _CARD_CSS = """
     opacity: 0.55;
 }
 .st-key-tour_sp_close button:hover { opacity: 1; }
-/* UX-200: `box-shadow: none` above took Streamlit's focus ring too. */
+/* `box-shadow: none` above removes Streamlit's focus ring too, so draw one. */
 .st-key-tour_sp_close button:focus-visible {
     opacity: 1;
     outline: 2px solid var(--sps-accent);
@@ -776,10 +766,10 @@ _CARD_CSS = """
     margin-bottom: 0.9rem;
 }
 .st-key-tour_card [data-testid="stHorizontalBlock"] { margin-top: 0.9rem; }
-/* UX-12 "Don't show this again": a footnote between the progress bar and the
+/* "Don't show this again": a footnote between the progress bar and the
    footer, so it's muted and pulled tight rather than reading as another step.
-   UX-110 gives the wizard-setup-guide card (same `tour_card` shape) the
-   identical treatment for its own opt-out. */
+   The setup guide's card (same `tour_card` shape) gives its own opt-out the
+   identical treatment. */
 .st-key-tour_dont_show,
 .st-key-wizard_guide_dont_show { margin-top: -0.5rem !important; }
 .st-key-tour_dont_show label,
@@ -823,7 +813,7 @@ def _card_colors_css() -> str:
 
 
 # -----------------------------------------------------------------------------
-# Moving and folding a guide card (2026-10-09)
+# Moving and folding a guide card
 # -----------------------------------------------------------------------------
 # Every guide card — the welcome tour, a tutorial, the setup guide — can be
 # dragged by its title to wherever it covers nothing, and folded (—) to a small
@@ -1069,10 +1059,8 @@ _GROUP_RING_ID = "tour-group-ring"
 def _highlight_css(selector: str, accent: str) -> str:
     """The pulsing outline drawn around a tour/guide target.
 
-    Factored out of `render_spotlight_tour` (DATA-22 §4) so the setup guide can
-    highlight wizard steps with exactly the same treatment the welcome tour uses
-    — the guide documented its own gap ("the steps are descriptive, not anchored
-    to specific controls") while this machinery sat 800 lines above it.
+    Shared by the welcome tour, the tutorials and the setup guide, so every
+    guide highlights its target with exactly the same treatment.
 
     A `_GROUP_SELECTORS` target outlines the one ring `_group_ring_script`
     places around its matches, not each match.
@@ -1179,9 +1167,9 @@ def _group_ring_script(selector: str) -> str:
     </script>"""
 
 
-#: UX-101, measured live (Streamlit 1.62, 1440×900): a popover's panel is drawn
-#: at ``z-index: 1000060``, above the card's 999990 — so on a step that opens
-#: one, the panel covered the card's left edge and cut the first word off every
+#: Measured live (Streamlit 1.62, 1440×900): a popover's panel is drawn at
+#: ``z-index: 1000060``, above the card's 999990 — so on a step that opens one,
+#: the panel covers the card's left edge and cuts the first word off every
 #: line. Raise the card **only on those steps**; everywhere else it stays under
 #: Streamlit's own overlays, where a floating card belongs.
 _CARD_OVER_POPOVER_CSS = ".st-key-tour_card { z-index: 1000070; }"
@@ -1201,10 +1189,10 @@ def _all_popover_triggers() -> str:
 def _popover_script(trigger: str) -> str:
     """Open the popover this step points inside, and close the last step's.
 
-    A closed Streamlit popover renders **no body**: before UX-101 the two
-    *narrow the pool* steps pointed at a container that only exists while the
-    funnel is open, so the spotlight retried for 30 s and then gave up in
-    silence — no highlight, no scroll, no error, and the card still advanced.
+    A closed Streamlit popover renders **no body**: the *narrow the pool* steps
+    point at a container that only exists while the funnel is open, and with
+    the funnel closed the spotlight would retry and then give up in silence —
+    no highlight, no scroll, no error, and the card still advancing.
 
     Opening it is the one piece of state the tour touches, and it is chrome, not
     data: no widget inside is read or written, so the tutorial's promise that it
@@ -1280,17 +1268,13 @@ def _scroll_into_view_script(selector: str) -> str:
     the nearest scrollable ancestor instead of calling `scrollIntoView` (which
     moves the document).
 
-    There is no sidebar branch any more. Targets used to need an
-    ``aria-expanded`` gate plus a retrying click on ``stExpandSidebarButton``,
-    because a *collapsed* sidebar still reports nonzero layout rects so plain
-    visibility couldn't tell whether the panel was really on screen. Every step
-    now points at something in the page or on the top menu bar, where
+    Every step points at something in the page or on the nav bar, where
     ``findVisible()`` answers correctly on its own.
 
     The scroller's top is not all on screen: Streamlit's fixed header and the
     wizard's sticky bar (`_TOP_OVERLAYS`) cover it. Measured from the
-    scroller's own top, the setup guide's part 2 landed under both — its title
-    and first fields hidden, the card over what was left — so a target now
+    scroller's own top, the setup guide's part 2 would land under both — its
+    title and first fields hidden, the card over what was left — so a target
     lands below them, and one taller than the room left is aligned by its top.
     """
     return f"""<script>
@@ -1359,9 +1343,8 @@ def render_spotlight_tour() -> None:
 
     Call early in ``main()``, right after ``maybe_show_welcome_tour()``, so
     the card streams to the browser before the heavy data/plot work instead
-    of seconds after the page opens. Replay clicks still activate it within
-    the same run because the button arms the tour in its ``on_click``
-    callback (``_arm_tour``), which runs before the rerun starts. Runs as a
+    of seconds after the page opens. A replay arms the tour (``_arm_tour``)
+    before the run that draws it, so it shows on that run. Runs as a
     fragment: Back/Next/close rerun only this function, so the highlight moves
     instantly and ✕ makes the card + CSS vanish without a full-app rerun
     (the fragment then renders nothing, which clears its previous elements).
@@ -1372,7 +1355,7 @@ def render_spotlight_tour() -> None:
     step_idx = min(st.session_state.get("tour_step", 0), n - 1)
     step = _SPOTLIGHT_STEPS[step_idx]
 
-    # BUG-6: fall back to the app's brand blue (matches the pinned theme
+    # Fall back to the app's brand blue (matches the pinned theme
     # `.streamlit/config.toml` primaryColor), never Streamlit's default red, so
     # the tour accent stays consistent even if the runtime doesn't expose the
     # theme option.
@@ -1406,7 +1389,7 @@ def render_spotlight_tour() -> None:
         # Close (✕) in the top-right corner — exits the tour like "Exit"/"Done"
         # (CSS pins it; the dismiss listener wires it for instant close too).
         st.button(
-            # UX-200: `spoken` names the glyph for screen readers.
+            # `spoken` names the glyph for screen readers.
             f"✕ {spoken('Close the tour')}",
             wrap=True,
             key="tour_sp_close",
@@ -1415,12 +1398,12 @@ def render_spotlight_tour() -> None:
         )
         _render_guide_fold_button("tour", "tour")
         # <h2> keeps the page heading outline valid (the card sits right under
-        # the page <h1>; an <h4> here would be an h1→h4 jump). Sized back down
-        # to the original compact look via `.st-key-tour_card h2` in _CARD_CSS.
+        # the page <h1>; an <h4> here would be an h1→h4 jump). Sized down to a
+        # compact look via `.st-key-tour_card h2` in _CARD_CSS.
         st.markdown(f"## {step['title']}")
         st.markdown(_welcome_body(step["body"]) if step_idx == 0 else step["body"])
         st.progress((step_idx + 1) / n, text=progress_text)
-        # UX-12: the opt-out sits on the two steps where a user decides they're
+        # The opt-out sits on the two steps where a user decides they're
         # finished with the tour — the welcome (bail out now) and the last step
         # (done, don't greet me again). Keeping it off the middle steps preserves
         # the card's tight vertical rhythm.
@@ -1472,9 +1455,9 @@ def render_spotlight_tour() -> None:
         embed_html_iframe(_dismiss_listener_script(step["selector"]), height=0)
         embed_html_iframe(_guide_drag_script("tour"), height=0)
 
-        # UX-101: raise the popover this step points inside (and lower the one
-        # the last step raised) BEFORE the find-and-scroll below goes looking —
-        # a closed popover has no body for it to find.
+        # Open the popover this step points inside (and close the one the last
+        # step opened) BEFORE the find-and-scroll below goes looking — a closed
+        # popover has no body for it to find.
         popover_script = _popover_script(step.get("popover", ""))
         if popover_script:
             embed_html_iframe(popover_script, height=0)
@@ -1496,13 +1479,9 @@ def render_spotlight_tour() -> None:
             #   re-renders, and instant also scrolls the document. Instead,
             #   center the target within its nearest scrollable ancestor only.
             # - Skip targets that are already fully on screen.
-            # - The iframe stays INSIDE the fixed-position card: when it sat
-            #   at the bottom of the main column, its (re)mount could yank
-            #   the main scroller to the page bottom to reveal it.
-            # The sidebar branch is gone with the sidebar: every target is now
-            # either in the page or on the top menu bar, both of which are
-            # always laid out and visible, so there is nothing to expand first
-            # and no `in_sidebar` flag to carry.
+            # - The iframe stays INSIDE the fixed-position card: at the bottom
+            #   of the main column, its (re)mount could yank the main scroller
+            #   to the page bottom to reveal it.
             embed_html_iframe(
                 _scroll_into_view_script(step["selector"]),
                 height=0,
@@ -1547,7 +1526,7 @@ def _open_dataset_name() -> str | None:
 
 
 def _welcome_body(body: str) -> str:
-    """The welcome card's text, naming the dataset that is open (#374 F32)."""
+    """The welcome card's text, naming the dataset that is open."""
     name = _open_dataset_name()
     if not name:
         return body
@@ -1556,13 +1535,12 @@ def _welcome_body(body: str) -> str:
 
 
 def _arm_tour() -> None:
-    """``on_click`` callback for the replay button: arm the tour from step 0.
+    """Arm the tour from step 0, for the chooser's *Welcome tour → Start*.
 
-    Callbacks run *before* the rerun, so the tour's render call early in
-    ``main()`` — which executes long before the menu button — picks the
-    request up within the same run. Dialogs can't be opened from callbacks,
-    so the dialog style sets a request flag that ``maybe_show_welcome_tour``
-    (the early call site) serves.
+    The chooser reruns the app right after, so the tour's render call early in
+    ``main()`` picks the request up on that run. A dialog can't be opened from
+    here, so the dialog style sets a request flag that
+    ``maybe_show_welcome_tour`` (the early call site) serves.
     """
     st.session_state["tour_step"] = 0
     _set_guide_folded("tour", False)
@@ -1583,17 +1561,17 @@ def maybe_show_welcome_tour() -> None:
     after it; the spotlight style just arms ``tour_mode``.
     """
     if st.session_state.pop("_tour_dialog_requested", False):
-        # Replay request from the menu button's on_click callback.
+        # Replay request from `_arm_tour`.
         _tour_dialog()
         return
     if st.session_state.get("tour_seen"):
         return
     if tour_suppressed(st.query_params):
         return
-    if tour_opted_out():  # UX-12: "Don't show this again", persisted in a cookie
+    if tour_opted_out():  # "Don't show this again", persisted in a cookie
         return
     st.session_state["tour_seen"] = True  # before opening — see module docstring
-    # #374 F32: a session recovered from *Saved on this computer* belongs to
+    # A session recovered from *Saved on this computer* belongs to
     # someone who has used the app here before — a new browser, or cleared
     # site data, cleared the cookie opt-out, not their experience.
     from scanpath_studio.persistence import session_was_restored
@@ -1604,7 +1582,7 @@ def maybe_show_welcome_tour() -> None:
 
 
 # -----------------------------------------------------------------------------
-# Use-case tutorials (UX-40)
+# Use-case tutorials
 # -----------------------------------------------------------------------------
 
 
@@ -1679,7 +1657,7 @@ def tutorial_availability(
     return False, f"Unknown availability rule: {rule}."
 
 
-#: #374 F31 — what a rule lacks when the trial filters, not the dataset, are
+#: What a rule lacks when the trial filters, not the dataset, are
 #: why a tutorial cannot start.
 _FILTERED_REASONS = {
     "has_trials": "no trial is left in the pool.",
@@ -1731,12 +1709,11 @@ def _start_use_case(tutorial_id: str, *, restart: bool = False) -> None:
         _tutorial_completed().pop(tutorial_id, None)
     else:
         _tutorial_progress().setdefault(tutorial_id, 0)
-    # UX-83: navigate to the step's own page right away when it names a
-    # different view, instead of opening the card on whatever page the user
-    # already stood on and offering a "Show me / Open this panel" button to
-    # get there. Covers resume too — the current step (not always index 0)
-    # is what the card is about to show. `tutorial_return` above already
-    # captured the page being left, so Exit still comes back to it.
+    # Navigate to the step's own page right away when it names a different
+    # view, rather than opening the card on whatever page the user stands on.
+    # Covers resume too — the current step (not always index 0) is what the
+    # card is about to show. `tutorial_return` above already captured the page
+    # being left, so Exit still comes back to it.
     step_index = int(_tutorial_progress().get(tutorial_id, 0))
     steps = steps_of(tutorial)
     if 0 <= step_index < len(steps):
@@ -1778,7 +1755,7 @@ def _open_tutorial_surface(step: TutorialStep) -> None:
         st.session_state["single_subtab"] = step.subtab
     if step.corpus_subtab is not None:
         st.session_state["corpus_subtab"] = step.corpus_subtab
-    # DATA-35: the Data page's two screens. A step that points into the editor
+    # The Data page's two screens. A step that points into the editor
     # opens it; one that points at the overview closes it, so walking back up a
     # tutorial does not leave the editor covering the table the previous step
     # was about.
@@ -1795,11 +1772,11 @@ _KNOWN_VIEWS = (_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA)
 def _tutorial_surface_is_open(step: TutorialStep) -> bool:
     """Is the view (and subtab) this step points at the one on screen?
 
-    UX-40: this used to fold everything that was not Corpus Analysis into
-    Scanpath, which predates DATA-26's third view — so a step with
-    ``view=_VIEW_DATA`` reported "not open" *while the user was standing on the
-    Data page*, and the card offered to open the panel they were already
-    looking at (and withheld the spotlight that should have been on it).
+    Each known view is compared as itself; only an unknown ``main_nav`` value
+    counts as Scanpath. Folding the Data page into Scanpath would report a
+    ``view=_VIEW_DATA`` step "not open" *while the user stands on the Data
+    page*, offering to open the panel they are looking at and withholding its
+    spotlight.
     """
     from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
 
@@ -1808,7 +1785,7 @@ def _tutorial_surface_is_open(step: TutorialStep) -> bool:
         current_view = _VIEW_SCANPATH
     if current_view != step.view:
         return False
-    # DATA-35: on the Data page, "which screen" is part of the answer — an
+    # On the Data page, "which screen" is part of the answer — an
     # editor step is not open while the overview is showing, and vice versa.
     if step.view == _VIEW_DATA and bool(
         st.session_state.get(DATASET_EDITOR_OPEN_KEY)
@@ -1832,10 +1809,11 @@ def _arm_tutorial_library() -> None:
 
 
 def maybe_show_tutorial_library() -> None:
-    """Open the tutorial chooser if the ❓ Help menu button armed it.
+    """Open the tutorial chooser if the ❓ Help nav entry armed it.
 
     Served early in ``main()`` beside :func:`maybe_show_faq`, for the same
-    reason: the button renders at the bottom of the run.
+    reason: before the heavy data/plot work, so the modal does not wait out the
+    rest of the run.
     """
     if st.session_state.pop("_tutorial_library_requested", False):
         _tutorial_library_dialog()
@@ -1844,9 +1822,9 @@ def maybe_show_tutorial_library() -> None:
 def stash_tutorial_context(context: dict[str, object]) -> None:
     """Park the context the tutorial chooser reads, without rendering anything.
 
-    UX-65 turned the ❓ Help buttons into nav entries, so there is no longer a
-    widget to hang this on — but the dialog still needs to know what is loaded,
-    and it can be opened from any view, so the stash has to happen every run.
+    The ❓ Help entries are nav entries, with no widget to hang this on — but
+    the dialog needs to know what is loaded, and it can be opened from any
+    view, so the stash has to happen every run.
     """
     st.session_state["_tutorial_context"] = dict(context)
 
@@ -1855,11 +1833,6 @@ def stash_tutorial_context(context: dict[str, object]) -> None:
 @guarded()
 def _tutorial_library_dialog() -> None:
     """The chooser: outcome, prerequisites, time, and progress per tutorial."""
-    from scanpath_studio.menu import close_open_popovers
-
-    # Opened from a button inside the ❓ Help popover, whose open state is
-    # client-side — without this it floats on top of the modal.
-    close_open_popovers()
     context = st.session_state.get("_tutorial_context") or {}
     st.markdown("**Choose a tutorial.**")
     st.caption(
@@ -1874,15 +1847,9 @@ def _tutorial_library_dialog() -> None:
     if welcome_action.button("Start", key="tutorial_start_welcome", width="stretch"):
         _arm_tour()
         st.rerun(scope="app")
-    # UX-110: the welcome tour's own "Don't show this again" (UX-12), reachable
-    # here too — every other card in this dialog already offers its own
-    # opt-out (below), so the welcome card was the one place in the whole
-    # chooser missing it.
+    # The welcome tour's own "Don't show this again", reachable here too.
     _render_tour_optout(welcome, key_suffix="_picker")
-    # UX-40: one bordered card per tutorial instead of five identical
-    # caption/caption/caption/two-buttons stacks separated by dividers — at that
-    # density the eye had nothing to land on, and "Start over" sat there at full
-    # weight even for a tutorial nobody had started yet.
+    # One bordered card per tutorial, so each reads as one choice.
     for tutorial in TUTORIALS:
         available, reason = tutorial_availability(tutorial, context)
         completed = bool(_tutorial_completed().get(tutorial.id))
@@ -1901,10 +1868,10 @@ def _tutorial_library_dialog() -> None:
             state = f"{len(steps_of(tutorial))} steps · {tutorial.estimated_time}"
         head.caption(f"{state} · needs {tutorial.prerequisite.lower()}")
         # Handled by return value, not `on_click`, because **an `st.dialog` body
-        # is a fragment**: a callback here reruns only the dialog, so the state
-        # `_start_use_case` writes never reached `main()` — the chooser sat
-        # there unchanged and the task card it was supposed to hand over to was
-        # never drawn. `st.rerun(scope="app")` both closes the modal (the
+        # is a fragment**: a callback here would rerun only the dialog, so the
+        # state `_start_use_case` writes would never reach `main()` — the
+        # chooser would sit there unchanged and the task card it hands over to
+        # would never be drawn. `st.rerun(scope="app")` both closes the modal (the
         # `_tutorial_library_requested` flag was already popped, so the next run
         # does not re-open it) and renders the card underneath.
         if action.button(
@@ -2039,33 +2006,6 @@ def render_use_case_tutorial() -> None:
                 _finish_use_case(tutorial.id)
                 st.rerun()
 
-        # A Streamlit popover is client-side state, so its server callback can
-        # start a tutorial but cannot close the chooser that contained the
-        # Start button. Close only the expanded Tutorials trigger once it
-        # appears later in this rerun; otherwise the chooser sits over the
-        # menu while the task card is already active.
-        embed_html_iframe(
-            """<script>
-            (function () {
-                const doc = window.parent.document;
-                let tries = 0;
-                (function closeTutorialChooser() {
-                    const trigger = [...doc.querySelectorAll(
-                        'button[aria-expanded="true"]'
-                    )].find((button) =>
-                        (button.textContent || '').includes('Tutorials')
-                    );
-                    if (trigger) {
-                        trigger.click();
-                        return;
-                    }
-                    if (++tries < 200) setTimeout(closeTutorialChooser, 150);
-                })();
-            })();
-            </script>""",
-            height=0,
-        )
-
         embed_html_iframe(_guide_drag_script("tutorial"), height=0)
 
         popover_script = _popover_script(step.popover)
@@ -2098,11 +2038,10 @@ def render_use_case_tutorial() -> None:
 
 
 # -----------------------------------------------------------------------------
-# FAQ (UX-15) — the handful of questions that come up over and over, answered
-# in-app so nobody has to leave to find out that (say) their measures are their
-# eye-tracker's, not ours. Deliberately SHORT: the canonical, complete version
-# is docs/faq.md on the docs site, linked from the bottom of the dialog. Keep
-# these answers in sync with that page when either changes.
+# FAQ — the handful of questions that come up over and over, answered in-app
+# so nobody has to leave to find out. Deliberately SHORT: the canonical,
+# complete version is docs/faq.md on the docs site, linked from the bottom of
+# the dialog. Keep these answers in sync with that page when either changes.
 # -----------------------------------------------------------------------------
 
 DOCS_FAQ_URL = f"{CITATION['docs_url']}faq/"
@@ -2127,7 +2066,7 @@ _FAQ_ITEMS = [
         "the trial id, so map your item column as **Text ID** if trial order was "
         "randomized.",
     ),
-    # #374 F22: the answer depends on where the app runs — `faq_items` fills
+    # The answer depends on where the app runs — `faq_items` fills
     # it in from `_where_data_goes`, so a hosted copy never says "nowhere".
     (_WHERE_DATA_GOES, ""),
     (
@@ -2163,7 +2102,7 @@ _FAQ_ITEMS = [
     ),
 ]
 
-# PRE-21: FAQ entries that only make sense while a gated feature is exposed.
+# FAQ entries that only make sense while a gated feature is exposed.
 # Appended by `faq_items()` rather than living in `_FAQ_ITEMS`, so the default
 # build never offers an answer about a control it doesn't have.
 _DRIFT_FAQ_ITEMS = [
@@ -2178,11 +2117,11 @@ _DRIFT_FAQ_ITEMS = [
 
 
 def _where_data_goes() -> str:
-    """ "Where does my data go?" for where this app is running (#374 F22).
+    """ "Where does my data go?" for where this app is running.
 
     Local means the server listens on loopback only — its own configuration,
-    which ENG-56 made the test for the recovery copy too — as ``scanpath-studio``
-    and the desktop app do. Anything else (the online demo, a bare
+    the same test the recovery copy uses — as ``scanpath-studio`` and the
+    desktop app do. Anything else (the online demo, a bare
     ``streamlit run``) processes an upload on a server other machines reach.
     """
     from scanpath_studio.persistence import (
@@ -2219,7 +2158,7 @@ def _where_data_goes() -> str:
 
 
 def faq_items() -> list:
-    """The FAQ entries this build can honestly answer (PRE-21)."""
+    """The FAQ entries this build can honestly answer."""
     items = [
         (question, _where_data_goes() if question == _WHERE_DATA_GOES else answer)
         for question, answer in _FAQ_ITEMS
@@ -2239,11 +2178,6 @@ def _faq_dialog() -> None:
     the link buttons at the bottom are also the app's route into the docs from
     a help context.
     """
-    from scanpath_studio.menu import close_open_popovers
-
-    # Opened from a button inside the ❓ Help popover, whose open state is
-    # client-side — without this it floats on top of the modal.
-    close_open_popovers()
     st.caption(
         "Short answers to the questions that come up most. The full version — "
         "with the long explanations — lives on the documentation site."
@@ -2282,14 +2216,13 @@ def _arm_faq() -> None:
 
 
 def maybe_show_faq() -> None:
-    """Open the FAQ dialog if the ❓ Help menu button armed it.
+    """Open the FAQ dialog if the ❓ Help nav entry armed it.
 
     Call from ``main()`` next to :func:`maybe_show_welcome_tour`, BEFORE the
-    heavy data / plot work. The button sits at the *bottom* of ``main()``, so
-    opening the dialog from its return value meant the modal only streamed to
-    the browser after the whole rerun — including the ~10 s plot embeds — had
-    finished. Served here it appears immediately and overlays whatever renders
-    after it.
+    heavy data / plot work. Served there the modal appears immediately and
+    overlays whatever renders after it, rather than streaming to the browser
+    only after the whole rerun — including the ~10 s plot embeds — has
+    finished.
     """
     if st.session_state.pop("_faq_dialog_requested", False):
         _faq_dialog()
@@ -2307,12 +2240,10 @@ def maybe_show_faq() -> None:
 # is still on screen so the two don't stack), and is replayable from the
 # wizard's "❓ Show setup guide" button.
 #
-# UX-110: this is the third first-visit walkthrough in the app (after the
-# welcome tour and the per-tutorial cards), and until now the only one with no
-# persistent opt-out — ``wizard_guide_seen`` gates the auto-open, but it is
-# plain session state, so the guide came back to greet every new tab/session
-# regardless of a prior "I get it, stop". It now carries the same cookie +
-# checkbox shape as the other two.
+# ``wizard_guide_seen`` gates the auto-open, but it is plain session state, so
+# on its own the guide would greet every new tab/session regardless of a prior
+# "I get it, stop". Like the welcome tour, it carries a persistent opt-out: a
+# cookie + checkbox of the same shape.
 # -----------------------------------------------------------------------------
 
 # One year, path=/, SameSite=Lax — same shape as ``TOUR_OPTOUT_COOKIE``, no
@@ -2349,11 +2280,11 @@ def _wizard_guide_optout_script(opted_out: bool) -> str:
 
 
 def _render_wizard_guide_optout() -> None:
-    """The "Don't show this again" checkbox for the setup guide (UX-110).
+    """The "Don't show this again" checkbox for the setup guide.
 
-    One call site today (the guide's own running card) — there is no picker
-    equivalent to sync with, unlike the welcome tour and the per-tutorial
-    cards, so this is simpler than :func:`_render_tour_optout`: no second
+    One call site (the guide's own running card) — there is no picker
+    equivalent to sync with, unlike the welcome tour's, so this is simpler
+    than :func:`_render_tour_optout`: no second
     widget key, no last-synced reconciliation, just seed-once-then-let-the-
     widget-own-it, same as any ordinary Streamlit checkbox. Kept as its own
     function (rather than inlined) so a second surface — should one ever
@@ -2373,12 +2304,10 @@ def _render_wizard_guide_optout() -> None:
 
 
 # (title, markdown body) per step — an overview, one per part of the wizard in
-# order, then the closing Save card.
-# DATA-22 §4: the guide is now *anchored*. Each step names the wizard step it
-# talks about (so Next drives the accordion instead of narrating beside it) and a
-# CSS selector to highlight + scroll to. Keyed expanders give every step a
-# `.st-key-wiz_open_<id>` selector for free, so no new wrapper containers were
-# needed; finer targets reuse existing widget keys.
+# order, then the closing Save card. Each card names the wizard part it talks
+# about (``step_id``) and a CSS selector to highlight + scroll to: every part's
+# container is keyed by `wizard_shell.part_key`, which gives it a
+# `.st-key-wiz_part_<id>` selector; finer targets reuse existing widget keys.
 _WIZARD_GUIDE_STEPS = [
     {
         "title": f"{ICONS['datasets']} Set up your dataset",
@@ -2425,7 +2354,7 @@ _WIZARD_GUIDE_STEPS = [
         "selector": ".st-key-wiz_part_setup",
         "step_id": "setup",
     },
-    # #417 — the add screen's optional fourth part, drawn only on a local
+    # The add screen's optional fourth part, drawn only on a local
     # install; `_wizard_guide_steps` leaves this card out wherever it is not.
     {
         "title": "4 · Stimulus images",
@@ -2454,13 +2383,10 @@ _WIZARD_GUIDE_STEPS = [
 ]
 
 
-#: The setup guide is a floating card over the wizard (2026-10-09): the wizard
-#: used to keep a gutter the card's width down the right of the page, so the
-#: card sat beside its fields — at the cost of squeezing every mapping row into
-#: what was left. The card is dragged by its title to wherever it covers
-#: nothing and folded to a small tab instead, like the welcome tour's and the
-#: tutorials' cards. The page keeps room at its foot, so whatever the card
-#: covers at the bottom can still be scrolled clear of it.
+#: The setup guide is a floating card over the wizard, dragged by its title to
+#: wherever it covers nothing and folded to a small tab, like the welcome
+#: tour's and the tutorials' cards. The page keeps room at its foot, so
+#: whatever the card covers at the bottom can still be scrolled clear of it.
 _WIZARD_GUIDE_PAGE_CSS = """
 [data-testid="stMainBlockContainer"] { padding-bottom: 16rem !important; }
 """
@@ -2476,21 +2402,9 @@ def _wizard_guide_steps() -> list[dict]:
 
 
 def _wizard_guide_go(step_idx: int) -> None:
-    """Move the guide to ``step_idx`` and open the wizard step it describes.
-
-    This is what makes the card *drive* the wizard rather than narrate beside it.
-    ``go_to_step`` is safe here because a guide button is an ``on_click``
-    callback: it runs before the script re-executes, so the ``wiz_open_*`` writes
-    land before the expanders instantiate.
-    """
-    from . import wizard_shell
-
+    """Move the guide to ``step_idx``, clamped to its cards."""
     steps = _wizard_guide_steps()
-    step_idx = max(0, min(step_idx, len(steps) - 1))
-    st.session_state["wizard_guide_step"] = step_idx
-    target = steps[step_idx].get("step_id")
-    if target:
-        wizard_shell.go_to_step(target)
+    st.session_state["wizard_guide_step"] = max(0, min(step_idx, len(steps) - 1))
 
 
 def _wizard_guide_back() -> None:
@@ -2507,9 +2421,9 @@ def _exit_wizard_guide() -> None:
 
 def _wizard_guide_progress(step_idx: int, step: dict) -> str:
     """Where the guide is, counted in the screen's own parts ("2 · Upload data
-    tables" is part 2 of 3), not in cards: neither the overview card nor the
-    closing Save card is a part, and "Step 3 of 4" under a "2 ·" heading
-    contradicted the parts the screen numbers."""
+    tables" is part 2), not in cards: neither the overview card nor the
+    closing Save card is a part, and a card count under a "2 ·" heading would
+    contradict the parts the screen numbers."""
     n_parts = sum(1 for s in _wizard_guide_steps() if s["step_id"])
     if step["step_id"]:
         return f"Part {step_idx} of {n_parts}"
@@ -2606,7 +2520,7 @@ def render_spotlight_wizard_guide() -> None:
         _render_guide_fold_button("wizard", "setup guide")
         st.markdown(step["body"])
         st.progress((step_idx + 1) / n, text=progress_text)
-        # UX-110: same placement rule as the welcome tour's own opt-out — only
+        # Same placement rule as the welcome tour's own opt-out — only
         # where a user decides they're done with the guide (the first step,
         # bailing out now, or the last, got it, don't greet me again), so the
         # short middle step keeps its tight vertical rhythm.
@@ -2642,7 +2556,7 @@ def maybe_show_wizard_guide() -> None:
     Call as the active wizard renders, immediately followed by
     ``render_spotlight_wizard_guide()`` which draws the card. The auto-open is
     skipped for embeds/deep-links, while the welcome spotlight tour is still
-    on screen (so the two walkthroughs never stack), and — UX-110 — for a
+    on screen (so the two walkthroughs never stack), and for a
     browser that already asked never to see it again via
     :func:`wizard_guide_opted_out`. ``wizard_guide_seen`` is set *before*
     arming (mirroring ``tour_seen``) so a dismissal doesn't re-open it on the

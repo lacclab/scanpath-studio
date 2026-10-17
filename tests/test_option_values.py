@@ -1,6 +1,6 @@
-"""#374 F4 — an enumerated figure option takes any spelling of a choice (the
-app's label, the CLI's flag value, any case) and refuses anything else, rather
-than silently drawing the default."""
+"""An enumerated figure option takes any spelling of a choice (the app's
+label, the CLI's flag value, any case) and refuses anything else, rather than
+silently drawing the default."""
 
 from __future__ import annotations
 

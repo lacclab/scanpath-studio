@@ -1,9 +1,10 @@
-"""#422 — a picked word-box fill color shows, and survives closing the popover.
+"""A picked word-box fill color shows, and survives closing the popover.
 
-Two causes, both reproduced in a browser: the fill is drawn at 0.05 opacity by
-default, so a picked color barely tinted the boxes; and a pick dismissed by a
-click on the page was dropped, because the Word boxes popover closed (and
-unmounted the picker) before the picker sent its value.
+Two things stand in its way, both seen in a browser: the fill is drawn at 0.05
+opacity by default, so a picked color alone barely tints the boxes; and a pick
+dismissed by a click on the page is lost unless it is sent first, because the
+Word boxes popover closes (and unmounts the picker) before the picker sends
+its value.
 """
 
 from __future__ import annotations

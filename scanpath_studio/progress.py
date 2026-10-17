@@ -1,4 +1,4 @@
-"""UX-165: a Streamlit-free progress hook for slow work.
+"""A Streamlit-free progress hook for slow work.
 
 Loaders and figure builders call :func:`report` from inside their loops, and
 the orchestrator calls :func:`step_to` between stages. With no task active both
@@ -19,8 +19,8 @@ runs on a miss.
 And they are where slow work **lets the server talk**. A CPU-bound build on the
 script thread holds Python's GIL, and the server's event loop needs several
 handoffs of it to send one message, each waiting out the interpreter's switch
-interval — so everything a run queues, a card's own reveal included, used to
-reach the browser only once the build ended. Inside a task, a call therefore
+interval — so without a yield, everything a run queues, a card's own reveal
+included, reaches the browser only once the build ends. Inside a task, a call therefore
 sleeps for ``YIELD_S`` whenever ``YIELD_EVERY_S`` has passed since the task
 began or last did — so a task quicker than that never sleeps: a sleep releases
 the GIL outright, and the loop drains its queue uncontended.
@@ -232,8 +232,8 @@ class Task:
             )
 
 
-#: Every task key carries the session id, so a plain dict here kept every task of
-#: every session for the life of the server. Weak: a task stays registered
+#: Every task key carries the session id, so a plain dict here would keep every
+#: task of every session for the life of the server. Weak: a task stays registered
 #: exactly while something holds it — its card during the run, and a superseded
 #: run's thread while that is still computing it, the case joining exists for.
 _REGISTRY: weakref.WeakValueDictionary[Hashable, Task] = weakref.WeakValueDictionary()

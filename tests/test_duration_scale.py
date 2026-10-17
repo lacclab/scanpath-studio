@@ -1,13 +1,14 @@
 """The fixed duration scale for fixation marker sizes.
 
-A fixation's marker size used to be interpolated between the shortest and the
-longest duration of whatever was drawn beside it, so one duration was a
-different size in every trial, on each side of a comparison and after a filter.
-The fixed scale (√ by default, EyeLink Data Viewer's convention of an absolute
+Interpolating a fixation's marker size between the shortest and the longest
+duration of whatever is drawn beside it would make one duration a different
+size in every trial, on each side of a comparison and after a filter. The
+fixed scale (√ by default, EyeLink Data Viewer's convention of an absolute
 mapping) maps one duration range onto the size range for every figure. These
 tests pin that: same duration → same size across trials whose durations differ
 widely, across comparison sides, replay frames and bulk exports; clamping; the
-key; and the migration that keeps older links and settings files relative.
+key; and the migration that keeps links and settings files from older
+versions on the relative scale.
 """
 
 from __future__ import annotations
@@ -176,7 +177,7 @@ def test_static_figures_share_the_scale_across_trials(sample, contrasting_trials
 
 
 def test_relative_scale_still_differs_across_trials(sample, contrasting_trials):
-    """The control: the old scale does rescale per trial — which is what the
+    """The control: the relative scale does rescale per trial — which is what the
     fixed one exists to stop, and what proves the test above can fail."""
     words, fixations = sample
     pairs = []
@@ -507,8 +508,8 @@ def test_a_link_with_the_scale_reopens_on_it():
 
 
 def test_the_size_key_toggle_alone_does_not_mark_an_old_link():
-    # `duration_size_legend` came in with the scale, so it cannot mean the
-    # link predates it.
+    # `duration_size_legend` exists only alongside the scale, so a link that
+    # carries it cannot predate the scale.
     seen = _open_link({"trial_id": "t1", "duration_size_legend": "0"})
     assert seen["global_marker_size_scale"] is None  # the seeded default
     assert seen["global_duration_size_legend"] is False

@@ -125,7 +125,7 @@ _CANVAS_CONSEQUENCE = (
 
 
 #: The checks, in the order they are reported. Each consequence is what the
-#: app does with those rows today: none of them is removed from a table.
+#: app does with those rows: none of them is removed from a table.
 CHECKS: tuple[_Check, ...] = (
     _Check(
         "fixation_duration",

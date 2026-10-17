@@ -1,10 +1,9 @@
 """Redraw the architecture diagram (fig1_architecture.pdf) for the manuscript.
 
-Same layout as the original hand-drawn figure, updated for the current app:
-the front end is described as three views (not tabs) and the pipeline's last
-stage now includes corpus-level aggregation.
+The front end is drawn as three views, and the pipeline's last stage includes
+corpus-level aggregation.
 
-Run from the app repo:  cd app && uv run python paper/paper_fig_architecture.py
+Run from the repo root:  uv run python paper/paper_fig_architecture.py
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ def _figures_dir() -> Path:
 
     Defaults to ``paper/figures/`` inside the software repo so an archived
     release is self-contained; set ``PAPER_FIGURES_DIR`` to write straight into
-    the manuscript tree (e.g. ``PAPER_FIGURES_DIR=../../overleaf/figures``).
+    the manuscript tree (e.g. ``PAPER_FIGURES_DIR=../overleaf/figures``).
     """
     env = os.environ.get("PAPER_FIGURES_DIR")
     out = Path(env) if env else Path(__file__).resolve().parent / "figures"

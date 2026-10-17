@@ -110,7 +110,13 @@ See [Recovery cache](cli.md#cache).
 
 ## Help and versions
 
-### Where do I ask a question or report a bug?
+### Where do I ask a question, report a bug or send feedback?
+
+:material/help: **Help → :material/feedback: Send feedback** in the app lists
+where each kind goes — a bug report, a feature request, an idea or comment, or
+a question — and shows the version and system details a bug report needs, ready
+to copy.
+Nothing is sent from the app: each route is a GitHub page you submit yourself.
 
 Ask in [Discussions → Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a).
 Report a bug as a
@@ -130,8 +136,8 @@ pip install -U scanpath-studio
 
 ### Will my links, settings and scripts work after an update?
 
-Scanpath Studio is in beta, so they may not. Until 1.0, any release may change
-the app, its share links and saved settings, the Python API and the CLI. The
+Not necessarily. Until version 1.0, any release may change the app, its share
+links and saved settings, the Python API and the CLI. The
 [changelog](https://github.com/lacclab/scanpath-studio/blob/main/CHANGELOG.md) lists every change. To reproduce a result exactly,
 note the version you used and install that one:
 `pip install scanpath-studio==<version>`.

@@ -1,4 +1,4 @@
-"""BUG-98 — the 📁 folder picker runs in a child process, never in the server."""
+"""The 📁 folder picker runs in a child process, never in the server."""
 
 from __future__ import annotations
 

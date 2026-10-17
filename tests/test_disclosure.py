@@ -1,14 +1,12 @@
-"""UX-20: the AI-assistance disclosure, and the facts behind it.
+"""The AI-assistance disclosure, and the facts behind it.
 
 The note is deliberately three lines — built with AI assistance, cross-check
-before publishing, here is where to report it. It used to also spell out two
-things a reader could verify (the ground-truth trial, EyeLink precedence); that
-prose was cut as clutter, but the *guarantees* it described are what let the note
-stay this short, so they keep their tests here. A disclosure resting on claims
+before publishing, here is where to report it. Two guarantees a reader could
+verify (the ground-truth trial, EyeLink precedence) are what let the note stay
+this short, so they keep their tests here. A disclosure resting on claims
 nobody checks is worse than no disclosure.
 
-The route to the ground-truth trial is UX-37 behaviour now, not a documented
-claim, and is covered in ``tests/test_debug_log.py``.
+The route to the ground-truth trial is covered in ``tests/test_debug_log.py``.
 """
 
 from __future__ import annotations
@@ -37,8 +35,8 @@ class TestTheNoteIsOnEverySurface:
         # The actionable half — without it the note is unfalsifiable.
         assert "cross-check" in body.lower(), path
         # It must never send a reader off to hand-edit a URL: someone who has to
-        # do that verifies nothing. Scoped to the note itself, since app.py also
-        # *explains* the old param in a code comment.
+        # do that verifies nothing. Scoped to the note itself, since a code
+        # comment elsewhere in app.py may name the param.
         note = body[body.lower().find("ai assistance") :][:2000]
         assert "?source=synthetic" not in note, path
 
@@ -54,9 +52,15 @@ class TestTheNoteIsOnEverySurface:
         assert "feature request" in body or "request a feature" in body, path
 
     def test_the_in_app_note_links_issues_via_the_citation_metadata(self):
-        """Not a hard-coded URL — the repo link already lives in CITATION."""
+        """Not a hard-coded URL — the link lives in CITATION, and opens the
+        repository's feature-request template."""
+        from scanpath_studio.constants import CITATION
+
         body = _text("scanpath_studio/app.py")
-        assert 'CITATION["url"]}/issues' in body
+        assert 'CITATION["feature_request_url"]' in body
+        assert CITATION["feature_request_url"].startswith(
+            f"{CITATION['url']}/issues/new?template="
+        )
 
     def test_no_liability_disclaimer_language(self):
         """Deliberately not a warranty notice — MIT already carries that, and
@@ -71,7 +75,7 @@ class TestTheNoteIsOnEverySurface:
 @pytest.mark.timeout(90)
 class TestTheGroundTruthFixtureIsReal:
     """The reading measures are pinned to a hand-traced trial. Nothing in the UI
-    says so anymore, but it is the reason the note needs no hedging beyond
+    says so, but it is the reason the note needs no hedging beyond
     "cross-check"."""
 
     def test_the_expectations_cover_every_canonical_measure(self):

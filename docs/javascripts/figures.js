@@ -1,4 +1,4 @@
-/* Figures on the docs pages (ENG-78).
+/* Figures on the docs pages.
  *
  * `docs_support.embed` writes each figure's Plotly JSON into the page, as the
  * host's `data-figure` attribute — never an inline script, which Material's
@@ -14,11 +14,10 @@
  * on its `document$` stream rather than once on load.
  *
  * A replay's JSON also carries `player`, the app's own wall-clock player
- * (`plots.animation_player_post_script`, BUG-93) — Plotly's frame queue runs a
+ * (`plots.animation_player_post_script`) — Plotly's frame queue runs a
  * replay slow — which is run against the drawn plot, as the app runs it. A
  * replay's JSON has no `frames`: the start of `player` rebuilds them from a
- * packed copy and adds them before the player starts (`plots.replay_page`,
- * PERF-17).
+ * packed copy and adds them before the player starts (`plots.replay_page`).
  */
 (() => {
   const PLOTLY_SRC = new URL("plotly.min.js", document.currentScript.src).href;

@@ -1,8 +1,8 @@
-"""DATA-20 milestone 1 — the participant-level metadata table.
+"""The participant-level metadata table.
 
-The acceptance check the item names: a categorical field, a numeric one, and a
-participant the table forgot must prove that the field filters, projects onto
-the trial path, and round-trips — and that an unmatched participant is
+The core check: a categorical field, a numeric one, and a participant the
+table forgot must prove that the field filters, projects onto the trial path,
+and round-trips — and that an unmatched participant is
 *reported* rather than dropped or guessed.
 """
 
@@ -70,7 +70,7 @@ class TestIngestion:
 
 
 class TestZeroPaddedReaderIds:
-    """BUG-59: a CSV reads reader `007` as 7; the data kept "007"."""
+    """A CSV reads reader `007` as 7, while the data keeps "007"."""
 
     def test_the_table_joins_to_the_zero_padded_readers(self):
         table = pd.DataFrame({"participant_id": [7, 12], "age": [24, 31]})
@@ -87,9 +87,9 @@ class TestZeroPaddedReaderIds:
 
 
 class TestABlankRowIsNoOne:
-    """BUG-60: the blank row a spreadsheet leaves at the end became a reader,
-    trial or text named "nan" — pandas 3 keeps a missing id as NaN, and the
-    `!= ""` guard let it through."""
+    """The blank row a spreadsheet leaves at the end is no reader, trial or
+    text — not one named "nan": pandas 3 keeps a missing id as NaN, which a
+    `!= ""` guard lets through."""
 
     def test_participant_table(self, tmp_path):
         path = tmp_path / "readers.csv"
@@ -112,7 +112,7 @@ class TestABlankRowIsNoOne:
         assert built.frame["trial_id"].tolist() == ["t1"]
 
     def test_text_table_with_a_composite_id(self):
-        """A missing part used to raise inside the join, not just leak."""
+        """A missing part of a composite id neither raises in the join nor leaks."""
         table = pd.DataFrame(
             {
                 "article": ["a1", "a1", None],
@@ -125,9 +125,9 @@ class TestABlankRowIsNoOne:
 
 
 class TestAnInfiniteValueIsUnknown:
-    """Round 10, finding 3: one ``inf`` in a numeric field became a slider end,
-    which Streamlit refuses — the whole filter panel failed. It is now no value,
-    at every grain, and the range covers the finite records."""
+    """One ``inf`` in a numeric field would become a slider end, which Streamlit
+    refuses — failing the whole filter panel. It is no value, at every grain,
+    and the range covers the finite records."""
 
     SCORES = [1.0, float("inf"), -float("inf"), 4.0]
 
@@ -287,8 +287,8 @@ class TestRoundTrip:
 
 
 # -----------------------------------------------------------------------------
-# End to end in the running app. DATA-20's acceptance check is that a field
-# works "with no code change per surface", so these assert the *effect* — the
+# End to end in the running app. A field must work with no code change per
+# surface, so these assert the *effect* — the
 # pool narrows, the field is offered as a chip, the value reaches the trial
 # frame — rather than that some particular helper was called.
 # -----------------------------------------------------------------------------
@@ -397,10 +397,10 @@ class TestTheAppSurfaces:
 
 
 class TestARestoredTableSurvivesTheDataPage:
-    """DATA-38 — a table the recovery cache (or a saved config) brings back has
-    no file in its uploader, and the Data page reads an empty uploader as "the
-    user just removed it" (UX-115). Unmarked, the first visit to that page
-    detached exactly what the restore brought back."""
+    """A table the recovery cache (or a saved config) brings back has no file in
+    its uploader, and the Data page reads an empty uploader as "the user just
+    removed it". Unmarked, the first visit to that page would detach exactly
+    what the restore brought back."""
 
     def _booted_with(self, *, restored: bool):
         from tests.conftest import pin_data_view
@@ -435,7 +435,7 @@ class TestARestoredTableSurvivesTheDataPage:
 
         at = self._booted_with(restored=True)
         assert at.session_state[md.SESSION_KEY].names == ("native_language",)
-        # … and its field still narrows the pool, which is what the bug took.
+        # … and its field still narrows the pool.
         pin_view(at, _VIEW_SCANPATH)
         at.session_state["filter_meta_native_language"] = ["Hebrew"]
         at.run(timeout=90)
@@ -459,8 +459,8 @@ class TestARestoredTableSurvivesTheDataPage:
         assert not md.is_restored(at.session_state, "participant")
 
     def test_removing_an_uploaded_file_still_detaches_it(self):
-        """UX-115 unchanged: a table that *did* come from the uploader goes when
-        its file does."""
+        """A table that *did* come from the uploader still goes when its file
+        does."""
         at = self._booted_with(restored=False)
         assert md.SESSION_KEY not in at.session_state
 
@@ -468,9 +468,9 @@ class TestARestoredTableSurvivesTheDataPage:
 def test_loader_bookkeeping_is_not_registered_as_a_field():
     """`data.read_tables` tags rows with `source_file`; that is not metadata.
 
-    Caught on the CLI, where the table goes through the multi-file reader: the
-    column showed up as a field called "Source file", offered as a filter and a
-    chip, with one distinct value.
+    On the CLI the table goes through the multi-file reader, so without this the
+    column would show up as a field called "Source file", offered as a filter and
+    a chip, with one distinct value.
     """
     frame = pd.DataFrame(
         {
@@ -502,11 +502,11 @@ class TestControlsOnlyOfferLoadedReaders:
 
 
 class TestAnImpossibleNarrowingEmptiesThePool:
-    """The highest-severity defect this feature surfaced, in *existing* code.
+    """A filter that matches nobody must show nobody.
 
-    `data.filter_trials` gated on `if participants:`, so an empty list — which
-    only a set intersection can produce — read as "no constraint" and showed
-    the whole corpus. A filter that matches nobody must show nobody.
+    An empty participant list — which only a set intersection can produce —
+    must not read as "no constraint": `data.filter_trials` gating on
+    `if participants:` would show the whole corpus.
     """
 
     def _frames(self):
@@ -564,7 +564,7 @@ class TestAnImpossibleNarrowingEmptiesThePool:
         """`rejoin` and `build` must agree on `matched`.
 
         A conflicting reader is in the table but carries no values, so it is
-        neither matched nor "only in the data". Counting it as matched made
+        neither matched nor "only in the data". Counting it as matched would make
         "Joined to N readers" grow on the first rerun after attaching.
         """
         frame = pd.DataFrame(
@@ -583,12 +583,12 @@ class TestAnImpossibleNarrowingEmptiesThePool:
 
 
 # -----------------------------------------------------------------------------
-# DATA-20 round 2 — the three surfaces the first pass left out.
+# Corpus grouping, the export bundle and the upload wizard.
 # -----------------------------------------------------------------------------
 
 
 class TestCorpusGroupingByAReaderAttribute:
-    """Milestone: group cohorts in Corpus Analysis by a metadata field.
+    """Group cohorts in Corpus Analysis by a metadata field.
 
     The whole design rests on one translation — a participant-grain constraint
     *is* a participant constraint — so these assert that a metadata group
@@ -688,7 +688,7 @@ class TestCorpusGroupingByAReaderAttribute:
 
 
 class TestCorpusGroupingByTrialAndTextAttributes:
-    """AN-31: Groups splits and filters by the trial and text tables too.
+    """Groups splits and filters by the trial and text tables too.
 
     The same translation as the reader grain, one and two grains over — a trial
     field resolves to ``(participant_id, trial_id)`` readings and a text field to
@@ -740,7 +740,7 @@ class TestCorpusGroupingByTrialAndTextAttributes:
         assert "qa_condition" not in selected.columns
 
     def test_a_reader_paired_trial_table_keeps_to_its_reading(self, monkeypatch):
-        """The headless-only kind (DATA-29): a row describes one reading."""
+        """The headless-only kind: a row describes one reading."""
         from scanpath_studio import aggregation, tabs
 
         frame = pd.DataFrame(
@@ -849,8 +849,8 @@ class TestCorpusGroupingByTrialAndTextAttributes:
         ]
 
     def test_a_trial_cohort_needs_no_resolving(self):
-        """Its readings are the reading key every table carries, so #412's
-        resolution leaves it as it is and nothing is missing."""
+        """Its readings are the reading key every table carries, so the
+        per-reading resolution leaves it as it is and nothing is missing."""
         from scanpath_studio import aggregation
 
         pairs = {("participant_id", "trial_id"): [("p1", "t1")]}
@@ -861,7 +861,7 @@ class TestCorpusGroupingByTrialAndTextAttributes:
 
 
 class TestTheExportOptOut:
-    """Milestone 10 — per-field control over what leaves in the bundle."""
+    """Per-field control over what leaves in the bundle."""
 
     @staticmethod
     def _frame():
@@ -986,7 +986,7 @@ class TestGroupingEndToEnd:
         languages = ["Hebrew" if i % 2 == 0 else "English" for i in range(len(readers))]
         _attach(at, readers, languages)
         pin_view(at, _VIEW_CORPUS)
-        # PERF-9: only the open Corpus subtab renders.
+        # Only the open Corpus subtab renders.
         at.session_state["corpus_subtab"] = "Groups"
         at.run(timeout=120)
         assert not at.exception, at.exception
@@ -1010,7 +1010,7 @@ class TestGroupingEndToEnd:
     @pytest.mark.timeout(240)
     @pytest.mark.parametrize("grain", ["trial", "text"])
     def test_a_trial_or_text_attribute_splits_the_cohort(self, grain):
-        """AN-31, end to end on the demo: the field is offered, and picking it
+        """End to end on the demo: the field is offered, and picking it
         narrows the cohort to exactly the rows the table describes. The
         selection is seeded into session state alongside the view request, in
         the one run, rather than through a `set_value` a re-pin would discard.
@@ -1066,12 +1066,11 @@ class TestGroupingEndToEnd:
 
 
 class TestTheWizardStep:
-    """DATA-20 round 2 — *About your readers* is a step of the upload wizard.
+    """*About your readers* lives in the upload wizard.
 
-    The user's call: the wizard is the **main** home, because a first-time
-    uploader is answering exactly this question and would otherwise never meet
-    the feature. The Data-page section stays, for the sources the wizard never
-    runs for.
+    The wizard is the feature's **main** home, because a first-time uploader is
+    answering exactly this question and would otherwise never meet the feature.
+    The Data-page section stays, for the sources the wizard never runs for.
     """
 
     @staticmethod
@@ -1126,18 +1125,13 @@ class TestTheWizardStep:
         at.run(timeout=120)
         assert not at.exception, at.exception
 
-        # UX-53 folded the seven steps into two linear parts; UX-113 unfolded
-        # them back to five, flat and same-size; UX-114 folded "Keep extra
-        # fields" back into "Map data fields" (per-table pickers now sit
-        # directly under each table's own mapping), leaving four; UX-129
-        # folded "Map data fields" itself into "Upload data tables" (every
-        # table already uploaded and mapped in the same row), leaving three.
-        # The participant table stays up beside the uploads — it is an
-        # upload, so it belongs with them, under no heading of its own (r6).
-        # #417 added an optional fourth, last so leaving it out renumbers
-        # nothing.
+        # Three required parts, plus an optional fourth that comes last so
+        # leaving it out renumbers nothing. Each table is uploaded and mapped
+        # in one row, its extra-field pickers directly under its own mapping,
+        # and the participant table stays up beside the uploads — it is an
+        # upload, so it belongs with them, under no heading of its own.
         assert [s.number for s in wizard_shell.STEPS] == [1, 2, 3, 4]
-        # UX-174 r2 renamed part 1 when it gained the Description field.
+        # Part 1 holds the Description field too.
         assert [s.title for s in wizard_shell.STEPS] == [
             "Name & description",
             "Upload data tables",
@@ -1176,11 +1170,11 @@ class TestTheWizardStep:
 
 
 class TestTablesBelongToADataset:
-    """DATA-47 — metadata tables are per dataset, like every other table.
+    """Metadata tables are per dataset, like every other table.
 
-    They were one slot per grain for the whole session: a new dataset opened
-    with the last one's tables, attaching a table to dataset B replaced dataset
-    A's, and detaching it anywhere removed it everywhere."""
+    With one slot per grain for the whole session, a new dataset would open
+    with the last one's tables, attaching a table to dataset B would replace
+    dataset A's, and detaching it anywhere would remove it everywhere."""
 
     @staticmethod
     def _readers(source: str, field: str = "age"):
@@ -1316,7 +1310,7 @@ class TestTablesBelongToADataset:
         assert md.store_signature(session)  # still something to write
 
     def test_compare_b_filters_by_its_own_datasets_table(self, monkeypatch):
-        """CMP-8's scanpath B can come from another dataset — its filters must
+        """Compare's scanpath B can come from another dataset — its filters must
         then narrow by *that* dataset's table, not the selected one's."""
         import streamlit as st
 

@@ -43,14 +43,14 @@ def _manifest(root):
 
 
 def _frame_files(root, name):
-    """Where the manifest keeps one dataset's frames — a fresh name per write
-    since #412, so read from it rather than derived from the dataset's name."""
+    """Where the manifest keeps one dataset's frames — a fresh name per write,
+    so read from it rather than derived from the dataset's name."""
     frames = _manifest(root)["datasets"][name]["frames"]
     return {key: root / relative for key, relative in frames.items()}
 
 
 def _sidecar(root):
-    """The metadata tables' file the manifest names (#412: versioned)."""
+    """The metadata tables' file the manifest names (versioned)."""
     return root / _manifest(root)["metadata"]["file"]
 
 
@@ -67,11 +67,11 @@ def test_enabled_only_for_loopback_without_override():
 
 
 class TestTheGateTrustsTheServerNotTheBrowser:
-    """ENG-56 — inside a Streamlit server the gate reads ``server.address``.
+    """Inside a Streamlit server the gate reads ``server.address``.
 
-    It used to read ``st.context.url``, which Streamlit copies from the browser's
-    own message, so a peer on the network could connect to an all-interfaces
-    server claiming ``http://localhost/`` and get the owner's cached datasets.
+    Never ``st.context.url``: Streamlit copies that from the browser's own
+    message, so a peer on the network could connect to an all-interfaces server
+    claiming ``http://localhost/`` and get the owner's cached datasets.
     """
 
     @pytest.fixture
@@ -109,7 +109,7 @@ class TestTheGateTrustsTheServerNotTheBrowser:
 
 
 def test_the_desktop_app_binds_loopback_so_it_keeps_its_cache():
-    """ENG-56 made the cache follow the bind address, so the launcher's is load-bearing."""
+    """The cache follows the bind address, so the launcher's is load-bearing."""
     import re
     from pathlib import Path
 
@@ -138,7 +138,7 @@ def test_round_trip_datasets_settings_mappings_and_annotations(tmp_path):
         "trial_annotations": {
             ("p1", "t1"): {"star": True, "tags": ["Review"], "note": "check"}
         },
-        # UX-174 r2 — descriptions, for an upload and for a built-in alike.
+        # Descriptions, for an upload and for a built-in alike.
         "_dataset_descriptions": {"My corpus": "A pilot.", "Bundled Demo": ""},
     }
     assert save_state(source, tmp_path)
@@ -156,7 +156,7 @@ def test_round_trip_datasets_settings_mappings_and_annotations(tmp_path):
     assert restored["global_show_heatmap"] is False
     assert restored["global_word_hover_fields"] == ["text", "surprisal"]
     assert restored["col_map_fix_x"] == "gaze_x"
-    # DATA-48: the store named no dataset and the upload has no such trial, so
+    # The store named no dataset and the upload has no such trial, so
     # the entry waits for the first built-in or corpus opened — not the upload.
     import scanpath_studio.annotations as annotations_mod
 
@@ -243,7 +243,7 @@ class TestAnnotationsModuleImport:
 
 
 class TestAnnotationsPerDataset:
-    """DATA-48 — the cache keeps each dataset's annotations as its own."""
+    """The cache keeps each dataset's annotations as its own."""
 
     STAR = {"star": True, "tags": ["Review"], "note": "A's note."}
     NOTE = {"star": False, "tags": [], "note": "B's note."}
@@ -282,8 +282,10 @@ class TestAnnotationsPerDataset:
         manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
         assert set(manifest["annotations"]["datasets"]) == {"A", "B"}
 
-    def test_a_pre_data48_manifest_migrates_to_the_dataset_it_had_open(self, tmp_path):
-        """The manifest's one flat list named no dataset. The session it
+    def test_a_flat_annotations_manifest_migrates_to_the_dataset_it_had_open(
+        self, tmp_path
+    ):
+        """A manifest's one flat annotations list names no dataset. The session it
         restores opens on the dataset the manifest had selected, which adopts
         them; the next save writes them back under that name — once."""
         import scanpath_studio.annotations as annotations_mod
@@ -379,7 +381,7 @@ def test_forget_removes_only_known_cache_files(tmp_path):
     assert not (tmp_path / "manifest.json").exists()
 
 
-# ENG-30 — the cache is inspectable and controllable from outside itself. These
+# The cache is inspectable and controllable from outside itself. These
 # pin the read-only status dict (app panel / CLI / api.cache_status all render
 # it) and the two controls: pause saving, and forget what was saved.
 
@@ -437,7 +439,7 @@ def test_cache_status_flags_an_unreadable_manifest(tmp_path):
 
 
 def test_a_paused_session_does_not_save(tmp_path, monkeypatch):
-    """BUG-71's pause — the only one left since UX-179 removed the toggle."""
+    """A session paused by a restore safeguard does not save."""
     import scanpath_studio.persistence as module
 
     monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
@@ -469,7 +471,7 @@ def test_clear_local_state_deletes_files_and_session_bookkeeping(tmp_path, monke
 
 
 def test_clear_saved_work_starts_over(tmp_path, monkeypatch):
-    """#374 F33: the Data page's clear empties the session too, so the next
+    """The Data page's clear empties the session too, so the next
     run's save cannot write the old work back."""
     import scanpath_studio.persistence as module
 
@@ -524,11 +526,11 @@ def test_restored_flag_marks_only_a_session_that_got_data_back(tmp_path):
 
 
 class TestOnlyARealRecoveryIsAnnounced:
-    """UX-136 — every rerun writes the cache, so a session that has only ever
-    changed view settings still leaves a manifest behind. Restoring one is not
-    "recovering your last session", and saying so was worst in exactly the case
-    the user hit: right after clearing the cache by hand, where the toast reads
-    as "clearing it did nothing"."""
+    """Every rerun writes the cache, so a session that has only ever changed
+    view settings still leaves a manifest behind. Restoring one is not
+    "recovering your last session", and saying so is worst right after clearing
+    the cache by hand, where the toast would read as "clearing it did
+    nothing"."""
 
     def test_settings_alone_restore_silently(self, tmp_path, monkeypatch):
         monkeypatch.setattr(persistence, "state_directory", lambda *a, **k: tmp_path)
@@ -618,7 +620,7 @@ def test_upgrade_from_a_manifest_without_row_counts(tmp_path):
     session = {"_datasets": {"Corpus": _dataset()}, "global_show_heatmap": True}
     save_state(session, tmp_path)
 
-    # Rewrite the manifest the way the pre-ENG-30 writer did.
+    # Rewrite the manifest the way an older writer did, with no row counts.
     path = tmp_path / "manifest.json"
     manifest = json.loads(path.read_text(encoding="utf-8"))
     for entry in manifest["datasets"].values():
@@ -643,7 +645,7 @@ def test_upgrade_from_a_manifest_without_row_counts(tmp_path):
 
 
 def test_setup_snapshot_survives_a_cache_round_trip(tmp_path):
-    """CMP-8 §1: the per-dataset `setup` key must ride the recovery cache.
+    """The per-dataset `setup` key must ride the recovery cache.
 
     Without it a restored session would reopen an uploaded corpus with no
     geometry — the exact hole the snapshot exists to close — and the compare
@@ -682,12 +684,12 @@ def test_a_cache_written_before_the_setup_key_still_restores(tmp_path):
     assert SetupSnapshot.from_dict(entry.get("setup"), fallback=fallback) == fallback
 
 
-# DATA-23 — a rename moves the cached Parquet files instead of re-encoding them,
-# so the cache never accumulates orphans under the old name's slug.
+# A rename re-keys the cached dataset without re-encoding its Parquet files,
+# so the cache never accumulates orphans under the old name.
 
 
 def test_rename_rekeys_the_cache_and_keeps_the_restore(tmp_path):
-    """#412: the files are not named after the dataset, so a rename moves none —
+    """The files are not named after the dataset, so a rename moves none —
     one manifest replacement, never a half-moved cache."""
     session = {"_datasets": {"Corpus": _dataset()}, "data_source_choice": "Corpus"}
     assert save_state(session, tmp_path)
@@ -753,9 +755,9 @@ def test_a_failed_rename_forces_a_full_rewrite_next_save(tmp_path):
 
 
 class TestRememberedDatasetCounts:
-    """DATA-32 — a dataset's headline counts are computed once and remembered.
+    """A dataset's headline counts are computed once and remembered.
 
-    The point of the item is the *invalidation*, not the store: a remembered
+    What matters is the *invalidation*, not the store: a remembered
     count is a number on screen that claims to describe the data, so it must
     never outlive the rows it was taken from.
     """
@@ -867,13 +869,13 @@ class TestRememberedDatasetCounts:
         restored: dict = {}
         assert persistence.restore_state(restored, tmp_path)
         assert restored[DATASET_COUNTS_STORE_KEY] == remembered
-        # …and forgetting the cache forgets them, which is what the ask named.
+        # …and forgetting the cache forgets them.
         persistence.clear_local_state(restored, tmp_path)
         assert DATASET_COUNTS_STORE_KEY not in restored
 
 
 class TestTheRecoveryToastPhrase:
-    """UX-136 — the toast names what came back, so the claim can be checked
+    """The toast names what came back, so the claim can be checked
     against the *Saved on this computer* section it points at."""
 
     @staticmethod
@@ -901,12 +903,12 @@ class TestTheRecoveryToastPhrase:
 
 
 class TestAMalformedCacheNeverStopsTheApp:
-    """BUG-71 — the manifest is a file on disk, so any JSON can be in it.
+    """The manifest is a file on disk, so any JSON can be in it.
 
-    Wrong shapes used to escape as an ``AttributeError`` the restore did not
-    catch, and restored values were seeded unchecked into widgets that refuse
-    them — both before the 💾 Session dialog that could reset them, on every
-    launch. Each case below crashed the app in the pre-beta audit.
+    A wrong shape must not escape as an ``AttributeError`` the restore does not
+    catch, and restored values must not be seeded unchecked into widgets that
+    refuse them — either would crash the app on every launch, before any
+    control that could reset the cache. Each case below is one such shape.
     """
 
     @staticmethod
@@ -931,7 +933,7 @@ class TestAMalformedCacheNeverStopsTheApp:
             assert "_datasets" not in session
 
     def test_a_malformed_dataset_entry_costs_only_that_dataset(self, tmp_path):
-        """It used to abandon the whole restore; now it is held back — kept,
+        """It does not abandon the whole restore: it is held back — kept,
         verbatim, for the next save — and everything else restores."""
         self._write(
             tmp_path,
@@ -1025,14 +1027,14 @@ class TestAMalformedCacheNeverStopsTheApp:
         )
         session = {}
         assert restore_state(session, tmp_path)
-        # Round 11: a design's bad value is dropped, its good ones kept.
+        # A design's bad value is dropped, its good ones kept.
         assert session[DESIGN_PRESETS]["ok"]["global_show_fix"] is False
         assert "global_fixation_opacity" not in session[DESIGN_PRESETS]["ok"]
         assert "bad" not in session[DESIGN_PRESETS]
 
 
 class TestTheRestoreCrashLoopBreaker:
-    """BUG-71 — a restore that breaks the app must not break every launch.
+    """A restore that breaks the app must not break every launch.
 
     Its marker is written before the cache is applied and cleared when a run
     that applied it reaches the epilogue (`save_local_state`). A session that
@@ -1091,7 +1093,7 @@ class TestTheRestoreCrashLoopBreaker:
 def test_a_restore_that_crashes_the_app_does_not_crash_the_next_launch(
     tmp_path, monkeypatch
 ):
-    """End to end (BUG-71): launch one dies after restoring; launch two opens."""
+    """End to end: launch one dies after restoring; launch two opens."""
     streamlit_testing = pytest.importorskip("streamlit.testing.v1")
     from scanpath_studio import app
     from tests.conftest import APP_SCRIPT
@@ -1119,20 +1121,19 @@ def test_a_restore_that_crashes_the_app_does_not_crash_the_next_launch(
     assert (tmp_path / "manifest.json").read_text(encoding="utf-8") == manifest
 
     def test_metadata_tables_are_named_in_the_toast(self):
-        """DATA-38 — a restored participant table is something a user would
+        """A restored participant table is something a user would
         recognise coming back, so the toast says so."""
         assert self._recap(datasets=1, metadata=2) == "1 dataset and 2 metadata tables"
 
 
 class TestMetadataTablesInTheRecoveryCache:
-    """DATA-38 — attached participant / trial / text tables survive a refresh.
+    """Attached participant / trial / text tables survive a refresh.
 
-    They were in neither list the cache writes, so a refresh brought the
-    dataset back and silently dropped every table attached to it — and with
-    them every metadata field in the filter funnel, the chip picker and the
-    trial-sort popover.
+    Otherwise a refresh would bring the dataset back and silently drop every
+    table attached to it — and with them every metadata field in the filter
+    funnel, the chip picker and the trial-sort popover.
 
-    DATA-47: the tables belong to a dataset — the session keys hold the
+    The tables belong to a dataset — the session keys hold the
     selected one's (``OWNER_KEY``), the cache files them under its name, and a
     restore returns them to that dataset, reaching the session keys once it is
     selected (``activate_dataset``, which ``app.main`` runs every run)."""
@@ -1247,7 +1248,8 @@ class TestMetadataTablesInTheRecoveryCache:
         assert list(restored[md.TEXT_SESSION_KEY].frame["genre"]) == ["fiction"]
 
     def test_a_manifest_without_metadata_still_restores(self, tmp_path):
-        """Every manifest written before DATA-38 lacks the key."""
+        """An older manifest, written before metadata tables were cached,
+        lacks the key."""
         from scanpath_studio import metadata as md
 
         save_state({"_datasets": {"study": _dataset()}}, tmp_path)
@@ -1333,8 +1335,8 @@ class TestMetadataTablesInTheRecoveryCache:
     def test_a_file_that_will_not_read_is_held_back_not_overwritten(
         self, tmp_path, damage
     ):
-        """Round 10, finding 4: the next save deleted the unreadable tables,
-        and nothing said they had failed."""
+        """The next save must not delete the unreadable tables, and the
+        failure is said."""
         from scanpath_studio import metadata as md
 
         save_state({"_datasets": {"study": _dataset()}, **self._attached()}, tmp_path)
@@ -1407,7 +1409,7 @@ class TestMetadataTablesInTheRecoveryCache:
 
 
 def test_restoring_datasets_reports_each_one(tmp_path):
-    """UX-166: the restore card counts datasets as they are read back."""
+    """The restore card counts datasets as they are read back."""
     from scanpath_studio import progress
 
     assert save_state({"_datasets": {"My corpus": _dataset()}}, tmp_path)
@@ -1418,7 +1420,7 @@ def test_restoring_datasets_reports_each_one(tmp_path):
 
 
 def test_column_names_survive_a_cache_round_trip(tmp_path):
-    """DATA-66: the column-name map is a plain payload on the entry, so the
+    """The column-name map is a plain payload on the entry, so the
     manifest carries it like `setup` — a restored upload keeps its names."""
     names = {
         "fixations": {
@@ -1470,8 +1472,8 @@ def test_a_built_in_datasets_own_setup_survives_a_cache_round_trip(tmp_path):
 
 
 class TestEachCachedDatasetRestoresOnItsOwn:
-    """One damaged dataset used to block every dataset's recovery, and the next
-    automatic save then wrote the empty session over the manifest. Now each
+    """One damaged dataset must not block every dataset's recovery, nor let the
+    next automatic save write the empty session over the manifest. Each
     dataset restores on its own, a failed one is kept (entry and files) through
     every save until it is retried or removed, and a cache that cannot be read
     at all pauses saving — while an absent or cleared cache saves normally.
@@ -1508,7 +1510,7 @@ class TestEachCachedDatasetRestoresOnItsOwn:
         return _manifest(root)
 
     def _damage(self, root):
-        """The review's case: only `damaged`'s word table goes missing."""
+        """Only `damaged`'s word table goes missing."""
         words = self._files(root, "damaged")["words"]
         backup = words.read_bytes()
         words.unlink()
@@ -1708,7 +1710,7 @@ def _metadata_notice_app():
 
 
 def test_the_page_names_held_back_metadata_tables_with_their_actions():
-    """Round 10, finding 4: the held-back tables are said, with Retry and a
+    """The held-back tables are said, with Retry and a
     Remove from cache scoped to them."""
     streamlit_testing = pytest.importorskip("streamlit.testing.v1")
     at = streamlit_testing.AppTest.from_function(_metadata_notice_app)
@@ -1723,15 +1725,14 @@ def test_the_page_names_held_back_metadata_tables_with_their_actions():
 
 
 class TestASaveIsAllOrNothing:
-    """#412 — a save that fails part-way must leave the previous session whole.
+    """A save that fails part-way must leave the previous session whole.
 
-    Each dataset frame used to be replaced in place, one file at a time, and the
-    metadata tables' file before the manifest: a failure in between left the old
-    manifest naming new Words beside old Fixations, or old settings beside new
-    metadata, and the next launch restored that mixture as if it were a session.
-    Now every changed file is written under a new name and the manifest naming
-    them is swapped in last, so a restart sees the whole old state or the whole
-    new one.
+    Replacing files in place, one at a time, would let a failure in between
+    leave the old manifest naming new Words beside old Fixations, or old
+    settings beside new metadata, and the next launch would restore that
+    mixture as if it were a session. Every changed file is written under a new
+    name and the manifest naming them is swapped in last, so a restart sees the
+    whole old state or the whole new one.
     """
 
     OLD = {"trial": "old", "age": 30, "heatmap": False}
@@ -1969,10 +1970,10 @@ class TestASaveIsAllOrNothing:
             restored["_datasets"]["Corpus"]["words"], _dataset()["words"]
         )
 
-    def test_a_cache_written_before_412_restores_and_moves_on(self, tmp_path):
-        """The layout every cache had until #412 — frames named after the
-        dataset's slug, the tables in `metadata.json` — still restores, and the
-        first save that rewrites a file retires the old one."""
+    def test_a_slug_named_cache_restores_and_moves_on(self, tmp_path):
+        """The older layout — frames named after the dataset's slug, the tables
+        in `metadata.json` — still restores, and the first save that rewrites a
+        file retires the old one."""
         import hashlib
 
         assert save_state(self._session(**self.OLD), tmp_path)

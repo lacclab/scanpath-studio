@@ -1,8 +1,8 @@
-"""CMP-22: scanpath B's picker lists every trial, A's own included.
+"""Scanpath B's picker lists every trial, A's own included.
 
-B used to drop the selected trial from its pool, so the two position readouts
-counted different lists (1/24 next to 1/23) on the same, unfiltered data. A is
-now a candidate like any other; it is only kept from being B's *default*.
+Dropping the selected trial from B's pool would make the two position readouts
+count different lists (1/24 next to 1/23) on the same, unfiltered data. A is a
+candidate like any other; it is only kept from being B's *default*.
 """
 
 from __future__ import annotations

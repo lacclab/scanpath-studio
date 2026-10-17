@@ -143,7 +143,7 @@ def test_render_forwards_saccade_styling(tmp_path, monkeypatch):
 
 def test_render_forwards_saccade_color_by_type(tmp_path, monkeypatch):
     # --saccade-color-by-type flips the mode; --saccade-type-color overrides a
-    # class colour and implies the mode (VIZ-8).
+    # class colour and implies the mode.
     from scanpath_studio import api
 
     captured = {}
@@ -171,7 +171,7 @@ def test_render_forwards_saccade_color_by_type(tmp_path, monkeypatch):
 
 
 def test_render_forwards_heatmap_norm(tmp_path, monkeypatch):
-    # --heatmap-norm log reaches the figure builder as "Log" (VIZ-3).
+    # --heatmap-norm log reaches the figure builder as "Log".
     from scanpath_studio import api
 
     captured = {}
@@ -191,7 +191,7 @@ def test_render_forwards_heatmap_norm(tmp_path, monkeypatch):
 @pytest.mark.parametrize(
     ("flags", "expected"),
     [
-        # v0.33.0's `--colorbars` asked for what is now the default.
+        # `--colorbars` (v0.33.0's spelling) asks for what is the default.
         (["--colorbars"], {}),
         (
             ["--colorbars", "--no-heatmap-colorbar"],
@@ -222,7 +222,7 @@ def test_render_forwards_heatmap_norm(tmp_path, monkeypatch):
     ],
 )
 def test_render_keeps_the_v0_33_colorbar_flags(tmp_path, monkeypatch, flags, expected):
-    """Round 9, finding 4: a command written for v0.33.0 still runs."""
+    """A command written for v0.33.0 still runs."""
     from scanpath_studio import api
 
     captured = {}
@@ -241,8 +241,8 @@ def test_render_keeps_the_v0_33_colorbar_flags(tmp_path, monkeypatch, flags, exp
 
 
 def test_render_forwards_linear_reading_flags(tmp_path, monkeypatch):
-    # VIZ-9: --saccade-arcs / --snap-fixations (#422: + --snap-position) reach
-    # the figure builder.
+    # --saccade-arcs / --snap-fixations (+ --snap-position) reach the figure
+    # builder.
     from scanpath_studio import api
 
     captured = {}
@@ -320,8 +320,8 @@ def test_render_animate_html(tmp_path):
 
 
 def test_render_animate_autoplays_by_default(tmp_path):
-    # VIZ-10: the saved interactive HTML auto-starts the replay — on the
-    # wall-clock player (BUG-93), which reads the autoplay flag.
+    # The saved interactive HTML auto-starts the replay — on the wall-clock
+    # player, which reads the autoplay flag.
     out_file = tmp_path / "anim.html"
     cli.main(["render", "--sample", "--animate", "-o", str(out_file)])
     html = out_file.read_text(encoding="utf-8")
@@ -330,7 +330,7 @@ def test_render_animate_autoplays_by_default(tmp_path):
 
 
 def test_render_animate_no_autoplay_flag(tmp_path):
-    # VIZ-10: --no-autoplay saves a figure that opens paused.
+    # --no-autoplay saves a figure that opens paused.
     out_file = tmp_path / "anim.html"
     cli.main(["render", "--sample", "--animate", "--no-autoplay", "-o", str(out_file)])
     html = out_file.read_text(encoding="utf-8")
@@ -351,7 +351,7 @@ def test_render_unknown_trial_exits():
 
 
 def test_render_unknown_trial_without_participant_exits(tmp_path):
-    # Regression: a mistyped -t without -p must error, not silently render
+    # A mistyped -t without -p must error, not silently render
     # the dataset's first trial.
     out_file = tmp_path / "x.html"
     with pytest.raises(SystemExit, match="No trial matches"):
@@ -379,9 +379,9 @@ def test_render_bad_canvas_exits():
 
 
 def test_render_animate_warns_on_unsupported_flags(tmp_path, capsys):
-    # EXP-10: this test used to pin `color_by` as unsupported, which it never
-    # was — `animate_scanpath` colours the replay by it. The heatmap and the
-    # arc schematic are what the replay genuinely cannot draw.
+    # `color_by` is supported — `animate_scanpath` colours the replay by it.
+    # The heatmap and the arc schematic are what the replay genuinely cannot
+    # draw.
     out_file = tmp_path / "anim.html"
     cli.main(
         [
@@ -390,8 +390,8 @@ def test_render_animate_warns_on_unsupported_flags(tmp_path, capsys):
             "--animate",
             "--heatmap",
             "--saccade-arcs",
-            # EXP-17: a real column — the demo's fixations carry no
-            # `pass_index`, which this test used to colour by, silently flat.
+            # A real column of the demo's fixations (they carry no
+            # `pass_index`).
             "--color-by",
             "duration_ms",
             "-o",
@@ -406,11 +406,11 @@ def test_render_animate_warns_on_unsupported_flags(tmp_path, capsys):
 
 
 def test_render_animate_forwards_every_option_the_replay_takes(tmp_path, monkeypatch):
-    """EXP-10: the forwarded set is `figure_options("animation")`, not a list.
+    """The forwarded set is `figure_options("animation")`, not a hand-kept list.
 
-    The hand-kept list silently dropped the marker shape, the flat colour and
-    the palette, and refused three options the builder honours — so an
-    animation snippet copied from the app replayed a different figure."""
+    A hand-kept list drifts — silently dropping options the builder honours,
+    such as the marker shape, the flat colour and the palette — so an
+    animation snippet copied from the app would replay a different figure."""
     from scanpath_studio import api
 
     captured = {}
@@ -461,7 +461,7 @@ def test_render_animate_forwards_every_option_the_replay_takes(tmp_path, monkeyp
         "title",
         "caption",
         "screen",
-        "column_names",  # DATA-66: the dataset's names, for the replay's text
+        "column_names",  # the dataset's names, for the replay's text
     }
 
 
@@ -473,7 +473,7 @@ _PNG_1x1 = bytes.fromhex(
 
 
 def test_render_stimulus_image_embeds_and_dims(tmp_path):
-    # VIZ-4: --stimulus-image overlays an image; --stimulus-image-opacity dims it.
+    # --stimulus-image overlays an image; --stimulus-image-opacity dims it.
     img = tmp_path / "stim.png"
     img.write_bytes(_PNG_1x1)
     out_file = tmp_path / "out.html"
@@ -495,7 +495,7 @@ def test_render_stimulus_image_embeds_and_dims(tmp_path):
 
 
 def test_render_stimulus_image_origin_and_size(tmp_path):
-    # VIZ-4: explicit size + origin place a crop in fixation coordinates.
+    # Explicit size + origin place a crop in fixation coordinates.
     img = tmp_path / "stim.png"
     img.write_bytes(_PNG_1x1)
     out_file = tmp_path / "out.html"
@@ -535,7 +535,7 @@ def test_render_stimulus_image_bad_origin_exits(tmp_path):
 
 
 def test_render_animate_forwards_stimulus_image(tmp_path):
-    # VIZ-4: the animation honours the stimulus image too.
+    # The animation honours the stimulus image too.
     img = tmp_path / "stim.png"
     img.write_bytes(_PNG_1x1)
     out_file = tmp_path / "anim.html"
@@ -554,7 +554,7 @@ def test_render_animate_forwards_stimulus_image(tmp_path):
 
 
 def test_render_separable_layers(tmp_path, monkeypatch):
-    # VIZ-5: --separable-layers writes a <output>_layers/ folder. Stub the writers
+    # --separable-layers writes a <output>_layers/ folder. Stub the writers
     # to avoid Kaleido/Chrome; assert the CLI targets the right dir + format.
     from pathlib import Path
 
@@ -706,7 +706,7 @@ def test_render_potec_conflicts_with_other_inputs():
 
 
 def test_render_potec_narrows_by_the_text_in_a_reader_text_trial(tmp_path, monkeypatch):
-    """DATA-61: a PoTeC trial is ``<reader>_<text>``; ``-t 0_b0`` loads text b0
+    """A PoTeC trial is ``<reader>_<text>``; ``-t 0_b0`` loads text b0
     and renders that reader's reading of it."""
     from scanpath_studio import datasets
 
@@ -834,7 +834,7 @@ def test_analyze_and_corpus_commands(tmp_path):
     assert figure.is_file()
 
 
-# ENG-30 — `scanpath-studio cache` is the terminal view of the on-device
+# `scanpath-studio cache` is the terminal view of the on-device
 # recovery cache the app writes on localhost/desktop.
 
 
@@ -878,7 +878,7 @@ def test_cache_reports_what_is_stored_and_clears_it(tmp_path, monkeypatch, capsy
     out = capsys.readouterr().out
     assert "1 dataset: Corpus" in out
     assert "2 rows" in out
-    assert "(s)" not in out  # #374 F38: real plurals
+    assert "(s)" not in out  # real plurals
 
     cli.main(["cache", "--clear"])
     assert "Cleared" in capsys.readouterr().out
@@ -907,7 +907,7 @@ def test_cache_names_a_damaged_dataset(tmp_path, monkeypatch, capsys):
 
     monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
     _seed_cache(tmp_path)
-    # #412: a fresh name per write — the manifest says which file is Words.
+    # A fresh name per write — the manifest says which file is Words.
     manifest = json_module.loads((tmp_path / "manifest.json").read_text("utf-8"))
     (tmp_path / manifest["datasets"]["Corpus"]["frames"]["words"]).unlink()
 
@@ -991,9 +991,8 @@ def test_python_dash_m_reaches_the_cli(tmp_path):
     assert __version__ in (result.stdout + result.stderr)
 
 
-# --- CMP-9: compare mode on the CLI -----------------------------------------
-# Compare existed only in the app and the share link; these pin the headless
-# spelling. `_SAMPLE_TRIAL_*` are two real trials of the bundled demo — a
+# --- compare mode on the CLI ------------------------------------------------
+# These pin the headless spelling of compare mode. `_SAMPLE_TRIAL_*` are two real trials of the bundled demo — a
 # renamed sample would break these loudly rather than silently comparing a
 # trial against itself.
 _SAMPLE_PARTICIPANT = "l37_1129"
@@ -1099,7 +1098,7 @@ def test_render_compare_with_splits_on_the_last_colon():
 
 
 def test_render_compare_across_two_datasets(tmp_path):
-    """B from a second pair of tables — the cross-dataset half of CMP-9."""
+    """B from a second pair of tables — the cross-dataset half of compare."""
     from scanpath_studio import api
 
     words, fixations = api.load_sample_data(names="canonical")
@@ -1173,7 +1172,7 @@ def test_render_compare_overlay_refuses_two_different_screens(tmp_path):
         )
     message = str(excinfo.value)
     assert "1680" in message
-    # BUG-85: a CLI user is told the CLI's flag, not the API's keyword — and
+    # A CLI user is told the CLI's flag, not the API's keyword — and
     # not that the app's side-by-side fallback happened, since nothing was drawn.
     assert "--compare-layout side-by-side" in message
     assert "layout='side_by_side'" not in message
@@ -1182,11 +1181,9 @@ def test_render_compare_overlay_refuses_two_different_screens(tmp_path):
 
 def test_compare_setup_snapshot_comes_from_a_stated_canvas_only():
     """A stated canvas is a known screen, and says nothing; no canvas leaves the
-    screen to `api.compare_scanpaths`, which reads it off the data.
-
-    BUG-85 removed the other way in: `--monitor-mm` alone used to build a
-    snapshot around the *default* canvas (ASSUMED), replacing the data's own
-    screen in the gate with one nobody stated — for a value nothing reads."""
+    screen to `api.compare_scanpaths`, which reads it off the data. Nothing
+    else builds one: a snapshot around the *default* canvas (ASSUMED) would
+    replace the data's own screen in the gate with one nobody stated."""
     from scanpath_studio.experimental_setup import Provenance, setups_comparable
 
     assert cli._compare_setup_snapshot(None) is None
@@ -1206,9 +1203,8 @@ def test_compare_setup_snapshot_comes_from_a_stated_canvas_only():
     ],
 )
 def test_render_takes_no_physical_display_geometry(flag, tmp_path, capsys):
-    """BUG-85: these four were accepted and recorded on a `SetupSnapshot` that
-    nothing reads — the overlay rule is about pixels (CMP-11 is a gate, not a
-    rescaling), so no figure ever depended on them."""
+    """`render` takes no physical display geometry: the overlay rule is about
+    pixels (a gate, not a rescaling), so no figure would depend on it."""
     out = tmp_path / "unused.html"
     with pytest.raises(SystemExit):
         cli.main(["render", "--sample", flag, "520", "-o", str(out)])
@@ -1223,25 +1219,24 @@ def _render_flag_help(flag: str) -> str:
 
 
 def test_compare_layout_help_states_the_equal_canvas_rule():
-    """BUG-85: since CMP-11 an overlay across two datasets needs equal canvases
-    and nothing more — an unrecorded screen overlays with a warning — but the
-    help still asked for "the same known screen"."""
+    """An overlay across two datasets needs equal canvases and nothing more —
+    an unrecorded screen overlays with a warning — so the help does not ask
+    for "the same known screen"."""
     help_text = _render_flag_help("--compare-layout")
     assert "known screen" not in help_text
     assert "canvas" in help_text and "warning" in help_text
 
 
 def test_color_by_help_offers_line():
-    """BUG-85: `--color-by line` is the line option, as in the app's select."""
+    """`--color-by line` is the line option, as in the app's select."""
     assert "line" in _render_flag_help("--color-by")
 
 
 def test_an_explicit_flag_wins_over_the_illustration_preset(tmp_path, monkeypatch):
-    """`--illustration` was applied after `--color-by`, the layer switches and
-    the saccade colouring, so it overrode them: `--color-by line` drew flat
-    where `--color-by-line` (applied later) coloured by line. The comment on
-    the flags after the preset, and `plot_scanpath(illustration=True, …)`, both
-    let an explicit option win; now every flag does (BUG-85 review)."""
+    """Every explicit flag wins over the `--illustration` preset, as an
+    explicit option does in `plot_scanpath(illustration=True, …)`: a preset
+    applied after `--color-by`, the layer switches and the saccade colouring
+    would override them, so `--color-by line` would draw flat."""
     captured = _captured_static(
         tmp_path,
         monkeypatch,
@@ -1272,7 +1267,7 @@ def test_the_illustration_preset_alone_is_unchanged(tmp_path, monkeypatch):
 
 
 def test_render_color_by_line_colours_each_fixation_by_its_line(tmp_path):
-    """BUG-85: `--color-by line` passed validation and drew one flat colour."""
+    """`--color-by line` colours by line, not one flat colour."""
     out = tmp_path / "lines.html"
     cli.main(
         [
@@ -1292,7 +1287,7 @@ def test_render_color_by_line_colours_each_fixation_by_its_line(tmp_path):
 
 
 def test_render_compare_with_rejects_all_screens(tmp_path):
-    """Regression: this combination used to die on an UnboundLocalError."""
+    """This combination is refused with a message, not an UnboundLocalError."""
     with pytest.raises(SystemExit) as excinfo:
         cli.main(
             [
@@ -1309,10 +1304,11 @@ def test_render_compare_with_rejects_all_screens(tmp_path):
 
 
 def test_render_animate_with_compare_co_animates(tmp_path, monkeypatch):
-    """Regression: `--animate --compare-with` silently dropped the comparison.
+    """`--animate --compare-with` co-animates rather than silently dropping
+    the comparison.
 
-    The app renders a dual co-animation when both modes are on, so the CLI was
-    the only surface that could not produce one — and it said nothing.
+    The app renders a dual co-animation when both modes are on, so the CLI
+    must be able to produce one too.
     """
     from scanpath_studio import api
 
@@ -1390,9 +1386,10 @@ def test_render_animate_compare_rejects_two_screens(tmp_path):
 
 
 def test_render_animate_compare_reads_an_unstated_screen_off_the_data(tmp_path):
-    """CMP-21: without --compare-canvas the co-animation went ahead unchecked,
-    where the static overlay reads B's screen off its data and refuses. B here
-    is a demo trial, whose data spans more than the 1680x1050 stated for A."""
+    """Without --compare-canvas the co-animation reads B's screen off its data
+    and refuses, as the static overlay does, rather than going ahead unchecked.
+    B here is a demo trial, whose data spans more than the 1680x1050 stated
+    for A."""
     from scanpath_studio import api
 
     words, fixations = api.load_sample_data(names="canonical")
@@ -1455,7 +1452,7 @@ def test_render_animate_compare_leaves_one_datasets_pair_alone(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# The three settings the Python form used to carry alone (the four-surface rule)
+# Settings the Python form carries must have a `render` flag (four-surface rule)
 # ---------------------------------------------------------------------------
 def _captured_static(tmp_path, monkeypatch, argv):
     """Run ``render`` with a stubbed builder and return its keyword arguments."""
@@ -1475,8 +1472,8 @@ def _captured_static(tmp_path, monkeypatch, argv):
 
 
 def test_render_forwards_the_fixation_index_window(tmp_path, monkeypatch):
-    """VIZ-7 had no `render` flag at all, so the CLI silently drew the whole
-    trial where the Python form drew a window — a different figure."""
+    """The fixation-index window has a `render` flag, so the CLI draws the
+    same window the Python form does, not the whole trial."""
     captured = _captured_static(tmp_path, monkeypatch, ["--fix-index-range", "3:9"])
     assert captured["fix_index_range"] == (3, 9)
 
@@ -1489,9 +1486,8 @@ def test_the_replay_takes_the_fixation_index_window_too(tmp_path, monkeypatch):
 
 
 def test_a_comparison_takes_the_fixation_index_window_too(tmp_path, monkeypatch):
-    """EXP-11: `compare_scanpaths` has always taken `fix_index_range`, but the
-    compare branch never passed it, so `--compare-with --fix-index-range 1:10`
-    drew both whole trials."""
+    """The compare branch passes `fix_index_range` to `compare_scanpaths`, so
+    `--compare-with --fix-index-range 1:10` does not draw both whole trials."""
     from scanpath_studio import api
 
     captured = {}
@@ -1581,7 +1577,7 @@ def test_a_malformed_fixation_flag_is_refused(tmp_path, monkeypatch, bad):
 
 
 # ---------------------------------------------------------------------------
-# EXP-13 — a user-triggerable mistake is a message, never a traceback
+# A user-triggerable mistake is a message, never a traceback
 # ---------------------------------------------------------------------------
 def _renamed_sample(tmp_path):
     """The raw demo with its id/box columns renamed past auto-detection."""
@@ -1793,8 +1789,8 @@ def test_a_reversed_or_lowercase_colorscale_is_accepted():
 def test_compare_stimulus_on_a_split_layout_is_named_as_ignored(
     tmp_path, capsys, layout
 ):
-    """ENG-53: each split panel draws its own stimulus, so the choice does
-    nothing there — and the docs' example claimed it did."""
+    """Each split panel draws its own stimulus, so the choice does nothing
+    there, and the CLI says it is ignored."""
     cli.main(
         [
             "render",
@@ -1838,12 +1834,12 @@ def test_compare_stimulus_on_an_overlay_is_not_warned_about(tmp_path, capsys):
 
 
 # ---------------------------------------------------------------------------
-# EXP-16 — no empty artefacts from a successful exit
+# No empty artefacts from a successful exit
 # ---------------------------------------------------------------------------
 def test_analyze_writes_a_readable_cleaning_qa_with_preprocessing_off(tmp_path):
-    """The default `--short-policy off` wrote `cleaning_qa.csv` as a single
-    newline, which `pd.read_csv` refuses — the bundle writes one "Off" row per
-    trial instead, and so does `analyze` now."""
+    """With the default `--short-policy off`, `cleaning_qa.csv` holds one "Off"
+    row per trial, as the bundle's does — never a single newline, which
+    `pd.read_csv` refuses."""
     import pandas as pd
 
     from scanpath_studio import data as data_module
@@ -1900,7 +1896,7 @@ def test_analyze_keeps_the_preprocessing_report_when_it_ran(tmp_path):
 
 def test_corpus_difference_without_a_diff_column_is_refused(tmp_path):
     """The builder's "no data" placeholder is right for the app's empty states,
-    but headlessly it was an empty figure behind an exit code of 0."""
+    but headlessly it would be an empty figure behind an exit code of 0."""
     import pandas as pd
 
     tidy = tmp_path / "tidy.csv"
@@ -1925,7 +1921,7 @@ def test_corpus_difference_without_a_diff_column_is_refused(tmp_path):
     ("flag", "value"), [("--color-by", "nosuchfield"), ("--highlight-column", "nosuch")]
 )
 def test_render_refuses_a_column_the_data_does_not_have(tmp_path, flag, value):
-    """EXP-17: both used to exit 0 with a flat-coloured / unmarked figure."""
+    """Neither exits 0 with a flat-coloured / unmarked figure."""
     out = tmp_path / "x.html"
     with pytest.raises(SystemExit, match=f"{flag} on the CLI"):
         cli.main(["render", "--sample", flag, value, "-o", str(out)])
@@ -1933,12 +1929,13 @@ def test_render_refuses_a_column_the_data_does_not_have(tmp_path, flag, value):
 
 
 # ---------------------------------------------------------------------------
-# ENG-54 — the package root and the command line say what they mean
+# The package root and the command line say what they mean
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("word", ["rendr", "analyse", "foo"])
 def test_a_mistyped_command_is_refused_not_forwarded(monkeypatch, word):
-    """A bare word reached `streamlit run` as a script argument — dying on
-    "No such option" when flags followed, launching the app when none did."""
+    """A bare word must not reach `streamlit run` as a script argument — which
+    would die on "No such option" when flags followed, and launch the app when
+    none did."""
     calls = []
     monkeypatch.setattr(cli, "launch_app", lambda args: calls.append(args))
     with pytest.raises(SystemExit, match=f"unknown command {word!r}"):
@@ -1961,7 +1958,7 @@ def test_streamlit_flags_and_script_paths_still_launch_the_app(monkeypatch):
 
 
 def test_the_sample_help_names_the_readers_it_ships(capsys):
-    """DATA-43: the demo is two participants, every one with fixations."""
+    """The demo is two participants, every one with fixations."""
     with pytest.raises(SystemExit):
         cli.main(["render", "--help"])
     out = " ".join(capsys.readouterr().out.split())
@@ -1970,7 +1967,7 @@ def test_the_sample_help_names_the_readers_it_ships(capsys):
 
 
 # ---------------------------------------------------------------------------
-# ENG-55 — a local launch listens on this computer only
+# A local launch listens on this computer only
 # ---------------------------------------------------------------------------
 def _launch_argv(monkeypatch, tmp_path, extra_args, *, config: str | None = None):
     """`launch_app`'s argv with Streamlit stubbed and its config files pinned
@@ -2035,7 +2032,7 @@ def test_the_address_flag_is_a_real_streamlit_option():
 
 
 # ---------------------------------------------------------------------------
-# UX-183 — no Deploy button in the header
+# No Deploy button in the header
 # ---------------------------------------------------------------------------
 def test_a_launch_hides_the_deploy_button(monkeypatch, tmp_path):
     argv = _launch_argv(monkeypatch, tmp_path, [])

@@ -1,4 +1,4 @@
-"""#374 F29 — Share → Code writes only options that change the figure, spells
+"""Share → Code writes only options that change the figure, spells
 "no marking" as Python's ``None``, and never names a palette the figure's
 colours don't match."""
 
@@ -21,8 +21,8 @@ def _code(**figure) -> cs.ReproductionCode:
     return cs.reproduction_code(DEMO, state)
 
 
-def test_the_reviewed_figure_has_no_option_that_does_nothing():
-    """The figure from the review: *High contrast* applied, then two colours
+def test_a_hand_tuned_figure_has_no_option_that_does_nothing():
+    """A figure with *High contrast* applied, then two colours
     changed by hand, the highlight off, and the heatmap and boxes off."""
     palette = palette_settings("High contrast")
     figure = {

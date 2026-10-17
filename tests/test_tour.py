@@ -1,6 +1,6 @@
 """Tests for the welcome tour + the dataset-setup guide spotlight card.
 
-The setup guide is now a bottom-right floating card (``tour_mode == "wizard"``)
+The setup guide is a bottom-right floating card (``tour_mode == "wizard"``)
 rather than a modal, so the user can follow along while filling in the wizard.
 These exercise the arming + rendering + dismissal without booting the whole app.
 """
@@ -74,10 +74,10 @@ class TestWizardGuideSpotlight:
 
 
 class TestWizardGuideOptOut:
-    """UX-110: the setup guide gets the same persistent "don't show again" the
-    welcome tour and the per-tutorial cards already have — until this, only
-    ``wizard_guide_seen`` (plain session state) gated the auto-open, so it
-    greeted every new session regardless of a prior dismissal."""
+    """The setup guide has the same persistent "don't show again" as the
+    welcome tour and the per-tutorial cards — with only ``wizard_guide_seen``
+    (plain session state) gating the auto-open, it would greet every new
+    session regardless of a prior dismissal."""
 
     def test_checkbox_on_first_step_defaults_off(self):
         at = AppTest.from_function(_wizard_guide_app)
@@ -110,8 +110,8 @@ class TestWizardGuideOptOut:
 
     def test_replay_ignores_the_opt_out(self):
         """The explicit "❓ Show setup guide" button still works even after
-        opting out of the automatic greeting — same rule UX-12 set for the
-        welcome tour's replay."""
+        opting out of the automatic greeting — the same rule as the welcome
+        tour's replay."""
         at = AppTest.from_function(_wizard_guide_optout_replay_app)
         at.run()
         assert at.session_state["tour_mode"] == "wizard"
@@ -190,7 +190,7 @@ def _welcome_names_dataset_app():
 
 
 class TestWelcomeNamesWhatIsOpen:
-    """#374 F32: no "A demo dataset is loaded" over a returning user's data."""
+    """No "A demo dataset is loaded" over a returning user's data."""
 
     def test_a_restored_session_does_not_open_the_tour(self):
         at = AppTest.from_function(_welcome_after_restore_app).run()
@@ -207,7 +207,7 @@ class TestWelcomeNamesWhatIsOpen:
 
 
 class TestTourOptOut:
-    """UX-12: "Don't show this again", persisted in the ``sps_tour_optout`` cookie."""
+    """The "Don't show this again" choice, persisted in the ``sps_tour_optout`` cookie."""
 
     def test_checkbox_on_welcome_step_defaults_off(self):
         at = AppTest.from_function(_welcome_tour_app)
@@ -247,7 +247,7 @@ class TestTourOptOut:
 def _tour_optout_dual_app():
     """Stand-ins for the welcome tour's own checkbox and the 🧭 Tutorials
     picker's Welcome tour card checkbox — the two real surfaces sharing this
-    preference (UX-110)."""
+    preference."""
     import streamlit as st
 
     from scanpath_studio.tour import (
@@ -265,10 +265,9 @@ def _tour_optout_dual_app():
 
 
 class TestWelcomeTourOptOutSync:
-    """UX-110: the welcome tour's own checkbox and the picker card's copy of
-    it are two widgets sharing the ``tour_dont_show`` truth — ticking either
-    must show as ticked in the other, the same guarantee UX-110 gives the
-    per-tutorial checkboxes."""
+    """The welcome tour's own checkbox and the picker card's copy of it are two
+    widgets sharing the ``tour_dont_show`` truth — ticking either must show as
+    ticked in the other, the same guarantee the per-tutorial checkboxes have."""
 
     def test_both_default_off(self):
         at = AppTest.from_function(_tour_optout_dual_app)
@@ -299,7 +298,7 @@ class TestWelcomeTourOptOutSync:
 
 def test_welcome_tour_text_is_concise():
     """Every welcome/spotlight/wizard step body stays short (UI/UX: no walls of
-    text). Guards against the steps creeping back to multi-paragraph blurbs."""
+    text). Guards against the steps growing into multi-paragraph blurbs."""
     from scanpath_studio.tour import (
         _SPOTLIGHT_STEPS,
         _STEPS,
@@ -315,7 +314,7 @@ def test_welcome_tour_text_is_concise():
 
 
 # -----------------------------------------------------------------------------
-# Task-oriented tutorials (UX-40)
+# Task-oriented tutorials
 # -----------------------------------------------------------------------------
 
 
@@ -391,9 +390,8 @@ def _choose_help_entry(at, entry: str) -> None:
 def _tutorial_library_optout_app():
     """Mirrors app.main's ordering: serve the chooser early, stash its context late.
 
-    The chooser is a dialog off the ❓ Help nav entry (the menu bar made the old
-    nested ``🧭 Tutorials`` popover a popover-inside-a-popover), armed the same
-    way as the FAQ — see ``tour.maybe_show_tutorial_library``.
+    The chooser is a dialog off the ❓ Help nav entry (a ``🧭 Tutorials`` popover
+    there would be a popover-inside-a-popover), armed the same way as the FAQ — see ``tour.maybe_show_tutorial_library``.
     """
     import streamlit as st
 
@@ -466,8 +464,8 @@ class TestUseCaseTutorials:
         assert all(tutorial_availability(tutorial, ready)[0] for tutorial in TUTORIALS)
 
     def test_the_filter_is_named_when_it_is_why_a_tutorial_cannot_start(self):
-        """#374 F31: "need two readings with the same text id" was wrong when
-        the dataset had them and a filter hid them."""
+        """When the dataset has two readings with the same text id and a filter
+        hides them, the reason names the filter, not a missing pair."""
         import pandas as pd
 
         from scanpath_studio.tour import (
@@ -496,7 +494,7 @@ class TestUseCaseTutorials:
         assert filtered_reason(compare, narrowed) is None
 
     def test_navigation_opens_panels_and_exit_restores_the_start_location(self):
-        """UX-83: starting a tutorial navigates to its first step's view right
+        """Starting a tutorial navigates to its first step's view right
         away, instead of leaving the card on the page you were already on and
         offering a "Show me / Open this panel" button to get there."""
         from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
@@ -504,8 +502,8 @@ class TestUseCaseTutorials:
         at = AppTest.from_function(_use_case_tutorial_app).run()
         assert not at.exception, at.exception
         # "filter_annotate"'s first step is on Scanpath — the app started on
-        # Corpus Analysis (the fixture's seed), so UX-83 should have moved it
-        # already, with no click needed and no "Show me" button offered.
+        # Corpus Analysis (the fixture's seed), so starting it should have
+        # moved it already, with no click needed and no "Show me" button offered.
         assert at.session_state["main_nav"] == _VIEW_SCANPATH
         assert not [b for b in at.button if b.key == "tutorial_open_surface"]
         assert at.button(key="tutorial_next")
@@ -534,12 +532,12 @@ class TestUseCaseTutorials:
         assert [b.proto.url for b in at.link_button] == [tutorial.docs_url]
 
     def test_a_data_page_step_counts_as_open_on_the_data_page(self):
-        """UX-40: the surface check predated DATA-26's third top-level view.
+        """The surface check knows all three top-level views.
 
-        Anything that was not Corpus Analysis was treated as Scanpath, so a
-        ``view=_VIEW_DATA`` step reported "not open" *while the user stood on
-        the Data page* — the card offered to open the panel already on screen,
-        and withheld the spotlight that belonged on it.
+        Treating anything that is not Corpus Analysis as Scanpath would make a
+        ``view=_VIEW_DATA`` step report "not open" *while the user stands on
+        the Data page* — the card would offer to open the panel already on
+        screen, and withhold the spotlight that belongs on it.
         """
         at = AppTest.from_function(_surface_open_probe_app).run()
         assert not at.exception, at.exception
@@ -558,7 +556,7 @@ class TestUseCaseTutorials:
 
 
 # -----------------------------------------------------------------------------
-# FAQ (UX-15)
+# FAQ
 # -----------------------------------------------------------------------------
 
 
@@ -574,10 +572,10 @@ def _faq_app():
 
 
 class TestFaq:
-    """The in-app FAQ dialog (UX-15) and its links out to the docs site."""
+    """The in-app FAQ dialog and its links out to the docs site."""
 
     def test_help_entry_opens_a_dialog_with_every_item(self):
-        # PRE-21: the set is conditional — a gated feature's entry is only
+        # The set is conditional — a gated feature's entry is only
         # offered when that feature is. `faq_items()` is the resolved list.
         from scanpath_studio.tour import faq_items
 
@@ -620,7 +618,7 @@ class TestFaq:
             assert len(answer) <= 480, f"FAQ answer too long: {question!r}"
 
     def test_where_data_goes_says_only_what_applies_here(self, monkeypatch):
-        """#374 F22: the hosted demo's FAQ must not claim uploads stay local."""
+        """The hosted demo's FAQ must not claim uploads stay local."""
         from scanpath_studio import persistence, tour
 
         def answer() -> str:
@@ -640,9 +638,9 @@ class TestFaq:
         assert "recovery copy" in local and "server" not in local
 
     def test_no_entry_is_for_someone_editing_the_code(self):
-        """BUG-85: docs/faq.md dropped "I edited the code and nothing changed?"
-        for the beta — it is contributor material, and CONTRIBUTING.md keeps
-        it — and this dialog follows that page."""
+        """The FAQ has no "I edited the code and nothing changed?": it is
+        contributor material, which CONTRIBUTING.md keeps, and this dialog
+        follows docs/faq.md."""
         from scanpath_studio.tour import faq_items
 
         text = " ".join(f"{question} {answer}" for question, answer in faq_items())
@@ -650,7 +648,7 @@ class TestFaq:
         assert "Restart the server" not in text
 
     def test_the_export_answer_works_in_the_desktop_app_too(self):
-        """BUG-85: the desktop bundle has no `plotly_get_chrome`, and no Python to
+        """The desktop bundle has no `plotly_get_chrome`, and no Python to
         run it from; what it can use is an installed Chrome, Chromium or Edge."""
         from scanpath_studio.tour import faq_items
 
@@ -664,7 +662,7 @@ def _keys_built_inside_a_popover() -> set[str]:
     """Container keys created off a ``st.popover(...)`` handle.
 
     A closed popover renders no body, so these keys are absent from the DOM
-    until their trigger is clicked (UX-101). Found by reading the source rather
+    until their trigger is clicked. Found by reading the source rather
     than listed by hand: the point is to notice the *next* control that moves
     into a popover.
     """
@@ -707,8 +705,8 @@ def _keys_built_inside_a_popover() -> set[str]:
 class TestSpotlightSelectorsResolve:
     """Every spotlight step must point at a container that actually exists.
 
-    ``scanpath_studio/CLAUDE.md`` says to keep ``_SPOTLIGHT_STEPS`` in sync with
-    the ``tour_grp_*`` wrappers, but nothing enforced it: a renamed or removed
+    ``AGENTS.md`` says to keep ``_SPOTLIGHT_STEPS`` in sync with the
+    ``tour_grp_*`` wrappers, and this enforces it: a renamed or removed
     container leaves the step silently un-highlighted — the card still advances,
     it just points at nothing, which no other test would notice.
     """
@@ -770,9 +768,9 @@ class TestSpotlightSelectorsResolve:
         )
 
     def test_every_step_names_a_real_subtab(self):
-        """BUG-77: two steps wrote ``subtab="Export"`` while the tab is labelled
-        "📤 Export", so no tab opened, the card claimed it had, and the spotlight
-        aimed at a panel that never rendered. The selector test above cannot see
+        """A step's ``subtab`` is the tab's real label ("📤 Export", not
+        "Export"), or no tab opens, the card claims it has, and the spotlight
+        aims at a panel that never renders. The selector test above cannot see
         this — the container exists, just never on screen."""
         from scanpath_studio import tabs
         from scanpath_studio.tour import TUTORIALS
@@ -792,8 +790,9 @@ class TestSpotlightSelectorsResolve:
         )
 
     def test_the_data_page_draws_the_datasets_table_the_tutorial_points_at(self):
-        """BUG-77: "Load and verify a dataset" opened the Data page and outlined
-        the data-source picker — which only Scanpath and Corpus Analysis draw."""
+        """The "Load and verify a dataset" tutorial outlines what the Data page
+        draws, not the data-source picker — which only Scanpath and Corpus
+        Analysis draw."""
         from pathlib import Path
 
         from streamlit.testing.v1 import AppTest
@@ -814,10 +813,10 @@ class TestSpotlightSelectorsResolve:
         assert "tutorial_available_datasets" in set(keys(at.main))
 
     def test_no_two_steps_spotlight_the_same_area(self):
-        """UX-34: two steps sharing a selector lit up both areas at once.
+        """Two steps sharing a selector would light up both areas at once.
 
-        The "narrow the pool" and "pick a trial" steps both targeted the wrapper
-        around *both* rows, so each highlighted the other's subject too.
+        Were the "narrow the pool" and "pick a trial" steps both to target a
+        wrapper around *both* rows, each would highlight the other's subject.
         """
         from scanpath_studio.tour import _SPOTLIGHT_STEPS
 
@@ -826,13 +825,12 @@ class TestSpotlightSelectorsResolve:
         assert not duplicates, f"steps share a spotlight target: {duplicates}"
 
     def test_a_target_inside_a_popover_says_so(self):
-        """UX-101: a closed Streamlit popover renders **no body**.
+        """A closed Streamlit popover renders **no body**.
 
-        UX-64 folded the trial filters into one funnel, which put
-        ``tour_grp_narrow_by`` inside a popover — and the two steps aimed at it
-        went on pointing at an element that only exists while the funnel is
-        open. The spotlight's find-and-scroll retried for 30 s and then returned
-        silently: no highlight, no error, and the card still advanced.
+        The trial filters sit in one funnel popover, so ``tour_grp_narrow_by``
+        only exists while the funnel is open. A step aimed at it without
+        opening it makes the spotlight's find-and-scroll retry for 30 s and then
+        return silently: no highlight, no error, and the card still advances.
 
         So every step whose target is built off a popover handle has to declare
         the trigger that opens it. The containment is read out of the source,
@@ -898,7 +896,7 @@ class TestSpotlightSelectorsResolve:
 
     def test_the_card_rises_above_the_panel_it_opened(self):
         """Streamlit draws a popover's panel above the card, so an opened funnel
-        covered the card's left edge and cut the first word off every line
+        covers the card's left edge and cuts the first word off every line
         (measured live at 1440x900). The card outranks it on those steps only."""
         from scanpath_studio.tour import _CARD_OVER_POPOVER_CSS
 
@@ -920,16 +918,15 @@ class TestSpotlightSelectorsResolve:
         assert FUNNEL_TRIGGER in script
 
     def test_data_source_sits_outside_the_filter_spotlight(self):
-        """UX-42: adjacent targets must not be nested inside one highlight."""
+        """Adjacent targets must not be nested inside one highlight."""
         import inspect
 
         from scanpath_studio.tabs import render_single_trial_tab
 
         source = inspect.getsource(render_single_trial_tab)
-        # UX-64 collapsed the Narrow-by row into the picker row: the source
-        # picker is that row's lead cell and the filters moved inside a 🔎
-        # popover. The invariant is unchanged — the two spotlight targets are
-        # *siblings*, never one inside the other. `tour_grp_data_source` is made
+        # The source picker is the picker row's lead cell and the filters sit
+        # inside a 🔎 popover. The two spotlight targets are *siblings*, never
+        # one inside the other. `tour_grp_data_source` is made
         # by `app.render_data_source_picker` (a second one here would be a
         # duplicate key), so what this pins is that the dataset cell gets the
         # renderer straight and the filter group is built somewhere else.
@@ -939,7 +936,7 @@ class TestSpotlightSelectorsResolve:
         assert "leading_renderer=_render_dataset_cell" in source
 
     def test_filter_group_has_a_dataset_divider(self):
-        """UX-42: the sibling groups retain a visible boundary between them."""
+        """The sibling groups retain a visible boundary between them."""
         from scanpath_studio.styles import get_app_css
 
         css = get_app_css()
@@ -962,8 +959,8 @@ class TestSpotlightSelectorsResolve:
     def test_page_top_inset_clears_the_fixed_header(self):
         """The first Scanpath row must sit fully below Streamlit's fixed chrome.
 
-        Asserted per declaration rather than on one packed line: #UX-99 added
-        the side gutters to the same rule, so the block is now multi-line. The
+        Asserted per declaration rather than on one packed line: the same rule
+        sets the side gutters, so the block is multi-line. The
         bottom gap is the theme's own `paddingBottom` (Streamlit 1.66).
         """
         from scanpath_studio.constants import APP_THEME
@@ -994,7 +991,7 @@ class TestSpotlightSelectorsResolve:
         assert '[class*="_confirm"] button {' not in css
 
     def test_subtabs_stay_in_the_plot_column(self):
-        """UX-173: a tall rail cannot push the panels away from a short plot."""
+        """A tall rail cannot push the panels away from a short plot."""
         import inspect
 
         from scanpath_studio.tabs import render_single_trial_tab
@@ -1006,7 +1003,7 @@ class TestSpotlightSelectorsResolve:
         assert "with subtabs_slot:" in source
 
     def test_visualization_rail_uses_page_flow(self):
-        """UX-173: controls are neither capped at plot height nor faded out."""
+        """Controls are neither capped at plot height nor faded out."""
         from scanpath_studio.styles import get_app_css
 
         css = get_app_css()
@@ -1018,7 +1015,7 @@ class TestSpotlightSelectorsResolve:
         assert '[data-testid="stColumn"]:has(.st-key-scanpath_rail)' not in css
 
     def test_plot_rail_uses_one_compact_control_header(self):
-        """UX-44: modes and visualization settings share one rail heading."""
+        """Modes and visualization settings share one rail heading."""
         import inspect
 
         from scanpath_studio import controls
@@ -1033,21 +1030,20 @@ class TestSpotlightSelectorsResolve:
         assert 'st.markdown("## 🎛️ View modes")' not in tab_source
         assert 'st.markdown("## 🎨 Visualization")' not in tab_source
         assert "sps-control-label" in control_source
-        # VIZ-39: the 2×2 grid of built-in designs is unchanged — 🛠️ Custom is
-        # still the unnamed "your last hand-tuning" slot — and the user's own
-        # named designs are the library beneath it.
+        # The 2×2 grid of built-in designs — 🛠️ Custom is the unnamed "your
+        # last hand-tuning" slot — and the user's own named designs are the
+        # library beneath it.
         assert 'key="viz_view_custom"' in control_source
         assert "_render_saved_designs(viz)" in control_source
-        # UX-80: a section is a `[toggle | ▾]` row, not an expander.
+        # A section is a `[toggle | ▾]` row, not an expander.
         assert "_rail_section(" in control_source
         assert 'viz.expander("↗️ Saccades"' not in control_source
 
     def test_plot_rail_merges_figure_and_canvas_without_nested_expander(self):
-        """UX-44: four lower groups become three without nesting expanders.
+        """Figure and canvas share one group, without nesting expanders.
 
-        UX-80/81 kept the merge and changed the container: 📐 Figure & canvas is
-        a `[name | ▾]` row whose popover holds the screen half, the axes and the
-        labels — and the *text* half left it for 📄 Stimulus → Text.
+        📐 Figure & canvas is a `[name | ▾]` row whose popover holds the screen
+        half, the axes and the labels; the *text* half is in 📄 Stimulus → Text.
         """
         import inspect
 
@@ -1057,9 +1053,10 @@ class TestSpotlightSelectorsResolve:
         canvas_source = inspect.getsource(app.render_canvas_controls)
 
         assert "f\"{ICONS['figure']} **Figure & canvas**\"" in control_source
-        # UX-163: the typography draws always, greyed while Text is off.
+        # The typography draws always, greyed while Text is off.
         assert "text_disabled=not show_labels" in control_source
-        assert "display = host if bare else host.expander" in canvas_source
+        # Drawn inside a popover, so it must never open an expander of its own.
+        assert ".expander(" not in canvas_source
         assert 'viz.expander("🖥️ Canvas & text"' not in control_source
         assert 'viz.expander("📐 Figure & axes"' not in control_source
 
@@ -1075,12 +1072,11 @@ class TestSpotlightSelectorsResolve:
         assert "canvas_renderer(target)" not in source
 
     def test_plot_rail_uses_contextual_style_filter_labels(self):
-        """UX-44: repeated per-layer labels stay terse.
+        """Repeated per-layer labels stay terse.
 
-        UX-72 moved 🧹 Filter out of the layers into one section for the whole
-        figure, and UX-80 made every section a `[toggle | ▾]` row — so a layer's
-        style controls *are* its section's popover body and no longer need a
-        label of their own. What is still pinned is that the labels are the
+        🧹 Filter is one section for the whole figure, and every section is a
+        `[toggle | ▾]` row — so a layer's style controls *are* its section's
+        popover body and need no label of their own. What is pinned is that the labels are the
         section names, terse, and that Reset is not one of them.
         """
         import inspect
@@ -1094,18 +1090,17 @@ class TestSpotlightSelectorsResolve:
         assert "Reset settings" not in control_source
 
     def test_reset_closes_the_rail_below_every_control_it_resets(self):
-        """BUG-24: Reset is the last thing in the rail, at full width.
+        """Reset is the last thing in the rail, at full width.
 
-        It used to share the heading row as a compact pill. The rail is only
-        ~150px wide inside at ordinary desktop widths, which is not enough for
-        both, so a container query stacked the two below 240px — and that rule
-        flipped ``flex-direction`` without clearing Streamlit's
-        ``flex-wrap: wrap``, turning the header into a *column-wrapping* flex
-        container whose second track landed ~100px right of the rail, where its
-        own ``overflow`` clipped it. Reset was invisible unless the browser was
-        zoomed out far enough to reach the side-by-side branch.
+        The rail is only ~150px wide inside at ordinary desktop widths, not
+        enough for the heading and a compact Reset pill side by side. A
+        container query that stacks the two by flipping ``flex-direction``
+        without clearing Streamlit's ``flex-wrap: wrap`` turns the header into a
+        *column-wrapping* flex container whose second track lands ~100px right
+        of the rail, where its own ``overflow`` clips it — Reset is then
+        invisible unless the browser is zoomed far out.
 
-        Two things keep that from coming back: the heading row holds a single
+        Two things keep that from happening: the heading row holds a single
         element, and the reset renders after ``render_plot_controls`` (creation
         order is what puts it at the foot of the rail's scroll area).
         """
@@ -1127,14 +1122,14 @@ class TestSpotlightSelectorsResolve:
             "render_viz_reset(st)"
         )
 
-        # Full width, one label: the compact pill was for the shared row only.
+        # Full width, one label, no compact pill.
         reset_source = inspect.getsource(controls.render_viz_reset)
         assert 'width="stretch"' in reset_source
         assert "compact" not in reset_source.split('"""')[0]
 
-        # The rule that hid it re-stacked a row inside a rail container query.
-        # UX-194's preset tiers query the same container (one at 240px) but
-        # only resize their buttons; none of them may change a row's direction.
+        # No rail container query may re-stack a row: the preset tiers query
+        # the same container (one at 240px) but only resize their buttons;
+        # none of them may change a row's direction.
         css = get_app_css()
         for block in css.split("@container sps-rail")[1:]:
             body = block[: block.find("\n    }")]
@@ -1143,14 +1138,14 @@ class TestSpotlightSelectorsResolve:
 
 
 def test_spotlight_helpers_are_plain_functions_that_return_their_css():
-    """Regression: the DATA-22 factoring must not steal `render_spotlight_tour`'s
+    """The spotlight helpers must not steal `render_spotlight_tour`'s
     `@st.fragment`.
 
     Inserting `_highlight_css` / `_scroll_into_view_script` directly above the
-    decorated function once left the decorator attached to the *helper* — which
-    made it return `None` (a fragment has no return value), silently dropping the
-    highlight outline from both the welcome tour and the setup guide, and cost
-    the tour its fragment so every Back/Next waited on a full app rerun.
+    decorated function leaves the decorator attached to the *helper* — which
+    makes it return `None` (a fragment has no return value), silently dropping
+    the highlight outline from both the welcome tour and the setup guide, and
+    costs the tour its fragment so every Back/Next waits on a full app rerun.
     """
     import inspect
 
@@ -1161,7 +1156,7 @@ def test_spotlight_helpers_are_plain_functions_that_return_their_css():
             f"{helper.__name__} must stay an undecorated pure helper"
         )
 
-    css = tour._highlight_css(".st-key-wiz_open_setup", "#1f77b4")
+    css = tour._highlight_css(".st-key-wiz_part_setup", "#1f77b4")
     assert "tour-pulse" in css and "outline: 3px solid #1f77b4" in css
     assert tour._highlight_css("", "#1f77b4") == ""
 
@@ -1172,7 +1167,7 @@ def test_spotlight_helpers_are_plain_functions_that_return_their_css():
 
 
 def test_wizard_guide_steps_are_anchored_to_real_wizard_steps():
-    """DATA-22 §4: the guide drives the wizard instead of narrating beside it."""
+    """The guide drives the wizard instead of narrating beside it."""
     from scanpath_studio import wizard_shell
     from scanpath_studio.tour import _WIZARD_GUIDE_STEPS
 
@@ -1183,14 +1178,14 @@ def test_wizard_guide_steps_are_anchored_to_real_wizard_steps():
     )
     for step in anchored:
         assert step["step_id"] in known
-        # UX-53 r8: the parts are linear labels, not keyed expanders, so the
+        # The parts are linear labels, not keyed expanders, so the
         # selector comes from their own container key.
         assert step["selector"] == f".st-key-{wizard_shell.part_key(step['step_id'])}"
 
 
 def test_the_nav_step_draws_one_ring_not_a_bracket_per_link():
-    """The nav selector matches one container per link: outlining each drew a
-    row of separate brackets. It outlines one ring around all of them, which
+    """The nav selector matches one container per link: outlining each would
+    draw a row of separate brackets. It outlines one ring around all of them, which
     the ring script places and removes once the step's CSS no longer styles it
     or the tour card is gone, so it cannot outlive the tour."""
     from scanpath_studio import tour
@@ -1209,9 +1204,9 @@ def test_the_nav_step_draws_one_ring_not_a_bracket_per_link():
 
 def test_the_setup_guide_counts_the_parts_it_names(monkeypatch):
     """Each part card is headed "1 ·", "2 ·", "3 ·" — so the guide counts
-    parts, not cards ("Step 3 of 4" under "2 · Upload data tables"
-    contradicted both). The fourth, Stimulus images, is a card only where the
-    add screen draws that part (#417), and the overview names no count, which
+    parts, not cards ("Step 3 of 4" under "2 · Upload data tables" would
+    contradict both). The fourth, Stimulus images, is a card only where the
+    add screen draws that part, and the overview names no count, which
     would be wrong on one install or the other."""
     from scanpath_studio import tour
 
@@ -1262,7 +1257,7 @@ def test_the_setup_guide_progress_names_the_save_step():
 
 
 class TestEveryGuideCardFolds:
-    """2026-10-09: the welcome tour, a tutorial and the setup guide each fold
+    """The welcome tour, a tutorial and the setup guide each fold
     (—) to a tab naming where they are, open again where they were, and are
     dragged by their title (`tour._GUIDE_DRAG_SCRIPT`)."""
 

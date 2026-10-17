@@ -40,15 +40,15 @@ authors:
     affiliation: "Data and Decision Sciences, Technion – Israel Institute of Technology"
     orcid: "https://orcid.org/0000-0003-4474-1727"
 # NOTE: a paper is in preparation.
-# Zenodo *concept* DOI (ENG-75): it resolves to the latest archived release;
+# Zenodo *concept* DOI: it resolves to the latest archived release;
 # each release also gets its own version DOI on that record. Zenodo's
 # CITATION.cff reader ignores this field, so it cannot upset the archiving.
 doi: "10.5281/zenodo.22933884"
 repository-code: "https://github.com/lacclab/scanpath-studio"
 url: "https://scanpath-studio.streamlit.app"
 license: MIT
-version: 0.38.4
-date-released: "2026-10-16"
+version: 0.39.0
+date-released: "2026-10-17"
 keywords:
   - eye-tracking
   - eye movements

@@ -1,4 +1,4 @@
-"""AN-32 — Corpus Analysis shows the reading measures a dataset brings.
+"""Corpus Analysis shows the reading measures a dataset brings.
 
 The page computes no FFD, TFD, … of its own. Each measure is an optional field
 of the AOI table, mapped on ➕ Add dataset and ✏️ Edit dataset (two lines under
@@ -86,8 +86,8 @@ class TestTheMapping:
         frame = pd.DataFrame(
             columns=["participant_id", "trial_id", "total_fixation_duration_ms"]
         )
-        # A schema saved before AN-32 names no measure key; the column is
-        # still what the dataset brought.
+        # An older schema names no measure key; the column is still what the
+        # dataset brought.
         proposed = _remap_proposed(
             {"trial": "trial_id"}, frame.columns, _WORD_REMAP_CANON
         )
@@ -141,15 +141,15 @@ class TestThePages:
         assert not at.exception, at.exception
         picker = next(s for s in at.selectbox if s.key == "ptext_measure")
         # The demo's report has no single-fixation or landing measures, and
-        # the page no longer derives them.
+        # the page does not derive them.
         labels = " ".join(picker.options)
         assert "Total fixation duration" in labels
         assert "Single-fixation" not in labels and "landing" not in labels.lower()
 
 
 class TestTheKeepPicker:
-    """AN-32 follow-up: a measure mapped on the *Reading measures* lines was
-    also offered — and pre-kept — as an extra field under its canonical name."""
+    """A measure mapped on the *Reading measures* lines is not also offered —
+    or pre-kept — as an extra field under its canonical name."""
 
     def test_a_mapped_measure_is_not_an_extra_field(self):
         words, _ = data.load_sample_data()
@@ -193,8 +193,8 @@ class TestTheKeepPicker:
             assert "word_length" in kept
 
 
-class TestFromTheReview:
-    """Three things the review of #259 found."""
+class TestProposalsFindMeasuresAndConditions:
+    """Measures and conditions a schema proposal must still find."""
 
     def test_a_table_the_app_wrote_keeps_its_measures(self):
         # A normalized frame (an exported words.csv) carries the canonical
@@ -224,7 +224,7 @@ class TestFromTheReview:
 
 
 class TestSkippedWordsAreLeftOut:
-    """#374 F1 — BUG-63's rule on the imported path: an IA report's 0 ms FFD /
+    """The never-fixated rule on the imported path: an IA report's 0 ms FFD /
     FPRT / RPD / single-fixation duration on a word nobody fixated is blank,
     not a 0 ms fixation; its total fixation duration stays 0."""
 
@@ -269,7 +269,7 @@ class TestSkippedWordsAreLeftOut:
 
 
 def test_an_imported_blank_second_pass_is_zero_where_the_count_is_known():
-    """#374: second pass is "fewer than two runs ⇒ 0" on the imported path too."""
+    """Second pass is "fewer than two runs ⇒ 0" on the imported path too."""
     import pandas as pd
 
     from scanpath_studio.data import _blank_unfixated_measures

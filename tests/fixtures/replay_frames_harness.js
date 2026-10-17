@@ -1,4 +1,4 @@
-// PERF-17: run the script `plots.replay_page` hands a replay's page against a
+// Run the script `plots.replay_page` hands a replay's page against a
 // fake Plotly, and print the frames it gives `Plotly.addFrames` as JSON.
 //
 //   node replay_frames_harness.js config.json

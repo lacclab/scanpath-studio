@@ -1,4 +1,4 @@
-"""The build version (#139): which build of Scanpath Studio this is."""
+"""The build version: which build of Scanpath Studio this is."""
 
 from __future__ import annotations
 

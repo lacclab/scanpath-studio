@@ -1,4 +1,4 @@
-"""UX-10: ordering the trial pool by reader / text / condition / computed stats."""
+"""Ordering the trial pool by reader / text / condition / computed stats."""
 
 from __future__ import annotations
 
@@ -145,9 +145,9 @@ class TestTrialSortKeys:
         assert "duration_ms" not in keys
 
     def test_participant_scope_prevents_repeated_trial_ids_from_colliding(self):
-        # This mirrors the report: the picker has already been narrowed to p1,
-        # while its source tables still contain another participant using the
-        # same plain trial labels with different metadata.
+        # The picker has already been narrowed to p1, while its source tables
+        # still contain another participant using the same plain trial labels
+        # with different metadata.
         combos = pd.DataFrame(
             {
                 "participant_id": ["p1", "p1"],
@@ -259,7 +259,7 @@ class TestTrialSortKeys:
         assert "notes" not in keys
 
     def test_readers_who_share_a_trial_id_keep_their_own_values(self):
-        """#412: one key per reading, so two readers' trials of one id are
+        """One key per reading, so two readers' trials of one id are
         neither counted as one trial nor dropped for disagreeing."""
         combos = pd.DataFrame(
             {
@@ -396,7 +396,7 @@ def _participant_scoped_metadata_picker_app():
 
 
 class TestSortValueIsVisibleInThePicker:
-    """UX-10 follow-up: sorting with the key hidden just looks shuffled."""
+    """Sorting with the key hidden just looks shuffled."""
 
     def _picker(self, at):
         return next(s for s in at.selectbox if s.label.startswith("Select trial"))
@@ -474,7 +474,7 @@ def _numeric_ids_picker_app():
 
 
 class TestDataOrderIsTheDefault:
-    """UX-171: the picker walks trials in the order the data has them; sorting by
+    """The picker walks trials in the order the data has them; sorting by
     Trial ID is a choice in ⇅, not the default."""
 
     def _picker(self, at):

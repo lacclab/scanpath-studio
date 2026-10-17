@@ -71,14 +71,13 @@ def build_plot_config(
     highlighting, canvas, screen geometry, axes, comparison styling, trial
     selection) plus provenance (app version, export date, data source).
 
-    **UX-179 (schema 4) took everything else out.** The file used to be the
-    💾 Session dialog's whole-session backup and also carried the annotations,
-    the column mapping and the three metadata tables. Each now has its own
-    file where it is edited — 🗂️ Data → Annotations → *Export*, ✏️ Edit dataset
-    → *Download setup file*, and the tables you attached — so this one describes a
-    figure and nothing else."""
-    # ENG-11: PLOT_CONFIG_SCHEMA is the single source of truth for the version;
-    # bump it (+ register a migration) in url_state when this layout changes.
+    The file describes a figure and nothing else. The annotations, the column
+    mapping and the metadata tables each have their own file where they are
+    edited — 🗂️ Data → Annotations → *Export*, ✏️ Edit dataset → *Download setup
+    file*, and the tables you attached. (Files older than schema 4 carried
+    them too; the reader ignores them.)"""
+    # PLOT_CONFIG_SCHEMA is the single source of truth for the version; bump
+    # it (+ register a migration) in url_state when this layout changes.
     from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
 
     # Schema 6: the *requested* mode (the switches), as a link records it.
@@ -103,7 +102,7 @@ def build_plot_config(
     )
 
     return {
-        # Schema 4 (UX-179) = the figure only; older files still restore
+        # Schema 4 and later = the figure only; older files still restore
         # through the same reader, which ignores what they carry beyond it.
         "schema": PLOT_CONFIG_SCHEMA,
         "app": {"name": "Scanpath Studio", "version": app_version},
@@ -137,11 +136,11 @@ def build_plot_config(
             "use_stimulus_font_pt": bool(
                 state.get("global_use_stimulus_font_pt", False)
             ),
-            # DATA-22 §7 surface 3: how each group came to be known. Additive, so
-            # per ENG-11 this is a documented no-op migration and
-            # PLOT_CONFIG_SCHEMA stays put. Absent when the active source never
-            # declared a setup — an omitted key reads as "unknown", which is
-            # true; writing "assumed" there would invent a claim.
+            # How each group came to be known. Additive, so it needs no
+            # migration and PLOT_CONFIG_SCHEMA stays put. Absent when the active
+            # source never declared a setup — an omitted key reads as
+            # "unknown", which is true; writing "assumed" there would invent a
+            # claim.
             **(setup_provenance or {}),
         },
         "axes": {
@@ -154,7 +153,7 @@ def build_plot_config(
             "coordinate_grid_spacing": float(
                 state.get("global_coordinate_grid_spacing", 100.0)
             ),
-            # #422: Crop to data's margin (applies while cropping).
+            # Crop to data's margin (applies while cropping).
             "crop_margin_auto": bool(state.get("global_crop_margin_auto", True)),
             "crop_margin_px": float(
                 state.get("global_crop_margin_px", DEFAULT_CROP_MARGIN_PX)
@@ -163,7 +162,7 @@ def build_plot_config(
         "layers": {
             "words": figure_settings["show_words"],
             "word_labels": figure_settings["show_word_labels"],
-            # UX-128: the 📄 Stimulus master switch — like the other section
+            # The 📄 Stimulus master switch — like the other section
             # switches (fixations/saccades/heatmap/raw_gaze) this is the raw
             # widget value, not something `_collect_viz_settings` gates.
             "stimulus": bool(state.get("global_show_stimulus", True)),
@@ -172,13 +171,13 @@ def build_plot_config(
             "saccades": figure_settings["show_saccades"],
             "saccade_arrows": figure_settings.get("show_saccade_arrows", False),
             "heatmap": figure_settings["show_heatmap"],
-            # BUG-72: the switch, not the figure's *effective* raw gaze (switch
-            # AND this trial has samples) — saving on a trial without raw gaze
-            # used to record the layer as off.
+            # The switch, not the figure's *effective* raw gaze (switch AND
+            # this trial has samples), so saving on a trial without raw gaze
+            # still records the layer as on.
             "raw_gaze": bool(viz_settings.get("show_raw_gaze", False)),
             "stimulus_image": viz_settings.get("show_stimulus_image", False),
             "full_monitor": figure_settings.get("fit_to_monitor", True),
-            # VIZ-10: autoplay the animated replay on load.
+            # Autoplay the animated replay on load.
             "autoplay": bool(viz_settings.get("anim_autoplay", True)),
         },
         "illustration": {
@@ -199,15 +198,15 @@ def build_plot_config(
                 state.get("global_preproc_blink_adjacent", True)
             ),
         },
-        # VIZ-11 follow-up: the animation frame grid, so a restored config
-        # reproduces the same smoothness / export size.
+        # The animation frame grid, so a restored config reproduces the same
+        # smoothness / export size.
         "animation": {
             "grid_step_ms": int(viz_settings.get("anim_grid_step_ms", 100) or 100),
             "max_frames": int(viz_settings.get("anim_max_frames", 360) or 360),
-            # BUG-72: the replay speed — a non-1× speed is an Illustration.
+            # The replay speed — a non-1× speed is an Illustration.
             "playback_speed": float(state.get(SINGLE_PLAYBACK_SPEED, 1.0) or 1.0),
         },
-        # #374 F28: Export → Current figure's print size (a blank width is the
+        # Export → Current figure's print size (a blank width is the
         # screen-size PNG).
         "export": (print_size or {}),
         "coloring": {
@@ -246,7 +245,7 @@ def build_plot_config(
                 viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH)
             ),
             "saccade_opacity": float(viz_settings.get("saccade_opacity", 1.0)),
-            # VIZ-8: colour-by-reading-type mode + per-class palette + legend.
+            # Colour-by-reading-type mode + per-class palette + legend.
             "saccade_color_mode": viz_settings.get("saccade_color_mode", "Uniform"),
             "saccade_type_legend": bool(viz_settings.get("saccade_type_legend", True)),
             "show_color_legend": bool(viz_settings.get("show_color_legend", True)),
@@ -256,11 +255,11 @@ def build_plot_config(
             "saccade_class_colors": dict(
                 viz_settings.get("saccade_class_colors") or {}
             ),
-            # VIZ-31: the reading-class filter (which classes are drawn at all).
+            # The reading-class filter (which classes are drawn at all).
             "saccade_classes": list(
                 viz_settings.get("saccade_classes") or SACCADE_CLASS_ORDER
             ),
-            # VIZ-9: linear-reading mode (arced saccades + #422's snap to line).
+            # Linear-reading mode (arced saccades + snap to line).
             "saccade_render_mode": viz_settings.get("saccade_render_mode", "Straight"),
             "fixation_snap_to_line": bool(
                 viz_settings.get("fixation_snap_to_line", False)
@@ -268,15 +267,15 @@ def build_plot_config(
             "fixation_snap_position": float(
                 viz_settings.get("fixation_snap_position", DEFAULT_SNAP_POSITION)
             ),
-            # PRE-3 drift correction (ENG-23): saved as the picker's own
-            # spelling ("Off" or a title-cased algorithm) so it restores 1:1.
+            # Drift correction: saved as the picker's own spelling ("Off" or
+            # a title-cased algorithm) so it restores 1:1.
             "drift_correction": str(viz_settings.get("align_algorithm", "Off")),
             "drift_connectors": bool(viz_settings.get("align_connectors", False)),
             "hollow_fixations": bool(viz_settings.get("hollow_fixations", False)),
             "fixation_opacity": float(viz_settings.get("fixation_opacity", 1.0)),
-            # VIZ-17 uniform fixation colour · VIZ-15 marker shape · VIZ-18 palette
-            # (the palette's colours are already in the individual keys; the name
-            # rides along so the picker restores onto the right entry).
+            # Uniform fixation colour · marker shape · palette (the palette's
+            # colours are already in the individual keys; the name rides along
+            # so the picker restores onto the right entry).
             "fixation_color": viz_settings.get(
                 "fixation_color", DEFAULT_FIXATION_COLOR
             ),
@@ -284,7 +283,7 @@ def build_plot_config(
                 "fixation_symbol", DEFAULT_FIXATION_SYMBOL
             ),
             "palette": viz_settings.get("palette", DEFAULT_PALETTE),
-            # VIZ-4: image-stimulus opacity + manual alignment (dataset + uploads).
+            # Image-stimulus opacity + manual alignment (dataset + uploads).
             "stimulus_image_opacity": float(
                 viz_settings.get("stimulus_image_opacity", 1.0)
             ),
@@ -339,7 +338,7 @@ def build_plot_config(
                 viz_settings.get("fixation_hover_fields") or []
             ),
         },
-        # EXP-5: title/caption pattern, moved here from being Export-only.
+        # The figure's title and caption: switches and patterns.
         "labels": {
             "show_title": bool(state.get("global_show_title", False)),
             "show_caption": bool(state.get("global_show_caption", False)),
@@ -351,7 +350,7 @@ def build_plot_config(
                 "critical_span_style", "Mark text"
             ),
             "highlight_column": figure_settings.get("highlight_column", "is_in_aspan"),
-            # Fixation classification (PRE-2): short/long/out-of-bounds highlight or
+            # Fixation classification: short/long/out-of-bounds highlight or
             # discard, saved verbatim so it restores 1:1.
             "fixation_flags": figure_settings.get("fixation_flags"),
             "highlight_text_color": figure_settings.get(
@@ -360,8 +359,9 @@ def build_plot_config(
             "background_color": figure_settings.get("background_color"),
             "span_border_color": figure_settings.get("span_border_color", "#000000"),
         },
-        # #422: the design choices that used to be fixed, as the rail holds
-        # them (an Auto box stays ticked, its number kept) so they restore 1:1.
+        # The rail's finer design choices (`DESIGN_*_PARAMS`: outlines, arrow
+        # size, colour-bar size, title/caption fonts …), as the rail holds them
+        # (an Auto box stays ticked, its number kept) so they restore 1:1.
         "design": {
             param: state[key]
             for group in (
@@ -376,11 +376,11 @@ def build_plot_config(
         "raw_gaze": {
             "available": not trial_raw_gaze.empty,
             "points": len(trial_raw_gaze) if not trial_raw_gaze.empty else 0,
-            # VIZ-50: the dataset's samples are made up (the bundled demo's) —
+            # The dataset's samples are made up (the bundled demo's) —
             # provenance, like the two keys above, and not read back.
             "synthesized": raw_gaze_synthesized,
-            # VIZ-43: the layer's own style — the two keys above describe the
-            # trial the config was saved on and are not read back.
+            # The layer's own style — the keys above describe the trial the
+            # config was saved on and are not read back.
             "color": viz_settings.get("raw_gaze_color", "#888888"),
             "marker_size": float(viz_settings.get("raw_gaze_marker_size", 4.0)),
             "opacity": float(viz_settings.get("raw_gaze_opacity", 0.6)),
@@ -399,13 +399,13 @@ def build_plot_config(
         # Per-scanpath styling for the two-trial comparison (None when the caller
         # didn't collect it). Each entry holds raw widget values so it restores 1:1.
         "compare": compare_styles,
-        # CMP-11 — how the two scanpaths are arranged, and whose stimulus an
+        # How the two scanpaths are arranged, and whose stimulus an
         # overlay draws. Separate from `compare` above, which is a two-entry list
         # of per-scanpath *styling*; these describe the view itself.
         "compare_view": {
             "layout": state.get(SINGLE_COMPARE_LAYOUT, "Overlay"),
             "stimulus": state.get(SINGLE_COMPARE_STIMULUS, "Both"),
-            # BUG-72: the A/B legend, the one compare setting that is a switch.
+            # The A/B legend, the one compare setting that is a switch.
             "legend": bool(viz_settings.get("show_compare_legend", True)),
         },
     }

@@ -1,9 +1,9 @@
-"""DATA-2 display-geometry conversions.
+"""Display-geometry conversions.
 
-These three functions are small, but they are what turns the sidebar's monitor
-setup into the numbers everything else quotes: the DPI behind point-specified
+These three functions are small, but they are what turns the recording setup
+into the numbers everything else quotes: the DPI behind point-specified
 stimulus typography, and the pixels-per-degree behind saccade amplitudes and the
-PRE-* visual-angle columns. A silent factor-of-25.4 or degrees/radians slip here
+visual-angle columns. A silent factor-of-25.4 or degrees/radians slip here
 would show up as plausible-looking numbers in a paper, so the expected values are
 computed by hand rather than from the implementation.
 """
@@ -69,7 +69,7 @@ def test_nonsense_geometry_raises_instead_of_returning_infinity(func, args):
 
 
 # -----------------------------------------------------------------------------
-# DATA-22 / CMP-8 — the per-dataset SetupSnapshot and its provenance
+# The per-dataset SetupSnapshot and its provenance
 # -----------------------------------------------------------------------------
 
 
@@ -108,7 +108,7 @@ class TestSetupSnapshot:
         assert snapshot.stimulus_font_px(12.0) == pytest.approx(16.0)
 
     def test_a_skipped_geometry_hides_what_it_cannot_derive(self):
-        """The whole point of SKIPPED: no number is better than an invented one.
+        """What SKIPPED is for: no number is better than an invented one.
 
         px/degree and pt→px both need the physical width. Under a skipped
         geometry group they must be unavailable, not computed from the default
@@ -144,7 +144,7 @@ class TestSetupSnapshot:
 
 
 class TestProvenanceParam:
-    """The compact `setup_prov` share value (DATA-22 §7 surface 2)."""
+    """The compact `setup_prov` share value."""
 
     def test_round_trips(self):
         snapshot = SetupSnapshot(

@@ -1,9 +1,9 @@
 """One screen per scanpath in a comparison.
 
 Every screen of a multipart trial is its own coordinate space. A comparison
-that handed a whole parent trial to the builder drew every page in one
+that handed a whole parent trial to the builder would draw every page in one
 scanpath, with a saccade from the last fixation on page 1 to the first on
-page 2 that nobody made. Each side now resolves one screen in its own frames.
+page 2 that nobody made, so each side resolves one screen in its own frames.
 """
 
 from __future__ import annotations

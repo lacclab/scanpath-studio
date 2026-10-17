@@ -9,7 +9,7 @@ PoTeC (one reader x one long textbook text, loaded from a local clone).
 Times are the median of REPEATS runs on whatever machine this executes on;
 record the machine spec alongside the numbers.
 
-Run from the app repo:  cd app && uv run python paper/paper_timings.py
+Run from the repo root:  uv run python paper/paper_timings.py
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ import scanpath_studio as sps
 from scanpath_studio import data as _data
 
 REPEATS = 3
-POTEC_ROOT = Path("data/PoTeC")  # relative to the app repo
+POTEC_ROOT = Path("data/PoTeC")  # relative to the repo root
 
 
 def timed(fn):

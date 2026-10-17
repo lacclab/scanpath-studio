@@ -1,10 +1,10 @@
-"""#417 — each dataset's stimulus-image folder is its own, saved with it.
+"""Each dataset's stimulus-image folder is its own, saved with it.
 
-The folder and filename pattern used to be two session-wide text boxes on
-✏️ Edit dataset: they applied to whichever dataset was open, followed the user
-to the next one, and were gone after a restart. They are now stored per dataset
-(`constants.DATASET_STIMULUS_IMAGES_KEY`), asked for on the add screen too, and
-saved by the editor's ✅ Save changes like everything else on it.
+The folder and filename pattern are stored per dataset
+(`constants.DATASET_STIMULUS_IMAGES_KEY`), asked for on the add screen as well
+as on ✏️ Edit dataset, and saved by the editor's ✅ Save changes like everything
+else on it — so they never follow the user to another dataset, and they
+survive a restart.
 """
 
 from __future__ import annotations

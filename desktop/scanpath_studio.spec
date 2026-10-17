@@ -1,12 +1,13 @@
-# PyInstaller spec for the standalone desktop build (ENG-15, signed under ENG-21).
+# PyInstaller spec for the standalone desktop build.
 #
 # Build (from the repo root, in an env with the package + pyinstaller installed):
 #   pyinstaller --clean --noconfirm desktop/scanpath_studio.spec
 # Output: dist/ScanpathStudio/ on Linux/Windows; dist/ScanpathStudio.app on macOS
-# (onedir either way — the ENG-15 design note linked from desktop/README.md has
-# the onedir-vs-onefile rationale). Verify with desktop/smoke_test.py.
+# (onedir either way: it starts in seconds instead of unpacking a huge archive
+# on every launch, and trips antivirus heuristics far less than onefile).
+# Verify with desktop/smoke_test.py.
 #
-# Signing (macOS, ENG-21): set SCANPATH_CODESIGN_IDENTITY to a "Developer ID
+# Signing (macOS): set SCANPATH_CODESIGN_IDENTITY to a "Developer ID
 # Application: …" identity and PyInstaller signs every collected binary
 # inside-out with the hardened runtime, a secure timestamp and the entitlements.
 # Leave it unset — a fork, or any local build — and PyInstaller ad-hoc signs the
@@ -53,10 +54,10 @@ hiddenimports += collect_submodules("streamlit")
 for pkg in ("plotly", "streamlit_sortables", "kaleido", "imageio_ffmpeg"):
     datas += collect_data_files(pkg)
 # pandas imports its Excel engines by name at call time, which the analysis
-# cannot see: openpyxl reads .xlsx, xlrd legacy .xls (#DATA-53).
+# cannot see: openpyxl reads .xlsx, xlrd legacy .xls.
 hiddenimports += ["streamlit_sortables", "imageio_ffmpeg", "openpyxl", "xlrd"]
 
-# #139: the bundle reports the exact build it was made from. The spec runs in
+# The bundle reports the exact build it was made from. The spec runs in
 # the repository (CI checks it out with fetch-depth 0, so the tag is visible)
 # while `scanpath_studio` is imported from site-packages, so describe the
 # checkout explicitly and ship the answer as _build.json, which build_info
@@ -82,11 +83,11 @@ else:
 icon = [icon_path] if icon_path else None
 
 codesign_identity = os.environ.get("SCANPATH_CODESIGN_IDENTITY") or None
-# One key, com.apple.security.cs.allow-jit; why the usual others are omitted is in
-# plans/eng-21-signing-notarization.md → Entitlements. The plist carries no XML
-# comment on purpose: codesign parses it with AMFI's strict XML reader, which
-# rejects a "--" inside a comment that plutil accepts. Only a real identity
-# passes the file, so an unsigned build never exercises it.
+# One key, com.apple.security.cs.allow-jit (desktop/README.md says why the usual
+# others are omitted). The plist carries no XML comment on purpose: codesign
+# parses it with AMFI's strict XML reader, which rejects a "--" inside a comment
+# that plutil accepts. Only a real identity passes the file, so an unsigned
+# build never exercises it.
 entitlements_file = (
     os.path.join(SPECPATH, "entitlements.plist")  # noqa: F821
     if codesign_identity
@@ -116,12 +117,12 @@ exe = EXE(
     debug=False,
     strip=False,
     upx=False,
-    # Linux/Windows keep the console: server logs + errors stay visible (the
-    # ENG-15 decision). macOS cannot — inside a .app, Launch Services wires
+    # Linux/Windows keep the console: server logs + errors stay visible.
+    # macOS cannot — inside a .app, Launch Services wires
     # stdout/stderr to /dev/null in *both* modes, and console=True additionally
     # sets LSBackgroundOnly, which costs the Dock icon and Cmd-Tab and makes a
     # double-click look like nothing happened. So the .app is windowed and the
-    # launcher redirects its own output to ~/Library/Logs instead (ENG-21).
+    # launcher redirects its own output to ~/Library/Logs instead.
     console=not is_macos,
     icon=icon,
     codesign_identity=codesign_identity,

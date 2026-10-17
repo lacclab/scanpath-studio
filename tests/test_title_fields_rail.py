@@ -1,9 +1,9 @@
-"""#422 — the rail's *Available fields* are the ones the figure renders with.
+"""The rail's *Available fields* are the ones the figure renders with.
 
-The list, the pattern's validation and its preview were computed for a
-stand-in trial ("p01" · "t01") with no `combos` row, so the preview showed
-made-up ids and a field the figure itself accepts could be refused as unknown.
-They now come from `tabs._title_caption_fields` for the selected trial.
+The list, the pattern's validation and its preview come from
+`tabs._title_caption_fields` for the selected trial, never from a stand-in trial
+("p01" · "t01") with no `combos` row: that would show made-up ids in the
+preview and refuse, as unknown, a field the figure itself accepts.
 """
 
 from __future__ import annotations

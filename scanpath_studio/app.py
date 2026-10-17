@@ -254,6 +254,7 @@ from scanpath_studio.experimental_setup import (
     font_size_px,
     stimulus_font_css,
 )
+from scanpath_studio.feedback import maybe_show_feedback
 from scanpath_studio.fields import row_label
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.menu import (
@@ -1504,7 +1505,7 @@ Cross-check results before publishing.
 with the version above, your operating system, and how you run the app.
 
 {ICONS["question"]} Questions go to [Discussions → Q&A]({CITATION["questions_url"]}) ↗,
-and feature requests to [an issue]({CITATION["url"]}/issues) ↗.
+and feature requests to [an issue]({CITATION["feature_request_url"]}) ↗.
 """
     )
     # The Debug drawer opens from here, not from the ❓ Help menu.
@@ -9051,6 +9052,7 @@ def _run_app() -> None:
         # out the whole rerun.
         maybe_show_faq()
         maybe_show_about()
+        maybe_show_feedback()
         maybe_show_tutorial_library()
         # ❓ Help → About → Debug, served early like its siblings.
         maybe_show_debug()

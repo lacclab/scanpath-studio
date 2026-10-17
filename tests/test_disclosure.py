@@ -52,9 +52,15 @@ class TestTheNoteIsOnEverySurface:
         assert "feature request" in body or "request a feature" in body, path
 
     def test_the_in_app_note_links_issues_via_the_citation_metadata(self):
-        """Not a hard-coded URL — the repo link already lives in CITATION."""
+        """Not a hard-coded URL — the link lives in CITATION, and opens the
+        repository's feature-request template."""
+        from scanpath_studio.constants import CITATION
+
         body = _text("scanpath_studio/app.py")
-        assert 'CITATION["url"]}/issues' in body
+        assert 'CITATION["feature_request_url"]' in body
+        assert CITATION["feature_request_url"].startswith(
+            f"{CITATION['url']}/issues/new?template="
+        )
 
     def test_no_liability_disclaimer_language(self):
         """Deliberately not a warranty notice — MIT already carries that, and

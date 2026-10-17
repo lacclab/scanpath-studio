@@ -672,6 +672,10 @@ CITATION = {
     # Where a user asks, reports, and gets the desktop app.
     "questions_url": "https://github.com/lacclab/scanpath-studio/discussions/categories/q-a",
     "bug_report_url": "https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md",
+    "feature_request_url": (
+        "https://github.com/lacclab/scanpath-studio/issues/new?template=feature_request.md"
+    ),
+    "ideas_url": "https://github.com/lacclab/scanpath-studio/discussions/new?category=ideas",
     "desktop_url": "https://github.com/lacclab/scanpath-studio/releases/latest",
     "lab_url": "https://lacclab.github.io/",
     "corpus_note": (
@@ -1005,6 +1009,9 @@ ICONS: dict[str, str] = {
     "course": ":material/school:",
     "question": ":material/forum:",
     "bug": ":material/bug_report:",
+    "feedback": ":material/feedback:",
+    "feature_request": ":material/lightbulb:",
+    "comment": ":material/chat:",
     "desktop": ":material/computer:",
     # Plot rail: design presets, layer sections and figure groups.
     "preset_scanpath": ":material/timeline:",

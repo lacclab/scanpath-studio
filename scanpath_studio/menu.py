@@ -6,7 +6,7 @@ chrome and the main content gets the full page width.
 **The nav** (:func:`render_nav`) is Streamlit's own
 ``st.navigation(position="top")``: three **views** — 🗺️ Scanpath · 📊 Corpus
 Analysis · 🗂️ Data — and a ❓ Help section of **action** entries (Tutorials,
-FAQ, About; Debug opens from the foot of About). Selecting an action arms a dialog and bounces the router
+FAQ, About, Send feedback; Debug opens from the foot of About). Selecting an action arms a dialog and bounces the router
 straight back to the view you were on, so the modal opens over your work.
 
 Session-wide tools are not on the bar but where each is used: what the
@@ -66,6 +66,9 @@ _HELP_PAGES = {
     "help_tutorials": ("Tutorials", ICONS["tutorials"], "help-tutorials"),
     "help_faq": ("FAQ", ICONS["faq"], "help-faq"),
     "help_about": ("About", ICONS["about"], "help-about"),
+    # Last, where a help menu's *Send feedback* usually sits: it is where you
+    # go once the other three have not answered you.
+    "help_feedback": ("Send feedback", ICONS["feedback"], "help-feedback"),
     # Debug is not listed here: it is a developer tool, opened from a small
     # button at the foot of About (`app._about_dialog`).
 }
@@ -156,6 +159,10 @@ def _arm_help_action(entry: str) -> None:
         from scanpath_studio import app
 
         app._arm_about()
+    elif entry == "help_feedback":
+        from scanpath_studio import feedback
+
+        feedback._arm_feedback()
 
 
 def render_nav() -> str:

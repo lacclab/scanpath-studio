@@ -1171,9 +1171,6 @@ def _apply_url_preset() -> str | None:
         &show_heatmap=1
         ...etc — see _URL_PRESETS above
 
-    Side effect: when any colorscale is set via URL, ``global_advanced`` is
-    seeded too (a pinned key that no widget reads).
-
     External tools can deep-link into this app via the URL schema above to
     land on a specific trial with the reviewer's preferred viz settings.
     """
@@ -1305,11 +1302,6 @@ def _apply_url_preset() -> str | None:
         else:
             st.session_state.setdefault("global_show_title", both)
             st.session_state.setdefault("global_show_caption", both)
-
-    # A linked colorscale also seeds `global_advanced` — a key `session_keys`
-    # pins as link-seeded, though no widget reads it.
-    if "heatmap_colorscale" in qp or "fixation_colorscale" in qp:
-        st.session_state.setdefault("global_advanced", True)
 
     # Animate is a toggle on the Scanpath view, not a tab, so a legacy
     # `?tab=animation` deep link just pre-ticks it.

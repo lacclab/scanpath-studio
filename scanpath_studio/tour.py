@@ -1833,11 +1833,6 @@ def stash_tutorial_context(context: dict[str, object]) -> None:
 @guarded()
 def _tutorial_library_dialog() -> None:
     """The chooser: outcome, prerequisites, time, and progress per tutorial."""
-    from scanpath_studio.menu import close_open_popovers
-
-    # A popover's open state is client-side: close any left open, or it floats
-    # on top of the modal.
-    close_open_popovers()
     context = st.session_state.get("_tutorial_context") or {}
     st.markdown("**Choose a tutorial.**")
     st.caption(
@@ -2011,32 +2006,6 @@ def render_use_case_tutorial() -> None:
                 _finish_use_case(tutorial.id)
                 st.rerun()
 
-        # A popover's open state is client-side, so the server cannot close a
-        # chooser the Start button sat in. Close an expanded trigger labelled
-        # *Tutorials* if one appears later in this rerun, so it cannot sit over
-        # the menu while the task card is already active.
-        embed_html_iframe(
-            """<script>
-            (function () {
-                const doc = window.parent.document;
-                let tries = 0;
-                (function closeTutorialChooser() {
-                    const trigger = [...doc.querySelectorAll(
-                        'button[aria-expanded="true"]'
-                    )].find((button) =>
-                        (button.textContent || '').includes('Tutorials')
-                    );
-                    if (trigger) {
-                        trigger.click();
-                        return;
-                    }
-                    if (++tries < 200) setTimeout(closeTutorialChooser, 150);
-                })();
-            })();
-            </script>""",
-            height=0,
-        )
-
         embed_html_iframe(_guide_drag_script("tutorial"), height=0)
 
         popover_script = _popover_script(step.popover)
@@ -2209,11 +2178,6 @@ def _faq_dialog() -> None:
     the link buttons at the bottom are also the app's route into the docs from
     a help context.
     """
-    from scanpath_studio.menu import close_open_popovers
-
-    # A popover's open state is client-side: close any left open, or it floats
-    # on top of the modal.
-    close_open_popovers()
     st.caption(
         "Short answers to the questions that come up most. The full version — "
         "with the long explanations — lives on the documentation site."
@@ -2438,20 +2402,9 @@ def _wizard_guide_steps() -> list[dict]:
 
 
 def _wizard_guide_go(step_idx: int) -> None:
-    """Move the guide to ``step_idx`` and mark the wizard step it describes open.
-
-    ``go_to_step`` is safe here because a guide button is an ``on_click``
-    callback: it runs before the script re-executes, so the ``wiz_open_*`` writes
-    land before any widget instantiates.
-    """
-    from . import wizard_shell
-
+    """Move the guide to ``step_idx``, clamped to its cards."""
     steps = _wizard_guide_steps()
-    step_idx = max(0, min(step_idx, len(steps) - 1))
-    st.session_state["wizard_guide_step"] = step_idx
-    target = steps[step_idx].get("step_id")
-    if target:
-        wizard_shell.go_to_step(target)
+    st.session_state["wizard_guide_step"] = max(0, min(step_idx, len(steps) - 1))
 
 
 def _wizard_guide_back() -> None:

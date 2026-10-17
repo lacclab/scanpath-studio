@@ -7379,19 +7379,6 @@ def canvas_geometry_frames(
     return word_geometry, fixation_geometry
 
 
-# Primary EyeLink IA measures — the headline columns a pre-aggregated export
-# (e.g. OneStop) carries. Not read: `_compute_word_metrics_cached` recomputes
-# whenever fixations exist, since the computed path adds measures such exports
-# lack, and existing values win column by column (see
-# compute_per_word_measures for the precedence rule).
-_PREAGGREGATED_METRIC_COLUMNS = [
-    "first_fixation_ms",
-    "first_pass_gaze_duration_ms",
-    "total_fixation_duration_ms",
-    "n_fixations",
-]
-
-
 def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
     """Return per-word reading measures.
 

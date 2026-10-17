@@ -962,14 +962,6 @@ SELECTOR_ROW_WRAP_REM = (
     + 4 * 1.0
 )
 
-#: ``SELECTOR_ROW_GRID``'s three left tracks as one — for a row whose left side
-#: is a single wide element rather than dataset + pick + scrub.
-SELECTOR_ROW_WIDE_GRID = [
-    SELECTOR_ROW_GRID[0] + SELECTOR_ROW_GRID[1] + SELECTOR_ROW_GRID[2],
-    SELECTOR_ROW_GRID[3],
-]
-
-
 #: The trial-identity check screens a sample of trials by default. The
 #: 🗂️ Data page's *Check every trial* button sets this session flag to ask for
 #: the full census instead. UI-only — it is deliberately not wire format, so it

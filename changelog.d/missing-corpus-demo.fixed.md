@@ -1,1 +1,0 @@
-Opening a corpus a server cannot download now switches the dataset picker to the bundled demo, and a demo standing in for a missing corpus is drawn on its own screen instead of the corpus', which cut its text off.

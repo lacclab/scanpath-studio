@@ -3,9 +3,9 @@
 A hand-drawn two-line text, with fixations snapped to its lines and arced saccades.
 
 1. Download the [words](https://lacclab.github.io/scanpath-studio/gallery/illustration/words.csv) and [fixations](https://lacclab.github.io/scanpath-studio/gallery/illustration/fixations.csv), then choose + → Import files in the app.
-1. Add the two tables as a dataset. Select its only trial and Reset visualization.
+1. Add the two tables as a dataset, with Recording setup → Screen → I know it set to 450 × 340. Select its only trial and Reset visualization.
 1. In Fixations → Snap, choose To line and show the reading order. In Saccades → Shape, choose Arc.
-1. In Figure & canvas, use a 450 × 340 canvas and hide the duration size key. Set the Illustration label text to “Illustration · hand-drawn”.
+1. In Figure & canvas, hide the duration size key and set the Illustration label text to “Illustration · hand-drawn”.
 
 [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
 

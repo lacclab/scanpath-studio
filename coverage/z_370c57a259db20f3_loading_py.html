@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_measures_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-16 17:30 +0000
+            created at 2026-10-17 09:53 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -80,7 +80,7 @@
     </div>
 </header>
 <main id="source">
-    <p class="pln"><span class="n"><a id="t1" href="#t1">1</a></span><span class="t"><span class="str">&quot;&quot;&quot;UX-165: loading cards that keep the page whole, say what is happening, and</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1" href="#t1">1</a></span><span class="t"><span class="str">&quot;&quot;&quot;Loading cards that keep the page whole, say what is happening, and</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2" href="#t2">2</a></span><span class="t"><span class="str">can be cancelled.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t3" href="#t3">3</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t4" href="#t4">4</a></span><span class="t"><span class="str">Three pieces, all built on :mod:`scanpath_studio.progress`:</span>&nbsp;</span><span class="r"></span></p>
@@ -96,7 +96,7 @@
     <p class="pln"><span class="n"><a id="t14" href="#t14">14</a></span><span class="t"><span class="str">  the new page has drawn its controls, and a region card opening releases it.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t15" href="#t15">15</a></span><span class="t"><span class="str">* :func:`run_scope` &#8212; wraps each script run, so no timer outlives its run.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t16" href="#t16">16</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t17" href="#t17">17</a></span><span class="t"><span class="str">Mechanics, proved by the UX-165 spike: the **script thread** draws each card</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t17" href="#t17">17</a></span><span class="t"><span class="str">Mechanics: the **script thread** draws each card</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t18" href="#t18">18</a></span><span class="t"><span class="str">hidden when it opens &#8212; its Cancel button included, since a widget must be</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t19" href="#t19">19</a></span><span class="t"><span class="str">created on the script thread and once per run &#8212; and a **timer thread**</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t20" href="#t20">20</a></span><span class="t"><span class="str">carrying the script-run context reveals it and rewrites only its text</span>&nbsp;</span><span class="r"></span></p>
@@ -306,7 +306,7 @@
     <p class="pln"><span class="n"><a id="t224" href="#t224">224</a></span><span class="t">    <span class="str">&quot;&quot;&quot;The skeleton&#x27;s `grid-template-columns` for the selector row.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t225" href="#t225">225</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t226" href="#t226">226</a></span><span class="t"><span class="str">    Each track takes the real row&#x27;s weight and the floor `styles.py` gives it</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t227" href="#t227">227</a></span><span class="t"><span class="str">    (UX-181), so the skeleton draws the row the page is about to show.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t227" href="#t227">227</a></span><span class="t"><span class="str">    so the skeleton draws the row the page is about to show.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t228" href="#t228">228</a></span><span class="t"><span class="str">    &quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t229" href="#t229">229</a></span><span class="t">    <span class="key">return</span> <span class="str">&quot; &quot;</span><span class="op">.</span><span class="nam">join</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t230" href="#t230">230</a></span><span class="t">        <span class="fst">f&quot;</span><span class="fst">minmax(</span><span class="op">{</span><span class="nam">selector_track_floor</span><span class="op">(</span><span class="nam">i</span><span class="op">)</span><span class="op">}</span><span class="fst">, </span><span class="op">{</span><span class="nam">w</span><span class="op">}</span><span class="fst">fr)</span><span class="fst">&quot;</span>&nbsp;</span><span class="r"></span></p>
@@ -734,8 +734,8 @@
     <p class="pln"><span class="n"><a id="t652" href="#t652">652</a></span><span class="t"><span class="str">        Only a task that did real work (`progress.Task.worked` &#8212; something</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t653" href="#t653">653</a></span><span class="t"><span class="str">        reported) *and* took at least `DELAY_S` records its duration: the</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t654" href="#t654">654</a></span><span class="t"><span class="str">        dataset card opens on every run, and a plain rerun&#x27;s 0.04 s would</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t655" href="#t655">655</a></span><span class="t"><span class="str">        otherwise overwrite the real load&#x27;s time, so a slow load read &quot;last</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t656" href="#t656">656</a></span><span class="t"><span class="str">        load 0.0 s&quot; &#8212; nor is a plain rerun that happened to be slow, all cache</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t655" href="#t655">655</a></span><span class="t"><span class="str">        otherwise overwrite the real load&#x27;s time, so a slow load would read</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t656" href="#t656">656</a></span><span class="t"><span class="str">        &quot;last load 0.0 s&quot; &#8212; nor is a plain rerun that happened to be slow, all cache</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t657" href="#t657">657</a></span><span class="t"><span class="str">        checks on a big corpus, a load. A task that is already finished &#8212;</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t658" href="#t658">658</a></span><span class="t"><span class="str">        retired by `Page.release` when something else interrupted the load, an</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t659" href="#t659">659</a></span><span class="t"><span class="str">        inline download say &#8212; records nothing either.</span>&nbsp;</span><span class="r"></span></p>
@@ -953,7 +953,7 @@
     <p class="pln"><span class="n"><a id="t871" href="#t871">871</a></span><span class="t"><span class="str">    is re-raised as Streamlit&#x27;s own `StopException`, which Streamlit treats as</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t872" href="#t872">872</a></span><span class="t"><span class="str">    a premature stop and so skips its stale-widget sweep &#8212; the state of every</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t873" href="#t873">873</a></span><span class="t"><span class="str">    widget the run never reached is kept, where a normal finish would drop it.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t874" href="#t874">874</a></span><span class="t"><span class="str">    Today only an abandoned run ever computes a cancelled task</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t874" href="#t874">874</a></span><span class="t"><span class="str">    Only an abandoned run ever computes a cancelled task</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t875" href="#t875">875</a></span><span class="t"><span class="str">    (`progress.begin` never joins one), so its page is gone and Streamlit drops</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t876" href="#t876">876</a></span><span class="t"><span class="str">    whatever it sends either way; the stop is what keeps a cut-short run from</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t877" href="#t877">877</a></span><span class="t"><span class="str">    ending as a successful one, should a cancel ever reach a run on screen.</span>&nbsp;</span><span class="r"></span></p>
@@ -1015,7 +1015,7 @@
             <a class="nav" href="z_370c57a259db20f3_measures_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-16 17:30 +0000
+            created at 2026-10-17 09:53 +0000
         </p>
     </div>
 </footer>

@@ -24,7 +24,7 @@ At least one of the first three tables below; add others as needed.
 | ---------------------- | -------------------------------------------------------------- |
 | Fixations              | One row per fixation: trial ID, duration, and x/y or a word ID |
 | Words (interest areas) | One row per word: trial ID, word ID and bounding box           |
-| Raw gaze               | One row per sample: participant ID, trial ID, x and y          |
+| Raw gaze               | One row per sample: trial ID, x and y                          |
 | Participants           | One row per participant, with metadata                         |
 | Trials                 | One row per trial, with metadata                               |
 | Texts                  | One row per text, with metadata                                |
@@ -51,7 +51,7 @@ Include per-word reading measures in the Words table, such as first fixation dur
 1. Choose + → Import files and name the dataset.
 1. Upload your tables and check the column mapping.
 1. Enter the recording screen size and typography where known.
-1. Optionally attach stimulus screenshots from a local folder.
+1. Optionally, on a local or desktop install, attach stimulus screenshots from a folder.
 1. Click Add dataset.
 
 \[!\[
@@ -76,7 +76,7 @@ scanpath-studio render --words ia.csv --fixations fixations.csv --list-trials
 scanpath-studio check --words ia.csv --fixations fixations.csv
 ```
 
-For raw gaze, metadata and explicit column mappings, see the [loaders](https://lacclab.github.io/scanpath-studio/api/#load-your-data) and [CLI input options](https://lacclab.github.io/scanpath-studio/cli/#render).
+For raw gaze, metadata and explicit column mappings, see the [loaders](https://lacclab.github.io/scanpath-studio/api/#load-your-data) and [CLI input options](https://lacclab.github.io/scanpath-studio/cli/#flags-input).
 
 ## Manage datasets
 

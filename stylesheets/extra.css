@@ -20,7 +20,7 @@
   color: var(--md-primary-fg-color);
 }
 
-/* ---------- Figures built at docs-build time (ENG-78) ----------
+/* ---------- Figures built at docs-build time ----------
    `docs_support.embed` + javascripts/figures.js: the figure renders at its
    own pixel size inside `.sps-plot-stage` and is scaled to the column as one
    block, so the host reserves its aspect ratio until then. */
@@ -84,7 +84,7 @@
   margin-top: 0.4em;
 }
 
-/* ---------- Generated reference tables (ENG-79) ---------- */
+/* ---------- Generated reference tables ---------- */
 
 /* The reference tables span the column, so the description gets the room
    the names leave; Material would otherwise size them to their content and
@@ -151,7 +151,7 @@
   height: auto;
 }
 
-/* ---------- Annotated screenshots (ENG-78) ---------- */
+/* ---------- Annotated screenshots ---------- */
 
 .md-typeset figure.sps-screenshot {
   margin: 1.2em 0;
@@ -162,7 +162,7 @@
   border: 1px solid var(--md-default-fg-color--lightest);
 }
 
-/* The app's icons (ENG-88): a page writes `:material/database:`, the docs hook
+/* The app's icons: a page writes `:material/database:`, the docs hook
    turns it into a span, and this draws the glyph from the Material Symbols font
    Streamlit ships (copied into the site by the hook) — the same one the app uses. */
 @font-face {

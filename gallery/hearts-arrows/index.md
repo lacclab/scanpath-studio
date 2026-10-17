@@ -2,10 +2,10 @@
 
 Make a figure for a talk or teaching: pink hearts for fixations, purple arrows for the eye’s movements. This short, hand-drawn example is an illustration.
 
-1. Download the [words](https://lacclab.github.io/scanpath-studio/gallery/hearts-arrows/words.csv) and [fixations](https://lacclab.github.io/scanpath-studio/gallery/hearts-arrows/fixations.csv). Choose + → Import files, add both tables, then select the only trial and Reset visualization.
+1. Download the [words](https://lacclab.github.io/scanpath-studio/gallery/hearts-arrows/words.csv) and [fixations](https://lacclab.github.io/scanpath-studio/gallery/hearts-arrows/fixations.csv). Choose + → Import files and add both tables. In Recording setup, choose Screen → I know it and enter 450 × 300. Add the dataset, then select the only trial and Reset visualization.
 1. In **Fixations → Marker**, choose **Heart**, set the color to `#d12d72`, size range to **18–30**, and opacity to **0.85**. Under **Snap**, choose **To line**. Turn off **Fixation index**.
 1. In **Saccades**, set **Shape** to **Arc**. Under **Line**, use `#4f46a5` and width **2.5**. Turn on **Direction arrows** with size **12**.
-1. In **Figure & canvas**, use a **450 × 300** canvas and hide the duration size key. Set the Illustration label to “Illustration · hand-drawn”. Keep text highlighting off.
+1. In **Figure & canvas**, hide the duration size key and set the Illustration label to “Illustration · hand-drawn”. Keep text highlighting off.
 
 Save the look under **My designs** to apply it to your own data.
 

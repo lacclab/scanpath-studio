@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_save_dialog_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-16 17:30 +0000
+            created at 2026-10-17 09:53 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -80,7 +80,7 @@
     </div>
 </header>
 <main id="source">
-    <p class="pln"><span class="n"><a id="t1" href="#t1">1</a></span><span class="t"><span class="str">&quot;&quot;&quot;UX-165: a Streamlit-free progress hook for slow work.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1" href="#t1">1</a></span><span class="t"><span class="str">&quot;&quot;&quot;A Streamlit-free progress hook for slow work.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2" href="#t2">2</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t3" href="#t3">3</a></span><span class="t"><span class="str">Loaders and figure builders call :func:`report` from inside their loops, and</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t4" href="#t4">4</a></span><span class="t"><span class="str">the orchestrator calls :func:`step_to` between stages. With no task active both</span>&nbsp;</span><span class="r"></span></p>
@@ -101,8 +101,8 @@
     <p class="pln"><span class="n"><a id="t19" href="#t19">19</a></span><span class="t"><span class="str">And they are where slow work **lets the server talk**. A CPU-bound build on the</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t20" href="#t20">20</a></span><span class="t"><span class="str">script thread holds Python&#x27;s GIL, and the server&#x27;s event loop needs several</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t21" href="#t21">21</a></span><span class="t"><span class="str">handoffs of it to send one message, each waiting out the interpreter&#x27;s switch</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t22" href="#t22">22</a></span><span class="t"><span class="str">interval &#8212; so everything a run queues, a card&#x27;s own reveal included, used to</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t23" href="#t23">23</a></span><span class="t"><span class="str">reach the browser only once the build ended. Inside a task, a call therefore</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t22" href="#t22">22</a></span><span class="t"><span class="str">interval &#8212; so without a yield, everything a run queues, a card&#x27;s own reveal</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t23" href="#t23">23</a></span><span class="t"><span class="str">included, reaches the browser only once the build ends. Inside a task, a call therefore</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t24" href="#t24">24</a></span><span class="t"><span class="str">sleeps for ``YIELD_S`` whenever ``YIELD_EVERY_S`` has passed since the task</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t25" href="#t25">25</a></span><span class="t"><span class="str">began or last did &#8212; so a task quicker than that never sleeps: a sleep releases</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t26" href="#t26">26</a></span><span class="t"><span class="str">the GIL outright, and the loop drains its queue uncontended.</span>&nbsp;</span><span class="r"></span></p>
@@ -314,8 +314,8 @@
     <p class="run run2"><span class="n"><a id="t232" href="#t232">232</a></span><span class="t">            <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t233" href="#t233">233</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t234" href="#t234">234</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t235" href="#t235">235</a></span><span class="t"><span class="com">#: Every task key carries the session id, so a plain dict here kept every task of</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t236" href="#t236">236</a></span><span class="t"><span class="com">#: every session for the life of the server. Weak: a task stays registered</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t235" href="#t235">235</a></span><span class="t"><span class="com">#: Every task key carries the session id, so a plain dict here would keep every</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t236" href="#t236">236</a></span><span class="t"><span class="com">#: task of every session for the life of the server. Weak: a task stays registered</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t237" href="#t237">237</a></span><span class="t"><span class="com">#: exactly while something holds it &#8212; its card during the run, and a superseded</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t238" href="#t238">238</a></span><span class="t"><span class="com">#: run&#x27;s thread while that is still computing it, the case joining exists for.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t239" href="#t239">239</a></span><span class="t"><span class="nam">_REGISTRY</span><span class="op">:</span> <span class="nam">weakref</span><span class="op">.</span><span class="nam">WeakValueDictionary</span><span class="op">[</span><span class="nam">Hashable</span><span class="op">,</span> <span class="nam">Task</span><span class="op">]</span> <span class="op">=</span> <span class="nam">weakref</span><span class="op">.</span><span class="nam">WeakValueDictionary</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -440,7 +440,7 @@
             <a class="nav" href="z_370c57a259db20f3_save_dialog_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-16 17:30 +0000
+            created at 2026-10-17 09:53 +0000
         </p>
     </div>
 </footer>

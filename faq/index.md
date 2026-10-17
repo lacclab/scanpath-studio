@@ -64,7 +64,9 @@ Start the app with `scanpath-studio run --no-persist` to save nothing. To delete
 
 ## Help and versions
 
-### Where do I ask a question or report a bug?
+### Where do I ask a question, report a bug or send feedback?
+
+**Help → Send feedback** in the app lists where each kind goes — a bug report, a feature request, an idea or comment, or a question — and shows the version and system details a bug report needs, ready to copy. Nothing is sent from the app: each route is a GitHub page you submit yourself.
 
 Ask in [Discussions → Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a). Report a bug as a [GitHub issue](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md), with the version, your operating system and how you run the app (pip, the desktop app or the online demo). **Help → About** shows the version and links both; on the command line, `scanpath-studio --version`.
 
@@ -78,7 +80,7 @@ pip install -U scanpath-studio
 
 ### Will my links, settings and scripts work after an update?
 
-Scanpath Studio is in beta, so they may not. Until 1.0, any release may change the app, its share links and saved settings, the Python API and the CLI. The [changelog](https://github.com/lacclab/scanpath-studio/blob/main/CHANGELOG.md) lists every change. To reproduce a result exactly, note the version you used and install that one: `pip install scanpath-studio==<version>`.
+Not necessarily. Until version 1.0, any release may change the app, its share links and saved settings, the Python API and the CLI. The [changelog](https://github.com/lacclab/scanpath-studio/blob/main/CHANGELOG.md) lists every change. To reproduce a result exactly, note the version you used and install that one: `pip install scanpath-studio==<version>`.
 
 ## Citing
 

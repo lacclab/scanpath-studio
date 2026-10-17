@@ -1433,6 +1433,9 @@ def _about_dialog() -> None:
     """The About modal: version, authors, links, citation, AI-assistance note."""
     from scanpath_studio import __release__, __version__
 
+    # Triple-click the heading.
+    render_easter_egg()
+
     bibtex = (
         "@software{Shubi_Scanpath_Studio_2026,\n"
         "author = {Shubi, Omer and Gruteke Klein, Keren and Grossman, Maya and "
@@ -9027,21 +9030,15 @@ def _run_app() -> None:
     # on_click callback, which runs before this point in the rerun.
     #
     # One container for the whole block, so it always holds exactly one index
-    # below it — `render_easter_egg()`, for one, draws a bare iframe except
-    # while a tour or tutorial is active, so without the container the first
-    # run after one closes would insert an element above the view and shift it.
-    # See AGENTS.md → Gotchas.
+    # below it — the tour and the tutorial draw only while active, so without
+    # the container the first run after one closes would remove an element
+    # above the view and shift it. See AGENTS.md → Gotchas.
     with st.container():
         maybe_show_welcome_tour()
         render_spotlight_tour()
         # Task-oriented tutorials share the spotlight mechanism but keep
         # their own progress and do not inherit the welcome tour's opt-out.
         render_use_case_tutorial()
-        # Arm the title's easter egg. After the tour/tutorial renders, because
-        # its suppression reads the `tour_mode` / `tutorial_active` those set — and it
-        # doesn't care about DOM order, being a height-0 script that retries until the
-        # heading has hydrated.
-        render_easter_egg()
         # A cut-off dropdown label shows in full on hover. Unconditional,
         # so it never moves the view's index.
         render_truncation_tooltips()

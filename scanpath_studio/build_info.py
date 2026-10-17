@@ -173,6 +173,25 @@ def read_checkout(
         return None
     if done.returncode != 0:
         return None
+    line = done.stdout.strip()
+    match = _DESCRIBE.match(line)
+    if not match:
+        return None
+    # describe counts every commit the tag lacks, merges included. The demo's
+    # `stable` branch takes each release as a merge commit, so there that
+    # count grows by one per release ever merged; count only the commits that
+    # brought changes of their own.
+    try:
+        counted = run(
+            ["git", "-C", str(root), "rev-list", "--count", "--no-merges"]
+            + [f"v{match['release']}..HEAD"],
+            **options,
+        )
+        distance = int(counted.stdout) if counted.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError, ValueError):
+        distance = None
+    if distance is not None:
+        line = f"v{match['release']}-{distance}-g{match['commit']}"
     # `describe --dirty` would refresh and rewrite .git/index, which can make
     # a concurrent `git commit` fail; `status` with optional locks off does
     # not.
@@ -184,7 +203,6 @@ def read_checkout(
         dirty = status.returncode == 0 and bool(status.stdout.strip())
     except (OSError, subprocess.SubprocessError):
         dirty = False
-    line = done.stdout.strip()
     return from_describe(line + "-dirty" if dirty else line)
 
 

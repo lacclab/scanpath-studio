@@ -28,8 +28,10 @@ def _git(
     *,
     status: str = "",
     status_returncode: int = 0,
+    count: str | None = None,
 ):
-    """A fake ``subprocess.run`` answering ``describe`` and ``status`` separately."""
+    """A fake ``subprocess.run`` answering ``describe``, ``status`` and the
+    ``rev-list`` count separately; without ``count`` the count fails."""
     calls = []
     envs = []
 
@@ -39,6 +41,10 @@ def _git(
         if cmd[3] == "status":
             return subprocess.CompletedProcess(
                 cmd, status_returncode, stdout=status, stderr=""
+            )
+        if cmd[3] == "rev-list":
+            return subprocess.CompletedProcess(
+                cmd, 0 if count is not None else 128, stdout=count or "", stderr=""
             )
         return subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr="")
 
@@ -97,6 +103,27 @@ def test_a_checkout_is_described_by_git(tmp_path):
     assert run.calls[0][-2:] == ["--match", "v[0-9]*"]
 
 
+def test_merge_commits_are_not_counted_as_commits_after_the_release(tmp_path):
+    # the demo's branch takes each release as a merge: describe counts those
+    run = _git("v0.40.0-7-gcab46ec\n", count="1\n")
+    info = bi.read_checkout(_project(tmp_path), run=run)
+    assert (info.distance, info.version) == (1, "0.40.0.post1+gcab46ec")
+    counted = next(cmd for cmd in run.calls if cmd[3] == "rev-list")
+    assert counted[4:] == ["--count", "--no-merges", "v0.40.0..HEAD"]
+
+
+def test_a_release_merged_into_another_branch_is_the_release(tmp_path):
+    run = _git("v0.40.0-6-gcab46ec\n", count="0\n")
+    info = bi.read_checkout(_project(tmp_path), run=run)
+    assert info.version == "0.40.0"
+    assert info.describe() == "Release v0.40.0"
+
+
+def test_a_failed_count_keeps_describes_own(tmp_path):
+    info = bi.read_checkout(_project(tmp_path), run=_git("v0.35.0-3-g8f18219\n"))
+    assert info.distance == 3
+
+
 def test_describe_is_not_asked_to_check_for_changes(tmp_path):
     # `describe --dirty` rewrites .git/index (and takes index.lock)
     run = _git("v0.35.0-3-g8f18219\n")
@@ -144,7 +171,7 @@ def test_git_runs_without_the_callers_git_variables(tmp_path, monkeypatch):
     monkeypatch.setenv("GIT_DIR", "/elsewhere/.git")
     run = _git("v0.35.0-3-g8f18219\n")
     bi.read_checkout(_project(tmp_path), run=run)
-    assert len(run.envs) == 2
+    assert len(run.envs) == 3
     for env in run.envs:
         assert "GIT_DIR" not in env
         assert env["GIT_OPTIONAL_LOCKS"] == "0"

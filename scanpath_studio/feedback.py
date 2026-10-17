@@ -103,9 +103,6 @@ def maybe_show_feedback() -> None:
 @guarded()
 def _feedback_dialog() -> None:
     """Four routes to GitHub, and the details to paste into a bug report."""
-    from scanpath_studio.menu import close_open_popovers
-
-    close_open_popovers()
     st.caption(
         "Nothing is sent from the app. Each button opens a page on GitHub, "
         "where you write and submit it yourself (a free GitHub account is "

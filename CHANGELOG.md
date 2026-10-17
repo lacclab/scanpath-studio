@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/);
 `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.39.1] - 2026-10-17
+
+### Changed
+- The app's help texts, messages, captions and tours are shorter and plainer, and the few that named the wrong control or promised more than the app does are corrected. ([#476](https://github.com/lacclab/scanpath-studio/issues/476))
+
 ## [0.39.0] - 2026-10-17
 
 ### Added

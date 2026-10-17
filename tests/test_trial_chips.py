@@ -235,7 +235,7 @@ def test_the_picker_says_where_the_colours_are():
     # Source-level: the caption is drawn into a `host` the picker is handed, and
     # the buckets themselves are a `sort_items` component AppTest cannot read.
     source = " ".join(inspect.getsource(render_trial_chip_picker).split())
-    assert 'set below the list."' in source
+    assert 'colors below the list."' in source
 
 
 def test_a_cropped_figure_says_it_is_cropped():

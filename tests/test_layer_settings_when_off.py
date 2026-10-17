@@ -82,7 +82,7 @@ class TestTheLayerOffGate:
         assert at.number_input(key="global_saccade_width__num").proto.disabled
         # Plus one caption at the head of the popover, for the case where the
         # user never hovers a control.
-        assert any("turn the layer on" in (c.value or "") for c in at.caption)
+        assert any("Turn the layer on" in (c.value or "") for c in at.caption)
 
     def test_the_stored_value_is_untouched(self):
         """A disabled widget keeps its key — greying must not rewrite settings.
@@ -129,7 +129,7 @@ def test_the_rail_still_renders_a_layers_settings_with_the_layer_off(
 
     control = getattr(at, kind)(key=setting_key)
     assert control.proto.disabled
-    assert "turn the layer on" in control.proto.help
+    assert "Turn the layer on" in control.proto.help
 
 
 @pytest.mark.timeout(180)

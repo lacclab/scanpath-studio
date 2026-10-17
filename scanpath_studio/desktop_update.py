@@ -348,7 +348,10 @@ def _not_ours(state: Path) -> bool:
 
 
 def _not_ours_reason(state: Path) -> str:
-    return f"{state} isn't a folder of this account's own, so the update won't use it."
+    return (
+        f"{state} isn't a folder owned by this user account, so the update "
+        "won't use it."
+    )
 
 
 def refusal(
@@ -374,14 +377,14 @@ def refusal(
     except InvalidVersion:
         return f"{check.latest.tag} isn't a version this app can install."
     if prerelease:
-        return f"v{check.latest.version} is a pre-release; it is never installed automatically."
+        return f"v{check.latest.version} is a pre-release, so it isn't installed automatically."
     asset = asset_for(check, install, machine=machine)
     if asset is None:
         if update_archive(install.system, machine) is None:
             return "There is no desktop build for this computer."
         return (
-            "This release has no update for this computer yet; desktop builds "
-            "are uploaded up to an hour after a release."
+            "This release has no update for this computer yet. Desktop builds "
+            "can take up to an hour after a release to appear."
         )
     if not asset.digest.startswith("sha256:"):
         return (
@@ -395,8 +398,8 @@ def refusal(
         )
     if not _can_write(install.root, install.system):
         return (
-            f"This account can't change {install.root}; whoever installed "
-            "Scanpath Studio has to update it."
+            f"This user account can't change {install.root}. Ask whoever "
+            "installed Scanpath Studio to update it."
         )
     state = state_dir(install) if state is None else state
     if _not_ours(state):
@@ -405,7 +408,8 @@ def refusal(
     there = _nearest_existing(state)
     if not _can_write(there, install.system) or _device(there) != _device(install.root):
         return (
-            f"There's nowhere on this disk beside {install.root} to prepare the update."
+            f"There is no writable folder on the same disk as {install.root} "
+            "to prepare the update in."
         )
     if _pending(state) is not None:
         return "An update is already under way."
@@ -417,8 +421,8 @@ def refusal(
         )
     if install.system == "darwin" and team_id(install.root, run=run) is None:
         return (
-            "This copy of Scanpath Studio isn't signed by its developers, so an "
-            "update can't be checked against it."
+            "This copy of Scanpath Studio isn't signed by its developers, so "
+            "the update can't be verified."
         )
     return None
 
@@ -501,7 +505,7 @@ def download(
         return UpdateFailed(f"The download couldn't be saved: {_short_reason(error)}")
 
     def stopped() -> UpdateFailed:
-        return UpdateFailed("The download stopped before it finished; are you offline?")
+        return UpdateFailed("The download stopped before it finished. Are you offline?")
 
     digest = hashlib.sha256()
     done = 0
@@ -517,12 +521,12 @@ def download(
                 response = opener(request, timeout=timeout)
             except urllib.error.HTTPError as error:
                 raise UpdateFailed(
-                    f"GitHub answered HTTP {error.code} for the download, so it "
+                    f"GitHub returned HTTP {error.code} for the download, so it "
                     "was not fetched."
                 ) from error
             except (OSError, http.client.HTTPException) as error:
                 raise UpdateFailed(
-                    "The download couldn't start; are you offline?"
+                    "The download couldn't start. Are you offline?"
                 ) from error
             with response:
                 while True:
@@ -535,8 +539,8 @@ def download(
                     done += len(chunk)
                     if asset.size and done > asset.size:
                         raise UpdateFailed(
-                            "The download is larger than the release says it "
-                            "is, so it was thrown away."
+                            "The download is larger than the release says, so "
+                            "it was discarded."
                         )
                     try:
                         out.write(chunk)
@@ -554,7 +558,7 @@ def download(
         partial.unlink(missing_ok=True)
         raise UpdateFailed(
             "The download doesn't match the checksum GitHub published for it, "
-            "so it was thrown away."
+            "so it was discarded."
         )
     os.replace(partial, target)
     return target

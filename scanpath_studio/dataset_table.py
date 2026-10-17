@@ -54,13 +54,12 @@ UNKNOWN = "Unknown"
 
 #: Each missing-value label's meaning, for its hover text.
 GAP_EXPLANATIONS: Mapping[str, str] = {
-    NOT_LOADED: "Not counted yet — this dataset has not been opened, and it "
-    "publishes no figures of its own.",
-    NOT_REPORTED: "The corpus' published figures do not include this one. Open "
+    NOT_LOADED: "Not counted yet. This dataset has not been opened, and it "
+    "publishes no figures.",
+    NOT_REPORTED: "The corpus' published figures don't include this one. Open "
     "the dataset to count it.",
     NOT_APPLICABLE: "This dataset has nothing of this kind to count.",
-    UNKNOWN: "Not available — the data loaded, but this count could not be "
-    "determined from it.",
+    UNKNOWN: "The data loaded, but this count could not be worked out from it.",
 }
 
 #: Why a loaded dataset can hold no value for a field: the table the count is
@@ -86,18 +85,18 @@ NEEDS_SETUP = "Needs setup"
 #: What each value of the **Status** column means, for its hover text.
 STATUS_EXPLANATIONS: Mapping[str, str] = {
     LOADED: "Read this session, so it usually opens quickly.",
-    AVAILABLE: "Its files are here; opening it reads them, which can take a "
+    AVAILABLE: "Its files are here. Opening it reads them, which can take a "
     "while for a large dataset.",
-    NEEDS_DOWNLOAD: "Its files are not in its folder yet: open it, then click "
+    NEEDS_DOWNLOAD: "Its files are not downloaded yet. Open it, then click "
     "**Download**.",
-    NEEDS_SETUP: "Its files were not found and there is no download: open it "
+    NEEDS_SETUP: "Its files were not found and it has no download. Open it "
     "and set its **Data directory** to their folder.",
 }
 
 #: Where a row's numbers come from, for the count columns' header.
 COUNTS_EXPLANATION = (
-    "Counted from a dataset's own rows once it has been opened; until then, the "
-    "figures the corpus publishes for itself."
+    "Counted from the dataset's rows once it has been opened. Until then, the "
+    "figures the corpus publishes."
 )
 
 #: Kind is ordered by what a row is, not alphabetically, when it is sorted.

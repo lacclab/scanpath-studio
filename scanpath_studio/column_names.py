@@ -518,7 +518,7 @@ class ColumnNames:
             return "made by Scanpath Studio" + (f" ({note})" if note else "")
         if kind == COMPUTED:
             return "computed by Scanpath Studio"
-        return "your column, under its own name"
+        return "your column, with its original name"
 
     def restricted_to(self, columns: Iterable[str]) -> ColumnNames:
         """Only the entries for ``columns`` — a frame's actual columns.
@@ -727,7 +727,7 @@ def from_schema(
     if table == "words":
         out["word_id"] = _mapped_or(schema, "word_id", GENERATED, "the row order")
         out["text"] = _mapped_or(schema, "text", GENERATED, "w0, w1 … from the word id")
-        out["line_idx"] = _mapped_or(schema, "line", GENERATED, "1 — one line")
+        out["line_idx"] = _mapped_or(schema, "line", GENERATED, "1, a single line")
         if all(schema.get(k) for k in ("x", "y", "width", "height")):
             for key in ("x", "y", "width", "height"):
                 out[key] = SourceName((str(schema[key]),))

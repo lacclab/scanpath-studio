@@ -158,7 +158,9 @@ def _public_ready_cached(
     kwargs = dict(options)
     short = short or label.split(" — ")[0]
     if not root:
-        return False, f"{short} has no data folder yet — open it once first."
+        return False, (
+            f"{short} has no data folder yet. Open it as the main dataset once first."
+        )
     hint = f"Open {short} as the main dataset once to download or locate it."
     try:
         if onestop_regime_for_choice(label):
@@ -171,7 +173,7 @@ def _public_ready_cached(
         elif _POTEC_LABEL_HINT in label:
             present = datasets.potec_present(root)
         else:
-            return False, f"{short} isn't loadable as a comparison dataset."
+            return False, f"{short} can't be used as a comparison dataset."
     except (OSError, ValueError, KeyError):
         # `KeyError` too: no one probe may take the whole app down through the
         # compare-B enumeration, which runs over *every* registry entry on every

@@ -149,8 +149,8 @@ import time:
     short="PoTeC",                 # what the picker shows
     language="German",
     size="75 participants · 12 texts",
-    description="Potsdam Textbook Corpus — German readers, experts and "
-    "novices, reading biology and physics textbook passages.",
+    description="Potsdam Textbook Corpus: German experts and novices "
+    "reading biology and physics textbook passages.",
     link="https://github.com/DiLi-Lab/PoTeC",
     published_counts={             # the row before anyone opens it
         "Participants": 75,
@@ -160,7 +160,7 @@ import time:
         "Fixations": 404420,
     },
     published_counts_source=(
-        "PoTeC's own README for participants, texts and trials. Words and "
+        "PoTeC's README for participants, texts and trials. Words and "
         "fixations were measured from the released corpus."
     ),
     reading_note="Fixation positions are reconstructed, not recorded: "

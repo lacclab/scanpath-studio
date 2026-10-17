@@ -114,8 +114,8 @@ EDITOR_STEPS: tuple[WizardStep, ...] = (
         "edit_name",
         1,
         "Name & description",
-        "What the dataset is called in the list of datasets and the picker, and "
-        "the sentence shown under its name.",
+        "The dataset's name in the dataset list and picker, and the description "
+        "shown under it.",
         False,
     ),
     WizardStep(
@@ -123,8 +123,8 @@ EDITOR_STEPS: tuple[WizardStep, ...] = (
         1,
         "Data tables & column mapping",
         "Which of your columns the app reads as participant, trial, word, "
-        "position and duration — everything drawn follows from it. Any "
-        "metadata tables attached to the dataset are here too.",
+        "position and duration. Metadata tables attached to the dataset are "
+        "here too.",
         True,
     ),
     WizardStep(
@@ -139,24 +139,24 @@ EDITOR_STEPS: tuple[WizardStep, ...] = (
         3,
         "Stimulus images",
         "Screenshots of the stimulus from a folder on this computer, drawn under "
-        "the scanpath without adding an image_path column to your data. Saved "
-        "with the dataset.",
+        "the scanpath. Your data needs no image_path column for this. Saved with "
+        "the dataset.",
         False,
     ),
     WizardStep(
         "edit_identity",
         4,
         "Trial identity",
-        "Whether the Trial ID above actually identifies one trial — checked "
-        "on the whole dataset, before any filtering.",
+        "Whether the Trial ID above identifies a single trial, checked on the "
+        "whole dataset before any filtering.",
         False,
     ),
     WizardStep(
         "edit_preproc",
         5,
         "Preprocessing",
-        "Optional soft exclusion and merging of short fixations, applied to "
-        "every view. Off by default; original rows remain available.",
+        "Optionally exclude or merge short fixations in every view. Off by "
+        "default; the original rows stay available.",
         False,
     ),
 )

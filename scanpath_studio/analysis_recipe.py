@@ -35,12 +35,12 @@ RECIPE_VERSION = 1
 #: What the recipe deliberately leaves out, written into every one.
 EXCLUDES = {
     "figure_settings": (
-        "Palette, canvas and fonts live in the settings file (Scanpath → "
-        "Share → File), which holds no trial filters."
+        "Palette, canvas and fonts are in the settings file (Scanpath → "
+        "Share → File). That file has no trial filters."
     ),
     "data": (
-        "No table rows and no annotation notes. The dataset is referenced by "
-        "name and must be loaded to repeat the analysis."
+        "The recipe has no table rows or annotation notes. It names the "
+        "dataset, which must be loaded to repeat the analysis."
     ),
 }
 

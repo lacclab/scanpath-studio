@@ -298,7 +298,7 @@ class TestASmoothedHeatmapOffersNoRange:
         at = _rail(**{**WORD_HEAT, "global_heatmap_style": style, HEAT_KEY: (0, 600)})
         assert at.slider(key=HEAT_VIEW).proto.disabled
         assert at.checkbox(key="_heatmap_color_range_auto").proto.disabled
-        assert "own peak" in at.slider(key=HEAT_VIEW).proto.help
+        assert "figure's peak" in at.slider(key=HEAT_VIEW).proto.help
         assert at.session_state[HEAT_KEY] == (0, 600)
         # Back on Word boxes the same range is live again.
         at.session_state["global_heatmap_style"] = "Word boxes"

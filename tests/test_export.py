@@ -419,7 +419,7 @@ class TestExportComputesNoMeasures:
         # The rest of the family still comes out.
         assert "per_trial/p1__t1/saccades.csv" in names
         readme = archive.read("README.md").decode()
-        assert "This dataset brought none" in readme
+        assert "This dataset has none" in readme
 
     def test_brought_measures_are_written_as_they_came(
         self, minimal_combos, minimal_words, minimal_fixations, base_settings

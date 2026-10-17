@@ -182,7 +182,7 @@ class TestZipSizeCap:
         monkeypatch.setattr("scanpath_studio.data.ZIP_MAX_COMPRESSION_RATIO", 5.0)
         # A zip bomb in miniature: 1 MB of zeroes deflates to a few hundred bytes.
         buf = _zip_bytes({"fix.csv": b"0" * (1024 * 1024)})
-        with pytest.raises(ValueError, match="doesn't look like a normal data export"):
+        with pytest.raises(ValueError, match="unusual for a data export"):
             read_table(buf)
 
     def test_small_but_very_compressible_archive_is_allowed(self, monkeypatch):

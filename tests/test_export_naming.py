@@ -328,4 +328,4 @@ def test_the_example_shows_the_name_a_clashing_pattern_gets():
     at.text_input(key="bulk_path_pattern").set_value("README.md").run(timeout=30)
     assert not at.exception, at.exception
     assert not at.error, [e.value for e in at.error]
-    assert example().startswith("Example: `README-2.md` — `README.md` would clash")
+    assert example().startswith("Example: `README-2.md` (`README.md` is taken")

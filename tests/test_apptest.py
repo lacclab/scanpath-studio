@@ -1832,7 +1832,7 @@ class TestBuiltInEditorSavesItsMapping:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert self._applied(at) == other
         assert "_dataset_editor_open" not in at.session_state
-        assert any("your changes are saved" in str(s.value) for s in at.success)
+        assert any("Your changes are saved" in str(s.value) for s in at.success)
 
     def test_cancel_puts_the_mapping_keys_back(self, monkeypatch):
         """✕ Cancel's restore, driven directly: the Leave button sits in a
@@ -3734,7 +3734,7 @@ class TestNavRegressions:
         # What the file holds, and what it does not, beside it.
         captions = " ".join(str(c.value) for c in at.caption)
         assert "Includes the figure settings, recording setup and trial" in captions
-        assert "excludes trial filters, cohort definitions, annotations" in captions
+        assert "Leaves out trial filters, cohort definitions, annotations" in captions
 
 
 @pytest.mark.timeout(60)

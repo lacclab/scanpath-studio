@@ -448,8 +448,8 @@ PALETTES: dict[str, dict] = {
     # lightness only and so survive every common deficiency. This is the
     # default a fresh session opens with.
     "Default (colourblind-safe)": {
-        "description": "Okabe–Ito hues + Blues scales; safe for deuteran-, "
-        "protan- and tritanopia.",
+        "description": "Okabe–Ito hues and Blues scales, chosen to stay "
+        "distinguishable with common color-vision deficiencies.",
         "fixation_color": DEFAULT_FIXATION_COLOR,
         "fixation_colorscale": DEFAULT_FIXATION_COLORSCALE,
         "heatmap_colorscale": DEFAULT_HEATMAP_COLORSCALE,
@@ -462,8 +462,8 @@ PALETTES: dict[str, dict] = {
     # Lightness-only encoding: everything survives a black & white print or
     # photocopy, because nothing depends on hue at all.
     "Print / greyscale": {
-        "description": "Grays only — nothing depends on hue, so it survives a "
-        "black & white print. Pair with marker shape.",
+        "description": "Grays only, so it still reads in a black-and-white "
+        "print. Pair with marker shape.",
         "fixation_color": "#1a1a1a",
         "fixation_colorscale": "Greys",
         "heatmap_colorscale": "Greys",

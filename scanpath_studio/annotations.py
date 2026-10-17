@@ -860,8 +860,8 @@ def render_trial_annotations(
             ),
             key=scope_key,
             horizontal=True,
-            help="Whole trial: every screen of this trial. This screen: only the "
-            "screen on view.",
+            help="**Whole trial** covers every screen of this trial. "
+            "**This screen** covers only the screen on view.",
         )
         if scope == "This screen":
             annotation_screen = str(screen_id)
@@ -968,9 +968,8 @@ def render_trial_annotations(
         # No shortcut button under this — the caption names where the whole
         # dataset's annotations are listed instead.
         st.caption(
-            "Every annotation on this dataset is listed on "
-            f"{ICONS['view_data']} **Data Management → Annotations**, to export, import "
-            "or delete."
+            "To export, import or delete this dataset's annotations, go to "
+            f"{ICONS['view_data']} **Data Management → Annotations**."
         )
 
 
@@ -1232,9 +1231,9 @@ def render_dataset_annotations(
             max_upload_size=upload_limit_mb(),
         )
         st.caption(
-            "A file exported here or in an Export bundle. Annotations on trials "
-            "this dataset doesn't have are skipped, and an imported one replaces "
-            "what its trial already had."
+            "Use a file exported here or in an Export bundle. Annotations on "
+            "trials this dataset doesn't have are skipped. An imported "
+            "annotation replaces the trial's current one."
         )
     delete_slot = toolbar.container(width="content")
 
@@ -1249,9 +1248,9 @@ def render_dataset_annotations(
         st.caption(
             f"{_plural(elsewhere, 'annotation')} here "
             f"{'is' if elsewhere == 1 else 'are'} on trials this dataset hasn't "
-            "loaded (*In dataset* unticked). They stay with this "
-            "dataset; to move them to another, **Export** them here and "
-            "**Import** them there."
+            "loaded (*In dataset* unticked). To move "
+            f"{'it' if elsewhere == 1 else 'them'} to another dataset, "
+            "**Export** here and **Import** there."
         )
     frame = _annotations_frame(records, trials, trial_labels)
     column_config = {}
@@ -1262,8 +1261,8 @@ def render_dataset_annotations(
             "",
             type="tertiary",
             width="small",
-            help="Show this trial — and its screen, for a screen annotation — "
-            "in the Scanpath view.",
+            help="Open this trial in the Scanpath view, on its screen for a "
+            "screen annotation.",
             on_click=_open_annotation,
             args=(open_key, records, trials, _trial_set(open_trials)),
             key=open_key,
@@ -1295,8 +1294,8 @@ def render_dataset_annotations(
         help="Tick rows in the table to delete them.",
     ):
         st.write(
-            f"Delete {_plural(len(picked), 'annotation')}? This cannot be undone "
-            "— **Export** first to keep a copy."
+            f"Delete {_plural(len(picked), 'annotation')}? This cannot be undone. "
+            "**Export** first to keep a copy."
         )
         st.button(
             "Delete",

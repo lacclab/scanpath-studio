@@ -122,7 +122,7 @@ class AnimationBudgetError(AnimationExportError):
 # installed Chrome, Chromium or Edge there too.
 CHROME_INSTALL_HINT = (
     "Image export needs Chrome, Chromium or Edge, and none was found. Install one "
-    "of them and try again — or, with a pip install, run `plotly_get_chrome -y`. "
+    "and try again. With a pip install, you can also run `plotly_get_chrome -y`. "
     "The **HTML** export needs no browser."
 )
 
@@ -172,7 +172,7 @@ def warm_calc_fig(fig, opts: dict):
         except queue.Empty:
             if not thread.is_alive():
                 raise RendererStoppedError(
-                    "The browser that draws the frames closed as soon as it started."
+                    "The browser that draws the frames closed right after it started."
                 ) from None
     if isinstance(result, BaseException):
         raise result
@@ -341,11 +341,10 @@ def check_gif_budget(
     fits = int(budget) // per_frame
     shorter = f"cap it at {fits} frames or fewer, or " if fits >= 1 else ""
     raise AnimationBudgetError(
-        f"a {n_frames}-frame GIF at {width}×{height} px and {scale:g}× comes to "
-        f"{total / 1e6:,.0f} megapixels of frames, over the "
+        f"a {n_frames}-frame GIF at {width}×{height} px and {scale:g}× is "
+        f"{total / 1e6:,.0f} megapixels, over the "
         f"{budget / 1e6:,.0f}-megapixel limit for one GIF"
-        f"{' on this shared server' if shared else ''}. Export **MP4** instead — "
-        f"its frames stream straight to the encoder and the file stays small — or "
+        f"{' on this shared server' if shared else ''}. Export **MP4** instead, or "
         f"{shorter}lower the resolution."
     )
 
@@ -401,8 +400,8 @@ def render_png_frames(
         import kaleido
     except Exception as exc:  # pragma: no cover - import guard
         raise AnimationExportError(
-            "Kaleido is not installed, so the animation can't be rasterized to "
-            "GIF/MP4. Use the HTML export instead, or `pip install kaleido`."
+            "Kaleido is not installed, so GIF and MP4 export is unavailable. Use "
+            "the HTML export, or run `pip install kaleido`."
         ) from exc
 
     frames = list(fig.frames or ())
@@ -695,7 +694,7 @@ def export_animation(
         emit_status(
             status_callback,
             ExportStage.STARTING_RENDERER,
-            "Starting one shared Chrome/Kaleido renderer…",
+            "Starting the browser that draws the frames…",
             started_at=started,
         )
 

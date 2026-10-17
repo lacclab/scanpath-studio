@@ -362,9 +362,9 @@ def missing_browser_note(static_formats: bool) -> str:
         return ""
     return (
         "PNG, SVG and PDF bundle figures need Chrome, Chromium or Edge on the "
-        "computer running Scanpath Studio, and none was found, so they will fail. "
-        "Pick **HTML**, which needs no browser — or install one. The current "
-        "figure's PNG and SVG downloads are made by your own browser."
+        "computer running Scanpath Studio, and none was found. Pick **HTML**, "
+        "which needs no browser, or install one. The PNG and SVG downloads of the "
+        "current figure use your own browser."
     )
 
 
@@ -674,10 +674,10 @@ def path_structure_error(pattern: str) -> str | None:
         return "The file path pattern is empty."
     if "\\" in probe:
         return (
-            "Use `/` between folders: a backslash is a separator to some unzip tools."
+            "Use `/` between folders. Some unzip tools read a backslash as a separator."
         )
     if probe.startswith("/") or _DRIVE_PREFIX.match(probe):
-        return "The file path must be relative to the ZIP: start it with a folder or file name."
+        return "The file path must be relative to the ZIP. Start it with a folder or file name."
     for part in probe.split("/"):
         if not part.strip():
             return "The file path has an empty folder or file name (`//`, or a trailing `/`)."
@@ -1130,7 +1130,7 @@ def render_static_figure_bytes(
         emit_status(
             status_callback,
             ExportStage.STARTING_RENDERER,
-            "Starting the Chrome/Kaleido renderer (cold starts can take a few seconds)…",
+            "Starting the browser that draws the figure (this can take a few seconds)…",
             started_at=started,
         )
         with _figure_renderer(True) as render:
@@ -1286,7 +1286,8 @@ def _render_scope_picker(
         # The stored value stays "All"; only what the radio shows says more.
         format_func=lambda label: "All, ignoring filters" if label == "All" else label,
         horizontal=True,
-        help="Choose a subset. All ignores active filters.",
+        help="Pick the trials to export. *All, ignoring filters* also includes "
+        "trials the trial filters hide.",
         label_visibility="collapsed",
     )
     scope, export_unfiltered = options_map[scope_label]
@@ -1556,8 +1557,8 @@ def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
     # A name the bundle keeps for its own files is not refused — the
     # trial's file takes the next free one, which the example shows.
     clash = (
-        f" — `{plain}` would clash with one of the bundle's own files, so it "
-        "gets the next free name."
+        f" (`{plain}` is taken by another file in the bundle, so the next free "
+        "name is used)"
         if example != plain
         else ""
     )
@@ -1621,9 +1622,9 @@ def render_export_options(
                 selection_mode="multi",
                 default=["PDF"],
                 key=f"{key_prefix}_figfmts",
-                help="PDF/SVG are vector, PNG is raster, and HTML is interactive. "
-                "The bundle draws PDF, SVG and PNG with Chrome, Chromium or "
-                "Edge; HTML needs no browser.",
+                help="PDF and SVG are vector, PNG is raster, and HTML is "
+                "interactive. PDF, SVG and PNG need Chrome, Chromium or Edge; "
+                "HTML needs no browser.",
             )
             or []
         )
@@ -1641,9 +1642,9 @@ def render_export_options(
                 value=False,
                 key=f"{key_prefix}_html_self_contained",
                 persist_state="session",
-                help="Tick to make the bundle's HTML figures open without an "
-                "internet connection: each carries the Plotly library, about "
-                "4.8 MB more. Unticked, they load it from cdn.plot.ly when opened.",
+                help="Tick to make the bundle's HTML figures open offline. Each "
+                "then includes the Plotly library, about 4.8 MB more. Unticked, "
+                "they load it from cdn.plot.ly when opened.",
             )
         )
         # The bundle's static figures need a browser on the server,
@@ -1664,7 +1665,7 @@ def render_export_options(
                 value=2,
                 width=140,
                 key=f"{key_prefix}_scale",
-                help="Higher values increase quality and file size.",
+                help="Higher values give sharper images and larger files.",
             )
         else:
             png_scale = int(st.session_state.get(f"{key_prefix}_scale", 2))
@@ -1684,9 +1685,9 @@ def render_export_options(
         # Kaleido/Chrome, unlike the browser-free HTML the user chose), so warn.
         if separable_layers and not (include_png or include_svg or include_pdf):
             st.caption(
-                f"{ICONS['warning']} Separable layers export as **SVG** (a static vector needing "
-                "Chrome/Kaleido) — HTML figures can't be split. Pick SVG/PDF/PNG "
-                "above to choose the layer format."
+                f"{ICONS['warning']} HTML figures can't be split, so the layers "
+                "export as **SVG**, which needs Chrome, Chromium or Edge. Pick SVG, "
+                "PDF or PNG above to choose the layer format."
             )
         include_plot_config = panel_field(
             st,
@@ -1702,8 +1703,9 @@ def render_export_options(
             "Annotations (JSON)",
             value=False,
             key=f"{key_prefix}_annotations",
-            help="Include the exported trials' favorites, tags and notes as one "
-            f"annotations.json — the file {ICONS['view_data']} Data Management → Annotations imports.",
+            help="Include the exported trials' favorites, tags and notes as "
+            "annotations.json. You can import it on "
+            f"{ICONS['view_data']} Data Management → Annotations.",
         )
         tabular = (
             panel_field(
@@ -1722,7 +1724,8 @@ def render_export_options(
                 default=[],
                 key=f"{key_prefix}_tabular",
                 help="Choose the data tables to include. Word measures are the "
-                "reading measures the dataset brought; none are computed.",
+                "reading measures that came with the dataset; the app computes "
+                "none.",
             )
             or []
         )
@@ -1754,8 +1757,8 @@ def render_export_options(
                 "Combine all trials into one file per table",
                 value=False,
                 key=f"{key_prefix}_combine",
-                help="Write each table once, with every exported trial stacked "
-                "in it, under aggregate/ — instead of one file per trial.",
+                help="Write each table once under aggregate/, with all exported "
+                "trials in it, instead of one file per trial.",
             )
         else:
             table_format = str(st.session_state.get(f"{key_prefix}_fmt", "csv"))
@@ -1767,9 +1770,8 @@ def render_export_options(
         path_pattern = _render_naming_options(st, combos, key_prefix)
         if title_pattern or caption_pattern:
             st.caption(
-                "Title and caption on the figure — set on the Scanpath rail's "
-                f"**{ICONS['figure']} Figure & canvas** → *Title* / *Caption*, and "
-                "applied here too."
+                "The figures use the title and caption set on the Scanpath rail's "
+                f"**{ICONS['figure']} Figure & canvas** → *Title* / *Caption*."
             )
 
     return ExportOptions(
@@ -1828,8 +1830,8 @@ def _render_screen_picker(
             options=screen_options,
             key=key,
             placeholder="All screens",
-            help="Export only these screens of each trial. Leave empty for "
-            "every screen; a trial that shows none of them is left out.",
+            help="Export only these screens of each trial. Leave empty for all "
+            "screens. Trials that show none of the picked screens are left out.",
         )
         or []
     )
@@ -2660,24 +2662,24 @@ def bulk_export(
         *_scope_lines(options, combos, units),
         "",
         "## Layout",
-        "- `index.csv` lists every file in this bundle — its path, what it is, "
-        "its participant, trial and screen — and every requested file that "
-        "failed (`status` = `failed`) or reading skipped (`skipped`). A file "
-        "type that was not requested is not listed.",
+        "- `index.csv` lists every file in this bundle (its path, what it is, "
+        "its participant, trial and screen), plus every requested file that "
+        "failed (`status` = `failed`) or was skipped (`skipped`). File types "
+        "you did not request are not listed.",
         "- `per_trial/<participant>__<trial>/` holds each trial's files, "
-        "unless the File naming pattern moved them (`index.csv` has every path). "
-        "A file the pattern names like another, or like one of this bundle's "
-        "own files, has `-2`, `-3` … added to its name.",
+        "unless the File naming pattern put them elsewhere (`index.csv` has "
+        "every path). A file whose name is already taken in the bundle has "
+        "`-2`, `-3` … added to its name.",
         "- A trial shown on several screens adds `screens/screen-001-<id>/` "
         "inside its folder.",
         *(
             [
-                "- `aggregate/` holds each table once, every trial in this run "
-                "stacked in it (*Combine all trials into one file*)."
+                "- `aggregate/` holds each table once, with all trials in this "
+                "run (*Combine all trials into one file per table*)."
             ]
             if options.combine_trials and options.any_table()
             else (
-                ["- `aggregate/` holds the reader summary, across every trial."]
+                ["- `aggregate/` holds the reader summary across all trials."]
                 if options.include_analysis_family
                 else []
             )
@@ -2694,13 +2696,13 @@ def bulk_export(
         "## Data dictionary",
         *(
             [
-                "Columns keep the names they have in the dataset's own files. "
-                "A column Scanpath Studio built, converted or computed keeps its "
-                "internal name; `columns.json` maps every column below to its "
+                "Columns keep the names they have in the dataset's files. A "
+                "column Scanpath Studio built, converted or computed has its "
+                "internal name. `columns.json` maps each column below to its "
                 "internal name, for scripts that work across datasets. Columns "
-                "not listed are written under their own names. A table the app "
-                "derives (a summary, the saccades) carries the dataset's ids under "
-                "these names, and its own values under the app's.",
+                "not listed keep their names. Tables the app derives (summaries, "
+                "saccades) use the dataset's names for the ids and the app's "
+                "names for the values they add.",
                 *dictionary_lines(written, maps),
                 *(
                     ["", "Reading measures in the word tables:"]
@@ -2720,20 +2722,21 @@ def bulk_export(
         *(
             [f"- {measure_headers.get(column, column)}" for column in brought]
             if brought
-            else ["- (no reading measures — see below)"]
+            else ["- (no reading measures; see below)"]
             if measures_wanted
             else []
         ),
         "",
         "## Reading measures",
-        "The word tables carry the reading measures the dataset brought, as "
-        "mapped on the app's Data Management page; Scanpath Studio computes none of them.",
+        "The word tables carry the reading measures that came with the dataset, "
+        "as mapped on the app's Data Management page. Scanpath Studio computes "
+        "none of them.",
         *(
             [
                 "",
-                "This dataset brought none, so the bundle has no word-measure "
-                "table. Map them in the app on Data Management → Edit dataset → "
-                "Reading measures.",
+                "This dataset has none, so the bundle has no word-measure table. "
+                "To add them, map them in the app on Data Management → Edit "
+                "dataset → Reading measures.",
             ]
             if measures_wanted and not brought
             else []
@@ -2789,7 +2792,7 @@ def bulk_export(
             else ExportStage.ENCODING_WRITING
         ),
         (
-            "Starting one shared Chrome/Kaleido renderer…"
+            "Starting the browser that draws the figures…"
             if options.needs_kaleido()
             else "Writing selected files…"
         ),
@@ -3307,7 +3310,7 @@ def bulk_export(
     emit_status(
         status_callback,
         ExportStage.FINALIZING,
-        "Finalizing and compressing the zip archive…",
+        "Compressing the zip archive…",
         started_at=started,
         completed=progress.finished_trials,
         total=progress.total_trials,

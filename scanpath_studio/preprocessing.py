@@ -554,7 +554,10 @@ def duration_mass_table(
         analysis = analysis.loc[~analysis["excluded"].fillna(False).astype(bool)]
     keys = grouping_columns(analysis)
     if keys != grouping_columns(out):
-        raise ValueError("Character and fixation tables use different part identities.")
+        raise ValueError(
+            "Screen ID is set in only one of the word and fixation tables; set "
+            "it in both or neither."
+        )
     groups = (
         analysis.groupby(keys, sort=False, dropna=False) if keys else [((), analysis)]
     )
@@ -759,7 +762,10 @@ def measure_sensitivity(
 
     trial_keys = grouping_columns(fixations)
     if trial_keys != grouping_columns(words):
-        raise ValueError("Words and fixations use different part identities.")
+        raise ValueError(
+            "Screen ID is set in only one of the word and fixation tables; set "
+            "it in both or neither."
+        )
     combined_parts = []
     report_parts = []
     groups = (

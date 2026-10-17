@@ -146,5 +146,5 @@ def test_the_link_says_a_metadata_field_does_not_travel(pattern, warned):
     at.session_state["_pattern"] = pattern
     at.run(timeout=30)
     assert not at.exception, at.exception
-    said = any("Metadata tables" in c for c in at.session_state["_caveats"])
+    said = any("metadata table" in c for c in at.session_state["_caveats"])
     assert said is warned

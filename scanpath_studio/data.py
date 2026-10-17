@@ -818,9 +818,9 @@ def load_onestop_server_bundle(
             if not ok
         ]
         st.error(
-            f"No data for participant {participant!r} on this server: they have "
-            f"no reading data, or its files ({', '.join(missing)}) are missing. "
-            "Whoever runs the server can regenerate them with "
+            f"No data for participant {participant!r} on this server. Either they "
+            f"have no reading data or its files ({', '.join(missing)}) are "
+            "missing. The server's admin can regenerate the files with "
             "`python -m scanpath_studio.onestop_shard --data-dir <ONESTOP_DATA_DIR>`."
         )
         st.stop()
@@ -830,7 +830,7 @@ def load_onestop_server_bundle(
     fix_path = base / "fixations_Paragraph.csv.zip"
     if not ia_path.exists() or not fix_path.exists():
         st.error(
-            f"OneStop data not found under {base}. Expected ia_Paragraph.csv.zip + "
+            f"OneStop data not found under {base}. Expected ia_Paragraph.csv.zip and "
             f"fixations_Paragraph.csv.zip."
         )
         return pd.DataFrame(), pd.DataFrame()
@@ -1831,8 +1831,8 @@ def validate_fix_schema(schema: dict[str, str | None]) -> list:
     has_xy = schema.get("x") and schema.get("y")
     if not has_xy and not schema.get("word_id"):
         problems.append(
-            "missing X and Y (or a Word/IA ID, to place each fixation at its "
-            "word's center)"
+            "missing X and Y, or a Word/IA ID to place each fixation at its "
+            "word's center"
         )
     return problems
 
@@ -2456,10 +2456,10 @@ def mapping_value_preview(
 _UNPARSED_CONSEQUENCE = {
     "duration": "those fixations are read as 0 ms long",
     "timestamp": "those fixations are read as starting at 0",
-    "x": "those fixations are placed at their word's center when they have a word id, "
-    "and left off the plot otherwise",
-    "y": "those fixations are placed at their word's center when they have a word id, "
-    "and left off the plot otherwise",
+    "x": "those fixations are placed at their word's center if they have a word id, "
+    "and left off the plot if not",
+    "y": "those fixations are placed at their word's center if they have a word id, "
+    "and left off the plot if not",
     "word_id": "those rows have no word id",
 }
 #: The same for the Words table, where x/y are a box's corner, not a gaze.
@@ -2502,9 +2502,9 @@ def numeric_parse_issues(
         )
         if failed.str.fullmatch(_THOUSANDS_GROUPED).all():
             line += (
-                ". They could be a decimal comma or a thousands separator, so they "
-                "were not guessed at — re-export the table with a '.' decimal point "
-                "and no thousands separator"
+                ". The comma could be a decimal comma or a thousands separator, so "
+                "they were not converted. Re-export the table with a '.' decimal "
+                "point and no thousands separator"
             )
         consequences = (
             _UNPARSED_CONSEQUENCE if fixations else _UNPARSED_WORD_CONSEQUENCE
@@ -2556,10 +2556,10 @@ def unplaced_fixations_issue(
     examples = ", ".join(f"'{v}'" for v in failed.drop_duplicates().head(3))
     return (
         f"{table}: the Word/IA ID column `{column}` holds no numbers (e.g. "
-        f"{examples}). With no X and Y mapped, a fixation is placed at the center "
-        "of the word box its Word/IA ID names, and Word/IA IDs are read as "
-        "numbers — so none of these fixations can be placed. Map the fixations' "
-        "X and Y, or use numeric Word/IA IDs in both tables."
+        f"{examples}). Without X and Y, a fixation is placed at the center of "
+        "the word box its Word/IA ID names, and Word/IA IDs must be numbers, so "
+        "none of these fixations can be placed. Map the fixations' X and Y, or "
+        "use numeric Word/IA IDs in both tables."
     )
 
 
@@ -2675,13 +2675,13 @@ def screen_fraction_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> li
     if not (xs.between(0, 1, inclusive="neither").any()):
         return []  # all 0 / all 1 is degenerate data, not a fraction
     return [
-        f"{table}: every position in `{x}` / `{y}` lies between 0 and 1 — these "
-        "look like fractions of the screen (Gazepoint's FPOGX/FPOGY, Pupil Labs "
-        "Core's norm_pos), not pixels, so the scanpath is drawn in a 1-pixel "
-        "corner of the canvas. They are not converted, because the screen size "
-        "is not known here: multiply them by the screen width and height in "
-        "pixels before uploading (for Pupil Core, whose y points up, use "
-        "(1 − y) × height)."
+        f"{table}: the positions in `{x}` / `{y}` all fall around 0 to 1. They "
+        "look like fractions of the screen (such as Gazepoint's FPOGX/FPOGY or "
+        "Pupil Labs Core's norm_pos), not pixels, so the scanpath is drawn in a "
+        "1-pixel corner of the canvas. The app does not know the screen size, so "
+        "it does not convert them. Multiply them by the screen width and height "
+        "in pixels before uploading. Pupil Core's y points up, so use "
+        "(1 − y) × height for it."
     ]
 
 
@@ -3019,8 +3019,8 @@ def _empty_file_error(name: str) -> ValueError:
     """The error an empty upload raises, in place of pandas' "No columns to
     parse from file"."""
     return ValueError(
-        f"'{Path(name).name}' is empty — it has no header row. Check the export "
-        "finished writing, then upload it again."
+        f"'{Path(name).name}' is empty and has no header row. Check that the "
+        "export finished writing, then upload it again."
     )
 
 
@@ -3288,15 +3288,16 @@ def _check_zip_limits(infos: list[zipfile.ZipInfo]) -> None:
                 f"{info.filename!r} in the zip unpacks to "
                 f"{_format_bytes(info.file_size)}, over the "
                 f"{_format_bytes(ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES)} per-file "
-                "limit. Split it into smaller files (one per participant works "
-                f"well). Running it yourself? {ZIP_MAX_MEMBER_ENV} (GB) raises it."
+                "limit. Split it into smaller files, for example one per "
+                f"participant. If you run the app yourself, set {ZIP_MAX_MEMBER_ENV} "
+                "(in GB) to raise the limit."
             )
     if total > ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES:
         raise ValueError(
             f"the zip unpacks to {_format_bytes(total)}, over the "
             f"{_format_bytes(ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES)} limit. Split it "
-            "into smaller uploads. Running it yourself? "
-            f"{ZIP_MAX_TOTAL_ENV} (GB) raises it."
+            "into smaller uploads. If you run the app yourself, set "
+            f"{ZIP_MAX_TOTAL_ENV} (in GB) to raise the limit."
         )
     if total >= ZIP_RATIO_CHECK_MIN_BYTES:
         ratio = total / max(compressed, 1)
@@ -3304,9 +3305,9 @@ def _check_zip_limits(infos: list[zipfile.ZipInfo]) -> None:
             raise ValueError(
                 f"the zip archive expands {ratio:.0f}× (to "
                 f"{_format_bytes(total)}), above the "
-                f"{ZIP_MAX_COMPRESSION_RATIO:.0f}× limit — it doesn't look like "
-                "a normal data export. Unzip it and load the tables directly if "
-                "this is genuine."
+                f"{ZIP_MAX_COMPRESSION_RATIO:.0f}× limit, which is unusual for a "
+                "data export. If the zip is genuine, unzip it and load the tables "
+                "directly."
             )
 
 
@@ -3370,9 +3371,9 @@ class _BudgetedZipMember(io.RawIOBase):
         self.consumed += read
         if self.consumed > self._budget:
             raise ValueError(
-                f"{self._name!r} in the zip is larger than the archive says, "
-                f"past the {_format_bytes(self._budget)} {self._limit_label}, so "
-                "it was not read. Re-create the zip and upload it again."
+                f"{self._name!r} in the zip is larger than the archive says "
+                f"(over the {_format_bytes(self._budget)} {self._limit_label}), "
+                "so it was not read. Re-create the zip and upload it again."
             )
         return read
 
@@ -3438,7 +3439,7 @@ class ZipMemberSplit:
         if self.left_out_kind in _ZIP_KIND_NOUNS:
             other = _ZIP_KIND_NOUNS[self.left_out_kind][n_out != 1]
             row = _ZIP_KIND_ROWS[self.left_out_kind]
-            tail = f" — add the ZIP to the {row} row too."
+            tail = f". Add the ZIP to the {row} row too."
         else:
             other, tail = ("other file" if n_out == 1 else "other files"), "."
         verb = "was" if n_out == 1 else "were"
@@ -4123,7 +4124,7 @@ def infer_fix_schema(fixations: pd.DataFrame) -> dict[str, str] | None:
     schema = propose_fix_schema(fixations)
     problems = validate_fix_schema(schema)
     if problems:
-        st.error(f"Fixations schema problems: {'; '.join(problems)}")
+        st.error(f"Fixations table problems: {'; '.join(problems)}")
         return None
     return schema
 
@@ -4329,37 +4330,35 @@ class StimulusJoin:
             which = "that screen" if len(self.missing_screens) == 1 else "those screens"
             parts.append(
                 f" {self._unit(self.missing_screen_readings)} {verb} a Words-table trial "
-                f"that has no boxes for {which} ({screens})."
+                f"with no boxes for {which} ({screens})."
             )
         if self.ambiguous_readings:
             shown = ", ".join(repr(t) for t in self.ambiguous_texts[:3])
             more = len(self.ambiguous_texts) - 3
             if more > 0:
                 shown += f" and {more:,} more"
-            texts = (
-                "that Text ID" if len(self.ambiguous_texts) == 1 else "those Text IDs"
-            )
             verb = "names" if self.ambiguous_readings == 1 else "name"
             parts.append(
-                f" {self._unit(self.ambiguous_readings)} {verb} a Text ID the Words "
-                f"table gives to more than one of its trials ({shown}), so "
-                f"{texts} cannot pick one set of boxes."
+                f" {self._unit(self.ambiguous_readings)} {verb} a Text ID that the "
+                f"Words table gives to more than one trial ({shown}), so the app "
+                "cannot tell which trial's boxes to use."
             )
         return "".join(parts)
 
     def _mismatch_note(self) -> str:
         if not self.text_mismatches:
             return ""
-        verb, pron = ("has", "its") if self.text_mismatches == 1 else ("have", "their")
+        match, verb = (
+            ("matches", "has") if self.text_mismatches == 1 else ("match", "have")
+        )
         example = ""
         if self.mismatch_example is not None:
             reading, aoi = self.mismatch_example
             example = f" (e.g. {reading!r} against {aoi!r})"
         return (
-            f" {self._unit(self.text_mismatches)} {verb} the boxes of the Words-"
-            f"table trial {pron} Trial ID matches, but a different Text ID from that "
-            f"trial's{example}: check that Text ID names the same texts in both "
-            "tables."
+            f" {self._unit(self.text_mismatches)} {match} a Words-table trial by "
+            f"Trial ID but {verb} a different Text ID{example}. Check that Text ID "
+            "names the same texts in both tables."
         )
 
     def describe(self) -> str:
@@ -4381,24 +4380,23 @@ class StimulusJoin:
     def problem(self) -> str:
         """Why the join is refused, and what to map instead."""
         advice = (
-            " Map **Text ID** in both tables to the column naming the text "
-            "each row belongs to, or give the Words table the fixations' own "
-            "Trial IDs."
+            " Map **Text ID** in both tables to the column that names each "
+            "row's text, or give the Words table the fixations' Trial IDs."
         )
         if self.matched:
             # Only a multipart dataset refuses a partial join: every screen a
             # reading has fixations on needs its boxes (`validate_matching_parts`).
             return (
                 "The Words table has no Participant ID, so its word boxes are shared "
-                f"by every trial of a text, but only {self.matched:,} of "
+                f"by every trial of a text. Only {self.matched:,} of "
                 f"{self._unit(self.readings)} find theirs, and a multipart dataset "
                 "needs boxes for every screen it has fixations on."
                 f"{self._why_unmatched()}{advice}"
             )
         return (
             "The Words table has no Participant ID, so its word boxes are shared by "
-            f"every trial of a text, but none of the {self._unit(self.readings)} "
-            "in the fixations finds them: the dataset would have no word boxes."
+            f"every trial of a text. None of the {self._unit(self.readings)} "
+            "in the fixations finds them, so the dataset would have no word boxes."
             f"{self._why_unmatched()}{advice}"
         )
 
@@ -6708,7 +6706,7 @@ def trial_filter_conflict_note(
         one = len(readings) == 1
         lines.append(
             f"**{plural(len(readings), 'trial')}** {'has' if one else 'have'} "
-            f"one {label(col)} in the Words table and another in the Fixations "
+            f"a different {label(col)} in the Words table than in the Fixations "
             f"table, so {subject or f'the {label(col)} filter'} leaves "
             f"{'it' if one else 'them'} out ({shown}{more})."
         )
@@ -7177,23 +7175,23 @@ def trial_identity_warning(report: dict[str, object]) -> str | None:
         else f"of {total:,} trials"
     )
     lead = (
-        f"**{affected:,} {scope} look like more than one trial "
+        f"**{affected:,} {scope} look like several trials merged "
         f"under the current Trial ID.**"
     )
     multi = report.get("multi_valued_columns") or {}
     if report.get("mixed_source_shapes"):
         return (
-            f"{lead} Their rows come from files with different columns — one "
+            f"{lead} Their rows come from files with different columns, so one "
             "table probably holds both fixation and interest-area reports. "
-            "Upload each report in its own row: Fixations, or Words (interest "
+            "Upload each report in its own row, Fixations or Words (interest "
             "areas)."
         )
     if multi:
         col, count = next(iter(multi.items()))
         return (
-            f"{lead} `{col}` takes more than one value inside a trial "
-            f"({plural(count, 'trial')}) — adding it to the Trial ID mapping "
-            "would separate them."
+            f"{lead} `{col}` takes more than one value within a trial "
+            f"({plural(count, 'trial')}). Add it to the Trial ID mapping to "
+            "separate them."
         )
     parts = []
     if report.get("duplicate_word_rows"):

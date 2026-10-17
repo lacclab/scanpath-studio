@@ -58,15 +58,14 @@ def crash_message(error: BaseException) -> str:
     from scanpath_studio import __version__
 
     return (
-        "**Scanpath Studio ran into an unexpected error.** This is most likely "
-        "a bug in the app, not something you did — please let us know so we "
-        "can fix it.\n\n"
+        "**Scanpath Studio hit an unexpected error.** This is probably a bug "
+        "in the app. Please report it so we can fix it.\n\n"
         f"{ICONS['bug']} [Report this bug]({report_url(error)}) ↗ and paste the "
-        "error details below (use their **Copy** button), with what you were "
-        "doing when it happened and your operating system. "
-        f"{ICONS['question']} Questions are welcome on "
+        "error details below (use their **Copy** button), what you were doing "
+        "and your operating system. "
+        f"{ICONS['question']} Ask questions on "
         f"[Discussions → Q&A]({CITATION['questions_url']}) ↗.\n\n"
-        f"Version {__version__}. Reloading the page usually gets you going again."
+        f"Version {__version__}. Reloading the page often fixes it."
     )
 
 

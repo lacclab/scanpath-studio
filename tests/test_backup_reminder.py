@@ -72,7 +72,7 @@ def test_the_reminder_shows_until_dismissed(monkeypatch):
     at.run()
     assert not at.exception, at.exception
     text = " ".join(str(m.value) for m in at.markdown)
-    assert "This deployment saves nothing." in text
+    assert "This server saves nothing." in text
     assert BACKUP_GUIDE_URL in text
     assert "Data Management → Annotations" in text
     # Opened on Scanpath, so it offers the way to the Data Management page too.
@@ -82,4 +82,4 @@ def test_the_reminder_shows_until_dismissed(monkeypatch):
     at.run()
     assert at.session_state[BACKUP_REMINDER_KEY] == "dismissed"
     text = " ".join(str(m.value) for m in at.markdown)
-    assert "This deployment saves nothing." not in text
+    assert "This server saves nothing." not in text

@@ -1130,7 +1130,7 @@ def test_the_onestop_server_bundle_says_which_loader_it_is_not():
 
     source = _resolve_source(ONESTOP_CHOICE)
     assert source.options["variant"] == "lacclab"
-    assert "server-bundle" in source.note
+    assert "server bundle" in source.note
 
 
 def test_a_shared_deployment_never_quotes_the_servers_data_path(monkeypatch):
@@ -1963,7 +1963,7 @@ def test_an_added_dataset_carries_its_manual_mapping(tmp_path, monkeypatch):
     code = cs.reproduction_code(source, _manual_state())
     assert "word_schema={" in code.python and "fix_schema={" in code.python
     assert "'horizontal'" in code.python and "--word-schema" in code.cli
-    assert "mapping it was added with is written out" in " ".join(code.caveats)
+    assert "includes the dataset's column mapping" in " ".join(code.caveats)
     namespace: dict = {}
     exec(compile(code.python, "<snippet>", "exec"), namespace)  # noqa: S102
     assert len(namespace["words"]) == 2 and len(namespace["fixations"]) == 2

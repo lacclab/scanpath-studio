@@ -1082,7 +1082,7 @@ class TestAuthoringEditorFlow:
         at = at.run(timeout=60)
         _clean(at, "with an unusable authoring row:")
         warnings = " ".join(str(w.value) for w in at.warning)
-        assert "no X/Y" in warnings, "an undrawable row was dropped without saying so"
+        assert "No X/Y" in warnings, "an undrawable row was dropped without saying so"
         assert "row 2" in warnings
 
     def _linked(self, events: str) -> AppTest:
@@ -1097,7 +1097,7 @@ class TestAuthoringEditorFlow:
         raising from `pd.DataFrame` before the app draws its navigation."""
         at = self._linked('[{"x":100},1]')
         _clean(at, "with a malformed authored link:")
-        assert any("unreadable hand-made scanpath" in str(w.value) for w in at.warning)
+        assert any("unreadable authored scanpath" in str(w.value) for w in at.warning)
         assert at.session_state["author_text"] == "alpha beta"
 
     def test_valid_authored_link_events_survive_the_first_render(self):

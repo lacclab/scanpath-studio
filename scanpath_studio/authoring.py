@@ -200,7 +200,8 @@ def event_records_frame(records: Any) -> pd.DataFrame:
             raise ValueError(f"Authored fixation {number} is not an object.")
         if not any(column in record for column in EVENT_COLUMNS):
             raise ValueError(
-                f"Authored fixation {number} has none of: {', '.join(EVENT_COLUMNS)}."
+                f"Authored fixation {number} has none of the fields "
+                f"{', '.join(EVENT_COLUMNS)}."
             )
         bad = sorted(
             str(key)
@@ -209,7 +210,8 @@ def event_records_frame(records: Any) -> pd.DataFrame:
         )
         if bad:
             raise ValueError(
-                f"Authored fixation {number} has a non-scalar {', '.join(bad)}."
+                f"Authored fixation {number}: {', '.join(bad)} must be a number, "
+                "text or empty."
             )
     frame, _ = reconcile_event_table(pd.DataFrame(records).reset_index(drop=True))
     return frame
@@ -242,7 +244,7 @@ def event_problems(words: pd.DataFrame, events: pd.DataFrame | None) -> list[str
         listed = ", ".join(str(number) for number in unusable[:10])
         suffix = f" (+{len(unusable) - 10} more)" if len(unusable) > 10 else ""
         problems.append(
-            f"Not drawn — no X/Y and no valid target word: row {listed}{suffix}."
+            f"No X/Y and no valid target word, so not drawn: row {listed}{suffix}."
         )
     return problems
 

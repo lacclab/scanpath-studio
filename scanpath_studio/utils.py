@@ -1155,8 +1155,8 @@ def _render_trial_sort_popover(
             "Sort trials by",
             options=options,
             key=state_key,
-            help="Reorder the trial list by a computed statistic or by a participant, "
-            "text or condition property.",
+            help="Sort the trial list by a statistic or by a participant, text "
+            "or condition property.",
         )
         descending = labeled(
             st,
@@ -1596,9 +1596,9 @@ def _select_trial_none_mode(
                 None,
                 (
                     trial_id_help(id_part_names),
-                    "Click this dropdown, then type to narrow the list. "
-                    "★ favorite · 🏷️ tagged · 📝 has notes. When a sort key is "
-                    "active, each option ends with that trial's value for it.",
+                    "Type to narrow the list. ★ favorite · 🏷️ tagged · 📝 has "
+                    "notes. When the list is sorted, each option ends with "
+                    "that trial's sort value.",
                 ),
             )
         ),
@@ -1616,9 +1616,9 @@ def _select_trial_none_mode(
                 key=slider_key,
                 persist_state="session",
                 on_change=_on_trial_slider,
-                help=f"Scrub through the {n_trials} trials (index/total · id, "
-                "plus the sort value when one is active); the dropdown jumps to "
-                "a specific id.",
+                help=f"Scrub through the {n_trials} trials. Each shows its "
+                "index/total and id, plus the sort value when the list is "
+                "sorted. To jump to an id, use the dropdown.",
                 label_visibility="collapsed",
                 format_func=lambda value: (
                     slider_labels.get(value) or _slider_label(value)

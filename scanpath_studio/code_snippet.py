@@ -87,8 +87,8 @@ SOURCE_UNKNOWN = "unknown"
 #: the browser session, not at a path the server can quote back — writing a
 #: guessed path would produce a snippet that runs and loads the wrong thing.
 UNKNOWN_SOURCE_NOTE = (
-    "This dataset was uploaded into the app, so the snippet can't name the "
-    "files it came from — fill in the paths to your own tables."
+    "This dataset was uploaded in the app, so the snippet can't name its files. "
+    "Fill in the paths to your own tables."
 )
 
 
@@ -295,7 +295,7 @@ def _onestop_python(source: SnippetSource) -> list[str]:
 def _unknown_python(source: SnippetSource) -> list[str]:
     if source.options.get("keep_columns"):
         return [
-            "# Point these at your own tables — the app can't name an uploaded file.",
+            "# Point these at your own tables. The app can't name an uploaded file.",
             "words, fixations = sps.load_scanpath_data(",
             '    "words.csv",',
             '    "fixations.csv",',
@@ -354,9 +354,8 @@ UPLOAD_FIXATIONS_PLACEHOLDER = "fixations.csv"
 #: replay — step code (``source_recipe["steps"]``) → the caveat naming it.
 UPLOAD_STEP_NOTES = {
     "aggregate_char_boxes": (
-        "Its AOIs were character boxes, which the app joined into word boxes; "
-        "the loader in the snippet does not, so join them in your words table "
-        "first."
+        "Its AOIs were character boxes, which the app joined into word boxes. "
+        "The snippet's loader doesn't, so join them in your words table first."
     ),
 }
 
@@ -382,8 +381,8 @@ def upload_source(
     schemas = recipe.get("schemas") if isinstance(recipe.get("schemas"), dict) else {}
     steps = [str(s) for s in recipe.get("steps") or ()]
     notes = [
-        "This dataset was added in the app, so the snippet can't name its files: "
-        "replace "
+        "This dataset was added in the app, so the snippet can't name its files. "
+        "Replace "
         + " and ".join(
             f"`{p}`"
             for p, present in (
@@ -392,16 +391,16 @@ def upload_source(
             )
             if present
         )
-        + " with them (a list of files works for one added from several). "
-        "The column mapping it was added with is written out."
+        + " with your files (or a list of files, if you added several). "
+        "The snippet includes the dataset's column mapping."
     ]
     notes += [UPLOAD_STEP_NOTES[s] for s in steps if s in UPLOAD_STEP_NOTES]
     if derived := [str(c) for c in recipe.get("derived") or ()]:
         notes.append(
             "It maps "
             + ", ".join(f"`{c}`" for c in derived)
-            + ", made from the file names when it was added; the loader has no "
-            "such step, so add "
+            + ", made from the file names when it was added. The loader can't do "
+            "that, so add "
             + ("those columns" if len(derived) > 1 else "that column")
             + " to your tables first."
         )
@@ -415,7 +414,7 @@ def upload_source(
         notes.append(
             "Its mapping was edited after it was added, and "
             + ", ".join(unresolved)
-            + " could not be traced back to your files' columns — check "
+            + " could not be traced back to your files' columns. Check "
             + ("those fields" if len(unresolved) > 1 else "that field")
             + " before running it."
         )
@@ -2157,14 +2156,14 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
         notes.append(source.note)
     if _draws_primary_raw_gaze(state) and not _raw_gaze_named(source):
         notes.append(
-            "The raw gaze was loaded into the app, so the snippet can't name the "
-            f"file it came from and loads `{_RAW_GAZE_PLACEHOLDER}` instead — "
-            "point it at your own table."
+            "The raw gaze was loaded in the app, so the snippet can't name its "
+            f"file and loads `{_RAW_GAZE_PLACEHOLDER}` instead. Point it at your "
+            "own table."
         )
     if _second_raw_gaze(state) == [B_RAW_GAZE_PLACEHOLDER]:
         notes.append(
-            "Scanpath B's raw gaze was loaded into the app, so the snippet can't "
-            f"name its file and loads `{B_RAW_GAZE_PLACEHOLDER}` instead — point "
+            "Scanpath B's raw gaze was loaded in the app, so the snippet can't "
+            f"name its file and loads `{B_RAW_GAZE_PLACEHOLDER}` instead. Point "
             "it at your own table."
         )
     if any(
@@ -2172,8 +2171,8 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
         for key in ("background_image", "background_image_b")
     ):
         notes.append(
-            "The stimulus image was uploaded into the app, so the snippet "
-            f"names `{_IMAGE_PLACEHOLDER}` instead — point it at your own file."
+            "The stimulus image was uploaded in the app, so the snippet "
+            f"uses `{_IMAGE_PLACEHOLDER}` instead. Point it at your own file."
         )
     # Scanpath B can come from a *second* dataset, and its participant id
     # is that corpus's own. Both halves load B's tables and name
@@ -2183,13 +2182,13 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
     if other is not None:
         note = (
             f"Scanpath B comes from a second dataset (`{other.dataset}`), so "
-            f"`{other.participant}` is a participant of that dataset, not this one."
+            f"`{other.participant}` is a participant in that dataset, not this one."
         )
         if not (other.words or other.fixations):
             note += (
                 f" The snippet loads it from `{B_WORDS_PLACEHOLDER}` / "
                 f"`{B_FIXATIONS_PLACEHOLDER}` (`--compare-words` / "
-                "`--compare-fixations` on the CLI): point those at its tables."
+                "`--compare-fixations` on the CLI). Point those at its tables."
             )
         if state.kind == "animation" and other.canvas is None:
             # With `dataset_b=`, `animate_scanpath` checks the two screens as
@@ -2197,17 +2196,16 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
             # read off that trial's data, which rarely matches, so the note asks
             # for B's.
             note += (
-                " A co-animation needs both scanpaths on one screen, so state B's "
-                "too, as `setup_b=` (`--compare-canvas` on the CLI): one read off "
-                "B's data rarely matches."
+                " A co-animation needs both scanpaths on the same screen, so also "
+                "give B's screen, as `setup_b=` (`--compare-canvas` on the CLI). "
+                "Without it, B's screen is read from its data and may not match."
             )
         notes.append(note)
     if state.kind == "comparison" and str(state.illustration_label).lower() != "auto":
         notes.append(
             "`compare_scanpaths` has no `illustration_label` parameter, so the "
             "snippet leaves out your Illustration label (**"
-            f"{str(state.illustration_label).capitalize()}**); the comparison "
-            "sets it itself."
+            f"{str(state.illustration_label).capitalize()}**)."
         )
     return notes
 

@@ -605,8 +605,7 @@ def _leave_prompt_dialog(destination: str) -> None:
     """
     st.warning(
         f"**Leave setup and go to {view_label(destination)}?** This dataset isn't "
-        "added yet "
-        "— the files you uploaded won't be kept.",
+        "added yet, so the files you uploaded won't be kept.",
         icon=ICONS["warning"],
     )
     stay_col, leave_col = st.columns(2)
@@ -1016,17 +1015,16 @@ _DERIVE_TABLE_DISPLAY = {"Words / IA": WORDS_TABLE_LABEL}
 #: The one-line caption above each upload row: what goes there, in
 #: EyeLink's terms.
 ROW_CAPTIONS = {
-    "fixations": "One row per fixation — e.g. EyeLink's Fixation Report.",
-    "words": "One row per word with its box — e.g. EyeLink's Interest Area Report.",
-    "raw_gaze": "One row per gaze sample — e.g. EyeLink's Sample Report; drawn as "
-    "recorded.",
+    "fixations": "One row per fixation, e.g. EyeLink's Fixation Report.",
+    "words": "One row per word with its box, e.g. EyeLink's Interest Area Report.",
+    "raw_gaze": "One row per gaze sample, e.g. EyeLink's Sample Report.",
 }
 
 #: What each metadata table holds, beside its empty uploader.
 META_ROW_CAPTIONS = {
-    "participant": "One row per participant — e.g. age, native language, a group.",
-    "trial": "One row per trial — e.g. a list, a condition, a comprehension score.",
-    "text": "One row per text — e.g. a genre or a difficulty rating.",
+    "participant": "One row per participant, e.g. age, native language, a group.",
+    "trial": "One row per trial, e.g. a list, a condition, a comprehension score.",
+    "text": "One row per text, e.g. a genre or a difficulty rating.",
 }
 
 #: What each table must map, said under its caption until a file is in — the
@@ -1143,14 +1141,12 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         "Derive columns from text",
         key="wizard_filename_split",
         help=(
-            "When identity lives only inside a text value — no column carries "
-            "it on its own — derive real columns from it (e.g. session, "
-            "stimulus) that you can then map as an id below: split it on a "
-            "delimiter into positional columns, or pull out named regex "
-            "groups for parts of variable length (e.g. a stimulus name). "
-            "Pick the table first, then any of its own columns — defaults to "
-            f"the uploaded filename (captured as `source_file`). {ICONS['add']} Add line "
-            "adds a second line when one column's text isn't enough."
+            "Use this when an id, such as a session or stimulus, appears only "
+            "inside a text value like the filename. Pick a table and one of its "
+            "columns (by default the uploaded filename, `source_file`). Then "
+            "split the text on a delimiter, or pull parts out with named regex "
+            "groups. The new columns can be mapped as ids below. "
+            f"{ICONS['add']} Add line derives from a second column."
         ),
     )
     if not enabled:
@@ -1202,9 +1198,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             table_options,
             key=table_key,
             label_visibility="collapsed",
-            help="Which uploaded table to derive from — its own columns are "
-            "offered next, since two tables' `source_file` rarely mean the "
-            "same thing.",
+            help="The uploaded table to derive from. Its columns are offered next.",
             # The value stays "Words / IA" — saved setups name it.
             format_func=lambda t: _DERIVE_TABLE_DISPLAY.get(t, t),
         )
@@ -1225,9 +1219,8 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             table_columns,
             key=column_key,
             label_visibility="collapsed",
-            help="Which of that table's own columns to derive from — "
-            "defaults to the filename (`source_file`); pick any other "
-            "column that encodes identity as text.",
+            help="The column to derive from. Defaults to the filename "
+            "(`source_file`); pick another column if it holds the id as text.",
         )
         mode = mode_col.selectbox(
             "How",
@@ -1247,7 +1240,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                     key=delim_key,
                     max_chars=8,
                     label_visibility="collapsed",
-                    help="Character(s) to split the text on — e.g. "
+                    help="The characters to split the text on, e.g. "
                     "`reader0_b0_scanpath` → reader0 / b0 / scanpath.",
                 )
                 or "_"
@@ -1258,16 +1251,16 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                 value=_FILENAME_REGEX_EXAMPLE,
                 key=regex_key,
                 label_visibility="collapsed",
-                help=f"e.g. `{_FILENAME_REGEX_EXAMPLE}` — each named group becomes "
-                "a column. Edit this to match your own filenames.",
+                help=f"e.g. `{_FILENAME_REGEX_EXAMPLE}`. Each named group becomes "
+                "a column. Edit it to match your filenames.",
             )
             lower = switch(
                 lower_col,
                 "toggle",
                 "Lowercase",
                 key=lower_key,
-                help="Fold case so a value matches across tables (e.g. CamelCase "
-                "scanpath names vs lowercase AOI names).",
+                help="Lowercase the extracted values so they match across tables "
+                "(e.g. CamelCase scanpath names vs lowercase AOI names).",
             )
             if pattern:
                 try:
@@ -1291,9 +1284,8 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         f"{ICONS['add']} Add line",
         key="wizard_filename_another",
         width="stretch",
-        help="Add another mapping line — for when identity has to be pulled "
-        "from more than one column (or table), or the same column two "
-        "different ways.",
+        help="Add another line, to derive from a second column or table, or "
+        "from the same column a second way.",
     ):
         # `line_count` was already read (and the lines above already drawn
         # with it) before this button was evaluated, so raising it here alone
@@ -1400,9 +1392,9 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             )
             if collisions:
                 body.warning(
-                    "These group names already exist as columns and were left "
-                    f"untouched: {', '.join(sorted(collisions))}. Rename the "
-                    "group(s) and Apply again to extract them."
+                    "These group names already exist as columns, so they were not "
+                    f"extracted: {', '.join(sorted(collisions))}. Rename the "
+                    "groups and click Apply again."
                 )
 
             def _extract(
@@ -1453,7 +1445,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                 st.session_state[header_key] = [*header, *missing]
             body.caption(
                 f"Derived from **{target_table} · {applied_column}** "
-                "(first rows) — map them as ids below:"
+                "(first rows). Map them as ids below."
             )
             body.dataframe(
                 target[[applied_column, *new_cols]].drop_duplicates().head(),
@@ -1499,8 +1491,8 @@ def _wizard_trial_step(
     _render_identity_field(
         "trial",
         "Trial ID *",
-        "The column telling one participant's trials apart (e.g. TRIAL_INDEX) — "
-        "or several to build one, joined with `_`. Unique within a participant.",
+        "The column that tells one participant's trials apart (e.g. TRIAL_INDEX), "
+        "or several columns joined with `_`. Unique within a participant.",
         cells if cells is not None else [body] * 2,
         raw_words,
         raw_fix,
@@ -1541,9 +1533,9 @@ def _wizard_trial_step(
         counts_str = ", ".join(f"{k}: **{len(v):,}**" for k, v in present.items())
         if not set.intersection(*values):
             return (
-                f"{ICONS['warning']} No trial ids are shared across tables — {counts_str}. Check "
-                "that each table's **Trial ID** picks the column that names the "
-                "same trials."
+                f"{ICONS['warning']} No trial ids are shared across tables "
+                f"({counts_str}). Check that each table's **Trial ID** is the "
+                "column that names the same trials."
             )
     return None
 
@@ -1850,10 +1842,9 @@ def _wizard_table_keep_picker(
     inline_field_label(
         host,
         f"Extra fields to keep — {noun}",
-        "Columns not used in the mapping above. Keep the ones you want "
-        "available later — to filter trials by, sort by, color by, or show "
-        "as an info chip. Anything left out here is dropped when the "
-        "dataset is added.",
+        "Columns not used in the mapping above. Keep the ones you want to "
+        "filter trials by, sort by, color by or show as an info chip. Columns "
+        "left out are dropped when the dataset is added.",
     )
     # No bulk-select buttons: Streamlit puts "Select all" inside the dropdown
     # itself (`select_all`, on by default under 1000 options) and draws a ✕ to
@@ -2154,8 +2145,8 @@ def _wizard_restore_config(host) -> None:
         "Setup file",
         type=["json"],
         key="wizard_config_restore",
-        help="The file ⬇️ Download setup file saved at the foot of this screen "
-        "when you added data like this before.",
+        help="A file saved earlier with ⬇️ Download setup file, at the bottom of "
+        "this screen.",
         label_visibility="collapsed",
         max_upload_size=upload_limit_mb(),
     )
@@ -2203,10 +2194,10 @@ def _render_start_from(host) -> None:
     )
     tip = tooltip(
         "Start from",
-        "Fill this screen in from a setup you already have: a dataset you "
-        "added before — its column mapping, the fields it kept and its recording "
-        "setup — or the file Download setup file saved. Everything stays "
-        "editable, and Undo puts the screen back.",
+        "Fill this screen in from a dataset you added before (its column "
+        "mapping, kept fields and recording setup) or from a file saved with "
+        "Download setup file. You can still edit everything, and Undo puts the "
+        "screen back.",
     )
     row.markdown(
         f'<span class="sps-fhelp" data-tip="{tip}" aria-label="{tip}">'
@@ -2236,14 +2227,14 @@ def _render_start_from(host) -> None:
             "Copy its setup",
             key="wizard_copy_setup",
             on_click=_copy_dataset_setup,
-            help="Its column mapping, kept fields, column derivation and "
-            "recording setup, onto this screen. Your files still go below.",
+            help="Copies its column mapping, kept fields, column derivation and "
+            "recording setup to this screen. You still upload your files below.",
         )
     elif choice == _START_FILE:
         box = host.container(key="wiz_start_from_file")
         box.caption(
-            f"The file **{ICONS['download']} Download setup file** saved at the "
-            "foot of this screen when you added data like this before."
+            f"A file saved earlier with **{ICONS['download']} Download setup "
+            "file**, at the bottom of this screen."
         )
         _wizard_restore_config(box)
     _render_restored_config_caption(host)
@@ -2404,8 +2395,8 @@ def _render_setup_download(host) -> None:
         mime="application/json",
         key="wizard_setup_download",
         width="stretch",
-        help="Save this column mapping and recording setup to re-use on similar "
-        "data — load it with *Start from → A setup file* at the top of part 2.",
+        help="Save this column mapping and recording setup to reuse on similar "
+        "data. Load it with *Start from → A setup file* at the top of part 2.",
     )
 
 
@@ -2567,7 +2558,7 @@ _SETUP_AUTO_KEY = "_wizard_setup_auto"
 _SETUP_BADGES = {
     "entered": ("You entered it", "green", "confirm"),
     "data": ("From your data", "green", "confirm"),
-    "estimated": ("Estimated — a lower bound", "orange", "warning"),
+    "estimated": ("Estimated (lower bound)", "orange", "warning"),
     "assumed": ("Assumed", "orange", "warning"),
     "off": ("Off", "gray", "info"),
     "generic": ("Not set", "gray", "info"),
@@ -2702,7 +2693,7 @@ def _wizard_setup_step(
     value_col, how_col = _setup_row(
         host,
         "Screen",
-        "The presentation monitor's resolution in pixels. Everything is drawn in "
+        "The presentation monitor's resolution in pixels. Figures are drawn in "
         "these coordinates.",
     )
     screen_mode = _setup_choice(
@@ -2777,9 +2768,9 @@ def _wizard_setup_step(
         _setup_badge(
             line,
             "estimated",
-            "From the extent of the word boxes and fixations. Text rarely fills "
-            "the whole screen, so the real monitor was probably larger — choose "
-            "*I know it* to enter it.",
+            "Estimated from the extent of the word boxes and fixations. Text "
+            "rarely fills the whole screen, so the real screen is probably "
+            "larger. Choose *I know it* to enter it.",
         )
         if keep_saved and (est_w, est_h) != (canvas_w, canvas_h):
             line.button(
@@ -2787,8 +2778,8 @@ def _wizard_setup_step(
                 key=f"{key_prefix}_setup_reestimate_btn",
                 type="tertiary",
                 on_click=lambda: st.session_state.__setitem__(reestimate_key, True),
-                help="Re-estimate the screen from this dataset's data as mapped "
-                "above. Nothing changes until you save.",
+                help="Estimate the screen again from this dataset's mapped data. "
+                "Nothing changes until you save.",
             )
     else:
         canvas_w, canvas_h = 2560, 1440
@@ -2807,9 +2798,9 @@ def _wizard_setup_step(
     value_col, how_col = _setup_row(
         host,
         "Physical size",
-        "The monitor's physical width — of the visible display area, not the "
-        "diagonal. It gives the screen's DPI, which turns a font size in points "
-        "into pixels. Off is a real answer: a point size is then read as pixels.",
+        "The monitor's physical width (the visible display area, not the "
+        "diagonal). It gives the screen's DPI, which converts a font size in "
+        "points to pixels. With Off, a point size is read as pixels.",
     )
     geom_mode = _setup_choice(
         how_col,
@@ -2856,8 +2847,7 @@ def _wizard_setup_step(
         _setup_badge(
             line,
             "off",
-            "No DPI is derived for this dataset rather than one computed from a "
-            "default; a font size in points is read as pixels.",
+            "This dataset has no DPI, so a font size in points is read as pixels.",
         )
 
     # --- Text size ------------------------------------------------------------
@@ -2866,11 +2856,10 @@ def _wizard_setup_step(
     value_col, how_col = _setup_row(
         host,
         "Text size",
-        "How big the reading text was drawn. Word labels are rendered at this "
-        "size so the figure matches what the participant saw. **Fit to word "
-        "boxes** sizes them from the boxes: the distance between lines ÷ the "
-        "line spacing, how far apart the lines are in font sizes (3: a blank "
-        "line above and below).",
+        "How big the reading text was drawn. Word labels use this size so the "
+        "figure matches what the participant saw. **Fit to word boxes** takes "
+        "it from the boxes: the distance between lines ÷ the line spacing. Line "
+        "spacing is in font sizes (3 means a blank line above and below).",
     )
     text_options = [_TEXT_FONT, _TEXT_DEFAULT]
     if has_boxes:
@@ -2986,9 +2975,9 @@ def _wizard_setup_step(
             _setup_badge(
                 note,
                 "entered",
-                "Points become pixels through the monitor's width, which "
-                "*Physical size → I know it* gives. Without it the size is read as "
-                "pixels.",
+                "Points are converted to pixels with the monitor's width, set "
+                "under *Physical size → I know it*. Without it, the size is read "
+                "as pixels.",
             )
         elif unit == "pt":
             note.markdown(f"= **{base_font} px** at {dpi:.0f} DPI", width="content")
@@ -3013,9 +3002,9 @@ def _wizard_setup_step(
     value_col, how_col = _setup_row(
         host,
         "Font",
-        "The typeface the text was shown in. Word labels are drawn in it, so "
-        "they match the stimulus. Not sure leaves a generic monospace font. "
-        "📄 Stimulus → Text offers the same fonts, to change a figure's.",
+        "The typeface the text was shown in. Word labels are drawn in it to "
+        "match the stimulus. *Not sure* uses a generic monospace font. You can "
+        "change one figure's font under 📄 Stimulus → Text.",
     )
     current = font_choice(font_family)
     st.session_state.setdefault(
@@ -3058,8 +3047,7 @@ def _wizard_setup_step(
         _setup_badge(
             badge_col,
             "entered",
-            "Drawn in this font wherever it is installed on the computer showing "
-            "the figure.",
+            "Used when this font is installed on the computer showing the figure.",
         )
     else:
         font_family = FONT_FAMILY
@@ -3096,7 +3084,7 @@ def _wizard_setup_step(
             + ("is" if len(guessed) == 1 else "are")
             + " an estimate or a default. If you know the real "
             + ("value" if len(guessed) == 1 else "values")
-            + ", choose *I know it* — every figure is drawn to them."
+            + ", choose *I know it*. Every figure is drawn to this setup."
             + (
                 " You can also add the dataset now and change them later."
                 if initial is None
@@ -3356,8 +3344,7 @@ def _wizard_name_header(host, active: bool) -> None:
     box.text_area(
         "Description",
         key="wizard_dataset_description",
-        placeholder="Optional — what this dataset is: the participants, the texts, "
-        "the language.",
+        placeholder="Optional: the participants, the texts, the language.",
         help=description_help,
         label_visibility="collapsed",
         height=68,
@@ -3599,9 +3586,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
             intro.markdown(
                 f"{ICONS['tip']} **Working with your own data?** Use the "
                 f"[desktop app]({CITATION['desktop_url']}) ↗ (Windows, macOS, "
-                "Linux): it keeps your data on your computer, is faster, and "
-                "handles much larger datasets than this hosted copy. Or install "
-                "it with pip:\n\n"
+                "Linux). It keeps your data on your computer and handles larger "
+                "datasets than this hosted copy. Or install it with pip:\n\n"
                 "```bash\npip install scanpath-studio\nscanpath-studio\n```"
             )
 
@@ -3612,7 +3598,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # tooltip and the uploader's own accessible help.
     _upload_types_note = (
         ", ".join(t.upper() for t in app._UPLOAD_TYPES)
-        + f" — up to {upload_limit_label()} per file."
+        + f". Up to {upload_limit_label()} per file."
     )
 
     def upload_box(
@@ -3740,9 +3726,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
         inline_field_label(
             meta_heading,
             "Metadata",
-            "Optional per-participant, per-trial and per-text tables. Once "
-            "attached, their columns behave like fields in the data: "
-            "filters, chips, trial sorting, inspection and export.",
+            "Optional tables with one row per participant, trial or text. "
+            "Their columns work like fields in the data, in filters, chips, "
+            "trial sorting, inspection and export.",
             emphasis=True,
         )
 
@@ -3836,8 +3822,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
         row_fix[0].container(key="wiz_map_upload_col_map_fix"),
         label="Fixations table(s)",
         short_label="Fixations",
-        help_text="One row per fixation (EyeLink Fixation Report); files stack. "
-        + _upload_types_note,
+        help_text="One row per fixation (EyeLink Fixation Report). You can "
+        "upload several files. " + _upload_types_note,
         prefix="col_map_fix",
         multi=True,
         noun="fixation",
@@ -3859,8 +3845,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
         row_words[0].container(key="wiz_map_upload_col_map_words"),
         label=f"{WORDS_TABLE_LABEL} table(s)",
         short_label=WORDS_TABLE_LABEL,
-        help_text="One row per word box (EyeLink Interest Area Report); files "
-        "stack. " + _upload_types_note,
+        help_text="One row per word box (EyeLink Interest Area Report). You can "
+        "upload several files. " + _upload_types_note,
         prefix="col_map_words",
         kind="words",
         multi=True,
@@ -3910,9 +3896,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # Raw gaze can be the dataset's only table, not just an
         # overlay — and nothing is derived from it, which is worth saying
         # before someone uploads samples expecting fixations back.
-        help_text="Sample-level gaze (one file), drawn as recorded — under the "
-        "fixations, or on its own as the dataset's only table. No fixations "
-        "are detected from it. " + _upload_types_note,
+        help_text="Gaze samples (one file), drawn under the fixations or as the "
+        "dataset's only table. The app does not detect fixations from it. "
+        + _upload_types_note,
         prefix="col_map_raw_gaze",
         multi=False,
         noun="gaze point",
@@ -4016,8 +4002,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "participant",
             "Participant ID",
             "participant",
-            "The participant column — or several to build one. Leave empty for one "
-            "participant (Fixations) or boxes shared by all (Words).",
+            "The participant column, or several columns combined. Leave empty for "
+            "a single participant (Fixations) or boxes shared by all participants "
+            "(Words).",
             s2,
             raw_words,
             raw_fix,
@@ -4034,11 +4021,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "text_id",
             "Text ID",
             "text",
-            "The text column — or several to compose an id. Map your item "
-            "column here if trial order was randomized: `TRIAL_INDEX` only "
-            "orders a participant's trials. A Words table with no Participant "
-            "ID attaches to a trial by it when the Trial IDs differ. Leave "
-            "empty to use the Trial ID (a repeated trial keeps the same text).",
+            "The text column, or several columns combined. If trial order was "
+            "randomized, map your item column here, since `TRIAL_INDEX` only "
+            "orders a participant's trials. Leave empty to use the Trial ID (a "
+            "repeated trial keeps the same text). When the Trial IDs differ, a "
+            "Words table with no Participant ID is matched to trials by this "
+            "column.",
             s2,
             raw_words,
             raw_fix,
@@ -4235,10 +4223,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
         if any(p.startswith("need either") for p in words_problems):
             # Say what to do, not only what is missing.
             line += (
-                " Without word boxes the text can't be drawn: map the box "
+                " The text can't be drawn without word boxes. Map the box "
                 "columns, re-export the Interest Area Report with IA_LEFT, "
                 "IA_RIGHT, IA_TOP and IA_BOTTOM, or remove this table to see "
-                "fixations alone."
+                "the fixations alone."
             )
         problems.append(line)
     if fix_problems:
@@ -4305,7 +4293,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         s_setup.caption(
             f"{ICONS['success']} Filled in from "
             + (f"**{meta['data_source']}**" if meta.get("data_source") else "the setup")
-            + " — check it below."
+            + ". Check it below."
         )
 
     # The estimate needs canonical coordinates, and nothing is
@@ -4397,7 +4385,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 s6,
                 disabled=False,
                 on_click=_mark_add_attempted,
-                help_text="Some required fields are still empty — click to mark "
+                help_text="Some required fields are still empty. Click to mark "
                 "them in red.",
             )
         st.session_state["_composite_trial_columns"] = None
@@ -4540,16 +4528,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # tables that share every trial but spell the readers differently
         # passes it — and every scanpath would then draw over no text.
         s6.warning(
-            f"{ICONS['warning']} The two tables share Trial IDs but no participant: no fixation's "
-            "participant + trial has word boxes, so every scanpath would be "
-            "drawn without its text. Check that **Participant ID** names the "
-            "same participants, spelled the same way, in both tables."
+            f"{ICONS['warning']} The two tables share Trial IDs but no participants, "
+            "so every scanpath would be drawn without its text. Check that "
+            "**Participant ID** names the same participants, spelled the same "
+            "way, in both tables."
         )
 
     raw_gaze_norm = pd.DataFrame()
     if not raw_gaze.empty:
         if raw_gaze_problems:
-            s3.warning("Raw gaze ignored — " + "; ".join(raw_gaze_problems))
+            s3.warning("Raw gaze ignored: " + "; ".join(raw_gaze_problems))
         else:
             raw_gaze_norm = normalize_raw_gaze(
                 raw_gaze,

@@ -1359,7 +1359,7 @@ def _apply_url_preset() -> str | None:
             try:
                 events = event_records_frame(json.loads(str(qp["author_events"])))
             except (ValueError, TypeError, RecursionError):
-                st.warning("Ignored the link's unreadable hand-made scanpath.")
+                st.warning("Ignored the link's unreadable authored scanpath.")
             else:
                 st.session_state.setdefault("_authored_events_frame", events)
                 # Prevent the authoring widget's text-change initializer from
@@ -1433,10 +1433,10 @@ def missing_dataset_message(
     else:
         what = f"**{shown}**"
     return (
-        f"This link shows {what}, which isn't here. Ask the sender for the data "
-        f"files and its setup file ({ICONS['edit']} Edit dataset → Download setup file), "
-        f"then add it with {ICONS['add']} Add dataset → Import files. Nothing "
-        "from the link was applied."
+        f"This link shows {what}, which isn't available here, so nothing from "
+        "the link was applied. Ask the sender for the data files and the setup "
+        f"file ({ICONS['edit']} Edit dataset → Download setup file), then add the "
+        f"dataset with {ICONS['add']} Add dataset → Import files."
     )
 
 
@@ -1994,15 +1994,15 @@ def _migrate_plot_config(config: dict) -> tuple[dict, str | None]:
     working = copy.deepcopy(config)
     if version > PLOT_CONFIG_SCHEMA:
         return working, (
-            "This settings file was saved by a newer version of Scanpath Studio; "
-            "settings this one doesn't recognize were ignored."
+            "This settings file was saved by a newer version of Scanpath Studio. "
+            "Settings this version doesn't recognize were ignored."
         )
     while version < PLOT_CONFIG_SCHEMA:
         migrate = _PLOT_CONFIG_MIGRATIONS.get(version)
         if migrate is None:
             note = (
-                "This settings file is from an older version that can't be fully "
-                "read; applied what still fit."
+                "This settings file is from an older version and could only be "
+                "partly read. The settings that still fit were applied."
             )
             working["schema"] = version
             return working, note
@@ -2029,7 +2029,7 @@ def _match_selection(
     pid = selection.get("participant_id")
     tid = selection.get("trial_id")
     if tid in (None, ""):
-        return None, "it names no trial"
+        return None, "no trial is given"
     if combos is None or combos.empty:
         return None, "no trials pass the current filters"
     tid = str(tid)
@@ -2057,8 +2057,8 @@ def _match_selection(
     readers = match["participant_id"].astype(str).unique()
     if len(readers) > 1:
         return None, (
-            f"trial {tid} belongs to {len(readers)} participants and the link "
-            "names none"
+            f"trial {tid} belongs to {len(readers)} participants and no "
+            "participant is given"
         )
     return match.iloc[0], ""
 
@@ -2246,8 +2246,8 @@ def _settle_picker_selection(combos: pd.DataFrame) -> str | None:
             st.session_state.pop(state_key, None)
             message = (
                 f"Couldn't reopen the last trial: trial {trial} belongs to "
-                f"{len(readers)} participants and the saved selection names none. "
-                "Pick one in the trial list."
+                f"{len(readers)} participants and the saved selection doesn't say "
+                "which. Pick one in the trial list."
             )
     return message
 
@@ -3234,9 +3234,9 @@ def _compare_b_problem(compare: object, combos: pd.DataFrame) -> tuple[str | Non
     from .compare_source import secondary_dataset_options
 
     if not isinstance(compare, dict) or compare.get("trial_id") in (None, ""):
-        return None, "the file names no second trial"
+        return None, "the file has no second trial"
     if compare.get("participant_id") in (None, ""):
-        return None, "the file's second trial names no participant"
+        return None, "the file's second trial has no participant"
     source = compare.get("source")
     if source in (None, "") or source == st.session_state.get("data_source_choice"):
         _row, reason = _match_selection(compare, combos)
@@ -3251,7 +3251,7 @@ def _compare_b_problem(compare: object, combos: pd.DataFrame) -> tuple[str | Non
         return None, f"its dataset {source} is not available here"
     ready, why = offered[source]
     if not ready:
-        return None, f"its dataset {source} is not ready — {why or 'not found'}"
+        return None, f"its dataset {source} is not ready ({why or 'not found'})"
     return str(source), ""
 
 
@@ -3428,12 +3428,12 @@ def _build_share_query(
         if data_choice in (st.session_state.get("_datasets") or {}):
             params[PARAM_DATASET] = str(data_choice)
         caveats.append(
-            "This dataset's files can't travel in a link — the recipient needs "
-            "them too. Send them with its setup file "
-            f"({ICONS['edit']} **Edit dataset → Download setup file**): they add the "
-            f"dataset with {ICONS['add']} **Add dataset → Import files** and "
-            "restore the setup there. The link names the dataset and carries "
-            "the view settings."
+            "A link can't carry this dataset's files, so the recipient needs them "
+            "too. Send the files with the setup file "
+            f"({ICONS['edit']} **Edit dataset → Download setup file**). The "
+            f"recipient adds the dataset with {ICONS['add']} **Add dataset → "
+            "Import files** and restores the setup there. The link names the "
+            "dataset and carries the view settings."
         )
 
     if data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
@@ -3476,9 +3476,8 @@ def _build_share_query(
             # cannot travel, and the link must say so rather than arrive as a
             # single scanpath the recipient has no way to know was a pair.
             caveats.append(
-                "The compared scanpath names a second participant, so it isn't "
-                "included at this privacy setting — the link opens the first "
-                "scanpath only."
+                "The compared scanpath needs its participant id, which this link "
+                "leaves out, so the link opens the first scanpath only."
             )
         source_b = compare.get("source")
         if source_b:
@@ -3489,7 +3488,7 @@ def _build_share_query(
                 params.pop(COMPARE_PARAM)
                 caveats.append(
                     f"The compared scanpath comes from **{source_b}**, which "
-                    "can't be rebuilt from a link — it isn't included."
+                    "a link can't rebuild, so the link leaves it out."
                 )
         if COMPARE_PARAM in params and compare.get("screen_id") not in (None, ""):
             params[COMPARE_SCREEN_PARAM] = str(compare["screen_id"])
@@ -3641,9 +3640,9 @@ def _build_share_query(
         for table in ("participants", "trials", "texts")
     ):
         caveats.append(
-            "The title or caption names a metadata table's field (like "
-            "`{trials.font_size}`). Metadata tables don't travel in a link, so "
-            "it shows empty unless the recipient attaches the same table."
+            "The title or caption uses a metadata table field (like "
+            "`{trials.font_size}`). Links don't carry metadata tables, so the "
+            "field shows empty unless the recipient attaches the same table."
         )
     return urlencode(params), caveats
 
@@ -3937,10 +3936,10 @@ def _snippet_source(data_choice: str) -> SnippetSource:
             label=AUTHOR_CHOICE,
             options={"path": "scanpath.json"},
             note=(
-                "An authored scanpath exists only in the app — save it with "
-                "**Download authoring file** on *Author a scanpath* first (it "
-                "saves as `scanpath.json`, which the snippet reads), then run "
-                "the snippet beside it."
+                "An authored scanpath exists only in the app. Save it first with "
+                "**Download authoring file** on *Author a scanpath* (the file is "
+                "`scanpath.json`, which the snippet reads), then run the snippet "
+                "in the same folder."
             ),
         )
 
@@ -3986,11 +3985,11 @@ def _snippet_source(data_choice: str) -> SnippetSource:
                 "parts": ["Paragraph"],
             },
             note=(
-                "The app read this through its **server-bundle** path "
-                "(`$ONESTOP_DATA_DIR`, per-participant shards or the CSV.zip "
-                "exports). The snippet uses the public `load_onestop` loader, "
-                "which expects the regime/part report layout in that same "
-                "folder — point it at your reports if the two differ."
+                "The app read this from the OneStop server bundle "
+                "(`$ONESTOP_DATA_DIR`). The snippet uses the public `load_onestop` "
+                "loader, which expects the report files for each regime and part "
+                "in that folder. If your folder is laid out differently, point the "
+                "snippet at your reports."
             ),
         )
     stored = (st.session_state.get("_datasets") or {}).get(data_choice)
@@ -4060,14 +4059,14 @@ def _render_code_snippet_body(data_choice: str) -> None:
     state = st.session_state.get(SNIPPET_STATE_KEY)
     if not isinstance(state, FigureState):
         st.caption(
-            f"Open a trial on the {ICONS['view_scanpath']} Scanpath view and the code that rebuilds "
-            "its figure appears here."
+            f"Open a trial on the {ICONS['view_scanpath']} Scanpath view to see "
+            "the code that rebuilds its figure."
         )
         return
 
     st.markdown(
-        "**Reproduce this figure in code** — paste it into a notebook or a "
-        "terminal to rebuild exactly this plot, headlessly."
+        "**Reproduce this figure in code.** Paste it into a notebook or a "
+        "terminal to rebuild this plot without the app."
     )
     flavor_col, explicit_col = st.columns([2, 3], vertical_alignment="center")
     flavor = flavor_col.segmented_control(
@@ -4080,9 +4079,8 @@ def _render_code_snippet_body(data_choice: str) -> None:
     explicit = explicit_col.checkbox(
         "Show every option",
         key=SNIPPET_EXPLICIT_KEY,
-        help="By default only the options you changed are written, so the "
-        "snippet stays readable. Tick this for the full explicit form — every "
-        "figure option at its current value.",
+        help="By default the code lists only the options you changed. Tick "
+        "this to list every figure option at its current value.",
     )
     output = _SNIPPET_OUTPUT.get(state.kind, "scanpath.png")
     code = reproduction_code(
@@ -4103,7 +4101,7 @@ def _render_code_snippet_body(data_choice: str) -> None:
             st.caption(
                 f"{ICONS['warning']} `render` has no flag for "
                 + ", ".join(f"`{name}`" for name in code.cli_unsupported)
-                + f" — the {ICONS['python']} Python form carries "
+                + f". The {ICONS['python']} Python code includes "
                 + ("them." if len(code.cli_unsupported) > 1 else "it.")
             )
         # The install line rides *in* the copied block (one 📋 copies both), so
@@ -4163,8 +4161,8 @@ def _render_share_body(
             settings_file()
         return
     st.markdown(
-        "**Share this view** — a link that reopens Scanpath Studio on the "
-        "current trial with your visualization settings."
+        "**Share this view.** The link reopens Scanpath Studio on the current "
+        "trial with your visualization settings."
     )
     query, caveats = _build_share_query(data_choice)
     # Keep the rendered value inspectable in AppTest without duplicating the

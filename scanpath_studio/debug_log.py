@@ -308,8 +308,9 @@ def render_debug_toggle(host=None) -> None:
         f"{ICONS['debug']} Debug mode",
         key=_DEBUG_TOGGLE_KEY,
         on_change=_mirror_debug_toggle,
-        help="Show the captured log, a snapshot of what's loaded and a JSON "
-        "for bug reports. Also lists the *Synthetic test trial* dataset.",
+        help="Show the app's log, a summary of what is loaded, and a JSON "
+        "download for bug reports. Also adds the *Synthetic test trial* "
+        "dataset to the dataset list.",
     )
 
 
@@ -417,10 +418,9 @@ def render_debug_panel(host=None) -> None:
         st.divider()
         st.caption(
             "App / session state",
-            help="What this browser session holds: the size of every table in "
-            "memory (rows × columns) and how many session-state keys exist. A "
-            "read-out only — nothing here changes the app. Send it with a bug "
-            "report.",
+            help="The size of each table this browser session holds (rows × "
+            "columns) and the number of session-state keys. Include it in a "
+            "bug report.",
         )
         snapshot = _state_snapshot()
         st.dataframe(snapshot, hide_index=True, width="stretch")

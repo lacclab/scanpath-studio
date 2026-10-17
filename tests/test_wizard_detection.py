@@ -127,5 +127,5 @@ def test_the_add_confirmation_counts_trials_and_participants():
         {"participant_id": ["s01", "s01", "s02"], "trial_id": ["1", "2", "1"]}
     )
     message = dataset_added_message("Dataset 1", pd.DataFrame(), fixations)
-    assert message == "**Dataset 1** added — 3 trials, 2 participants."
+    assert message == "**Dataset 1** added: 3 trials, 2 participants."
     assert dataset_added_message("Gaze", None, None) == "**Gaze** added."

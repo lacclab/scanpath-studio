@@ -326,7 +326,7 @@ class TestTheApp:
         )
         at = self._open(words, fixations, ["Ele"])
         text = " ".join(w.value for w in at.warning)
-        assert "in the Words table and another in the Fixations table" in text
+        assert "in the Words table than in the Fixations table" in text
         assert "p_adv · adv" in text
         options = [str(o) for o in at.selectbox(key="single_trial_id").options]
         assert not any("adv" in o for o in options), options

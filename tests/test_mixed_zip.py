@@ -100,11 +100,11 @@ def test_the_row_says_what_it_left_out():
     message = zip_member_split(_mixed_zip(), "fixations").message()
     assert message == (
         "Using the 2 fixation reports in this ZIP; 2 interest-area reports were "
-        "left out — add the ZIP to the Words row too."
+        "left out. Add the ZIP to the Words row too."
     )
     other = zip_member_split(_mixed_zip(), "words").message()
     assert other.startswith("Using the 2 interest-area reports")
-    assert other.endswith("add the ZIP to the Fixations row too.")
+    assert other.endswith("Add the ZIP to the Fixations row too.")
 
 
 def test_api_load_splits_the_same_zip(tmp_path):

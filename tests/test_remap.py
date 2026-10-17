@@ -1051,10 +1051,10 @@ class TestEditorSetupExport:
         _mapping, notes = _setup_file_mapping(
             {"fixations": {"trial": "trial_id"}}, stored
         )
-        assert any("file names" in note for note in notes)
+        assert any("Derive columns from text" in note for note in notes)
         # A dataset stored before the column-name map existed says so.
         _mapping, notes = _setup_file_mapping({"fixations": {"x": "x"}}, {})
-        assert any("before the app kept" in note for note in notes)
+        assert any("before the app recorded" in note for note in notes)
 
     def test_edit_then_restore_over_the_original_files_gives_the_same_mapping(
         self,

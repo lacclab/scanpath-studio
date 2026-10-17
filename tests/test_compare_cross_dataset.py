@@ -831,7 +831,7 @@ class TestResolveCompareSource:
         source = _secondary()
         monkeypatch.setattr(tabs, "load_secondary_dataset", lambda name: source)
         st.session_state[COMPARE_SOURCE_KEY] = "PoTeC"
-        st.session_state[tabs._COMPARE_SOURCE_RESOLVED_KEY] = "OneStop"
+        st.session_state[tabs._COMPARE_SOURCE_RESOLVED_KEY] = "MultiplEYE"
         st.session_state[f"{tabs._COMPARE_FILTER_PREFIX}_trial_filters"] = {
             "participants": ["nobody"],
             "metadata": {},

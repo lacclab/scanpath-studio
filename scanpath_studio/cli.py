@@ -30,6 +30,7 @@ from . import column_names as _cn
 from .code_snippet import (
     SOURCE_AUTHOR,
     SOURCE_DEMO,
+    SOURCE_MULTIPLEYE,
     SOURCE_ONESTOP,
     SOURCE_POTEC,
     SnippetSource,
@@ -53,6 +54,7 @@ from .constants import (
     SACCADE_WIDTH_BOUNDS,
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
+    multipleye_enabled,
     palette_settings,
 )
 
@@ -579,6 +581,42 @@ def _render_parser() -> argparse.ArgumentParser:
         default="public",
         help="OneStop source variant for --onestop: 'public' (OSF download) or "
         "'lacclab' (a local lab-processed export; no download).",
+    )
+
+    # MultiplEYE is experimental. Without SCANPATH_EXPERIMENTAL its flags still
+    # parse and work, so a script that already uses them keeps running, but
+    # `--help` — and the docs' reference, generated from it — don't list them.
+    def mpe_help(text: str) -> str:
+        return text if multipleye_enabled() else argparse.SUPPRESS
+
+    src.add_argument(
+        "--source",
+        metavar="NAME",
+        choices=["multipleye"],
+        help=mpe_help(
+            "Load a native server-bundle corpus from its RAW export instead of "
+            "raw words/fixations tables. Currently only 'multipleye' — pair with "
+            "--export DIR. Renders through the same native loader (correct word "
+            "boxes/text/page layout, 1920x1080 monitor) as the interactive viewer."
+        ),
+    )
+    src.add_argument(
+        "--export",
+        metavar="DIR",
+        help=mpe_help(
+            "Raw export root for --source (e.g. a MultiplEYE_*_* export dir with "
+            "per-session scanpaths/ subfolders). Defaults to $MULTIPLEYE_DATA_DIR "
+            "for --source multipleye."
+        ),
+    )
+    src.add_argument(
+        "--no-question-screens",
+        action="store_true",
+        help=mpe_help(
+            "--source multipleye: load the reading pages only, leaving out the "
+            "comprehension-question screens (they are included by default, as "
+            "screens of the same trial)."
+        ),
     )
 
     src.add_argument(
@@ -2348,6 +2386,12 @@ def _snippet_data_source(args) -> SnippetSource:
                 "parts": list(args.onestop_part or ["Paragraph"]),
             },
         )
+    if args.source == "multipleye":
+        return cs.SnippetSource(
+            kind=cs.SOURCE_MULTIPLEYE,
+            label="MultiplEYE",
+            options={"root": args.export or "data/MultiplEYE"},
+        )
     if args.words or args.fixations:
         options = {
             "words": list(args.words or []),
@@ -2545,6 +2589,114 @@ def _parse_xy(value: str | None, flag: str = "--stimulus-image-origin") -> tuple
     return (x, y)
 
 
+def _load_multipleye_render(
+    export: str | None,
+    participant: str | None,
+    trial: str | None,
+    *,
+    list_only: bool = False,
+    include_question_screens: bool = True,
+):
+    """Native MultiplEYE load for `render --source multipleye`.
+
+    Loads the same normalized frames as the interactive viewer's MultiplEYE
+    server-bundle source (correct word boxes/text + image-origin coordinate
+    offsets), straight from the RAW export — never the review app's reshaped
+    per-pid parquet.
+
+    ``export`` is the raw export root (defaults to ``$MULTIPLEYE_DATA_DIR``).
+    ``participant`` is the session label, resolved case-insensitively (the review
+    app passes it lowercased, e.g. ``001_zh_ch_1_et2``; export ids are uppercase).
+
+    ``trial`` selection (a trial is one *reading of a stimulus*, and its
+    pages / question screens are screens inside it, picked with ``--screen``):
+      * a literal trial id — the stimulus, ``Lit_Alchemist_4`` — is used as-is;
+      * an integer N (the review app's trial number) selects the stimulus whose
+        ``trial_num == N``. With no ``--screen`` that renders its first screen,
+        i.e. reading page 1 — the single representative page a thumbnail shows.
+
+    ``include_question_screens`` mirrors the loader kwarg (``--no-question-screens``).
+
+    Returns ``(words, fixations, participant_id, trial_id)`` — the resolved ids
+    are passed straight to ``api.plot_scanpath``. With ``list_only`` the trial is
+    left unresolved (the caller just prints the combos).
+    """
+    import os
+
+    from .datasets import multipleye_inventory
+
+    root = (export or os.environ.get("MULTIPLEYE_DATA_DIR", "")).strip()
+    if not root:
+        raise SystemExit(
+            "--source multipleye needs --export DIR (or $MULTIPLEYE_DATA_DIR) "
+            "pointing at a MultiplEYE raw export root."
+        )
+
+    # Resolve the (possibly lowercased) pid to the export's canonical session id.
+    sessions, _ = multipleye_inventory(root, fixation_source="scanpaths")
+    if not sessions:
+        raise FileNotFoundError(
+            f"No MultiplEYE sessions under {root} — expected a raw export root "
+            "with per-session subfolders under scanpaths/."
+        )
+    session = None
+    if participant is not None:
+        want = str(participant).strip().lower()
+        session = next((s for s in sessions if s.lower() == want), None)
+        if session is None:
+            raise ValueError(
+                f"No MultiplEYE session matching participant {participant!r} "
+                f"(available: {', '.join(sessions)})."
+            )
+
+    from .datasets import load_multipleye
+
+    # Load only the requested session (sub-second); all sessions for --list-trials
+    # without a -p. Normalized frames, exactly like the viewer.
+    words, fixations = load_multipleye(
+        root,
+        sessions=[session] if session else None,
+        fixation_source="scanpaths",
+        include_question_screens=include_question_screens,
+        names="canonical",
+    )
+    if list_only:
+        return words, fixations, session, None
+
+    pid = session
+    tid = trial
+    known = set(fixations["trial_id"].astype(str)) if not fixations.empty else set()
+    if trial is not None and str(trial) not in known:
+        # An integer trial number (the review app's id): map trial_num → the
+        # stimulus trial it names. Its screens are selected with --screen /
+        # --all-screens; with neither, the first screen (reading page 1) renders,
+        # which is the single representative page a thumbnail shows.
+        try:
+            trial_num = int(str(trial))
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"--trial {trial!r} is neither a MultiplEYE trial id (the "
+                "stimulus, e.g. Lit_Alchemist_4) nor an integer trial number."
+            )
+        if "trial_num" not in fixations.columns:
+            raise ValueError(
+                "MultiplEYE fixations carry no 'trial_num' column — pass the "
+                "stimulus trial id to --trial instead."
+            )
+        match = fixations[fixations["trial_num"].astype("Int64") == trial_num]
+        if match.empty:
+            avail = sorted(
+                fixations["trial_num"].dropna().astype(int).unique().tolist()
+            )
+            raise ValueError(
+                f"No MultiplEYE trial_num={trial_num} for session {session!r} "
+                f"(available: {avail})."
+            )
+        tid = min(match["trial_id"].astype(str).unique())
+
+    return words, fixations, pid, tid
+
+
 def _apply_shared_colorbar_flags(args: argparse.Namespace) -> None:
     """Hand v0.33.0's shared ``--colorbar-*`` values to each bar that was not
     given its own; a bar's own flag wins, wherever it sits on the line.
@@ -2599,6 +2751,7 @@ def render(argv: list[str]) -> None:
         bool(args.authoring),
         bool(args.potec),
         bool(args.onestop),
+        bool(args.source),
     ]
     # Your own tables are words and/or fixations — or raw gaze alone, for a
     # dataset recorded as samples only. Beside any other input, --raw-gaze is
@@ -2607,7 +2760,11 @@ def render(argv: list[str]) -> None:
         bool(args.raw_gaze) and not any(corpus_inputs)
     )
     if sum([*corpus_inputs, own_tables]) != 1:
+        # Only the inputs `--help` lists: the experimental sources still
+        # count towards the guard, but the message doesn't advertise them.
         inputs = ["--sample", "--authoring PATH", "--potec DIR", "--onestop DIR"]
+        if multipleye_enabled():
+            inputs.append("--source NAME [--export DIR]")
         raise SystemExit(
             f"Provide exactly one input: {', '.join(inputs)}, or your own tables "
             "(--words and/or --fixations; one of them is enough for "
@@ -2802,6 +2959,20 @@ def render(argv: list[str]) -> None:
         words, fixations = data
         column_names = dict(data.column_names)
         canvas = canvas or source_canvas(SOURCE_ONESTOP)
+    elif args.source == "multipleye":
+        try:
+            words, fixations, args.participant, args.trial = _load_multipleye_render(
+                args.export,
+                args.participant,
+                args.trial,
+                list_only=args.list_trials,
+                include_question_screens=not args.no_question_screens,
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        # Same authoritative monitor the viewer's MultiplEYE bundle source snaps
+        # to — coords are offset onto the centered stimulus on the real screen.
+        canvas = canvas or source_canvas(SOURCE_MULTIPLEYE)
     else:
         manifest = None
         if args.trial_parts_manifest:

@@ -1,9 +1,9 @@
 """The deep link / Share contract for every public corpus.
 
 `url_state._SHAREABLE_SOURCES` gives a `?source=` token to the sources whose
-*identity is the token* — demo, synthetic, authored, the local env bundle.
-Every public corpus shares one generic token covering the whole of
-`app.public_dataset_registry()`: `?source=corpus&corpus=<slug>`.
+*identity is the token* — demo, synthetic, authored, the two local env bundles.
+Every public corpus — PoTeC, MultiplEYE — shares one generic token covering the
+whole of `app.public_dataset_registry()`: `?source=corpus&corpus=<slug>`.
 Without it they would fall through to "this data source can't be rebuilt from a
 link".
 
@@ -42,6 +42,7 @@ def _hide_builtin_corpus_data(monkeypatch, tmp_path) -> None:
     for const in (
         "POTEC_DEFAULT_DIR",
         "ONESTOP_PUBLIC_DEFAULT_DIR",
+        "MULTIPLEYE_DEFAULT_DIR",
     ):
         monkeypatch.setattr(app, const, str(tmp_path / const.lower()))
 

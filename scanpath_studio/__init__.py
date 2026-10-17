@@ -46,7 +46,9 @@ __release__ = "0.38.4"
 # Public headless API (see api.py / datasets.py). Resolved lazily so
 # `import scanpath_studio` stays cheap and doesn't pull in pandas/plotly/
 # streamlit until first use.
-# The app's own computed measures are experimental
+# The MultiplEYE loader stays importable but is left out of `__all__`: that
+# corpus is experimental (`constants.multipleye_enabled`).
+# The app's own computed measures are experimental the same way
 # (`constants.computed_measures_enabled`): importable, but not advertised —
 # they raise without SCANPATH_EXPERIMENTAL=1.
 _HELD_BACK_EXPORTS = frozenset(
@@ -59,7 +61,7 @@ _HELD_BACK_EXPORTS = frozenset(
         "trial_summary",
     }
 )
-_DATASET_EXPORTS = frozenset({"load_potec", "load_onestop"})
+_DATASET_EXPORTS = frozenset({"load_potec", "load_multipleye", "load_onestop"})
 _API_EXPORTS = (
     (frozenset(__all__) | _HELD_BACK_EXPORTS)
     - {"__version__", "main"}

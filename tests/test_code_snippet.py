@@ -365,6 +365,11 @@ def test_an_animation_carries_its_playback_settings():
             "--onestop-regime repeated",
         ),
         (
+            cs.SnippetSource(kind=cs.SOURCE_MULTIPLEYE, options={"root": "d/MPE"}),
+            "load_multipleye(",
+            "--source multipleye --export d/MPE",
+        ),
+        (
             cs.SnippetSource(
                 kind=cs.SOURCE_FILES,
                 options={"words": ["w.csv"], "fixations": ["f1.csv", "f2.csv"]},
@@ -2006,6 +2011,11 @@ def test_what_the_loader_cannot_replay_is_named():
     # The paths are placeholders, and the caveat says so — without implying
     # they are all there is to change.
     assert "`words.csv`" in source.note and "fixations.csv" not in source.note
+
+    preset = cs.upload_source(
+        "MPE", {"steps": ["multipleye_preset"]}, words=True, fixations=True
+    )
+    assert "MultiplEYE" in preset.note and "word_schema" not in preset.options
 
 
 def test_an_edited_mapping_is_restated_in_the_files_names():

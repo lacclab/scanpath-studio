@@ -571,9 +571,9 @@ def _font_corpus_link_app():
 
 @pytest.mark.parametrize(("snapped", "carried"), [(False, False), (True, True)])
 def test_the_factory_font_travels_from_a_font_declaring_corpus(snapped, carried):
-    """On a font-declaring corpus the first seeding snaps the base font to the
-    corpus'; a sender who then picked 16 has to say so, or the recipient gets
-    the corpus size back."""
+    """On MultiplEYE the first seeding snaps the base font to the corpus'; a
+    sender who then picked 16 has to say so, or the recipient gets the corpus
+    size back."""
     at = AppTest.from_function(_font_corpus_link_app)
     at.session_state["_snapped"] = snapped
     at.run(timeout=30)

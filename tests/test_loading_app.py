@@ -251,17 +251,22 @@ def _normalized_synthetic() -> tuple[pd.DataFrame, pd.DataFrame]:
     return api.load_scanpath_data(*load_synthetic_data(), names="canonical")
 
 
-def test_the_server_bundle_reports_on_a_miss(monkeypatch):
+def test_the_server_bundles_report_on_a_miss(monkeypatch):
     """A gated card opens on a report, so a build under one that reports nothing
     on a miss would never show it, however slow. The file readers and
-    normalization report from their loops; this reports once, first thing."""
+    normalization report from their loops; these report once, first thing."""
+    empty = (pd.DataFrame(), pd.DataFrame())
     monkeypatch.delenv(data.ONESTOP_DATA_DIR_ENV, raising=False)
-    cached = data.load_onestop_server_bundle
-    cached.clear()
-    try:
-        assert _reports_on_a_miss(cached), cached.__name__
-    finally:
-        cached.clear()  # nothing stubbed stays cached for later tests
+    monkeypatch.setattr(app, "load_multipleye_server_bundle", lambda _pid: empty)
+    for cached in (
+        data.load_onestop_server_bundle,
+        app._cached_multipleye_server_bundle,
+    ):
+        cached.clear()
+        try:
+            assert _reports_on_a_miss(cached), cached.__name__
+        finally:
+            cached.clear()  # nothing stubbed stays cached for later tests
 
 
 def test_the_trial_list_and_the_identity_check_report_on_a_miss():

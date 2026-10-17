@@ -250,26 +250,18 @@ class TestDatasetUnavailableState:
         assert note["size_hint"] == "~45 MB"
         assert note["download"] is not None
 
-    def test_non_downloadable_corpus_explains_the_folder_instead(self):
-        import streamlit as st
-
-        from scanpath_studio import app
-
-        st.session_state.pop(app._UNAVAILABLE_KEY, None)
-        app._dataset_access_status(
-            st, root="/nowhere", present=False, label="A local corpus"
-        )
-        note = st.session_state[app._UNAVAILABLE_KEY]
-        assert note["download"] is None
-        assert "Expected files" in note["action"]
-
     def test_a_present_corpus_records_nothing(self):
         import streamlit as st
 
         from scanpath_studio import app
 
         st.session_state.pop(app._UNAVAILABLE_KEY, None)
-        assert app._dataset_access_status(st, root="/here", present=True) is True
+        assert (
+            app._dataset_access_status(
+                st, root="/here", present=True, download=lambda root: None
+            )
+            is True
+        )
         assert app._UNAVAILABLE_KEY not in st.session_state
 
     @pytest.mark.timeout(240)

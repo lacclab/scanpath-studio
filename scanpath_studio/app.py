@@ -2324,16 +2324,16 @@ def _dataset_access_status(
     *,
     root: str,
     present: bool,
-    download: Callable[[str], None] | None = None,
+    download: Callable[[str], None],
     size_hint: str = "",
     key_prefix: str = "",
     label: str = "This dataset",
 ) -> bool:
-    """Found / missing status + an optional **Download** button.
+    """Found / missing status + a **Download** button.
 
     Returns ``True`` when the corpus is present on disk (ready to load). When
-    it's missing and ``download`` is given, renders a Download button that
-    fetches the files then reruns — the next run loads from disk with no
+    it's missing, renders a Download button that fetches the files with
+    ``download`` then reruns — the next run loads from disk with no
     re-download, and an already-downloaded corpus never re-checks the network.
 
     A missing corpus is also recorded for the main-area empty state: the
@@ -2343,18 +2343,6 @@ def _dataset_access_status(
     if present:
         cfg.success(f"Found in `{root}`")
         return True
-    if download is None:
-        cfg.warning(
-            f"No data found in `{root}` — point at a folder with the files above."
-        )
-        _note_dataset_unavailable(
-            label=label,
-            reason="its files aren't in the folder you pointed at.",
-            action=f"Set **Data location** on the {ICONS['view_data']} Data Management page to a folder "
-            "holding the files listed under **Expected files**.",
-            root=root,
-        )
-        return False
     cfg.info(
         f"Not downloaded yet{f' ({size_hint})' if size_hint else ''}. "
         f"**Download** saves it to `{root}`."

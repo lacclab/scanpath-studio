@@ -1,5 +1,4 @@
-"""The Add-dataset wizard's shell: part registries, status badges, and the
-per-step open-flag helpers.
+"""The Add-dataset wizard's shell: part registries and status badges.
 
 Knows nothing about columns or dataframes — ``wizard.py`` keeps the part bodies
 and finalize. What lives here is the *chrome*:
@@ -10,29 +9,8 @@ and finalize. What lives here is the *chrome*:
   is nothing to map until a file is read, so no chips, no accordion, no open state.
 - `EDITOR_STEPS` + `numbered()` — the ✏️ Edit dataset screen's parts, renumbered
   over the ones that actually render.
-- `step_panel` — the collapsed *Data & mapping* review panel's per-step block,
-  or a keyed expander (``active=True``).
-- `go_to_step` / `reset_accordion` — the per-step open-flag helpers, called by
-  the guide (`tour.py`) and the wizard's reset.
-
-**The rule those helpers keep.** A step's open flag (``wiz_open_<id>``) is
-written *only* by them and the guide. Nothing inside a step body may touch it:
-recomputing ``expanded=`` from whether the step is "done" collapses the expander
-under the user's cursor at their first pick in it.
-
-**A keyed expander's label and icon must be CONSTANT.** Changing either remounts
-the widget at its default — i.e. collapsed — on the very next run, no matter what
-its key holds, which is why `step_panel` never renders a status badge into the
-expander header. Reproduced and pinned by
-``tests/test_wizard_helpers.py::TestWizardAccordion::
-test_a_changing_header_would_collapse_a_keyed_expander``.
-
-**Step bodies must never be gated on the expander being open.** Streamlit drops
-a widget's key from session state at the end of any run in which the widget did
-not render, and ``controls.column_mapping_ui`` builds its ``col_map_*`` widgets
-without ``persist_state`` — so a collapsed-and-therefore-unrendered step would
-silently discard its mapping. Collapsed-but-rendered is correct; see the comment
-at the `step_panel` call sites in ``wizard.py``.
+- `step_panel` — a part's heading inside the collapsed *Data & mapping* review
+  panel.
 """
 
 from __future__ import annotations
@@ -42,15 +20,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 
-import streamlit as st
-
 from .constants import ICONS, icon_html
 from .fields import tooltip
-
-#: Prefix for the accordion's per-step open flags. Deliberately *not* the
-#: ``col_map_`` prefix — ``tabs._collect_column_mapping`` sweeps that whole
-#: namespace into the saved config, and a UI open/closed flag is not mapping.
-OPEN_KEY_PREFIX = "wiz_open_"
 
 
 class StepStatus(Enum):
@@ -215,11 +186,6 @@ def numbered(
     return out
 
 
-def open_key(step_id: str) -> str:
-    """Session key holding whether ``step_id``'s expander is open."""
-    return f"{OPEN_KEY_PREFIX}{step_id}"
-
-
 def part_key(step_id: str) -> str:
     """Container key for a part, and so its `.st-key-…` CSS/tour selector."""
     return f"wiz_part_{step_id}"
@@ -237,9 +203,8 @@ def part(
 
     The parts run in a fixed order — there is nothing to map before a file is
     read — so this is a *label*, not navigation: no expander, no chips, no open
-    state, and therefore none of the expander's collapse rules (see the module
-    docstring). It costs one line, which is the point: a sequence with no
-    choices in it needs no header and click per part.
+    state. It costs one line, which is the point: a sequence with no choices in
+    it needs no header and click per part.
 
     ``trailing``, when given, is called with a column beside the
     title — a control that belongs on the title line rather than in the body — so it
@@ -281,53 +246,12 @@ def badge(status: StepStatus) -> str:
     return ICONS[_badge_concept(status)]
 
 
-def go_to_step(step_id: str) -> None:
-    """Open exactly one step and close the others.
+def step_panel(host, step: WizardStep, status: StepStatus):
+    """A part's bold heading in the collapsed *Data & mapping* review panel.
 
-    Safe as an ``on_click``/``on_change`` callback: callbacks run as part of the
-    click event, *before* the script re-executes, so these writes land before the
-    expander widgets instantiate and Streamlit never sees a key being set for an
-    already-created widget.
+    The panel is itself an expander, and Streamlit forbids expander-in-expander,
+    so each part renders inline into ``host`` under this heading. The
+    ``wizard_reconfigure`` assertion in ``tests/test_apptest.py`` relies on that.
     """
-    for step in STEPS:
-        st.session_state[open_key(step.id)] = step.id == step_id
-
-
-def reset_accordion() -> None:
-    """Forget every step's open flag.
-
-    Called by ``wizard._reset_wizard_widgets`` when *Add data* starts a fresh
-    dataset; without it the second dataset would open on whichever step the
-    first one was left on.
-    """
-    for step in STEPS:
-        st.session_state.pop(open_key(step.id), None)
-
-
-def step_panel(host, step: WizardStep, status: StepStatus, *, active: bool):
-    """The container a step's body renders into.
-
-    ``active`` (the guided wizard) gives a keyed expander; ``on_change="rerun"``
-    is what makes Streamlit track its open state at all — with ``key=`` alone the
-    frontend keeps one open state while session state keeps another, so the
-    user's manual collapse is never recorded and the next rerun re-opens it.
-
-    ``active=False`` is the collapsed *Data & mapping* review panel, which is
-    itself an expander: Streamlit forbids expander-in-expander, so the step
-    degrades to a bold heading and renders inline into ``host``. The review
-    panel and the ``wizard_reconfigure`` assertion in ``tests/test_apptest.py``
-    rely on that.
-
-    ``status`` is deliberately **not** rendered into the active header. A keyed
-    expander whose label or icon changes remounts collapsed on the next run, so a
-    status badge there would slam the step shut the moment an upload or a mapping
-    pick completed it — see the module docstring.
-    """
-    if not active:
-        host.markdown(f"**{badge(status)} {step.number}. {step.title}**")
-        return host
-    return host.expander(
-        f"{step.number}. {step.title}",
-        key=open_key(step.id),
-        on_change="rerun",
-    )
+    host.markdown(f"**{badge(status)} {step.number}. {step.title}**")
+    return host

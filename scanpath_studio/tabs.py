@@ -7280,8 +7280,6 @@ def render_single_trial_tab(
     # (`trial_chip_fields`); one column per chosen field. When comparing, both
     # readings share one A/B table, which puts B's value directly under A's
     # rather than at another offset on another line.
-    # The line takes `SELECTOR_ROW_WIDE_GRID` — the control-line grid with the
-    # first three tracks merged — so ✏️ sits under ◀ ▶ ⇅.
     with chips_slot:
         # The ✏️ menu that picks the fields — and hides the row — is
         # at the end of A's trial row (`_render_chip_menu`), so the table has

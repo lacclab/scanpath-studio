@@ -215,9 +215,6 @@ def _reset_wizard_widgets() -> None:
         "_wizard_problems_last",
     ):
         st.session_state.pop(key, None)
-    # Clear the steps' open flags so the next entry does not open wherever the
-    # previous dataset was left.
-    wizard_shell.reset_accordion()
 
 
 def _default_dataset_name() -> str:
@@ -3441,8 +3438,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
     order, then the footer. The parts are what the setup guide targets.
 
     ``active`` is the guided wizard; ``active=False`` is the compact collapsed
-    *Data & mapping* review panel, where `wizard_shell.step_panel` degrades each
-    step to a plain heading (that panel is itself an expander, and Streamlit
+    *Data & mapping* review panel, where `wizard_shell.step_panel` draws each
+    step as a plain heading (that panel is itself an expander, and Streamlit
     forbids nesting one inside another).
 
     **Every step body renders on every run, open or closed.** Streamlit drops a
@@ -3543,18 +3540,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
             st.rerun()
 
     # The linear parts. `part()` while the wizard is active — a one-line
-    # numbered headline, no expander — and `step_panel`'s bold-heading
-    # degradation in the collapsed *Data & mapping* review panel, which is
-    # itself an expander and so can nest neither.
+    # numbered headline, no expander — and `step_panel`'s bold heading in the
+    # collapsed *Data & mapping* review panel, which is itself an expander.
     def _part(step_id: str, *, trailing=None):
         step = wizard_shell.STEPS_BY_ID[step_id]
         status = statuses.get(step_id, wizard_shell.StepStatus.TODO)
         if active:
             # No status badge: on the headline a ⚠️ would only nag about a field
-            # visible on the same screen (and `step_panel` refuses one too — a
-            # keyed expander that changes label remounts collapsed).
+            # visible on the same screen.
             return wizard_shell.part(body, step, trailing=trailing)
-        return wizard_shell.step_panel(body, step, status, active=False)
+        return wizard_shell.step_panel(body, step, status)
 
     # The dataset's **name** is its own numbered part — it
     # names the whole thing, so it belongs to neither the upload nor the

@@ -369,10 +369,6 @@ def snapshot_for(
     )
 
 
-#: :func:`snapshot_for` under its older private name.
-_snapshot_for = snapshot_for
-
-
 def load_secondary_dataset(name: str | None) -> SecondaryDataset | None:
     """Load one comparison source by name, or ``None`` when there is nothing to load.
 

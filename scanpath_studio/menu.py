@@ -101,37 +101,6 @@ class TopMenu:
     title: DeltaGenerator | None = None
 
 
-def close_open_popovers() -> None:
-    """Dismiss whichever menu popover is open, client-side.
-
-    A popover's open/closed state lives in the browser, so a server callback can
-    arm a dialog but cannot close a popover the button was inside — leaving the
-    popover panel floating on top of the modal it just opened. Call
-    this from a dialog body: it clicks the expanded trigger, which toggles it
-    shut. Retried, because a click during React hydration is silently lost.
-
-    Same trick as ``tour``'s tutorial-chooser closer, generalized: match any
-    expanded popover trigger rather than one by label.
-    """
-    from scanpath_studio.html_embed import embed_html_iframe
-
-    embed_html_iframe(
-        """<script>
-        (function () {
-            const doc = window.parent.document;
-            let tries = 0;
-            (function closePopover() {
-                const trigger = doc.querySelector(
-                    '[data-testid="stPopover"] button[aria-expanded="true"]');
-                if (trigger) { trigger.click(); return; }
-                if (++tries < 20) setTimeout(closePopover, 50);
-            })();
-        })();
-        </script>""",
-        height=0,
-    )
-
-
 def view_label(view: str) -> str:
     """The nav's short label for ``view`` (e.g. "Scanpath"), for use in prose.
 

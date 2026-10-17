@@ -2724,15 +2724,16 @@ class TestSetupWizard:
         at = _make_apptest(synthetic=True)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert any(s.key == "data_source_picker" for s in at.selectbox)
         _enter_add_data(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["_show_upload_wizard"] is True
         assert at.session_state["setup_complete"] is False
-        # The wizard owns the page: its Cancel button shows and the normal
-        # data-source radio does not.
+        # The wizard owns the page: its Cancel button shows and the dataset
+        # picker does not.
         assert any(b.key == "cancel_add_data" for b in at.button)
-        assert not any(r.key == "data_source_picker" for r in at.radio)
+        assert not any(s.key == "data_source_picker" for s in at.selectbox)
 
     def test_wizard_active_then_finalize_renders_tabs(self, monkeypatch):
         app = self._inject(monkeypatch)

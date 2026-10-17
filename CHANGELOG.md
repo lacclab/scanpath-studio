@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/);
 `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.39.0] - 2026-10-17
+
+### Added
+- A **Send feedback** entry under ❓ Help lists where to report a bug, suggest a feature, share an idea or ask a question, with the version and system details a bug report needs ready to copy. ([#464](https://github.com/lacclab/scanpath-studio/issues/464))
+
+### Changed
+- The Slack release notification links to the GitHub release notes instead of the PyPI page. ([#468](https://github.com/lacclab/scanpath-studio/issues/468))
+- Code comments, the contributor guides and the changelog no longer carry internal tracker IDs or development history, and an experimental feature's error says it is experimental and off by default. ([#471](https://github.com/lacclab/scanpath-studio/issues/471))
+- Code that nothing used is removed, with no change to what the app does; old share links and settings files open as before. ([#474](https://github.com/lacclab/scanpath-studio/issues/474))
+
+### Removed
+- The hidden harmonised benchmark corpora (EyeGenBench), their loader and `render --eyegenbench` / `--eyegenbench-dataset` are removed (they were only reachable with `SCANPATH_EXPERIMENTAL=1`). ([#471](https://github.com/lacclab/scanpath-studio/issues/471))
+- MultiplEYE support is removed: its corpus entry and upload format (only offered with `SCANPATH_EXPERIMENTAL=1`), the `MULTIPLEYE_DATA_DIR` server bundle, `load_multipleye`, and `render --source multipleye` / `--export` / `--no-question-screens`. ([#471](https://github.com/lacclab/scanpath-studio/issues/471))
+
+### Fixed
+- Opening a corpus a server cannot download now switches the dataset picker to the bundled demo, and a demo standing in for a missing corpus is drawn on its own screen instead of the corpus', which cut its text off. ([#469](https://github.com/lacclab/scanpath-studio/issues/469))
+- The Metadata heading on the add-dataset and ✏️ Edit dataset screens shows its intended bold, accent-coloured style. ([#471](https://github.com/lacclab/scanpath-studio/issues/471))
+
 ## [0.38.4] - 2026-10-16
 
 ### Added

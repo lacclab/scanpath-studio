@@ -262,7 +262,7 @@ class TestColumnMappingOverrideFlow:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         warnings = " ".join(w.value for w in at.warning)
         assert "Finish the column mapping" in warnings
-        assert "Word/IA ID" in warnings, warnings
+        assert "Word ID" in warnings, warnings
         # No plot/picker while the mapping is unusable, but the mapping control
         # itself stays editable so the user can fix it from where they are.
         assert _trial_ids(at) == []
@@ -874,7 +874,7 @@ class TestRecoveryCachePanelFlow:
 class TestAddDatasetMenu:
     """Creation actions and placeholders cannot become real sources."""
 
-    @pytest.mark.parametrize("source", [AUTHOR_CHOICE, "Synthetic sample"])
+    @pytest.mark.parametrize("source", [AUTHOR_CHOICE, "Hand-drawn sample"])
     def test_authoring_cancel_and_save_dataset(self, source):
         at = _boot(synthetic=True)
 
@@ -966,7 +966,7 @@ class TestAddDatasetMenu:
             timeout=60
         )
         _rerun(at, view="Corpus Analysis")
-        at.selectbox(key="data_source_picker").select("Bundled Demo").run(timeout=60)
+        at.selectbox(key="data_source_picker").select("Bundled demo").run(timeout=60)
         at.button(key="add_manual_dataset_btn").click().run(timeout=60)
         _clean(at)
         assert at.text_area(key="author_text").value == "A small manual trial."
@@ -996,7 +996,7 @@ class TestAddDatasetMenu:
 
 @pytest.mark.timeout(180)
 class TestAuthoringEditorFlow:
-    """The ✏️ Author a scanpath grid, driven the way a browser drives it.
+    """The ✏️ Draw a scanpath grid, driven the way a browser drives it.
 
     ``st.data_editor`` keeps its edits as a *delta* against the frame it was
     handed, and the browser re-sends that delta on every rerun. Feeding the
@@ -1174,7 +1174,7 @@ class TestCrossDatasetCompareFlow:
         picker = at.selectbox(key=COMPARE_SOURCE_KEY)
         assert "This dataset" in picker.options
         assert SYNTHETIC_SOURCE in picker.options
-        assert "Bundled Demo" not in picker.options
+        assert "Bundled demo" not in picker.options
 
         picker.set_value(SYNTHETIC_SOURCE)
         at.run(timeout=90)

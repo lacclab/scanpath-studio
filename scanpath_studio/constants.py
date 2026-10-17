@@ -86,7 +86,7 @@ def computed_measures_enabled() -> bool:
     reader / trial summaries, the analysis tables and `scanpath-studio
     analyze`, the export bundle's measure family, and the Corpus Analysis views
     built on them (Reading summary, Progressive vs regressive, Landing-position
-    curve, Reader summary table). Everything that shows the dataset's own
+    curve, Participant summary table). Everything that shows the dataset's own
     values stays. Unlike the app-only gates, the API raises and the CLI
     refuses: a script that gets no number is better off than one that gets an
     unchecked one.
@@ -109,7 +109,8 @@ def sentence_analysis_enabled() -> bool:
 
 def derived_analysis_tables_enabled() -> bool:
     """Whether the 🗂️ Data page's "🧮 Derived analysis tables" section (Sentences
-    / Saccades / Trials / Readers / Characters) is exposed **in the app**.
+    / Saccades / Trial summary / Participant summary / Characters) is exposed
+    **in the app**.
 
     Off unless ``SCANPATH_EXPERIMENTAL`` is set, for the same reason as
     `preprocessing_enabled()`: built and tested, not yet validated by hand.
@@ -170,7 +171,7 @@ DEFAULT_HEATMAP_COLORSCALE = "Blues"
 #: (`plots._add_interpolated_heatmap`), so a ``heatmap_range`` does nothing to
 #: them: the rail greys the range for these, and the code snippet omits it.
 #: Compare always draws word boxes, where the range applies again.
-SELF_SCALED_HEATMAP_STYLES = frozenset({"Interpolated"})
+SELF_SCALED_HEATMAP_STYLES = frozenset({"Smoothed"})
 
 DEFAULT_MARKER_SIZE_RANGE = (8, 24)
 # How fixation duration maps onto that size range. The three *fixed* scales map
@@ -181,9 +182,9 @@ DEFAULT_MARKER_SIZE_RANGE = (8, 24)
 # √ is the default because a marker's size is its diameter: √duration makes the
 # marker's area grow in step with duration.
 MARKER_SIZE_SCALES = {
-    "sqrt": "√ duration (area)",
-    "linear": "Linear (diameter)",
-    "log": "Log duration",
+    "sqrt": "Square root (area tracks duration)",
+    "linear": "Linear (diameter tracks duration)",
+    "log": "Logarithmic",
     "relative": "Relative to this figure",
 }
 DEFAULT_MARKER_SIZE_SCALE = "sqrt"
@@ -249,7 +250,7 @@ SACCADE_DASH_OPTIONS = {
 # Saccade line width (px): default + the (min, max) the width slider allows.
 DEFAULT_SACCADE_WIDTH = 2.0
 SACCADE_WIDTH_BOUNDS = (0.5, 10.0)
-#: The Interpolated heatmap's fixed blur σ (px): the box's limits and default.
+#: The Smoothed heatmap's fixed blur σ (px): the box's limits and default.
 HEATMAP_SIGMA_BOUNDS = (1.0, 500.0)
 DEFAULT_HEATMAP_SIGMA_PX = 20.0
 #: Snap to line: where on its text line a snapped fixation sits, in line
@@ -279,7 +280,7 @@ SACCADE_CLASS_LABELS = {
     "refixation": "Refixation",
     "return_sweep": "Return sweep",
     "regression": "Regression",
-    "other": "Other",
+    "other": "Off the text",
 }
 # Okabe-Ito, matching the colourblind-safe default palette.
 SACCADE_CLASS_COLORS = {
@@ -300,7 +301,7 @@ SACCADE_CLASS_EDITABLE = SACCADE_CLASS_ORDER[:-1]
 # reading paper actually draws. It reuses the same per-class machinery — the
 # classes are just folded into two buckets before the segments are built, so it
 # shares the colour pickers, the legend toggle and every surface.
-SACCADE_COLOR_MODES = ("Uniform", "Forward / regression", "By type")
+SACCADE_COLOR_MODES = ("One color", "Forward / regression", "By type")
 SACCADE_DIRECTION_CLASSES = ("forward", "regression")
 # reading class → the bucket it is drawn in under "Forward / regression".
 # ``other`` stays ``other`` (grey catch-all) so unclassifiable saccades aren't
@@ -316,7 +317,7 @@ SACCADE_DIRECTION_FOLD = {
 SACCADE_DIRECTION_LABELS = {
     "forward": "Forward",
     "regression": "Regression",
-    "other": "Other",
+    "other": "Off the text",
 }
 
 # Fixation marker shape. Plotly symbol name → the label shown in the picker.
@@ -447,7 +448,7 @@ PALETTES: dict[str, dict] = {
     # colourblind-safe encoding — plus single-hue Blues scales, which vary in
     # lightness only and so survive every common deficiency. This is the
     # default a fresh session opens with.
-    "Default (colourblind-safe)": {
+    "Default (colorblind-safe)": {
         "description": "Okabe–Ito hues and Blues scales, chosen to stay "
         "distinguishable with common color-vision deficiencies.",
         "fixation_color": DEFAULT_FIXATION_COLOR,
@@ -461,7 +462,7 @@ PALETTES: dict[str, dict] = {
     },
     # Lightness-only encoding: everything survives a black & white print or
     # photocopy, because nothing depends on hue at all.
-    "Print / greyscale": {
+    "Print / grayscale": {
         "description": "Grays only, so it still reads in a black-and-white "
         "print. Pair with marker shape.",
         "fixation_color": "#1a1a1a",
@@ -503,19 +504,7 @@ PALETTES: dict[str, dict] = {
         "background_color": "#ffffff",
     },
 }
-DEFAULT_PALETTE = "Default (colourblind-safe)"
-#: The names a person reads. The keys above are stored values (settings
-#: files, Share links, ``palette=``) and keep their spelling; every place that
-#: shows a palette shows it through `palette_label`.
-PALETTE_LABELS = {
-    "Default (colourblind-safe)": "Default (colorblind-safe)",
-    "Print / greyscale": "Print / grayscale",
-}
-
-
-def palette_label(name: str) -> str:
-    """A palette's display name (US spelling); any other value as it is."""
-    return PALETTE_LABELS.get(name, name)
+DEFAULT_PALETTE = "Default (colorblind-safe)"
 
 
 # Not a palette — the honest answer when the live colours match none of them.
@@ -692,13 +681,13 @@ CITATION = {
 # Here rather than in app.py so url_state.py / wizard.py can import them without
 # a cycle (app.py re-imports them for its own use and for tests).
 UPLOAD_CHOICE = "Upload tables"
-AUTHOR_CHOICE = "Author a scanpath"
-MANUAL_SAMPLE_CHOICE = "Synthetic sample"
-DEMO_CHOICE = "Bundled Demo"
+AUTHOR_CHOICE = "My scanpath"
+MANUAL_SAMPLE_CHOICE = "Hand-drawn sample"
+DEMO_CHOICE = "Bundled demo"
 SYNTHETIC_CHOICE = "Synthetic test trial"
 PUBLIC_DATASETS_CHOICE = "Public datasets"
 POTEC_DEFAULT_DIR = "data/PoTeC"
-ONESTOP_CHOICE = "OneStop server bundle"
+ONESTOP_CHOICE = "OneStop (local export)"
 # Public OneStop (OSF download-on-demand) — distinct from the env-var
 # ONESTOP_CHOICE server bundle. Each reading regime is its own dataset in the
 # flat data-source picker, holding every part of that regime; these are their
@@ -1203,7 +1192,7 @@ LEGEND_KIND_LABELS = {
     "compare": "Compare (A/B)",
     "saccades": "Saccade types",
     "colors": "Fixation colors",
-    "size_key": "Size key",
+    "size_key": "Fixation sizes",
     "highlight": "Text highlight",
 }
 #: The eight spots a legend can take around the plot — each corner, the middle

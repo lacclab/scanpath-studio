@@ -125,9 +125,9 @@ def _link_app():
     st.session_state["_share_selection"] = {"participant_id": "p1", "trial_id": "t1"}
     st.session_state["export_figure_width_unit"] = "mm"
     st.session_state["export_figure_dpi"] = 600
-    st.session_state["_without"] = _build_share_query("Bundled Demo")[0]
+    st.session_state["_without"] = _build_share_query("Bundled demo")[0]
     st.session_state["export_figure_width"] = 180.0
-    st.session_state["_with"] = _build_share_query("Bundled Demo")[0]
+    st.session_state["_with"] = _build_share_query("Bundled demo")[0]
 
 
 def test_the_link_carries_the_print_size_only_while_a_width_is_set():

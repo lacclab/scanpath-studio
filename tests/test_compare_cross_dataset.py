@@ -844,7 +844,7 @@ class TestResolveCompareSource:
 
 @pytest.fixture(scope="module")
 def _synthetic_vs_demo():
-    """A = the synthetic trial, B = the Bundled Demo's raw-gaze trial, with the
+    """A = the synthetic trial, B = the Bundled demo's raw-gaze trial, with the
     gaze-sample chip on and every other setting at its default."""
     import re
 
@@ -854,7 +854,7 @@ def _synthetic_vs_demo():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
     at.session_state["data_source_choice"] = "Synthetic test trial"
     at.session_state["single_compare_toggle"] = True
-    at.session_state[COMPARE_SOURCE_STATE_KEY] = "Bundled Demo"
+    at.session_state[COMPARE_SOURCE_STATE_KEY] = "Bundled demo"
     at.session_state["trial_chip_fields"] = ["@gaze_sample_count"]
     at.run()
     at.session_state["single_compare_trial"] = "l37_1129_2_2_2_Adv_r0"

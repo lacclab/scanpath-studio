@@ -37,7 +37,7 @@ def test_illustration_to_scanpath_restores_named_view_defaults(monkeypatch):
     assert controls._active_quick_view() == "illustration"
     assert store["global_saccade_render_mode"] == "Arc"
     assert store["global_fixation_snap_to_line"] is True
-    assert store["global_saccade_color_mode"] == "Uniform"
+    assert store["global_saccade_color_mode"] == "One color"
     assert store["global_fixation_opacity"] == 1.0
     assert store["single_animate"] is True
 
@@ -46,7 +46,7 @@ def test_illustration_to_scanpath_restores_named_view_defaults(monkeypatch):
     assert controls._active_quick_view() == "scanpath"
     assert store["global_saccade_render_mode"] == "Straight"
     assert store["global_fixation_snap_to_line"] is False
-    assert store["global_saccade_color_mode"] == "Uniform"
+    assert store["global_saccade_color_mode"] == "One color"
     assert store["global_fixation_opacity"] == 0.7
     assert store["single_animate"] is True
     assert controls._PRE_ILLUSTRATION_STATE not in store

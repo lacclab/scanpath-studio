@@ -22,13 +22,13 @@ from scanpath_studio.session_keys import (
 
 def test_bs_trial_and_dataset_round_trip_through_the_cache(tmp_path):
     session = {
-        COMPARE_SOURCE_STATE_KEY: "Bundled Demo",
+        COMPARE_SOURCE_STATE_KEY: "Bundled demo",
         COMPARE_IDENTITY_STATE_KEY: ("p7", "t3"),
     }
     assert save_state(session, tmp_path)
     restored: dict = {}
     assert restore_state(restored, tmp_path)
-    assert restored[COMPARE_SOURCE_STATE_KEY] == "Bundled Demo"
+    assert restored[COMPARE_SOURCE_STATE_KEY] == "Bundled demo"
     assert restored[COMPARE_IDENTITY_STATE_KEY] == ("p7", "t3")
 
 

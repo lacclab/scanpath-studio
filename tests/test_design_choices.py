@@ -51,14 +51,14 @@ def _marker_trace(fig):
 def test_each_heatmap_style_keeps_its_own_opacity_until_one_is_set():
     boxes = _heatmap_shapes(_static_fig(show_heatmap=True))
     assert boxes and {s.opacity for s in boxes} == {0.5}
-    interpolated = _static_fig(show_heatmap=True, heatmap_style="Interpolated")
+    interpolated = _static_fig(show_heatmap=True, heatmap_style="Smoothed")
     (grid,) = [t for t in interpolated.data if t.type == "heatmap"]
     assert grid.opacity == 0.45
 
     set_boxes = _heatmap_shapes(_static_fig(show_heatmap=True, heatmap_opacity=0.8))
     assert {s.opacity for s in set_boxes} == {0.8}
     set_grid = _static_fig(
-        show_heatmap=True, heatmap_style="Interpolated", heatmap_opacity=0.8
+        show_heatmap=True, heatmap_style="Smoothed", heatmap_opacity=0.8
     )
     assert [t.opacity for t in set_grid.data if t.type == "heatmap"] == [0.8]
 

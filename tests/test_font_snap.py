@@ -93,31 +93,31 @@ class TestTheRoundTrip:
 
     def test_leaving_that_corpus_puts_the_controls_back(self, session):
         """Without the restore this comes back as (22, CJK, False)."""
-        _seed("Bundled Demo", _WORDS)
+        _seed("Bundled demo", _WORDS)
         before = _font(session)
 
         _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
         assert _font(session) != before
 
-        _seed("Bundled Demo", _WORDS)
+        _seed("Bundled demo", _WORDS)
         assert _font(session) == before
 
     def test_a_hand_tuned_font_survives_the_detour(self, session):
         """Restoring the stashed values rather than the factory defaults is what
         makes "look at that corpus and come back" non-destructive."""
-        _seed("Bundled Demo", _WORDS)
+        _seed("Bundled demo", _WORDS)
         session["global_base_font_size"] = 29
         tuned = _font(session)
 
         _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
-        _seed("Bundled Demo", _WORDS)
+        _seed("Bundled demo", _WORDS)
 
         assert _font(session) == tuned
 
     def test_two_font_declaring_corpora_in_a_row_restore_the_original(self, session):
         """The stash is taken on the *first* snap of a run of them, so the third
         source gets the state before the first corpus and not the first's."""
-        _seed("Bundled Demo", _WORDS)
+        _seed("Bundled demo", _WORDS)
         before = _font(session)
 
         _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
@@ -127,7 +127,7 @@ class TestTheRoundTrip:
         )
         assert _font(session)[0] == 31
 
-        _seed("Bundled Demo", _WORDS)
+        _seed("Bundled demo", _WORDS)
         assert _font(session) == before
 
     def test_staying_on_one_source_does_not_re_snap(self, session):
@@ -150,7 +150,7 @@ class TestWhatMustNotBeTouched:
         session["global_scale_text_to_boxes"] = False
         linked = _font(session)
 
-        _seed("Bundled Demo", _WORDS)
+        _seed("Bundled demo", _WORDS)
 
         assert _font(session) == linked
 
@@ -158,7 +158,7 @@ class TestWhatMustNotBeTouched:
         """Popping it lets the `defaults` pin restore the factory value in the
         same run, rather than freezing whatever the last corpus left."""
         _seed(_FONT_CORPUS, _WORDS_WITH_FONT)
-        _seed("Bundled Demo", _WORDS)
+        _seed("Bundled demo", _WORDS)
 
         assert session["global_base_font_size"] == 16
         assert session["global_scale_text_to_boxes"] is True

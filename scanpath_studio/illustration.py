@@ -58,7 +58,7 @@ def illustration_reasons(
         reasons.append(f"drift correction: {algorithm}")
     flag_sets = [settings.get("fixation_flags") or {}, fixation_flags_b or {}]
     if any(
-        (value or {}).get("mode") == "Discard"
+        (value or {}).get("mode") == "Hide"
         for flags in flag_sets
         for value in flags.values()
     ):
@@ -75,7 +75,7 @@ def illustration_reasons(
     # The app's own made-up sources only, never a user's dataset whose name
     # happens to contain "synthetic" or "author".
     if synthetic or data_source in (SYNTHETIC_CHOICE, AUTHOR_CHOICE):
-        reasons.append("synthetic source")
+        reasons.append("synthetic data")
     playback_speed = settings.get("playback_speed", 1.0)
     try:
         playback_speed = float(playback_speed)

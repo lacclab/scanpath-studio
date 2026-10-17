@@ -200,7 +200,7 @@ def test_relative_scale_still_differs_across_trials(sample, contrasting_trials):
 def test_a_fixation_filter_does_not_rescale(sample, contrasting_trials):
     words, fixations = sample
     pid, tid = contrasting_trials[1]
-    flags = {"long": {"mode": "Discard", "threshold_ms": 400.0}}
+    flags = {"long": {"mode": "Hide", "threshold_ms": 400.0}}
     fig = sps.plot_scanpath(words, fixations, pid, tid, fixation_flags=flags)
     kept = _trial(fixations, pid, tid)
     kept = kept[kept["duration_ms"] <= 400]

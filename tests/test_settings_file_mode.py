@@ -95,7 +95,7 @@ def _save(monkeypatch, *, animate: bool, compare: bool) -> dict:
     at.run()
     assert not at.exception, at.exception
     at.session_state[SUBTAB_KEY] = SUBTAB_SHARE
-    at.session_state[SHARE_SECTION_KEY] = "File"
+    at.session_state[SHARE_SECTION_KEY] = "Settings file"
     at.run()
     assert not at.exception, at.exception
     assert written, "Share → File built no settings file"

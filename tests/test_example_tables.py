@@ -1,6 +1,6 @@
 """The example import pair, and *Available with this dataset*.
 
-The synthetic trial as an AOI table and a fixation table (`synthetic.py`) that
+The synthetic trial as a Words table and a fixation table (`synthetic.py`) that
 import with no manual mapping — the auto-detection's own end-to-end check. Once
 a dataset is added, the *What's in…* section opens with four lines saying what
 it supports: scanpaths, supplied reading measures, raw gaze coverage and

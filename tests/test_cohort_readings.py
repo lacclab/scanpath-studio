@@ -195,7 +195,7 @@ def test_the_groups_view_compares_the_two_readings(owner):
     at.session_state["cmp_mode"] = "Independent filter sets"
     at.session_state["cmp_setA_difficulty_level"] = ["Adv"]
     at.session_state["cmp_setB_difficulty_level"] = ["Ele"]
-    at.session_state["cmp_view"] = "Paired summary bars"
+    at.session_state["cmp_view"] = "Side-by-side summary bars"
     at.run(timeout=60)
     assert not at.exception, at.exception
     assert not at.warning, [w.value for w in at.warning]

@@ -36,7 +36,7 @@ and narrow, sort or label the list.
 | Control | What it does |
 | --- | --- |
 | **Select dataset** | The dataset the page shows. |
-| **+** → **Create manually** | Add a dataset by manual illustration: write a text and place its fixations by hand. |
+| **+** → **Draw a scanpath** | Add a dataset by manual illustration: write a text and place its fixations by hand. |
 | **+** → **Import files** | Add a dataset from data tables: upload your own tables as a new dataset. |
 | **Select trial** | The trial to show. Click it and type to narrow the list. |
 | **Trial** slider | Scrub through the trials in the list. |
@@ -152,7 +152,7 @@ The **Saccades** switch draws the lines between fixations; its **▾** holds:
 
 | Control | What it does |
 | --- | --- |
-| **Line** → **Color** | Choose what decides the saccade color: one color for all; forward saccades and regressions in two colors; or a color per saccade type (forward, skip, refixation, return sweep, regression), with a legend. Forward / regression and by type need a word ID for each fixation, the word it landed on, mapped in your fixations table (such as EyeLink's `CURRENT_FIX_INTEREST_AREA_ID`); without one every saccade reads as *other*. |
+| **Line** → **Color** | Choose what decides the saccade color: one color for all; forward saccades and regressions in two colors; or a color per saccade type (forward, skip, refixation, return sweep, regression), with a legend. Forward / regression and by type need a word ID for each fixation, the word it landed on, mapped in your fixations table (such as EyeLink's `CURRENT_FIX_INTEREST_AREA_ID`); without one every saccade is drawn as *Off the text*. |
 | **Line** → color box | Choose the saccade line color. |
 | **Line** → type colors | With **By type**: choose the color of each saccade type, such as regressions or return sweeps. |
 | **Line** → **Style** | Choose the saccade line style: solid, dashed, dotted or dash-dot. |
@@ -175,11 +175,11 @@ The **Stimulus** switch draws the text and the stimulus image; its **▾** holds
 | **Fit** → **Fit to word boxes** | Size the stimulus text to fill its word boxes, instead of a fixed font size. |
 | **Spacing** | Set the stimulus text line spacing: how far apart the lines are, in font sizes. |
 | **Size** | Set the stimulus text font size, in px or pt. |
-| **Font** | Choose the stimulus text font (typeface); *Other…* takes any font name. |
+| **Font** | Choose the stimulus text font (typeface); *Other font…* takes any font name. |
 | **Color** → text color | Choose the stimulus text color. |
 | **Background** | Choose the plot background color: a preset, or any color in the box beside it. |
-| **Highlight** → **Show** | Highlight words in the stimulus text, such as the answer span. |
-| **Highlight** → **Highlight words by** | Choose which words to highlight: a true/false word column, such as the critical span. |
+| **Highlight words** → **Show** | Highlight words in the stimulus text, such as the answer span. |
+| **Highlight words** → word column | Choose which words to highlight: a true/false word column, such as the critical span. |
 | **Style** | Choose the word highlight style: colored text, or a border round the words; and the highlight color. |
 | **Image** → **Show** | Show the stimulus image, the screen as shown in the experiment, under the scanpath. |
 | **File** | Upload a stimulus image (PNG, JPEG, GIF or WebP) to draw under the scanpath. |
@@ -210,12 +210,12 @@ The **Heatmap** switch shows where reading concentrated; its **▾** holds:
 
 | Control | What it does |
 | --- | --- |
-| **Style** | Choose the heatmap style: colored word boxes, or a smooth interpolated map. |
-| **Blur** | Set the heatmap blur: how far each fixation spreads, for the interpolated style; **Auto** picks it. |
+| **Style** | Choose the heatmap style: colored word boxes, or a smoothed map (a Gaussian blur of the fixations). |
+| **Blur** | Set the heatmap blur: how far each fixation spreads, for the smoothed style; **Auto** picks it. |
 | **Color** → **By** | Choose what the heatmap measures: total fixation duration (dwell time), or the number of fixations. |
 | **Color** → **Colors** | Choose the heatmap colors (color scale). |
 | **Scale** | Choose a linear or log heatmap scale. |
-| **Range** | For word-box heatmaps, fix the color range across trials. **Auto** fits each trial. Interpolated heatmaps use each figure's own peak. |
+| **Range** | For word-box heatmaps, fix the color range across trials. **Auto** fits each trial. Smoothed heatmaps use each figure's own peak. |
 | **Opacity** | Set the heatmap opacity; **Auto** uses each style's own. |
 | **Color bar** → **Show**, orientation, **Angle**, **Size**, **Thickness**, **Length** | Show the heatmap color bar, and set its orientation, label angle and size, thickness and length. |
 
@@ -243,9 +243,9 @@ Which fixations and saccades are drawn, and which stand out:
 | --- | --- |
 | **Fixations** → **Index range** | Show only some fixations: a range of the reading order, such as fixations 10 to 40. |
 | **Fixations** → **All trials** | Keep that fixation range when you move to another trial; otherwise it applies to this trial only, and the next trial shows all its fixations. |
-| **Short** / **Long** | Find short or long fixations by a duration threshold (ms): **Highlight** marks them, **Discard** hides them. |
-| **Out of bounds** | Highlight or discard out-of-bounds fixations, which land in no word box. |
-| **Blink** | Highlight or discard fixations at or next to a blink (needs a blink column). |
+| **Short** / **Long** | Find short or long fixations by a duration threshold (ms): **Highlight** marks them, **Hide** hides their markers. |
+| **Outside the text** | Highlight or hide fixations that land in no word box. |
+| **Near a blink** | Highlight or hide fixations at or next to a blink (needs a blink column). |
 | marker and color | Choose the marker shape and color of each highlighted fixation kind. |
 | **Saccades** → **Types** | Show only some saccade types, such as regressions or return sweeps. Needs a word ID for each fixation, as for coloring saccades by type. |
 
@@ -270,7 +270,7 @@ The figure as a whole:
 | **Title** → **Show**, text, **Size** | Add a figure title above the plot, and set its font size; `{field}` inserts a value of the trial. |
 | **Caption** → **Show**, text, **Size**, color | Add a figure caption below the plot, and set its font size and color. |
 | **Hover** → **Words** / **Fixations** | Choose the hover fields: what the tooltip shows when the mouse is over a word or a fixation. |
-| **Legends** → **Show** | Show or hide each legend: Compare (A/B), Saccade types, Fixation colors, Size key or Text highlight. |
+| **Legends** → **Show** | Show or hide each legend: Compare (A/B), Saccade types, Fixation colors, Fixation sizes or Text highlight. |
 | **Legends** → **Position** | Choose the legend position: a corner, the middle of an edge, or down a side, outside or inside the plot. |
 | **Legends** → **Arrangement** | Choose the legend arrangement: items stacked or side by side. |
 | **Legends** → **Text size** | Set the legend text (font) size, in px. |
@@ -324,10 +324,10 @@ The tabs under the figure:
 | | **Width**, unit, **DPI** | Set the PNG export size for print: width, unit and resolution (DPI). |
 | | **Trials to include** | Choose which trials to export in the bundle: this one, the filtered trials, or all of them. |
 | | **Formats** / **Tabular data** | Choose the bundle's figure formats and the data tables (CSV or Parquet) to include. |
-| | **Separable layers** | Export each visual layer (fixations, saccades, word boxes…) as its own file, to stack in a vector editor. |
+| | **Layers as separate files** | Export each visual layer (fixations, saccades, word boxes…) as its own file, to stack in a vector editor. |
 | | **Annotations (JSON)** / **Settings file (JSON)** | **Settings file**: beside each trial's figure, a `plot_config.json` recording how it was drawn (layers, colors, sizes, screen, title and caption), so the figures are documented. **Annotations**: one `annotations.json` with the exported trials' favorites, tags and notes, which :material/database: **Data Management** → **Annotations** can import again. |
 | | **File path pattern** | Set the file names inside the export bundle. |
 | | **Build export** | Build the export bundle (a zip) to download. |
 | **Share** | **Link** | Copy a share link that reopens this trial with these settings. The data doesn't travel in the link: whoever opens it needs the same dataset. The bundled demo works anywhere; a public corpus has to be downloaded on their side; for your own dataset, send its files and setup file (:material/edit: **Edit dataset** → **Download setup file**) so they can add it first. A link made on your own computer (a `localhost` address) opens only where the app runs at that same address. |
-| | **Code** → **Flavour**, **Show every option** | Get the Python or command-line code that redraws this figure, for scripts and reproduction. |
-| | **File** → **Download settings** / **Restore settings** | Save the plot settings to a file, or load (restore) a saved settings file. |
+| | **Code** → **Python** / **CLI**, **Show every option** | Get the Python or command-line code that redraws this figure, for scripts and reproduction. |
+| | **Settings file** → **Download settings** / **Restore settings** | Save the plot settings to a file, or load (restore) a saved settings file. |

@@ -188,7 +188,7 @@ def test_the_open_wizard_survives_an_upload_the_pipeline_rejects(one_sided_uploa
 
 
 def test_text_word_ids_with_no_xy_block_the_add(monkeypatch):
-    """Fixations with no X/Y are placed by their Word/IA ID, which is read as a
+    """Fixations with no X/Y are placed by their Word ID, which is read as a
     number — so text ids place none of them, and the add is blocked, saying
     why, directly above ✅ Add dataset."""
     from scanpath_studio import app
@@ -208,7 +208,7 @@ def test_text_word_ids_with_no_xy_block_the_add(monkeypatch):
 
     assert not at.exception
     said = [e.value for e in at.error if "holds no numbers" in e.value]
-    assert said, "text Word/IA IDs loaded without a word"
+    assert said, "text Word IDs loaded without a word"
     assert "`word_id`" in said[0] and "Map the fixations' X and Y" in said[0]
     finalize = [b for b in at.button if b.key == "wizard_finalize"]
     assert finalize and finalize[0].disabled

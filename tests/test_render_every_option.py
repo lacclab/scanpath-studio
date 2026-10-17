@@ -52,7 +52,7 @@ NON_DEFAULT = {
     "show_heatmap": True,
     "show_saccade_arrows": True,
     "show_raw_gaze": True,
-    "heatmap_style": "Interpolated",
+    "heatmap_style": "Smoothed",
     "heatmap_norm": "Log",
     "heatmap_metric": None,  # "counts" at the figure level
     "heatmap_sigma_px": 15.0,
@@ -84,7 +84,7 @@ NON_DEFAULT = {
     },
     "fixation_snap_to_line": True,
     "fixation_snap_position": 0.25,
-    "fixation_flags": {"short": {"mode": "Discard", "threshold_ms": 90.0}},
+    "fixation_flags": {"short": {"mode": "Hide", "threshold_ms": 90.0}},
     # The co-animation's B flags (`--compare-fixation-flag`).
     "fixation_flags_b": {"long": {"mode": "Highlight", "threshold_ms": 700.0}},
     "fixation_hover_fields": ["duration_ms"],
@@ -176,7 +176,7 @@ NON_DEFAULT = {
 #: *frames*, which are data rather than options.
 _NOT_OPTIONS = (cs._DERIVED_SETTINGS - {"show_raw_gaze"}) | {"words_b", "fixations_b"}
 
-DEMO = cs.SnippetSource(kind=cs.SOURCE_DEMO, label="Bundled Demo")
+DEMO = cs.SnippetSource(kind=cs.SOURCE_DEMO, label="Bundled demo")
 
 
 def _maximal_state(kind: str) -> cs.FigureState:
@@ -240,7 +240,7 @@ def test_a_palette_is_named_only_when_the_figure_wears_it():
     flags — and only when each colour it writes that the figure draws is the
     figure's."""
     settings = {**api.figure_options("static"), "text_color": "#333333"}
-    # *Print / greyscale*'s text colour, and nothing else of it: naming it would
+    # *Print / grayscale*'s text colour, and nothing else of it: naming it would
     # turn the fixations, saccades and colour scales grey.
     command, _ = cs.cli_snippet(DEMO, cs.FigureState(kind="static", settings=settings))
     assert "--palette" not in command
@@ -248,7 +248,7 @@ def test_a_palette_is_named_only_when_the_figure_wears_it():
 
     from scanpath_studio.constants import palette_settings
 
-    greyscale = palette_settings("Print / greyscale")
+    greyscale = palette_settings("Print / grayscale")
     settings = {
         **api.figure_options("static"),
         **{k: v for k, v in greyscale.items() if k != "word_label_color"},

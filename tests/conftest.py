@@ -91,7 +91,7 @@ def synthetic_fixations_df():
 
 @pytest.fixture
 def sample_words_df():
-    """Create a sample words/IA dataframe for testing."""
+    """Create a sample Words table dataframe for testing."""
     return pd.DataFrame(
         {
             "participant_id": ["p1", "p1", "p1", "p2", "p2"],

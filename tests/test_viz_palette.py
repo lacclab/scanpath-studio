@@ -182,9 +182,9 @@ class TestPalettes:
             normalized_words_df,
             normalized_fixations_df,
             canvas_size=(1000, 600),
-            palette="Print / greyscale",
+            palette="Print / grayscale",
         )
-        expected = palette_settings("Print / greyscale")["fixation_color"]
+        expected = palette_settings("Print / grayscale")["fixation_color"]
         assert _fixation_marker(fig).color == expected
 
     def test_an_explicit_colour_beats_the_palette(
@@ -194,7 +194,7 @@ class TestPalettes:
             normalized_words_df,
             normalized_fixations_df,
             canvas_size=(1000, 600),
-            palette="Print / greyscale",
+            palette="Print / grayscale",
             fixation_color="#ff0000",
         )
         assert _fixation_marker(fig).color == "#ff0000"
@@ -212,7 +212,7 @@ class TestPalettes:
 
     def test_greyscale_palette_is_actually_greyscale(self):
         """Every mark colour has R == G == B, so a B&W conversion loses nothing."""
-        settings = palette_settings("Print / greyscale")
+        settings = palette_settings("Print / grayscale")
         colors = [
             settings["fixation_color"],
             settings["saccade_color"],
@@ -225,7 +225,7 @@ class TestPalettes:
     def test_palette_maps_onto_session_keys(self):
         from scanpath_studio.controls import palette_state
 
-        state = palette_state("Default (colourblind-safe)")
+        state = palette_state("Default (colorblind-safe)")
         assert state["global_fixation_color"] == "#0072B2"
         assert state["global_saccade_class_color_regression"] == "#D55E00"
         # `other` is not user-editable, so it gets no session key.
@@ -235,7 +235,7 @@ class TestPalettes:
 class TestTheSelectorStopsClaimingAPalette:
     """A palette is one-way — it writes the ordinary colour keys and never
     reads them back — so without a derived "which palette is actually active?"
-    the dropdown would keep reading *Default (colourblind-safe)* after you've
+    the dropdown would keep reading *Default (colorblind-safe)* after you've
     hand-edited one of its colours. The Quick views follow the same rule."""
 
     @pytest.fixture
@@ -257,7 +257,7 @@ class TestTheSelectorStopsClaimingAPalette:
     def test_editing_one_colour_drops_it_to_custom(self, state):
         from scanpath_studio.controls import _active_palette, apply_palette
 
-        apply_palette("Default (colourblind-safe)")
+        apply_palette("Default (colorblind-safe)")
         state["global_saccade_color"] = "#123456"
         assert _active_palette() is None
 
@@ -266,7 +266,7 @@ class TestTheSelectorStopsClaimingAPalette:
         the question that isn't obvious from looking at the figure."""
         from scanpath_studio.controls import _active_palette, apply_palette
 
-        apply_palette("Print / greyscale")
+        apply_palette("Print / grayscale")
         state["global_heatmap_colorscale"] = "Turbo"
         assert _active_palette() is None
 
@@ -282,12 +282,12 @@ class TestTheSelectorStopsClaimingAPalette:
         returns, so the option disappears from the list again."""
         from scanpath_studio.controls import _active_palette, apply_palette
 
-        apply_palette("Default (colourblind-safe)")
+        apply_palette("Default (colorblind-safe)")
         original = state["global_saccade_color"]
         state["global_saccade_color"] = "#123456"
         assert _active_palette() is None
         state["global_saccade_color"] = original
-        assert _active_palette() == "Default (colourblind-safe)"
+        assert _active_palette() == "Default (colorblind-safe)"
 
     def test_a_lowercased_hex_still_matches(self, state):
         """`st.color_picker` hands colours back lowercase; the registry spells
@@ -295,9 +295,9 @@ class TestTheSelectorStopsClaimingAPalette:
         read Custom the first time its own picker was touched."""
         from scanpath_studio.controls import _active_palette, apply_palette
 
-        apply_palette("Default (colourblind-safe)")
+        apply_palette("Default (colorblind-safe)")
         state["global_fixation_color"] = state["global_fixation_color"].lower()
-        assert _active_palette() == "Default (colourblind-safe)"
+        assert _active_palette() == "Default (colorblind-safe)"
 
     def test_empty_state_is_not_silently_a_palette(self, state):
         from scanpath_studio.controls import _active_palette
@@ -309,7 +309,7 @@ class TestTheSelectorStopsClaimingAPalette:
         or picking it would wipe the very colours it stands for."""
         from scanpath_studio.controls import apply_palette
 
-        apply_palette("Default (colourblind-safe)")
+        apply_palette("Default (colorblind-safe)")
         state["global_saccade_color"] = "#123456"
         apply_palette(CUSTOM_PALETTE)
         assert state["global_saccade_color"] == "#123456"
@@ -336,8 +336,8 @@ class TestTheSelectorStopsClaimingAPalette:
                 normalized_fixations_df, 12, words=normalized_words_df
             )
 
-        apply_palette("Print / greyscale")
-        assert settings()["palette"] == "Print / greyscale"
+        apply_palette("Print / grayscale")
+        assert settings()["palette"] == "Print / grayscale"
         state["global_fixation_color"] = "#ff0000"
         assert settings()["palette"] == CUSTOM_PALETTE
 
@@ -358,8 +358,8 @@ class TestTheSelectorStopsClaimingAPalette:
         palette_descriptions = {entry["description"] for entry in PALETTES.values()}
         assert palette_descriptions.isdisjoint(c.value for c in at.caption)
 
-        picker().set_value("Default (colourblind-safe)").run(timeout=60)
-        assert picker().value == "Default (colourblind-safe)"
+        picker().set_value("Default (colorblind-safe)").run(timeout=60)
+        assert picker().value == "Default (colorblind-safe)"
         assert CUSTOM_PALETTE not in picker().options
 
         # Hand-edit one of the palette's colours, exactly as the colour picker
@@ -374,7 +374,7 @@ class TestTheSelectorStopsClaimingAPalette:
         ("saved", "expect_skipped"),
         [
             (CUSTOM_PALETTE, False),
-            ("Default (colourblind-safe)", False),
+            ("Default (colorblind-safe)", False),
             ("Nope", True),
         ],
     )
@@ -423,7 +423,7 @@ class TestAPaletteSurvivesAClosedPopover:
     def test_a_stale_echo_does_not_undo_the_palette(self, state):
         from scanpath_studio.controls import _active_palette, apply_palette
 
-        apply_palette("Print / greyscale")
+        apply_palette("Print / grayscale")
         grey = state["global_fixation_color"]
         self._run(state)
         self._run(state)
@@ -436,7 +436,7 @@ class TestAPaletteSurvivesAClosedPopover:
     def test_a_hand_picked_colour_still_wins(self, state):
         from scanpath_studio.controls import _active_palette, apply_palette
 
-        apply_palette("Print / greyscale")
+        apply_palette("Print / grayscale")
         grey = state["global_fixation_color"]
         apply_palette("High contrast")
         self._run(state)
@@ -460,7 +460,7 @@ class TestSaccadeDirectionMode:
     """Forward vs. regression, between Uniform and the five-way split."""
 
     def test_mode_sits_between_the_other_two(self):
-        assert SACCADE_COLOR_MODES == ("Uniform", "Forward / regression", "By type")
+        assert SACCADE_COLOR_MODES == ("One color", "Forward / regression", "By type")
 
     def _saccade_legend(self, fig):
         return {
@@ -478,7 +478,7 @@ class TestSaccadeDirectionMode:
             saccade_color_mode="Forward / regression",
         )
         names = self._saccade_legend(fig)
-        assert names <= {"Forward", "Regression", "Other"}
+        assert names <= {"Forward", "Regression", "Off the text"}
         assert "Skip" not in names and "Return sweep" not in names
 
     def test_by_type_still_splits_five_ways(
@@ -494,14 +494,14 @@ class TestSaccadeDirectionMode:
             "Refixation",
             "Return sweep",
             "Regression",
-            "Other",
+            "Off the text",
         }
 
     def test_uniform_draws_a_single_trace(
         self, normalized_words_df, normalized_fixations_df
     ):
         fig = _fig(
-            normalized_words_df, normalized_fixations_df, saccade_color_mode="Uniform"
+            normalized_words_df, normalized_fixations_df, saccade_color_mode="One color"
         )
         assert not self._saccade_legend(fig)
         assert sum(1 for t in fig.data if getattr(t, "name", "") == "saccades") == 1

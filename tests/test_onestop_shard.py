@@ -268,18 +268,18 @@ class TestProvenance:
     def test_reports_the_shard_when_a_participant_is_set(self, at_root):
         _write_shards(at_root)
         info = onestop_data_provenance("l37_1129")
-        assert info["loaded_from"] == "per-pid shard"
+        assert info["loaded_from"] == "per-participant Parquet file"
         assert info["ia_shard"].endswith("by_pid/ia/l37_1129.parquet")
         assert "ia_shard_mtime" in info and "fix_shard_mtime" in info
 
     def test_reports_the_full_export_without_one(self, at_root):
         info = onestop_data_provenance()
-        assert info["loaded_from"] == "full CSV.zip export"
+        assert info["loaded_from"] == "full OneStop CSV export"
         assert info["ia_shard"].endswith("ia_Paragraph.csv.zip")
 
     def test_a_missing_shard_leaves_the_mtime_out_rather_than_guessing(self, at_root):
         info = onestop_data_provenance("l99_0000")
-        assert info["loaded_from"] == "per-pid shard"
+        assert info["loaded_from"] == "per-participant Parquet file"
         assert "ia_shard_mtime" not in info
 
     def test_parses_cohort_source_and_date_from_the_canonical_layout(

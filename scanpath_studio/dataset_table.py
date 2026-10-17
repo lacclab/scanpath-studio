@@ -100,7 +100,7 @@ COUNTS_EXPLANATION = (
 )
 
 #: Kind is ordered by what a row is, not alphabetically, when it is sorted.
-KIND_ORDER: tuple[str, ...] = ("Demo", "Manual", "Private", "Public")
+KIND_ORDER: tuple[str, ...] = ("Demo", "Hand-drawn", "Private", "Public")
 
 
 def format_count(value: int) -> str:

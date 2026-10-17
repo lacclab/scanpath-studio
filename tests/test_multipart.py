@@ -519,7 +519,7 @@ def test_a_stamped_screen_order_survives_a_mapping_that_does_not_name_it():
 def test_an_unmapped_screen_index_column_does_not_make_a_table_multipart():
     """With no screen field mapped, a raw `screen_index` column must not ride
     through the stamp path above — deriving a `screen_id` from it would leave an
-    AOI table multipart after its screen fields were cleared, and the pair
+    Words table multipart after its screen fields were cleared, and the pair
     would be refused ("Multipart identity is present in only one report")."""
     from scanpath_studio.data import normalize_fixations, normalize_words
     from scanpath_studio.multipart import has_screen_identity, validate_matching_parts

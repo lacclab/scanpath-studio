@@ -44,7 +44,7 @@ _LINE_NAMES = {
     "Refixation",
     "Return sweep",
     "Regression",
-    "Other",
+    "Off the text",
 }
 
 

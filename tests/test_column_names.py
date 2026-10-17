@@ -563,8 +563,8 @@ def test_the_rail_shows_the_demos_own_column_names(demo_raw):
     hover = at.multiselect(key="global_fixation_hover_fields")
     assert "Duration (ms)" in hover.options, hover.options
     assert any(o.endswith(cn.COMPUTED_SUFFIX) for o in hover.options)
-    # "Line" is the app's, so it sorts after the dataset's own fields.
-    assert color.options[-1] == "Line" + cn.COMPUTED_SUFFIX
+    # "Text line" is the app's, so it sorts after the dataset's own fields.
+    assert color.options[-1] == "Text line" + cn.COMPUTED_SUFFIX
     metric = at.selectbox(key="global_heatmap_metric")
     assert metric.options == ["Duration (ms)", "Fixation count"]
     # The values are still canonical: links and saved configs are unchanged.

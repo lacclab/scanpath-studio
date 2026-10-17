@@ -1,7 +1,7 @@
 """In Compare, each scanpath is filtered by its own filters.
 
 A keeps the rail's ordinary 🧹 Filter section — the fixation-index window, the
-short / long / out-of-bounds / blink flags and the saccade-type filter, all live
+short / long / outside-the-text / blink flags and the saccade-type filter, all live
 in Compare — and B gets a "· B" block of its own. Every surface carries B's:
 the builders (a per-scanpath style entry), the Share link and saved config
 (`cmp_b_*`), `render` (`--compare-*`) and the API (`style_b` /
@@ -60,7 +60,7 @@ def _pair():
     return words, fixations
 
 
-_DISCARD_SHORT = {"short": {"mode": "Discard", "threshold_ms": 80}}
+_DISCARD_SHORT = {"short": {"mode": "Hide", "threshold_ms": 80}}
 
 
 def _markers(fig, name_prefix: str) -> int:
@@ -177,7 +177,7 @@ class TestTheCli:
                 "--compare-with",
                 "l37_1129:l37_1129_2_1_3_Adv_r0",
                 "--compare-fixation-flag",
-                "short=discard,threshold_ms=90",
+                "short=hide,threshold_ms=90",
                 "--compare-saccade-classes",
                 "regression",
                 "--compare-fix-index-range",
@@ -186,7 +186,7 @@ class TestTheCli:
                 str(tmp_path / "cmp.html"),
             ]
         )
-        assert seen["style_b"]["fixation_flags"]["short"]["mode"] == "Discard"
+        assert seen["style_b"]["fixation_flags"]["short"]["mode"] == "Hide"
         assert seen["style_b"]["saccade_classes"] == ["regression"]
         assert seen["fix_index_range_b"] == (2, 9)
         assert "fixation_flags" not in seen  # A is left alone
@@ -237,11 +237,11 @@ class TestTheRail:
 
     def test_bs_filters_reach_bs_style(self):
         at = _boot_compare()
-        at.selectbox(key="cmp1_fixclass_short_mode").set_value("Discard")
+        at.selectbox(key="cmp1_fixclass_short_mode").set_value("Hide")
         at.multiselect(key="cmp1_saccade_classes").set_value(["regression"])
         at.run(timeout=90)
         assert not at.exception, at.exception
-        assert at.session_state["cmp1_fixclass_short_mode"] == "Discard"
+        assert at.session_state["cmp1_fixclass_short_mode"] == "Hide"
         # A's own filter is untouched by B's.
         assert at.session_state["global_fixclass_short_mode"] == "Off"
 
@@ -289,7 +289,7 @@ def test_the_compare_legend_reads_larger_than_the_body(layout):
 
 
 def test_bs_own_filters_disclose_like_as():
-    """B's Discard flags and B's window alter the figure as much
+    """B's Hide flags and B's window alter the figure as much
     as A's do, so they reach the Illustration disclosure too."""
     from scanpath_studio.illustration import illustration_reasons
 

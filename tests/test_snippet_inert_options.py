@@ -8,7 +8,7 @@ from scanpath_studio import api
 from scanpath_studio import code_snippet as cs
 from scanpath_studio.constants import palette_settings
 
-DEMO = cs.SnippetSource(kind=cs.SOURCE_DEMO, label="Bundled Demo")
+DEMO = cs.SnippetSource(kind=cs.SOURCE_DEMO, label="Bundled demo")
 
 
 def _code(**figure) -> cs.ReproductionCode:

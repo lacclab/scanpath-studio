@@ -69,7 +69,7 @@ scanpath-studio render \
   --words ia.csv --fixations fixations.csv \
   --participant p1 --trial t3 --output scanpath.svg
 
-# An authoring file saved from the app's Author a scanpath screen
+# A draft file saved from the app's Draw a scanpath screen
 scanpath-studio render --authoring authored-scanpath.json -o authored.html
 
 # A public corpus, loaded the way the app loads it (PoTeC downloads on first use)
@@ -94,7 +94,7 @@ The Python API loads the same corpora with
 | size fixations by duration | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--no-duration-size-legend` |
 | draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; `--animate` and `--compare-with` honor it too) |
 | draw the stimulus | `--stimulus-image PATH` for one image. `--show-stimulus-image` draws each trial's own page, the `image_path` its rows carry (`--sample` ships its pages). `--image-root DIR --image-pattern '{text_id}.png'` fills `image_path` from a folder |
-| smooth the heatmap | `--heatmap-style interpolated --heatmap-sigma 20` (σ in px; leave it out for an automatic σ) |
+| smooth the heatmap | `--heatmap-style smoothed --heatmap-sigma 20` (σ in px; leave it out for an automatic σ) |
 | style the word boxes | `--word-box-color`, `--word-box-line-opacity`, `--word-box-fill-color`, `--word-box-fill-opacity` (0 draws outlines only, or fill only) |
 | size the figure | `--width`, `--height`, `--scale`. For print, `--width-mm MM` or `--width-in IN` with `--dpi N` (default 300) |
 | title and caption it | `--title`, `--caption` |

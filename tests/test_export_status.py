@@ -674,7 +674,7 @@ def test_the_export_panel_does_not_load_the_replay_on_a_rerun(monkeypatch, fmt):
 
 def test_the_clip_lasts_what_the_figures_own_replay_does(monkeypatch):
     # The GIF/MP4 reads the figure's own clock: a playback time the tab measured
-    # on its own, from fixations the builder's Discard flags had not dropped yet,
+    # on its own, from fixations the builder's Hide flags had not dropped yet,
     # would let a clip outlast the replay it was made from.
     AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
     from scanpath_studio import tabs

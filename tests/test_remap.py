@@ -320,7 +320,7 @@ def test_remap_proposed_always_seeds_text_id():
 
 
 class TestStimulusLevelWordsRemap:
-    """A per-*text* AOI table (no participant column) is broadcast onto the
+    """A per-*text* Words table (no participant column) is broadcast onto the
     readers at import, so the stored words carry real reader ids while their
     schema maps no Participant. ✅ Save changes on the ✏️ Edit dataset screen —
     which attaching a metadata table there requires — re-derives those words
@@ -813,7 +813,7 @@ class TestDroppedColumns:
 
 
 def _setup_file_raw_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """An AOI table with *edge* boxes and a fixation table with a seconds
+    """A Words table with *edge* boxes and a fixation table with a seconds
     duration and a composite trial id, every column under a name the app does
     not use — the case a setup file has to restate faithfully."""
     words = pd.DataFrame(

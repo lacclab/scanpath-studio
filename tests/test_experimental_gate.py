@@ -303,7 +303,7 @@ class TestPreprocessingGate:
         assert "Preprocessing" not in parts, parts
         assert "Preprocessing" not in " ".join(s.value for s in at.subheader)
         # With the experimental flag off (this whole file's default),
-        # the 🧮 Derived analysis tables section — Cleaning QA included — is
+        # the 🧮 Derived analysis tables section — Cleaning report included — is
         # withheld too, so there's nothing preprocessing-specific left to
         # single out here. See TestDerivedAnalysisTablesGate for that gate.
         labels = [e.label for e in at.expander]
@@ -312,10 +312,10 @@ class TestPreprocessingGate:
 
 class TestDerivedAnalysisTablesGate:
     """The Data page's 🧮 Derived analysis tables section (Sentences /
-    Saccades / Trials / Readers / Characters / Cleaning QA) is behind the
-    experimental flag, like preprocessing: the builders stay in the codebase,
-    but the app must neither render the section nor run the aggregation
-    pipeline that backs it.
+    Saccades / Trial summary / Participant summary / Characters / Cleaning
+    report) is behind the experimental flag, like preprocessing: the builders
+    stay in the codebase, but the app must neither render the section nor run
+    the aggregation pipeline that backs it.
     """
 
     def test_it_is_hidden_by_default(self, monkeypatch):
@@ -451,7 +451,7 @@ class TestComputedMeasuresGate:
         from scanpath_studio import export
 
         source = inspect.getsource(export.render_export_options)
-        assert '*(["Full measure family"] if computed_measures_enabled() else [])' in (
+        assert '*(["Computed measures"] if computed_measures_enabled() else [])' in (
             source
         )
 

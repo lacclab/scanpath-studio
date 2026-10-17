@@ -468,7 +468,7 @@ class TestCachePayload:
                 "note": "",
             }
         ]
-        annotations_mod.activate_dataset(session, "Bundled Demo")
+        annotations_mod.activate_dataset(session, "Bundled demo")
         assert set(_live(session)) == {("p1", "t1")}
         assert "unassigned" not in annotations_mod.cache_payload(session)
 
@@ -499,7 +499,7 @@ class TestCachePayload:
         annotations_mod.activate_dataset(session, "U")
         assert _live(session) == {}
         assert annotations_mod.cache_payload(session)["unassigned"]
-        annotations_mod.activate_dataset(session, "Bundled Demo")
+        annotations_mod.activate_dataset(session, "Bundled demo")
         assert set(_live(session)) == {("p1", "t1")}
         assert annotations_mod.store_for(session, "U") == {}
 
@@ -512,7 +512,7 @@ class TestCachePayload:
         annotations_mod.adopt_pending_dataset(session, "New")
         assert not annotations_mod.activate_dataset(session, "New")
         assert _live(session) == {}
-        annotations_mod.activate_dataset(session, "Bundled Demo")
+        annotations_mod.activate_dataset(session, "Bundled demo")
         assert set(_live(session)) == {("p1", "t1")}
 
     def test_adoption_can_wait_for_the_load(self):
@@ -567,10 +567,10 @@ class TestCachePayload:
             ("p2", "t2"),
             ("p3", "shared"),
         }
-        annotations_mod.activate_dataset(session, "Bundled Demo")
+        annotations_mod.activate_dataset(session, "Bundled demo")
         assert set(_live(session)) == {("p9", "t9")}
         assert set(annotations_mod.dataset_records(session)) == {
-            "Bundled Demo",
+            "Bundled demo",
             "U1",
             "U2",
         }

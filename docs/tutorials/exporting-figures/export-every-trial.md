@@ -11,7 +11,7 @@ Build a ZIP of static figures and data tables for a set of trials.
 2. Open Export → Export bundle and select this trial, the active filtered pool,
    or the whole dataset.
 3. Choose figure and table formats and check the filename pattern.
-   For editing individual layers later, enable separable layers.
+   For editing individual layers later, turn on **Layers as separate files**.
 4. Build and download the bundle, then inspect one exported figure.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"

@@ -47,7 +47,7 @@ _BOX_H = 20
 
 
 def make_synthetic_words() -> pd.DataFrame:
-    """Return the normalized words/IA frame for the synthetic trial."""
+    """Return the normalized Words table frame for the synthetic trial."""
     n = len(_WORD_TEXT)
     return pd.DataFrame(
         {
@@ -139,7 +139,7 @@ EXPECTED = {
 # named the way the add wizard's auto-detection reads it, so the pair maps
 # without a single manual pick (`tests/test_example_tables.py` holds it to that).
 
-#: The AOI table's columns, in file order.
+#: The Words table's columns, in file order.
 EXAMPLE_AOI_COLUMNS = (
     "participant_id",
     "trial_id",
@@ -167,9 +167,9 @@ EXAMPLE_FIXATION_COLUMNS = (
 
 
 def example_import_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """The synthetic trial as an AOI table and a fixation table to import.
+    """The synthetic trial as a Words table and a fixation table to import.
 
-    The AOI table carries two of the trial's hand-traced reading measures
+    The Words table carries two of the trial's hand-traced reading measures
     (``EXPECTED``) so the example shows that a dataset brings its own: the app
     computes none for Corpus Analysis. The fixation table has no word
     ids: the app assigns each fixation to the word box it falls in.

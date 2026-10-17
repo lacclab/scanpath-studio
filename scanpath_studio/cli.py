@@ -486,7 +486,7 @@ def _render_parser() -> argparse.ArgumentParser:
     src.add_argument(
         "--authoring",
         metavar="PATH",
-        help="An authoring file from the app's Author a scanpath screen.",
+        help="A draft file from the app's Draw a scanpath screen.",
     )
     src.add_argument(
         "--words",
@@ -881,8 +881,8 @@ def _render_parser() -> argparse.ArgumentParser:
         help="The app's Filters & highlights for fixations, repeatable. SPEC is "
         "CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB] with "
         "CATEGORY one of short, long, oob (outside every word box), blink and "
-        "MODE one of off, highlight, discard — e.g. --fixation-flag "
-        "short=discard,threshold_ms=80. discard drops those fixations from the "
+        "MODE one of off, highlight, hide — e.g. --fixation-flag "
+        "short=hide,threshold_ms=80. hide drops those fixations from the "
         "drawing only; measures and exports are untouched. threshold_ms applies "
         "to short/long only.",
     )
@@ -1022,14 +1022,14 @@ def _render_parser() -> argparse.ArgumentParser:
     )
     viz.add_argument(
         "--heatmap-style",
-        choices=["word-boxes", "interpolated"],
+        choices=["word-boxes", "smoothed"],
         help="Heatmap geometry (default: word-boxes).",
     )
     viz.add_argument(
         "--heatmap-sigma",
         type=float,
         metavar="PX",
-        help="Gaussian σ in px for --heatmap-style interpolated (default: 2%% of "
+        help="Gaussian σ in px for --heatmap-style smoothed (default: 2%% of "
         "the data's larger span, at least 8 px).",
     )
     viz.add_argument(
@@ -1049,7 +1049,7 @@ def _render_parser() -> argparse.ArgumentParser:
         type=float,
         metavar="O",
         help="Heatmap opacity, 0.05–1.0 (default: each style's own — word boxes "
-        "0.5, or 0.35 with no word boxes; interpolated 0.45).",
+        "0.5, or 0.35 with no word boxes; smoothed 0.45).",
     )
     viz.add_argument(
         "--fixation-colorscale",
@@ -1723,7 +1723,7 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="SPEC",
         help="Filters & highlights for the SECOND scanpath only, repeatable; "
         "same SPEC as --fixation-flag, e.g. --compare-fixation-flag "
-        "short=discard,threshold_ms=80. Replaces --fixation-flag for B.",
+        "short=hide,threshold_ms=80. Replaces --fixation-flag for B.",
     )
     cmp_group.add_argument(
         "--compare-saccade-classes",
@@ -2257,7 +2257,7 @@ def _parse_legend_layout(specs: list[str]) -> dict:
 
 
 def _parse_fixation_flags(specs: list[str]) -> dict:
-    """``["short=discard,threshold_ms=80"]`` → the ``fixation_flags`` dict.
+    """``["short=hide,threshold_ms=80"]`` → the ``fixation_flags`` dict.
 
     The app builds the same dict from its ``global_fixclass_*`` keys
     (``controls._collect_fixation_flags``) and a saved config carries it whole,
@@ -2370,7 +2370,7 @@ def _snippet_data_source(args) -> SnippetSource:
             label="raw gaze",
             options={"raw_gaze": list(args.raw_gaze)},
         )
-    return cs.SnippetSource(kind=cs.SOURCE_DEMO, label="Bundled Demo")
+    return cs.SnippetSource(kind=cs.SOURCE_DEMO, label="Bundled demo")
 
 
 def _print_reproduction_code(
@@ -3109,7 +3109,7 @@ def render(argv: list[str]) -> None:
     if args.heatmap_style:
         overrides["heatmap_style"] = {
             "word-boxes": "Word boxes",
-            "interpolated": "Interpolated",
+            "smoothed": "Smoothed",
         }[args.heatmap_style]
     if args.heatmap_sigma is not None:
         overrides["heatmap_sigma_px"] = args.heatmap_sigma
@@ -3204,7 +3204,7 @@ def render(argv: list[str]) -> None:
             show_saccade_arrows=False,
             show_heatmap=False,
             color_by=UNIFORM_COLOR_FIELD,
-            saccade_color_mode="Uniform",
+            saccade_color_mode="One color",
             saccade_render_mode="Arc",
             fixation_snap_to_line=True,
             fixation_opacity=1.0,

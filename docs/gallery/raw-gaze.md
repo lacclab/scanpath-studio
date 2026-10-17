@@ -18,7 +18,7 @@ print(gallery_figure("raw-gaze"))
 
 === "In the app"
 
-    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_2_2_Adv_r0`. Start with Reset visualization, turn off Stimulus → Highlight → Show.
+    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_2_2_Adv_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
     2. Turn on Raw gaze and turn off Saccades.
     3. In Fixations ▾ → Marker → Opacity, choose 0.35 so the samples show through.
 

@@ -5,7 +5,7 @@ Changing the stimulus keeps the fixations — id, X/Y, order and duration —
 rather than replacing them with one default fixation per word, and only a
 target word the edit changed is flagged. Regeneration is an explicit
 action, and the draft it (or a deletion, a move, a restored file) replaced is
-one click away. The editable draft also downloads as an authoring file that
+one click away. The editable draft also downloads as a draft file that
 loads back on the screen and through the API.
 """
 
@@ -150,10 +150,10 @@ def test_the_downloaded_file_round_trips(tmp_path):
     download = next(
         element
         for element in at.download_button
-        if "Download authoring file" in str(element.proto.label)
+        if "Download draft (JSON)" in str(element.proto.label)
     )
     payload = at.session_state["_author_save_payload"]["authoring"]
-    assert download.proto.label == "Download authoring file"
+    assert download.proto.label == "Download draft (JSON)"
     document = parse_authoring_document(payload)
     assert document.text == at.text_area(key="author_text").value
     events = document.events

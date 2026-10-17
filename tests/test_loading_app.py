@@ -125,7 +125,7 @@ def test_a_slow_load_shows_the_skeleton_and_its_step_list(at, monkeypatch):
     monkeypatch.setattr(loading, "DELAY_S", 0)
     monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
     monkeypatch.setattr(app, "prepare_data", _stop)
-    at.session_state["_pending_source_choice"] = "Bundled Demo"
+    at.session_state["_pending_source_choice"] = "Bundled demo"
     at.run()
     text = _markdown(at)
     assert "sps-sk-scanpath" in text and "sps-reveal-page" in text
@@ -707,7 +707,7 @@ def _compare_cancel_script():
 
     from scanpath_studio import tabs
 
-    st.session_state.setdefault("cmp_dataset", "Bundled Demo")
+    st.session_state.setdefault("cmp_dataset", "Bundled demo")
     st.button("x", key="c", on_click=tabs._cancel_compare_source, args=(("cmp", "k"),))
 
 
@@ -863,7 +863,7 @@ def test_a_view_switch_onto_an_in_flight_load_opens_the_loads_own_card(at, monke
     _hold_every_task(monkeypatch)
     demo = app.DEMO_CHOICE
     at.session_state["_pending_source_choice"] = demo
-    at.run()  # Bundled Demo's load starts and is now in flight
+    at.run()  # Bundled demo's load starts and is now in flight
     assert at.session_state[app.DATASET_TASK_KEY][2] == demo
     gc.collect()  # live because it is held, not because nothing collected it
     pin_view(at, _VIEW_CORPUS)
@@ -964,7 +964,7 @@ def test_a_hidden_last_loaded_dataset_is_never_offered_as_a_cancel_target(monkey
     test.session_state["data_source_choice"] = app.DEMO_CHOICE
     monkeypatch.setattr(app, "debug_enabled", lambda: True)  # keeps SYNTHETIC
     # selectable below despite not being the active dataset.
-    test.run()  # Bundled Demo finishes: LAST_LOADED_SOURCE_KEY == DEMO_CHOICE
+    test.run()  # Bundled demo finishes: LAST_LOADED_SOURCE_KEY == DEMO_CHOICE
     test.session_state[app.HIDDEN_DATASETS_KEY] = [app.DEMO_CHOICE]
     monkeypatch.setattr(loading, "DELAY_S", 0)
     monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)

@@ -339,7 +339,7 @@ def snapshot_for(
     A stored upload carries the snapshot its wizard captured. Anything else goes
     through the one source→monitor table (`app.resolve_source_monitor`): a corpus
     that declares a presentation monitor reports ``MEASURED``, and a corpus whose
-    canvas is inferred from data extents reports ``ESTIMATED``. Physical size,
+    canvas is inferred from data extents reports ``ESTIMATED``. Monitor width,
     viewing distance and typography stay at their defaults, marked ``ASSUMED`` —
     no registry entry records them, and B's panel does not use them.
 

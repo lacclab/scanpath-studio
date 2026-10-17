@@ -68,11 +68,11 @@ STYLES_SENT = {
     "cmp1_raw_gaze_color": "#1100ee",
     "cmp1_heatmap_colorscale": "Greens",
     # B's own filters ride the same group.
-    "cmp1_fixclass_short_mode": "Discard",
+    "cmp1_fixclass_short_mode": "Hide",
     "cmp1_fixclass_short_threshold_ms": 90,
     "cmp1_fixclass_long_mode": "Highlight",
     "cmp1_fixclass_long_threshold_ms": 900,
-    "cmp1_fixclass_oob_mode": "Discard",
+    "cmp1_fixclass_oob_mode": "Hide",
     "cmp1_fixclass_blink_mode": "Highlight",
     "cmp1_saccade_classes": ["forward", "regression"],
 }
@@ -420,7 +420,7 @@ def test_a_linked_canvas_and_font_survive_the_source_snap():
                     "global_canvas_height",
                     "global_canvas_width",
                 ],
-                "choice": "Bundled Demo",
+                "choice": "Bundled demo",
             }
         },
     )

@@ -1244,7 +1244,7 @@ def _render_saved_here_section(app_url: str, host) -> None:
             + ". Closing or refreshing the tab loses the datasets you uploaded, "
             "their column mappings, your annotations and designs. Export the "
             "annotations from **Annotations** above, and the figure's settings "
-            f"from {ICONS['view_scanpath']} Scanpath → {ICONS['share']} Share → **File**."
+            f"from {ICONS['view_scanpath']} Scanpath → {ICONS['share']} Share → **Settings file**."
         )
         if turned_off:
             # The switch itself, for whoever launches the app — kept out of the
@@ -2487,7 +2487,7 @@ def _load_onestop_regime_source(
     four regimes share (the parts other than Paragraph are the same files for
     all of them). They share the bundled demo's schema, so the raw frames go
     through the normal normalization pipeline and the Column-mapping panels
-    still appear. Distinct from the env-var "OneStop server bundle" source.
+    still appear. Distinct from the env-var "OneStop (local export)" source.
 
     ``options_host`` is unused (kept for the registry's loader signature);
     ``location_host`` is the data-location sub-slot.
@@ -3163,14 +3163,14 @@ def load_words_and_fixations(
     The Upload source is handled separately by the setup wizard
     (``_render_data_setup``), which groups each table's upload box with its
     mapping; this covers the bundled demo, synthetic trial, public datasets, and
-    the OneStop server bundle.
+    the OneStop local export.
 
     ``description_host`` / ``options_host`` / ``location_host`` are the
     sub-slots a public dataset's caption / source options / data-location
     controls render into (ignored by the other sources).
 
     Args:
-        data_choice: ``DEMO_CHOICE`` ("Bundled Demo") / ``SYNTHETIC_CHOICE`` /
+        data_choice: ``DEMO_CHOICE`` ("Bundled demo") / ``SYNTHETIC_CHOICE`` /
             ``PUBLIC_DATASETS_CHOICE`` / ``ONESTOP_CHOICE``. The Upload source
             and stored uploaded datasets are handled by ``main`` directly, not
             here.
@@ -3194,7 +3194,7 @@ def load_words_and_fixations(
         words, fixations = load_onestop_server_bundle(participant=participant)
         if words.empty or fixations.empty:
             _note_dataset_unavailable(
-                label="OneStop server bundle",
+                label=ONESTOP_CHOICE,
                 reason=(
                     "`$ONESTOP_DATA_DIR` isn't set."
                     if onestop_data_dir() is None
@@ -3224,7 +3224,7 @@ def _schema_key(schema: dict | None) -> tuple | None:
     )
 
 
-#: How the last normalized pair's stimulus-level AOI table attached to its
+#: How the last normalized pair's stimulus-level Words table attached to its
 #: readings (a ``data.StimulusJoin``, or ``None``), written by `_normalize_pair`
 #: for the add-dataset wizard. Scratch state, not wire format.
 STIMULUS_JOIN_KEY = "_stimulus_join"
@@ -3246,7 +3246,7 @@ def _normalize_pair_uncached(
 ) -> tuple[pd.DataFrame, pd.DataFrame, StimulusJoin | None, tuple]:
     """Pure normalize + harmonize, cached on a cheap fingerprint of the inputs.
 
-    Also returns how a stimulus-level AOI table attached to the readings
+    Also returns how a stimulus-level Words table attached to the readings
     (the one ``data.harmonize_frames_with_join`` made) — ``None`` for a
     per-reader one — which ``_normalize_pair`` publishes for the add-dataset
     wizard to state.
@@ -3363,7 +3363,7 @@ def _normalize_pair(
             # switching back to it is instant.
             keep=2,
         )
-    # Which key a stimulus-level AOI table joined through, for the
+    # Which key a stimulus-level Words table joined through, for the
     # add-dataset wizard to say — bookkeeping like `_composite_trial_columns`
     # above, written on a cache hit too so it always describes this pair.
     st.session_state[STIMULUS_JOIN_KEY] = join
@@ -4521,7 +4521,7 @@ def reserved_source_names() -> frozenset[str]:
 def resolve_data_source() -> str:
     """Resolve the active data source (renders no picker widget).
 
-    Returns the selected source: ``DEMO_CHOICE`` ("Bundled Demo"), a stored
+    Returns the selected source: ``DEMO_CHOICE`` ("Bundled demo"), a stored
     uploaded dataset's name, ``ONESTOP_CHOICE`` / ``PUBLIC_DATASETS_CHOICE`` when
     available, ``SYNTHETIC_CHOICE``, or ``UPLOAD_CHOICE``
     while the "➕ Add data" wizard is active. Switching to a stored dataset reloads
@@ -4764,7 +4764,7 @@ _AUTHOR_STALE_TARGETS_KEY = "_author_stale_targets"
 #: removed, moved or retimed fixations (`authoring.destructive_change`). One
 #: step, swapped with the current draft by **Restore previous draft**.
 _AUTHOR_PREVIOUS_DRAFT_KEY = "_author_previous_drafts"
-#: What the downloaded authoring file is called — the name Share → Code's
+#: What the downloaded draft file is called — the name Share → Code's
 #: snippet reads it by (`url_state._snippet_source`).
 AUTHORING_FILE_NAME = "scanpath.json"
 
@@ -4822,9 +4822,9 @@ def _save_authored_dataset(name_key: str) -> None:
     payload = st.session_state.pop("_author_save_payload", None)
     if payload is None:
         return
-    requested = str(st.session_state.get(name_key) or "My scanpath").strip()
+    requested = str(st.session_state.get(name_key) or "My saved scanpath").strip()
     if requested in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
-        requested += " (authored)"
+        requested += " (saved)"
     name = _safe_dataset_name(requested)
     st.session_state.setdefault("_datasets", {})[name] = payload
     # The draft's annotations were made on the scanpath being saved,
@@ -4979,7 +4979,7 @@ def render_data_source_picker(host=None) -> None:
         key="add_dataset_menu",
     ):
         st.button(
-            "Create manually",
+            "Draw a scanpath",
             icon=ICONS["author"],
             key="add_manual_dataset_btn",
             help="Write a text and place its fixations, or resume your manual scanpath.",
@@ -4999,10 +4999,15 @@ def render_data_source_picker(host=None) -> None:
 #: Each dataset kind's word in the table, keyed by the picker's glyph,
 #: and the Material Symbol the table draws beside it (the picker keeps its emoji,
 #: since a selectbox option is plain text).
-_DATASET_KIND_LABELS = {"🧪": "Demo", "✏️": "Manual", "🔒": "Private", "🌐": "Public"}
+_DATASET_KIND_LABELS = {
+    "🧪": "Demo",
+    "✏️": "Hand-drawn",
+    "🔒": "Private",
+    "🌐": "Public",
+}
 _DATASET_KIND_ICONS = {
     "Demo": ICONS["demo"],
-    "Manual": ICONS["author"],
+    "Hand-drawn": ICONS["author"],
     "Private": ICONS["private"],
     "Public": ICONS["public"],
 }
@@ -5015,23 +5020,11 @@ DATASET_ALIASES_KEY = "_dataset_display_aliases"
 HIDDEN_DATASETS_KEY = "_hidden_dataset_tokens"
 
 
-#: The built-in sources' names as shown. The tokens are a wire format
-#: (links, saved state), so only the display changes.
-_BUILTIN_DISPLAY_NAMES = {
-    DEMO_CHOICE: "Bundled demo",
-    MANUAL_SAMPLE_CHOICE: "Hand-drawn sample",
-}
-
-
 def _dataset_display_name(token: str, registry: dict | None = None) -> str:
     """User-facing dataset name without changing the source's stable token."""
     alias = (st.session_state.get(DATASET_ALIASES_KEY) or {}).get(token)
     if alias:
         return str(alias)
-    if token == AUTHOR_CHOICE:
-        return "My scanpath"
-    if token in _BUILTIN_DISPLAY_NAMES:
-        return _BUILTIN_DISPLAY_NAMES[token]
     registry = public_dataset_registry() if registry is None else registry
     return picker_name_for(token, registry) if token in registry else token
 
@@ -5147,12 +5140,7 @@ def remembered_dataset_counts(
     entry = store.get(token)
     if words is None and fixations is None and raw_gaze is None:
         counts = entry.get("counts") if isinstance(entry, dict) else None
-        remembered = dict(counts) if isinstance(counts, dict) else {}
-        # Older recovery manifests call the same value Readers. Read it as
-        # Participants without loading the dataset merely to refresh a label.
-        if "Participants" not in remembered and "Readers" in remembered:
-            remembered["Participants"] = remembered.pop("Readers")
-        return remembered
+        return dict(counts) if isinstance(counts, dict) else {}
     key = [
         frame_fingerprint(words),
         frame_fingerprint(fixations),
@@ -6676,7 +6664,7 @@ def _render_dataset_table_head(grid, sort) -> None:
     _sort_button(
         head.container(key="dsh_kind", width=_DATASET_KIND_W),
         "Kind",
-        "Sort by kind: Demo, Manual, Private, Public.",
+        "Sort by kind: Demo, Hand-drawn, Private, Public.",
     )
     _sort_button(
         head.container(key="dsh_name", width=_DATASET_NAME_W),
@@ -6785,7 +6773,7 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         # The discrepancy warning — rare, and the one thing on a row that says
         # a number elsewhere is wrong.
         name.badge(
-            "More than published",
+            "Exceeds published counts",
             icon=ICONS["warning"],
             color="orange",
             help="This session loaded **more** than the published figure for "
@@ -6830,8 +6818,7 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         type="tertiary",
         on_click=_edit_dataset_row,
         args=(row.token,),
-        help="Open the authoring editor to change the text, drag fixations, or "
-        "edit their timing."
+        help="Open the editor to change the text, drag fixations, or edit their timing."
         if row.token == MANUAL_SAMPLE_CHOICE
         else f"Edit {row.name}: its name, description, column mapping, "
         "recording setup, location and metadata tables.",
@@ -7004,7 +6991,7 @@ def resolve_source_monitor(
         override := dataset_setup_override(setup_override_token(data_choice))
     ):
         return override.canvas_width, override.canvas_height, True
-    # OneStop server bundle + bundled demo share the same experimental setup
+    # OneStop local export + bundled demo share the same experimental setup
     # (Dell U2715H, 2560x1440) — cited once at `constants.DEFAULT_FIGURE_SIZE`.
     if data_choice in (ONESTOP_CHOICE, DEMO_CHOICE):
         return 2560, 1440, True
@@ -7174,7 +7161,7 @@ def save_dataset_setup_override(token: str, payload: dict | None) -> None:
 
     ``payload`` (a ``SetupSnapshot.to_dict()``) becomes the dataset's own setup
     and applies to the figure at once, as an upload's saved setup does;
-    ``None`` drops it — *Reset to source setup* — and puts back what the figure
+    ``None`` drops it — *Reset to the corpus's setup* — and puts back what the figure
     showed before it, so the corpus' declared screen snaps in again. Only this
     dataset's entry changes: another dataset's override is never touched.
     """
@@ -7260,7 +7247,7 @@ def source_setup_snapshot(
     fixations: pd.DataFrame | None = None,
 ) -> SetupSnapshot:
     """A built-in or public dataset's setup **as its source states it** — what
-    ✏️ Edit dataset's *Reset to source setup* returns to.
+    ✏️ Edit dataset's *Reset to the corpus's setup* returns to.
 
     A corpus that declares its monitor reports it as measured; one that does
     not gets the extent of its data, estimated, as `compare_source.snapshot_for`
@@ -7343,7 +7330,7 @@ def seed_canvas_state(
         line_spacing, scale_text_to_boxes). The text-sizing pair keeps the reading
         text true-to-scale: see `plots._word_label_font_px`.
     """
-    # OneStop server bundle + bundled demo share the same experimental setup
+    # OneStop local export + bundled demo share the same experimental setup
     # (Dell U2715H, 2560x1440 — cited at `constants.DEFAULT_FIGURE_SIZE`).
     # Data-derived extents undershoot — text only fills part of the screen — so
     # hard-default to the real monitor here.
@@ -7596,8 +7583,8 @@ def font_dpi(data_choice: str | None = None) -> float | None:
 
 
 #: The Font row's two shadows of `global_font_family` (the choice, and the
-#: typed font of *Other…*), derived every run (`controls.shadow_widget_key`,
-#: safe inside a popover). The flag keeps *Other…* chosen while its box is
+#: typed font of *Other font…*), derived every run (`controls.shadow_widget_key`,
+#: safe inside a popover). The flag keeps *Other font…* chosen while its box is
 #: still to be filled in; the font they were derived from tells a pick here
 #: from a change made elsewhere (a link, a settings file, a dataset's own
 #: font).
@@ -7608,7 +7595,7 @@ _FONT_SEEDED_FROM_KEY = "_rail_font_seeded_from"
 
 
 def _apply_font_choice(widget_key: str) -> None:
-    """A font picked in the list becomes the text's font; *Other…* waits for
+    """A font picked in the list becomes the text's font; *Other font…* waits for
     the font to be typed in the box beside it."""
     if _shadow_key_missing(widget_key):
         return
@@ -7619,7 +7606,7 @@ def _apply_font_choice(widget_key: str) -> None:
 
 
 def _apply_font_other(widget_key: str) -> None:
-    """A font typed under *Other…*: a name (drawn with a monospace fallback)
+    """A font typed under *Other font…*: a name (drawn with a monospace fallback)
     or a whole CSS font stack."""
     if _shadow_key_missing(widget_key):
         return
@@ -7627,11 +7614,11 @@ def _apply_font_other(widget_key: str) -> None:
 
 
 def _font_rows(choice_host, other_host, *, disabled: bool, **kwargs) -> str:
-    """The font list and the box for *Other…*, over `global_font_family`.
+    """The font list and the box for *Other font…*, over `global_font_family`.
 
     The list is the Recording setup's (`experimental_setup.FONT_CHOICES`), so
     the dataset's font and the figure's are picked from the same names. The box
-    is greyed, not hidden, unless *Other…* is chosen. Returns the font drawn.
+    is greyed, not hidden, unless *Other font…* is chosen. Returns the font drawn.
     """
     ss = st.session_state
     css = str(ss.get("global_font_family") or FONT_FAMILY)
@@ -7696,7 +7683,7 @@ def _rail_text_rows(
       converted with the dataset's DPI (px = pt × DPI ÷ 72), or read as pixels
       when the dataset's Recording setup has no physical size;
     * *Font* — the font, from the Recording setup's list, and a box for any
-      other font (greyed unless *Other…* is chosen);
+      other font (greyed unless *Other font…* is chosen);
     * *Color* — the text colour, then the plot background: a preset, and a
       colour box showing the colour in use, where any colour picked applies
       at once.
@@ -7760,7 +7747,7 @@ def _rail_text_rows(
             caption_help=tip(
                 "Fitted: the size of the axis and legend text. Not fitted: the "
                 "reading text's too, in px or pt (px = pt × DPI ÷ 72). Without a "
-                "physical size in the Recording setup, pt is read as px."
+                "monitor width in the Recording setup, pt is read as px."
             ),
         )
         unit_col, size_col, note_col = size.columns(
@@ -7808,8 +7795,8 @@ def _rail_text_rows(
             caption_help=tip(
                 "The reading text's font, from the Recording setup's list. A "
                 "listed font that isn't installed falls back to its family. "
-                "Multilingual is a Noto Sans stack for CJK, Hebrew and Arabic. "
-                "**Other…** takes a font name or a CSS font stack."
+                "**Multilingual (Noto Sans)** covers CJK, Hebrew and Arabic. "
+                "**Other font…** takes a font name or a CSS font stack."
             ),
         )
         family_col, other_col = font.columns(
@@ -8020,7 +8007,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         + (
             "Edit the hand-drawn sample"
             if source == MANUAL_SAMPLE_CHOICE
-            else "Author a scanpath"
+            else "Draw a scanpath"
         )
     )
     header.button("Cancel", key="cancel_authoring", on_click=_cancel_authoring)
@@ -8031,10 +8018,10 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         "the keyboard."
     )
     restored = st.file_uploader(
-        "Restore authoring file",
+        "Load a saved draft",
         type=["json"],
         key=f"author_restore_upload_{source}",
-        help="Load a JSON file previously saved from this editor.",
+        help="Load a draft file (JSON) saved earlier from this screen.",
         max_upload_size=upload_limit_mb(),
     )
     if restored is not None:
@@ -8063,7 +8050,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     )
     layout = {**DEFAULT_LAYOUT, **st.session_state.get("_author_layout", {})}
     words = layout_text(text, **layout)
-    with st.expander("Parsed word geometry", expanded=False):
+    with st.expander("Word boxes", expanded=False):
         if words.empty:
             st.info(
                 "Enter stimulus text to create word boxes. An empty canvas also works."
@@ -8078,6 +8065,15 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
                 words[["text", "word_id", "line_idx", "x", "y", "width", "height"]],
                 hide_index=True,
                 width="stretch",
+                column_config={
+                    "text": "Word",
+                    "word_id": "Word number",
+                    "line_idx": "Line",
+                    "x": "X (px)",
+                    "y": "Y (px)",
+                    "width": "Width (px)",
+                    "height": "Height (px)",
+                },
             )
     for problem in layout_problems(
         words, canvas_width=layout["canvas_width"], margin=layout["margin"]
@@ -8257,7 +8253,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         "Dataset name",
         value="Hand-drawn sample (edited)"
         if source == MANUAL_SAMPLE_CHOICE
-        else "My scanpath",
+        else "My saved scanpath",
         key=name_key,
         required=True,
         # Read only by the Save dataset callback.
@@ -8284,7 +8280,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         args=(name_key,),
     )
     actions.download_button(
-        "Download authoring file",
+        "Download draft (JSON)",
         data=authoring_json(text, effective_events, layout=layout),
         file_name=AUTHORING_FILE_NAME,
         mime="application/json",
@@ -8294,8 +8290,8 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         disabled=not events_valid,
         help=(
             "The editable draft: text, layout, and every fixation with its id, "
-            "position, order and duration. Load it again with **Restore "
-            "authoring file**, or in a script with `load_authored_scanpath`."
+            "position, order and duration. Load it again with **Load a saved "
+            "draft**, or in a script with `load_authored_scanpath`."
         ),
     )
     previous = st.session_state.get(_AUTHOR_PREVIOUS_DRAFT_KEY, {}).get(source)
@@ -8400,7 +8396,7 @@ def _preprocessing_settings(host=None) -> dict:
             disabled=not enabled,
         )
         threshold = st.number_input(
-            "Short threshold (ms)",
+            "Short-fixation threshold (ms)",
             min_value=1.0,
             max_value=500.0,
             key="global_preproc_short_threshold_ms",
@@ -9315,7 +9311,7 @@ def _run_app() -> None:
             "Add dataset", icon=ICONS["add"], type="primary", key="data_add_menu"
         ):
             st.button(
-                "Create manually",
+                "Draw a scanpath",
                 icon=ICONS["author"],
                 key="create_manual_scanpath_btn",
                 on_click=_enter_manual_dataset,
@@ -9524,7 +9520,7 @@ def _run_app() -> None:
         # to it is instant (no re-upload, no re-mapping). See _render_data_setup's
         # finalize and resolve_data_source.
         stored = st.session_state["_datasets"][data_choice]
-        # A dataset saved by an older ✏️ Edit dataset can have its AOI table
+        # A dataset saved by an older ✏️ Edit dataset can have its Words table
         # stranded on the placeholder reader, so every scanpath would draw
         # without its boxes and text. Repair it once, in the store itself, so
         # the recovery cache writes the repaired frames and it stays fixed.

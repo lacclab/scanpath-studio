@@ -360,7 +360,7 @@ class TestTheGroundTruthTrialIsAlwaysAvailable:
         arm_debug_dialog(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert "Synthetic sample" in at.session_state["_data_source_entries"]
+        assert "Hand-drawn sample" in at.session_state["_data_source_entries"]
         assert "Synthetic test trial" not in at.session_state["_data_source_entries"]
 
         arm_debug_dialog(at)

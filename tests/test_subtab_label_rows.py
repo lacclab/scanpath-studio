@@ -177,7 +177,7 @@ class TestConvertedFields:
         assert "This trial" in scope.options
 
         rendered = _labels(at)
-        for title in ("Formats", "Separable layers"):
+        for title in ("Formats", "Layers as separate files"):
             assert any(f">{title}</span>" in label for label in rendered), title
         assert not any(">Trials to include</span>" in label for label in rendered), (
             "the section heading is the only visible scope label"
@@ -186,7 +186,7 @@ class TestConvertedFields:
         assert "### Trials to include" in headings
         assert "### Figure formats" in headings
         assert "### File naming" in headings
-        assert [p for p in at.get("popover") if p.proto.popover.label == "Fields"]
+        assert [p for p in at.get("popover") if p.proto.popover.label == "Placeholders"]
         assert not [e for e in at.expander if e.label == "Available fields"]
 
     def test_every_converted_widget_hides_its_own_label(self):

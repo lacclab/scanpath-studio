@@ -82,7 +82,7 @@ def test_a_known_font_is_the_labels_font():
 def test_another_font_can_be_typed():
     at = _run(
         wizard_setup_font_mode="I know the font",
-        wizard_setup_font_name="Other…",
+        wizard_setup_font_name="Other font…",
         wizard_setup_font_other="Source Code Pro",
     )
     assert at.session_state["_font"] == "'Source Code Pro', monospace"
@@ -112,8 +112,8 @@ class TestSharedFontVocabulary:
             ("monospace", "Generic monospace"),
             ("", "Generic monospace"),
             ("'Courier New', monospace", "Courier New"),
-            ("'Source Code Pro', monospace", "Other…"),
-            ("Arial", "Other…"),
+            ("'Source Code Pro', monospace", "Other font…"),
+            ("Arial", "Other font…"),
         ],
     )
     def test_a_font_maps_back_to_its_choice(self, css, choice):
@@ -186,7 +186,7 @@ def test_a_point_size_is_read_as_pixels_without_a_physical_size():
         wizard_setup_font_unit="pt",
         wizard_setup_font_pt=14.0,
     )
-    # Physical size starts Off: there is no DPI to convert through.
+    # Monitor width starts Off: there is no DPI to convert through.
     assert at.session_state["global_base_font_size"] == 14
 
 
@@ -239,7 +239,7 @@ def test_the_rail_lists_the_setup_fonts_and_shows_the_one_in_use():
     at = _run_rail(global_font_family="'Georgia', serif")
     assert list(at.selectbox[0].options) == list(FONT_CHOICES)
     assert at.selectbox[0].value == "Georgia"
-    assert at.text_input[0].disabled  # greyed unless Other…
+    assert at.text_input[0].disabled  # greyed unless Other font…
 
 
 def test_picking_a_font_in_the_rail_sets_the_figures_font():
@@ -250,14 +250,14 @@ def test_picking_a_font_in_the_rail_sets_the_figures_font():
 
 def test_other_in_the_rail_takes_a_typed_font():
     at = _run_rail(global_font_family="'Courier New', monospace")
-    at.selectbox[0].set_value("Other…").run(timeout=30)
-    assert at.selectbox[0].value == "Other…"
+    at.selectbox[0].set_value("Other font…").run(timeout=30)
+    assert at.selectbox[0].value == "Other font…"
     assert not at.text_input[0].disabled
     # The font in use is filled in, ready to edit.
     assert at.text_input[0].value == "Courier New"
     at.text_input[0].set_value("Source Code Pro").run(timeout=30)
     assert at.session_state["global_font_family"] == "'Source Code Pro', monospace"
-    assert at.selectbox[0].value == "Other…"
+    assert at.selectbox[0].value == "Other font…"
 
 
 def test_a_font_set_elsewhere_moves_the_rail():

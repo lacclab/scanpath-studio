@@ -289,11 +289,11 @@ class TestHeatmapValueBounds:
 
 
 class TestASmoothedHeatmapOffersNoRange:
-    """Interpolated scales its density to its own peak, so the range is greyed
+    """Smoothed scales its density to its own peak, so the range is greyed
     for it — kept, not cleared — and the code snippet does not present it as
     pinning anything."""
 
-    @pytest.mark.parametrize("style", ["Interpolated"])
+    @pytest.mark.parametrize("style", ["Smoothed"])
     def test_the_range_is_greyed_and_kept(self, style):
         at = _rail(**{**WORD_HEAT, "global_heatmap_style": style, HEAT_KEY: (0, 600)})
         assert at.slider(key=HEAT_VIEW).proto.disabled
@@ -308,7 +308,7 @@ class TestASmoothedHeatmapOffersNoRange:
 
     def test_compare_draws_word_boxes_so_the_range_stays_live(self):
         at = _rail(
-            **{**WORD_HEAT, "global_heatmap_style": "Interpolated", HEAT_KEY: (0, 600)},
+            **{**WORD_HEAT, "global_heatmap_style": "Smoothed", HEAT_KEY: (0, 600)},
             single_compare_toggle=True,
         )
         assert not at.slider(key=HEAT_VIEW).proto.disabled
@@ -320,7 +320,7 @@ class TestASmoothedHeatmapOffersNoRange:
         assert "heatmap_range" in figure_kwargs(
             {**settings, "heatmap_style": "Word boxes"}
         )
-        smoothed = {**settings, "heatmap_style": "Interpolated"}
+        smoothed = {**settings, "heatmap_style": "Smoothed"}
         assert "heatmap_range" not in figure_kwargs(smoothed)
         assert "heatmap_range" in figure_kwargs(smoothed, "comparison")
 

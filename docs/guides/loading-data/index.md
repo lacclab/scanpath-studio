@@ -19,7 +19,7 @@ Use the dataset picker or the :material/database: Data Management page:
 - Hand-drawn sample: a six-word trial
 - Public corpora: OneStop and PoTeC, downloaded on your computer
 - + → Import files: your own tables
-- + → Create manually: type text and place fixations
+- + → Draw a scanpath: type text and place fixations
 
 ### OneStop { #onestop }
 

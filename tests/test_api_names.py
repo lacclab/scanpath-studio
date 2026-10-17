@@ -103,7 +103,7 @@ class TestEveryFunctionTakesEitherKind:
         assert "CURRENT_FIX_DURATION" not in text
 
     def test_a_word_option_reads_the_words_tables_names(self, demo, demo_trial):
-        # `word_id` is the AOI table's IA_ID but the fixations' shifted
+        # `word_id` is the Words table's IA_ID but the fixations' shifted
         # interest-area id: a word hover is in the words table's names.
         words, fixations = demo
         fig = sps.plot_scanpath(

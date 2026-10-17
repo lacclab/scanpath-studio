@@ -2,7 +2,7 @@
 
 A link from a sender with non-default settings carries every figure-changing
 setting: the stimulus-image layer and *Show full monitor*, the fixation flags
-(with *Discard* the recipient would otherwise see different fixations, and no
+(with *Hide* the recipient would otherwise see different fixations, and no
 Illustration label), the replay speed (a non-1× speed stamps one), the colour-bar
 styling, the span border colour and Compare's A/B legend. These drive the writer
 into the reader, then the whole app from a sender to a recipient.
@@ -31,7 +31,7 @@ SENT = {
     "global_fixation_colorbar_tickangle": 45,
     "global_fixation_colorbar_tickfont_size": 16,
     "global_span_border_color": "#00AAAA",
-    "global_fixclass_short_mode": "Discard",
+    "global_fixclass_short_mode": "Hide",
     "global_fixclass_short_threshold_ms": 120,
     "global_fixclass_short_symbol": "x",
     "global_fixclass_short_color": "#FF0000",
@@ -42,7 +42,7 @@ SENT = {
     "global_fixclass_oob_mode": "Highlight",
     "global_fixclass_oob_symbol": "circle-open",
     "global_fixclass_oob_color": "#0000FF",
-    "global_fixclass_blink_mode": "Discard",
+    "global_fixclass_blink_mode": "Hide",
     "global_fixclass_blink_symbol": "square-open",
     "global_fixclass_blink_color": "#123456",
     "single_playback_speed": 2.0,
@@ -154,6 +154,6 @@ def test_the_whole_app_reopens_the_senders_figure():
     assert not recipient.exception, [e.message for e in recipient.exception]
     got = {key: recipient.session_state[key] for key in SENT}
     assert got == SENT
-    # *Discard* changes which fixations are drawn, so it has to travel.
+    # *Hide* changes which fixations are drawn, so it has to travel.
     flags = recipient.session_state["_snippet_state"].settings["fixation_flags"]
-    assert flags["short"]["mode"] == "Discard"
+    assert flags["short"]["mode"] == "Hide"

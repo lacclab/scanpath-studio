@@ -14,7 +14,7 @@ A free, open-source app for exploring eye movements in reading. Check data quali
 
 ## From your data to a figure
 
-- **Bring your own data.** Load fixation and interest-area tables, with optional raw gaze and metadata. [Data guide →](https://lacclab.github.io/scanpath-studio/guides/loading-data/)
+- **Bring your own data.** Load a Fixations table and a Words table, with optional raw gaze and metadata. [Data guide →](https://lacclab.github.io/scanpath-studio/guides/loading-data/)
 - **Explore and replay.** View fixations, saccades and heatmaps; filter trials, then star or tag the ones to revisit.
 - **Compare readings.** Overlay two scanpaths or place them side by side, across readers, conditions or datasets.
 - **Analyze a corpus.** Explore the reading measures in your data by text, reader or group.

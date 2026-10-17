@@ -539,7 +539,7 @@ def authoring_json(
 
 
 #: Schema 1 or 2 is accepted; the user is told only what the file is not.
-_NOT_AUTHORING = "That file isn't an authoring file saved from this editor."
+_NOT_AUTHORING = "That file isn't a draft file saved from this screen."
 
 
 def parse_authoring_document(payload: str) -> AuthoringDocument:
@@ -555,11 +555,11 @@ def parse_authoring_document(payload: str) -> AuthoringDocument:
         raise ValueError(_NOT_AUTHORING)
     events = value.get("fixations", [])
     if not isinstance(events, list):
-        raise ValueError("The authoring file's fixations must be a list.")
+        raise ValueError("The draft file's fixations must be a list.")
     frame = event_records_frame(events)
     layout = value.get("layout", {}) if schema == AUTHORING_SCHEMA else {}
     if not isinstance(layout, dict):
-        raise ValueError("The authoring file's layout must be an object.")
+        raise ValueError("The draft file's layout must be an object.")
     unknown = sorted(set(layout) - set(DEFAULT_LAYOUT))
     if unknown:
         raise ValueError(f"Unknown authoring layout option: {', '.join(unknown)}.")

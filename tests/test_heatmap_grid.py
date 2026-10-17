@@ -1,4 +1,4 @@
-"""The Interpolated / Duration-mass heatmap's smoothing grid."""
+"""The Smoothed / Duration-mass heatmap's smoothing grid."""
 
 from __future__ import annotations
 
@@ -111,7 +111,7 @@ class TestGaussianBlurShape:
 
 
 class TestHeatmapCoordinates:
-    @pytest.mark.parametrize("style", ["Interpolated"])
+    @pytest.mark.parametrize("style", ["Smoothed"])
     def test_single_line_z_matches_its_coordinates(self, style):
         words = _single_line_words()
         trace = _heatmap_trace(words, _fixations([150, 250], [110, 110]), style)
@@ -120,9 +120,7 @@ class TestHeatmapCoordinates:
 
     def test_single_line_density_peaks_on_the_fixation_row(self):
         words = _single_line_words()
-        trace = _heatmap_trace(
-            words, _fixations([150, 250], [110, 110]), "Interpolated"
-        )
+        trace = _heatmap_trace(words, _fixations([150, 250], [110, 110]), "Smoothed")
         z = np.nan_to_num(np.asarray(trace.z, dtype=float))
         peak_row = np.unravel_index(np.argmax(z), z.shape)[0]
         step = trace.y[1] - trace.y[0]
@@ -165,7 +163,7 @@ class TestInterpolationGridBudget:
             return real_histogram2d(x, y, bins=bins, **kwargs)
 
         monkeypatch.setattr(plots.np, "histogram2d", spy)
-        trace = _heatmap_trace(_NO_WORDS, _fixations(xs, ys), "Interpolated")
+        trace = _heatmap_trace(_NO_WORDS, _fixations(xs, ys), "Smoothed")
         nx, ny = requested["nx"], requested["ny"]
         assert max(nx, ny) == plots._INTERP_GRID
         assert min(nx, ny) >= plots._INTERP_MIN_CELLS
@@ -182,7 +180,7 @@ class TestInterpolationGridBudget:
 
     def test_coincident_fixations_peak_at_their_point(self):
         trace = _heatmap_trace(
-            _NO_WORDS, _fixations([100, 100], [300, 300]), "Interpolated"
+            _NO_WORDS, _fixations([100, 100], [300, 300]), "Smoothed"
         )
         z = np.nan_to_num(np.asarray(trace.z, dtype=float))
         row, col = np.unravel_index(np.argmax(z), z.shape)
@@ -191,7 +189,7 @@ class TestInterpolationGridBudget:
 
 
 class TestTheBlur:
-    """The Interpolated heatmap's σ: automatic, or a fixed number of px."""
+    """The Smoothed heatmap's σ: automatic, or a fixed number of px."""
 
     def _peak_width(self, sigma_px):
         fig = plots.make_scanpath_figure(
@@ -201,7 +199,7 @@ class TestTheBlur:
             canvas_height=600,
             base_font_size=16,
             show_heatmap=True,
-            heatmap_style="Interpolated",
+            heatmap_style="Smoothed",
             heatmap_metric="duration_ms",
             heatmap_sigma_px=sigma_px,
         )
@@ -219,10 +217,12 @@ class TestTheBlur:
         assert plots.interpolated_sigma_px(2000, 500) == 40.0
 
 
-def test_a_link_naming_duration_mass_opens_interpolated():
+def test_a_link_names_one_of_the_two_heatmap_styles():
     from scanpath_studio.url_state import _parse_heatmap_style
 
-    assert _parse_heatmap_style("Duration mass") == "Interpolated"
+    assert _parse_heatmap_style("Smoothed") == "Smoothed"
     assert _parse_heatmap_style("Word boxes") == "Word boxes"
+    with pytest.raises(ValueError):
+        _parse_heatmap_style("Duration mass")
     with pytest.raises(ValueError):
         _parse_heatmap_style("Contours")

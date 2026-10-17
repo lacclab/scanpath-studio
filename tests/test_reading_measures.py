@@ -1,7 +1,7 @@
 """Corpus Analysis shows the reading measures a dataset brings.
 
 The page computes no FFD, TFD, … of its own. Each measure is an optional field
-of the AOI table, mapped on ➕ Add dataset and ✏️ Edit dataset (two lines under
+of the Words table, mapped on ➕ Add dataset and ✏️ Edit dataset (two lines under
 the word box), auto-detected from EyeLink's interest-area report names. With
 none mapped the page says so and greys its sections.
 """

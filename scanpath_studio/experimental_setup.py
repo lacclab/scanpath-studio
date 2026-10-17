@@ -75,13 +75,13 @@ STIMULUS_FONTS = {
 #: The choice that draws the generic ``monospace`` (the setup's *Not sure*).
 GENERIC_FONT = "Generic monospace"
 #: The choice that draws a CJK / Hebrew / Arabic-capable Noto Sans stack.
-MULTILINGUAL_FONT = "Multilingual"
+MULTILINGUAL_FONT = "Multilingual (Noto Sans)"
 MULTILINGUAL_FONT_STACK = (
     "'Noto Sans', 'Noto Sans Hebrew', 'Noto Sans Arabic', "
     "'Noto Sans CJK SC', 'Arial Unicode MS', sans-serif"
 )
 #: The choice whose font is typed: a font name, or a CSS font stack.
-OTHER_FONT = "Other…"
+OTHER_FONT = "Other font…"
 #: Every font choice, in the order both screens list them.
 FONT_CHOICES = (GENERIC_FONT, *STIMULUS_FONTS, MULTILINGUAL_FONT, OTHER_FONT)
 _GENERIC_FAMILIES = {"monospace", "sans-serif", "serif", "cursive", "fantasy"}
@@ -207,10 +207,12 @@ _GROUP_WIRE_NAMES: dict[str, str] = {
 }
 _WIRE_NAME_GROUPS: dict[str, str] = {v: k for k, v in _GROUP_WIRE_NAMES.items()}
 
+#: Each setup group's heading, as the add and edit screens, the read-only
+#: summary and every message that names a group draw it — the one copy.
 SETUP_GROUP_LABELS: dict[str, str] = {
     "screen": "Screen",
-    "geometry": "Physical size",
-    "text": "Reading text size",
+    "geometry": "Monitor width",
+    "text": "Text size",
 }
 
 

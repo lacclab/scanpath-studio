@@ -134,7 +134,7 @@ REGISTER: tuple[Computation, ...] = (
         id="norm.words",
         name="Word table normalization",
         category=CATEGORY_NORMALIZATION,
-        summary="Map an arbitrary word/IA export onto the canonical word columns.",
+        summary="Map an arbitrary word or interest-area export onto the canonical word columns.",
         formula=(
             "For each canonical field, `pick_column` walks a candidate list and "
             "takes the first column that exists; the user's mapping overrides it. "
@@ -269,7 +269,7 @@ REGISTER: tuple[Computation, ...] = (
         missing=(
             "No matching word box, or no word id (blank, or not a number) ⇒ the "
             "fixation keeps no coordinates — a missing id never matches a box "
-            "with none. No x/y mapped and a Word/IA ID column with no numbers "
+            "with none. No x/y mapped and a Word ID column with no numbers "
             "at all ⇒ UnplacedFixationsError, never an empty figure."
         ),
         tiers="A, C",
@@ -813,12 +813,12 @@ REGISTER: tuple[Computation, ...] = (
     ),
     Computation(
         id="pre.cleaning_report",
-        name="Cleaning QA report",
+        name="Cleaning report",
         category=CATEGORY_PREPROCESSING,
         summary="What the preprocessing pass would remove, and why.",
         formula="Counts per exclusion reason over the unfiltered frame.",
         code="scanpath_studio/preprocessing.py:cleaning_report",
-        output="Cleaning QA table",
+        output="Cleaning report table",
         tiers="C",
         status=STATUS_PARTIAL,
         consumers=(_UI_PREPROCESSING, _API, _CLI, _EXPORT, _INSPECT_DERIVED),
@@ -1114,7 +1114,7 @@ REGISTER: tuple[Computation, ...] = (
             "in pixels."
         ),
         code="scanpath_studio/aggregation.py:reader_summary_table",
-        output="Readers table",
+        output="Participant summary table",
         unit="ms, px, counts, proportions",
         tiers="C, D",
         status=STATUS_PARTIAL,

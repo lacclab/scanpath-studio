@@ -56,6 +56,32 @@ METHOD_CITATIONS = {
     "consensus": "Carr et al. (2021), wisdom-of-the-crowd vote",
 }
 
+#: What each algorithm is called where a user picks or reads it: the published
+#: name (Carr et al., 2021; Schroeder, 2022), then what it does in a few words,
+#: since the bare names ("Warp", "Merge") say nothing about the method.
+METHOD_LABELS = {
+    "attach": "Attach (nearest line)",
+    "chain": "Chain (groups nearby fixations)",
+    "cluster": "Cluster (k-means on height)",
+    "compare": "Compare (matches each pass to a line)",
+    "merge": "Merge (joins runs into lines)",
+    "regress": "Regress (fits sloped lines)",
+    "segment": "Segment (return sweeps, top to bottom)",
+    "split": "Split (cuts at return sweeps)",
+    "stretch": "Stretch (scales and shifts heights)",
+    "warp": "Warp (time-warps to word order)",
+    "slice": "Slice (keeps reading runs together)",
+    "consensus": "Consensus (majority vote)",
+}
+
+
+def method_label(name: str) -> str:
+    """The user-facing label for an algorithm name, in any case (``"Warp"``
+    → ``"Warp (time-warps to word order)"``); anything else is returned as given,
+    so ``"Off"`` stays ``"Off"``."""
+    return METHOD_LABELS.get(str(name).lower(), str(name))
+
+
 ALGORITHMS = (
     "attach",
     "chain",

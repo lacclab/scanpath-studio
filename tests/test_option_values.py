@@ -21,7 +21,7 @@ def sample():
         ("heatmap_norm", "log", "Log"),
         ("heatmap_norm", "LOG", "Log"),
         ("heatmap_style", "word-boxes", "Word boxes"),
-        ("heatmap_style", "interpolated", "Interpolated"),
+        ("heatmap_style", "smoothed", "Smoothed"),
         ("critical_span_style", "mark-border", "Mark border"),
         ("critical_span_style", "mark_text", "Mark text"),
         ("critical_span_style", "none", "None"),
@@ -93,11 +93,11 @@ def test_figure_options_lists_the_accepted_values():
 @pytest.mark.parametrize(
     ("spelling", "name"),
     [
-        ("print", "Print / greyscale"),
-        ("greyscale", "Print / greyscale"),
+        ("print", "Print / grayscale"),
+        ("grayscale", "Print / grayscale"),
         ("high-contrast", "High contrast"),
         ("High contrast", "High contrast"),
-        ("default", "Default (colourblind-safe)"),
+        ("default", "Default (colorblind-safe)"),
     ],
 )
 def test_palettes_take_their_short_names(spelling, name):

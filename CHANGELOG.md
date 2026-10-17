@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/);
 `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.40.0] - 2026-10-17
+
+### Changed
+- Unclear labels across the app are renamed, with no carry-over of old link or settings values: fixation flags *Hide* (was Discard) and *Outside the text*, saccades *One color*, the *Smoothed* heatmap, *Word ID*, one *Words table* name, *Draw a scanpath*, *Monitor width*, US-spelled palettes, drift-correction algorithms described by what they do, and plainer Corpus Analysis view names. ([#478](https://github.com/lacclab/scanpath-studio/issues/478))
+
 ## [0.39.1] - 2026-10-17
 
 ### Changed

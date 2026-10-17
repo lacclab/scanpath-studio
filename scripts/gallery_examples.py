@@ -39,7 +39,7 @@ def _heatmap() -> dict:
         pid,
         tid,
         show_heatmap=True,
-        heatmap_style="Interpolated",
+        heatmap_style="Smoothed",
         highlight_column=None,
         show_fixations=False,
         show_saccades=False,

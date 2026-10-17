@@ -487,7 +487,7 @@ class TestUseCaseTutorials:
         assert filtered_reason(compare, narrowed) is None  # no snapshot: not filtered
         narrowed["unfiltered"] = build_tutorial_context(words, fixations, both)
         assert filtered_reason(compare, narrowed) == (
-            "no two trials in the pool share a text."
+            "no two trials left share a text."
         )
         # The dataset itself lacks the pair: the filter is not the cause.
         narrowed["unfiltered"] = build_tutorial_context(words, fixations, both.iloc[:1])
@@ -1204,7 +1204,7 @@ def test_the_nav_step_draws_one_ring_not_a_bracket_per_link():
 
 def test_the_setup_guide_counts_the_parts_it_names(monkeypatch):
     """Each part card is headed "1 ·", "2 ·", "3 ·" — so the guide counts
-    parts, not cards ("Step 3 of 4" under "2 · Upload data tables" would
+    parts, not cards ("Step 3 of 4" under "2 · Data tables & column mapping" would
     contradict both). The fourth, Stimulus images, is a card only where the
     add screen draws that part, and the overview names no count, which
     would be wrong on one install or the other."""

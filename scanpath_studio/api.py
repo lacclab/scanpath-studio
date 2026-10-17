@@ -111,7 +111,7 @@ def build_authored_scanpath(
 
     Args:
         text: The text to lay out as word boxes. Explicit line breaks are kept.
-        events: The fixations, one row each, with the columns the app's *Author a
+        events: The fixations, one row each, with the columns the app's *Draw a
             scanpath* table has (``fixation_id``, ``order_in_trial``, ``word_id``,
             ``x``, ``y``, ``duration_ms``). Left out, each word gets one fixation at its
             center.
@@ -132,11 +132,11 @@ def build_authored_scanpath(
 def load_authored_scanpath(
     source: str | Path,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Load an authoring file as normalized word and fixation frames.
+    """Load a draft file as normalized word and fixation frames.
 
     Args:
-        source: The JSON the app's **Download authoring file** saves: its path, or its
-            text.
+        source: The JSON the app's **Download draft (JSON)** saves on *Draw a
+            scanpath*: its path, or its text.
 
     Returns:
         The ``(words, fixations)`` frames, ready to plot.
@@ -2122,42 +2122,11 @@ def _figure_kwargs(overrides: dict) -> dict:
     return settings
 
 
-_SPELLINGS = (("grey", "gray"), ("colour", "color"))
-
-
-def _spelling_variants(text: str) -> list[str]:
-    """``text`` as written, all-US and all-UK: the palette names are shown in US
-    spelling, and both spellings name the same palette."""
-    import re
-
-    out = [text]
-    for pick in (1, 0):
-        variant = text
-        for pair in _SPELLINGS:
-            variant = re.sub(pair[1 - pick], pair[pick], variant, flags=re.IGNORECASE)
-        out.append(variant)
-    return list(dict.fromkeys(out))
-
-
 def resolve_palette(value: object) -> str:
-    """The `constants.PALETTES` name ``value`` stands for: the app's name in
-    either spelling (``"Print / grayscale"`` or ``"Print / greyscale"``), the
-    short name (``"print"``), any case. Raises ``ValueError`` otherwise."""
-    from .constants import PALETTES
-
-    error = None
-    for candidate in _spelling_variants(str(value)):
-        try:
-            name = normalize_palette(candidate)
-        except ValueError as exc:
-            error = error or exc
-            continue
-        if name in PALETTES:
-            return name
-        for spelled in _spelling_variants(name):
-            if spelled in PALETTES:
-                return spelled
-    raise error or ValueError(f"Unknown palette {value!r}.")
+    """The `constants.PALETTES` name ``value`` stands for: the app's name
+    (``"Print / grayscale"``) or its short name (``"print"``), any case.
+    Raises ``ValueError`` otherwise."""
+    return normalize_palette(value)
 
 
 def _check_colorscales(overrides: dict) -> None:
@@ -2646,7 +2615,7 @@ def plot_scanpath(
             "show_saccade_arrows": False,
             "show_heatmap": False,
             "color_by": UNIFORM_COLOR_FIELD,
-            "saccade_color_mode": "Uniform",
+            "saccade_color_mode": "One color",
             "saccade_render_mode": "Arc",
             "fixation_snap_to_line": True,
             "fixation_opacity": 1.0,

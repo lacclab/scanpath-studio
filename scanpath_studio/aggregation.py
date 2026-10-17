@@ -135,7 +135,7 @@ MEASURES: dict[str, Measure] = {
         ),
         Measure(
             "rpd",
-            "Regression-path — RPD",
+            "Regression-path duration — RPD",
             "words",
             "regression_path_duration_ms",
             "ms",

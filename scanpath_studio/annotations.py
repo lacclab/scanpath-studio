@@ -853,11 +853,7 @@ def render_trial_annotations(
             st,
             "radio",
             "Annotation scope",
-            options=["Parent trial", "This screen"],
-            # The stored option keeps its name; "parent" is internal wording.
-            format_func=lambda option: (
-                "Whole trial" if option == "Parent trial" else option
-            ),
+            options=["Whole trial", "This screen"],
             key=scope_key,
             horizontal=True,
             help="**Whole trial** covers every screen of this trial. "

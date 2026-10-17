@@ -298,14 +298,14 @@ def test_deep_link_seeds_frozen_state_keys():
     validated.update({param: "#123456" for param in _SHARE_COLOR_PARAMS})
     # These figure settings are closed vocabularies too.
     validated["fixation_colorbar_orientation"] = "Horizontal"
-    validated["heatmap_style"] = "Interpolated"
+    validated["heatmap_style"] = "Smoothed"
     validated["heatmap_colorbar_orientation"] = "Horizontal"
     validated["marker_size_scale"] = "linear"
     for category in ("short", "long", "oob", "blink"):
-        validated[f"fixclass_{category}_mode"] = "Discard"
+        validated[f"fixclass_{category}_mode"] = "Hide"
         validated[f"fixclass_{category}_symbol"] = "x"
         # B's flag modes, the same closed vocabulary.
-        validated[f"cmp_b_fixclass_{category}_mode"] = "Discard"
+        validated[f"cmp_b_fixclass_{category}_mode"] = "Hide"
     validated["cmp_b_saccade_classes"] = "forward,regression"
     # The print width's unit.
     validated["export_width_unit"] = "in"
@@ -470,7 +470,7 @@ def _restore_config_app():
         "column_mapping": {"col_map_fix_participant": "participant_id"},
         "layers": {key: True for key in _PLOT_CONFIG_LAYER_KEYS},
         "coloring": {
-            "palette": "Default (colourblind-safe)",
+            "palette": "Default (colorblind-safe)",
             "color_by": color_by,
             "heatmap_style": "Word boxes",
             "heatmap_norm": "Linear",
@@ -486,7 +486,7 @@ def _restore_config_app():
             "saccade_width": 2.0,
             "saccade_opacity": 0.5,
             "saccade_render_mode": "Arc",
-            "saccade_color_mode": "Uniform",
+            "saccade_color_mode": "One color",
             "saccade_type_legend": True,
             "show_color_legend": True,
             "show_highlight_legend": True,
@@ -584,9 +584,9 @@ def _restore_config_app():
             {
                 **compare_entry,
                 "fixation_flags": {
-                    "short": {"mode": "Discard", "threshold_ms": 90},
+                    "short": {"mode": "Hide", "threshold_ms": 90},
                     "long": {"mode": "Highlight", "threshold_ms": 900},
-                    "oob": {"mode": "Discard"},
+                    "oob": {"mode": "Hide"},
                     "blink": {"mode": "Off"},
                 },
                 "saccade_classes": ["forward", "regression"],
@@ -829,29 +829,6 @@ def test_url_bound_widget_keys_frozen():
         "Per participant",
         "Groups",
     )
-    # "Per participant" was once "Per reader"; links to the old name still
-    # open the subtab.
-    assert tabs.CORPUS_SUBTAB_ALIASES == {"Per reader": "Per participant"}
-
-
-def _old_corpus_subtab_app():
-    """The Corpus Analysis tab bar as `tabs` draws it, behind the alias shim."""
-    import streamlit as st
-
-    from scanpath_studio import tabs
-
-    tabs._accept_old_corpus_subtab()
-    st.tabs(list(tabs.CORPUS_SUBTABS), key="corpus_subtab", bind="query-params")
-
-
-def test_an_old_per_reader_link_opens_per_participant():
-    """A bookmarked `?corpus_subtab=Per+reader` opens Per participant
-    (Streamlit itself would drop the unknown label and open Per text)."""
-    at = AppTest.from_function(_old_corpus_subtab_app)
-    at.query_params["corpus_subtab"] = "Per reader"
-    at.run(timeout=30)
-    assert not at.exception, at.exception
-    assert at.session_state["corpus_subtab"] == "Per participant"
 
 
 def _groups_definition_app():

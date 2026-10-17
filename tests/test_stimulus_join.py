@@ -1,9 +1,9 @@
-"""One join for a stimulus-level AOI table, whatever the trial ids.
+"""One join for a stimulus-level Words table, whatever the trial ids.
 
-An AOI table with no Participant ID holds one set of word boxes per *text*,
+A Words table with no Participant ID holds one set of word boxes per *text*,
 shared by every reading of it. Each reading — ``(participant_id, trial_id[,
 screen_id])`` of the fixations — takes the boxes of its text through the key it
-shares with the AOI table: its own trial id when the AOI table is keyed by the
+shares with the Words table: its own trial id when the Words table is keyed by the
 readings' ids, else its Text ID (trial ids that embed the reader, a repeated
 reading's ``_r2``). When neither reaches one reading the load refuses rather
 than add a dataset with no AOIs.
@@ -26,7 +26,7 @@ from scanpath_studio.utils import extract_trial
 
 
 def _text_words() -> pd.DataFrame:
-    """A text-level AOI table keyed by ``unique_paragraph_id``: no reader, no
+    """A text-level Words table keyed by ``unique_paragraph_id``: no reader, no
     per-reader trial id."""
     return pd.DataFrame(
         {
@@ -71,7 +71,7 @@ class TestReaderEmbeddedTrialIds:
             adv = extract_trial(words, reader, f"{reader}_1129_1_2_Adv_r0")
             assert ele["text"].tolist() == ["Hello", "world"]
             assert adv["text"].tolist() == ["Bye"]
-        # The boxes carry the reading's own ids, the AOI table's text id.
+        # The boxes carry the reading's own ids, the Words table's text id.
         assert set(words["trial_id"]) == set(fixations["trial_id"])
         assert set(words["text_id"]) == {"1_1_Ele", "1_2_Adv"}
         assert data_module.STIMULUS_WORDS_FLAG not in words.columns
@@ -252,7 +252,7 @@ class TestNoJoinRefuses:
 
     def test_an_ambiguous_text_id_is_not_used(self):
         """An article-level Text ID over paragraph-level boxes names several
-        of the AOI table's trials; joining on it would hand a reading every
+        of the Words table's trials; joining on it would hand a reading every
         paragraph of the article. The trial id is used instead when it joins,
         and the refusal says why when it does not."""
         words = pd.DataFrame(
@@ -350,7 +350,7 @@ class TestNoJoinRefuses:
 
 class TestMultipart:
     def test_screens_join_by_text_and_screen(self):
-        """A multipart AOI table keys each screen's boxes by (text, screen);
+        """A multipart Words table keys each screen's boxes by (text, screen);
         a reading takes the boxes of its own screen of its own text."""
         words = pd.DataFrame(
             {
@@ -463,7 +463,7 @@ _FIX_SCHEMA = {
 
 
 def _aoi(trials, texts, labels) -> pd.DataFrame:
-    """One box per AOI-table trial."""
+    """One box per Words-table trial."""
     n = len(trials)
     return pd.DataFrame(
         {

@@ -271,7 +271,7 @@ class TestAnInvalidStoredMappingIsReportedNotRaised:
         )
         stored = at.session_state["_datasets"]["Probe"]
         assert stored["fixations"]["screen_id"].tolist() == ["a", "b"]
-        # The AOI table remapped before it is not committed either.
+        # The Words table remapped before it is not committed either.
         assert stored["words"]["text"].tolist() == ["Hi", "there"]
 
     def test_a_blocked_save_is_not_repeated_in_every_field(self):

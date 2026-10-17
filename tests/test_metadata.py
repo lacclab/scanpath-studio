@@ -1134,7 +1134,7 @@ class TestTheWizardStep:
         # Part 1 holds the Description field too.
         assert [s.title for s in wizard_shell.STEPS] == [
             "Name & description",
-            "Upload data tables",
+            "Data tables & column mapping",
             "Recording setup",
             "Stimulus images",
         ]

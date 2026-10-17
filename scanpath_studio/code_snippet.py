@@ -404,7 +404,7 @@ def upload_source(
             + ("those columns" if len(derived) > 1 else "that column")
             + " to your tables first."
         )
-    tables = {"words": "AOI", "fixations": "fixations", "raw_gaze": "raw gaze"}
+    tables = {"words": "Words", "fixations": "fixations", "raw_gaze": "raw gaze"}
     unresolved = [
         f"`{field}` ({tables.get(table, table)} table)"
         for table, fields in dict(recipe.get("unresolved") or {}).items()
@@ -890,7 +890,7 @@ _DRAWN_WITH = {
 
 def _inert(key: str, settings: dict) -> bool:
     """Whether ``key`` changes nothing on this figure: it styles a layer that
-    is off, a highlight with no highlight column, class colors in *Uniform*,
+    is off, a highlight with no highlight column, class colors in *One color*,
     or a color scale on uniformly colored fixations."""
     from .constants import UNIFORM_COLOR_FIELD
 
@@ -1180,7 +1180,7 @@ def _palette_colors(name: str) -> dict:
 
 
 def _classes_coloured(settings: dict) -> bool:
-    """Whether the reading-class colors are drawn at all. In *Uniform* they are
+    """Whether the reading-class colors are drawn at all. In *One color* they are
     not, so they can be neither a reason to name a palette nor a flag to emit."""
     return settings.get("saccade_color_mode") in ("By type", "Forward / regression")
 
@@ -1376,7 +1376,7 @@ _CLI_EMITTERS: dict[str, Any] = {
         "--heatmap-style",
         {
             "Word boxes": "word-boxes",
-            "Interpolated": "interpolated",
+            "Smoothed": "smoothed",
         },
     ),
     "heatmap_norm": _mapped("--heatmap-norm", {"Linear": "linear", "Log": "log"}),
@@ -2049,7 +2049,7 @@ def cli_snippet(
     for key, value in kwargs.items():
         # Never emit class colours the figure isn't drawing —
         # `--saccade-type-color` implies By type, so emitting them into a
-        # Uniform figure would switch its saccades to the five-way split.
+        # One-color figure would switch its saccades to the five-way split.
         if key == "saccade_class_colors":
             if _classes_coloured(state.settings):
                 argv += _saccade_class_colors(

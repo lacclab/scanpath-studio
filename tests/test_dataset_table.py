@@ -105,7 +105,7 @@ class TestSorting:
     def rows(self):
         return [
             _row("Demo", 0, kind="Demo", source="loaded", counts={"Trials": 36}),
-            _row("Sample", 1, kind="Manual"),
+            _row("Sample", 1, kind="Hand-drawn"),
             _row("PoTeC", 2, kind="Public", source="published", counts={"Trials": 900}),
             _row(
                 "OneStop",
@@ -152,7 +152,7 @@ class TestSorting:
 
     def test_kind_sorts_by_what_a_row_is(self, rows):
         kinds = [r.kind for r in dt.sort_rows(rows, "Kind")]
-        assert kinds == ["Demo", "Manual", "Private", "Public", "Public"]
+        assert kinds == ["Demo", "Hand-drawn", "Private", "Public", "Public"]
 
     def test_the_open_dataset_does_not_move_the_list(self, rows):
         from dataclasses import replace

@@ -198,5 +198,5 @@ def test_an_authoring_file_with_a_malformed_event_list_is_refused_cleanly():
         payload = json.dumps({"schema": 2, "text": "alpha", "fixations": fixations})
         with pytest.raises(ValueError, match="Authored fixation"):
             parse_authoring_document(payload)
-    with pytest.raises(ValueError, match="isn't an authoring file"):
+    with pytest.raises(ValueError, match="isn't a draft file"):
         parse_authoring_document("[1, 2]")

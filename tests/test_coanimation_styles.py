@@ -256,7 +256,7 @@ def test_lone_replay_ignores_the_per_scanpath_styles():
 def test_style_b_flags_apply_when_no_b_flags_are_given():
     words, fixations = _frames("p")
     words_b, fixations_b = _frames("q")
-    discard = {"short": {"mode": "Discard", "threshold_ms": 150}}
+    discard = {"short": {"mode": "Hide", "threshold_ms": 150}}
     fig = plots.make_scanpath_animation(
         words,
         fixations,

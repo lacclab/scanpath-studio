@@ -216,7 +216,7 @@ def build_plot_config(
             "color_by_line": bool(figure_settings.get("color_by_line")),
             "heatmap_metric": viz_settings["heatmap_metric"],
             "heatmap_style": figure_settings.get("heatmap_style", "Word boxes"),
-            # The Interpolated blur: Auto, and the fixed σ kept for when it is off.
+            # The Smoothed blur: Auto, and the fixed σ kept for when it is off.
             "heatmap_sigma_auto": bool(state.get("global_heatmap_sigma_auto", True)),
             "heatmap_sigma_px": float(
                 state.get("global_heatmap_sigma_px", DEFAULT_HEATMAP_SIGMA_PX)
@@ -246,7 +246,7 @@ def build_plot_config(
             ),
             "saccade_opacity": float(viz_settings.get("saccade_opacity", 1.0)),
             # Colour-by-reading-type mode + per-class palette + legend.
-            "saccade_color_mode": viz_settings.get("saccade_color_mode", "Uniform"),
+            "saccade_color_mode": viz_settings.get("saccade_color_mode", "One color"),
             "saccade_type_legend": bool(viz_settings.get("saccade_type_legend", True)),
             "show_color_legend": bool(viz_settings.get("show_color_legend", True)),
             "show_highlight_legend": bool(
@@ -350,7 +350,7 @@ def build_plot_config(
                 "critical_span_style", "Mark text"
             ),
             "highlight_column": figure_settings.get("highlight_column", "is_in_aspan"),
-            # Fixation classification: short/long/out-of-bounds highlight or
+            # Fixation classification: short/long/outside-the-text highlight or
             # discard, saved verbatim so it restores 1:1.
             "fixation_flags": figure_settings.get("fixation_flags"),
             "highlight_text_color": figure_settings.get(

@@ -106,7 +106,7 @@ def test_result_counts_reads_the_table_and_keeps_view_counts():
 def test_recipe_separates_filters_from_figure_settings_and_embeds_no_data():
     recipe = build_analysis_recipe(
         app_version="9.9.9",
-        dataset={"name": "Bundled Demo", "source": "Bundled Demo"},
+        dataset={"name": "Bundled demo", "source": "Bundled demo"},
         trial_filters=[
             {"field": "Participant", "values": ["p1"], "keys": ("filter_x",)},
             {"field": "Trial index", "range": [3.0, 10.0]},
@@ -119,7 +119,7 @@ def test_recipe_separates_filters_from_figure_settings_and_embeds_no_data():
     )
     assert recipe["kind"] == RECIPE_KIND
     assert recipe["app"]["version"] == "9.9.9"
-    assert recipe["dataset"] == {"name": "Bundled Demo", "source": "Bundled Demo"}
+    assert recipe["dataset"] == {"name": "Bundled demo", "source": "Bundled demo"}
     # Only the filter's meaning travels — never the widget keys behind it.
     assert recipe["trial_filters"] == [
         {"field": "Participant", "values": ["p1"]},
@@ -167,14 +167,14 @@ def test_corpus_tables_offer_a_recipe_that_records_the_filters(monkeypatch):
     at.run(timeout=90)
     assert not at.exception, at.exception
 
-    # Per text → Per-reader profiles is the page's default view.
+    # Per text → Per-participant profiles is the page's default view.
     buttons = {b.key: b for b in at.download_button}
     assert "dl_ptext1" in buttons
     assert buttons["dl_ptext1_recipe"].proto.label == "⬇ Download the recipe (JSON)"
     assert bound, "the recipe button was never handed its inputs"
 
     recipe = json.loads(tabs._recipe_json(*bound[-1]))
-    assert recipe["dataset"]["source"] == "Bundled Demo"
+    assert recipe["dataset"]["source"] == "Bundled demo"
     assert recipe["trial_filters"] == [{"field": "Participant", "values": ["l7_1090"]}]
     assert recipe["pool"] == {
         "trials": 12,
@@ -183,7 +183,7 @@ def test_corpus_tables_offer_a_recipe_that_records_the_filters(monkeypatch):
         "readers_in_dataset": 2,
     }
     assert recipe["analysis"]["section"] == "Per text"
-    assert recipe["analysis"]["view"] == "Per-reader profiles"
+    assert recipe["analysis"]["view"] == "Per-participant profiles"
     assert recipe["analysis"]["measure"]["key"] == "tfd"
     assert recipe["result"]["file"].startswith("per_reader_tfd_")
     assert recipe["result"]["readers"] == 1

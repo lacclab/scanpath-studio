@@ -323,7 +323,7 @@ class TestBuildShareQuery:
             "global_text_color": "#0a0b0c",
             "global_highlight_text_color": "#fedcba",
             "global_color_by": "duration_ms",
-            "global_heatmap_style": "Interpolated",
+            "global_heatmap_style": "Smoothed",
             "global_heatmap_norm": "Log",
             "global_marker_size_range": (10, 30),
             "global_order_font_size": 18,
@@ -347,7 +347,7 @@ class TestBuildShareQuery:
         assert parsed["text_color"] == ["#0a0b0c"]
         assert parsed["highlight_text_color"] == ["#fedcba"]
         assert parsed["color_by"] == ["duration_ms"]
-        assert parsed["heatmap_style"] == ["Interpolated"]
+        assert parsed["heatmap_style"] == ["Smoothed"]
         assert parsed["heatmap_norm"] == ["Log"]
         assert parsed["marker_size_range"] == ["10,30"]
         assert parsed["order_font_size"] == ["18"]
@@ -375,7 +375,7 @@ class TestBuildShareQuery:
         assert ss["global_text_color"] == "#0a0b0c"
         assert ss["global_highlight_text_color"] == "#fedcba"
         assert ss["global_color_by"] == "duration_ms"
-        assert ss["global_heatmap_style"] == "Interpolated"
+        assert ss["global_heatmap_style"] == "Smoothed"
         assert ss["global_heatmap_norm"] == "Log"
         assert ss["global_marker_size_range"] == (10, 30)
         assert ss["global_order_font_size"] == 18

@@ -32,29 +32,28 @@ ROUTES: tuple[tuple[str, str, str, str, str], ...] = (
         "Report a bug",
         "bug",
         CITATION["bug_report_url"],
-        "Something behaves wrongly, shows a wrong value, or crashes. "
-        "Paste the details below into it.",
+        "Something is wrong or crashes. Paste the details below into it.",
     ),
     (
         "feature",
         "Suggest a feature",
         "feature_request",
         CITATION["feature_request_url"],
-        "Something you want the app to do, in your own terms.",
+        "Something the app should do.",
     ),
     (
         "idea",
-        "Share an idea or comment",
+        "Share an idea",
         "comment",
         CITATION["ideas_url"],
-        "Anything else: what works, what is confusing, what you use it for.",
+        "Anything else: what works, what is confusing.",
     ),
     (
         "question",
         "Ask a question",
         "question",
         CITATION["questions_url"],
-        "How do I…? Is this expected? The answer helps the next person too.",
+        "How do I…? Is this expected?",
     ),
 )
 
@@ -103,23 +102,15 @@ def maybe_show_feedback() -> None:
 @guarded()
 def _feedback_dialog() -> None:
     """Four routes to GitHub, and the details to paste into a bug report."""
-    st.caption(
-        "Nothing is sent from the app. Each button opens a page on GitHub, "
-        "where you write and submit it yourself (a free GitHub account is "
-        "needed)."
-    )
+    st.caption("Opens GitHub; nothing is sent from the app.")
     for key, label, icon, url, purpose in ROUTES:
         st.link_button(
             f"{label} ↗",
             url,
+            help=purpose,
             icon=ICONS[icon],
             width="stretch",
             type="primary" if key == "bug" else "secondary",
         )
-        st.caption(purpose)
-    st.markdown("**Details for a bug report**")
+    st.caption("For a bug report, paste:")
     st.code(environment_details(), language=None, wrap_lines=True)
-    st.caption(
-        "Add what you did, what you expected and what happened instead — and, "
-        "if a trial shows it, a share link from 🗺️ Scanpath → 🔗 Share."
-    )

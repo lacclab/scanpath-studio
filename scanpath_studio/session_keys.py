@@ -303,7 +303,6 @@ ONESTOP_PARTS = "onestop_parts"
 
 # --- Infrastructure keys the URL / config paths read or stamp ---------------
 DEEPLINK_PARTICIPANT = "_deeplink_participant"
-GLOBAL_ADVANCED = "global_advanced"
 # The per-trial annotation store; owned by annotations.py (pinned equal to it by
 # the contract test). Schema 2–3 configs carried it; from schema 4 it travels
 # in its own file (🗂️ Data → Annotations) and the recovery cache. It holds the
@@ -983,10 +982,8 @@ URL_BOUNDED_STATE_KEYS = frozenset(
 )
 
 # Session keys a deep link seeds beyond the viz settings: the trial picker, the
-# public-OneStop source options, and the two side-effect keys (`global_advanced`
-# is seeded when a colorscale is linked, though no widget reads it;
-# `_deeplink_participant` is the one-shot capture the OneStop shard fast-path
-# keys off).
+# public-OneStop source options, and `_deeplink_participant`, the one-shot
+# capture the OneStop shard fast-path keys off.
 URL_SEEDED_STATE_KEYS = frozenset(
     {
         SINGLE_SELECT_TRIAL_MODE,
@@ -1003,7 +1000,6 @@ URL_SEEDED_STATE_KEYS = frozenset(
         ONESTOP_REGIME,
         ONESTOP_PARTS,
         DEEPLINK_PARTICIPANT,
-        GLOBAL_ADVANCED,
         # The one-shot "leave these alone" handoff to the source snap.
         LINK_SETUP_STATE_KEY,
     }

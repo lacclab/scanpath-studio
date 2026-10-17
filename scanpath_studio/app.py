@@ -145,7 +145,6 @@ from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     WORD_FIELD_SPECS,
-    _labeled,
     _pin,
     _shadow_key_missing,
     _sub_caption,
@@ -258,7 +257,6 @@ from scanpath_studio.experimental_setup import (
 from scanpath_studio.fields import row_label
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.menu import (
-    close_open_popovers,
     render_nav,
     render_top_menu,
     view_label,
@@ -529,7 +527,7 @@ _TOOLTIP_OWNER_SCRIPT = """
 #: iframe lands in that iframe's document instead. What the page does see is
 #: its window losing focus to the frame, so on `blur` with an `<iframe>` now
 #: active (and not one inside a popover) this clicks every expanded popover
-#: trigger, which toggles it shut — the same move as `menu.close_open_popovers`.
+#: trigger, which toggles it shut.
 #: Installed in the parent's realm once per page load, like the script above.
 _IFRAME_CLICK_CLOSES_POPOVER_SCRIPT = """
 <script>
@@ -1435,9 +1433,8 @@ def _about_dialog() -> None:
     """The About modal: version, authors, links, citation, AI-assistance note."""
     from scanpath_studio import __release__, __version__
 
-    # The button that opened this sits inside the ❓ Help popover, whose open
-    # state is client-side — without this it floats on top of the modal.
-    close_open_popovers()
+    # Triple-click the heading.
+    render_easter_egg()
 
     bibtex = (
         "@software{Shubi_Scanpath_Studio_2026,\n"
@@ -2330,16 +2327,16 @@ def _dataset_access_status(
     *,
     root: str,
     present: bool,
-    download: Callable[[str], None] | None = None,
+    download: Callable[[str], None],
     size_hint: str = "",
     key_prefix: str = "",
     label: str = "This dataset",
 ) -> bool:
-    """Found / missing status + an optional **Download** button.
+    """Found / missing status + a **Download** button.
 
     Returns ``True`` when the corpus is present on disk (ready to load). When
-    it's missing and ``download`` is given, renders a Download button that
-    fetches the files then reruns — the next run loads from disk with no
+    it's missing, renders a Download button that fetches the files with
+    ``download`` then reruns — the next run loads from disk with no
     re-download, and an already-downloaded corpus never re-checks the network.
 
     A missing corpus is also recorded for the main-area empty state: the
@@ -2349,18 +2346,6 @@ def _dataset_access_status(
     if present:
         cfg.success(f"Found in `{root}`")
         return True
-    if download is None:
-        cfg.warning(
-            f"No data found in `{root}` — point at a folder with the files above."
-        )
-        _note_dataset_unavailable(
-            label=label,
-            reason="its files aren't in the folder you pointed at.",
-            action=f"Set **Data location** on the {ICONS['view_data']} Data Management page to a folder "
-            "holding the files listed under **Expected files**.",
-            root=root,
-        )
-        return False
     cfg.info(
         f"Not downloaded yet{f' ({size_hint})' if size_hint else ''}. "
         f"**Download** saves it to `{root}`."
@@ -4529,14 +4514,10 @@ BUILTIN_SOURCE_CHOICES = (
 
 def reserved_source_names() -> frozenset[str]:
     """Every built-in data-source label: the fixed tokens and every corpus."""
-    return (
-        frozenset(BUILTIN_SOURCE_CHOICES)
-        | frozenset(PUBLIC_DATASET_REGISTRY)
-        | frozenset(public_dataset_registry())
-    )
+    return frozenset(BUILTIN_SOURCE_CHOICES) | frozenset(public_dataset_registry())
 
 
-def resolve_data_source(host=None) -> str:
+def resolve_data_source() -> str:
     """Resolve the active data source (renders no picker widget).
 
     Returns the selected source: ``DEMO_CHOICE`` ("Bundled Demo"), a stored
@@ -4553,9 +4534,6 @@ def resolve_data_source(host=None) -> str:
     entry list the picker renders from (``_data_source_entries``).
     ``data_source_choice`` is the canonical key (``?source=…`` deep links and
     the wizard's finalize / cancel path both write it).
-
-    ``host`` is the Data page's *Data source* slot. Nothing is drawn into it:
-    the add-dataset wizard's ✕ Cancel rides the wizard's own sticky bar.
     """
     # Apply a programmatic source switch (the wizard's finalize / Cancel, or the
     # main-view picker's on_change) BEFORE anything reads data_source_choice. It
@@ -7906,326 +7884,75 @@ def render_canvas_controls(
     fixations_filtered: pd.DataFrame,
     data_choice: str | None = None,
     slot=None,
-    expanded: bool = False,
-    title: str = "Experimental Setup",
-    bare: bool = False,
     text_host=None,
     render_text: bool = True,
     text_disabled: bool = False,
     text_section: str | None = None,
 ) -> tuple[int, int, int, str, float, bool]:
-    """Render the canvas-geometry, typography and background panel.
+    """Render the Scanpath rail's typography rows and resolve the canvas.
 
-    These controls let the user match the visualization to the experimental
-    display, which is what keeps coordinates and word boxes spatially accurate.
-
-    The panel normally renders into ``slot`` as its own collapsible expander.
-    Pass ``bare=True`` when ``slot`` is already the disclosure container, as the
-    compact Scanpath rail does. The setup wizard keeps the standalone expander.
     `seed_canvas_state` does the state work and is called first here, so rendering
     and not-rendering resolve identically.
 
-    **``text_host`` is where the typography half goes.** The two
-    halves answer different questions and, in the rail, live in different
-    sections: the **screen** half (the monitor the figure is framed on) is drawn
-    into ``slot`` for 📐 Figure & canvas, and the **text** half (how the reading
-    text is drawn) into ``text_host`` for 📄 Stimulus → *Text*, beside the layer
-    it describes. One call renders both — a widget drawn twice is a duplicate-key
-    error, and one not drawn at all loses its key at the end of the run. The
-    wizard passes neither and gets both, flat, in one expander: that step *is*
-    the setup form, and hiding half of it behind buttons would be a step you
-    cannot read at a glance.
+    **Only the text half is drawn.** The monitor's size and its physical
+    geometry (width in mm, viewing distance, display DPI) are the dataset's
+    Recording setup, asked for on the 🗂️ Data page with a provenance; a second
+    set in the rail could disagree with it. Their *values* are unaffected —
+    ``seed_canvas_state`` pins them on every run, and every consumer (px/degree
+    for saccade amplitude in degrees, the point-to-pixel stimulus font
+    conversion) reads them from state, which is also what keeps a share link
+    carrying them working.
 
-    **The physical-geometry controls are not drawn in ``bare`` mode.**
-    Monitor physical width, viewing distance and display DPI are experiment
-    facts, and the 🗂️ Data page's **Recording setup** already asks for
-    them with a provenance; a second set in the rail could disagree with it. The
-    *values* are unaffected — ``seed_canvas_state`` still pins them, and every
-    consumer (px/degree for saccade amplitude in degrees, the point-to-pixel
-    stimulus font conversion) reads them from state, which is also what keeps a
-    share link carrying them working.
-
-    **In ``bare`` mode the rows take the rail popovers' shape.**
-    The monitor's width and height share one ``Monitor | W × H px`` row, and the
-    typography is four captioned rows — *Fit*, *Size*, *Font*, *Color* — under
-    the 📄 Stimulus popover's *Text* row (`_rail_text_rows`). ``text_disabled``
-    greys them while the Text layer is off, rather than leaving them undrawn;
-    ``text_section`` titles the group where no *Text* row precedes it (the
-    Corpus figure-style panel). The wizard's standalone form stays flat.
+    **``text_host`` is where the typography goes**: 📄 Stimulus → *Text*,
+    beside the layer it describes, as four captioned rows — *Fit*, *Size*,
+    *Font*, *Color* (`_rail_text_rows`). Without one (the Corpus figure-style
+    panel) they go into ``slot``, and ``text_section`` titles the group, since
+    no *Text* row precedes it there. ``text_disabled`` greys them while the
+    Text layer is off, rather than leaving them undrawn.
 
     Returns:
         Tuple of (canvas_width, canvas_height, base_font_size, font_family,
         line_spacing, scale_text_to_boxes).
     """
     seeded = seed_canvas_state(words_filtered, fixations_filtered, data_choice)
-    _, font_css = _dataset_font(words_filtered)
-    host = slot if slot is not None else st.container()
-    display = host if bare else host.expander(title, expanded=expanded)
+    canvas_width, canvas_height = int(seeded[0]), int(seeded[1])
 
-    def field(host, kind: str, label: str, **kwargs):
-        """One control, `label | field` in the rail and label-above in the wizard.
-
-        The rail reads as a compact form; the wizard's flat expander keeps the
-        label above its field, for the same reason it stays flat — that
-        step *is* the setup form, laid out across the page rather than inside a
-        28rem popover, so there is no height to buy back.
-        """
-        if bare:
-            return _labeled(host, kind, label, **kwargs)
-        kwargs.pop("display", None)
-        return getattr(host, kind)(label, **kwargs)
-
-    # No sub-popovers: each half is drawn straight into the section that owns
-    # it, and the caller has already opened the one disclosure.
-    screen = display
-    text = text_host if (bare and text_host is not None) else display
-    if bare:
-        # The monitor's size is the dataset's Recording setup, set on the 🗂️ Data
-        # page; the rail only frames the figure on it. `seed_canvas_state` has
-        # resolved both keys above, and no widget owns them here, so nothing can
-        # drop them at the end of a run.
-        canvas_width, canvas_height = int(seeded[0]), int(seeded[1])
-    else:
-        canvas_width = field(
-            screen,
-            "number_input",
-            "Monitor width (px)",
-            min_value=100,
-            max_value=10000,
-            step=10,
-            help="Use the real monitor width in pixels to keep coordinates true "
-            "to scale.",
-            key="global_canvas_width",
-            persist_state="session",
-        )
-        canvas_height = field(
-            screen,
-            "number_input",
-            "Monitor height (px)",
-            min_value=100,
-            max_value=10000,
-            step=10,
-            help="Use the real monitor height in pixels to keep coordinates true "
-            "to scale.",
-            key="global_canvas_height",
-            persist_state="session",
-        )
-    # Physical setup values live beside the pixel canvas they explain. The
-    # width gives the DPI the point-size font converts through. The viewing
-    # distance is not asked for: only px/degree reads it, and nothing in the
-    # app draws in degrees. `global_viewing_distance_mm` still rides links and
-    # configs, pinned by `seed_canvas_state`.
-    #
-    # **In the rail these are not drawn at all.** They are experiment facts,
-    # and the 🗂️ Data page's Recording setup already asks for them *with a
-    # provenance*; a second set here could disagree with it. Not rendering a
-    # widget normally loses its key — but in the rail these keys are not
-    # widget-owned: `seed_canvas_state` pins them on every run (including the
-    # derived DPI), so a share link or saved config still restores them and
-    # every consumer reads the same numbers. The wizard's standalone form shows
-    # the width and DPI.
-    if bare:
-        display_dpi = float(st.session_state.get("global_display_dpi", 96.0))
-    else:
-        monitor_width_mm = field(
-            screen,
-            "number_input",
-            "Monitor physical width (mm)",
-            display="Physical width (mm)",
-            min_value=100.0,
-            max_value=3000.0,
-            step=1.0,
-            key="global_monitor_width_mm",
-            persist_state="session",
-            help="Width of the visible display area, not the diagonal size.",
-        )
-        derived_dpi = float(canvas_width) / (float(monitor_width_mm) / 25.4)
-        display_dpi = field(
-            screen,
-            "number_input",
-            "Display DPI",
-            min_value=20.0,
-            max_value=1000.0,
-            step=1.0,
-            key="global_display_dpi",
-            persist_state="session",
-            help="Used for point-to-pixel stimulus font conversion. The physical "
-            f"width above implies {derived_dpi:.1f} DPI.",
-        )
-    # No derived visual-angle figure (px/degree) is shown anywhere: nothing in
-    # the app draws in degrees.
-
-    # Text can be switched off while this function still supplies the screen
-    # half to 📐 Figure & canvas; the caller then has no text container, so
-    # return before the typography rows. Do not
-    # move the typography controls into the Figure popover as a fallback: they
-    # belong to Stimulus → Text, and their session-persistent keys already keep
-    # the last values while that layer is hidden.
+    # Text can be switched off while the caller still needs the resolved
+    # canvas; it then has no text container, so return before the typography
+    # rows. Do not move them into the Figure popover as a fallback: they belong
+    # to Stimulus → Text, and their session-persistent keys already keep the
+    # last values while that layer is hidden.
     if not render_text:
         return (
-            int(canvas_width),
-            int(canvas_height),
+            canvas_width,
+            canvas_height,
             int(seeded[2]),
             str(seeded[3]),
             float(seeded[4]),
             bool(seeded[5]),
         )
 
-    if bare:
-        # The DPI is read only while a point size is drawn (its widgets' values
-        # are already this run's): the default rerun asks nothing of the setup.
-        ss = st.session_state
-        points = not ss.get("global_scale_text_to_boxes", True) and ss.get(
-            "global_use_stimulus_font_pt"
-        )
-        base_font_size, font_family, line_spacing, scale_text_to_boxes = (
-            _rail_text_rows(
-                text,
-                seeded=seeded,
-                font_dpi=font_dpi(data_choice) if points else None,
-                words_filtered=words_filtered,
-                font_css=font_css,
-                disabled=text_disabled,
-                section=text_section,
-            )
-        )
-        return (
-            int(canvas_width),
-            int(canvas_height),
-            int(base_font_size),
-            font_family,
-            float(line_spacing),
-            bool(scale_text_to_boxes),
-        )
-
-    # --- 🔤 Text & fonts (the wizard's flat form) -------------------------
-    # Reading text is true-to-scale by default: it auto-sizes to the word boxes
-    # (text height = line distance / line spacing) and scales with the figure,
-    # so it always fills the real line slot. Untick to fall back to a fixed
-    # font size. Keyed (+ seeded) so the settings file can capture/reapply
-    # them. The same words, units and font list as the rail.
-    scale_text_to_boxes = field(
-        text,
-        "checkbox",
-        "Fit to word boxes",
-        key="global_scale_text_to_boxes",
-        persist_state="session",
-        help="Size the text from the word boxes. Without boxes, the font size "
-        "is used instead.",
+    _, font_css = _dataset_font(words_filtered)
+    if text_host is None:
+        text_host = slot if slot is not None else st.container()
+    # The DPI is read only while a point size is drawn (its widgets' values
+    # are already this run's): the default rerun asks nothing of the setup.
+    ss = st.session_state
+    points = not ss.get("global_scale_text_to_boxes", True) and ss.get(
+        "global_use_stimulus_font_pt"
     )
-    line_spacing = float(st.session_state.get("global_line_spacing", seeded[4]))
-    use_stimulus_font_pt = bool(
-        st.session_state.get("global_use_stimulus_font_pt", False)
+    base_font_size, font_family, line_spacing, scale_text_to_boxes = _rail_text_rows(
+        text_host,
+        seeded=seeded,
+        font_dpi=font_dpi(data_choice) if points else None,
+        words_filtered=words_filtered,
+        font_css=font_css,
+        disabled=text_disabled,
+        section=text_section,
     )
-    if scale_text_to_boxes:
-        line_spacing = field(
-            text,
-            "number_input",
-            "Line spacing",
-            min_value=1.0,
-            max_value=10.0,
-            step=0.5,
-            key="global_line_spacing",
-            persist_state="session",
-            help=_LINE_SPACING_HELP,
-        )
-    else:
-        use_stimulus_font_pt = field(
-            text,
-            "segmented_control",
-            "Font unit",
-            options=[False, True],
-            format_func=lambda use_pt: "pt" if use_pt else "px",
-            key="global_use_stimulus_font_pt",
-            persist_state="session",
-            help="Points are converted with the dataset DPI: px = pt × DPI ÷ 72.",
-        )
-        if use_stimulus_font_pt:
-            stimulus_font_pt = field(
-                text,
-                "number_input",
-                "Font size (pt)",
-                min_value=FONT_PT_RANGE[0],
-                max_value=FONT_PT_RANGE[1],
-                step=0.5,
-                key="global_stimulus_font_pt",
-                persist_state="session",
-            )
-            st.session_state["global_base_font_size"] = font_size_px(
-                stimulus_font_pt, "pt", display_dpi
-            )
-
-    if not scale_text_to_boxes and use_stimulus_font_pt:
-        base_font_size = int(st.session_state["global_base_font_size"])
-    else:
-        base_font_size = field(
-            text,
-            "number_input",
-            "Plot font size (px)" if scale_text_to_boxes else "Font size (px)",
-            min_value=FONT_PX_RANGE[0],
-            max_value=FONT_PX_RANGE[1],
-            step=1,
-            help=(
-                "Axis, legend, and fallback text size."
-                if scale_text_to_boxes
-                else "Reading-text, axis, and legend size in monitor pixels."
-            ),
-            key="global_base_font_size",
-            persist_state="session",
-        )
-    family_col, other_col = text.columns(2, vertical_alignment="bottom")
-    font_family = _font_rows(family_col, other_col, disabled=False)
-    if "right_to_left" in words_filtered and words_filtered["right_to_left"].any():
-        text.caption(
-            "↔ Right-to-left script detected — labels are laid out by the browser."
-        )
-    # When the dataset declares its stimulus typeface, the overlaid
-    # text only lines up with the stimulus image if that exact font is installed
-    # on the viewer's machine — we don't bundle it, and the browser otherwise
-    # falls back per-script (CJK lands, but half-width Latin in a CJK font drifts,
-    # e.g. URLs render too wide). Tell the user the font + how to get it.
-    hint = _stimulus_font_install_hint(font_css)
-    if hint is not None:
-        font_name, font_url = hint
-        text.caption(
-            f"{ICONS['info']} This corpus was rendered in **{font_name}**. For the overlaid text "
-            "to match the stimulus image exactly, install that font on this "
-            "computer (it isn't bundled), then reload — otherwise the browser "
-            "substitutes a fallback and labels (especially URLs / Latin) can "
-            f"drift. [Download]({font_url}); install via Font Book (macOS), "
-            "right-click → Install (Windows), or `~/.local/share/fonts` + "
-            "`fc-cache -f` (Linux). Or just turn on the **stimulus image** to read "
-            "the original text."
-        )
-
-    # Base reading-text colour (highlighted-text colour lives in the plot
-    # controls). Read back into viz_settings by controls.render_plot_controls.
-    field(
-        text,
-        "color_picker",
-        "Text color",
-        key="global_text_color",
-        persist_state="session",
-        help="Colour of the reading text drawn over the stimulus.",
-    )
-
-    # Plot background lives here (Experimental Setup) rather than with the plot
-    # controls; render_plot_controls reads the chosen value from session state.
-    field(
-        text,
-        "selectbox",
-        "Plot background",
-        options=BG_CHOICES,
-        key="global_bg_choice",
-        persist_state="session",
-        help="Background of the plotting area (and exported figures).",
-    )
-    # The colour in use, and any colour picked here applies at once.
-    background_swatch(text, label="Background color")
-
     return (
-        int(canvas_width),
-        int(canvas_height),
+        canvas_width,
+        canvas_height,
         int(base_font_size),
         font_family,
         float(line_spacing),
@@ -9303,21 +9030,15 @@ def _run_app() -> None:
     # on_click callback, which runs before this point in the rerun.
     #
     # One container for the whole block, so it always holds exactly one index
-    # below it — `render_easter_egg()`, for one, draws a bare iframe except
-    # while a tour or tutorial is active, so without the container the first
-    # run after one closes would insert an element above the view and shift it.
-    # See AGENTS.md → Gotchas.
+    # below it — the tour and the tutorial draw only while active, so without
+    # the container the first run after one closes would remove an element
+    # above the view and shift it. See AGENTS.md → Gotchas.
     with st.container():
         maybe_show_welcome_tour()
         render_spotlight_tour()
         # Task-oriented tutorials share the spotlight mechanism but keep
         # their own progress and do not inherit the welcome tour's opt-out.
         render_use_case_tutorial()
-        # Arm the title's easter egg. After the tour/tutorial renders, because
-        # its suppression reads the `tour_mode` / `tutorial_active` those set — and it
-        # doesn't care about DOM order, being a height-0 script that retries until the
-        # heading has hydrated.
-        render_easter_egg()
         # A cut-off dropdown label shows in full on hover. Unconditional,
         # so it never moves the view's index.
         render_truncation_tooltips()
@@ -9518,12 +9239,10 @@ def _run_app() -> None:
 
     # Data source selection. Only the *resolution* happens here (it must
     # precede the load); the picker itself renders in the Scanpath and Corpus
-    # views. The resolver is handed the Data page's source slot but draws
-    # nothing into it: the add-dataset wizard's ✕ Cancel rides the wizard's own
-    # bar.
+    # views.
     from scanpath_studio.wizard import _enter_add_data_wizard
 
-    data_choice = resolve_data_source(host=setup_source_slot)
+    data_choice = resolve_data_source()
     # The metadata tables belong to a dataset. Swap the selected one's
     # onto the session keys every consumer reads (`metadata.active()` & co.),
     # filing the previous dataset's away. Keyed by the concrete canonical choice
@@ -10368,7 +10087,6 @@ def _run_app() -> None:
             canvas_geometry_frame,
             canvas_choice,
             slot=slot,
-            bare=True,
             text_host=text_host,
             render_text=render_text,
             text_disabled=text_disabled,

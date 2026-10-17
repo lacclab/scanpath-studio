@@ -1,7 +1,7 @@
-"""The title's triple-click easter egg.
+"""The About heading's triple-click easter egg.
 
 It is browser-only, so what a test can pin is the *contract* around the script:
-the selector it binds to still matches the header the app renders, the trigger
+the selector it binds to still finds the About dialog's heading, the trigger
 stays a triple-click, and the sessions that must not be interrupted (embeds, a
 running tour or tutorial) get no script at all.
 """
@@ -33,20 +33,44 @@ def test_script_is_inert_and_self_cleaning() -> None:
     assert "teardown" in script and "wrap.remove()" in script
 
 
-def test_selector_matches_the_header_container_key() -> None:
-    """`app._render_about_panel` keys the header container; the selector follows it.
+def test_the_about_dialog_draws_the_script_the_selector_finds() -> None:
+    """The selector finds the About dialog by the container the script is drawn
+    in, so the dialog must draw it — and only About: every dialog has an ``h2``."""
+    import inspect
 
-    Matched on the `key=` alone, not on the whole call: the panel takes a
-    `host` so the title can render into the menu row's left column, and the call
-    is `(host if host is not None else st).container(...)`. The key is what
-    `.st-key-about_header` is built from, and all this selector needs, so a
-    stricter match would fail on a rewrite that cannot break the egg.
-    """
-    from pathlib import Path
+    from scanpath_studio import app
 
-    source = Path(easter_egg.__file__).with_name("app.py").read_text(encoding="utf-8")
-    assert '.container(key="about_header")' in source
-    assert easter_egg.TITLE_SELECTOR == ".st-key-about_header h1"
+    assert "render_easter_egg()" in inspect.getsource(app._about_dialog)
+    assert f".st-key-{easter_egg.EGG_KEY}" in easter_egg.TITLE_SELECTOR
+    assert easter_egg.TITLE_SELECTOR.startswith('[data-testid="stDialog"]')
+    assert easter_egg.TITLE_SELECTOR.endswith(" h2")
+    source = inspect.getsource(easter_egg.render_easter_egg)
+    assert "st.container(key=EGG_KEY)" in source
+
+
+def test_the_eyes_sit_above_the_dialog() -> None:
+    """Streamlit draws its dialog at z-index 1000059 (measured in the browser);
+    eyes under it would pop up invisible behind the heading they belong to."""
+    assert easter_egg._Z_INDEX > 1000059
+    assert f"z-index: {easter_egg._Z_INDEX}" in easter_egg.egg_script()
+
+
+def test_an_orphaned_pair_still_fades() -> None:
+    """Closing the dialog kills the script mid-animation, so the fade must not
+    depend on it: it is a CSS animation delayed by the eyes' lifetime."""
+    script = easter_egg.egg_script()
+    assert (
+        f"sps-egg-away {easter_egg._FADE_MS}ms ease-in "
+        f"{easter_egg._LIFETIME_MS}ms forwards"
+    ) in script
+
+
+def test_a_remount_replaces_the_click_handler() -> None:
+    """A rerun of the dialog keeps its heading but kills the old script, whose
+    handler then never runs: the new mount must replace it, not skip binding."""
+    script = easter_egg.egg_script()
+    assert 'title.removeEventListener("click", title.__spsEgg)' in script
+    assert "spsEggWired" not in script
 
 
 def test_embeds_get_no_egg() -> None:

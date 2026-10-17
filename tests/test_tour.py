@@ -1055,7 +1055,8 @@ class TestSpotlightSelectorsResolve:
         assert "f\"{ICONS['figure']} **Figure & canvas**\"" in control_source
         # The typography draws always, greyed while Text is off.
         assert "text_disabled=not show_labels" in control_source
-        assert "display = host if bare else host.expander" in canvas_source
+        # Drawn inside a popover, so it must never open an expander of its own.
+        assert ".expander(" not in canvas_source
         assert 'viz.expander("🖥️ Canvas & text"' not in control_source
         assert 'viz.expander("📐 Figure & axes"' not in control_source
 
@@ -1155,7 +1156,7 @@ def test_spotlight_helpers_are_plain_functions_that_return_their_css():
             f"{helper.__name__} must stay an undecorated pure helper"
         )
 
-    css = tour._highlight_css(".st-key-wiz_open_setup", "#1f77b4")
+    css = tour._highlight_css(".st-key-wiz_part_setup", "#1f77b4")
     assert "tour-pulse" in css and "outline: 3px solid #1f77b4" in css
     assert tour._highlight_css("", "#1f77b4") == ""
 

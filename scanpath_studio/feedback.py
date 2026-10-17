@@ -32,7 +32,7 @@ ROUTES: tuple[tuple[str, str, str, str, str], ...] = (
         "Report a bug",
         "bug",
         CITATION["bug_report_url"],
-        "Something is wrong or crashes. Paste the details below into it.",
+        "Something is wrong or crashes. Paste the details below into the report.",
     ),
     (
         "feature",
@@ -102,7 +102,7 @@ def maybe_show_feedback() -> None:
 @guarded()
 def _feedback_dialog() -> None:
     """Four routes to GitHub, and the details to paste into a bug report."""
-    st.caption("Opens GitHub; nothing is sent from the app.")
+    st.caption("Each link opens GitHub. The app sends nothing itself.")
     for key, label, icon, url, purpose in ROUTES:
         st.link_button(
             f"{label} ↗",

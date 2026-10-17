@@ -119,8 +119,8 @@ def _box_masks(frame: pd.DataFrame) -> dict[str, pd.Series]:
 _CANVAS_CONSEQUENCE = (
     "They stay in every table and export. The figure ignores a screen size that "
     "is not one finite, positive number per screen, and draws that screen at the "
-    "size it uses when there is none: the Recording setup in the app, the size "
-    "given or one fitted to the data in the API and on the command line."
+    "size in the Recording setup instead (in the API and on the command line, the "
+    "size given or one fitted to the data)."
 )
 
 
@@ -133,10 +133,9 @@ CHECKS: tuple[_Check, ...] = (
         "Fixations lasting 0 ms or less",
         ("duration_ms",),
         _duration_masks,
-        "They stay in every table and export, and are counted at their value "
-        "wherever durations are summed (reading time, dwell). The plot draws them "
-        "at the smallest marker size. A blank or unreadable duration cell also "
-        "loads as 0 ms.",
+        "They stay in every table and export, and count at their value in "
+        "duration sums (reading time, dwell). The plot draws them at the smallest "
+        "marker size. A blank or unreadable duration cell also loads as 0 ms.",
     ),
     _Check(
         "fixation_timing",
@@ -144,11 +143,11 @@ CHECKS: tuple[_Check, ...] = (
         "Fixations with an infinite duration or onset",
         ("duration_ms", "timestamp_ms"),
         _timing_masks,
-        "They stay in every table and export, and an infinite duration makes "
-        "every sum it enters infinite (reading time, dwell). The figure draws it "
-        "at the smallest marker size and the replay counts it as 0 ms; a trial "
-        "with an infinite onset draws that fixation last, and its replay is "
-        "timed by the fixation durations instead of the onsets.",
+        "They stay in every table and export. An infinite duration makes every "
+        "sum it enters infinite (reading time, dwell). The figure draws it at the "
+        "smallest marker size and the replay counts it as 0 ms. A fixation with "
+        "an infinite onset is drawn last, and its trial's replay is timed by "
+        "fixation durations instead of onsets.",
     ),
     _Check(
         "fixation_position",
@@ -156,10 +155,9 @@ CHECKS: tuple[_Check, ...] = (
         "Fixations with no usable position",
         ("x", "y"),
         _position_masks,
-        "They stay in every table and export, but the plot cannot place them: "
-        "their marker, and the saccades to and from them, are left out of the "
-        "figure. A missing position is one neither the data nor the fixated "
-        "word's box could supply.",
+        "They stay in every table and export. The plot leaves out their markers "
+        "and the saccades to and from them. A position is missing when neither "
+        "the data nor the fixated word's box gives one.",
     ),
     _Check(
         "raw_gaze_position",
@@ -167,8 +165,8 @@ CHECKS: tuple[_Check, ...] = (
         "Raw-gaze samples with no usable position",
         ("x", "y"),
         _position_masks,
-        "They stay in the table and its export; the raw-gaze layer leaves them "
-        "out. Missing positions are usual in sample data (blinks, track loss).",
+        "They stay in the table and its export. The raw-gaze layer leaves them "
+        "out. Missing positions are common in raw gaze (blinks, track loss).",
     ),
     _Check(
         "word_box_size",
@@ -176,10 +174,10 @@ CHECKS: tuple[_Check, ...] = (
         "Word boxes with no area or no usable position",
         ("x", "y", "width", "height"),
         _box_masks,
-        "They stay in every table and export. A box with no area holds no "
-        "fixation, so fixations reach such a word only through the data's own "
-        "word ids, and the box draws as a line or not at all; a box with an "
-        "infinite size or position is left out of the figure.",
+        "They stay in every table and export. A box with no area contains no "
+        "fixation, so a fixation reaches that word only through a word id in the "
+        "data. The box draws as a line or not at all. A box with an infinite "
+        "size or position is left out of the figure.",
     ),
     _Check(
         "word_canvas",

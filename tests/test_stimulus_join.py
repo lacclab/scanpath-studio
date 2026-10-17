@@ -757,7 +757,7 @@ class TestMultipartScreens:
                 names="canonical",
             )
         text = str(err.value)
-        assert "has no boxes for that screen ('p9')" in text
+        assert "with no boxes for that screen ('p9')" in text
         assert "neither a Trial ID nor a Text ID" not in text
 
     def test_blank_screens_still_pair_with_blank_screens(self):
@@ -851,8 +851,11 @@ class TestMessages:
         assert (join.matched, join.ambiguous_readings) == (1, 1)
         text = join.describe()
         assert "1 trial shares neither" in text
-        assert "1 trial names a Text ID the Words table gives to more than one" in text
-        assert "'X'" in text and "that Text ID cannot pick" in text
+        assert (
+            "1 trial names a Text ID that the Words table gives to more than one"
+            in text
+        )
+        assert "'X'" in text and "cannot tell which trial's boxes" in text
 
     def test_a_multipart_partial_join_is_refused_up_front(self):
         """Every screen a reading has fixations on needs its boxes, so a

@@ -80,10 +80,10 @@ def test_latest_release_reads_githubs_answer():
 @pytest.mark.parametrize(
     ("error", "reason"),
     [
-        (urllib.error.URLError("no route"), "are you offline"),
-        (TimeoutError("slow"), "are you offline"),
-        (http.client.IncompleteRead(b""), "are you offline"),
-        (http.client.RemoteDisconnected("closed"), "are you offline"),
+        (urllib.error.URLError("no route"), "Are you offline"),
+        (TimeoutError("slow"), "Are you offline"),
+        (http.client.IncompleteRead(b""), "Are you offline"),
+        (http.client.RemoteDisconnected("closed"), "Are you offline"),
         (
             urllib.error.URLError(ssl.SSLCertVerificationError("bad cert")),
             "certificate",

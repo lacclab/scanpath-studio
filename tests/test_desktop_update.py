@@ -321,7 +321,7 @@ def test_a_dropped_download_is_an_update_failure(tmp_path):
     def opener(request, timeout):
         raise OSError("connection reset")
 
-    with pytest.raises(du.UpdateFailed, match="are you offline"):
+    with pytest.raises(du.UpdateFailed, match="Are you offline"):
         du.download(_asset(b"x"), tmp_path, opener=opener)
     assert not list(tmp_path.glob("*.part"))
 

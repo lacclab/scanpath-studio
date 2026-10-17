@@ -441,7 +441,7 @@ def test_the_grid_shows_one_page_and_says_how_to_see_more(monkeypatch):
     at = AppTest.from_function(_lookalike_comparisons_app).run(timeout=60)
     assert not at.exception, at.exception
     assert len(_panel_captions_shown(at)) == 2
-    assert _count_line(at) == "Showing 1–2 of 3 matches — pick a page for more."
+    assert _count_line(at) == "Showing 1–2 of 3 matches. Pick a page to see more."
     # A pager above the grid and one under it.
     assert len(at.pagination) == 2
 
@@ -451,7 +451,7 @@ def test_the_grid_shows_one_page_and_says_how_to_see_more(monkeypatch):
     assert [c.split(" · NLD")[0] for c in _panel_captions_shown(at)] == [
         "**Participant p9**"
     ]
-    assert _count_line(at) == "Showing 3 of 3 matches — pick a page for more."
+    assert _count_line(at) == "Showing 3 of 3 matches. Pick a page to see more."
 
 
 def test_one_page_has_no_pager():

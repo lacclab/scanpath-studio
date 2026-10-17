@@ -526,7 +526,7 @@ class TestBuildShareQuery:
         assert ss["author_text"] == "alpha beta"
         assert "_authored_events_frame" not in ss
         assert "_author_text_for_events" not in ss
-        assert any("unreadable hand-made scanpath" in str(w) for w in fake_st.warnings)
+        assert any("unreadable authored scanpath" in str(w) for w in fake_st.warnings)
 
 
 class TestExplicitReaderIsBinding:

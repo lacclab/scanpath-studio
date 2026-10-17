@@ -454,9 +454,9 @@ def setups_comparable(a: SetupSnapshot, b: SetupSnapshot) -> tuple[bool, str]:
     """
     if a.canvas != b.canvas:
         return False, (
-            f"These trials were recorded on different screens — "
-            f"{a.canvas_width}×{a.canvas_height} and "
-            f"{b.canvas_width}×{b.canvas_height} px — so their positions can't "
+            f"These trials were recorded on different screens "
+            f"({a.canvas_width}×{a.canvas_height} and "
+            f"{b.canvas_width}×{b.canvas_height} px), so their positions can't "
             f"share axes."
         )
     unknown = [
@@ -472,9 +472,9 @@ def setups_comparable(a: SetupSnapshot, b: SetupSnapshot) -> tuple[bool, str]:
         )
         return True, (
             f"{subject} its screen, so the matching "
-            f"{a.canvas_width}×{a.canvas_height} canvas may be a default, not "
-            f"proof both were shown on one display. Check before reading "
-            f"positions across the overlay."
+            f"{a.canvas_width}×{a.canvas_height} canvas may be a default. Check "
+            f"that both were shown on the same display before comparing "
+            f"positions in the overlay."
         )
     return True, ""
 

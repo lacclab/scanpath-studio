@@ -52,14 +52,11 @@ DESKTOP_ARCHIVES = {
     ("linux", "x86_64"): "ScanpathStudio-linux-x86_64.tar.gz",
 }
 
-_OFFLINE = "Couldn't reach GitHub to check — are you offline?"
+_OFFLINE = "Couldn't reach GitHub to check. Are you offline?"
 _BAD_CERT = (
-    "GitHub's certificate couldn't be verified on this computer, so the check "
-    "was not made."
+    "Couldn't verify GitHub's certificate on this computer, so the check was not made."
 )
-_UNREADABLE = (
-    "GitHub sent an answer this version of the app can't read; try again later."
-)
+_UNREADABLE = "GitHub sent a reply this version of the app can't read. Try again later."
 
 
 @dataclass(frozen=True)
@@ -177,11 +174,12 @@ def _http_reason(error: urllib.error.HTTPError) -> str:
         except (TypeError, ValueError, OverflowError, OSError):
             when = " later"
         return (
-            f"GitHub's limit on checks from this network is used up; try again{when}."
+            f"GitHub's limit on checks from this network has been reached. Try "
+            f"again{when}."
         )
     if error.code == 404:
         return "GitHub lists no published release of Scanpath Studio."
-    return f"GitHub answered with an error (HTTP {error.code}); try again later."
+    return f"GitHub returned an error (HTTP {error.code}). Try again later."
 
 
 def _release_from(payload: object) -> Release:
@@ -298,8 +296,8 @@ def check_for_updates(
     download = release.asset(name) if name else None
     if download is None:
         message += (
-            " Its download for this computer isn't on the release page yet; "
-            "desktop builds are uploaded up to an hour after a release."
+            " Its download for this computer isn't on the release page yet. "
+            "Desktop builds can take up to an hour after a release to appear."
             if name
             else " There is no desktop build for this computer; see the release page."
         )

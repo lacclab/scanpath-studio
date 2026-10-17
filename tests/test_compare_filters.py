@@ -1,11 +1,9 @@
-"""CMP-24 — in Compare, each scanpath is filtered by its own filters.
+"""In Compare, each scanpath is filtered by its own filters.
 
-Before this, the rail's 🧹 Filter section reached scanpath A alone: the
-fixation-index window was A's (B was never windowed), and the short / long /
-out-of-bounds / blink flags and the saccade-type filter were greyed out in
-Compare because the comparison builders took neither. Now A keeps the rail's
-ordinary filters, B gets a "· B" block of its own, and every surface carries
-B's: the builders (a per-scanpath style entry), the Share link and saved config
+A keeps the rail's ordinary 🧹 Filter section — the fixation-index window, the
+short / long / out-of-bounds / blink flags and the saccade-type filter, all live
+in Compare — and B gets a "· B" block of its own. Every surface carries B's:
+the builders (a per-scanpath style entry), the Share link and saved config
 (`cmp_b_*`), `render` (`--compare-*`) and the API (`style_b` /
 `fix_index_range_b`).
 """
@@ -233,7 +231,7 @@ class TestTheRail:
         assert any(
             str(s.key).startswith("_single_compare_fix_range__w") for s in at.slider
         )
-        # A's flags used to be greyed out in Compare.
+        # A's flags are live in Compare, not greyed out.
         assert not at.selectbox(key="global_fixclass_short_mode").disabled
         assert not at.multiselect(key="global_saccade_classes").disabled
 
@@ -285,13 +283,13 @@ def _share_app():
 
 @pytest.mark.parametrize("layout", ["overlay", "side_by_side"])
 def test_the_compare_legend_reads_larger_than_the_body(layout):
-    """UX-172: the A/B legend is 1.3x the figure's base font."""
+    """The A/B legend is 1.3x the figure's base font."""
     fig = _figure(layout=layout, show_legend=True)
     assert fig.layout.legend.font.size == round(16 * 1.3)
 
 
 def test_bs_own_filters_disclose_like_as():
-    """Review of #251: B's Discard flags and B's window alter the figure as much
+    """B's Discard flags and B's window alter the figure as much
     as A's do, so they reach the Illustration disclosure too."""
     from scanpath_studio.illustration import illustration_reasons
 

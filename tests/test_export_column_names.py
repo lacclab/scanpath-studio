@@ -1,4 +1,4 @@
-"""DATA-66 phase 3: exported tables name their columns as the dataset does."""
+"""Exported tables name their columns as the dataset does."""
 
 from __future__ import annotations
 
@@ -228,7 +228,7 @@ class TestPairExport:
         assert not any(n.endswith("columns.json") for n in zf.namelist())
 
 
-# --- The parity review's cases ---------------------------------------------
+# --- Aliases, app datasets and rewritten columns ----------------------------
 
 
 def test_columns_json_matches_the_files_on_a_demo_shaped_map(frames):
@@ -351,7 +351,7 @@ class TestRewrites:
         }
 
     def test_the_demo_names_its_shifted_word_id_honestly(self):
-        """BUG-8 shifts the demo's fixation word ids on every load."""
+        """The demo's fixation word ids are shifted (`− 1`) on every load."""
         from scanpath_studio.compare_source import _builtin_column_names
         from scanpath_studio.constants import DEMO_CHOICE
 

@@ -1,9 +1,9 @@
-"""#374 F19: what a screen reader announces for the app's controls.
+"""What a screen reader announces for the app's controls.
 
 Streamlit sets a widget's ``aria-label`` to its label string verbatim, so a
-label written as ``**Select Trial**`` or ``:material/star: Favorite`` was read
-out with its markdown. These pin the source-side fixes; the parent-page script
-that cleans the labels which must keep an icon is browser-verified.
+label written as ``**Select Trial**`` or ``:material/star: Favorite`` would be
+read out with its markdown. These pin the source side; the parent-page script
+that cleans the labels which must keep an icon is verified in a browser.
 """
 
 from __future__ import annotations

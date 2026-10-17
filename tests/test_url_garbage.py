@@ -1,11 +1,10 @@
-"""BUG-69: a hand-edited share link must never crash the app.
+"""A hand-edited share link must never crash the app.
 
 Every URL param that feeds a min/max-bounded widget is clamped on the way in
 (`url_state._URL_BOUNDED`), and every colour param is read as ``#rrggbb`` or
-dropped with the "Ignored bad URL param" warning (`_parse_hex_color`). The audit
-found two holes: raw gaze's marker size and opacity rode the link with no bounds
-(``?raw_gaze_opacity=5`` crashed the slider), and colours were read as any string
-(``?order_font_color=zzz`` crashed Plotly inside the figure builder). This boots
+dropped with the "Ignored bad URL param" warning (`_parse_hex_color`). Without
+a bound, ``?raw_gaze_opacity=5`` would crash the slider; read as any string,
+``?order_font_color=zzz`` would crash Plotly inside the figure builder. This boots
 the real app with garbage in *every* such param at once, so a param added later
 without a bound or a validator fails here by name.
 """
@@ -40,7 +39,7 @@ def _boot(params: dict[str, str]):
 
 
 def test_every_bounded_param_is_a_known_widget_bound():
-    """Raw gaze's two sliders are the ones UX-86 put on the link unbounded."""
+    """Raw gaze's two sliders, marker size and opacity, are bounded on the link."""
     params = _bounded_params()
     assert params["raw_gaze_marker_size"][1] == (1.0, 12.0)
     assert params["raw_gaze_opacity"][1] == (0.1, 1.0)
@@ -55,8 +54,8 @@ def test_out_of_range_values_are_clamped_not_crashed_on(side):
         value = hi + 10 * span if side == "above" else lo - 10 * span
         ranged = url_key.endswith("_range")
         query[url_key] = f"{value},{value}" if ranged else f"{value}"
-    # The source it names, as every Share link does: since EXP-19 a link's
-    # canvas and font are held against the source snap only for that source.
+    # The source it names, as every Share link does: a link's canvas and font
+    # are held against the source snap only for that source.
     query["source"] = "demo"
     at = _boot(query)
 

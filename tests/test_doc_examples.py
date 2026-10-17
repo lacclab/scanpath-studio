@@ -1,11 +1,10 @@
-"""ENG-53 — the documented examples run as written.
+"""The documented examples run as written.
 
-The pre-beta audit found a dozen examples in the docs that failed when pasted:
-demo ids that do not exist (``-p 1 -t 1``, ``p2:t5``, ``l7_101``), a
-``--heatmap-style`` spelling the parser rejects, keyword names no function
-takes. Each was a doc drifting from the code with nothing to notice. These
-tests run every ``render --sample`` command in the CLI-facing pages and the
-Python examples that name demo ids, so the next drift fails here instead."""
+A docs example drifts from the code with nothing to notice it: demo ids that do
+not exist (``-p 1 -t 1``, ``p2:t5``, ``l7_101``), a ``--heatmap-style``
+spelling the parser rejects, keyword names no function takes. These tests run
+every ``render --sample`` command in the CLI-facing pages and the Python
+examples that name demo ids, so a drift fails here instead."""
 
 from __future__ import annotations
 

@@ -35,7 +35,7 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
 1. **Branch** — `git switch -c release-v<version> origin/main`.
 2. **Changelog** — `python scripts/changelog_fragments.py release <version>`
    writes the `changelog.d/` fragments into a `## [<version>] - <today>`
-   section of `CHANGELOG.md` and deletes them (ENG-86). A fragment named by a
+   section of `CHANGELOG.md` and deletes them. A fragment named by a
    slug is cited by the PR whose squash-merge added it, read from `git log`; if
    the script refuses one ("no merged PR found"), it did not land through a
    PR — rename it to the issue or PR it belongs to. Read the section it wrote;
@@ -68,7 +68,7 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
    (`.github/workflows/publish.yml`, Trusted Publishing) and the
    `Desktop builds` workflow (`.github/workflows/desktop.yml`), which
    attaches per-OS bundles to the GitHub release. `publish.yml` refuses a tag
-   that does not match `__release__` (ENG-62) — which is why the tag goes on
+   that does not match `__release__` — which is why the tag goes on
    the merged commit, not on a commit from before the bump.
 
 ## After

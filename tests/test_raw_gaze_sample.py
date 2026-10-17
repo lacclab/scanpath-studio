@@ -58,9 +58,8 @@ def test_synthesize_handles_missing_columns():
 
 
 def test_bundled_raw_gaze_overlaps_a_bundled_trial():
-    """Regression guard: the shipped raw_gaze sample must cover a (participant,
-    trial) that exists in the shipped fixations — otherwise the app filters it
-    to 0 rows (the original bug)."""
+    """The shipped raw_gaze sample covers a (participant, trial) that exists in
+    the shipped fixations — otherwise the app filters it to 0 rows."""
     import pytest
 
     from scanpath_studio.data import load_sample_data, load_sample_raw_gaze

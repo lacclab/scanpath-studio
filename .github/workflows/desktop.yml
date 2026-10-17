@@ -1,8 +1,7 @@
-# ENG-15: standalone desktop builds (PyInstaller onedir — see
-# https://github.com/lacclab/scanpath-studio/blob/v0.31.2/plans/eng-15-desktop-app.md).
-# ENG-21 added the signed, notarized macOS .app + .dmg
-# (plans/eng-21-signing-notarization.md). Runs on release tags + manual
-# dispatch, not per-PR: a 3-OS build is release infrastructure, not a PR gate.
+# Standalone desktop builds (PyInstaller onedir), plus a signed, notarized
+# macOS .app + .dmg when the Apple secrets are set (desktop/SIGNING.md). Runs on
+# release tags + manual dispatch, not per-PR: a 3-OS build is release
+# infrastructure, not a PR gate.
 name: Desktop builds
 
 on:
@@ -47,7 +46,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # #139: the spec stamps the bundle from `git describe`, which needs
+          # The spec stamps the bundle from `git describe`, which needs
           # the tags — a dispatched build of main then reports its own build.
           fetch-depth: 0
 
@@ -62,7 +61,7 @@ jobs:
       - name: Install package + PyInstaller
         run: pip install . pyinstaller==6.22.3
 
-      # ENG-21. Everything below degrades to an unsigned build when the Apple
+      # Everything below degrades to an unsigned build when the Apple
       # secrets are absent — a fork running workflow_dispatch has none, and must
       # still produce a working bundle. The check is a step output rather than
       # `if: secrets.X != ''`, because secrets are not available in step `if:`.
@@ -239,8 +238,8 @@ jobs:
       # The installer most Windows users download: one Setup.exe instead of
       # "extract, then find ScanpathStudio.exe". It wraps the same onedir
       # folder; the zip above stays a release asset for the portable route and
-      # for #385's in-app updater. Inno Setup is pinned like the rest of the
-      # CI tooling.
+      # for the in-app updater. Inno Setup is pinned like the rest of the CI
+      # tooling.
       - name: Build the installer
         if: runner.os == 'Windows'
         shell: pwsh
@@ -261,7 +260,7 @@ jobs:
             desktop/windows_installer.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
-      # #385: the in-app updater, end to end. Install this build, offer it back
+      # The in-app updater, end to end. Install this build, offer it back
       # as a newer release through a local feed, run `--update`, and require
       # the swap, the relaunch and the new copy's "booted" report — then
       # smoke-test what is installed now. macOS needs the Developer ID team the
@@ -291,7 +290,7 @@ jobs:
       # The update helper's every path — swap, rollback, the rollback that
       # fails too, the app that won't quit — under the Windows PowerShell 5.1
       # it runs under on users' machines, started as start_swap starts it. CI's
-      # ordinary test run has only PowerShell 7, on Linux (#394).
+      # ordinary test run has only PowerShell 7, on Linux.
       - name: Update helper tests (Windows PowerShell 5.1)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -393,20 +392,17 @@ jobs:
         # Tolerate exactly one failure mode of `create`: losing the race to
         # publish.yml (re-check with `view`). Anything else — permissions, a
         # bad tag — still fails the job loudly. Uploads retry per file:
-        # uploads.github.com intermittently 404s mid-batch (it dropped the
-        # macOS asset on the v0.25.0 release), and --clobber makes retries
-        # idempotent.
+        # uploads.github.com intermittently 404s mid-batch, and --clobber makes
+        # retries idempotent.
         run: |
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --verify-tag --title "$TAG" \
               --notes "Release $TAG (notes added by the PyPI publish workflow)." \
               || gh release view "$TAG" >/dev/null
           fi
-          # The .dmg and -setup.exe globs are load-bearing: the macOS asset
-          # stopped being a tarball in ENG-21, the Windows installer joined the
-          # zip later, and a missing pattern here drops an asset from the
-          # release silently — `if-no-files-found` guards the artifact upload,
-          # not this loop.
+          # One glob per asset type, the .dmg and -setup.exe included: a
+          # missing pattern here drops an asset from the release silently —
+          # `if-no-files-found` guards the artifact upload, not this loop.
           shopt -s nullglob
           assets=(ScanpathStudio-*.tar.gz ScanpathStudio-*.zip ScanpathStudio-*.dmg ScanpathStudio-*-setup.exe)
           if [ ${#assets[@]} -eq 0 ]; then

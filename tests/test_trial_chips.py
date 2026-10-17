@@ -1,10 +1,9 @@
 """The trial-condition chip strip above the scanpath.
 
-UX-11 split the strip by *kind*: conditions inline as chips, the computed stats
-(reading time, the counts) behind a **Summary stats** popover beside it. This
-round folded the stats back in as ordinary chips — the two numbers most often
-wanted cost a click, and the control was empty as often as not — so the popover
-is gone and the picker offers all four alongside every other field.
+The computed stats (reading time, the counts) are ordinary chips beside the
+conditions rather than behind a **Summary stats** popover, where the two numbers
+most often wanted would cost a click; the picker offers them alongside every
+other field.
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ def test_two_summary_fields_are_chips_by_default():
     # four computed chips crowd out the conditions beside them.
     assert "@word_count" not in shown
     assert "@in_text_fixations" not in shown
-    # VIZ-45: the gaze-sample count is a default too — drawn only for a trial
+    # The gaze-sample count is a default too — drawn only for a trial
     # that has samples, so a fixation trial without them still shows two.
     assert "@gaze_sample_count" in shown
     assert set(_CHIP_DEFAULT_SUMMARY) == {
@@ -43,7 +42,7 @@ def test_two_summary_fields_are_chips_by_default():
 
 
 def test_trial_duration_is_onset_to_offset_and_named_apart_from_fixation_time():
-    """#374 F8: two different numbers never share the name "reading time"."""
+    """Two different numbers never share the name "reading time"."""
     import pandas as pd
 
     from scanpath_studio import tabs
@@ -88,9 +87,9 @@ def _unclocked_fixations(n: int = 300):
 
 
 def test_numbered_fixations_have_no_trial_duration():
-    """#422: PoTeC's chips read *Total fixation time 103.5 · Trial duration
-    1.0* — the made-up 0, 1, 2, … onsets taken for milliseconds. Without
-    recorded onsets there is no trial duration to show."""
+    """Without recorded onsets there is no trial duration to show: PoTeC's
+    made-up 0, 1, 2, … onsets taken for milliseconds would read *Total
+    fixation time 103.5 · Trial duration 1.0*."""
     import pandas as pd
 
     from scanpath_studio import tabs
@@ -125,9 +124,9 @@ def test_onsets_too_close_for_their_durations_are_not_a_trial_duration():
 
 
 def test_the_replay_names_a_span_without_onsets_for_what_it_is():
-    """#422: the Animate box said *Trial duration: 103.5s* — the fixations laid
-    end to end. That span is the summed fixation time, and the replay's
-    readout must not call its clock the trial's either."""
+    """Without onsets the replay lays the fixations end to end; that span is
+    the summed fixation time, so neither the Animate box nor the replay's
+    readout calls it the trial's duration (*Trial duration: 103.5s*)."""
     import pandas as pd
 
     from scanpath_studio import tabs
@@ -252,7 +251,7 @@ def test_a_cropped_figure_says_it_is_cropped():
 
 
 def test_the_chip_editor_offers_each_role_once():
-    """#374 F5: no second "Trial (unique_trial_id)" beside "Trial"."""
+    """No second "Trial (unique_trial_id)" beside "Trial"."""
     import pandas as pd
 
     from scanpath_studio import controls
@@ -275,7 +274,7 @@ def test_the_chip_editor_offers_each_role_once():
 
 
 def test_hiding_the_chips_keeps_their_fields():
-    """#373: the ✏️ menu's switch hides the chip table and keeps the field
+    """The ✏️ menu's switch hides the chip table and keeps the field
     selection, so showing it again brings back the same row."""
     from pathlib import Path
 

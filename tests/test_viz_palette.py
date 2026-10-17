@@ -1,5 +1,5 @@
-"""VIZ-15 / VIZ-17 / VIZ-18 / VIZ-19 — marker shape, uniform fixation colour,
-selectable palettes, and the two-way saccade split.
+"""Marker shape, uniform fixation colour, selectable palettes, and the two-way
+saccade split.
 
 Each has to hold on all four surfaces (UI state → figure, deep link, CLI,
 headless API), so these check the figure output and the plumbing rather than the
@@ -47,7 +47,7 @@ def _fixation_marker(fig):
 
 
 class TestUniformFixationColor:
-    """VIZ-17: size already encodes duration, so hue is free by default."""
+    """Size already encodes duration, so hue is free by default."""
 
     def test_uniform_paints_one_flat_colour(
         self, normalized_words_df, normalized_fixations_df
@@ -78,7 +78,7 @@ class TestUniformFixationColor:
 
 
 class TestMarkerSymbol:
-    """VIZ-15: shape as a second channel that survives greyscale."""
+    """Shape as a second channel that survives greyscale."""
 
     @pytest.mark.parametrize(
         "symbol", [s for s in FIXATION_SYMBOLS if s not in FIXATION_GLYPH_SYMBOLS]
@@ -154,7 +154,7 @@ class TestMarkerSymbol:
 
 
 class TestPalettes:
-    """VIZ-18: a palette is a preset over the ordinary colour keys."""
+    """A palette is a preset over the ordinary colour keys."""
 
     @pytest.mark.parametrize("name", list(PALETTES))
     def test_every_palette_is_complete(self, name):
@@ -233,10 +233,10 @@ class TestPalettes:
 
 
 class TestTheSelectorStopsClaimingAPalette:
-    """VIZ-18 follow-up. A palette is one-way — it writes the ordinary colour
-    keys and never reads them back — so without a derived "which palette is
-    actually active?" the dropdown keeps reading *Default (colourblind-safe)* after you've
-    hand-edited one of its colours. Same rule VIZ-12 applies to the Quick views."""
+    """A palette is one-way — it writes the ordinary colour keys and never
+    reads them back — so without a derived "which palette is actually active?"
+    the dropdown would keep reading *Default (colourblind-safe)* after you've
+    hand-edited one of its colours. The Quick views follow the same rule."""
 
     @pytest.fixture
     def state(self, monkeypatch):
@@ -325,8 +325,8 @@ class TestTheSelectorStopsClaimingAPalette:
     def test_viz_settings_report_custom_rather_than_a_stale_name(
         self, state, normalized_words_df, normalized_fixations_df
     ):
-        """The name reaches Share, Save & restore and the export caption. It has
-        to be derived there too, or a hand-edited figure is exported labelled
+        """The name reaches Share, the settings file and the export caption. It
+        has to be derived there too, or a hand-edited figure is exported labelled
         with a palette it doesn't use. Goes through the real non-rendering reader
         (`viz_settings_from_state`) so this covers the path those surfaces use."""
         from scanpath_studio.controls import apply_palette, viz_settings_from_state
@@ -345,7 +345,7 @@ class TestTheSelectorStopsClaimingAPalette:
     def test_the_rail_selector_says_custom_after_you_edit_a_colour(self):
         """End to end through the real rail: the unit tests above pin the
         derivation, this pins that the *widget* shows it — which is the whole
-        point of the item."""
+        point."""
         streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 
         at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
@@ -398,10 +398,11 @@ class TestTheSelectorStopsClaimingAPalette:
 
 
 class TestAPaletteSurvivesAClosedPopover:
-    """#374 F9. A colour picker inside a rail popover that has been opened once
-    keeps echoing the colour it last showed, on every rerun, even after a
-    palette wrote a new one while the popover was closed. The palette held for
-    one run and then snapped back, and the box read Custom."""
+    """A colour picker inside a rail popover that has been opened once keeps
+    echoing the colour it last showed, on every rerun, even after a palette
+    wrote a new one while the popover was closed. Unless that echo is
+    discarded, the palette holds for one run and then snaps back, and the box
+    reads Custom."""
 
     @pytest.fixture
     def state(self, monkeypatch):
@@ -456,7 +457,7 @@ class TestAPaletteSurvivesAClosedPopover:
 
 
 class TestSaccadeDirectionMode:
-    """VIZ-19: forward vs. regression, between Uniform and the five-way split."""
+    """Forward vs. regression, between Uniform and the five-way split."""
 
     def test_mode_sits_between_the_other_two(self):
         assert SACCADE_COLOR_MODES == ("Uniform", "Forward / regression", "By type")
@@ -551,9 +552,10 @@ class TestDeepLinkAndCli:
 
 
 class TestADesignPresetSurvivesAClosedPopover:
-    """#374 F9 for the design presets: Illustration writes popover widgets
-    (Saccades ▾ Shape, Fixations ▾ Snap, opacity); a stale echo of the old
-    value must not undo them, and the dataset-seeded keys are not held."""
+    """The same stale echo, for the design presets: Illustration writes
+    popover widgets (Saccades ▾ Shape, Fixations ▾ Snap, opacity); a stale echo
+    of the old value must not undo them, and the dataset-seeded keys are not
+    held."""
 
     @pytest.fixture
     def state(self, monkeypatch):

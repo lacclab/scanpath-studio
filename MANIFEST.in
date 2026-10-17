@@ -4,6 +4,6 @@ include NOTICE
 recursive-include scanpath_studio/sample_data *.csv
 recursive-include scanpath_studio/sample_data *.parquet
 recursive-include scanpath_studio/sample_data *.png
-# ENG-61: the suite needs the whole repository (streamlit_app.py, docs/,
+# The test suite needs the whole repository (streamlit_app.py, docs/,
 # CITATION.cff), so a partial copy in the sdist could never run.
 prune tests

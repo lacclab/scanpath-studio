@@ -1,9 +1,10 @@
-"""#374 F25 — the design-preset highlight follows the design, not the mode.
+"""The design-preset highlight follows the design, not the mode.
 
-Compare and Animate are ways of viewing a design: switching one on used to move
-the highlight from Scanpath to Custom. A new dataset re-seeds its own canvas and
-fields, which also read as a hand edit. And a link built from a customized view
-opened on Scanpath, because only the design's own few keys were checked.
+Compare and Animate are ways of viewing a design, so switching one on keeps the
+highlight on Scanpath rather than moving it to Custom. A new dataset re-seeds
+its own canvas and fields, which is not a hand edit either. And a link built
+from a customized view opens on Custom, while one from a stock view — which
+carries the whole design — opens on that design.
 """
 
 from __future__ import annotations

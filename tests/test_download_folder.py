@@ -1,4 +1,4 @@
-"""UX-184 — one Download folder for every public corpus, chosen by the user."""
+"""One Download folder for every public corpus, chosen by the user."""
 
 from __future__ import annotations
 

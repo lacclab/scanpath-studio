@@ -1,6 +1,6 @@
 # Test Suite for Scanpath Studio
 
-This directory contains the test suite for the scanpath visualization Streamlit app — 50+ files covering the data pipeline, figure builders, app boot, and the public headless surfaces.
+This directory contains the test suite for the scanpath visualization Streamlit app — over 200 files covering the data pipeline, figure builders, app boot, and the public headless surfaces.
 
 ## Running Tests
 
@@ -62,20 +62,20 @@ cross-cutting files. The load-bearing ones:
 - `test_measures.py`, `test_data.py`, `test_plots.py`, `test_aggregation.py`,
   `test_alignment.py`, `test_similarity.py` — the pure computation +
   figure-builder core.
-- `test_apptest.py`, `test_apptest_flows.py`, and ~48 more `AppTest`-based
-  files — boot the whole app headless via
-  `streamlit.testing.v1.AppTest.from_file("streamlit_app.py")` and drive
-  widgets. This is the house-preferred way to test app behavior (see
-  `CLAUDE.md → Dev loop`); only a handful of older files still mock `st.*`.
+- `test_apptest.py`, `test_apptest_flows.py`, and over a hundred more
+  `AppTest`-based files — boot the whole app headless via
+  `streamlit.testing.v1.AppTest.from_file(APP_SCRIPT)` (the absolute path to
+  `streamlit_app.py`, from `conftest.py`) and drive widgets. This is the
+  preferred way to test app behavior; only a handful of files mock `st.*`.
 - `test_api.py`, `test_cli.py`, `test_cli_drift.py` — the headless API and
   CLI surfaces (the four-surface rule's non-UI half).
 - `test_export.py`, `test_export_naming.py`, `test_animation_export.py` —
   bulk export, path patterns, separable layers, GIF/MP4.
-- `test_dataset_support.py`, `test_multipleye_enrichment.py`,
-  `test_onestop_shard.py` — the public-corpus loaders.
+- `test_dataset_support.py`, `test_onestop_shard.py` — the public-corpus
+  loaders.
 - **Contract tests that gate CI on a rename**:
   `test_session_key_contract.py` pins the share-link / saved-config session
-  keys (ENG-6) against a frozen list — a renamed key fails the test instead
+  keys against a frozen list — a renamed key fails the test instead
   of someone's old link; `test_citation.py` enforces version parity between
   `__init__.py` and `CITATION.cff`.
 

@@ -1,6 +1,6 @@
-"""Keyed, entity-level metadata tables (DATA-20).
+"""Keyed, entity-level metadata tables.
 
-Milestone 1 is **participant grain**: a separate table whose rows are readers
+The **participant grain** is a separate table whose rows are readers
 and whose columns (``native_language``, ``age``, ``comprehension_score``, …)
 should behave "as if they were fields in the data" — filterable, chip-able,
 sortable, inspectable, exportable — without being any part of the recorded eye
@@ -28,21 +28,22 @@ contributes no value, so a downstream field reads as missing rather than as an
 arbitrary winner. Unmatched ids are reported on both sides — rows describing
 readers who are not in the data, and readers in the data with no row.
 
-**Milestone 2 is trial grain (DATA-29)**: the same idea one level down — a
+The **trial grain** is the same idea one level down — a
 table whose rows are *readings*. It reuses everything that is about validating a
 keyed table (the dtype classification, the field registry, the join report, the
 "conflicting rows are dropped, not resolved" rule) and differs only where the
 grain genuinely differs:
 
-* the **key** is the user's call — a trial id alone, or a reader **and** a trial
+* the **key** is the user's choice — a trial id alone, or a reader **and** a trial
   id, because a repeated reading is a different trial for the same reader only
   in corpora that record it that way;
 * **filtering** narrows to a set of ``(participant_id, trial_id)`` keys, applied
   by ``data.filter_to_keys`` — there is no participant-constraint indirection to
   mirror, because a trial constraint already *is* the grain the pool is keyed on.
 
-Later grains (stimulus, screen, word, fixation) add rows to the same registry;
-:class:`MetadataField` already carries ``grain``.
+The **text grain** (:func:`build_text_metadata`) is flat like the participant
+table, one row per text. Other grains (stimulus, screen, word, fixation) would
+add rows to the same registry; :class:`MetadataField` already carries ``grain``.
 """
 
 from __future__ import annotations
@@ -70,10 +71,9 @@ def _with_data_candidates(data_candidates: list[str], *extras: str) -> tuple[str
     spellings it does not already hold (compared case-insensitively, as the
     ``infer_*_id_column`` lookups compare).
 
-    DATA-44: the metadata lists used to be hand-copied twins of ``data``'s and
-    drifted — the text list lost ``unique_paragraph_id``, the demo corpus's own
-    text id — so a table exported beside the data needed a manual pick. Deriving
-    them means a name ``data`` learns is a name a metadata table is keyed by."""
+    Derived rather than hand-copied, so the lists cannot drift apart: a name
+    ``data`` learns is a name a metadata table is keyed by, and a table exported
+    beside the data needs no manual pick."""
     seen: set[str] = set()
     out: list[str] = []
     for name in (*data_candidates, *extras):
@@ -92,9 +92,8 @@ PARTICIPANT_ID_CANDIDATES: tuple[str, ...] = _with_data_candidates(
     _data.PARTICIPANT_CANDIDATES, "participant", "subject", "reader", "pid"
 )
 
-# Grain of a field — the entity one row describes. PARTICIPANT (DATA-20),
-# TRIAL (DATA-29) and TEXT are ingested; the rest are named so the registry's
-# shape is settled.
+# Grain of a field — the entity one row describes. PARTICIPANT, TRIAL and TEXT
+# are ingested.
 GRAIN_PARTICIPANT = "participant"
 GRAIN_TRIAL = "trial"
 GRAIN_TEXT = "text"
@@ -124,7 +123,7 @@ SESSION_KEY = "_participant_metadata"
 RAW_SESSION_KEY = "_participant_metadata_raw"
 FILE_SESSION_KEY = "_participant_metadata_file"
 
-# DATA-29 — the same three, for the trial table. Separate keys rather than one
+# The same three, for the trial table. Separate keys rather than one
 # keyed-by-grain dict: the two tables are attached, replaced and cleared
 # independently, and every consumer wants one of them specifically.
 TRIAL_SESSION_KEY = "_trial_metadata"
@@ -249,7 +248,7 @@ class ParticipantMetadata:
 
 @dataclass(frozen=True)
 class TrialMetadata:
-    """A validated trial table plus its field registry (DATA-29).
+    """A validated trial table plus its field registry.
 
     ``frame`` always carries a string ``trial_id`` column, and a string
     ``participant_id`` column as well when the table is keyed by both. Rows
@@ -257,8 +256,9 @@ class TrialMetadata:
     :attr:`report`, so a lookup either finds one unambiguous row or none — the
     same rule the participant table follows.
 
-    ``keyed_by_participant`` is the user's answer to the question DATA-29 opened
-    with. It is not inferred: a corpus where every reader reads every text can
+    ``keyed_by_participant`` is the user's answer to whether a row describes a
+    text (every reading of a trial id) or one reading. It is not inferred: a
+    corpus where every reader reads every text can
     key by trial id alone and mean it, and one with repeated readings cannot,
     and nothing in the file itself says which world you are in.
     """
@@ -393,11 +393,11 @@ class TextMetadata:
 def _rows_with_ids(frame: pd.DataFrame, columns) -> pd.DataFrame:
     """A copy of ``frame`` without the rows that have no value in an id column.
 
-    A blank row — the one Excel leaves at the end of a sheet — became a phantom
-    reader named "nan": under pandas 3 a missing id stays NaN through
-    ``stable_id``, and the ``!= ""`` test that used to drop it let NaN
-    through (BUG-60). A composite id with a missing part raised in the join
-    instead. Such a row describes no one, so it goes.
+    A blank row — the one Excel leaves at the end of a sheet — would become a
+    phantom reader named "nan": under pandas 3 a missing id stays NaN through
+    ``stable_id``, so an ``!= ""`` test alone lets it through, and a composite
+    id with a missing part raises in the join. Such a row describes no one, so
+    it goes.
     """
     ids = frame[list(columns)]
     missing = ids.isna() | ids.apply(lambda c: c.astype(str).str.strip() == "")
@@ -409,14 +409,14 @@ def _merge_duplicates(work: pd.DataFrame, key: pd.Series, value_columns) -> tupl
 
     Returns ``(work, key, duplicated, conflicting, combined_rows)``: ``work``
     and ``key`` with one row per key, the keys that repeated, the keys whose
-    rows disagree (dropped whole, as every grain here has always done), and how
-    many rows were folded together.
+    rows disagree (dropped whole, at every grain), and how many rows were
+    folded together.
 
     Rows *disagree* when a field holds two different non-missing values. Rows
     that do not are one record written twice, and each field takes the one
     value they hold — two ``p1`` rows, one with a language and one with an age,
-    become one reader with both. Keeping the first row instead lost the second
-    row's values, and which ones depended on the file's row order.
+    become one reader with both. Keeping the first row instead would lose the
+    second row's values, and which ones would depend on the file's row order.
     """
     repeated = key.duplicated(keep=False)
     if not repeated.any():
@@ -453,7 +453,7 @@ def _range_mask(
     """Rows inside every range in ``ranges`` (inclusive).
 
     A row with no value for a ranged field is kept — a range narrows, it does
-    not exclude the unmeasured (UX-49) — unless ``keep_unknown`` maps that
+    not exclude the unmeasured — unless ``keep_unknown`` maps that
     field to ``False``: the researcher's explicit "only records with a
     measured value".
     """
@@ -521,7 +521,7 @@ def unknown_count(metadata, name: str, keys: Iterable | None = None) -> int:
 
 
 def active_trials() -> TrialMetadata | None:
-    """The trial table attached to this session, or ``None`` (DATA-29)."""
+    """The trial table attached to this session, or ``None``."""
     try:
         import streamlit as st
 
@@ -566,7 +566,7 @@ def build_trial_metadata(
     source_name: str = "trial metadata",
     keys: Iterable | None = None,
 ) -> TrialMetadata:
-    """Validate a raw trial table into a registry + clean frame (DATA-29).
+    """Validate a raw trial table into a registry + clean frame.
 
     ``trial_column`` is a single column name, or **several** to build a unique
     trial id on the fly (joined with ``_``, like the Trial ID mapping the
@@ -609,9 +609,8 @@ def build_trial_metadata(
     # trial id is spelled the same way `data.normalize_*` spells the app's: a
     # blank cell anywhere else in *this* file's trial-id column is enough to
     # read it as floats ("101.0") against the data's "101", and the join below
-    # would silently match nothing (DATA-29's "no reading matched" is exactly
-    # this) — and a composite id is built the identical way (`compose_id`,
-    # each part through `stable_id` first).
+    # would silently match nothing — and a composite id is built the identical
+    # way (`compose_id`, each part through `stable_id` first).
     work["trial_id"] = trial_id_series(work, trial_column)
     if participant_column:
         work["participant_id"] = stable_id(work[participant_column])
@@ -674,7 +673,7 @@ def build_trial_metadata(
 
 
 def rejoin_trials(metadata: TrialMetadata, keys: Iterable) -> TrialMetadata:
-    """Recompute the join report against the trials actually loaded (DATA-29).
+    """Recompute the join report against the trials actually loaded.
 
     ``keys`` are ``(participant_id, trial_id)`` pairs; a table keyed by trial
     alone is compared on the trial half, so "this file describes texts, not
@@ -731,7 +730,7 @@ def trials_matching(
     cannot do without: expanding a trial-id-keyed table back to the readings
     that share that trial id, and keeping the trials the table never mentions
     when the only constraint is a numeric range (``data.filter_trials``' rule
-    that a range narrows rather than excludes the unmeasured — UX-49).
+    that a range narrows rather than excludes the unmeasured).
 
     ``keep_unknown`` maps a ranged field to ``False`` to leave its unknowns
     out instead: a reading whose value is missing, and one with no row at all
@@ -775,7 +774,7 @@ def trials_matching(
         # row at all — the participant table's rule, one grain down. "Has a
         # row" is read from the whole table, never from the rows that passed
         # the range: a reading described *outside* the range is described, and
-        # treating it as unlisted added every one of them back.
+        # treating it as unlisted would add every one of them back.
         listed = set(metadata.key_series())
         described = (
             listed
@@ -843,9 +842,9 @@ def trial_bounds_for(
 
     A field with one value over the loaded trials — a one-row table, or a pilot
     whose trials all share it — has no range, the rule :func:`bounds_for` and
-    :func:`text_bounds_for` already follow. Returning ``(20.0, 20.0)`` handed
-    the filter panel a slider Streamlit refuses to draw, which stopped the
-    whole Scanpath view.
+    :func:`text_bounds_for` follow. Returning ``(20.0, 20.0)`` would hand the
+    filter panel a slider Streamlit refuses to draw, which stops the whole
+    Scanpath view.
     """
     if metadata is None or metadata.frame.empty or name not in metadata.frame.columns:
         return None
@@ -859,7 +858,7 @@ def trial_bounds_for(
 
 
 def trial_to_payload(metadata: TrialMetadata | None) -> dict | None:
-    """Serialize the trial table for save & restore (DATA-29)."""
+    """Serialize the trial table for save & restore."""
     if metadata is None or metadata.frame.empty:
         return None
     return {
@@ -1207,7 +1206,7 @@ def _classify(series: pd.Series) -> str:
 
 def _coerce(series: pd.Series, dtype: str) -> pd.Series:
     if dtype == _DTYPE_NUMERIC:
-        # An infinite value is no value (round 10): the record counts as
+        # An infinite value is no value: the record counts as
         # unknown, which a range keeps unless *Keep unknown values* is off —
         # and a slider never gets an infinite end. All three grains read here.
         numbers = pd.to_numeric(series, errors="coerce")
@@ -1221,8 +1220,8 @@ def _coerce(series: pd.Series, dtype: str) -> pd.Series:
 def field_label(name: str) -> str:
     """The label for a metadata field: its column name, as the table spelled it.
 
-    DATA-66: a field the user attached is shown under the name it has in their
-    file (``native_language``, not "Native language"). Public because it is the
+    A field the user attached is shown under the name it has in their file
+    (``native_language``, not "Native language"). Public because it is the
     *only* labeller for a metadata field: the picker in ``tabs._pretty_col`` has
     to name a field the same way whether or not it can reach the attached table
     at that moment.
@@ -1309,7 +1308,7 @@ def build_participant_metadata(
 
 
 def _match_padding(ids: pd.Series, participants: Iterable) -> pd.Series:
-    """``ids`` spelled the data's way when only zero-padding differs (BUG-59).
+    """``ids`` spelled the data's way when only zero-padding differs.
 
     A metadata CSV reads a reader ``007`` as the number 7 while the data kept
     "007", and the table then joined to no one; ``data.zero_padding_map``
@@ -1320,10 +1319,10 @@ def _match_padding(ids: pd.Series, participants: Iterable) -> pd.Series:
 
 def _respell_ids(ids: pd.Series, reference: set) -> pd.Series:
     """``ids`` spelled the way ``reference`` spells them, when the two differ
-    only by zero-padding (BUG-59) or by the escaping composite ids gained
-    (``data.composite_respelling_map``: a dataset restored from the recovery
-    cache keeps the ids it was stored with, a table attached today composes
-    them anew). Both maps refuse anything ambiguous."""
+    only by zero-padding or by the escaping of a ``_`` inside a composite id's
+    part (``data.composite_respelling_map``: a dataset restored from an older
+    recovery cache keeps the unescaped ids it was stored with, while a table
+    attached now composes them escaped). Both maps refuse anything ambiguous."""
     unique = ids.unique()
     mapping = zero_padding_map(unique, reference) or composite_respelling_map(
         unique, reference
@@ -1347,9 +1346,9 @@ def rejoin(
     )
     # Conflicting ids are *in the table* — so they are not "only in the data" —
     # but they carry no values, so they are not joined either. Counting them as
-    # matched (as an earlier version did) made "Joined to N readers" grow by the
-    # conflict count on the first rerun after the file was attached, disagreeing
-    # with what `build_participant_metadata` had just reported.
+    # matched would make "Joined to N readers" grow by the conflict count on the
+    # first rerun after the file was attached, disagreeing with what
+    # `build_participant_metadata` had just reported.
     table_ids = usable_ids | set(metadata.report.conflicting)
     return ParticipantMetadata(
         metadata.frame,
@@ -1409,8 +1408,8 @@ def participants_matching(
     mask &= _range_mask(frame, active_ranges, keep_unknown)
     matching = set(frame.loc[mask, "participant_id"])
     if not active and _keeps_unlisted(active_ranges, keep_unknown):
-        # Range-only narrowing keeps the unmeasured (`data.filter_trials`' rule,
-        # UX-49) — and a reader with **no row at all** is the most unmeasured
+        # Range-only narrowing keeps the unmeasured (`data.filter_trials`'
+        # rule) — and a reader with **no row at all** is the most unmeasured
         # there is, so they are kept on the same terms as a reader whose value
         # is NaN. A *categorical* selection still excludes them, matching every
         # other membership filter in the app: "only Hebrew speakers" cannot
@@ -1480,10 +1479,9 @@ def bounds_for(
 
 
 # -----------------------------------------------------------------------------
-# Serialization — the ENG-26 on-device recovery cache (DATA-38, see
-# `session_payloads` below) and the payload `api`/`cli` hand in. (The 💾 Session
-# backup carried these too until UX-179 cut the settings file to the figure.) Records rather than a pickled frame, so it round-trips
-# through JSON like every other saved setting.
+# Serialization — the on-device recovery cache (see `session_payloads` below)
+# and the payload `api`/`cli` hand in. Records rather than a pickled frame, so
+# it round-trips through JSON like every other saved setting.
 # -----------------------------------------------------------------------------
 
 
@@ -1512,23 +1510,22 @@ def from_payload(payload: dict | None) -> ParticipantMetadata | None:
 
 
 # -----------------------------------------------------------------------------
-# DATA-38 — attached tables in the ENG-26 on-device recovery cache, and DATA-47 —
-# the tables belong to a dataset.
+# Attached tables in the on-device recovery cache — and the tables belong to a
+# dataset.
 #
 # The session keys above hold the tables of the *selected* dataset only — the
 # one every consumer (filters, chips, sort, inspection, export) reads through
 # `active()` / `active_trials()` / `active_texts()`. Every other dataset's
 # tables wait in a per-dataset store, and `activate_dataset` swaps them in and
-# out when the selection changes. They used to be one slot per grain for the
-# whole session, so a new dataset opened with the last one's tables, attaching a
-# table to dataset B replaced dataset A's, and detaching it anywhere removed it
-# everywhere. The cache writes the store, keyed by dataset.
+# out when the selection changes, so a dataset never opens with another's
+# tables, and attaching or detaching a table touches only its own dataset. The
+# cache writes the store, keyed by dataset.
 # -----------------------------------------------------------------------------
 
 #: What a grain's ``*_FILE_SESSION_KEY`` holds when its table came back from the
 #: recovery cache or a saved config, rather than from a file in the uploader.
 #: The metadata sections read an empty uploader as "the user just removed the
-#: file" and detach on sight (UX-115) — and a restored table has no file in the
+#: file" and detach on sight — and a restored table has no file in the
 #: uploader, so without this marker the first visit to the 🗂️ Data page would
 #: detach exactly what the restore brought back.
 RESTORED_FILE_SIGNATURE = "restored"
@@ -1570,9 +1567,9 @@ _ROW_KEYS = ("records", "rows")
 def session_payloads(session) -> dict[str, dict]:
     """Every attached table as its save & restore payload, keyed by grain.
 
-    Each carries its frame's ``columns`` too: the cache writes its manifest with
-    sorted keys, which would otherwise hand the rows back alphabetised and
-    reorder the table's fields everywhere they are listed.
+    Each carries its frame's ``columns`` too, so the field order survives a
+    JSON writer that sorts keys, which would otherwise hand the rows back
+    alphabetised and reorder the table's fields everywhere they are listed.
     """
     payloads = {}
     for grain, key, _raw, _file, dump, _load in _GRAINS:
@@ -1679,7 +1676,7 @@ def restore_payloads(session, payloads) -> int:
     return restored
 
 
-#: DATA-47 — every dataset's tables but the selected one's, as the payloads
+#: Every dataset's tables but the selected one's, as the payloads
 #: :func:`session_payloads` builds: ``{dataset: {grain: payload}}``. Payloads
 #: rather than table objects so the cache can write them as they are.
 DATASET_STORE_KEY = "_metadata_by_dataset"
@@ -1699,8 +1696,8 @@ def upload_key(grain: str, session=None) -> str:
 
     Popping an uploader's key from session state does not empty it: the browser
     still holds the file and sends it back on the next rerun, where it reads as
-    a new upload — so a table attached to one dataset re-attached itself to the
-    next one opened. Only a new key gives the browser a fresh, empty uploader,
+    a new upload — so a table attached to one dataset would re-attach itself to
+    the next one opened. Only a new key gives the browser a fresh, empty uploader,
     so a dataset switch moves every uploader to a new generation.
     """
     if session is None:
@@ -1791,7 +1788,7 @@ def activate_dataset(session, dataset: str) -> bool:
     return True
 
 
-#: CMP-8's key prefix for scanpath B's filters, and the picker's "same dataset"
+#: The key prefix for Compare's scanpath B filters, and the picker's "same dataset"
 #: answer (``compare_source.THIS_DATASET`` — not imported: `compare_source`
 #: imports `app`, which imports this).
 _COMPARE_PREFIX = "cmp"
@@ -1799,7 +1796,7 @@ _COMPARE_SAME_DATASET = "This dataset"
 _BUILT_KEY = "_metadata_built_for_compare"
 
 
-#: EXP-22 — the table each grain is named by in a title / caption pattern:
+#: The table each grain is named by in a title / caption pattern:
 #: ``{trials.font_size}`` is the trial table's ``font_size``.
 PATTERN_TABLE_NAMES = {
     GRAIN_PARTICIPANT: "participants",
@@ -1811,7 +1808,7 @@ PATTERN_TABLE_NAMES = {
 def pattern_rows(
     participant, trial, text_id=None, *, prefix: str = ""
 ) -> dict[str, dict[str, object]]:
-    """This trial's row of every attached metadata table (EXP-22).
+    """This trial's row of every attached metadata table.
 
     ``{"participants": {...}, "trials": {...}, "texts": {...}}`` — only the
     tables that are attached, each with every registered field (a reader, trial
@@ -1843,7 +1840,7 @@ def pattern_rows(
 
 
 def attached_for(grain: str, prefix: str = ""):
-    """The table ``grain``'s filters under key ``prefix`` narrow by (DATA-47).
+    """The table ``grain``'s filters under key ``prefix`` narrow by.
 
     The main pool's filters read the selected dataset's table. Compare mode's
     scanpath B (the ``cmp`` prefix) can come from another dataset, and then its
@@ -1947,7 +1944,7 @@ def dataset_payloads(session) -> dict[str, dict]:
 
 
 def store_signature(session) -> list:
-    """A cheap fingerprint of every dataset's tables, for the cache (DATA-47).
+    """A cheap fingerprint of every dataset's tables, for the cache.
 
     The live tables by content (:func:`session_signature` — they are rebuilt on
     every render), the rest by the store's revision counter. Empty when nothing

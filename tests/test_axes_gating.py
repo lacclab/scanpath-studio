@@ -1,4 +1,4 @@
-"""#422 — when the X / Y fields (and what depends on them) can be changed.
+"""When the X / Y fields (and what depends on them) can be changed.
 
 Only the static figure takes `x_field` / `y_field`; Animate and Compare always
 plot screen x / y, so the fields grey there and their hover says how to get

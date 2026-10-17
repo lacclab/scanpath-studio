@@ -1,8 +1,8 @@
-"""ENG-85: the desktop launcher opens the app in its own browser window.
+"""The desktop launcher opens the app in its own browser window.
 
 Chrome / Edge / Brave / Chromium's ``--app=<url>`` gives a window with no tabs
-and no address bar; without one of them the launcher keeps the old behaviour,
-a tab in the default browser.
+and no address bar; without one of them the launcher falls back to a tab in the
+default browser.
 """
 
 from __future__ import annotations

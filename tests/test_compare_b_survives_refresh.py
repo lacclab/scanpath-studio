@@ -1,10 +1,10 @@
 """Scanpath B survives a refresh, as scanpath A does.
 
 A refresh is a new session, restored from the recovery cache. A's trial
-(`single_trial_id`) was in the cache; B's was not, so a refresh in Compare
-kept A and swapped B for the first candidate. B is remembered by identity
-(CMP-13's `_compare_selected_identity`) and, with its dataset (`cmp_dataset`),
-now goes into the cache too.
+(`single_trial_id`) goes into the cache, and so does B's: B is remembered by
+identity (`_compare_selected_identity`) together with its dataset
+(`cmp_dataset`), so a refresh in Compare keeps B rather than swapping it for
+the first candidate.
 """
 
 from __future__ import annotations
@@ -33,8 +33,8 @@ def test_bs_trial_and_dataset_round_trip_through_the_cache(tmp_path):
 
 
 def test_both_screens_round_trip_through_the_cache(tmp_path):
-    """On a trial recorded over several screens, a refresh kept A's and B's
-    trials but sent both back to screen 1."""
+    """On a trial recorded over several screens, a refresh keeps A's and B's
+    screens too, rather than sending both back to screen 1."""
     session = {SINGLE_SCREEN_ID: "page_3", SINGLE_COMPARE_SCREEN_ID: "question_7"}
     assert save_state(session, tmp_path)
     restored: dict = {}

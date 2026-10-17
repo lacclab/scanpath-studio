@@ -1,4 +1,4 @@
-"""BUG-6: the branded theme applies regardless of launch directory.
+"""The branded theme applies regardless of launch directory.
 
 Streamlit only auto-loads ``.streamlit/config.toml`` relative to the launch
 directory, so ``python -m scanpath_studio`` from outside ``app/`` misses it and
@@ -31,12 +31,12 @@ def test_config_toml_matches_theme_constants():
 
 
 def test_app_css_page_background_matches_theme_constants():
-    """UX-145: the opaque page-background token mirrors both theme backgrounds.
+    """The opaque page-background token mirrors both theme backgrounds.
 
     The sticky header bars (✏️ Edit dataset, the add-dataset wizard) must be
     opaque in whichever theme is active. Streamlit exposes no CSS variable for
-    that on the main page — the old ``var(--background-color, #fff)`` named one
-    that does not exist, so the fallback painted a white strip in dark mode —
+    that on the main page — ``var(--background-color, #fff)`` names one that
+    does not exist, so its fallback would paint a white strip in dark mode —
     so ``styles.py`` resolves it with ``light-dark()`` against the ``color-scheme``
     Streamlit sets on ``.stApp``. CSS can't import Python, so pin the two colours
     here to keep the sticky bars consistent with the page."""
@@ -96,8 +96,8 @@ def test_launch_app_respects_user_theme_override(monkeypatch):
 # --- The upload cap travels with the launch, like the theme -------------------
 # Same failure mode, different setting: `.streamlit/config.toml` is resolved
 # against the launch directory, so a pip-installed `scanpath-studio` started
-# from anywhere else fell back to Streamlit's 200 MB default and rejected any
-# table over it — a normal size for a real fixation report.
+# from anywhere else would fall back to Streamlit's 200 MB default and reject
+# any table over it — a normal size for a real fixation report.
 
 
 def test_config_toml_matches_the_upload_cap_constant():
@@ -136,7 +136,7 @@ def test_launch_app_respects_a_user_upload_cap_override(monkeypatch):
 
 
 def test_wordmark_has_a_transparent_dark_variant():
-    """#374 F37: no light tile behind the wordmark in dark mode.
+    """No light tile behind the wordmark in dark mode.
 
     Both images are transparent at the corners, and the dark variant is swapped
     in by CSS that follows the theme (``light-dark()``), with the OS preference

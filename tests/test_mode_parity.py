@@ -1,20 +1,20 @@
-"""VIZ-23 — the rail's settings must reach *all three* render paths.
+"""The rail's settings must reach *all three* render paths.
 
 The scanpath rail is one control set feeding three builders (static figure,
-animation, comparison). ``scanpath_studio/CLAUDE.md`` → *Which viz settings
-apply in which render path (VIZ-21)* is the map; this file is the executable
-half of it for the cells VIZ-23 turned from ❌ into ✅:
+animation, comparison). ``AGENTS.md`` → *Which viz settings apply in which
+render path* is the map; this file is the executable half of it for the
+settings that reach more than the static figure:
 
-- **drift correction** (PRE-3) is applied once, above the render-mode split, so
-  the two Drift-correction controls move fixations on the animation and the
+- **drift correction** is applied once, above the render-mode split, so the
+  two Drift-correction controls move fixations on the animation and the
   comparison figure too — not just the static plot;
-- the animation now takes the word-label / arrow / flag / colorbar options;
-- the comparison figure now takes the marker symbol, the critical-span text
+- the animation takes the word-label / arrow / flag / colorbar options;
+- the comparison figure takes the marker symbol, the critical-span text
   marking, the stimulus image and the colorbar styling.
 
 Every assertion is paired with a "correction off / setting at its default"
-counterpart, because backward compatibility is the hard constraint: an
-untouched control must reproduce exactly what it produced before.
+counterpart, because an untouched control must change nothing: the default
+figure is the hard constraint.
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ def _fixations() -> pd.DataFrame:
                     "text_id": "para",
                     "x": 125.0 + 100.0 * (word_id % 3) + bump,
                     # Off the line on purpose — this is the vertical drift the
-                    # PRE-3 algorithms exist to remove.
+                    # line-assignment algorithms exist to remove.
                     "y": line_y + DRIFT_OFFSET,
                     "duration_ms": 100.0 + 10.0 * order,
                     "timestamp_ms": 200.0 * (order - 1),
@@ -165,7 +165,7 @@ def quiet_chart(monkeypatch):
     """Swallow the true-scale HTML embed, so the two render helpers can be called
     outside a running Streamlit script."""
     monkeypatch.setattr(tabs, "_render_true_scale_chart", lambda *a, **k: None)
-    # The replay embeds its cached markup directly (PERF-16).
+    # The replay embeds its cached markup directly.
     monkeypatch.setattr(tabs, "_render_true_scale_plot", lambda *a, **k: None)
 
 
@@ -251,9 +251,9 @@ def _animate(viz: dict, monkeypatch, *, drift_corrected: bool = False, dual=Fals
         seen["_fixations"] = fixations
         return real(words, fixations, **kwargs)
 
-    # PERF-13 caches the build, so spy on the cached wrapper (bypassing the
+    # The build is cached, so spy on the cached wrapper (bypassing the
     # cache): a builder spy would see nothing on a hit from an earlier test.
-    # PERF-16's view cache sits in front of it, so empty that too.
+    # The view cache sits in front of it, so empty that too.
     monkeypatch.setattr(tabs, "_cached_scanpath_animation", spy)
     tabs._cached_replay_view.clear()
     frames = (
@@ -280,7 +280,8 @@ def _animate(viz: dict, monkeypatch, *, drift_corrected: bool = False, dual=Fals
 @pytest.mark.usefixtures("quiet_chart")
 class TestAnimationWiring:
     def test_defaults_reproduce_the_previous_replay(self, monkeypatch):
-        """Every VIZ-23 parameter must default to the pre-VIZ-23 behaviour."""
+        """Every option the animation shares with the static figure defaults
+        to off / the base style."""
         _, kwargs = _animate(
             _viz(critical_span_style="None", highlight_column=None), monkeypatch
         )
@@ -485,8 +486,8 @@ class TestComparisonWiring:
         assert "#abcdef" in list(labels[0].textfont.color)
 
     def test_per_scanpath_styles_still_beat_the_globals(self, monkeypatch):
-        """CMP overrides own colour/size/opacity — VIZ-23 must not take them
-        over by passing the global equivalents."""
+        """Compare's overrides own colour/size/opacity — the comparison wiring
+        must not take them over by passing the global equivalents."""
         viz = _viz(
             compare_style_a={"fix_color": "#ff0000", "opacity": 0.5},
             compare_style_b={"fix_color": "#00ff00", "opacity": 0.5},
@@ -524,7 +525,7 @@ class TestComparisonWiring:
 
 
 # -----------------------------------------------------------------------------
-# CMP-7 — the comparison heatmap, and the Fixations toggle that makes it legible
+# The comparison heatmap, and the Fixations toggle that makes it legible
 # -----------------------------------------------------------------------------
 
 
@@ -532,10 +533,10 @@ def _float_word_id_fixations() -> pd.DataFrame:
     """The fixation shape a real corpus has: ``word_id`` is a *float* column.
 
     A fixation that lands outside every box gets ``NaN``, so pandas types the
-    whole column float64 while the words table keeps int64 ``word_id``. That
-    dtype gap is what CMP-7's heatmap fell into — ``str(7)`` on one side against
-    ``str(7.0)`` on the other matched nothing, and every word came out at value
-    zero, i.e. no heatmap at all.
+    whole column float64 while the words table keeps int64 ``word_id``. A join
+    across that dtype gap — ``str(7)`` on one side against ``str(7.0)`` on the
+    other — matches nothing, and every word comes out at value zero, i.e. no
+    heatmap at all.
     """
     frame = _fixations()
     frame["word_id"] = frame["word_id"].astype(float)
@@ -585,7 +586,7 @@ class TestComparisonHeatmap:
         assert widths == {25.0}
 
     def test_fixations_off_leaves_the_heatmap_alone(self, monkeypatch):
-        """CMP-7: two full sets of markers bury the split boxes."""
+        """Two full sets of markers bury the split boxes."""
         on, _ = _compare(
             _viz(show_heatmap=True),
             monkeypatch,
@@ -652,7 +653,7 @@ class TestDriftCorrectionReachesEveryPath:
 
         monkeypatch.setattr(tabs, "_cached_scanpath_figure", static)
         monkeypatch.setattr(tabs, "_cached_scanpath_animation", anim)
-        # A PERF-16 view hit would never reach the spied replay cache.
+        # A view-cache hit would never reach the spied replay cache.
         tabs._cached_replay_view.clear()
         monkeypatch.setattr(tabs, "make_comparison_figure", compare)
         return seen
@@ -731,8 +732,8 @@ class TestDriftCorrectionReachesEveryPath:
             self._assert_snapped(_pair_words(cmp_words, participant, trial_id), new_ys)
 
     def test_no_algorithm_leaves_every_path_untouched(self, monkeypatch):
-        """The default. Each builder must see the very frame it saw before —
-        same values, in the same order."""
+        """The default. Each builder must see the loader's own frame — same
+        values, in the same order."""
         seen = self._spy(monkeypatch)
         at = AppTest.from_file(APP_SCRIPT)
         at.run(timeout=90)

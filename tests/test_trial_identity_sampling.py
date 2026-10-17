@@ -1,8 +1,8 @@
-"""VAL-7's identity check on a sample of trials (PERF-6).
+"""The trial-identity check runs on a sample of trials.
 
-The check runs on the *unfiltered* corpus every time a dataset loads — 4.1 s at
-OneStop scale (24,046 trials) to produce one warning line. It is a screen, not a
-census: a mapping that under-specifies does so systematically, so it shows up in
+The check runs on the *unfiltered* corpus every time a dataset loads — a full
+scan costs 4.1 s at OneStop scale (24,046 trials) to produce one warning line.
+It is a screen, not a census: a mapping that under-specifies does so systematically, so it shows up in
 any fair sample. The full scan stays available on demand.
 """
 

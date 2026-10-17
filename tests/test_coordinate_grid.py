@@ -1,4 +1,4 @@
-"""VIZ-34 monitor-pixel coordinate grid across every rendering surface."""
+"""Monitor-pixel coordinate grid across every rendering surface."""
 
 from __future__ import annotations
 

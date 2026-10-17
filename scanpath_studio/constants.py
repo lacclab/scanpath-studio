@@ -14,14 +14,14 @@ PACKAGE_NAME = "scanpath_studio"
 SAMPLE_INDEX = "sample_index"
 
 
-# --- PRE-21: features that are built but not fully integrated ----------------
-# Vertical drift correction (the PRE-3 port of Carr et al. 2021) and the NLD
-# similarity scoring under 🔬 Comparisons both work, and both are half-wired:
-# the similarity table still shows three metrics as "Not yet computed", and the
-# drift-correction subtab's follow-ups (PRE-9, PRE-10) are unfinished. Shipping
-# them visible invites users to lean on them, so ahead of publication they are
-# gated off — a **visibility gate, not a removal**: `alignment.py` and
-# `similarity.py` stay exactly where they are and stay reachable for us.
+# --- Experimental features ----------------------------------------------------
+# Features that are built but not yet validated or fully integrated are off
+# unless ``SCANPATH_EXPERIMENTAL`` is set: vertical drift correction (a port of
+# Carr et al. 2021's line-assignment algorithms) and the NLD similarity scoring
+# under 🔬 Comparisons both work, but the similarity table still shows three
+# metrics as "Not yet computed" and the Line assignment subtab is unfinished.
+# This is a **visibility gate, not a removal**: `alignment.py` and
+# `similarity.py` stay where they are and stay importable.
 #
 # Polarity is the opposite of `app.public_datasets_enabled`: these default
 # **off** and the env var turns them on. Read at *call time*, which is both what
@@ -31,9 +31,10 @@ EXPERIMENTAL_ENV_VAR = "SCANPATH_EXPERIMENTAL"
 
 
 def experimental_features_enabled() -> bool:
-    """Whether the not-fully-integrated features are exposed (PRE-21).
+    """Whether the experimental features are exposed.
 
-    Off unless ``SCANPATH_EXPERIMENTAL`` is set to something truthy.
+    Off unless ``SCANPATH_EXPERIMENTAL`` is set to something truthy (``1``,
+    ``true``, ``yes``, ``on``). Every gate below reads this one switch.
     """
     return os.environ.get(EXPERIMENTAL_ENV_VAR, "").strip().lower() in (
         "1",
@@ -44,116 +45,80 @@ def experimental_features_enabled() -> bool:
 
 
 def drift_correction_enabled() -> bool:
-    """Whether vertical drift correction / line assignment is exposed (PRE-21)."""
+    """Whether vertical drift correction / line assignment is exposed.
+
+    Turning it on adds the rail's drift-correction control, the Line
+    assignment subtab and `render`'s ``--drift-correction`` flag. Off unless
+    ``SCANPATH_EXPERIMENTAL`` is set: the algorithms work, but the subtab is
+    unfinished. While it is off, an API call that asks for drift correction
+    raises rather than returning uncorrected fixations.
+    """
     return experimental_features_enabled()
 
 
 def similarity_enabled() -> bool:
-    """Whether NLD scanpath-similarity scoring is exposed (PRE-21)."""
-    return experimental_features_enabled()
+    """Whether NLD scanpath-similarity scoring is exposed under 🔬 Comparisons.
 
-
-def multipleye_upload_enabled() -> bool:
-    """Whether the wizard's "Dataset format" choice + MultiplEYE upload branch
-    are exposed **in the app**, this release (UX-114).
-
-    Held back the same way PRE-22 holds back the preprocessing panel: the code
-    (`wizard._render_multipleye_upload`, the format `segmented_control`) stays
-    in place for a later revival — most of what it did by hand is now what the
-    generalized Generic wizard can do too (UX-113's filename-derive +
-    block-aware char-AOI aggregation), so it may shrink further rather than
-    simply come back — but this release ships with no format *choice* at all:
-    every upload goes through Generic. Scope is the **app** only;
-    `datasets.multipleye_frames_from_uploads`/`load_multipleye_uploads` are
-    untouched and still callable directly.
-    """
-    return experimental_features_enabled()
-
-
-def multipleye_enabled() -> bool:
-    """Whether the MultiplEYE corpus is offered, this release (DATA-54).
-
-    Held back for the beta: its data is not openly available yet, and the loader
-    was built and tested on one sample (Zurich Chinese). Off, the entry leaves
-    the public-dataset registry — so the data picker, the 🗂️ Data page, Compare's
-    second dataset and share links all stop offering it — and `render`'s
-    ``--source multipleye`` / ``--export`` / ``--no-question-screens`` flags are
-    hidden from ``--help``. Like PRE-22's gate, this hides rather than breaks:
-    those flags still parse, and `datasets.load_multipleye` is untouched, so a
-    script that already uses them keeps working.
-    """
-    return experimental_features_enabled()
-
-
-def benchmark_corpora_enabled() -> bool:
-    """Whether the harmonised benchmark corpora are offered, this release
-    (DATA-54, DATA-55).
-
-    A bundle can only be built with the EyeGenBench pipeline, which is not public
-    yet, and the corpora are unfinished work — the picker marks each one (WIP).
-    The app no longer discovers them at all (DATA-55: a corpus is listed only
-    once someone adds it, and the flow that adds one is DATA-56). Off, this also
-    keeps an added corpus out of `app.public_dataset_registry`, and hides
-    `render`'s ``--eyegenbench`` / ``--eyegenbench-dataset`` flags from
-    ``--help``. Hidden, not removed: those flags still parse, and
-    `eyegenbench.load_eyegenbench` is untouched.
+    Off unless ``SCANPATH_EXPERIMENTAL`` is set: NLD works, but three of the
+    table's four metrics are not computed yet.
     """
     return experimental_features_enabled()
 
 
 def preprocessing_enabled() -> bool:
-    """Whether the soft-exclusion / merge pipeline is exposed **in the app** (PRE-22).
+    """Whether the soft-exclusion / merge pipeline is exposed **in the app**.
 
-    The feature is finished and tested; it is held back from this release's UI
-    and picked up in the next one, so the same flag that carries PRE-21's
-    unfinished work carries it — one env var for "not in this release", one code
-    path, and no branch to rebase.
+    Turning it on adds the 🗂️ Data page's Preprocessing panel. Off unless
+    ``SCANPATH_EXPERIMENTAL`` is set: the pipeline is built and tested but not
+    yet validated by hand.
 
-    `api.preprocess_data` and `scanpath-studio analyze` are held back by
+    `api.preprocess_data` and `scanpath-studio analyze` are gated by
     `computed_measures_enabled` instead, which raises rather than hides.
     """
     return experimental_features_enabled()
 
 
 def computed_measures_enabled() -> bool:
-    """Whether the numbers Scanpath Studio works out itself are exposed, this release.
+    """Whether the numbers Scanpath Studio works out itself are exposed.
 
-    Held back until each is checked by hand: the per-word reading measures
-    (`api.compute_word_metrics`), the reader / trial summaries, the analysis
-    tables and `scanpath-studio analyze`, the export bundle's measure family,
-    and the Corpus Analysis views built on them (Reading summary, Progressive vs
-    regressive, Landing-position curve, Reader summary table). What stays is
-    everything that shows the dataset's own values. Unlike PRE-22's app-only
-    gate, the API raises and the CLI refuses: a script that gets no number is
-    better off than one that gets an unchecked one.
+    Off unless ``SCANPATH_EXPERIMENTAL`` is set, until each is validated by
+    hand: the per-word reading measures (`api.compute_word_metrics`), the
+    reader / trial summaries, the analysis tables and `scanpath-studio
+    analyze`, the export bundle's measure family, and the Corpus Analysis views
+    built on them (Reading summary, Progressive vs regressive, Landing-position
+    curve, Reader summary table). Everything that shows the dataset's own
+    values stays. Unlike the app-only gates, the API raises and the CLI
+    refuses: a script that gets no number is better off than one that gets an
+    unchecked one.
     """
     return experimental_features_enabled()
 
 
 def sentence_analysis_enabled() -> bool:
-    """Whether Corpus Analysis offers its **Per sentence** subtab (AN-33).
+    """Whether Corpus Analysis offers its **Per sentence** subtab.
 
-    Held back: it works its numbers out from the fixation table, while the rest
-    of the page shows only the measures the dataset brought (AN-32), so a
-    dataset with supplied measures and no fixations read as 0 ms and skipped.
-    It comes back once it is built on the supplied measures. Off, the subtab
-    is not drawn and its table is never computed; `preprocessing.sentence_measures`
-    is untouched (`api.analysis_tables` is held back by `computed_measures_enabled`).
+    Off unless ``SCANPATH_EXPERIMENTAL`` is set: it works its numbers out from
+    the fixation table, while the rest of the page shows only the measures the
+    dataset brought, so a dataset with supplied measures and no fixations reads
+    as 0 ms and skipped. Off, the subtab is not drawn and its table is never
+    computed; `preprocessing.sentence_measures` is untouched
+    (`api.analysis_tables` is gated by `computed_measures_enabled`).
     """
     return experimental_features_enabled()
 
 
 def derived_analysis_tables_enabled() -> bool:
     """Whether the 🗂️ Data page's "🧮 Derived analysis tables" section (Sentences
-    / Saccades / Trials / Readers / Characters) is exposed **in the app** (UX-126).
+    / Saccades / Trials / Readers / Characters) is exposed **in the app**.
 
-    Same gate, same reasoning as `preprocessing_enabled()`/`drift_correction_enabled()`:
-    the feature is finished and tested, held back for a later release. Off, the
-    section doesn't render *and* its backing computation (`tabs._c_derived_tables`
-    — full reading-measure + saccade/sentence/reader aggregation) never runs, not
-    just its display — a Data page rerun with the flag off does none of that work.
-    Scope is the **app** only: `preprocessing.py`'s own table builders are
-    untouched and still directly callable.
+    Off unless ``SCANPATH_EXPERIMENTAL`` is set, for the same reason as
+    `preprocessing_enabled()`: built and tested, not yet validated by hand.
+    Off, the section doesn't render *and* its backing computation
+    (`tabs._c_derived_tables` — full reading-measure + saccade/sentence/reader
+    aggregation) never runs, not just its display — a Data page rerun with the
+    flag off does none of that work. Scope is the **app** only:
+    `preprocessing.py`'s own table builders are untouched and still directly
+    callable.
     """
     return experimental_features_enabled()
 
@@ -164,9 +129,8 @@ def derived_analysis_tables_enabled() -> bool:
 FONT_FAMILY = "monospace"
 
 # The demo corpus' own presentation monitor, so a figure with no declared
-# canvas still renders true-to-scale. Sourced once, in
-# `eyegenbench_geometry.DISPLAY_SPECS["onestop"]` (Berzak et al. 2025, Sci Data
-# 12:1995 — Dell U2715H, 2560 px × 1440 px over 597 mm × 336 mm).
+# canvas still renders true-to-scale. Sourced from Berzak et al. 2025, Sci Data
+# 12:1995 — Dell U2715H, 2560 px × 1440 px over 597 mm × 336 mm.
 DEFAULT_FIGURE_SIZE = (2560, 1440)
 
 # Reading text is drawn true-to-scale: one line of text fills ``1/line_spacing``
@@ -212,8 +176,8 @@ DEFAULT_MARKER_SIZE_RANGE = (8, 24)
 # How fixation duration maps onto that size range. The three *fixed* scales map
 # one duration range (ms, below) onto it for every figure, so a 200 ms fixation
 # is the same size in any trial, comparison side, replay or export — EyeLink
-# Data Viewer's convention. "relative" is the original behaviour: each figure
-# spans its own shortest-to-longest duration, so sizes only compare within it.
+# Data Viewer's convention. With "relative", each figure spans its own
+# shortest-to-longest duration, so sizes only compare within it.
 # √ is the default because a marker's size is its diameter: √duration makes the
 # marker's area grow in step with duration.
 MARKER_SIZE_SCALES = {
@@ -236,19 +200,19 @@ MARKER_DURATION_BOUNDS = (10, 3000)
 DEFAULT_ORDER_FONT_COLOR = "#111111"
 
 WORD_BOX_COLOR = "#6c757d"
-#: The outline's opacity; 1 draws it solid, as before the setting existed.
+#: The outline's opacity; 1 draws it solid.
 WORD_BOX_LINE_OPACITY = 1.0
 #: The word boxes' fill, drawn translucent (``WORD_BOX_FILL_OPACITY``) so it
 #: tints the interest area without hiding the text, fixations or image under it.
 WORD_BOX_FILL_COLOR = "#646464"
 WORD_BOX_FILL_OPACITY = 0.05
-# VIZ-32: black, matching the colourblind-safe default palette.
+# Black, matching the colourblind-safe default palette.
 WORD_LABEL_COLOR = "#000000"
 # Default colour for highlighted ("Mark text") reading text — vermillion,
 # matching the colourblind-safe default palette. The visualization controls
 # expose a picker that overrides it per figure.
 HIGHLIGHTED_TEXT_COLOR = "#D55E00"
-# VIZ-32: reddish purple, matching the colourblind-safe default palette.
+# Reddish purple, matching the colourblind-safe default palette.
 SACCADE_COLOR = "#CC79A7"
 TRENDLINE_COLOR = "#dc3545"
 CURRENT_FIX_COLOR = "rgba(255, 127, 14, 0.6)"
@@ -262,16 +226,15 @@ def compare_palette_color(idx: int) -> str:
     truth shared by the per-scanpath style controls (``controls._seed_compare_styles``
     / ``_collect_compare_styles``) and the figure builders
     (``plots._comparison_scanpath_style``), so the swatch shown in the controls can
-    never drift from what's drawn (CMP-3)."""
+    never drift from what's drawn."""
     return COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)]
 
 
 #: Each comparison scanpath's default marker alpha, shared the same way: the
 #: rail seeds ``cmp{idx}_opacity`` from it (``controls._seed_compare_styles``)
-#: and the builder falls back to it (``plots._comparison_scanpath_style``).
-#: CMP-20: the builder's own 1.0 was what every headless ``compare_scanpaths`` /
-#: ``render --compare-with`` drew, so the default comparison differed from the
-#: app's. 0.7 matches the single-trial default, so overlaps show through.
+#: and the builder falls back to it (``plots._comparison_scanpath_style``), so
+#: a headless ``compare_scanpaths`` / ``render --compare-with`` draws the app's
+#: default. 0.7 matches the single-trial default, so overlaps show through.
 COMPARE_FIXATION_OPACITY = 0.7
 
 
@@ -289,13 +252,13 @@ SACCADE_WIDTH_BOUNDS = (0.5, 10.0)
 #: The Interpolated heatmap's fixed blur σ (px): the box's limits and default.
 HEATMAP_SIGMA_BOUNDS = (1.0, 500.0)
 DEFAULT_HEATMAP_SIGMA_PX = 20.0
-#: #422 — Snap to line: where on its text line a snapped fixation sits, in
-#: line heights from the line's middle (negative = up). −0.5 is the line's top
-#: edge, where VIZ-9's snap above the word drew it; the default keeps that look.
+#: Snap to line: where on its text line a snapped fixation sits, in line
+#: heights from the line's middle (negative = up). The default, −0.5, is the
+#: line's top edge, just above the word.
 DEFAULT_SNAP_POSITION = -0.5
 SNAP_POSITION_BOUNDS = (-2.0, 2.0)
 
-# VIZ-8 · colour saccades by reading type. Each saccade (the segment from one
+# Colour saccades by reading type. Each saccade (the segment from one
 # fixation to the next) is classified into one of these reading-schematic
 # classes by ``measures.classify_saccades`` and — in the "By type" colour mode —
 # drawn as its own sub-trace with a small legend. ``other`` is the catch-all for
@@ -318,7 +281,7 @@ SACCADE_CLASS_LABELS = {
     "regression": "Regression",
     "other": "Other",
 }
-# VIZ-32: Okabe-Ito, matching the colourblind-safe default palette.
+# Okabe-Ito, matching the colourblind-safe default palette.
 SACCADE_CLASS_COLORS = {
     "forward": "#009E73",  # bluish green — normal left-to-right progression
     "skip": "#56B4E9",  # sky blue — jumps over one or more words
@@ -331,12 +294,12 @@ SACCADE_CLASS_COLORS = {
 # fixed grey).
 SACCADE_CLASS_EDITABLE = SACCADE_CLASS_ORDER[:-1]
 
-# VIZ-19 · saccade colour modes. The five-way "By type" split is more than most
+# Saccade colour modes. The five-way "By type" split is more than most
 # figures need, so there's a middle option between one flat colour and the full
 # reading-class breakdown: "Forward / regression", the distinction almost every
 # reading paper actually draws. It reuses the same per-class machinery — the
-# classes are just folded into two buckets before the segments are built, so the
-# colour pickers, the legend toggle and every surface stay as they are.
+# classes are just folded into two buckets before the segments are built, so it
+# shares the colour pickers, the legend toggle and every surface.
 SACCADE_COLOR_MODES = ("Uniform", "Forward / regression", "By type")
 SACCADE_DIRECTION_CLASSES = ("forward", "regression")
 # reading class → the bucket it is drawn in under "Forward / regression".
@@ -356,10 +319,10 @@ SACCADE_DIRECTION_LABELS = {
     "other": "Other",
 }
 
-# VIZ-15 · fixation marker shape. Plotly symbol name → the label shown in the
-# picker. Shape is a *second* encoding channel, and unlike hue it survives
-# greyscale printing — so it pairs with VIZ-17 (colour freed up once it stops
-# duplicating size) and VIZ-18 (print / colourblind palettes).
+# Fixation marker shape. Plotly symbol name → the label shown in the picker.
+# Shape is a *second* encoding channel, and unlike hue it survives greyscale
+# printing — so it pairs with the flat default colour (below) and the print /
+# colourblind palettes.
 FIXATION_SYMBOLS = {
     "circle": "● Circle",
     "square": "■ Square",
@@ -382,13 +345,13 @@ DEFAULT_FIXATION_SYMBOL = "circle"
 FIXATION_GLYPH_SYMBOLS = {"heart": "♥"}
 FIXATION_GLYPH_SIZE_SCALE = 1.8
 
-# VIZ-17 · the "Color fixations by" option meaning *don't* map a variable to hue.
+# The "Color fixations by" option meaning *don't* map a variable to hue.
 # Marker size already encodes fixation duration, so colouring by duration too
 # double-encodes one variable and spends the colour channel on nothing. The
 # default is therefore one flat colour, and colour-by is an explicit opt-in for a
 # *different* variable (surprisal, frequency, line, pass index).
 UNIFORM_COLOR_FIELD = "(uniform)"
-# VIZ-32: blue, matching the colourblind-safe default palette.
+# Blue, matching the colourblind-safe default palette.
 DEFAULT_FIXATION_COLOR = "#0072B2"
 
 # Outline width (px) for hollow (outline-only) fixation markers.
@@ -397,8 +360,9 @@ HOLLOW_OUTLINE_WIDTH = 2.0
 # Distinct mark for fixations that fall outside every word box ("out of text").
 OUT_OF_TEXT_COLOR = "#d62728"  # red
 
-# Plot background. Default white; some analyses prefer a neutral gray.
-# A "Custom…" entry in the rail reveals a free color picker.
+# Plot background. Default white; some analyses prefer a neutral gray. The
+# rail's colour swatch takes any colour; one that matches no preset is stored
+# as *Custom…*.
 DEFAULT_BACKGROUND_COLOR = "#ffffff"
 BACKGROUND_PRESETS = {
     "White": "#ffffff",
@@ -411,14 +375,14 @@ BACKGROUND_PRESETS = {
 #: least this many screen px (`plots._compute_axis_ranges`).
 CANVAS_PAD_MIN_PX = 20.0
 CANVAS_PAD_FRACTION = 0.05
-#: #422 — Crop to data's own margin, in screen px: where the box starts once
+#: Crop to data's own margin, in screen px: where the box starts once
 #: *Auto* is unticked, and the range a link or settings file is held to.
 DEFAULT_CROP_MARGIN_PX = 50.0
 CROP_MARGIN_BOUNDS = (0.0, 2000.0)
 
-# --- #422 · design choices that used to be fixed --------------------------------
-# Each default is the value the figure always drew with; each `*_BOUNDS` is the
-# range the rail, a link, a settings file and `render` hold it to.
+# --- Figure design settings ----------------------------------------------------
+# Each `*_BOUNDS` is the range the rail, a link, a settings file and `render`
+# hold its setting to.
 #: The heatmap's opacity once set by hand; unset, each style keeps its own
 #: (`plots.HEATMAP_STYLE_OPACITY`). The rail's box starts from Word boxes'.
 DEFAULT_HEATMAP_OPACITY = 0.5
@@ -450,7 +414,7 @@ DEFAULT_COLORBAR_LENGTH = 0.33
 COLORBAR_LENGTH_BOUNDS = (0.1, 1.0)
 
 
-# --- BUG-101 · the Plotly config every figure is drawn with --------------------
+# --- The Plotly config every figure is drawn with ------------------------------
 # plotly.js 3 defaults `showSendToCloud` to true: the modebar's "Share chart…"
 # button uploads the whole figure — words, coordinates, hover fields — to
 # cloud.plotly.com. Nothing in Scanpath Studio sends data anywhere unasked, and
@@ -460,7 +424,7 @@ COLORBAR_LENGTH_BOUNDS = (0.1, 1.0)
 PLOTLY_CONFIG: dict = {"showSendToCloud": False}
 
 
-# --- VIZ-18 · selectable palettes --------------------------------------------
+# --- Selectable palettes -----------------------------------------------------
 # These figures don't only get looked at on the screen they were made on: they go
 # into papers (printed, sometimes in black & white) and are read by colourblind
 # viewers. One palette can't serve all of that, so the colour defaults are a
@@ -476,13 +440,13 @@ PLOTLY_CONFIG: dict = {"showSendToCloud": False}
 #   * hues distinguishable under deuteranopia/protanopia (no red-vs-green pair
 #     carrying meaning on its own), and
 #   * **lightness** ordered as well as hue, so the figure still reads after a
-#     greyscale conversion. Marker shape (VIZ-15) and the two-way saccade mode
-#     (VIZ-19) are the redundant channels when colour alone can't carry it.
+#     greyscale conversion. Marker shape and the two-way saccade mode are the
+#     redundant channels when colour alone can't carry it.
 PALETTES: dict[str, dict] = {
     # Okabe & Ito's eight-colour set — the de-facto standard for qualitative
     # colourblind-safe encoding — plus single-hue Blues scales, which vary in
-    # lightness only and so survive every common deficiency. VIZ-32: this is the
-    # default a fresh session opens with, not just an opt-in choice.
+    # lightness only and so survive every common deficiency. This is the
+    # default a fresh session opens with.
     "Default (colourblind-safe)": {
         "description": "Okabe–Ito hues + Blues scales; safe for deuteran-, "
         "protan- and tritanopia.",
@@ -540,7 +504,7 @@ PALETTES: dict[str, dict] = {
     },
 }
 DEFAULT_PALETTE = "Default (colourblind-safe)"
-#: #374: the names a person reads. The keys above are stored values (settings
+#: The names a person reads. The keys above are stored values (settings
 #: files, Share links, ``palette=``) and keep their spelling; every place that
 #: shows a palette shows it through `palette_label`.
 PALETTE_LABELS = {
@@ -575,7 +539,7 @@ def palette_settings(name: str) -> dict:
     return settings
 
 
-# --- App theme (BUG-6) -------------------------------------------------------
+# --- App theme -----------------------------------------------------------------
 # The branded look. Streamlit only auto-loads ``.streamlit/config.toml`` relative
 # to the *launch* directory, so ``streamlit run streamlit_app.py`` from ``app/``
 # (Streamlit Cloud) picks it up but ``python -m scanpath_studio`` from anywhere
@@ -592,10 +556,9 @@ APP_THEME = {
     "textColor": "#212529",
     "font": "sans-serif",
     # No built-in gap under the last element (Streamlit's default is ~10rem of
-    # empty scroll). Streamlit 1.66's own setting, replacing the
-    # `padding-bottom: 0 !important` that styles.py used to carry. Its top
-    # counterpart, `paddingTop`, is measured from *below* the header, so it
-    # cannot express styles.py's tighter `padding-top` — that one stays CSS.
+    # empty scroll), through Streamlit's own setting. Its top counterpart,
+    # `paddingTop`, is measured from *below* the header, so it cannot express
+    # styles.py's tighter `padding-top` — that one is CSS.
     "paddingBottom": "0",
 }
 # Dark-variant overrides ([theme.dark] in config.toml). Users switch via the ☰
@@ -613,13 +576,13 @@ APP_THEME_DARK = {
 #: above that. Kept in sync with ``.streamlit/config.toml``'s
 #: ``server.maxUploadSize``; `cli._max_upload_cli_flags` passes it explicitly
 #: because that config file is resolved against the *launch* directory, so a
-#: pip-installed console script started from anywhere else silently fell back to
-#: the 200 MB default. This is the transport limit only — what a machine can
+#: pip-installed console script started from anywhere else would silently fall
+#: back to the 200 MB default. This is the transport limit only — what a machine can
 #: actually parse is a separate question, which `data.UPLOAD_SIZE_WARN_BYTES`
 #: answers for the memory-capped hosted demo.
 UPLOAD_MAX_SIZE_MB = 5000
 
-#: ENG-68: a deployment's own, lower per-file ceiling, in MB — set on the hosted
+#: A deployment's own, lower per-file ceiling, in MB — set on the hosted
 #: demo (its Community Cloud secrets, which Streamlit loads into the environment
 #: at startup) so a visitor cannot send a multi-GB file at a ~1 GB container,
 #: while every other install keeps :data:`UPLOAD_MAX_SIZE_MB`.
@@ -628,7 +591,7 @@ UPLOAD_LIMIT_ENV = "SCANPATH_MAX_UPLOAD_MB"
 
 #: The file types every table upload box accepts (``zip`` wraps any of the
 #: others; ``txt`` is a tab-separated report; ``xls`` is a legacy workbook or
-#: EyeLink Data Viewer's text-in-an-``.xls`` export, DATA-53 / BUG-55).
+#: EyeLink Data Viewer's text-in-an-``.xls`` export).
 UPLOAD_FILE_TYPES = ("csv", "tsv", "txt", "parquet", "feather", "zip", "xlsx", "xls")
 
 
@@ -636,7 +599,7 @@ def configured_upload_limit_mb() -> int | None:
     """``SCANPATH_MAX_UPLOAD_MB`` as a positive whole number of MB, else ``None``.
 
     The raw deployment setting, before it meets the server's own limit — what
-    ``scanpath-studio run`` hands the server (ENG-68).
+    ``scanpath-studio run`` hands the server.
     """
     raw = os.environ.get(UPLOAD_LIMIT_ENV, "").strip()
     try:
@@ -686,8 +649,8 @@ def upload_identity(uploaded) -> tuple[str | None, str]:
     while a *fresh* upload applies again. The ``file_id`` Streamlit gives each
     upload event makes re-uploading the very same file count as fresh; the
     content hash makes a different file count as fresh even where no
-    ``file_id`` exists. Name and size alone did neither: two files can share
-    both.
+    ``file_id`` exists. Name and size alone would do neither: two files can
+    share both.
     """
     import hashlib
 
@@ -701,7 +664,7 @@ CITATION = {
         "David R. Reich, Lena Jäger, Yevgeni Berzak"
     ),
     "title": "Scanpath Studio",
-    # ENG-75: the Zenodo *concept* DOI — resolves to the latest archived
+    # The Zenodo *concept* DOI — resolves to the latest archived
     # release. Kept equal to CITATION.cff's `doi` by tests/test_citation.py.
     "doi": "10.5281/zenodo.22933884",
     "url": "https://github.com/lacclab/scanpath-studio",
@@ -726,8 +689,8 @@ CITATION = {
 
 
 # --- Data-source identity + main view labels --------------------------------
-# Moved out of app.py so url_state.py / wizard.py can import them without a
-# cycle (app.py re-imports them for its own use and for tests).
+# Here rather than in app.py so url_state.py / wizard.py can import them without
+# a cycle (app.py re-imports them for its own use and for tests).
 UPLOAD_CHOICE = "Upload tables"
 AUTHOR_CHOICE = "Author a scanpath"
 MANUAL_SAMPLE_CHOICE = "Synthetic sample"
@@ -735,115 +698,17 @@ DEMO_CHOICE = "Bundled Demo"
 SYNTHETIC_CHOICE = "Synthetic test trial"
 PUBLIC_DATASETS_CHOICE = "Public datasets"
 POTEC_DEFAULT_DIR = "data/PoTeC"
-EYEGENBENCH_DEFAULT_DIR = "data/EyeGenBench"
-# DATA-27 (Task 11R): every prepared benchmark corpus is its own top-level entry
-# in the flat data-source picker, exactly like PoTeC / MultiplEYE / OneStop —
-# there is no "EyeGenBench" source fronting them. **"EyeGenBench" is provenance,
-# not a source**: it names the pipeline that harmonises the corpora and is being
-# extracted into its own repository, so it appears in descriptions and help
-# strings only — never in an entry label, which is built from the corpus'
-# manifest name (`app.py`).
-# The suffix that distinguishes a harmonised corpus from a *native* entry for the
-# same corpus (PoTeC, OneStop ship both ways). Applied by property — the
-# harmonised copy is re-derived and its geometry may be weaker — never by vendor
-# name; see consequence 1 above.
-BENCHMARK_SHORT_SUFFIX = " (harmonised benchmark)"
-# The registry-key suffix. Keys must be unique across the whole registry, and a
-# native entry's key is `"<Corpus> — <full name>"`, so this shape can't collide.
-BENCHMARK_LABEL_SUFFIX = " — harmonised benchmark corpus"
-# DATA-27 ships to main unfinished, so every harmonised corpus wears this in the
-# source picker. It is **display only** — appended by `app._entry_label` at
-# render time, never stored on the entry. Putting it on the registry key or on
-# `short` would change the picker's stored `data_source_choice` value and (for a
-# built-in) the `?corpus=` slug, so removing it later would break links and saved
-# configs written while it was up; as a formatting step it costs one line to
-# delete. Nothing derives identity from it.
-BENCHMARK_WIP_SUFFIX = " (WIP)"
-
-# DATA-27 R35: a benchmark manifest records `language` as an **ISO 639-1 code**
-# ('zh', 'da', 'en', …), not a name, and the picker shows it to a reader. A small
-# explicit table beats a dependency for a field this narrow; unknown codes fall
-# back to the code itself (never "Unknown" — the code is real information, and
-# inventing a placeholder for it loses that).
-LANGUAGE_NAMES = {
-    "ar": "Arabic",
-    "bg": "Bulgarian",
-    "ca": "Catalan",
-    "cs": "Czech",
-    "da": "Danish",
-    "de": "German",
-    "el": "Greek",
-    "en": "English",
-    "es": "Spanish",
-    "et": "Estonian",
-    "eu": "Basque",
-    "fa": "Persian",
-    "fi": "Finnish",
-    "fr": "French",
-    "ga": "Irish",
-    "he": "Hebrew",
-    "hi": "Hindi",
-    "hr": "Croatian",
-    "hu": "Hungarian",
-    "id": "Indonesian",
-    "is": "Icelandic",
-    "it": "Italian",
-    "ja": "Japanese",
-    "ko": "Korean",
-    "lt": "Lithuanian",
-    "lv": "Latvian",
-    "mk": "Macedonian",
-    "ml": "Malayalam",
-    "nl": "Dutch",
-    "no": "Norwegian",
-    "pl": "Polish",
-    "pt": "Portuguese",
-    "ro": "Romanian",
-    "ru": "Russian",
-    "sk": "Slovak",
-    "sl": "Slovenian",
-    "sq": "Albanian",
-    "sr": "Serbian",
-    "sv": "Swedish",
-    "ta": "Tamil",
-    "th": "Thai",
-    "tr": "Turkish",
-    "uk": "Ukrainian",
-    "ur": "Urdu",
-    "vi": "Vietnamese",
-    "zh": "Chinese",
-}
-
-
-def language_display(value) -> str:
-    """An ISO language code (or comma-joined list of them) as display names.
-
-    A multilingual corpus records several codes in one field (`"en,de,ru"` — MECO,
-    celer), so each part is mapped and the list re-joined. An unrecognised code
-    renders as itself: it still identifies the language to anyone who knows it,
-    which "Unknown" does not. A blank/absent value gives ``""`` so the caller can
-    drop the caption rather than print an empty label.
-    """
-    text = str(value or "").strip()
-    if not text:
-        return ""
-    parts = [part.strip() for part in text.split(",") if part.strip()]
-    return ", ".join(LANGUAGE_NAMES.get(part.lower(), part) for part in parts)
-
-
-MULTIPLEYE_DEFAULT_DIR = "data/MultiplEYE_ZH_CH_Zurich_1_2025"
 ONESTOP_CHOICE = "OneStop server bundle"
 # Public OneStop (OSF download-on-demand) — distinct from the env-var
-# ONESTOP_CHOICE server bundle. DATA-63: each reading regime is its own dataset
-# in the flat data-source picker, holding every part of that regime; these are
-# their registry labels. Named constants (not inline strings) so the deep-link /
+# ONESTOP_CHOICE server bundle. Each reading regime is its own dataset in the
+# flat data-source picker, holding every part of that regime; these are their
+# registry labels. Named constants (not inline strings) so the deep-link /
 # Share contract in url_state.py and compare_source.py can reference them
-# without importing app.py's PUBLIC_DATASET_REGISTRY (DATA-3: shareable).
+# without importing app.py's PUBLIC_DATASET_REGISTRY.
 ONESTOP_PUBLIC_DEFAULT_DIR = "data/OneStop"
 # Default folder for the lacclab OneStop variant (a lab-processed local export;
-# superset schema, no download). Blank: ENG-60 — it was one maintainer's own
-# OneDrive path, prefilled into the Data directory box for every user who picked
-# the option. Set `ONESTOP_LACCLAB_DIR`, or type the path on the 🗂️ Data page.
+# superset schema, no download). Blank, since there is no path that holds for
+# every user: set `ONESTOP_LACCLAB_DIR`, or type the path on the 🗂️ Data page.
 ONESTOP_LACCLAB_DEFAULT_DIR = ""
 ONESTOP_REGIME_LABELS = {
     "ordinary": "Ordinary reading",
@@ -851,16 +716,16 @@ ONESTOP_REGIME_LABELS = {
     "repeated": "Repeated reading",
     "information_seeking_repeated": "Information seeking (repeated)",
 }
-#: DATA-63 — regime → the registry label of that regime's dataset.
+#: Regime → the registry label of that regime's dataset.
 ONESTOP_REGIME_CHOICES = {
     regime: f"OneStop — {label}" for regime, label in ONESTOP_REGIME_LABELS.items()
 }
 
 
-#: DATA-63 — each regime dataset's ``?source=`` token. Its own per regime,
-#: because the token also names Compare's dataset B (``cmp_source``), which
-#: carries no regime of its own. The DATA-3 ``onestop_public`` token stays
-#: readable: with its ``onestop_regime`` it names one of these four.
+#: Each regime dataset's ``?source=`` token. Its own per regime, because the
+#: token also names Compare's dataset B (``cmp_source``), which carries no
+#: regime of its own. Older links' ``onestop_public`` token is still read:
+#: with its ``onestop_regime`` it names one of these four.
 ONESTOP_REGIME_SOURCE_TOKENS = {
     regime: f"onestop_{regime}" for regime in ONESTOP_REGIME_LABELS
 }
@@ -890,30 +755,21 @@ ONESTOP_VARIANT_LABELS = {
     "public": "Public (OSF download)",
     "lacclab": "LaCC lab (local export)",
 }
-MULTIPLEYE_BUNDLE_CHOICE = "MultiplEYE server bundle"
-# Default dir for the MultiplEYE *server bundle* (per-session parquet shards
-# under `<dir>/scanpath/`), overridable via the `MULTIPLEYE_DATA_DIR` env var.
-# Empty default so the source only appears when the env var is set (like the
-# OneStop server bundle). Distinct from MULTIPLEYE_DEFAULT_DIR above, which is
-# the public-corpus loader's tree.
-MULTIPLEYE_BUNDLE_DEFAULT_DIR = ""
 _VIEW_SCANPATH = "Scanpath Visualization"
 _VIEW_CORPUS = "Corpus Analysis"
-# DATA-26: the third top-level view — everything about the dataset *itself*
-# (source, location, column mapping, contents, recording setup, preprocessing),
-# which used to be split between the ⚙️ Configure / 🧹 Preprocessing menu
-# popovers and a 🔎 Data Inspection subtab buried in the Scanpath view.
+# The third top-level view — everything about the dataset *itself* (source,
+# location, column mapping, contents, recording setup, preprocessing).
 _VIEW_DATA = "Data"
 _MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA]
 
-#: DATA-32 — the dataset table's remembered headline counts, `{token: {...}}`.
+#: The dataset table's remembered headline counts, `{token: {...}}`.
 #: A session-state key that also travels in the recovery cache's manifest, so it
 #: lives here rather than in `app`: `persistence` writes it and `app` fills it,
 #: and `persistence` cannot import `app` (that is the cycle `app` already
 #: avoids by importing `persistence` one way).
 DATASET_COUNTS_STORE_KEY = "_dataset_counts_store"
 
-#: UX-174 r2 — ``{dataset token: description}``, every description the user
+#: ``{dataset token: description}``, every description the user
 #: wrote (on the add wizard or ✏️ Edit dataset), for any kind of dataset. One
 #: small dict persisted as a recovery-cache session key, *not* a field on an
 #: upload's ``_datasets`` entry: every non-frame field there is part of the
@@ -921,7 +777,7 @@ DATASET_COUNTS_STORE_KEY = "_dataset_counts_store"
 #: upload's Parquet files. Here for the same import-cycle reason as above.
 DATASET_DESCRIPTIONS_KEY = "_dataset_descriptions"
 
-#: #417 — ``{dataset token: {"folder": str, "pattern": str}}``, the local
+#: ``{dataset token: {"folder": str, "pattern": str}}``, the local
 #: folder of stimulus images each dataset was pointed at (the add screen's and
 #: ✏️ Edit dataset's *Stimulus images*), for any kind of dataset. Kept beside
 #: the store like the descriptions, for the same reason. A machine-local path,
@@ -939,8 +795,9 @@ DEFAULT_STIMULUS_IMAGE_PATTERN = "{text_id}.png"
 DATASET_SETUP_OVERRIDES_KEY = "_dataset_setup_overrides"
 #: Which dataset's override the ``global_*`` setup keys hold now, and what they
 #: held before it was applied — put back when that dataset is left or its
-#: override is reset (the shape of BUG-50's font snap). Both persisted, so a
-#: relaunch onto the dataset does not stash the override as its own "before".
+#: override is reset (the same stash-and-restore shape as the font snap). Both
+#: persisted, so a relaunch onto the dataset does not stash the override as its
+#: own "before".
 SETUP_OVERRIDE_FOR_KEY = "_setup_override_for"
 SETUP_OVERRIDE_RESTORE_KEY = "_setup_override_restore"
 #: The ``global_*`` keys an override writes (and its restore puts back).
@@ -957,15 +814,15 @@ SETUP_OVERRIDE_SESSION_KEYS = (
     "global_scale_text_to_boxes",
 )
 
-#: UX-184 — the folder every public corpus downloads into, each in a subfolder
+#: The folder every public corpus downloads into, each in a subfolder
 #: (``<folder>/PoTeC``), set on the 🗂️ Data page. A recovery-cache session key
 #: so the choice survives a restart; never in a link, since it is a local path
 #: (see `session_keys.PARAM_CORPUS`). Unset, `DOWNLOAD_DIR_ENV` decides, then
-#: the checkout's ``data/`` or the per-user data home (ENG-59).
+#: the checkout's ``data/`` or the per-user data home.
 DOWNLOAD_DIR_KEY = "download_dir"
 DOWNLOAD_DIR_ENV = "SCANPATH_STUDIO_DOWNLOAD_DIR"
 
-#: VIZ-45 — the raw-gaze layer's per-dataset default (`app.seed_raw_gaze_default`):
+#: The raw-gaze layer's per-dataset default (`app.seed_raw_gaze_default`):
 #: the dataset it was last decided for, and the value that decision overwrote.
 #: Recovery-cache session keys, so a relaunch onto the same dataset does not
 #: decide again over the user's own choice; here for the import-cycle reason
@@ -976,8 +833,8 @@ RAW_GAZE_SNAP_RESTORE_KEY = "_raw_gaze_snap_restore"
 #: one decided while the link was on the URL. Session-only: a link is a visit.
 RAW_GAZE_LINK_FOR_KEY = "_raw_gaze_link_for"
 
-#: DATA-35 — "the ✏️ Edit dataset screen is open". The Data page is two screens
-#: now: the **overview** (the dataset table + what's in the open dataset) and the
+#: "The ✏️ Edit dataset screen is open". The Data page is two screens: the
+#: **overview** (the dataset table + what's in the open dataset) and the
 #: **editor** (everything that configures it — source options and location,
 #: column mapping, recording setup, trial identity, stimulus images, the two
 #: metadata tables, preprocessing). Both are built every run and switched by key,
@@ -989,92 +846,79 @@ DATA_OVERVIEW_KEY = "data_overview"
 DATA_EDITOR_KEY = "data_dataset_editor"
 DATA_EDITOR_OFFSCREEN_KEY = "data_dataset_editor_offscreen"
 
-# DATA-26: the two keys the Data page's outer container is built with — visible
-# when that view is active, off-screen otherwise.
+# The two keys the Data page's outer container is built with — visible when
+# that view is active, off-screen otherwise.
 #
 # The setup widgets (the loaders' directory input and ⬇ Download button, the
 # source options, the column-mapping selectboxes) *drive* `prepare_data` on
-# every rerun, and Streamlit drops the key of a widget that did not render. The
-# menu popovers they used to live in executed every run for exactly that reason;
-# a page body only executes while its view is selected. So the page is rendered
-# every run either way and simply hidden — `styles.py` gives the off-screen key
-# `display: none` — which keeps this a re-host rather than a rewrite of every
-# loader into a render/resolve pair.
+# every rerun, and Streamlit drops the key of a widget that did not render. A
+# page body would only execute while its view is selected, so the page is
+# rendered every run either way and simply hidden — `styles.py` gives the
+# off-screen key `display: none` — rather than splitting every loader into a
+# render/resolve pair.
 DATA_PAGE_KEY = "data_setup_page"
 DATA_PAGE_OFFSCREEN_KEY = "data_setup_page_offscreen"
 
-#: BUG-31 — the view the user tried to reach while the add-dataset wizard was
+#: The view the user tried to reach while the add-dataset wizard was
 #: open. `app.main` holds them on the 🗂️ Data page and the wizard asks whether to
 #: discard the setup; this remembers where they were headed so *Discard and
 #: leave* can finish the trip. Session state only, never a wire format.
 WIZARD_LEAVE_KEY = "_wizard_leave_requested"
 
-#: BUG-31 — the view the user answered *Keep setting up* for. The prompt is
+#: The view the user answered *Keep setting up* for. The prompt is
 #: suppressed while the nav sits on exactly that view, so choosing to stay does
 #: not re-ask on every rerun; clicking a *different* view asks again. Session
 #: state only, never a wire format.
 WIZARD_STAY_KEY = "_wizard_leave_acknowledged"
 
-#: UX-54 — set by the dataset table's ✏️ Edit button to the dataset it opened, so
+#: Set by the dataset table's ✏️ Edit button to the dataset it opened, so
 #: the Column mapping section below can say that is why the page changed under
 #: the user. Read once and cleared; session state only, never a wire format.
 FOCUS_MAPPING_KEY = "_focus_column_mapping"
 
-# UX-47: ONE column grid for every control row stacked above the plot — the
-# Narrow-by row, the trial picker, the multipart screen navigator, the chip
-# strip, and (in Compare mode) the second dataset's picker and its own Narrow-by
-# row. Three tracks: **pick** (the row's own dropdown), **scrub** (the wide
-# middle — a slider, a pair of multiselects, the chips), **act** (the right-hand
-# `railbtn_*` pills, which `styles.py` packs flush right).
+# ONE column grid for every control row stacked above the plot — A's trial row
+# and, in Compare mode, B's (plus the page skeleton that stands in for them while
+# loading). Four tracks: **dataset** (the dataset picker and its + menu),
+# **trial** (the row's own dropdown), **scrub** (the wide middle — the trial
+# slider), **actions** (the right-hand `railbtn_*` pills, which `styles.py`
+# packs flush right; the filters are one icon there).
 #
-# It is a shared constant rather than a repeated literal because that is the
-# whole feature: the rows are built in three functions across two modules, and
-# each of them owning its own weights is exactly how they drifted apart — the
-# source dropdown ended 50 px short of the trial dropdown directly below it, and
-# the middle track started 38 px further left on one row than the next. Tracks
-# span by *summing* the weights they cover (the chip strip is 3 + 5), never by
-# inventing a second pair; a `st.columns` of merged weights differs from the
-# three-track boundary by a fraction of one gutter (~3 px at the default 1 rem),
-# which is below the threshold where an eye reads two edges as unaligned.
+# It is a shared constant rather than a repeated literal because the rows are
+# built in several functions across two modules, and rows that each own their
+# weights drift out of alignment. Tracks span by *summing* the weights they
+# cover, never by inventing a second set; a `st.columns` of merged weights
+# differs from the separate-track boundary by a fraction of one gutter (~3 px at
+# the default 1 rem), which is below the threshold where an eye reads two edges
+# as unaligned.
 #
 # Widths, not pixels: Streamlit shares the row minus its gutters out by weight,
-# so the grid holds at every window size.
-# UX-64 made it **four** tracks — dataset · trial · scrub · actions — because
-# the Narrow-by row above it is gone and its dataset picker moved down onto this
-# one. The dataset track is as wide as the trial track and deliberately does not
-# shrink: two datasets under comparison are told apart by that label. What gave
-# way is the scrubber (5.0 → 3.6) and the filters, which became one icon in the
-# actions cluster rather than a labelled **More** button of their own.
-# UX-143: the first track also holds +; borrow from the scrubber to keep the
-# dataset name readable. The same track boundaries apply to the related rows.
-# UX-181: the weights now favour the scrubber, and `styles.py` puts floors
-# under the other three tracks. The actions track is a fixed width: its pills
-# are a fixed ~11.5rem, and a proportional track grew with the window and left
-# an empty gap to the left of ◀. Its weight is nominal. The dataset and trial
-# tracks shrink with the window down to a floor that still shows a name in
-# full. So a wide window gives its extra width to the scrubber, and a narrow
-# one takes it from the scrubber first. Every row of this grid gets the same
-# floors, so the rows still line up.
+# so the grid holds at every window size. The dataset track is as wide as the
+# trial track: two datasets under comparison are told apart by that label. The
+# weights favour the scrubber, and `styles.py` puts floors under the other three
+# tracks. The actions track is a fixed width: its pills are a fixed width, and a
+# proportional track would grow with the window and leave an empty gap to the
+# left of ◀. Its weight is nominal. The dataset and trial tracks shrink with the
+# window down to a floor that still shows a name in full. So a wide window gives
+# its extra width to the scrubber, and a narrow one takes it from the scrubber
+# first. Every row of this grid gets the same floors, so the rows still line up.
 SELECTOR_ROW_GRID = [2.6, 2.3, 5.1, 1.0]
 
-#: UX-181: the minimum width of each `SELECTOR_ROW_GRID` track, in rem. `None`
-#: is no floor (the scrubber). The actions floor fits A's ◀ ▶ ⇅ 🔎 ✏️ — five
-#: pills, measured at ~15rem with their gaps (2026-10-07; ✏️ moved here from
-#: the chip row). The dataset floor fits the dataset
-#: dropdown beside its + menu, and the trial floor fits a OneStop trial id.
+#: The minimum width of each `SELECTOR_ROW_GRID` track, in rem. `None` is no
+#: floor (the scrubber). The actions floor fits A's ◀ ▶ ⇅ 🔎 ✏️ — five pills,
+#: about 15rem with their gaps. The dataset floor fits the dataset dropdown
+#: beside its + menu, and the trial floor fits a OneStop trial id.
 #: `styles.py` caps the two picker floors at a share of the row
 #: (`SELECTOR_ROW_FLOOR_CAPS`), so a narrow window still has room for the
 #: scrubber.
 SELECTOR_ROW_FLOORS_REM = (15.75, 12.5, None, 15.0)
 
-#: UX-181: the share of the row that caps each picker floor, as a percentage.
+#: The share of the row that caps each picker floor, as a percentage.
 SELECTOR_ROW_FLOOR_CAPS = (25, 20, None, None)
 
-#: The pre-UX-64 three-track shape, for the rows that still have three things
-#: on them — the multipart screen navigator and compare mode's own picker rows.
-#: Built by merging the trial and scrub tracks, so their outer boundaries still
-#: line up with the four-track row above them (which is the whole point of
-#: sharing one grid — see the note at the top of this block).
+#: The three-track shape, for a selector row with no scrubber — a one-trial
+#: pool, A's or Compare's B. Built by merging the trial and scrub tracks, so its
+#: outer boundaries still line up with the four-track rows (which is the whole
+#: point of sharing one grid — see the note at the top of this block).
 SELECTOR_ROW_TRIO = [
     SELECTOR_ROW_GRID[0],
     SELECTOR_ROW_GRID[1] + SELECTOR_ROW_GRID[2],
@@ -1083,7 +927,7 @@ SELECTOR_ROW_TRIO = [
 
 #: The multipart screen navigator's track, appended at the right end of a trial
 #: row (after ◀ ▶ ⇅ 🔎) when the dataset has screens: a narrow dropdown + ◀ ▶,
-#: so the screens no longer take a row of their own under each trial row. Its
+#: so the screens need no row of their own under each trial row. Its
 #: width is mostly its floor (`SELECTOR_SCREEN_FLOOR_REM`); the weight is
 #: nominal, like the actions track's.
 SELECTOR_SCREEN_TRACK = 1.0
@@ -1094,8 +938,8 @@ SELECTOR_SCREEN_FLOOR_REM = 24.5
 
 #: The screen navigator's own width inside that track, in rem: the track less
 #: A's ⇅ 🔎 ✏️ and the gap before them (~10.75rem). Fixed rather than "what the
-#: menus leave", because B's row has no ✏️ — its navigator used to take the
-#: difference and come out wider than A's, right under it (2026-10-07).
+#: menus leave", because B's row has no ✏️: taking the difference would make
+#: B's navigator wider than A's, right under it.
 SELECTOR_SCREEN_PICKER_REM = SELECTOR_SCREEN_FLOOR_REM - 10.75
 
 #: With a screen track, the actions track keeps only ◀ ▶: its floor, in rem.
@@ -1119,54 +963,49 @@ SELECTOR_ROW_WRAP_REM = (
 )
 
 #: ``SELECTOR_ROW_GRID``'s three left tracks as one — for a row whose left side
-#: is a single wide element rather than dataset + pick + scrub. Kept for
-#: deep-link-stable layouts that still want it; UX-75 moved the chip strip off
-#: it onto ``SELECTOR_ROW_TRIO``, so its title lands under the dataset picker
-#: and its chips under the trial picker and scrubber.
+#: is a single wide element rather than dataset + pick + scrub.
 SELECTOR_ROW_WIDE_GRID = [
     SELECTOR_ROW_GRID[0] + SELECTOR_ROW_GRID[1] + SELECTOR_ROW_GRID[2],
     SELECTOR_ROW_GRID[3],
 ]
 
 
-#: VAL-7's identity check screens a sample of trials by default (PERF-6). The
+#: The trial-identity check screens a sample of trials by default. The
 #: 🗂️ Data page's *Check every trial* button sets this session flag to ask for
 #: the full census instead. UI-only — it is deliberately not wire format, so it
 #: travels in neither a share link nor a saved config.
 TRIAL_IDENTITY_FULL_KEY = "_trial_identity_full_scan"
 
-#: VAL-7's verdict used to ride a page-wide ⚠️ banner above every view, on every
-#: run, for as long as the dataset stayed loaded — a permanent warning about a
-#: decision that is only made twice: when a dataset is added, and when its
-#: mapping is edited. Both moments now set this flag instead, and ``app.main``
-#: pops it once the (already computed) report for the newly derived frames
-#: exists — raising the verdict as a modal exactly where the Trial ID mapping
-#: was just chosen. The value says which flow asked, so the modal's "go back"
-#: button can name the right screen: ``"add"`` or ``"edit"``.
+#: The trial-identity check's verdict is about a decision made only twice:
+#: when a dataset is added, and when its mapping is edited. Both moments set
+#: this flag, and ``app.main`` pops it once the (already computed) report for
+#: the newly derived frames exists — raising the verdict as a modal exactly
+#: where the Trial ID mapping was just chosen, rather than as a page-wide
+#: banner on every run. The value says which flow asked, so the modal's "go
+#: back" button can name the right screen: ``"add"`` or ``"edit"``.
 TRIAL_IDENTITY_CHECK_KEY = "_trial_identity_check_after"
 
-#: #374 F30 — the name of the dataset ✅ Add dataset just stored, popped by
+#: The name of the dataset ✅ Add dataset just stored, popped by
 #: ``app.main`` once its frames are loaded to confirm what arrived.
 DATASET_ADDED_KEY = "_dataset_added_name"
 
 
-# --- UX-138 · the icon vocabulary ---------------------------------------------
+# --- The icon vocabulary -------------------------------------------------------
 # One Material Symbols (Rounded) icon per *concept* the app draws as chrome — a
 # nav entry, a rail section, a subtab, a button, an alert — so the same idea
 # looks the same everywhere and swapping one is a one-line change. Streamlit
 # renders the shortcode in markdown and in every ``icon=`` parameter.
 #
-# Keyed by meaning, not by the emoji it replaced: 👁️ used to stand for the
-# Scanpath preset, the Fixations layer *and* a data preview, and those are three
-# entries here. Prose keeps its emoji — help text, tour bodies, docstrings,
+# Keyed by meaning, not by glyph: the Scanpath preset, the Fixations layer and
+# a data preview are three entries here. Prose keeps its emoji — help text, tour bodies, docstrings,
 # ``cli.py`` and ``docs/`` still write "the 🗂️ **Data** page" — and so do the
 # places a shortcode cannot reach: selectbox options and dataframe cells are
 # plain text (the trial-picker ★ 🏷️ 📝 markers, the dataset-kind tags), and
 # Plotly text is baked into every export (▶ Play, the marker-shape previews).
-# The typographic glyphs on buttons (◀ ▶ ⇅ ✕ ⬇ ↗) stay as they are too.
+# The typographic glyphs on buttons (◀ ▶ ⇅ ✕ ⬇ ↗) are kept too.
 ICONS: dict[str, str] = {
     # Navigation and dialogs. `app` is the welcome tour's; the favicon itself
-    # stays 👀 — see `app.set_page_config`'s call site.
+    # is 👀 — see `app.set_page_config`'s call site.
     "app": ":material/visibility:",
     "view_scanpath": ":material/route:",
     "view_corpus": ":material/bar_chart:",
@@ -1244,7 +1083,7 @@ ICONS: dict[str, str] = {
     "folder": ":material/folder_open:",
     "demo": ":material/science:",
     "author": ":material/draw:",
-    # UX-174 — the dataset table: the two kinds without an icon of their own,
+    # The dataset table: the two kinds without an icon of their own,
     # the open dataset's badge, the row menu and the sort arrows.
     "private": ":material/lock:",
     "public": ":material/public:",
@@ -1257,7 +1096,7 @@ ICONS: dict[str, str] = {
     "auto_detected": ":material/auto_awesome:",
     "stats": ":material/query_stats:",
     "derived_tables": ":material/calculate:",
-    # Dataset and reader metrics (ENG-36's `st.metric` rows).
+    # Dataset and reader metrics (the `st.metric` rows).
     "participants": ":material/group:",
     "texts": ":material/article:",
     "trials": ":material/list_alt:",
@@ -1274,10 +1113,6 @@ ICONS: dict[str, str] = {
     "step_action": ":material/error:",
     "step_todo": ":material/radio_button_unchecked:",
     "step_optional": ":material/remove:",
-    # Geometry provenance of a dataset's word boxes.
-    "geometry_real": ":material/verified:",
-    "geometry_reconstructed": ":material/build:",
-    "geometry_synthesized": ":material/science:",
     # Alerts, toasts and inline status.
     "warning": ":material/warning:",
     "error": ":material/block:",
@@ -1310,7 +1145,7 @@ _MARKDOWN_SPECIALS = re.compile(r"([\\`*_{}\[\]<>()#+\-.!|~:$])")
 
 
 def spoken(name: str) -> str:
-    """``name`` as an icon-only button's accessible name (UX-200).
+    """``name`` as an icon-only button's accessible name.
 
     A button whose face is a glyph (◀, ⇅) or an icon reads, to a screen reader,
     as the glyph's own name ("black left-pointing triangle") or the icon's
@@ -1322,7 +1157,7 @@ def spoken(name: str) -> str:
 
     Buttons only. A popover passes its raw label to its dialog's
     ``aria-label`` as well, asterisks and all, so a popover is named with a
-    plain label clipped by key instead (`styles.py`, BUG-108).
+    plain label clipped by key instead (`styles.py`).
     """
     escaped = _MARKDOWN_SPECIALS.sub(r"\\\1", name)
     return f"*{escaped}*"
@@ -1351,8 +1186,8 @@ def icons_to_html(text: str) -> str:
     return _SHORTCODE.sub(r'<span class="sps-icon" aria-hidden="true">\1</span>', text)
 
 
-#: The Scanpath view's subtab labels. Named because the set is no longer fixed:
-#: PRE-21 offers Line assignment only while drift correction is exposed, so the
+#: The Scanpath view's subtab labels. Named because the set is not fixed: Line
+#: assignment is offered only while drift correction is exposed, so the
 #: tabs are built as a list and mapped back by label. They live here rather than
 #: in `tabs` because the tutorial steps in `tour` open a subtab by its label too,
 #: and `tests/conftest.py` imports them rather than repeating the strings.

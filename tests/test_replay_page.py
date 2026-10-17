@@ -1,16 +1,16 @@
-"""PERF-17: a replay's page carries its frames packed, and the browser rebuilds them.
+"""A replay's page carries its frames packed, and the browser rebuilds them.
 
 Every frame of a replay restates every animated trace at full length, ~33 KB a
-frame, so the demo's longest trial was a 12 MB page at the default 361 frames and
-66 MB at the finest grid's 2,001. `plots.replay_page` leaves the frames out of
-the figure the page serializes and prepends a decoder to the BUG-93 player: frame
-0 whole, then only what changed since the frame before, rebuilt with
-`Plotly.addFrames` before the player starts.
+frame, so unpacked the demo's longest trial would be a 12 MB page at the default
+361 frames and 66 MB at the finest grid's 2,001. `plots.replay_page` leaves the
+frames out of the figure the page serializes and prepends a decoder to the
+wall-clock replay player: frame 0 whole, then only what changed since the frame
+before, rebuilt with `Plotly.addFrames` before the player starts.
 
 The figure itself keeps its frames, so the GIF/MP4 export and the API are
 untouched. What has to hold is that the browser ends up with the *same* frames:
 these tests run the real decoder under node (`fixtures/replay_frames_harness.js`)
-and compare what it hands `Plotly.addFrames` with the frames `to_html` used to
+and compare what it hands `Plotly.addFrames` with the frames `to_html` would
 write.
 """
 
@@ -138,7 +138,7 @@ class TestTheBrowserGetsTheSameFrames:
 
     @needs_node
     def test_every_kind_of_change_survives_the_round_trip(self, tmp_path):
-        # The generic cases the replay builder happens not to produce today —
+        # The generic cases the replay builder happens not to produce —
         # a key that appears or goes, a type that changes, a bool that must not
         # become 1, a patched and a resized array, an ndarray, a frame without
         # `traces`, a frame-level key, unicode and markup in strings.
@@ -189,7 +189,7 @@ class TestTheBrowserGetsTheSameFrames:
 
 
 class TestValuesTheEncoderMustNotMisjudge:
-    """Review of #278: values whose `==` raises or lies must still be carried."""
+    """Values whose `==` raises or lies must still be carried."""
 
     def test_pd_na_against_none_is_carried_not_raised(self):
         # A nullable (`Int64`) fixation column reaches a frame as `pd.NA`, where
@@ -232,7 +232,7 @@ class TestValuesTheEncoderMustNotMisjudge:
 
 class TestThePageIsSmall:
     def test_the_longest_demo_trial_is_a_small_page(self):
-        # 12 MB before PERF-17 (361 frames × ~33 KB). The bound leaves room for
+        # 12 MB unpacked (361 frames × ~33 KB). The bound leaves room for
         # a layer or two more, not for frames that restate their traces again.
         fig = _replay("longest")
         assert len(fig.frames) == 360

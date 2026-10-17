@@ -1,7 +1,7 @@
 """Scanpath similarity metrics for comparing scanpaths over the same text.
 
-The reference use case is the **Multiple Comparison** tab: score how close each
-model-generated scanpath is to the real reading of the same text.
+The reference use case is the 🔬 **Comparisons** subtab: score how close each
+matching reading of the same text is to the selected scanpath.
 
 Currently one metric is implemented for real:
 
@@ -271,7 +271,7 @@ def compute_similarity_table(
 
 
 # -----------------------------------------------------------------------------
-# Cumulative metric curves (for the Multiple Comparison convergence plots)
+# Cumulative metric curves (for the Comparisons convergence plots)
 # -----------------------------------------------------------------------------
 
 

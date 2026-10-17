@@ -74,7 +74,7 @@ class TestPickColumn:
 
 
 class TestPickColumnPrefixSuffixSecondPass:
-    """`pick_column`'s second pass (DATA-25): a vendor prefix or suffix on a
+    """`pick_column`'s second pass: a vendor prefix or suffix on a
     known name (`AOI_LEFT`, `LEFT_px`) is caught by matching whole,
     separator-split tokens — but only when exactly one column survives it
     across the whole candidate list. Two or more survivors is ambiguity and
@@ -139,7 +139,7 @@ class TestPickColumnPrefixSuffixSecondPass:
         assert pick_column(df, ["word_id", "IA_ID", "aoi"]) is None
 
     def test_aoi_id_beside_the_aoi_edges_is_the_word_id(self):
-        """DATA-60: all five columns carry the token ``aoi``, but only
+        """All five columns carry the token ``aoi``, but only
         ``AOI_ID`` is spelled entirely in the word-id list's own words."""
         df = pd.DataFrame(
             {
@@ -168,10 +168,10 @@ class TestPickColumnPrefixSuffixSecondPass:
 
 
 class TestTextColumnIsNotABoxField:
-    """BUG-99: OneStop's IA report carries ``TOP_LEFT``, the box corner as the
-    text ``(368,186)``, beside the ``IA_*`` edges. Its tokens ``top`` + ``left``
-    made it the x and the y proposal, and every load warned that none of its
-    values were numbers."""
+    """OneStop's IA report carries ``TOP_LEFT``, the box corner as the text
+    ``(368,186)``, beside the ``IA_*`` edges. Its tokens ``top`` + ``left`` must
+    not make it the x and the y proposal, or every load warns that none of its
+    values are numbers."""
 
     @staticmethod
     def _onestop_like() -> pd.DataFrame:
@@ -219,7 +219,7 @@ class TestTextColumnIsNotABoxField:
 
 
 class TestBoxEdgesResolveAsOneSet:
-    """DATA-57: the four edges are picked as a set sharing one affix, so an AOI
+    """The four edges are picked as a set sharing one affix, so an AOI
     table carrying two box encodings still auto-fills instead of every edge
     being ambiguous."""
 
@@ -339,7 +339,7 @@ class TestProposeWordSchemaMatching:
         assert schema["bottom"] == "IA Bottom"
 
     def test_aoi_prefixed_edges_are_auto_detected(self):
-        # DATA-25 second pass: a vendor's AOI_LEFT/RIGHT/TOP/BOTTOM naming
+        # The second pass: a vendor's AOI_LEFT/RIGHT/TOP/BOTTOM naming
         # reaches the same fields IA_LEFT etc. do, without the manual
         # column-mapping step.
         df = pd.DataFrame(
@@ -381,12 +381,10 @@ class TestProposeWordSchemaMatching:
 class TestProposeFixSchemaMatching:
     """propose_fix_schema resolves EyeGenBench's harmonized column names.
 
-    DATA-27 R32: `FIX_FIXATION_ID_CANDIDATES`/`FIX_WORD_ID_CANDIDATES` had no
-    entry for `fix_index`/`ia_index`, and `PARTICIPANT_CANDIDATES` had none for
-    `unique_participant_id` — so the app's auto-detect path (unlike the
-    explicit `EYEGENBENCH_FIX_SCHEMA` the headless loader uses) silently
-    dropped all three fields on every EyeGenBench corpus. See
-    `scanpath_studio/eyegenbench.py::EYEGENBENCH_FIX_SCHEMA`.
+    `FIX_FIXATION_ID_CANDIDATES` / `FIX_WORD_ID_CANDIDATES` list `fix_index` /
+    `ia_index`, and `PARTICIPANT_CANDIDATES` lists `unique_participant_id`, so
+    the app's auto-detect path finds all three on an EyeGenBench table; without
+    them it would silently drop them.
     """
 
     def test_eyegenbench_columns_resolve_participant_fixation_id_and_word_id(self):
@@ -407,10 +405,10 @@ class TestProposeFixSchemaMatching:
         assert schema["word_id"] == "ia_index"
 
     def test_unique_participant_id_outranks_recording_session_label(self):
-        # Provo carries both columns (a coincidental parallel id, per the
-        # brief); `unique_participant_id` is the one EYEGENBENCH_FIX_SCHEMA
-        # names, and it must win regardless of which column exists in a given
-        # corpus. Pin the *priority*, not just presence of either alone.
+        # Provo carries both columns (a coincidental parallel id);
+        # `unique_participant_id` is EyeGenBench's own reader id, and it must
+        # win regardless of which column exists in a given corpus. Pin the
+        # *priority*, not just presence of either alone.
         df = pd.DataFrame(
             {
                 "unique_participant_id": ["r1", "r1"],
@@ -732,11 +730,11 @@ class TestNormalizeFixations:
 
 
 class TestUnreadableNumbers:
-    """BUG-54: a mapped numeric column that does not parse is never silent.
+    """A mapped numeric column that does not parse is never silent.
 
-    A decimal-comma export (`117,7`) read as all-NaN, and the fallbacks then
-    snapped every fixation to its word's centre and made every duration 0 — a
-    plausible figure, nothing said.
+    A decimal-comma export (`117,7`) reads as all-NaN, and the fallbacks would
+    then snap every fixation to its word's centre and make every duration 0 — a
+    plausible figure, with nothing said.
     """
 
     SCHEMA = {
@@ -797,9 +795,9 @@ class TestUnreadableNumbers:
 
 
 class TestTextWordIds:
-    """#412 (review finding 11): Word/IA IDs are read as numbers, so text ids
-    (`w1`, `w2`) parse to NaN — and pandas joins NaN to NaN, so every
-    coordinate-less fixation was placed on the first word's box."""
+    """Word/IA IDs are read as numbers, so text ids (`w1`, `w2`) parse to NaN —
+    and pandas joins NaN to NaN, so without a guard every coordinate-less
+    fixation would be placed on the first word's box."""
 
     WORD_SCHEMA = {
         "participant": "participant",
@@ -864,7 +862,7 @@ class TestTextWordIds:
         )
 
     def test_text_ids_with_no_xy_are_refused(self):
-        """The review's probe: both fixations landed on 'Hello' (x 25)."""
+        """Unrefused, both fixations would land on 'Hello' (x 25)."""
         with (
             pytest.raises(data_module.UnplacedFixationsError) as raised,
             pytest.warns(UserWarning, match="Words table: 2 of 2 values in 'id'"),
@@ -934,10 +932,10 @@ class TestTextWordIds:
         assert "--fix-schema" not in _load_error_message(exc, schema_flags=False)
 
     def test_snapping_skips_a_box_with_no_id(self):
-        """VIZ-9's linear-reading snap looked boxes up by id through
-        `Series.map`, which matches a NaN key to a NaN id too. #422's snap to
-        line keeps that rule: a fixation on no word takes the line nearest its
-        y, never the line of the box with no id."""
+        """Looking boxes up by id through `Series.map` matches a NaN key to a
+        NaN id too, so the snap to line skips id-less boxes: a fixation on no
+        word takes the line nearest its y, never the line of the box with no
+        id."""
         from scanpath_studio import plots
 
         # The id-less box is on the lower line (y 100), word 1 on the upper (0).
@@ -955,10 +953,10 @@ class TestTextWordIds:
 
 
 class TestRowsWithoutIdentity:
-    """BUG-56: one blank row made a dataset impossible to add.
+    """A blank row does not make a dataset impossible to add.
 
     Excel leaves a `,,,,` line at the end of a saved sheet; its NaN trial id
-    crashed `_disambiguate_repeated_readings`' integer cast.
+    must not reach `_disambiguate_repeated_readings`' integer cast.
     """
 
     SCHEMA = {
@@ -1011,7 +1009,7 @@ class TestRowsWithoutIdentity:
 
 
 class TestOpaqueAndBlankIds:
-    """Round 10, finding 1: ids are opaque within a column, and an id that is
+    """Ids are opaque within a column, and an id that is
     only whitespace is missing — never a trial named ``""``."""
 
     SCHEMA = {
@@ -1106,7 +1104,7 @@ class TestOpaqueAndBlankIds:
 
 
 class TestZeroPaddedIds:
-    """BUG-59: `007` in one table and 7 in the other joined on nothing."""
+    """`007` in one table and 7 in the other still join."""
 
     def test_the_map_names_each_id_by_its_padded_twin(self):
         assert data_module.zero_padding_map(["7", "12"], ["007", "012"]) == {
@@ -1284,9 +1282,9 @@ class TestCompositeTrialId:
         ]
 
     def test_a_single_column_pick_wins_over_a_raw_unique_trial_id(self):
-        """BUG-58: a hand-picked single column used to be replaced by any
-        literal `unique_trial_id` column, silently — here only the fixations
-        carry one, so the two tables joined on nothing."""
+        """A hand-picked single column is never replaced by a literal
+        `unique_trial_id` column — here only the fixations carry one, so the two
+        tables would join on nothing."""
         words = self._words()
         fixations = self._words(unique_trial_id=["u1", "u1", "u2", "u3"])[
             ["participant_id", "para", "unique_trial_id", "x", "y"]
@@ -1452,9 +1450,8 @@ class TestCompositeTrialId:
 
 
 class TestMappedTextIdWins:
-    """#412 (review finding 5): a literal `unique_paragraph_id` column used to
-    override whatever Text ID the mapping named, on both tables — BUG-58's
-    trap for the Trial ID, left open for the Text ID."""
+    """The mapped Text ID wins over a literal `unique_paragraph_id` column, on
+    both tables — the same rule as for the Trial ID."""
 
     WORD_SCHEMA = {
         "trial": "legacy_trial",
@@ -1507,8 +1504,8 @@ class TestMappedTextIdWins:
         )
 
     def test_the_tables_join_on_the_mapped_text_id(self):
-        """The review's probe: the AOI table is stimulus-level and joins its
-        fixations by Text ID only, so the stray column made the load fail."""
+        """The AOI table is stimulus-level and joins its fixations by Text ID
+        only, so a stray column overriding the mapping would fail the load."""
         from scanpath_studio import api
 
         words, fixations = api.load_scanpath_data(
@@ -1561,7 +1558,7 @@ class TestMappedTextIdWins:
 
     def test_an_edit_keeps_the_stored_text_id(self):
         """✏️ Edit dataset keeps `unique_paragraph_id` when a composite Trial ID
-        names it — and it then overrode the editor's Text ID too."""
+        names it — and the kept column must not override the editor's Text ID."""
         frame = self._fixations(unique_paragraph_id=["legacy-other"])
         keep = data_module.compute_keep_columns(self.FIX_SCHEMA)
         stored = normalize_fixations(frame, self.FIX_SCHEMA, keep_columns=keep)
@@ -1660,8 +1657,8 @@ class TestComputeWordMetrics:
 
 
 class TestCoerceFlag:
-    """BUG-7: EyeLink writes flags as strings ``'0'`` / ``'1'`` / ``'.'`` (its
-    missing-value sentinel), so a truthiness cast made every row True."""
+    """EyeLink writes flags as strings ``'0'`` / ``'1'`` / ``'.'`` (its
+    missing-value sentinel), so a truthiness cast would make every row True."""
 
     def test_the_eyelink_sentinel_column_is_not_all_true(self):
         from scanpath_studio.data import coerce_flag
@@ -1720,8 +1717,8 @@ class TestCoerceFlag:
         assert flags.dropna().tolist() == [False, True, False]
 
     def test_the_bundled_demo_no_longer_flags_every_row(self):
-        """Regression guard for the reported repro (2026-07-03): the demo's
-        IA_REGRESSION_* columns carry 1191 `'.'` rows that all read as True."""
+        """The demo's IA_REGRESSION_* columns carry 1191 `'.'` rows, which a
+        truthiness cast would read as True."""
         from scanpath_studio.data import (
             infer_word_schema,
             load_sample_data,
@@ -1732,7 +1729,7 @@ class TestCoerceFlag:
         words = normalize_words(words_raw, infer_word_schema(words_raw))
         for col in ("regression_in_flag", "regression_out_flag"):
             assert words[col].any(), f"{col} is all False"
-            assert not words[col].all(), f"{col} is all True (BUG-7)"
+            assert not words[col].all(), f"{col} is all True"
 
 
 class TestDefaultFilters:
@@ -1761,14 +1758,14 @@ class TestDefaultFilters:
 
 
 class TestFrameFingerprint:
-    """DATA-16 / audit S5.
+    """`frame_fingerprint` changes with an edit anywhere in the frame.
 
     The fingerprint is the explicit `@st.cache_data` key for ~32 call sites,
-    including the whole normalize step. It used to sample only the first and last
-    64 rows, so a table of >=129 rows edited anywhere in between produced an
-    identical key — a certain collision, not a probabilistic one. Re-uploading a
-    corrected table of the same shape then served every figure, measure and
-    aggregate from the pre-edit data, silently.
+    including the whole normalize step. A key sampled from the first and last 64
+    rows would be identical for a table of >=129 rows edited anywhere in between
+    — a certain collision, not a probabilistic one — and a re-uploaded corrected
+    table of the same shape would silently be served every figure, measure and
+    aggregate from the pre-edit data.
     """
 
     def _pair(self, n, edit_at):
@@ -1784,8 +1781,8 @@ class TestFrameFingerprint:
         a, b = self._pair(n, n // 2)
         assert frame_fingerprint(a) != frame_fingerprint(b)
 
-    def test_the_audit_repro_no_longer_collides(self):
-        """Verbatim from the 0.25.0 security audit (git history; ENG-80)."""
+    def test_an_edit_in_the_middle_of_a_frame_gets_a_key_of_its_own(self):
+        """A 300-row frame edited at row 150 gets a key of its own."""
         a = pd.DataFrame(
             {
                 "participant_id": [f"p{i}" for i in range(300)],
@@ -1817,9 +1814,10 @@ class TestFrameFingerprint:
         assert frame_fingerprint(pd.DataFrame()) == (0, ())
 
     def test_a_large_frame_is_hashed_in_full(self):
-        """BUG-103. Above 200,000 rows the key used to be ~384 sampled rows, so
-        this edit — row 100, past the first 64 and between two stride rows — left
-        it unchanged, and a corrected re-upload was served the old results."""
+        """Above 200,000 rows the key is still a full digest. A key of ~384
+        sampled rows would miss this edit — row 100, past the first 64 and
+        between two stride rows — and serve a corrected re-upload the old
+        results."""
         n = 200_001
         a = pd.DataFrame({"duration_ms": np.full(n, 100.0)})
         b = a.copy()
@@ -1827,7 +1825,7 @@ class TestFrameFingerprint:
         assert frame_fingerprint(a) != frame_fingerprint(b)
         assert len(frame_fingerprint(a)) == 3  # (rows, columns, full digest)
 
-    def test_the_review_repro_reaches_the_cached_result(self):
+    def test_an_edited_frame_reaches_a_cached_consumer(self):
         """The same edit through a real cached consumer: the corrected frame gets
         its own trial summary, not the one cached for the original."""
         from scanpath_studio import tabs
@@ -1855,13 +1853,13 @@ class TestFrameFingerprint:
         assert total(fixed) - total(fix) == pytest.approx(899.0, abs=0.5)
 
     def test_an_unhashable_frame_fails_closed(self):
-        """The old last resort returned (n, cols, 0, 0), so every frame of the
-        same shape collided — it failed *open*. A frame that can't be hashed must
-        miss the cache instead."""
+        """A frame that can't be hashed must miss the cache. A constant last
+        resort such as (n, cols, 0, 0) would make every frame of the same shape
+        collide — failing *open*."""
         rows = [{"span": {"a": 1}} for _ in range(3)]
         df = pd.DataFrame({"span": [frozenset({1}) | frozenset() for _ in rows]})
         df["span"] = [object() for _ in range(3)]  # unhashable-to-stringify path
-        # Reset between the two calls: the PERF-3 memo would otherwise hand back
+        # Reset between the two calls: the per-run memo would otherwise hand back
         # the first answer for the same object and this would pass vacuously.
         first = frame_fingerprint(df)
         reset_fingerprint_memo()
@@ -1873,12 +1871,12 @@ class TestFrameFingerprint:
 
 
 class TestFingerprintMemo:
-    """PERF-3: the same frame OBJECT is hashed at most once per run.
+    """The same frame OBJECT is hashed at most once per run.
 
-    Once the expensive subtabs went lazy, the cache keys themselves were the
-    biggest cost left in a rerun — ~26 calls over the same handful of frames,
-    43% of the run. Hashing one object twice in a run cannot give two answers,
-    so everything after the first is waste.
+    With the expensive subtabs lazy, the cache keys themselves are a large cost
+    in a rerun — many calls over the same handful of frames. Hashing one object
+    twice in a run cannot give two answers, so everything after the first is
+    waste.
     """
 
     def setup_method(self):
@@ -1943,9 +1941,10 @@ class TestFingerprintMemo:
         """The entry is a *weak* ref, so memoizing must not pin the frame.
 
         `st.cache_data` hands out a fresh object per call, so every run's corpus
-        frames are new objects. A strong memo held up to `_FINGERPRINT_MEMO_MAX`
-        of them from the end of one run until the top of the next — a session's
-        whole idle time — on frames that used to be freed when `main()` returned.
+        frames are new objects. A strong memo would hold up to
+        `_FINGERPRINT_MEMO_MAX` of them from the end of one run until the top of
+        the next — a session's whole idle time — on frames that are otherwise
+        freed when `main()` returns.
         """
         import gc
         import weakref
@@ -1960,8 +1959,8 @@ class TestFingerprintMemo:
 
     def test_eviction_drops_the_coldest_entry_not_everything(self, monkeypatch):
         """A bulk export overflows the ceiling with per-trial temporaries. Clearing
-        the whole memo there threw away the hot corpus frames to make room for
-        them, so the next `_c_*` call re-hashed from scratch."""
+        the whole memo there would throw away the hot corpus frames to make room
+        for them, so the next `_c_*` call would re-hash from scratch."""
         calls = self._counted(monkeypatch)
         hot = pd.DataFrame({"x": range(500)})
         frame_fingerprint(hot)
@@ -1978,16 +1977,16 @@ class TestFingerprintMemo:
 
 
 # ---------------------------------------------------------------------------
-# DATA-25 — vendor export column names, and the unit suffixes they carry
+# Vendor export column names, and the unit suffixes they carry
 # ---------------------------------------------------------------------------
 
 
 class TestNormColDropsTrailingUnits:
     """`_norm_col` strips one trailing ``[unit]`` / ``(unit)`` block before folding.
 
-    Every name here is one a real export writes. Before DATA-25 the brackets'
-    letters were folded into the key (``fixationpointxdacspx``), so none of them
-    could match a candidate that names the same thing."""
+    Every name here is one a real export writes. Folding the brackets' letters
+    into the key (``fixationpointxdacspx``) would keep every one of them from
+    matching a candidate that names the same thing."""
 
     @pytest.mark.parametrize(
         "raw, key",
@@ -2025,7 +2024,7 @@ class TestNormColDropsTrailingUnits:
 
 class TestVendorExportsAreAutoDetected:
     """`propose_fix_schema` / `propose_raw_gaze_schema` find the fields in each
-    vendor's export without the manual mapping step (DATA-25)."""
+    vendor's export without the manual mapping step."""
 
     def test_tobii_pro_lab_fixation_export(self):
         df = pd.DataFrame(
@@ -2207,8 +2206,8 @@ class TestVendorExportsAreAutoDetected:
 
 
 class TestVendorUnitsAreRead:
-    """DATA-40: auto-detection found each vendor's time and position columns
-    (DATA-25) but read their numbers as if they were milliseconds and pixels."""
+    """Auto-detection reads each vendor's time and position numbers in the unit
+    the export uses, not as if they were milliseconds and pixels."""
 
     @pytest.mark.parametrize(
         "column, factor",
@@ -2251,7 +2250,7 @@ class TestVendorUnitsAreRead:
 
 
 class TestCanvasGeometryFrames:
-    """DATA-46 — the wizard estimates the screen before anything is normalized,
+    """The wizard estimates the screen before anything is normalized,
     so it has to read the *mapped* geometry, not columns called ``x``."""
 
     def test_eyelink_edges_estimate_from_the_boxes_and_fixations(self):
@@ -2276,7 +2275,7 @@ class TestCanvasGeometryFrames:
             {"x": "CURRENT_FIX_X", "y": "CURRENT_FIX_Y"},
         )
         assert data_module.compute_canvas_size(*geometry) == (2200, 1200)
-        # The raw tables alone were read as "nothing to estimate from".
+        # The raw tables alone read as "nothing to estimate from".
         raw = data_module.compute_canvas_size(words, fixations)
         assert raw == tuple(int(v) for v in data_module.DEFAULT_FIGURE_SIZE)
 

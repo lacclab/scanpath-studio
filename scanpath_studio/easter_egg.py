@@ -1,4 +1,4 @@
-"""UX-39 — the app's one easter egg: triple-click the title and eyes pop up.
+"""The app's one easter egg: triple-click the title and eyes pop up.
 
 Triple-click the "Scanpath Studio" heading and a pair of oversized googly eyes
 pops up beside it, blinks once, follows the cursor for a few seconds, and fades
@@ -25,8 +25,8 @@ Four details that are load-bearing rather than decorative:
   before wiring itself, and marks the heading (``dataset.spsEggWired``) so the
   re-mount doesn't stack a second listener on a surviving node.
 - **It never blocks the app.** The overlay is ``pointer-events: none`` so it
-  cannot swallow a click meant for the Corpus Analysis button beside it, and the
-  handler clears the text selection a triple-click makes for free.
+  cannot swallow a click meant for a control beneath it, and the handler
+  clears the text selection a triple-click makes for free.
 """
 
 from __future__ import annotations
@@ -165,12 +165,10 @@ _JS = """
         const place = () => {
             const rect = textRect(title);
             const width = wrap.offsetWidth || size * 2;
-            // Beside the heading when its own column has room. The header's other
-            // column holds the Corpus Analysis button, and eyes parked over the
-            // app's only nav control read as a rendering bug rather than a joke —
-            // so when it's tight they peek over the top of the title instead,
-            // where the page has nothing but padding. Never shrink to fit: "big"
-            // is the whole idea.
+            // Beside the heading when its own column has room; when it's tight
+            // they peek over the top of the title instead, where the page has
+            // nothing but padding, rather than spill into the header's other
+            // column. Never shrink to fit: "big" is the whole idea.
             const colRight = Math.min(
                 title.getBoundingClientRect().right, win.innerWidth
             );

@@ -77,7 +77,7 @@ def _plot_region(fig):
 
 class TestDecorationDoesNotShrinkPlot:
     """A colorbar/legend must sit in reserved margin, not steal space from the
-    equal-aspect plot region (the historical colorbar-shrinks-the-plot bug)."""
+    equal-aspect plot region."""
 
     def test_colorbar_keeps_plot_region(
         self, normalized_words_df, normalized_fixations_df
@@ -112,7 +112,7 @@ class TestDecorationDoesNotShrinkPlot:
 
 
 class TestDriftConnectors:
-    """PRE-3: the drift-connector overlay adds exactly one extra Scatter trace."""
+    """The drift-connector overlay adds exactly one extra Scatter trace."""
 
     def test_connectors_add_one_trace(
         self, normalized_words_df, normalized_fixations_df
@@ -170,7 +170,7 @@ class TestSaccadeColor:
 
 
 class TestSaccadeColorByType:
-    """VIZ-8: colour each saccade by its reading class."""
+    """Colour each saccade by its reading class."""
 
     def test_uniform_mode_is_a_single_trace(
         self, normalized_words_df, normalized_fixations_df
@@ -293,7 +293,7 @@ class TestSaccadeColorByType:
 
 
 class TestHeatmapNormalization:
-    """VIZ-3: Linear vs Log heatmap colour scaling."""
+    """Linear vs Log heatmap colour scaling."""
 
     def test_apply_heatmap_norm_helper(self):
         from scanpath_studio.plots import _apply_heatmap_norm
@@ -377,7 +377,7 @@ class TestHeatmapNormalization:
         assert heat[0].colorbar.title.text.endswith("(log)")
 
     def test_word_box_range_endpoints_transform_with_values(self):
-        # The core VIZ-3 contract: under Log the raw-unit heatmap_range keeps its
+        # The core contract: under Log the raw-unit heatmap_range keeps its
         # meaning because the endpoints are transformed alongside the values. So a
         # word AT an endpoint maps to the same colour under Linear and Log (both
         # land at colour position 0 or 1), while a mid-range word is compressed.
@@ -492,7 +492,7 @@ class TestHeatmapNormalization:
 
 
 class TestLinearReadingView:
-    """VIZ-9: arced saccades + fixations snapped onto their line (#422)."""
+    """Arced saccades + fixations snapped onto their line."""
 
     def _trial(self):
         words = pd.DataFrame(
@@ -586,7 +586,7 @@ class TestLinearReadingView:
         snap = next(t for t in snapped.data if t.mode == "markers")
         assert list(raw.x) == [120.0, 320.0]  # raw gaze x (off the word centre)
         assert list(raw.y) == [75.0, 225.0]  # raw gaze y
-        # #422: x stays the recorded x; y goes to each line's top edge (50/200,
+        # x stays the recorded x; y goes to each line's top edge (50/200,
         # NOT the raw 75/225) — the default position, −0.5 line heights.
         assert list(snap.x) == [120.0, 320.0]
         assert list(snap.y) == [50.0, 200.0]
@@ -594,7 +594,7 @@ class TestLinearReadingView:
     def test_a_snapped_fixation_is_colored_by_the_line_it_is_on(self):
         # Touching lines (0–40, 40–80): the second fixation snaps to y 40, as
         # near the first line's middle as its own, so guessing its line again
-        # from y named the wrong one. It is tinted by the line it snapped to.
+        # from y would name the wrong one. It is tinted by the line it snapped to.
         words, fix = self._trial()
         words = words.assign(x=[100, 100], y=[0, 40])
         fix = fix.assign(x=[120.0, 120.0], y=[10.0, 60.0])
@@ -879,7 +879,7 @@ class TestMakeScanpathFigure:
             heatmap_range=None,
         )
         assert isinstance(fig, go.Figure)
-        # Figure now shrinks to the data's aspect ratio (see _fit_display_size);
+        # The figure shrinks to the data's aspect ratio (see _fit_display_size);
         # dimensions are capped at the requested canvas, not pinned to it.
         assert 0 < fig.layout.width <= 800
         assert 0 < fig.layout.height <= 600
@@ -1181,7 +1181,7 @@ class TestMakeScanpathAnimation:
     def test_make_scanpath_animation_background_image_layer(
         self, tmp_path, normalized_words_df, normalized_fixations_df
     ):
-        # The stimulus-image background (MultiplEYE) must show in the animated
+        # The stimulus-image background must show in the animated
         # replay too — placed at its centered origin, below the traces, and
         # persisting across frames (a layout image, not per-frame data).
         p = tmp_path / "stim.png"
@@ -1258,7 +1258,7 @@ class TestMakeScanpathAnimation:
     def test_animation_colors_by_numeric_metric(
         self, normalized_words_df, normalized_fixations_df
     ):
-        # The replay must honour the sidebar's color-by metric + colorscale like
+        # The replay must honour the rail's color-by metric + colorscale like
         # the static figure does, with cmin/cmax pinned to the WHOLE trial so
         # colours don't renormalise as the trail grows frame by frame.
         fig = make_scanpath_animation(
@@ -1341,10 +1341,10 @@ class TestMakeScanpathAnimation:
     def test_order_numbers_never_glide_in_from_corner(
         self, normalized_words_df, normalized_fixations_df
     ):
-        # Regression: order numbers used to ride the growing markers+text trail,
-        # so each new <text> node flashed at the (0,0) corner before snapping to
-        # its fixation. They now live in their own FULL-LENGTH text trace whose
-        # `text` strings are CONSTANT across every frame; a number is revealed by
+        # Order numbers live in their own FULL-LENGTH text trace whose `text`
+        # strings are CONSTANT across every frame — riding the growing
+        # markers+text trail instead, each new <text> node would flash at the
+        # (0,0) corner before snapping to its fixation. A number is revealed by
         # un-masking its x/y from None straight to its fixation's true coordinate
         # (never an intermediate / origin position), so a label only ever turns
         # on in place — it never moves. (Full length + position-only change is
@@ -1392,7 +1392,7 @@ class TestMakeScanpathAnimation:
         assert prev_shown == n  # last frame shows the whole reading
 
     def test_slider_uniform_time_grid_bounded_and_labelled(self, normalized_words_df):
-        # VIZ-11: frames sit on a uniform time grid, so the slider scrubs linearly
+        # Frames sit on a uniform time grid, so the slider scrubs linearly
         # and every per-step label reads "elapsed / total s". A long reading
         # coarsens the grid instead of emitting one frame per fixation, so the step
         # count stays bounded (the GIF/MP4 export can't balloon). The per-step tick
@@ -1424,7 +1424,7 @@ class TestMakeScanpathAnimation:
         # "elapsed / total s" label on every step (meaningful for any reader count).
         assert all(" / " in s.label and s.label.endswith("s") for s in slider.steps)
         assert slider.currentvalue.visible
-        # #374 F23: the readout names its clock, and the transport is drawn in
+        # The readout names its clock, and the transport is drawn in
         # the app's font rather than the figure's stimulus font.
         assert slider.currentvalue.prefix == "Trial time "
         assert slider.currentvalue.font.family == "sans-serif"
@@ -1461,9 +1461,9 @@ class TestMakeScanpathAnimation:
 
 
 class TestAnimationPlayer:
-    """VIZ-10 autoplay + BUG-93: the replay's clock and its autoplay intent ride on
-    ``layout.meta``, for the wall-clock player every HTML surface embeds. (How
-    that player keeps time is `tests/test_replay_player.py`.)"""
+    """The replay's clock and its autoplay intent ride on ``layout.meta``, for
+    the wall-clock player every HTML surface embeds. (How that player keeps time
+    is `tests/test_replay_player.py`.)"""
 
     def _anim(self, words, fixations, **kw):
         return make_scanpath_animation(
@@ -1528,7 +1528,7 @@ class TestAnimationPlayer:
     def test_the_player_waits_for_the_real_frame_list(
         self, normalized_words_df, normalized_fixations_df
     ):
-        # VIZ-10 regression: Plotly keeps frames on gd._transitionData._frames,
+        # Plotly keeps frames on gd._transitionData._frames,
         # NOT gd.frames (undefined), and attaches them after newPlot resolves —
         # so the player polls for that list instead of trusting a fixed delay.
         script = animation_player_post_script(
@@ -1542,7 +1542,7 @@ class TestAnimationPlayer:
 
 
 class TestStimulusImageOpacity:
-    """VIZ-4: the stimulus-image layer honours an opacity (dataset + uploads)."""
+    """The stimulus-image layer honours an opacity (dataset + uploads)."""
 
     def test_static_figure_applies_opacity(
         self, tmp_path, normalized_words_df, normalized_fixations_df
@@ -1615,7 +1615,7 @@ class TestStimulusImageOpacity:
 
 
 class TestSplitScanpathLayers:
-    """VIZ-5: split the figure into one registered figure per layer."""
+    """Split the figure into one registered figure per layer."""
 
     def _rich_figure(self, tmp_path, words, fixations):
         p = tmp_path / "stim.png"
@@ -1757,17 +1757,17 @@ class TestDualScanpathAnimation:
         )
         assert isinstance(fig, go.Figure)
         assert hasattr(fig, "frames")
-        # Frames sit on a uniform time grid (VIZ-11), bounded regardless of the
+        # Frames sit on a uniform time grid, bounded regardless of the
         # onset pattern across the two overlaid scanpaths.
         assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES
-        # A/B legend is off by default (CMP-2) — the flat colours already tell the
+        # A/B legend is off by default — the flat colours already tell the
         # two readers apart.
         assert [t.name for t in fig.data if t.showlegend] == []
 
     def test_dual_animation_legend_when_enabled(
         self, normalized_words_df, normalized_fixations_df
     ):
-        # With show_legend=True both trails appear in the legend (CMP-2).
+        # With show_legend=True both trails appear in the legend.
         fig = make_scanpath_animation(
             normalized_words_df,
             normalized_fixations_df,
@@ -1830,7 +1830,7 @@ class TestDualScanpathAnimation:
             fixations_b=fix_a.iloc[:1].copy(),  # single fixation at t=0
         )
         labels = [s.label for s in fig.layout.sliders[0].steps]
-        # Uniform time grid (VIZ-11): every label reads "elapsed / total s". The
+        # Uniform time grid: every label reads "elapsed / total s". The
         # *total* proves the clock — real timestamps span ~1.1s (fixation 2 onset
         # at 1.0s + 0.1s dwell); a duration-based clock would collapse it to 0.2s.
         total_s = float(labels[0].split("/")[1].strip().rstrip("s"))
@@ -1841,7 +1841,7 @@ class TestDualScanpathAnimation:
     def test_dual_animation_identical_inputs(
         self, normalized_words_df, normalized_fixations_df
     ):
-        # Identical scanpaths animate on the same uniform time grid (VIZ-11).
+        # Identical scanpaths animate on the same uniform time grid.
         fig = make_scanpath_animation(
             normalized_words_df,
             normalized_fixations_df,
@@ -1885,7 +1885,7 @@ class TestDualScanpathAnimation:
 
 
 class TestAnimationFrameGrid:
-    """VIZ-11 follow-up: the frame grid is the user's tradeoff to make, and the
+    """The frame grid is the user's tradeoff to make, and the
     cap coarsening the requested step must be *reported*, not silent."""
 
     def _fix(self, n=200, gap_ms=100.0):
@@ -1924,7 +1924,7 @@ class TestAnimationFrameGrid:
         summary = animation_timeline_summary(
             [self._fix()], 1.0, grid_step_ms=10, max_frames=25
         )
-        # #422: the limit counts every frame, the first and the last included.
+        # The limit counts every frame, the first and the last included.
         assert summary["n_frames"] == 25
         assert summary["max_frames"] == 25
         assert summary["coarsened"] is True
@@ -1949,7 +1949,7 @@ class TestAnimationFrameGrid:
         assert implicit == explicit
 
     def test_the_standard_preset_is_the_default_grid(self):
-        # #422: a fresh session's grid is named *Standard*, not *Custom* — so it
+        # A fresh session's grid is named *Standard*, not *Custom* — so it
         # has to be the grid the rail, the API and `render` all start on.
         from scanpath_studio.controls import _VIZ_WIDGET_DEFAULTS
         from scanpath_studio.plots import _ANIM_GRID_STEP_MS, _ANIM_MAX_FRAMES
@@ -1995,10 +1995,10 @@ class TestAnimationPlaybackTiming:
     def test_playback_ms_is_the_reading_span_over_the_speed(
         self, normalized_fixations_df, speed
     ):
-        # BUG-93: the replay runs on the wall clock (animation_player_post_script),
-        # so what it takes — and what the side panel quotes — is the reading span
-        # divided by the speed. It used to be n_frames × Play's frame duration,
-        # which quoted a floored, truncated duration that Play then overran.
+        # The replay runs on the wall clock (animation_player_post_script), so
+        # what it takes — and what the side panel quotes — is the reading span
+        # divided by the speed, not n_frames × Play's frame duration (a floored,
+        # truncated duration that Play would overrun).
         span, playback_ms = animation_playback_ms([normalized_fixations_df], speed)
         assert span > 0
         assert playback_ms == pytest.approx(span / speed)
@@ -2009,7 +2009,7 @@ class TestAnimationPlaybackTiming:
     def test_frame_floor_clamps_fast_playback(self, normalized_words_df):
         # Plotly's own Play — what a figure plays with where the player script
         # isn't embedded, e.g. `fig.show()` — floors its frame duration at
-        # _ANIM_MIN_FRAME_MS. Under the uniform time grid (VIZ-11) that duration
+        # _ANIM_MIN_FRAME_MS. Under the uniform time grid that duration
         # is step / playback_speed, so a very high speed would drive it below
         # the floor — the clamp keeps it at the floor.
         from scanpath_studio.plots import _ANIM_MIN_FRAME_MS
@@ -2178,7 +2178,7 @@ class TestMakeComparisonFigure:
     def test_comparison_per_scanpath_opacity(
         self, normalized_words_df, normalized_fixations_df
     ):
-        """VIZ-6: a per-scanpath opacity < 1.0 sets that marker's alpha."""
+        """A per-scanpath opacity < 1.0 sets that marker's alpha."""
         words_multi = pd.concat(
             [
                 normalized_words_df.assign(participant_id="p1", trial_id="t1"),
@@ -2313,7 +2313,7 @@ class TestPlotEnhancements:
     def test_out_of_bounds_overlay_trace(
         self, synthetic_words_df, synthetic_fixations_df
     ):
-        # The synthetic trial has exactly one out-of-bounds fixation (PRE-2).
+        # The synthetic trial has exactly one out-of-bounds fixation.
         fig = self._figure(
             synthetic_words_df,
             synthetic_fixations_df,
@@ -2365,7 +2365,7 @@ class TestPlotEnhancements:
         assert float(fix.marker.line.width) >= 1.0
 
     def test_fixation_opacity(self, synthetic_words_df, synthetic_fixations_df):
-        # VIZ-6: the opacity is set explicitly (even at the 1.0 default) so the
+        # The opacity is set explicitly (even at the 1.0 default) so the
         # control overrides Plotly's ~0.7 default for variable-size markers — i.e.
         # "opacity at 1" really renders fully opaque.
         fig = self._figure(
@@ -2398,10 +2398,10 @@ class TestPlotEnhancements:
     def test_rtl_word_labels_are_centred_and_kept_isolated(
         self, synthetic_words_df, synthetic_fixations_df
     ):
-        """BUG-30: labels centre on their glyphs, in either direction.
+        """Labels centre on their glyphs, in either direction.
 
-        They used to anchor at the leading edge — `x` for LTR, `x + width` for
-        RTL — which left all of the box's spare room on the trailing side. A
+        Anchoring at the leading edge — `x` for LTR, `x + width` for RTL — would
+        leave all of the box's spare room on the trailing side. A
         centred label needs no direction-dependent anchor at all; the Unicode
         isolates stay, because they are about shaping mixed runs, not placement.
         """
@@ -2442,9 +2442,9 @@ class TestPlotEnhancements:
         assert list(trace.x) == pytest.approx(list((x0 + x1) / 2.0))
 
     def test_labels_on_a_tiling_corpus_are_centred_in_the_box(self):
-        """BUG-97: on the demo each box runs on across the space after its word
-        (BUG-83), and the label is centred in that box — 'Robert', 358 → 491,
-        at 424.5 — not on its glyph run (415), which drew it flush left."""
+        """On the demo each box runs on across the space after its word, and the
+        label is centred in that box — 'Robert', 358 → 491, at 424.5 — not on its
+        glyph run (415), which would draw it flush left."""
         from scanpath_studio import api, plots
         from scanpath_studio.measures import word_box_bounds
 
@@ -2720,8 +2720,7 @@ class TestLinePitchAndScript:
         assert _line_pitch(words) == pytest.approx(98.6)
 
     def test_line_pitch_equals_box_height_when_tiling(self, normalized_words_df):
-        # OneStop-style tiling / single line -> pitch falls back to box height, so
-        # existing OneStop sizing is unchanged.
+        # OneStop-style tiling / single line -> pitch falls back to box height.
         assert _line_pitch(normalized_words_df) == pytest.approx(50.0)
 
     def test_tight_boxes_size_from_pitch_not_height(self):
@@ -2735,7 +2734,7 @@ class TestLinePitchAndScript:
             manual_font_px=0,
             scale_text_to_boxes=True,
         )
-        assert font > 34 / 3 + 1  # strictly bigger than the old box-height budget
+        assert font > 34 / 3 + 1  # strictly bigger than the box-height budget
 
     def test_latin_advance_detects_cjk(self):
         cjk = pd.DataFrame({"text": ["月球是地球", "唯一卫星"]})
@@ -2758,7 +2757,7 @@ class TestLinePitchAndScript:
         assert wf == pytest.approx(28 * 0.92, rel=0.02)
 
     def test_width_fit_latin_only_unchanged(self, normalized_words_df):
-        # No CJK -> identical to the historical (box_width / n) / 0.6 formula.
+        # No CJK -> the plain (box_width / n) / 0.6 formula.
         wf = _width_fit_font(normalized_words_df)
         assert wf == pytest.approx(10 / 0.6 * 0.92, rel=1e-6)
 
@@ -2775,7 +2774,7 @@ class TestLinePitchAndScript:
 
 
 class TestBackgroundImageLayer:
-    """The stimulus-page background image layer (MultiplEYE)."""
+    """The stimulus-page background image layer."""
 
     def test_png_size_and_data_uri(self, tmp_path):
         p = tmp_path / "stim.png"
@@ -2861,7 +2860,7 @@ class TestBackgroundImageLayer:
 
 
 class TestNonFiniteValues:
-    """Round 9: a value Data checks reports as infinite is drawn as missing —
+    """A value Data checks reports as infinite is drawn as missing —
     off the axes, with no saccade through it — and never crashes a builder."""
 
     @staticmethod

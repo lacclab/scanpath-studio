@@ -133,7 +133,7 @@ EXPECTED = {
 }
 
 
-# --- DATA-67: the example import pair ---------------------------------------
+# --- The example import pair -----------------------------------------------
 #
 # The trial above as the two files an import starts from, with every column
 # named the way the add wizard's auto-detection reads it, so the pair maps
@@ -171,7 +171,7 @@ def example_import_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
 
     The AOI table carries two of the trial's hand-traced reading measures
     (``EXPECTED``) so the example shows that a dataset brings its own: the app
-    computes none for Corpus Analysis (AN-32). The fixation table has no word
+    computes none for Corpus Analysis. The fixation table has no word
     ids: the app assigns each fixation to the word box it falls in.
     """
     words = make_synthetic_words()
@@ -185,7 +185,7 @@ def example_import_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def make_multipart_synthetic_data() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Two-screen executable specification for multipart trials (DATA-21).
+    """Two-screen executable specification for multipart trials.
 
     Screen 1 contains a regression (word 2 → word 1); screen 2 has a different
     canvas and resets the screen-local fixation index while the parent clock and

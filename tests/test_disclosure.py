@@ -1,14 +1,12 @@
-"""UX-20: the AI-assistance disclosure, and the facts behind it.
+"""The AI-assistance disclosure, and the facts behind it.
 
 The note is deliberately three lines — built with AI assistance, cross-check
-before publishing, here is where to report it. It used to also spell out two
-things a reader could verify (the ground-truth trial, EyeLink precedence); that
-prose was cut as clutter, but the *guarantees* it described are what let the note
-stay this short, so they keep their tests here. A disclosure resting on claims
+before publishing, here is where to report it. Two guarantees a reader could
+verify (the ground-truth trial, EyeLink precedence) are what let the note stay
+this short, so they keep their tests here. A disclosure resting on claims
 nobody checks is worse than no disclosure.
 
-The route to the ground-truth trial is UX-37 behaviour now, not a documented
-claim, and is covered in ``tests/test_debug_log.py``.
+The route to the ground-truth trial is covered in ``tests/test_debug_log.py``.
 """
 
 from __future__ import annotations
@@ -37,8 +35,8 @@ class TestTheNoteIsOnEverySurface:
         # The actionable half — without it the note is unfalsifiable.
         assert "cross-check" in body.lower(), path
         # It must never send a reader off to hand-edit a URL: someone who has to
-        # do that verifies nothing. Scoped to the note itself, since app.py also
-        # *explains* the old param in a code comment.
+        # do that verifies nothing. Scoped to the note itself, since a code
+        # comment elsewhere in app.py may name the param.
         note = body[body.lower().find("ai assistance") :][:2000]
         assert "?source=synthetic" not in note, path
 
@@ -71,7 +69,7 @@ class TestTheNoteIsOnEverySurface:
 @pytest.mark.timeout(90)
 class TestTheGroundTruthFixtureIsReal:
     """The reading measures are pinned to a hand-traced trial. Nothing in the UI
-    says so anymore, but it is the reason the note needs no hedging beyond
+    says so, but it is the reason the note needs no hedging beyond
     "cross-check"."""
 
     def test_the_expectations_cover_every_canonical_measure(self):

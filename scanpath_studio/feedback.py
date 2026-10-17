@@ -1,12 +1,12 @@
 """*Send feedback* — the ❓ Help entry that says where each kind of feedback goes.
 
 **Nothing is sent from the app.** Every route is a GitHub page the user opens in
-their browser and submits themselves — the privacy page promises the app makes
-no request of its own, and a feedback form posting somewhere would break that.
-The dialog lists four routes (a bug report, a feature request, an idea or
-general comment, a question) and, for a bug report, the details its template asks for —
-version, install, Python, Streamlit, OS — in a block with a *Copy* button, so
-a report doesn't depend on the user finding the version first.
+their browser and submits themselves, so recordings stay on the user's computer
+and the app needs no feedback service. The dialog lists four routes (a bug
+report, a feature request, an idea or general comment, a question) and, for a
+bug report, the details its template asks for — version, install, Python,
+Streamlit, OS — in a block with a *Copy* button, so a report doesn't depend on
+the user finding the version first.
 
 The details are shown, not put into the issue URL: the user sees exactly what
 they paste, and the template's own sections stay intact (a ``body=`` parameter

@@ -1,4 +1,4 @@
-"""UX-165: loading cards at runtime — hidden, revealed, cancelled, released."""
+"""Loading cards at runtime — hidden, revealed, cancelled, released."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ def test_a_revealed_card_shows_its_steps_and_a_working_cancel(monkeypatch):
     monkeypatch.setattr(loading, "DELAY_S", 0)
     # The script stops with the card still open (never explicitly closed);
     # this test inspects that frozen card, so it opts out of the production
-    # off-thread clear `run_scope` now runs on any card still open at exit.
+    # off-thread clear `run_scope` runs on any card still open at exit.
     monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
     at = AppTest.from_function(_frozen_card_script).run()
     assert not at.exception
@@ -217,7 +217,7 @@ def test_a_region_card_releases_the_page_and_inherits_a_seen_reveal(monkeypatch,
     monkeypatch.setattr(loading, "DELAY_S", 0.2)
     monkeypatch.setattr(loading, "REFRESH_S", 30)
     # The script stops mid-plot-card; this test inspects the frozen card, so
-    # it opts out of the production off-thread clear that `st.stop()` now
+    # it opts out of the production off-thread clear that `st.stop()`
     # triggers (see test_a_stopped_card_clears_off_thread_unless_kept).
     monkeypatch.setattr(loading, "_KEEP_ON_STOP", True)
     at = AppTest.from_function(_page_script)
@@ -436,8 +436,8 @@ def _finished_card_script():
 
 
 def test_a_runs_task_leaves_the_registry_once_the_run_is_over():
-    """UX-165: every task key carries the session id, so a registry that kept
-    each task for the life of the server grew with every session. A task stays
+    """Every task key carries the session id, so a registry that kept each task
+    for the life of the server would grow with every session. A task stays
     registered exactly while something holds it — during the run, its card."""
     at = AppTest.from_function(_finished_card_script).run()
     assert not at.exception
@@ -643,7 +643,7 @@ def _gated_card_script():
 
 @pytest.mark.parametrize("reports", [False, True])
 def test_a_gated_card_shows_only_once_its_task_has_worked(monkeypatch, reports):
-    """UX-166: a card over work that is cheap on a cache hit (``reveal_on_work``)
+    """A card over work that is cheap on a cache hit (``reveal_on_work``)
     stays hidden however long its block runs until its task reports — then the
     timer, checking again every ``REFRESH_S``, reveals it. And only such a load
     is a "last load" to quote: a rerun that did no work records nothing."""

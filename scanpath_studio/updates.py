@@ -1,4 +1,4 @@
-"""Is there a newer Scanpath Studio than this build? (#139)
+"""Is there a newer Scanpath Studio than this build?
 
 Asked only when someone clicks *Check for updates* (Help → About), runs
 ``scanpath-studio version --check`` or calls ``api.check_for_updates`` — never
@@ -44,7 +44,7 @@ UPDATE_COMMANDS = {
 #: Each release's desktop download per (platform, machine) — the names
 #: ``.github/workflows/desktop.yml`` gives them. There is no Intel Mac build.
 #: Windows people get the per-user installer; the ``.zip`` stays on releases as
-#: the folder #385's updater swaps.
+#: the folder the desktop updater (``desktop_update``) swaps.
 DESKTOP_ARCHIVES = {
     ("darwin", "arm64"): "ScanpathStudio-macos-arm64.dmg",
     ("win32", "amd64"): "ScanpathStudio-windows-x86_64-setup.exe",
@@ -113,7 +113,7 @@ class UpdateCheckError(Exception):
 
 
 def _ssl_context() -> ssl.SSLContext:
-    """TLS trust for the request: what the operating system trusts (#391).
+    """TLS trust for the request: what the operating system trusts.
 
     Python's own defaults read OpenSSL's CA list, which a python.org install
     on macOS ships empty and a frozen desktop build may not find at all, and

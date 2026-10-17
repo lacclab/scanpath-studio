@@ -1,4 +1,4 @@
-"""UX-196 — the hover tooltip for cut-off dropdown labels."""
+"""The hover tooltip for cut-off dropdown labels."""
 
 from __future__ import annotations
 

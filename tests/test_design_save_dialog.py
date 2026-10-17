@@ -1,4 +1,4 @@
-"""My designs → 💾: the dialog that names the settings on screen (VIZ-39, #422)."""
+"""My designs → 💾: the dialog that names the settings on screen."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def _pending(at) -> bool:
 
 
 def test_the_name_field_is_not_required():
-    """#422: a required field blocks every submit button of its form until it
+    """A required field blocks every submit button of its form until it
     has a value — Cancel too. The check is the browser's, so AppTest cannot
     click into it; the proto is what reaches the browser."""
     at = _open_dialog()

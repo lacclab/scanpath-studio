@@ -5,7 +5,7 @@ Produces (into paper/figures, or $PAPER_FIGURES_DIR):
   fig_comparison.png — two readers of the same paragraph, overlaid on one canvas (blue/red)
   fig_replay.png     — three replay frames (a montage) at increasing reading time
 
-Run from the app repo:  cd app && uv run python paper/paper_figs.py
+Run from the repo root:  uv run python paper/paper_figs.py
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ def _figures_dir() -> Path:
 
     Defaults to ``paper/figures/`` inside the software repo so an archived
     release is self-contained; set ``PAPER_FIGURES_DIR`` to write straight into
-    the manuscript tree (e.g. ``PAPER_FIGURES_DIR=../../overleaf/figures``).
+    the manuscript tree (e.g. ``PAPER_FIGURES_DIR=../overleaf/figures``).
     """
     env = os.environ.get("PAPER_FIGURES_DIR")
     out = Path(env) if env else Path(__file__).resolve().parent / "figures"

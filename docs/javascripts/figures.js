@@ -1,4 +1,4 @@
-/* Figures on the docs pages (ENG-78).
+/* Figures on the docs pages.
  *
  * `docs_support.embed` writes each figure's Plotly JSON into the page, as the
  * host's `data-figure` attribute — never an inline script, which Material's
@@ -14,11 +14,10 @@
  * on its `document$` stream rather than once on load.
  *
  * A replay's JSON also carries `player`, the app's own wall-clock player
- * (`plots.animation_player_post_script`, BUG-93) — Plotly's frame queue runs a
+ * (`plots.animation_player_post_script`) — Plotly's frame queue runs a
  * replay slow — which is run against the drawn plot, as the app runs it. A
  * replay's JSON has no `frames`: the start of `player` rebuilds them from a
- * packed copy and adds them before the player starts (`plots.replay_page`,
- * PERF-17).
+ * packed copy and adds them before the player starts (`plots.replay_page`).
  */
 (() => {
   const PLOTLY_SRC = new URL("plotly.min.js", document.currentScript.src).href;
@@ -48,6 +47,9 @@
 
   const draw = async (host) => {
     const { player, ...spec } = JSON.parse(host.dataset.figure);
+    const replayPreview = Boolean(spec.layout?.meta?.sps_preview_loop);
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (replayPreview && reducedMotion) spec.layout.meta.scanpath_autoplay = false;
     const stage = document.createElement("div");
     stage.className = "sps-plot-stage";
     stage.id = `sps-plot-${++plotCount}`;
@@ -58,6 +60,30 @@
     await Plotly.newPlot(stage, spec);
     // The site's own build wrote this script, exactly as the app embeds it.
     if (player) new Function(player.split("{plot_id}").join(stage.id))();
+    if (replayPreview && !reducedMotion) {
+      // Use the same wall-clock player as the detail page. Keep thumbnail
+      // playback visible and repeat it, so arriving late never shows a still.
+      const last = spec.layout.meta.scanpath_frame_times_ms.length - 1;
+      let visible = false;
+      let restartTimer;
+      const play = () => {
+        if (visible && stage.isConnected && !document.hidden)
+          stage.emit("plotly_buttonclicked", { button: { name: "play" } });
+      };
+      const visibility = new IntersectionObserver(([entry]) => {
+        visible = entry.isIntersecting;
+        clearTimeout(restartTimer);
+        if (visible) play();
+        else stage.emit("plotly_buttonclicked", { button: { name: "pause" } });
+        if (!stage.isConnected) visibility.disconnect();
+      });
+      stage.on("plotly_animatingframe", (event) => {
+        if (Number(event.name) !== last || !visible) return;
+        clearTimeout(restartTimer);
+        restartTimer = setTimeout(play, 800);
+      });
+      visibility.observe(host);
+    }
     fit(host);
     new ResizeObserver(() => fit(host)).observe(host);
     host.dataset.state = "ready";

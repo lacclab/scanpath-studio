@@ -20,7 +20,7 @@
   color: var(--md-primary-fg-color);
 }
 
-/* ---------- Figures built at docs-build time (ENG-78) ----------
+/* ---------- Figures built at docs-build time ----------
    `docs_support.embed` + javascripts/figures.js: the figure renders at its
    own pixel size inside `.sps-plot-stage` and is scaled to the column as one
    block, so the host reserves its aspect ratio until then. */
@@ -84,7 +84,7 @@
   margin-top: 0.4em;
 }
 
-/* ---------- Generated reference tables (ENG-79) ---------- */
+/* ---------- Generated reference tables ---------- */
 
 /* The reference tables span the column, so the description gets the room
    the names leave; Material would otherwise size them to their content and
@@ -151,7 +151,7 @@
   height: auto;
 }
 
-/* ---------- Annotated screenshots (ENG-78) ---------- */
+/* ---------- Annotated screenshots ---------- */
 
 .md-typeset figure.sps-screenshot {
   margin: 1.2em 0;
@@ -162,7 +162,7 @@
   border: 1px solid var(--md-default-fg-color--lightest);
 }
 
-/* The app's icons (ENG-88): a page writes `:material/database:`, the docs hook
+/* The app's icons: a page writes `:material/database:`, the docs hook
    turns it into a span, and this draws the glyph from the Material Symbols font
    Streamlit ships (copied into the site by the hook) — the same one the app uses. */
 @font-face {
@@ -295,12 +295,54 @@
   font-size: 0.7rem;
 }
 
-.md-typeset .sps-home-features {
+/* Keep the recording prominent within each workflow tab. */
+.sps-home-workflows .tabbed-block::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+@media (min-width: 60em) {
+  .sps-home-workflows .tabbed-block > p:first-child {
+    float: left;
+    width: 73%;
+    margin: 0 1.5rem 0 0;
+  }
+
+  .sps-home-workflows .tabbed-block > p:nth-child(2) {
+    padding-top: 1.5rem;
+  }
+}
+.sps-home-workflows .sps-shot {
+  width: 100%;
+  margin: 0.75rem 0;
+}
+
+.md-typeset .sps-home-workflows .md-button {
+  padding: 0.5em 0.75em;
+  font-size: 0.7rem;
+}
+
+.md-typeset .sps-first-figure {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.md-typeset .sps-home-features > ul > li > ul {
-  margin-bottom: 0;
+/* Keep project destinations visible without the repository statistics. */
+.md-header .md-header__source {
+  display: block;
+  width: auto;
+  margin-left: 0.4rem;
+}
+
+.sps-project-links {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.sps-project-links .md-header__button {
+  margin: 0;
+  padding: 0.35rem;
 }
 
 .sps-home-links {
@@ -315,21 +357,16 @@
     gap: 1.2rem;
     margin-bottom: 1.5rem;
   }
-
-  .md-typeset .sps-home-features {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 34em) {
-  .md-typeset .sps-home-features {
+  .md-typeset .sps-first-figure {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
 /* The gallery index is a catalogue; each example opens on its own page. */
-.sps-gallery-grid,
-.sps-recording-grid {
+.sps-gallery-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
@@ -365,13 +402,8 @@
   font-size: 0.75rem;
 }
 
-.sps-recording-grid h3 {
-  margin-top: 0;
-}
-
 @media (max-width: 40em) {
-  .sps-gallery-grid,
-  .sps-recording-grid {
+  .sps-gallery-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }

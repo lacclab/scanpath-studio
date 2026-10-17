@@ -1,13 +1,12 @@
-"""BUG-108 + UX-200: every icon-only button and popover has an accessible name.
+"""Every icon-only button and popover has an accessible name.
 
-The mode and rail-section triggers draw only Streamlit's chevron (UX-80 r2), and
-until BUG-108 they did so by passing an empty label — which left nine unnamed
-buttons for a screen reader to choose between. Each is now named ("Fixation
-settings"), and `styles.py` clips the label off screen so the chevron is still
-all that is drawn. Verified in the browser: the button's text and its dialog's
+The mode and rail-section triggers draw only Streamlit's chevron, and an empty
+label there would leave nine unnamed buttons for a screen reader to choose
+between. Each is named ("Fixation settings"), and `styles.py` clips the label
+off screen so the chevron is still all that is drawn. Verified in the browser: the button's text and its dialog's
 ``aria-label`` read "Fixation settings", and the label's box is 1×1 px.
 
-UX-200 extended that to every other control drawn as a glyph or icon alone: the
+The same holds for every other control drawn as a glyph or icon alone: the
 ◀ ▶ steps, the ⇅ sorts, the folder pickers, ✏️, 🗑, ✨, + and the previews. Two
 techniques, because Streamlit names the two differently:
 
@@ -31,7 +30,8 @@ from scanpath_studio.styles import get_app_css
 PACKAGE = Path(__file__).resolve().parents[1] / "scanpath_studio"
 _BUTTONS = {"button", "download_button", "form_submit_button", "link_button"}
 _SHORTCODE = re.compile(r":material/\w+:")
-#: Popovers that keep a key from before UX-200 and are clipped by it.
+#: Popovers with a key of their own (not ``iconpop_*``) that the label is
+#: clipped by.
 _KEYED_POPOVERS = ("add_dataset_menu",)
 _NAMED = "\x00named\x00"
 
@@ -187,7 +187,7 @@ def test_the_names_are_clipped_off_screen():
 
 
 def test_the_rail_triggers_keep_a_focus_ring():
-    """Their `box-shadow: none` took Streamlit's own ring (UX-200)."""
+    """Their `box-shadow: none` removes Streamlit's own ring, so they draw one."""
     css = re.sub(r"\s+", " ", get_app_css())
     body = _rule_body(
         css,

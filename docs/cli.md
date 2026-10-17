@@ -348,8 +348,7 @@ copy at its next change, so clear the cache with the app closed.
 | turn it off wherever the variable is set | `SCANPATH_STUDIO_PERSIST=0` |
 | move the folder | `SCANPATH_STUDIO_STATE_DIR` |
 
-Hosted deployments never cache. See
-[Privacy](privacy.md#what-happens-to-a-file-you-upload).
+Hosted deployments do not cache by default.
 
 ## version
 

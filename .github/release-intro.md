@@ -7,7 +7,7 @@
 
 [Documentation](https://lacclab.github.io/scanpath-studio/) · [Ask a question](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a) · [Report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md) · [Cite](https://lacclab.github.io/scanpath-studio/cite/)
 
-**Held back in this beta:** the reading measures and summaries the app would compute from fixations. Corpus Analysis shows the measures your dataset brings, and the computations reference lists what each figure derives.
+**Not included yet:** reading measures computed by the app from fixations. Corpus Analysis shows the measures your dataset brings.
 
 ---
 

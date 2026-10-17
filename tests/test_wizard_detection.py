@@ -1,4 +1,4 @@
-"""#374 F13: what the add screen detects on an EyeLink export.
+"""What the add screen detects on an EyeLink export.
 
 `item` is the Text ID of an EyeLink experiment whose trial order was
 randomized; a condition column is kept by default so it can be filtered on; a
@@ -120,7 +120,7 @@ def test_extras_keep_conditions_and_never_a_mapped_column(monkeypatch):
 
 
 def test_the_add_confirmation_counts_trials_and_participants():
-    """#374 F30: ✅ Add dataset says what arrived."""
+    """✅ Add dataset says what arrived."""
     from scanpath_studio.app import dataset_added_message
 
     fixations = pd.DataFrame(

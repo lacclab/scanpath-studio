@@ -415,7 +415,7 @@ def test_a_numeric_colour_bar_survives_the_heart():
     assert (bars[0].marker.cmin, bars[0].marker.cmax) == (100.0, 300.0)
 
 
-# --- #422: the fixations' Color bar row says why it is greyed -----------------
+# --- The fixations' Color bar row says why it is greyed ----------------------
 
 
 def _color_bar_tip(at: AppTest) -> str:
@@ -468,7 +468,7 @@ def test_color_by_offers_retained_numeric_columns_after_the_familiar_ones():
     # Identifiers, positions, flags and text are not colour scales.
     for column in ("x", "y", "fixation_id", "saccade_ok", "label"):
         assert column not in options
-    # Bookkeeping never shows (DATA-49).
+    # Bookkeeping never shows.
     assert "_timestamp_synthesized" not in color_field_options(
         fixations.assign(_timestamp_synthesized=False)
     )

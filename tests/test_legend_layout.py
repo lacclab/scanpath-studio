@@ -2,7 +2,7 @@
 
 Each legend kind can be moved to a spot of its own, laid out as a stack or a
 row and given a text size, on top of its layer's own show/hide switch. Auto
-throughout draws the figure exactly as before. An outside spot grows the figure
+throughout keeps the default placement. An outside spot grows the figure
 so the equal-aspect plot region — and the true-to-scale text — keeps its size.
 """
 
@@ -597,7 +597,8 @@ class TestOnlyTheLegendsDrawnGetARow:
 
 class TestTheContentTop:
     """A legend above the plot stands on the top of the highest marker, not its
-    centre — its background washed out the top of that fixation."""
+    centre — on the centre, its background would wash out the top of that
+    fixation."""
 
     @staticmethod
     def _inset(size):
@@ -676,7 +677,7 @@ class TestTheSizeKeyAboveThePlot:
 class TestTheHighlightNote:
     """The note naming the highlighted words is a Legends row of its own:
     Show hides it, Position moves it, Text size sizes it; Auto leaves it in
-    the plot's bottom-left corner, where it always was."""
+    the plot's bottom-left corner."""
 
     @staticmethod
     def _fig():

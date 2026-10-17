@@ -532,7 +532,7 @@ class TestAnExistingDatasetGainsRawGaze:
 
 
 class TestNameDescriptionAndMetadataWaitForSave:
-    """Improvement A — the parts of an edit the editor's widgets do not hold
+    """The parts of an edit the editor's widgets do not hold
     (the metadata tables) are noted when it opens and put back on Cancel; the
     name and description are drafts until Save."""
 

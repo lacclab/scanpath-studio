@@ -1,4 +1,4 @@
-"""Telling the user how long an export still has (PERF-6).
+"""Telling the user how long an export still has.
 
 A bulk export over OneStop is a job measured in hours — ~0.7 s a trial across
 20,000 trials. "1,203 / 20,000" answers *where* it is; it does not answer the

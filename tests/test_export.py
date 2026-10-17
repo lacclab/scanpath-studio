@@ -138,8 +138,8 @@ class TestBulkExport:
     def test_a_path_pattern_that_leaves_the_zip_is_refused_up_front(
         self, minimal_combos, minimal_words, minimal_fixations, base_settings, pattern
     ):
-        """Round 10, finding 5: `../{artifact}.{ext}` wrote `../plot_config.json`,
-        and an empty pattern a member with no name."""
+        """`../{artifact}.{ext}` would write `../plot_config.json`, and an empty
+        pattern a member with no name."""
         opts = ExportOptions(
             include_png=False,
             include_svg=False,
@@ -194,7 +194,7 @@ class TestBulkExport:
             assert "per_trial/p1__t1/saccades.csv" in names
             assert "per_trial/p1__t1/word_measures.csv" in names
             assert "per_trial/p1__t1/trial_summary.csv" in names
-            # EXP-23: stacked copies only when the tables are combined — the
+            # Stacked copies only when the tables are combined — the
             # reader summary, which has no per-trial form, is always there.
             assert "aggregate/all_saccades.csv" not in names
             assert "aggregate/all_reader_summary.csv" in names
@@ -208,9 +208,9 @@ class TestBulkExport:
         base_settings,
         table_format,
     ):
-        """EXP-15: with the combined tables *and* the full family ticked,
-        `aggregate/all_fixations.*` was written twice with different columns —
-        a zip keeps both entries, and a reader silently sees only one."""
+        """With the combined tables *and* the full family ticked,
+        `aggregate/all_fixations.*` must be written once — a zip keeps both
+        entries of a duplicate name, and a reader silently sees only one."""
         import collections
 
         opts = ExportOptions(
@@ -398,8 +398,8 @@ def _bulk(combos, words, fixations, settings, **options):
 
 
 class TestExportComputesNoMeasures:
-    """EXP-23: Export follows AN-32 — the word tables carry the reading
-    measures the dataset brought, and nothing is computed."""
+    """The word tables carry the reading measures the dataset brought, and
+    nothing is computed."""
 
     def test_no_brought_measures_means_no_word_table_and_a_note(
         self, minimal_combos, minimal_words, minimal_fixations, base_settings
@@ -442,7 +442,7 @@ class TestExportComputesNoMeasures:
 
 
 class TestCombineTrials:
-    """EXP-23: *Combine all trials into one file* writes each table once,
+    """*Combine all trials into one file* writes each table once,
     every trial stacked, in place of the per-trial copies."""
 
     def test_tables_are_stacked_instead_of_per_trial(
@@ -488,8 +488,8 @@ class TestCombineTrials:
 
 
 class TestBulkDriftCorrection:
-    """EXP-4 / VIZ-24: bulk-exported figures honour the PRE-3 drift correction;
-    the exported tables deliberately stay uncorrected."""
+    """Bulk-exported figures honour the drift correction; the exported tables
+    deliberately stay uncorrected."""
 
     @pytest.fixture
     def two_line_words(self):
@@ -616,7 +616,7 @@ class TestBulkDriftCorrection:
 
 
 class TestSeparableLayers:
-    """VIZ-5: the per-layer figure breakdown dropped under `layers/`."""
+    """The per-layer figure breakdown dropped under `layers/`."""
 
     def test_layer_formats_defaults_to_svg(self):
         # Separable layers with no vector/raster figure format picked → SVG (the
@@ -739,7 +739,7 @@ class TestSeparableLayers:
         base_settings,
     ):
         # A layer-split failure must be reported as a *layer* error and must NOT
-        # drop the combined figure (they're in separate try blocks now).
+        # drop the combined figure (they're in separate try blocks).
         import scanpath_studio.export as export_mod
 
         monkeypatch.setattr(export_mod, "_figure_renderer", self._fake_renderer())
@@ -779,20 +779,20 @@ class TestSeparableLayers:
 
 
 class TestLocalPathsAreNotExported:
-    """DATA-16 / security audit S4.
+    """Local paths never reach an exported file.
 
     `image_path` is a passthrough meta field on both schemas, so it survives
     normalization and rides into the exported fixation tables — and a fixations
     CSV is exactly the file that gets attached to a paper, posted to OSF, or
     mailed to a collaborator. `/Users/<name>/` discloses the OS account name and
-    the rest discloses the directory layout, including where a MultiplEYE corpus
-    lives on the machine.
+    the rest discloses the directory layout, including where a corpus lives on
+    the machine.
     """
 
     LEAKY = "/Users/someone/Projects/corpora/images/2_1_1_Ele__paragraph.png"
 
     def _export(self, combos, words, fixations, settings, fmt="csv"):
-        # A brought measure, so the words table is written too (EXP-23).
+        # A brought measure, so the words table is written too.
         words = words.assign(total_fixation_duration_ms=200.0)
         opts = ExportOptions(
             include_png=False,
@@ -820,7 +820,7 @@ class TestLocalPathsAreNotExported:
     def test_no_exported_table_carries_the_directory(
         self, minimal_combos, minimal_words, minimal_fixations, base_settings
     ):
-        """Checked the way the audit found it: grep every zip member."""
+        """Grep every zip member for the directory."""
         fixations = minimal_fixations.assign(image_path=self.LEAKY)
         words = minimal_words.assign(image_path=self.LEAKY)
         archive = self._export(minimal_combos, words, fixations, base_settings)
@@ -892,7 +892,7 @@ class TestStripLocalPaths:
 
 
 class TestAnnotationsInTheBundle:
-    """UX-179: the Export bundle can carry the exported trials' annotations."""
+    """The Export bundle can carry the exported trials' annotations."""
 
     RECORDS = [
         {
@@ -951,14 +951,14 @@ class TestAnnotationsInTheBundle:
             text = zf.read("annotations.json").decode("utf-8")
             store = deserialize(text)
             assert list(store) == [("p1", "t1")]
-            # DATA-48: schema 3 names the dataset the annotations were made on.
+            # Schema 3 names the dataset the annotations were made on.
             assert file_dataset(text) == "Pilot"
             assert "annotations.json" in zf.read("README.md").decode("utf-8")
 
     def test_no_annotation_in_scope_means_no_file_and_no_readme_line(
         self, minimal_combos, minimal_words, minimal_fixations, base_settings
     ):
-        """Round 10, finding 6: the README promised a file the scope left out."""
+        """The README never promises a file the scope left out."""
         others = minimal_combos[minimal_combos["trial_id"] != "t1"]
         with self._export(
             others, minimal_words, minimal_fixations, base_settings, include=True
@@ -999,7 +999,7 @@ class TestAnnotationsInTheBundle:
 
 
 class TestBuildSummary:
-    """EXP-24: a built bundle says what it made and what failed, and a missing
+    """A built bundle says what it made and what failed, and a missing
     browser costs only the formats that need one."""
 
     @staticmethod
@@ -1238,11 +1238,12 @@ class TestInventory:
 
 
 class TestTheBundlesOwnFilesKeepTheirNames:
-    """#412 — a valid path pattern could name a trial's file `README.md` (or
-    `index.csv`, `columns.json`, a metadata or combined table): the bundle then
-    held two members of that name, a reader opened the plot config as the
-    README, and the inventory pointed at whichever one it met. The trial's file
-    now takes the next free name, and each member is the file its row says."""
+    """A valid path pattern can name a trial's file `README.md` (or
+    `index.csv`, `columns.json`, a metadata or combined table). The bundle must
+    not then hold two members of that name — a reader would open the plot
+    config as the README, and the inventory would point at whichever one it
+    met — so the trial's file takes the next free name, and each member is the
+    file its row says."""
 
     @staticmethod
     def _bundle(combos, words, fixations, settings, pattern):

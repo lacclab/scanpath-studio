@@ -1,13 +1,13 @@
 """Manuscript screenshots of the running application.
 
 The other scripts here render figures headlessly through the public API. This
-one is the exception the README used to note: the interface figures can only
-come from the app itself, so it drives a real browser over a running server and
-saves what a user would see.
+one is the exception: the interface figures can only come from the app itself,
+so it drives a real browser over a running server and saves what a user would
+see.
 
 Run the app first (its port is the one this script talks to)::
 
-    cd app && uv run streamlit run streamlit_app.py --server.port 8599
+    uv run streamlit run streamlit_app.py --server.port 8599
 
 then, from the same directory::
 
@@ -21,10 +21,7 @@ Its Chromium build comes from ``playwright install chromium``; set
 Captured in the app's **light** theme at a 2x device scale factor, with
 Streamlit's local-dev toolbar hidden, so the images stand up to print.
 
-Two of the figures need data beyond the bundled demo: the MultiplEYE
-question-screen heatmap loads the ZH-CH sample through the app's public-corpus
-picker, so `data/MultiplEYE_ZH_CH_Zurich_1_2025` has to be in place (see
-`datasets.load_multipleye`). Everything else is the demo the app ships with.
+Every figure is taken from the demo the app ships with.
 """
 
 from __future__ import annotations
@@ -212,8 +209,9 @@ def deep_link(page: Page, params: dict) -> None:
 def reset_viz(page: Page) -> None:
     """Press ♻️ Reset visualization, so a run never inherits the last one's view.
 
-    The fixation-index window in particular has no URL param (VIZ-7), so a
-    window left behind by an earlier run would silently subset every figure.
+    The fixation-index window in particular is not named in this script's
+    links, so a window left behind by an earlier run would silently subset
+    every figure.
     """
     btns = visible(page.locator('button:has-text("Reset visualization")'))
     if not btns:
@@ -344,16 +342,6 @@ DEMO_TRIAL = {
 SENTENCE_WORDS = (92, 105)
 SENTENCE_FIXATIONS = (124, 139)
 
-#: One MultiplEYE reading: a Chinese stimulus, on the last of its comprehension
-#: -question screens (70 fixations over the question and its four options).
-MULTIPLEYE_QUESTION = {
-    "source": "corpus",
-    "corpus": "multipleye",
-    "participant": "001_ZH_CH_1_ET1",
-    "trial_id": "Arg_PISACowsMilk_10",
-    "screen": "question_10131",
-}
-
 
 def capture(page: Page) -> None:
     # The app restores the last session's dataset, view and plot settings, so
@@ -435,15 +423,15 @@ def capture(page: Page) -> None:
         leave[0].click()
         settle(page, quiet=2.0)
 
-    # The two figures that need a view of their own come last, because each
-    # leaves the app somewhere the ones above would rather not start from.
+    # The figure that needs a view of its own comes last, because it leaves
+    # the app somewhere the ones above would rather not start from.
     print("sentence schematic", flush=True)
     deep_link(
         page,
         {
             **DEMO_TRIAL,
-            # VIZ-9's linear-reading schematic: fixations snapped to their line
-            # (keeping their own x, #422), saccades arced over the text.
+            # The linear-reading schematic: fixations snapped to their line
+            # (keeping their own x), saccades arced over the text.
             "snap_fixations": 1,
             "saccade_render_mode": "Arc",
             "show_order": 1,
@@ -461,28 +449,6 @@ def capture(page: Page) -> None:
     )
     set_fix_window(page, *SENTENCE_FIXATIONS)
     shot_zoomed_plot(page, "fig_ui_plot_sentence_schematic", "single", *SENTENCE_WORDS)
-
-    print("multipleye question screen", flush=True)
-    deep_link(
-        page,
-        {
-            **MULTIPLEYE_QUESTION,
-            "show_heatmap": 1,
-            "heatmap_style": "Interpolated",
-            "heatmap_colorscale": "Viridis",
-            "show_colorbars": 1,
-            "show_words": 1,
-            "show_labels": 1,
-            "show_fixations": 0,
-            "show_saccades": 0,
-            "show_raw_gaze": 0,
-            "snap_fixations": 0,
-            "saccade_render_mode": "Straight",
-            "full_monitor": 1,
-            "palette": "Default (colourblind-safe)",
-        },
-    )
-    shot_plot(page, "fig_ui_plot_multipleye_question", "single")
 
 
 def main() -> int:

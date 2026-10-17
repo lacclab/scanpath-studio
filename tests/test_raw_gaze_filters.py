@@ -1,4 +1,4 @@
-"""BUG-12 (annotation filters reach the raw-gaze table) + DATA-16 (zip size cap).
+"""Annotation filters reach the raw-gaze table, and zipped tables have a size cap.
 
 Both live in ``data.py``: the raw-gaze samples table has to be narrowed by the
 same ``(participant_id, trial_id)`` key set as the words and fixations frames,
@@ -106,10 +106,9 @@ class TestFilterFrameToKeys:
 
 
 class TestAllThreeFramesEmptyTogether:
-    """BUG-12's user-visible consequence: with nothing starred, the raw-gaze
-    frame used to survive "⭐ Favorites only" while words + fixations emptied, so
-    ``app.main``'s all-three-empty guard (and the UX-7 guidance panel behind it)
-    never fired."""
+    """With nothing starred, "⭐ Favorites only" empties the raw-gaze frame
+    along with words + fixations — otherwise ``app.main``'s all-three-empty
+    guard (and the guidance panel behind it) would never fire."""
 
     def test_favorites_only_with_nothing_starred_empties_every_frame(self):
         words, fixations, raw = _words(), _fixations(), _raw_gaze()
@@ -148,7 +147,7 @@ def _zip_bytes(members: dict[str, bytes]) -> io.BytesIO:
 
 
 class TestZipSizeCap:
-    """DATA-16 / security finding S6."""
+    """A zipped table that would decompress past the ``ZIP_MAX_*`` limits is refused."""
 
     def test_limits_are_ordered_sanely(self):
         assert ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES <= ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES
@@ -236,9 +235,9 @@ class TestZipSizeCap:
             read_table(buf)
 
     def test_defaults_clear_a_full_fixation_report(self):
-        # DATA-34: one OneStop fixation report is a single ~8 GB CSV inside its
-        # zip. The 4 GB per-member default refused it outright; the caps are a
-        # memory guard, and the machine holding a corpus has the memory.
+        # One OneStop fixation report is a single ~8 GB CSV inside its zip, so
+        # a 4 GB per-member cap would refuse it outright; the caps are a memory
+        # guard, and the machine holding a corpus has the memory.
         assert ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES >= 16 * 1024**3
         assert ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES >= 32 * 1024**3
 

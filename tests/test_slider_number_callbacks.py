@@ -1,11 +1,11 @@
-"""BUG-18: a number box's ``on_change`` must not crash when its key is gone.
+"""A number box's ``on_change`` must not crash when its key is gone.
 
-The UX-9 slider+box pairs give the box a shadow ``{key}__num*`` session key and
+The slider+box pairs give the box a shadow ``{key}__num*`` session key and
 commit it to the canonical key from an ``on_change`` callback. Streamlit runs
 that callback *before* the script that would recreate the widget, and it drops a
 widget's key at the end of any run in which the widget did not render — so a
-change queued while a slow rerun was in flight could reach a callback whose own
-key no longer existed. The reported crash was
+change queued while a slow rerun is in flight can reach a callback whose own
+key no longer exists. The crash looks like
 
     KeyError: st.session_state has no key "global_heatmap_color_range__num_lo"
 

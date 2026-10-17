@@ -43,8 +43,8 @@ individual trials.
 
 Use a tidy summary table: a word profile needs `word_id` and `value`, with
 optional `lo` and `hi` for a band. Rename a source word ID column to `word_id`
-if needed. The [gallery example](../../gallery/word-profile.md) includes a
-ready-to-render table.
+if needed. Use a result table exported from Corpus Analysis.
+For a trial-order trend, see [Across the experiment](../../gallery/across-experiment.md).
 
 ??? example "Python and CLI: word profile"
 

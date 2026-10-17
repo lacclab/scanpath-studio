@@ -3,7 +3,7 @@
 This module powers the "Bulk export" button. Users pick which artifacts they
 want per trial (PNG, SVG, JSON plot config, fixations CSV/Parquet, per-word
 measures CSV/Parquet), or each table once with every trial stacked in it
-(EXP-23's *Combine all trials into one file*). Everything is packaged into a
+(*Combine all trials into one file*). Everything is packaged into a
 single zip archive with a clean folder structure:
 
     bulk_export_<timestamp>.zip
@@ -11,7 +11,7 @@ single zip archive with a clean folder structure:
     │  ├─ <participant>__<trial>/
     │  │  ├─ figure.png
     │  │  ├─ figure.svg
-    │  │  ├─ layers/                 (VIZ-5, optional)
+    │  │  ├─ layers/                 (optional)
     │  │  │  ├─ word_boxes.svg
     │  │  │  ├─ fixations.svg
     │  │  │  ├─ saccades.svg
@@ -23,7 +23,7 @@ single zip archive with a clean folder structure:
     ├─ aggregate/                 (combined tables, instead of the per-trial ones)
     │  ├─ all_fixations.csv (and/or .parquet)
     │  └─ all_measures.csv (and/or .parquet)
-    └─ annotations.json          (UX-179, optional)
+    └─ annotations.json          (optional)
 """
 
 from __future__ import annotations
@@ -96,21 +96,21 @@ from .utils import extract_trial
 
 
 def _local_stamp() -> str:
-    """Now in this computer's local time, with its UTC offset said (#374, F28):
+    """Now in this computer's local time, with its UTC offset said:
     ``2026-10-06 21:21:01 (UTC+03:00)``."""
     now = datetime.now().astimezone()
     offset = now.strftime("%z")
     return f"{now:%Y-%m-%d %H:%M:%S} (UTC{offset[:3]}:{offset[3:]})"
 
 
-# --- #374 F28 · a raster figure's print size ---------------------------------
+# --- A raster figure's print size --------------------------------------------
 #: The units a print width is given in → millimetres per unit.
 PRINT_UNITS = {"mm": 1.0, "in": 25.4}
 #: The resolution a print width is drawn at when none is named.
 DEFAULT_PRINT_DPI = 300
-#: #374 F28 — the print width and dpi every surface accepts: Export → Current
-#: figure's boxes, a link or settings file (clamped), `render` and `save_figure`
-#: (refused outside them).
+#: The print width and dpi every surface accepts: Export → Current figure's
+#: boxes, a link or settings file (clamped), `render` and `save_figure` (refused
+#: outside them).
 PRINT_WIDTH_BOUNDS = (1.0, 2000.0)
 PRINT_DPI_BOUNDS = (50, 2400)
 #: What the app's Export → Current figure PNG is drawn at without a print width
@@ -163,16 +163,14 @@ def set_png_dpi(path, dpi: int) -> None:
         image.save(path, format="PNG", dpi=(dpi, dpi))
 
 
-# --- EXP-1 · customizable export paths ---------------------------------------
-# A zip of 200 trials landed with names the tool chose, which is rarely how a
-# user organizes figures for a paper. The path of every artifact is now a
-# *pattern* over the trial's own fields, so a batch can be dropped straight into
-# an existing folder structure. The default reproduces the historical layout
-# exactly, so nothing changes unless the pattern is edited.
+# --- Customizable export paths -----------------------------------------------
+# Names the tool chooses are rarely how a user organizes figures for a paper, so
+# the path of every artifact is a *pattern* over the trial's own fields, and a
+# batch can be dropped straight into an existing folder structure.
 DEFAULT_PATH_PATTERN = "per_trial/{participant_id}__{trial_id}/{artifact}.{ext}"
-# EXP-2 · a figure pulled into a paper or a slide loses its provenance the moment
-# it leaves the app, so it can carry its own. Same substitution as the path
-# patterns; empty means "no title / no caption".
+# A figure pulled into a paper or a slide loses its provenance the moment it
+# leaves the app, so it can carry its own title and caption. Same substitution
+# as the path patterns; empty means "no title / no caption".
 DEFAULT_TITLE_PATTERN = "{participant_id} · {trial_id}"
 DEFAULT_CAPTION_PATTERN = "{text_id} · {n_fixations} fixations · {settings}"
 
@@ -192,56 +190,55 @@ class ExportOptions:
     # stays interactive; handled specially in the export loop.
     include_html: bool = False
     include_plot_config: bool = True
-    # UX-179: the exported trials' annotations (favorites, tags, notes) as one
+    # The exported trials' annotations (favorites, tags, notes) as one
     # `annotations.json` at the bundle root — the file 🗂️ Data → Annotations
     # exports and imports. Off by default: notes can be personal.
     include_annotations: bool = False
     include_fixations: bool = False
-    # VIZ-45: each trial's raw (sample-level) gaze as its own table, written as
+    # Each trial's raw (sample-level) gaze as its own table, written as
     # recorded — for a raw-gaze-only dataset it is the only recording there is.
     include_raw_gaze: bool = False
-    # AN-32 / EXP-23: the word table with the reading measures the dataset
-    # *brought*. Export computes none, as the Corpus Analysis page doesn't.
+    # The word table with the reading measures the dataset *brought*. Export
+    # computes none, as the Corpus Analysis page doesn't.
     include_measures: bool = False
     include_analysis_family: bool = False
-    # EXP-23: write each chosen table once, every exported trial stacked, as
-    # `aggregate/all_<table>` — instead of one file per trial. Replaced the
-    # "Mega-table", which stacked two of the tables beside the per-trial ones.
+    # Write each chosen table once, every exported trial stacked, as
+    # `aggregate/all_<table>` — instead of one file per trial.
     combine_trials: bool = False
-    # VIZ-5: also drop a per-layer breakdown of the figure (word boxes / fixations
+    # Also drop a per-layer breakdown of the figure (word boxes / fixations
     # / saccades / heatmap / labels / stimulus image) into `layers/` so each can be
     # restyled independently in Illustrator / Inkscape. Uses the selected vector /
     # raster formats (SVG when none was picked — the publication default).
     separable_layers: bool = False
     table_format: str = "csv"  # "csv" | "parquet" | "both"
     png_scale: int = 2
-    # EXP-1: where each artifact lands inside the zip. `{artifact}` / `{ext}` name
-    # the file (figure / fixations / measures / plot_config / layer names); every
-    # other placeholder comes from the trial. The default is the historical layout.
+    # Where each artifact lands inside the zip. `{artifact}` / `{ext}` name the
+    # file (figure / fixations / measures / plot_config / layer names); every
+    # other placeholder comes from the trial.
     path_pattern: str = DEFAULT_PATH_PATTERN
-    # EXP-2: an optional title + caption rendered into the exported image and
-    # recorded in the per-trial manifest. Empty = off (the historical behaviour).
+    # An optional title + caption rendered into the exported image and
+    # recorded in the per-trial manifest. Empty = off.
     title_pattern: str = ""
     caption_pattern: str = ""
-    # VIZ-36: what `{dataset_name}` substitutes to. The app fills it from the
+    # What `{dataset_name}` substitutes to. The app fills it from the
     # dataset picker's label; a headless caller that says nothing gets "", so
     # the placeholder renders empty rather than erroring on a surface nobody is
     # watching.
     dataset_name: str = ""
-    # DATA-20 milestone 10: which columns of the attached participant table go
-    # into `metadata/participants.*`. `None` is every field (the default, and
-    # what a headless caller that knows nothing about this gets); a tuple is
-    # exactly those, always alongside the reader id; an **empty** tuple leaves
-    # the table out of the bundle. Reader attributes are the most re-identifying
-    # thing an export can carry, so the opt-out has to be per field rather than
+    # Which columns of the attached participant table go into
+    # `metadata/participants.*`. `None` is every field (the default, and what a
+    # headless caller that knows nothing about this gets); a tuple is exactly
+    # those, always alongside the reader id; an **empty** tuple leaves the table
+    # out of the bundle. Reader attributes are the most re-identifying thing an
+    # export can carry, so the opt-out has to be per field rather than
     # all-or-nothing.
     metadata_fields: tuple[str, ...] | None = None
-    # DATA-29: the same per-field opt-out for the attached *trial* table,
-    # written to `metadata/trials.*`. Kept as its own field rather than
-    # folded into `metadata_fields` because the two tables are attached and
-    # cleared independently, and because what is safe to ship differs by
-    # grain: a reader attribute re-identifies a person, a trial attribute
-    # usually describes the material.
+    # The same per-field opt-out for the attached *trial* table, written to
+    # `metadata/trials.*`. Kept as its own field rather than folded into
+    # `metadata_fields` because the two tables are attached and cleared
+    # independently, and because what is safe to ship differs by grain: a
+    # reader attribute re-identifies a person, a trial attribute usually
+    # describes the material.
     trial_metadata_fields: tuple[str, ...] | None = None
     # And the same opt-out for the attached *text* table, written to
     # `metadata/texts.*` — the third grain, same reasoning again.
@@ -292,7 +289,7 @@ class ExportOptions:
         return [f for f in self.figure_formats() if f != "html"]
 
     def layer_formats(self) -> list[str]:
-        """Formats for the per-layer breakdown (VIZ-5) — the selected non-HTML
+        """Formats for the per-layer breakdown — the selected non-HTML
         figure formats, or SVG when none was picked (vectors suit Illustrator).
         Empty when separable layers are off."""
         if not self.separable_layers:
@@ -316,7 +313,7 @@ class ExportProgress:
     finished_trials: int = 0
     bytes_written: int = 0
     errors: list[str] = field(default_factory=list)
-    # EXP-24: what the build produced, for the summary under it — every file in
+    # What the build produced, for the summary under it — every file in
     # the zip, and the figure files (combined figures and per-layer files)
     # written and failed, one per format per trial.
     files_written: int = 0
@@ -327,9 +324,9 @@ class ExportProgress:
 
 @dataclass(frozen=True)
 class ExportSummary:
-    """EXP-24: how a finished bundle reads — ``level`` is ``"success"``,
-    ``"warning"`` (some of it failed) or ``"error"`` (figures were asked for and
-    none was made), and ``expand_errors`` opens the error list for the last."""
+    """How a finished bundle reads — ``level`` is ``"success"``, ``"warning"``
+    (some of it failed) or ``"error"`` (figures were asked for and none was
+    made), and ``expand_errors`` opens the error list for the last."""
 
     level: str
     message: str
@@ -349,13 +346,13 @@ def html_plotlyjs(self_contained: bool) -> bool | str:
 
 
 def missing_browser_note(static_formats: bool) -> str:
-    """EXP-24: the bundle's browser prerequisite, when it is unmet, else ``""``.
+    """The bundle's browser prerequisite, when it is unmet, else ``""``.
 
     The bundle draws PNG, SVG and PDF through Kaleido on the server, which
     needs Chrome, Chromium or Edge there; the current figure's PNG and SVG are
-    saved by the reader's own browser and need none — a distinction the panel
-    used to keep to itself, so a bundle on a machine without one built a zip
-    of failures. Asked only when ``static_formats`` are picked.
+    saved by the reader's own browser and need none. Saying so up front keeps a
+    machine without a browser from building a zip of failures. Asked only when
+    ``static_formats`` are picked.
     """
     if not static_formats:
         return ""
@@ -372,13 +369,13 @@ def missing_browser_note(static_formats: bool) -> str:
 
 
 def summarize_export(progress: ExportProgress, size_bytes: int) -> ExportSummary:
-    """What a built bundle holds and what failed, in one line (EXP-24).
+    """What a built bundle holds and what failed, in one line.
 
-    A generic "Ready" over a zip whose figures all failed read as a success,
-    with the failures one click away in an expander. The line counts what was
-    made and what wasn't; a build whose requested figures all failed is an
-    error, with its list open. The zip stays downloadable either way — the
-    files it does hold are good.
+    A generic "Ready" over a zip whose figures all failed would read as a
+    success, with the failures one click away in an expander. The line counts
+    what was made and what wasn't; a build whose requested figures all failed
+    is an error, with its list open. The zip stays downloadable either way —
+    the files it does hold are good.
     """
 
     def plural(n: int, word: str) -> str:
@@ -423,7 +420,7 @@ _PLACEHOLDER_RE = re.compile(r"\{([^{}]*)\}")
 
 
 def _settings_summary(settings: dict) -> str:
-    """A one-line description of the settings that produced the figure (EXP-2)."""
+    """A one-line description of the settings that produced the figure."""
     layers = [
         name
         for name, key in (
@@ -445,11 +442,11 @@ def _settings_summary(settings: dict) -> str:
     return " · ".join(parts)
 
 
-#: VIZ-36 — the fields that can hold *two* values at once, because an overlay
+#: The fields that can hold *two* values at once, because an overlay
 #: draws two readings into one frame. Each gains an ``_a`` / ``_b`` variant.
 PAIRED_PATTERN_FIELDS = ("dataset_name", "participant_id", "trial_id", "text_id")
 
-#: EXP-22 — the tables a pattern can name a field of, as ``{table.field}``, and
+#: The tables a pattern can name a field of, as ``{table.field}``, and
 #: the heading each gets in the *Available fields* list. The metadata tables
 #: plus the two data tables' saved fields; a qualified name is what tells two
 #: tables' ``font_size`` apart, and what keeps them out of the plain list.
@@ -531,7 +528,7 @@ def table_pattern_fields(
     trial_fixations: pd.DataFrame | None,
     metadata_rows: dict | None = None,
 ) -> dict[str, dict]:
-    """``{table: {"table.field": value}}`` for one trial (EXP-22).
+    """``{table: {"table.field": value}}`` for one trial.
 
     ``metadata_rows`` is this trial's row of each attached metadata table
     (``metadata.pattern_rows``); the fixations and AOI tables contribute their
@@ -563,8 +560,8 @@ def pattern_fields(
 ) -> dict:
     """Every value a filename / title / caption pattern can substitute.
 
-    DATA-66: with ``column_names`` (the dataset's map), every field its file
-    named is also reachable under that name — ``{RECORDING_SESSION_LABEL}`` and
+    With ``column_names`` (the dataset's map), every field its file named is
+    also reachable under that name — ``{RECORDING_SESSION_LABEL}`` and
     ``{participant_id}`` both work, so a pattern can be written in either
     vocabulary.
 
@@ -572,11 +569,11 @@ def pattern_fields(
     counts and the settings summary. Values are left raw here; path rendering
     sanitizes them, while titles and captions want them readable.
 
-    **VIZ-36 — ``dataset_name`` arrives as an argument, never read from here.**
-    The app knows it as ``data_source_choice`` (since DATA-9 that key *is* the
-    picker's label, and DATA-23's rename re-keys it), but this function is pure
-    and also runs headless under ``api.save_figure_layers`` and ``cli render``,
-    where there is no session at all. Each of the five callers supplies it.
+    **``dataset_name`` arrives as an argument, never read from here.** The app
+    knows it as ``data_source_choice`` (that key *is* the picker's label, and a
+    rename re-keys it), but this function is pure and also runs headless under
+    ``api.save_figure_layers`` and ``cli render``, where there is no session at
+    all. Each caller supplies it.
 
     ``compare_row`` is the *other* reading in an overlay — two scanpaths in one
     frame, so a single ``{dataset_name}`` is ambiguous exactly where a title
@@ -586,13 +583,13 @@ def pattern_fields(
     validates and renders on a single-trial figure instead of erroring on a
     surface the author cannot see.
 
-    EXP-22: every attached metadata table's fields and each data table's saved
+    Every attached metadata table's fields and each data table's saved
     fields join as ``{table.field}`` (:func:`table_pattern_fields`) — qualified,
     so a trial table's ``font_size`` and a recorded ``font_size`` are both
     reachable, and none of the plain names above changes.
     """
     # The trial's row, less its bookkeeping (`_data_order`): a `_` column is the
-    # app's, as `_saved_table_fields` already holds for the tables (#422).
+    # app's, as `_saved_table_fields` already holds for the tables.
     fields: dict = {
         name: value
         for name, value in (combo_row or {}).items()
@@ -659,11 +656,12 @@ _DRIVE_PREFIX = re.compile(r"^[A-Za-z]:")
 
 def path_structure_error(pattern: str) -> str | None:
     """What is wrong with ``pattern``'s own text as a path inside the ZIP, or
-    ``None`` (round 10).
+    ``None``.
 
     The values put into ``{…}`` are sanitized one by one (:func:`render_pattern`),
-    but the text around them is the pattern's: ``../{artifact}.{ext}`` wrote a
-    member outside the archive's root, and an empty pattern one with no name.
+    but the text around them is the pattern's: ``../{artifact}.{ext}`` would
+    write a member outside the archive's root, and an empty pattern one with no
+    name.
     Every member must be a relative path of named folders ending in a file
     name, so this refuses an empty pattern, a leading ``/`` or drive, a
     backslash (a separator to some unzip tools), and an empty, ``.`` or ``..``
@@ -742,12 +740,12 @@ _AGGREGATE_TABLES = (
     "cleaning_qa",
     "reader_summary",
 )
-#: The attached metadata tables, as `metadata/<grain>` (DATA-20/29).
+#: The attached metadata tables, as `metadata/<grain>`.
 _METADATA_TABLES = ("participants", "trials", "texts")
 
 
 def bundle_member_names(options: ExportOptions | None = None) -> list[str]:
-    """The paths a bulk export writes for itself, whichever trials it holds (#412).
+    """The paths a bulk export writes for itself, whichever trials it holds.
 
     Reserved before any trial's file is named (:class:`ArchiveNames`), so a
     path pattern can never give a trial's file one of them — the README, the
@@ -777,7 +775,7 @@ def bundle_member_names(options: ExportOptions | None = None) -> list[str]:
 
 
 class ArchiveNames:
-    """Every member name one ZIP has given out, so that no two collide (#412).
+    """Every member name one ZIP has given out, so that no two collide.
 
     A bundle's own files are reserved up front (:func:`bundle_member_names`)
     and keep their names (:meth:`own`); a file the user's path pattern names
@@ -877,15 +875,15 @@ def resolve_export_path(
     return used.claim(path, record=record)
 
 
-# --- EXP-2 · titles and captions on the exported figure -----------------------
+# --- Titles and captions on the exported figure ------------------------------
 # Sized bands rather than Plotly's automatic title spacing: the scanpath figure
 # is equal-aspect (`scaleanchor`), so anything that eats into the plot area
 # shrinks the WHOLE plot — and the true-to-scale word labels, computed for the
 # un-shrunk size, then no longer match their boxes. Same constraint the animation
 # transport controls hit; same fix: grow the figure by exactly what the band
 # takes, so the plot region is untouched.
-# The bands follow the text's size (#422): at the default 20 px title and 13 px
-# caption they are the 46 px band and 22 px lines they always were.
+# The bands follow the text's size: at the default 20 px title and 13 px
+# caption they are a 46 px band and 22 px lines.
 _TITLE_BAND_PAD_PX = 26
 _CAPTION_LINE_FACTOR = 22 / 13
 _CAPTION_PAD_PX = 12
@@ -906,7 +904,7 @@ def annotate_figure(
     the plotting area — and therefore the true-to-scale text — is byte-identical
     to the untitled figure. Both are drawn as written: ``<b>`` in a title shows
     as ``<b>``, and only a real newline starts a new caption line. The sizes are
-    in px (#422); each band grows with its text.
+    in px; each band grows with its text.
     """
     if not title and not caption:
         return
@@ -954,7 +952,7 @@ def annotate_figure(
 
 
 def figure_text_style(settings) -> dict:
-    """``annotate_figure``'s text styling (#422) from a ``FigureSettings`` or a
+    """``annotate_figure``'s text styling from a ``FigureSettings`` or a
     settings mapping (the app's ``viz_settings``); what is missing is the
     default."""
     if isinstance(settings, Mapping):
@@ -971,13 +969,13 @@ def figure_text_style(settings) -> dict:
     )
 
 
-# DATA-16 (security audit S4). Columns that hold a filesystem path from the
-# machine the app ran on. `image_path` is a `passthrough` meta field on both
-# schemas, so it survives normalization and rides into the exported fixation
-# tables — and a fixations CSV is exactly the file that gets attached to a paper,
+# Columns that hold a filesystem path from the machine the app ran on.
+# `image_path` is a `passthrough` meta field on both schemas, so it survives
+# normalization and rides into the exported fixation tables — and a fixations
+# CSV is exactly the file that gets attached to a paper,
 # posted to OSF, or mailed to a collaborator. `/Users/<name>/` discloses the OS
-# account; the rest discloses the directory layout, including where a MultiplEYE
-# corpus lives. The basename still identifies the stimulus, which is all the
+# account; the rest discloses the directory layout, including where a corpus
+# lives. The basename still identifies the stimulus, which is all the
 # column is used for downstream.
 #
 # `source_file` is deliberately NOT here: it is an identity label, not a path.
@@ -988,7 +986,7 @@ _PATH_COLUMNS = ("image_path",)
 
 
 def strip_local_paths(df: pd.DataFrame) -> pd.DataFrame:
-    """Reduce path-bearing columns to their basename (S4).
+    """Reduce path-bearing columns to their basename.
 
     Returns ``df`` unchanged (the same object) when it carries none of them, so
     the common case costs one membership test and no copy.
@@ -1013,7 +1011,7 @@ def strip_local_paths(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-#: DATA-66: the artifacts that *are* one of the dataset's tables (rows of it,
+#: The artifacts that *are* one of the dataset's tables (rows of it,
 #: perhaps with computed columns added), and which one — so a fixation table's
 #: `x` is named as the fixation file named it and a word table's `x` as the AOI
 #: file did. Every other artifact is derived (a saccade table, a summary, a
@@ -1035,9 +1033,9 @@ def _write_table(
     names: ColumnNames | None = None,
     hidden: set[str] | None = None,
 ) -> int:
-    # DATA-49: the pipeline's bookkeeping columns stay out of what is shared.
+    # The pipeline's bookkeeping columns stay out of what is shared.
     df = strip_local_paths(shareable_frame(df))
-    # DATA-66: and the columns the user's file named go out under those names.
+    # And the columns the user's file named go out under those names.
     df = as_written(df, names, hidden)
     if fmt == "parquet":
         buf = io.BytesIO()
@@ -1062,7 +1060,7 @@ def _figure_renderer(enabled: bool):
     is unavailable — the per-trial failure is still surfaced as an export error.
 
     ``enabled`` also holds ``animation_export.KALEIDO_LOCK`` until the server has
-    stopped, since that server is one per process (UX-150).
+    stopped, since that server is one per process.
     """
     from .animation_export import KALEIDO_LOCK, warm_calc_fig
 
@@ -1171,7 +1169,7 @@ def render_static_figure_bytes(
 def _drift_corrected_for_figure(
     fix: pd.DataFrame, words: pd.DataFrame, settings: dict
 ) -> tuple[pd.DataFrame, tuple | None]:
-    """PRE-3 drift correction for one exported figure (EXP-4 / VIZ-24).
+    """Drift correction for one exported figure.
 
     Returns ``(figure_fixations, connector_y)``. When no algorithm is selected
     (``align_algorithm`` absent / ``"Off"`` — the default) or there is nothing to
@@ -1366,7 +1364,7 @@ def _render_scope_picker(
 
 
 def _preview_fields(combos: pd.DataFrame) -> dict:
-    """Stand-in field values for the live pattern preview (EXP-1/EXP-2).
+    """Stand-in field values for the live pattern preview.
 
     Uses the first trial in scope, so the preview is a path the user will
     actually get rather than a made-up example.
@@ -1406,12 +1404,11 @@ def _prune_stale_fields(state, state_key: str, names: list[str]) -> None:
 
 
 def _render_metadata_field_picker(key_prefix: str):
-    """DATA-20 milestone 10 — which participant fields ride along in the bundle.
+    """Which participant fields ride along in the bundle.
 
     Renders nothing when no table is attached, and returns ``None`` — "no
     restriction" — while every field is still selected, so an export made
-    without touching this control is byte-identical to one made before the
-    control existed.
+    without touching this control carries the whole table.
 
     It lives with the export options rather than beside the table on the 🗂️ Data
     page because it is a decision about *this bundle*: the same attached table
@@ -1445,7 +1442,7 @@ def _render_metadata_field_picker(key_prefix: str):
 
 
 def _render_trial_metadata_field_picker(key_prefix: str):
-    """DATA-29 — which trial fields ride along, the twin of the picker above.
+    """Which trial fields ride along, the twin of the picker above.
 
     Same contract in every respect: nothing rendered and ``None`` returned when
     no trial table is attached or while every field is still chosen, so an
@@ -1511,17 +1508,17 @@ def _render_text_metadata_field_picker(key_prefix: str):
 
 
 def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
-    """The compact **File naming** block: EXP-1's path pattern.
+    """The compact **File naming** block: the path pattern.
 
     Every pattern is validated and previewed against the first trial in scope as
     it's typed — finding a typo after a 200-trial render is the worst possible
     place to find it. Returns ``path_pattern``; an invalid pattern falls back to
     its default so a bad keystroke can't produce a broken zip.
 
-    The title/caption pair used to live here too (EXP-2) but moved to the
-    Scanpath rail's **📐 Figure & canvas** group (EXP-5), so it's visible on the
-    live figure and not just at export time; `render_export_options` reads it
-    back from there instead of keeping a second, possibly-diverging copy.
+    The title/caption pair lives in the Scanpath rail's **📐 Figure & canvas**
+    group instead, so it's visible on the live figure and not just at export
+    time; `render_export_options` reads it back from there instead of keeping a
+    second, possibly-diverging copy.
     """
     fields = _preview_fields(combos)
     available = ", ".join(
@@ -1556,7 +1553,7 @@ def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
         )
         for names in ((), bundle_member_names())
     )
-    # #412: a name the bundle keeps for its own files is not refused — the
+    # A name the bundle keeps for its own files is not refused — the
     # trial's file takes the next free one, which the example shows.
     clash = (
         f" — `{plain}` would clash with one of the bundle's own files, so it "
@@ -1588,8 +1585,8 @@ def render_export_options(
     is the whole loaded dataset. Picking the "All" scope switches the scope
     picker — and the export itself — to ``combos_all`` so the trial filters
     are ignored. ``title_pattern``/``caption_pattern`` come from the Scanpath
-    rail's **📐 Figure & canvas** → *Title* / *Caption* (EXP-5) —
-    this panel no longer has its own copy of that setting.
+    rail's **📐 Figure & canvas** → *Title* / *Caption* — this panel has no
+    copy of that setting of its own.
     """
     st = st_module
     # No expander — the options are always displayed.
@@ -1649,15 +1646,14 @@ def render_export_options(
                 "4.8 MB more. Unticked, they load it from cdn.plot.ly when opened.",
             )
         )
-        # EXP-24: the bundle's static figures need a browser on the server,
+        # The bundle's static figures need a browser on the server,
         # which the current figure's PNG/SVG do not — said only when it is
         # missing, and only while one of those formats is picked.
         if note := missing_browser_note(include_pdf or include_svg or include_png):
             st.warning(note, icon=ICONS["warning"])
-        # Only surface the scale stepper when PNG is on, and keep it narrow.
-        # `width` does here what the old `st.columns([1, 3])` did: a 1–4 stepper
-        # stretched across the whole field column reads as a text box. UX-69
-        # dropped the columns because they nested inside the row's own.
+        # Only surface the scale stepper when PNG is on, and keep it narrow
+        # with `width` (columns would nest inside the row's own): a 1–4 stepper
+        # stretched across the whole field column reads as a text box.
         if include_png:
             png_scale = panel_field(
                 st,
@@ -1674,7 +1670,7 @@ def render_export_options(
             png_scale = int(st.session_state.get(f"{key_prefix}_scale", 2))
 
         st.markdown("### Also include")
-        # VIZ-5: per-layer figure breakdown for publication editing.
+        # Per-layer figure breakdown for publication editing.
         separable_layers = panel_field(
             st,
             "toggle",
@@ -1714,8 +1710,8 @@ def render_export_options(
                 st,
                 "pills",
                 "Tabular data",
-                # The measure family is computed by the app, and held back
-                # with the other computed measures.
+                # The measure family is computed by the app, so it is offered
+                # only while the computed measures are enabled.
                 options=[
                     "Fixations",
                     "Raw gaze",
@@ -1795,7 +1791,7 @@ def render_export_options(
         path_pattern=path_pattern,
         title_pattern=title_pattern,
         caption_pattern=caption_pattern,
-        # VIZ-36: this panel only runs inside the app, so the picker's label is
+        # This panel only runs inside the app, so the picker's label is
         # available; `pattern_fields` itself stays session-free.
         dataset_name=_session_dataset_name(),
         metadata_fields=metadata_fields,
@@ -1841,7 +1837,7 @@ def _render_screen_picker(
 
 
 def _session_dataset_name() -> str:
-    """The dataset picker's label, for the options UI only (VIZ-36).
+    """The dataset picker's label, for the options UI only.
 
     Guarded because `export` is imported headless by `api` and `cli`, where
     there is no session; the value only ever reaches `ExportOptions`, never
@@ -1895,7 +1891,7 @@ def _apply_scope(combos: pd.DataFrame, options: ExportOptions) -> pd.DataFrame:
 
 @dataclass(frozen=True)
 class ComparisonSide:
-    """One half of an exported comparison pair (CMP-8 §6).
+    """One half of an exported comparison pair.
 
     ``dataset`` is the corpus label — ``None`` for the active dataset, which is
     what every same-dataset comparison passes. ``participant`` / ``trial`` are
@@ -1920,8 +1916,8 @@ class ComparisonSide:
 
         Two corpora can hold the same ``(participant_id, trial_id)``; without
         this column the rows in ``fixations.csv`` would be indistinguishable.
-        ``side`` (CMP-22) also stamps a ``scanpath`` column, ``"A"`` or ``"B"``:
-        B can now be A's own trial, whose rows match A's on every other column.
+        ``side`` also stamps a ``scanpath`` column, ``"A"`` or ``"B"``: B can be
+        A's own trial, whose rows match A's on every other column.
         """
         label = self.dataset or "(this dataset)"
         out = []
@@ -1961,12 +1957,12 @@ def pair_export(
 ) -> bytes:
     """Zip one comparison **pair** — figure, manifest, and both scanpaths' tables.
 
-    ``column_names`` (DATA-66) is the active dataset's map per table. It names
+    ``column_names`` is the active dataset's map per table. It names
     the tables' columns only when both scanpaths come from that dataset: a pair
     across two datasets shares no file names, so its tables keep the internal
     ones, which both datasets understand.
 
-    CMP-8 §6. An exported cross-dataset figure is unreproducible on its own:
+    An exported cross-dataset figure is unreproducible on its own:
     nothing in the image records where B came from. The bundle writes the bulk
     exporter's per-trial shape for the pair instead of for one trial, and the
     ``datasets`` block in ``plot_config.json`` is what makes it reproducible —
@@ -1980,9 +1976,8 @@ def pair_export(
 
     ``options`` is the ordinary `ExportOptions` — the pair is one more "trial
     folder" as far as the writer is concerned, so the formats, table format and
-    figure toggles all mean what they already mean. Deliberately unchanged from
-    bulk export: the tables stay **uncorrected** by drift correction (EXP-4 /
-    VIZ-24), which the manifest records.
+    figure toggles all mean what they already mean. As in bulk export, the
+    tables stay **uncorrected** by drift correction, which the manifest records.
     """
     folder = f"{side_a.slug}__vs__{side_b.slug}"
     buffer = io.BytesIO()
@@ -2027,7 +2022,7 @@ def pair_export(
             if side_b.dataset in (None, side_a.dataset)
             else {}
         )
-        # AN-32 / EXP-23: the measures each side's dataset brought.
+        # The measures each side's dataset brought.
         measures = [
             words.assign(scanpath=side)
             for side, words in (("A", words_a), ("B", words_b))
@@ -2216,7 +2211,7 @@ def _session_text_metadata():
 
 
 def _session_trial_metadata():
-    """The attached trial table, when running inside the app (DATA-29).
+    """The attached trial table, when running inside the app.
 
     Handed over on a private session key for the same reason its participant
     twin is: the frame must not reach the bulk-export cache signature.
@@ -2230,7 +2225,7 @@ def _session_trial_metadata():
 
 
 def _session_participant_metadata():
-    """The attached participant table, when running inside the app (DATA-20).
+    """The attached participant table, when running inside the app.
 
     Handed over through session state rather than through ``settings`` so the
     frame never reaches the bulk-export cache signature, which stringifies the
@@ -2318,7 +2313,7 @@ def export_units(
             and raw_gaze is not None
             and SCREEN_ID in raw_gaze.columns
         ):
-            # VIZ-45, as `api._select_part` decides it: a trial recorded as raw
+            # As `api._select_part` decides it: a trial recorded as raw
             # gaze alone takes its screens from its samples, so each screen's
             # coordinate space is exported on its own instead of pooled.
             catalog = part_catalog(extract_trial(raw_gaze, participant, trial))
@@ -2517,23 +2512,23 @@ def bulk_export(
 ) -> tuple[bytes, ExportProgress]:
     """Build a zip archive of selected artifacts and return its bytes.
 
-    ``column_names`` (DATA-66) is the dataset's map per table
+    ``column_names`` is the dataset's map per table
     (``{"fixations": …, "words": …, "raw_gaze": …}``): each table is written
     with the columns its file named under those names, the README's data
     dictionary says where every column came from, and a ``columns.json``
-    records the map; patterns accept either name. Without it (headless
-    callers, until the API carries maps) the tables keep the internal names.
+    records the map; patterns accept either name. Without it the tables keep
+    the internal names.
 
-    ``metadata_rows_for(participant, trial, text_id)`` (EXP-22) returns a
+    ``metadata_rows_for(participant, trial, text_id)`` returns a
     trial's metadata-table rows for ``{table.field}`` patterns — the app passes
     ``metadata.pattern_rows``; headless callers have no attached tables.
 
-    ``annotation_records`` (UX-179) are the annotations to write as
+    ``annotation_records`` are the annotations to write as
     ``annotations.json`` when ``options.include_annotations`` is set, in
     ``annotations.current_records()``'s shape; only those on the exported
     trials go in. The app passes the session's; headless callers have none.
     ``annotation_dataset`` is the dataset they were made on, which the file
-    names (annotations file schema 3, DATA-48).
+    names (annotations file schema 3).
 
     progress_callback (if given) is invoked with an ExportProgress after every
     trial so the UI can update a progress bar.
@@ -2550,8 +2545,8 @@ def bulk_export(
         # Only the trials that show a chosen screen are exported — for the
         # annotations, the README and every per-trial table alike.
         combos = _keep_unit_trials(combos, units)
-    # UX-179's annotations, cut to the exported trials once: the README says
-    # the file is there exactly when the writer below writes it (round 10).
+    # The annotations, cut to the exported trials once: the README says the
+    # file is there exactly when the writer below writes it.
     annotations_kept: list[dict] = []
     if options.include_annotations and annotation_records:
         from .annotations import records_in, records_to_store
@@ -2598,11 +2593,11 @@ def bulk_export(
     )
     buf = io.BytesIO()
     zf = zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED)
-    # #412: every member's name comes from one registry, with the bundle's own
-    # files reserved first. A trial's file the path pattern names like one of
-    # them, or like another trial's, gets a `-2` instead of a second member of
-    # that name — which hid the README behind a plot config, and left the
-    # inventory pointing at whichever one a reader happened to open.
+    # Every member's name comes from one registry, with the bundle's own files
+    # reserved first. A trial's file the path pattern names like one of them, or
+    # like another trial's, gets a `-2` instead of a second member of that name —
+    # which would hide the README behind a plot config, and leave the inventory
+    # pointing at whichever one a reader happened to open.
     members = ArchiveNames(bundle_member_names(options))
     # The bundle's inventory, written last as `index.csv`: every file in it at
     # its actual path, and every requested file that failed, with the reading
@@ -2625,13 +2620,13 @@ def bulk_export(
             }
         )
 
-    # EXP-23: each table's per-trial frames, stacked into `aggregate/all_<table>`
+    # Each table's per-trial frames, stacked into `aggregate/all_<table>`
     # when the tables are combined. The family's words + fixations are kept
     # either way, for the reader summary, which only exists across trials.
     combined: dict[str, list[pd.DataFrame]] = {}
     family_words: list[pd.DataFrame] = []
     family_fixations: list[pd.DataFrame] = []
-    # AN-32 / EXP-23: the export writes the reading measures the dataset
+    # The export writes the reading measures the dataset
     # brought and computes none — so with none, the word tables are left out
     # and the README says why.
     measures_wanted = options.include_measures or options.include_analysis_family
@@ -2778,7 +2773,7 @@ def bulk_export(
     # figure or the per-layer breakdown).
     figure_formats = options.figure_formats()
     layer_formats = options.layer_formats()
-    # EXP-1: a user pattern can map two trials to the same path (one that omits
+    # A user pattern can map two trials to the same path (one that omits
     # the trial id, say). Two zip entries at one name silently loses a file, so
     # `resolve_export_path` disambiguates against `members` — every name given
     # out so far, the bundle's own reserved among them.
@@ -2855,8 +2850,8 @@ def bulk_export(
             # builder renders from fixations alone (words optional — boxes/labels)
             # or from words alone (AOI layout), and the live view does too; so a
             # words-that-don't-join / fixations-only trial must still export
-            # instead of being skipped with "empty data" (VIZ-5). VIZ-45: and
-            # a trial recorded as raw gaze alone is drawn from its samples.
+            # instead of being skipped with "empty data". And a trial recorded
+            # as raw gaze alone is drawn from its samples.
             if trial_words.empty and trial_fix.empty and trial_raw_gaze.empty:
                 progress.finished_trials += 1
                 progress.trials_skipped += 1
@@ -2910,7 +2905,7 @@ def bulk_export(
                 reasons,
             )
 
-            # EXP-1/EXP-2: everything this trial's paths, title and caption can
+            # Everything this trial's paths, title and caption can
             # substitute — its combo row plus counts and the settings summary.
             fields = pattern_fields(
                 participant,
@@ -2968,7 +2963,7 @@ def bulk_export(
                 )
                 fig = None
                 try:
-                    # EXP-4 / VIZ-24: apply the PRE-3 drift correction to the
+                    # Apply the drift correction to the
                     # figure's fixations (a no-op when "Off"), so the batch
                     # matches the corrected figure on screen. `trial_fix` itself
                     # stays uncorrected — the tables below export the recording.
@@ -2991,12 +2986,13 @@ def bulk_export(
                         show_connectors=connector_y is not None,
                         connector_y=connector_y,
                         # A corrected figure colours by line, exactly as the
-                        # on-screen static path forces it (tabs.py PRE-3
-                        # overrides) — else the batch differs in colouring.
+                        # on-screen static path forces it (tabs.py's drift-
+                        # correction overrides) — else the batch differs in
+                        # colouring.
                         color_by_line=bool(settings.get("color_by_line", False))
                         or fig_fix is not trial_fix,
                     )
-                    # VIZ-45: the trial's own samples, as the live figure
+                    # The trial's own samples, as the live figure
                     # gets them (the layer self-gates on `show_raw_gaze`).
                     fig = make_scanpath_figure(
                         trial_words,
@@ -3004,7 +3000,7 @@ def bulk_export(
                         settings=render_settings,
                         raw_gaze=trial_raw_gaze if not trial_raw_gaze.empty else None,
                     )
-                    # EXP-2: stamp the title/caption BEFORE measuring the output
+                    # Stamp the title/caption BEFORE measuring the output
                     # size — the bands grow the figure, and rendering at the
                     # pre-title size would crop them off.
                     annotate_figure(
@@ -3028,7 +3024,7 @@ def bulk_export(
                         )
                     if layer_formats:
                         _inventory("", "layers", "failed", unit_ids, str(exc), fmt="")
-                # EXP-24: each format on its own, so a missing browser costs the
+                # Each format on its own, so a missing browser costs the
                 # PNG/SVG/PDF and still leaves the trial's HTML in the zip.
                 if fig is not None:
                     # Render at the figure's own fitted size (not the raw
@@ -3069,7 +3065,7 @@ def bulk_export(
                         progress.bytes_written += len(data)
                         progress.figures_written += 1
 
-                # VIZ-5: per-layer breakdown into `layers/<layer>.<fmt>` — each a
+                # Per-layer breakdown into `layers/<layer>.<fmt>` — each a
                 # copy of the figure with only one layer's elements, same
                 # size/ranges so they register when stacked in Illustrator. Kept in
                 # its own try so a layer-render failure is reported as such and
@@ -3120,10 +3116,10 @@ def bulk_export(
                     base_font_size=base_font_size,
                     font_family=font_family,
                 )
-                # EXP-2: the title/caption are part of how the figure looked, so
+                # The title/caption are part of how the figure looked, so
                 # the manifest records them verbatim alongside the settings.
                 cfg["figure_text"] = {"title": title, "caption": caption}
-                # VIZ-50: the trial's samples, and whether they were recorded —
+                # The trial's samples, and whether they were recorded —
                 # the bundled demo's are synthesized, which its figure and its
                 # raw-gaze table cannot say for themselves.
                 if not trial_raw_gaze.empty:
@@ -3138,7 +3134,7 @@ def bulk_export(
                 _inventory(path, "plot_config", "written", unit_ids)
                 progress.bytes_written += len(data)
 
-            # AN-32 / EXP-23: the word table *is* the measures table — it carries
+            # The word table *is* the measures table — it carries
             # what the dataset brought, and nothing is computed. A trial with no
             # words, or a dataset that brought no measures, writes none.
             per_trial_measures = (
@@ -3177,8 +3173,8 @@ def bulk_export(
                 }
 
             # The family's word-enriched fixations and its word_measures stand
-            # in for the plain Fixations / Word measures files (EXP-15: two
-            # members with one name, and a reader keeps only one of them).
+            # in for the plain Fixations / Word measures files (two members
+            # with one name, and a reader keeps only one of them).
             tables = {
                 "fixations": trial_fix
                 if options.include_fixations and not options.include_analysis_family
@@ -3241,15 +3237,15 @@ def bulk_export(
                 zf, path, table, fmt, *names_for(artifact)
             )
             _inventory(path, artifact, "written")
-    # DATA-20: the participant table travels as its own per-grain table rather
+    # The participant table travels as its own per-grain table rather
     # than as columns smeared across the trial files — which is what keeps a
     # reader attribute distinguishable from a per-fixation measurement on the
     # way out, exactly as it is on the way in. Whenever one is attached, narrowed
-    # to `options.metadata_fields` (milestone 10's per-field opt-out; `None` is
-    # every field). The frame is handed over out-of-band (the settings dict
-    # carries only its fingerprint, so the bulk-export cache signature stays
-    # honest — see the note in `tabs._render_export_panel`). API/CLI callers can
-    # pass the frame in `settings` directly, which still works.
+    # to `options.metadata_fields` (the per-field opt-out; `None` is every
+    # field). The frame is handed over out-of-band (the settings dict carries
+    # only its fingerprint, so the bulk-export cache signature stays honest —
+    # see the note in `tabs._render_export_panel`). API/CLI callers can pass
+    # the frame in `settings` directly.
     participant_metadata = (settings or {}).get("participant_metadata")
     if participant_metadata is None:
         participant_metadata = _session_participant_metadata()
@@ -3264,7 +3260,7 @@ def bulk_export(
             path = members.own(f"metadata/participants.{fmt}")
             progress.bytes_written += _write_table(zf, path, participant_metadata, fmt)
             _inventory(path, "participant_metadata", "written")
-    # DATA-29: and the trial table beside it, on the same terms — its own
+    # And the trial table beside it, on the same terms — its own
     # per-grain file, keyed as it was attached, so a reading's attributes stay
     # distinguishable from the per-fixation measurements of that reading.
     trial_metadata = (settings or {}).get("trial_metadata")
@@ -3296,7 +3292,7 @@ def bulk_export(
             path = members.own(f"metadata/texts.{fmt}")
             progress.bytes_written += _write_table(zf, path, text_metadata, fmt)
             _inventory(path, "text_metadata", "written")
-    # UX-179: the exported trials' annotations, in the Data → Annotations file
+    # The exported trials' annotations, in the Data → Annotations file
     # format, so the bundle's notes can be imported back into the app.
     if annotations_kept:
         from .annotations import records_to_store, serialize

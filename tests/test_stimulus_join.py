@@ -1,4 +1,4 @@
-"""DATA-49 — one join for a stimulus-level AOI table, whatever the trial ids.
+"""One join for a stimulus-level AOI table, whatever the trial ids.
 
 An AOI table with no Participant ID holds one set of word boxes per *text*,
 shared by every reading of it. Each reading — ``(participant_id, trial_id[,
@@ -26,8 +26,8 @@ from scanpath_studio.utils import extract_trial
 
 
 def _text_words() -> pd.DataFrame:
-    """A text-level AOI table keyed by ``unique_paragraph_id`` — the DATA-49
-    repro's shape: no reader, no per-reader trial id."""
+    """A text-level AOI table keyed by ``unique_paragraph_id``: no reader, no
+    per-reader trial id."""
     return pd.DataFrame(
         {
             "unique_paragraph_id": ["1_1_Ele"] * 2 + ["1_2_Adv"],
@@ -181,7 +181,7 @@ class TestSharedAndRepeatedIds:
             ]
 
     def test_a_repeated_reading_joins_by_the_id_it_was_recorded_under(self):
-        """BUG-57 falls out of the general join: `_disambiguate_repeated_readings`
+        """A repeated reading falls out of the general join: `_disambiguate_repeated_readings`
         records the id it suffixed (`_base_trial_id`), so the `_r2` reading finds
         its boxes by trial id, and its fallback Text ID is the unsuffixed id."""
         fixations = pd.DataFrame(
@@ -495,8 +495,8 @@ def _fix(subjects, trials, texts, **extra) -> pd.DataFrame:
 
 
 class TestPerReadingRule:
-    """DATA-49 review: the key is chosen per reading — its exact trial id, then
-    the id it had before a repeat's `_r2`, then its unambiguous Text ID."""
+    """The key is chosen per reading — its exact trial id, then the id it had
+    before a repeat's `_r2`, then its unambiguous Text ID."""
 
     def test_each_reading_uses_its_own_route(self):
         """One reading matches only by trial id, the others only by Text ID; a
@@ -534,7 +534,7 @@ class TestPerReadingRule:
     def test_a_repeat_keeps_its_boxes_under_a_coarser_text_id(self):
         """Trial = paragraph, Text ID = article (two paragraphs per article):
         the article is ambiguous, and the `_r2` repeat of a paragraph must
-        still find its paragraph's boxes (the old BUG-57 suffix fallback did)."""
+        still find its paragraph's boxes."""
         words = _aoi(["a1p1", "a1p2"], ["a1", "a1"], ["first", "second"])
         fixations = _fix(
             ["r1", "r1", "r1"],
@@ -574,8 +574,8 @@ class TestPerReadingRule:
 
 
 class TestZeroPadding:
-    """BUG-59's zero-padding reconciliation runs before the join, and the join
-    the wizard reports is the one that ran (DATA-49 review)."""
+    """The zero-padding reconciliation runs before the join, and the join the
+    wizard reports is the one that ran."""
 
     def test_the_reported_join_is_the_one_made_after_padding(self):
         words = normalize_words(
@@ -669,8 +669,8 @@ class TestHeadlessSurfaces:
 
 
 class TestTrialIdMatchesStand:
-    """DATA-49 round 4: an exact trial-id match (or `_base_trial_id`) always
-    wins, as on main; a Text ID never moves a reading's boxes."""
+    """An exact trial-id match (or `_base_trial_id`) always wins; a Text ID
+    never moves a reading's boxes."""
 
     _PARAGRAPHS = _aoi(
         ["1", "2", "3", "4"], ["1", "2", "3", "4"], ["p1", "p2", "p3", "p4"]
@@ -917,8 +917,8 @@ class TestInternalColumns:
 
 
 def test_no_field_picker_offers_an_internal_column():
-    """DATA-49 round 4: the hover pickers, the Q&A / span candidates and the
-    comparison fields all draw from `data.user_columns`."""
+    """The hover pickers, the Q&A / span candidates and the comparison fields
+    all draw from `data.user_columns`."""
     from scanpath_studio import controls, tabs
 
     w, f = sps.load_scanpath_data(
@@ -936,8 +936,8 @@ def test_no_field_picker_offers_an_internal_column():
 
 
 class TestTextIdMappedSignal:
-    """DATA-49 final round: whether a Text ID was mapped comes from the schema
-    (`data.TEXT_ID_MAPPED`), not from its values."""
+    """Whether a Text ID was mapped comes from the schema (`data.TEXT_ID_MAPPED`),
+    not from its values."""
 
     def test_a_mapped_text_id_equal_to_the_trial_ids_still_joins(self):
         """AOI trials 1, 2 with texts alpha, beta; the fixations' trial *is*
@@ -979,8 +979,8 @@ class TestTextIdMappedSignal:
         assert remapped[data_module.TEXT_ID_MAPPED].all()
 
     def test_zero_padding_keeps_a_fallback_text_id_a_fallback(self):
-        """Probe Z1: AOI trial "007" with text "T7"; fixations trial 7 (an int)
-        and no Text ID. Padding the trial id pads its fallback text id too, so
+        """AOI trial "007" with text "T7"; fixations trial 7 (an int) and no
+        Text ID. Padding the trial id pads its fallback text id too, so
         nothing reads "7" as a real Text ID and no warning is raised."""
         import warnings
 
@@ -1030,9 +1030,9 @@ class TestRepeatBases:
 
 
 class TestRepeatIdsNeverMeetARealTrial:
-    """#412: a repeat's generated id used to be written without looking at the
-    participant's other trials, so two readings of `a` beside a recorded trial
-    `a_r2` gave `a`, `a_r2`, `a_r2` — two readings merged into one scanpath."""
+    """A repeat's generated id is written looking at the participant's other
+    trials; otherwise two readings of `a` beside a recorded trial `a_r2` would
+    give `a`, `a_r2`, `a_r2` — two readings merged into one scanpath."""
 
     def _fixations(self) -> pd.DataFrame:
         return pd.DataFrame(

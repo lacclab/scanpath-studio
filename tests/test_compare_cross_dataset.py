@@ -1,6 +1,6 @@
-"""CMP-8 — comparing scanpaths across two datasets.
+"""Comparing scanpaths across two datasets.
 
-The regression this file exists for is the one in §3: two corpora can hold the
+The regression this file exists for: two corpora can hold the
 same ``(participant_id, trial_id)``, and the comparison builder slices its frame
 by exactly that pair — so an un-namespaced merge renders *the wrong scanpath*,
 silently and plausibly. Everything else here (per-panel geometry, the column
@@ -77,7 +77,7 @@ class TestQualifyForCompare:
         assert tabs._qualify_for_compare(empty, "PoTeC").empty
 
     def test_the_two_intended_trials_render_when_the_ids_collide(self):
-        """The whole point of §3.
+        """Two corpora that share an id pair still draw two scanpaths.
 
         Both datasets hold ``(p1, t1)``. Without namespacing the builder would
         slice the *same* rows twice and draw one scanpath as if it were two —
@@ -105,7 +105,7 @@ class TestQualifyForCompare:
         # *panel* holds only its own is what makes this a real regression test:
         # without namespacing both slices match all six rows, so both panels draw
         # both scanpaths — and a "both values are somewhere in the figure" check
-        # would pass on the bug (verified by removing the qualification).
+        # would pass on the bug.
         per_trace = [
             {round(float(y)) for y in trace.y if y is not None}
             for trace in fig.data
@@ -193,7 +193,7 @@ class TestPerPanelGeometry:
         assert label_sizes[0] != label_sizes[1]
 
     def test_same_dataset_figure_is_unchanged_by_the_new_fields(self):
-        """`canvas_b=None` must be a true no-op — every existing comparison."""
+        """`canvas_b=None` must be a true no-op — every same-dataset comparison."""
         before = self._figure()
         after = self._figure(canvas_b=None)
         assert before.to_json() == after.to_json()
@@ -220,8 +220,7 @@ def _overlay_gate_app():
     """Drive the REAL gate (`tabs._compare_setups`) over three pairs.
 
     Deliberately not a re-implementation of the resolve: an inline copy of the
-    rule passes even when the shipped code stops agreeing with it, which is
-    exactly what the pre-CMP-11 version of this harness had become.
+    rule passes even when the shipped code stops agreeing with it.
     """
     import pandas as pd
     import streamlit as st
@@ -259,7 +258,7 @@ def _overlay_gate_app():
         }
     )
     cases = {
-        # Same dataset — one corpus is one screen; must stay as it always was.
+        # Same dataset — one corpus is one screen, so always comparable.
         "same_dataset": None,
         "same_screen": SetupSnapshot(
             canvas_width=1920,
@@ -286,7 +285,7 @@ def _overlay_gate_app():
         comparable, reason = _compare_setups(meta, words, fixations, 1920, 1080)
         layout = "overlay" if comparable else "side_by_side"
         st.session_state[f"_gate_{name}"] = (comparable, reason, layout)
-    # B from another dataset that reports no screen at all (BUG-85).
+    # B from another dataset that reports no screen at all.
     st.session_state["_gate_no_screen"] = _compare_setups(
         {"dataset": "PoTeC", "setup": None, "words": words},
         words,
@@ -297,7 +296,7 @@ def _overlay_gate_app():
 
 
 class TestOverlayGate:
-    """CMP-11 — overlay across datasets iff they share a known screen."""
+    """Overlay across datasets iff they share a known screen."""
 
     @staticmethod
     def _run():
@@ -313,7 +312,7 @@ class TestOverlayGate:
         assert layout == "overlay"
 
     def test_same_screen_cross_dataset_now_overlays_silently(self):
-        """The case CMP-8's blanket block was too coarse for.
+        """Two datasets on one known screen overlay, with no note.
 
         Silent on purpose: it is the control for the cautioned case below.
         """
@@ -333,10 +332,10 @@ class TestOverlayGate:
         assert at.session_state["single_compare_layout"] == "Overlay"
 
     def test_a_matching_canvas_the_corpus_never_recorded_still_overlays(self):
-        """Allowed with a caveat, not refused (2026-08-12).
+        """Allowed with a caveat, not refused.
 
         The motivating case is two OneStop regimes: same 2560x1440, both
-        ASSUMED because the corpus records no screen. Refusing there blocked
+        ASSUMED because the corpus records no screen. Refusing there would block
         exactly the comparison the feature exists for.
         """
         comparable, note, layout = self._run().session_state["_gate_unknown_screen"]
@@ -345,9 +344,9 @@ class TestOverlayGate:
         assert note, "an unrecorded screen must still be disclosed"
 
     def test_a_dataset_that_reports_no_screen_is_refused_with_the_reason_only(self):
-        """BUG-85: this reason ended "They are shown side by side instead." — the
-        static figure's fallback — so the animated warning, which shows only A,
-        quoted a layout it never drew. The fallback is the caller's to say."""
+        """The reason does not end with the static figure's fallback ("They are
+        shown side by side instead."): the animated warning shows only A, and
+        would quote a layout it never drew. The fallback is the caller's to say."""
         comparable, reason = self._run().session_state["_gate_no_screen"]
         assert comparable is False
         assert "doesn't record its screen" in reason
@@ -355,12 +354,13 @@ class TestOverlayGate:
 
 
 class TestCompareStimulusSource:
-    """CMP-11: whose word boxes an overlay draws.
+    """Whose word boxes an overlay draws.
 
     Two datasets' AOIs only coincide if the text is identical, so an overlay
     across corpora can end up with two offset sets of rectangles under two
-    traces. The picker is the user's call; what is pinned here is that choosing
-    a side drops only the *stimulus* layer, never that side's scanpath.
+    traces. The picker leaves the choice to the user; what is pinned here is
+    that choosing a side drops only the *stimulus* layer, never that side's
+    scanpath.
     """
 
     @staticmethod
@@ -501,7 +501,7 @@ class TestPairExportBundle:
 
 class TestSelfComparisonBundle:
     def test_each_scanpaths_rows_say_which_they_are(self):
-        """CMP-22: B can be A's own trial, whose rows then match A's on every
+        """B can be A's own trial, whose rows then match A's on every
         other column — participant, trial and `dataset` alike. The `scanpath`
         column is what tells the two halves of the pair's tables apart."""
         import io
@@ -514,7 +514,7 @@ class TestSelfComparisonBundle:
                 participant="p1",
                 trial="t1",
                 # A brought measure: the pair's measures file is the words
-                # table's own, never computed (EXP-23).
+                # table's own, never computed.
                 words=_words("p1", "t1").assign(total_fixation_duration_ms=1.0),
                 fixations=_fixations("p1", "t1"),
             )
@@ -545,7 +545,7 @@ class TestSelfComparisonBundle:
 
 
 class TestRestoredSetupCannotInventAMonitor:
-    """DATA-22's whole point, at the restore door.
+    """A restored setup must not invent a measured monitor.
 
     `tabs._build_studio_config` writes `experimental_setup` **without** a canvas
     (that lives in the sibling `canvas_px`). Feeding that section straight to
@@ -667,11 +667,11 @@ def _orphan_compare_params_app():
 
 
 class TestCompareParamsOnlyTravelWithAComparison:
-    """CMP-11: `cmp_layout`/`cmp_stimulus` describe a comparison, so they need one.
+    """`cmp_layout`/`cmp_stimulus` describe a comparison, so they need one.
 
     They ride the generic `_SHARE_VALUE_PARAMS` sweep, which reads session state
-    directly — and both keys persist. Without the gate every later link carried
-    an orphan `cmp_layout=…&cmp_stimulus=…` that restores nothing, including
+    directly — and both keys persist. Without the gate every later link would
+    carry an orphan `cmp_layout=…&cmp_stimulus=…` that restores nothing, including
     links where `compare=` was deliberately withheld by the identity picker.
     """
 
@@ -726,11 +726,11 @@ def _secondary(name: str = "PoTeC", *, participant: str = "r1") -> SecondaryData
 
 
 class TestBothPanelsNameTheirDataset:
-    """CMP-15 — a cross-dataset pair names A's corpus as well as B's.
+    """A cross-dataset pair names A's corpus as well as B's.
 
-    B's name came free with the *Compare with* pick while A's source was
-    implicit, so the chip strip labelled one panel with a corpus and the other
-    with a bare reader id — which reads as though only B came from a dataset.
+    B's name comes free with the *Compare with* pick while A's source is
+    implicit; a chip strip that labelled one panel with a corpus and the other
+    with a bare reader id would read as though only B came from a dataset.
     """
 
     @staticmethod
@@ -771,12 +771,12 @@ class TestBothPanelsNameTheirDataset:
 
 
 class TestResolveCompareSource:
-    """UX-64 — B's dataset resolves from state, before its one control line draws.
+    """B's dataset resolves from state, before its one control line draws.
 
     The row has to know how many candidates B has to decide whether it carries a
     scrub slider, so the source and its ``cmp`` filters are read the way
     ``app.main`` reads A's: from session state, ahead of the widgets that write
-    them (which now render inside the row's own 🔎 popover).
+    them (which render inside the row's own 🔎 popover).
     """
 
     def test_this_dataset_resolves_to_no_source(self, monkeypatch):
@@ -831,7 +831,7 @@ class TestResolveCompareSource:
         source = _secondary()
         monkeypatch.setattr(tabs, "load_secondary_dataset", lambda name: source)
         st.session_state[COMPARE_SOURCE_KEY] = "PoTeC"
-        st.session_state[tabs._COMPARE_SOURCE_RESOLVED_KEY] = "MultiplEYE"
+        st.session_state[tabs._COMPARE_SOURCE_RESOLVED_KEY] = "OneStop"
         st.session_state[f"{tabs._COMPARE_FILTER_PREFIX}_trial_filters"] = {
             "participants": ["nobody"],
             "metadata": {},
@@ -869,11 +869,11 @@ def _synthetic_vs_demo():
 
 
 def test_the_uniform_colour_is_not_reported_missing(_synthetic_vs_demo):
-    """BUG-107: the default colour is a rendering choice, not a field B lacks."""
+    """The default colour is a rendering choice, not a field B lacks."""
     assert not [t for t in _synthetic_vs_demo if "isn't in both datasets" in t]
 
 
 def test_a_cross_dataset_b_counts_its_own_gaze_samples(_synthetic_vs_demo):
-    """BUG-106: VIZ-48 draws B's samples, so B's chip counts them too."""
+    """B's samples are drawn, so B's chip counts them too."""
     table = next(t for t in _synthetic_vs_demo if "Number of gaze samples" in t)
     assert "2,233" in table, table

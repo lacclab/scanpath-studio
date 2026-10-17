@@ -1,10 +1,10 @@
 """Duplicate metadata rows that do not disagree are one record, combined.
 
 Two ``p1`` rows — one giving a language and no age, the other an age and no
-language — used to keep whichever came first, so the table lost age in one row
-order and language in the other. Each field now takes the one value its rows
+language — must not keep whichever came first, or the table loses age in one
+row order and language in the other. Each field takes the one value its rows
 hold, at all three grains; rows that hold two *different* values for a field
-are still refused.
+are refused.
 """
 
 from __future__ import annotations

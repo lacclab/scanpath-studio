@@ -1,11 +1,11 @@
-"""#420: the headless stimulus-image folder draws.
+"""The headless stimulus-image folder draws.
 
-`load_scanpath_data(image_root=…)` and `render --image-root` filled each row's
-`image_path`, and no API or CLI figure drew it: only the app's 📄 Stimulus →
-image did, through `tabs._reading_stimulus_image`. `show_stimulus_image` is
-the figure option that draws it now, through the one resolver the app uses
-too (`plots.reading_stimulus_image`), and `attach_stimulus_images` gives the
-corpus loaders the folder `load_scanpath_data` takes.
+`load_scanpath_data(image_root=…)` and `render --image-root` fill each row's
+`image_path`. `show_stimulus_image` is the figure option that draws it in API
+and CLI figures, through the one resolver the app's 📄 Stimulus → image uses
+too (`plots.reading_stimulus_image`, reached in the app through
+`tabs._reading_stimulus_image`), and `attach_stimulus_images` gives the corpus
+loaders the folder `load_scanpath_data` takes.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from tests.conftest import APP_SCRIPT
 #: Two demo readings of different texts — so of different pages.
 TRIAL = ("l37_1129", "l37_1129_2_2_1_Adv_r0")
 OTHER = ("l37_1129", "l37_1129_2_2_2_Adv_r0")
-#: Where the demo's pages sat on OneStop's screen (BUG-97).
+#: Where the demo's pages sat on OneStop's screen.
 DEMO_ORIGIN = (368.0, 186.0)
 
 
@@ -61,7 +61,7 @@ class TestTheOptionIsAFigureOption:
         assert api.CANONICAL_FIGURE_DEFAULTS["show_stimulus_image"] is False
 
     def test_the_app_never_asks_a_builder_for_it(self):
-        """The app places the page itself, behind ENG-57's rule on what its
+        """The app places the page itself, behind its rule on what its
         server may read; a builder resolving `image_path` for it would read an
         uploaded dataset's path on a shared deployment."""
         viz = collections.defaultdict(lambda: None, show_stimulus_image=True)
@@ -370,8 +370,8 @@ class TestNameOwnPages:
     @pytest.mark.parametrize(
         "moved",
         [
-            {"background_image_origin": (378.0, 186.0)},  # the VIZ-4 offset
-            {"background_image_size": (912.0, 627.0)},  # the VIZ-4 scale
+            {"background_image_origin": (378.0, 186.0)},  # a hand-set offset
+            {"background_image_size": (912.0, 627.0)},  # a hand-set scale
             {"background_image": "data:image/png;base64,AAAA"},  # an upload
         ],
     )
@@ -396,7 +396,8 @@ class TestNameOwnPages:
 
     def test_nothing_is_named_while_a_slot_the_option_fills_draws_none(self):
         """The option fills every empty slot: a split whose B panel the app
-        left blank (no page, or ENG-57's veto) must not get one headless."""
+        left blank (no page, or the server's read veto) must not get one
+        headless."""
         settings = _drawn(self.PAGE)
         slots = ("", "_b")
         assert cs.name_own_pages(settings, {"": self.PAGE}, slots) is settings
@@ -514,7 +515,7 @@ class TestShareCode:
             DEMO_CHOICE,
         )
 
-        # #417: the folder saved with the open dataset (the demo, here).
+        # The folder saved with the open dataset (the demo, here).
         saved = {
             DATASET_STIMULUS_IMAGES_KEY: {
                 DEMO_CHOICE: {

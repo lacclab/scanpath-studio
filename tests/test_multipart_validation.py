@@ -1,7 +1,7 @@
-"""ENG-37: `multipart.py`'s rejection rules.
+"""`multipart.py`'s rejection rules.
 
 `tests/test_multipart.py` covers the happy paths and the app-level navigators.
-What was untested is the half of the module that exists to say **no** — the
+This file covers the half of the module that exists to say **no** — the
 identity, conflict and manifest checks. Each of those is a rule whose failure
 mode is silence rather than an error: a screen quietly dropped, a canvas quietly
 taken from the first row, a manifest quietly leaving rows behind. A rule that
@@ -36,7 +36,7 @@ def _frame(**overrides):
 
 class TestScreenIdentity:
     def test_a_frame_with_neither_column_is_left_alone(self):
-        """Legacy single-screen data must pass through untouched."""
+        """Single-screen data must pass through untouched."""
         frame = pd.DataFrame({"participant_id": ["p1"], "trial_id": ["t1"]})
         assert normalize_screen_identity(frame) is frame
 

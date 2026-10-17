@@ -1,18 +1,17 @@
-"""VIZ-23 / BUG-13: the three scanpath builders honour the same viz settings.
+"""The three scanpath builders honour the same viz settings.
 
-VIZ-21 mapped which viz setting reaches which builder; VIZ-23 turns the ❌ cells
-into ✅. Two properties are pinned here:
+Two properties are pinned here for the options :func:`make_scanpath_animation`
+and :func:`make_comparison_figure` share with the static figure:
 
-1. **Parity.** Every option added to :func:`make_scanpath_animation` /
-   :func:`make_comparison_figure` defaults to the builder's previous behaviour,
-   so an existing caller that passes nothing gets the figure it got before —
-   asserted on the concrete structure (trace inventory, marker symbols, colorbar
-   dict, label colours) and, for the whole figure, by round-tripping the JSON.
-2. **Effect.** Each new option demonstrably changes the figure when set.
+1. **Parity.** Each option defaults to the builder's plain behaviour, so a
+   caller that passes nothing gets the plain figure — asserted on the concrete
+   structure (trace inventory, marker symbols, colorbar dict, label colours)
+   and, for the whole figure, by round-tripping the JSON.
+2. **Effect.** Each option demonstrably changes the figure when set.
 
-Plus BUG-13: the Arc-mode headroom reservation now minimises ``y(t)`` over the
-drawn Bézier instead of sampling its ``t = 0.5`` point, so a wide saccade whose
-endpoints differ in ``y`` no longer clips against the top of the view.
+Plus the Arc-mode headroom reservation, which minimises ``y(t)`` over the drawn
+Bézier instead of sampling its ``t = 0.5`` point, so a wide saccade whose
+endpoints differ in ``y`` does not clip against the top of the view.
 """
 
 from __future__ import annotations
@@ -185,7 +184,7 @@ def _trace_index(fig, name):
 
 
 def _t_half_apex(x0, y0, x1, y1, frac):
-    """The pre-BUG-13 headroom estimate: the arch's Bézier value at t = 0.5."""
+    """The naive headroom estimate: the arch's Bézier value at t = 0.5."""
     return 0.25 * (y0 + y1) + 0.5 * (min(y0, y1) - frac * abs(x1 - x0))
 
 
@@ -195,7 +194,8 @@ def _t_half_apex(x0, y0, x1, y1, frac):
 
 
 class TestAnimationParity:
-    """`make_scanpath_animation` without the new options renders as before."""
+    """`make_scanpath_animation` without the optional settings renders the
+    plain replay."""
 
     def test_explicit_defaults_reproduce_the_figure_byte_for_byte(self):
         base = _anim()
@@ -228,7 +228,7 @@ class TestAnimationParity:
             "words",
             "Scanpath A",
             None,
-            # Named like the static figure's since #422, so the app can stamp
+            # Named like the static figure's, so the app can stamp
             # the saccade opacity onto a cached replay.
             "saccades",
             None,
@@ -247,6 +247,13 @@ class TestAnimationParity:
         assert fig.layout.sliders[0].yanchor == "bottom"
         assert fig.layout.margin.t == _CONTROLS_MARGIN_PX
 
+    def test_plot_sits_on_the_papers_bottom_edge(self):
+        """The keys anchored at paper y=0 (highlight note, size key) stay
+        inside the border: the figure's spare height goes above the plot."""
+        fig = _anim()
+        assert fig.layout.yaxis.constrain == "domain"
+        assert fig.layout.yaxis.constraintoward == "bottom"
+
     def test_colorbar_keeps_its_placement_and_reserve(self):
         fig = _anim(
             color_by="duration_ms",
@@ -264,7 +271,7 @@ class TestAnimationParity:
         assert fig.layout.margin.b == 0
 
     def test_colorbar_is_now_the_static_figures_styled_one(self):
-        """Deliberate VIZ-23 change: both builders share `_colorbar_dict`."""
+        """Both builders share `_colorbar_dict`."""
         anim_cb = _trail(
             _anim(
                 color_by="duration_ms",
@@ -435,7 +442,7 @@ class TestComparisonParity:
         markers = _markers(_compare())
         assert len(markers) == 2
         assert [m.marker.color for m in markers] == list(COMPARISON_PALETTE[:2])
-        # Plotly's unset default was already "circle"; it is now stated outright.
+        # Plotly's unset default is "circle"; the builder states it outright.
         assert [m.marker.symbol for m in markers] == ["circle", "circle"]
 
     def test_word_labels_stay_flat_without_a_highlight_column(self):
@@ -597,7 +604,7 @@ class TestComparisonColorbarStyle:
 
 
 # ---------------------------------------------------------------------------
-# BUG-13 — Arc headroom uses the curve's real apex
+# Arc headroom uses the curve's real apex
 # ---------------------------------------------------------------------------
 
 
@@ -612,7 +619,7 @@ class TestArchApex:
         x0, y0, x1, y1 = 100.0, 300.0, 600.0, 120.0
         apex = _arch_apex_y(x0, y0, x1, y1, _ARCH_FRAC)
         # Smaller y is higher on the reversed screen axis: the real peak is
-        # ABOVE the point the old formula reserved for.
+        # ABOVE the t = 0.5 point.
         assert apex < _t_half_apex(x0, y0, x1, y1, _ARCH_FRAC)
 
     def test_apex_bounds_the_drawn_curve(self):
@@ -683,12 +690,12 @@ class TestArcHeadroom:
         saccades = next(t for t in fig.data if t.name == "saccades")
         drawn_apex = float(np.nanmin([v for v in saccades.y if v is not None]))
         assert top <= drawn_apex  # the apex sits inside the view
-        # …and the old t=0.5 estimate sat BELOW the real peak, so the reservation
-        # it produced clipped the top of the arc.
+        # …and the naive t=0.5 estimate sits BELOW the real peak, so a
+        # reservation from it would clip the top of the arc.
         old_estimate = _t_half_apex(140.0, 70.0, 940.0, y1, _ARCH_FRAC)
         assert old_estimate > drawn_apex
         assert self._reserved_top(y1, old_estimate) > drawn_apex
-        # The new reservation is the true Bézier apex, plus the 2% margin.
+        # The reservation is the true Bézier apex, plus the 2% margin.
         true_apex = _arch_apex_y(140.0, 70.0, 940.0, y1, _ARCH_FRAC)
         assert top == pytest.approx(self._reserved_top(y1, true_apex))
 

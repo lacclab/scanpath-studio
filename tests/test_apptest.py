@@ -1,9 +1,9 @@
 """Streamlit AppTest integration: spin up the app and assert key surfaces render.
 
-Companion file: ``tests/test_apptest_flows.py`` (ENG-4) drives multi-step
-*flows* through the same harness — overriding a column mapping and checking the
+Companion file: ``tests/test_apptest_flows.py`` drives multi-step *flows*
+through the same harness — overriding a column mapping and checking the
 re-derived data, narrowing the trial pool with the condition/annotation filters
-(incl. the UX-7 empty state), and building the bulk-export zip from the Export
+(incl. the empty-pool state), and building the bulk-export zip from the Export
 subtab. Add render-level checks here; add "change a control, assert the next
 render" checks there.
 """
@@ -25,9 +25,6 @@ from tests.conftest import (
     SUBTAB_KEY,
     SUBTAB_LINE_ASSIGNMENT,
     SUBTAB_SHARE,
-    _write_benchmark_corpus,
-    _write_benchmark_manifest,
-    add_benchmark_corpora,
     answer_setup_step,
     open_data_view,
     picked_trial_id,
@@ -69,7 +66,7 @@ def _make_apptest(*, synthetic: bool = False) -> AppTest:
 def _replay_tour(at: AppTest) -> None:
     """Replay the tour through the compatibility action used by tests.
 
-    The visible entry now lives in Tutorials; this bypasses the dialog so tests
+    The visible entry lives in Tutorials; this bypasses the dialog so tests
     focused on the tour itself do not also test the tutorial library.
     """
     from unittest.mock import patch
@@ -89,8 +86,8 @@ def _replay_tour(at: AppTest) -> None:
 def _enter_add_data(at: AppTest) -> None:
     """Click the Add-dataset button, wherever the app currently keeps it.
 
-    UX-64 moved it off the Scanpath control row onto the Data page, which is
-    now the only way in — so reaching it means switching views first.
+    It lives on the Data page, the only way in — so reaching it means
+    switching views first.
     """
     open_data_view(at)
     add = [b for b in at.button if b.key == "add_data_btn"]
@@ -109,14 +106,14 @@ class TestAppLaunches:
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
     def test_wordmark_ships_and_does_not_double_up_in_the_page(self):
-        """UX-62: the name is the header wordmark, and *only* that.
+        """The name is the header wordmark, and *only* that.
 
         Two things worth failing on. The image must **exist inside the
         package** — it is declared in `pyproject.toml`'s `package-data`, and a
         logo that slipped back outside it would leave every pip install with an
         empty header while a source checkout looked fine. And the page body must
-        not print the title or its one-line description any more, or the app
-        says its own name twice, a row apart.
+        not print the title or its one-line description, or the app says its
+        own name twice, a row apart.
 
         `st.logo` writes into Streamlit's header strip, which `AppTest` does not
         expose (it has no `.logo`), so the element itself is browser-verified.
@@ -139,11 +136,11 @@ class TestAppLaunches:
         ], "the one-line description lives in About, not in the page chrome"
 
     def test_nothing_renders_into_the_sidebar(self):
-        """The sidebar is gone — every group it held is a top-menu popover now.
+        """Nothing is written to the sidebar.
 
         Streamlit only draws sidebar chrome when something is written there, so
-        one stray ``st.sidebar.*`` call anywhere in the render path brings the
-        whole panel back, half-populated. Assert the container is empty rather
+        one stray ``st.sidebar.*`` call anywhere in the render path draws a
+        sidebar panel, half-populated. Assert the container is empty rather
         than trusting a grep: the call could be behind any branch.
         """
         at = _make_apptest()
@@ -157,11 +154,10 @@ class TestAppLaunches:
         assert not stray, f"these still render into the sidebar: {stray}"
 
     def test_a_panel_cannot_default_back_into_the_sidebar(self):
-        """ENG-44: ``render_trial_filters`` used to fall back to ``st.sidebar``
-        when given no host — a default that would have drawn the whole filter
-        panel into chrome the app has not rendered since UX-38. The host is now
-        required, so forgetting it is a TypeError rather than a panel nobody can
-        see."""
+        """``render_trial_filters`` has no default host: falling back to
+        ``st.sidebar`` would draw the whole filter panel into chrome the app
+        never renders. The host is required, so forgetting it is a TypeError
+        rather than a panel nobody can see."""
         import inspect
 
         from scanpath_studio import controls
@@ -171,10 +167,10 @@ class TestAppLaunches:
         assert host.kind is inspect.Parameter.KEYWORD_ONLY
 
     def test_the_session_entry_is_gone(self):
-        """UX-179: 💾 Session is not in the nav, and no popover stands in for it.
+        """💾 Session is not in the nav, and no popover stands in for it.
 
-        Its blocks moved to where each is used — Debug to ❓ Help, recovery and
-        Reset to the Data page, the settings file to Share → File.
+        Its blocks live where each is used — Debug in ❓ Help, the recovery
+        status on the Data page, the settings file in Share → File.
         """
         from scanpath_studio import menu
 
@@ -187,13 +183,12 @@ class TestAppLaunches:
             assert gone not in labels, labels
 
     def test_debug_mode_survives_the_dialog_closing(self):
-        """UX-100: the 🐛 Debug gate is not the toggle's own widget key.
+        """The 🐛 Debug gate is not the toggle's own widget key.
 
         A dialog body is a fragment: it runs only while the modal is open, and
         Streamlit drops a widget's key at the end of any run in which it did not
-        render. With `key=DEBUG_STATE_KEY` — which is how it was written while
-        the panel rendered every run — dismissing the modal turned debug mode
-        back off.
+        render. With `key=DEBUG_STATE_KEY`, dismissing the modal would turn
+        debug mode back off.
         """
         from scanpath_studio.debug_log import _DEBUG_DIALOG_KEY, DEBUG_STATE_KEY
 
@@ -207,10 +202,10 @@ class TestAppLaunches:
         assert at.session_state[DEBUG_STATE_KEY] is True
 
     def test_configure_and_preprocessing_left_the_menu_bar(self):
-        """DATA-26: the two setup groups are the Data page's, not the bar's.
+        """The two setup groups are the Data page's, not the bar's.
 
-        Leaving a stale trigger behind would give one job two doors again, which
-        is the whole complaint the page exists to answer.
+        A trigger left on the bar would give one job two doors, which is the
+        whole complaint the page exists to answer.
         """
         at = _make_apptest()
         at.run(timeout=30)
@@ -226,7 +221,7 @@ class TestAppLaunches:
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
     def test_multiple_comparison_tab_renders(self):
-        # Exercise the Comparisons subtab (ENG-8). The bundled demo has several
+        # Exercise the Comparisons subtab. The bundled demo has several
         # readers of each paragraph, so grouping the same text by participant_id
         # yields real comparison scanpaths to score against the selected trial.
         # Change the grid columns; confirm no exceptions / errors.
@@ -237,7 +232,7 @@ class TestAppLaunches:
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
     def test_stimulus_image_with_manual_alignment_renders(self):
-        # VIZ-4: the bundled demo ships a per-trial stimulus image. Turning it on
+        # The bundled demo ships a per-trial stimulus image. Turning it on
         # and applying a manual origin nudge + scale (the "Align to text"
         # controls) must render without exceptions / errors.
         at = _make_apptest()
@@ -250,14 +245,13 @@ class TestAppLaunches:
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
     def test_animation_export_controls_render(self):
-        # Animation is now a checkbox in the Scanpath Visualization tab; with it
-        # on, the Export toggle offers the HTML/GIF/MP4 selector. Selecting a
-        # rasterized format must render its options + Render button without
-        # crashing (and without triggering the expensive Kaleido render).
+        # With Animate on, the Export subtab offers the HTML/GIF/MP4 selector.
+        # Selecting a rasterized format must render its options + Render button
+        # without crashing (and without triggering the expensive Kaleido render).
         at = _make_apptest(synthetic=True)
         at.run(timeout=30)
         at.session_state["single_animate"] = True
-        at.session_state[SUBTAB_KEY] = SUBTAB_EXPORT  # PERF-3: open it to load it
+        at.session_state[SUBTAB_KEY] = SUBTAB_EXPORT  # open it to load it
         at.run(timeout=30)
         fmt_radios = [r for r in at.radio if list(r.options) == ["HTML", "GIF", "MP4"]]
         assert fmt_radios, "animation export-format radio not found"
@@ -265,7 +259,7 @@ class TestAppLaunches:
         # Re-pin the subtab: the tab bar is itself a widget, so any *other*
         # programmatic change lets it fall back to its default and the panel
         # under test silently doesn't render — the assertions below would then
-        # pass without ever reaching the rasterized branch (ENG-37).
+        # pass without ever reaching the rasterized branch.
         at.session_state[SUBTAB_KEY] = SUBTAB_EXPORT
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -275,8 +269,8 @@ class TestAppLaunches:
         assert [b for b in at.button if b.key == "anim_export_generate"]
 
     def test_single_trial_picker_degrades_without_slider(self):
-        # The mode pills are gone — there is just one trial picker now. With a
-        # single trial (synthetic source) it must NOT instantiate a one-option
+        # There is one trial picker. With a single trial (synthetic source) it
+        # must NOT instantiate a one-option
         # st.select_slider (that crashes the browser with `RangeError`); the
         # selectbox alone resolves it.
         at = _make_apptest(synthetic=True)
@@ -309,8 +303,8 @@ class TestAppLaunches:
         )
 
     def test_new_viz_toggles_build_without_error(self):
-        # Flip the new plot options (color-by-line — now the "line" option in the
-        # color-by selector — the PRE-2 out-of-bounds highlight, gray background)
+        # Flip several plot options (color-by-line — the "line" option in the
+        # color-by selector — the out-of-bounds highlight, gray background)
         # and confirm those code paths build without error. These pre-set values
         # mimic a Save & restore: the widgets must honour them (no inline
         # value=/index= override — see _VIZ_WIDGET_DEFAULTS) rather than reset.
@@ -322,14 +316,14 @@ class TestAppLaunches:
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-        # UX-162: the class modes are selectboxes in the 🧹 Filter table now.
+        # The class modes are selectboxes in the 🧹 Filter table.
         modes = {w.key: w.value for w in at.selectbox if w.key}
         assert modes.get("global_fixclass_oob_mode") == "Highlight", (
             "restored fixation-classification value was overridden by an inline default"
         )
 
     def test_drift_correction_in_place_builds(self):
-        # PRE-3: picking a drift-correction algorithm snaps fixations to their
+        # Picking a drift-correction algorithm snaps fixations to their
         # assigned line on the main plot. Pre-seed the picker (mimics a restore)
         # and confirm the corrected figure builds and the setting is collected.
         at = _make_apptest(synthetic=True)
@@ -341,7 +335,7 @@ class TestAppLaunches:
         assert at.session_state["global_align_algorithm"] == "Attach"
 
     def test_line_assignment_comparison_grid_builds(self):
-        # PRE-3: the "📐 Line assignment" subtab builds its 11-panel comparison
+        # The "📐 Line assignment" subtab builds its 11-panel comparison
         # grid (original + 10 algorithms) once the toggle is on, without error.
         at = _make_apptest(synthetic=True)
         at.session_state["align_grid_show"] = True
@@ -350,8 +344,7 @@ class TestAppLaunches:
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
     def test_single_fixation_opacity_builds_without_error(self):
-        # VIZ-6: the fixation opacity slider replaced the "Hollow circles"
-        # checkbox. A restored opacity < 1.0 must survive and the figure build.
+        # A restored fixation opacity < 1.0 must survive and the figure build.
         at = _make_apptest(synthetic=True)
         at.session_state["global_fixation_opacity"] = 0.5
         at.run(timeout=30)
@@ -360,7 +353,7 @@ class TestAppLaunches:
         assert at.session_state["global_fixation_opacity"] == 0.5
 
     def test_single_fixation_index_window(self):
-        # VIZ-7: narrow the main plot's fixation-index window and confirm the
+        # Narrow the main plot's fixation-index window and confirm the
         # slice path rebuilds the figure without exceptions (bundled demo trials
         # have enough fixations for the range slider to render).
         at = _make_apptest()
@@ -381,7 +374,7 @@ class TestAppLaunches:
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
     def test_compare_styles_collected_from_popover_keys(self):
-        # Per-scanpath comparison styling now lives inside the Fixation/Saccade
+        # Per-scanpath comparison styling lives inside the Fixation/Saccade
         # popovers. With Compare on, controls._collect_compare_styles reads the
         # cmp{idx}_* widget keys and threads them into the comparison figure (it
         # runs whenever single_compare_toggle is truthy, even single-trial). The
@@ -400,8 +393,7 @@ class TestAppLaunches:
         assert at.session_state["cmp1_saccade_style"] == "Dashed"
 
     def test_animate_checkbox_renders_animation(self):
-        # The Scanpath Visualization tab's Animate checkbox folds the former
-        # animation tab in: the playback-speed slider must appear without error.
+        # With Animate on, the playback-speed slider must appear without error.
         at = _make_apptest(synthetic=True)
         at.session_state["single_animate"] = True
         at.run(timeout=30)
@@ -412,8 +404,8 @@ class TestAppLaunches:
     def test_bulk_export_whole_dataset_option(self):
         # The bundle scope includes the current trial, the whole dataset, and
         # the active filtered subset.
-        at = _make_apptest()  # bundled 3-pid demo
-        at.session_state[SUBTAB_KEY] = SUBTAB_EXPORT  # PERF-3: open it to load it
+        at = _make_apptest()  # bundled 2-reader demo
+        at.session_state[SUBTAB_KEY] = SUBTAB_EXPORT  # open it to load it
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         scope_radios = [r for r in at.radio if r.key == "bulk_export_scope"]
@@ -434,9 +426,9 @@ class TestAppLaunches:
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
     def test_narrow_by_text_participant_multiselects_render(self):
-        # The former Browse-by Text/Participant modes are now inline "Narrow by"
-        # multiselects (filter_text_id / filter_participants) that narrow the pool.
-        at = _make_apptest()  # bundled 3-pid demo
+        # The inline "Narrow by" multiselects (filter_text_id /
+        # filter_participants) narrow the pool.
+        at = _make_apptest()  # bundled 2-reader demo
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         ms_keys = {m.key for m in at.multiselect if m.key}
@@ -463,9 +455,9 @@ class TestAppLaunches:
         )
 
     def test_narrow_by_text_shrinks_pool(self):
-        # The new text-narrowing path: picking a single text in the "Narrow by →
+        # Picking a single text in the "Narrow by →
         # Text" multiselect leaves only that text's trials in the picker.
-        at = _make_apptest()  # bundled 3-pid demo
+        at = _make_apptest()  # bundled 2-reader demo
         at.run(timeout=30)
         text_ms = [m for m in at.multiselect if m.key == "filter_text_id"]
         assert text_ms, "Narrow-by text multiselect missing"
@@ -516,13 +508,13 @@ class TestSingleReportDatasets:
 
 
 class TestLazySubtabs:
-    """PERF-3 — a per-trial subtab's body runs only when that tab is open.
+    """A per-trial subtab's body runs only when that tab is open.
 
     ``st.tabs`` executes every tab's body on every run; only the display is
-    client-side. That made four expensive panels a fixed tax on every rail
-    tweak. Streamlit 1.61's keyed tabs expose ``tab.open``, so the bodies are
-    now gated on it — which is only correct if opening a tab really does load
-    it, and if the closed ones really are skipped.
+    client-side, which would make the expensive panels a fixed tax on every
+    rail tweak. Keyed tabs expose ``tab.open``, so the bodies are gated on it —
+    which is only correct if opening a tab really does load it, and if the
+    closed ones really are skipped.
     """
 
     def test_closed_subtabs_do_not_run_their_bodies(self, monkeypatch):
@@ -564,11 +556,10 @@ class TestLazySubtabs:
 
 @pytest.mark.timeout(90)
 class TestDataInspectionTab:
-    """The 🗂️ Data page's lower half — the former Raw Data + Data Statistics
-    tabs merged into one panel: headline counts, raw tables, the summary-stats
-    table, and (as its own section above them since DATA-26) the column-mapping
-    table — while dropping the second stats row, the fixation histogram, and the
-    per-word measure section."""
+    """The 🗂️ Data page's inspection panel: headline counts, raw tables, the
+    summary-stats table, and (as its own section above them) the column-mapping
+    table — with no second stats row, fixation histogram or per-word measure
+    section."""
 
     def test_merged_sections_present_and_old_removed(self):
         at = _make_apptest(synthetic=True)
@@ -576,12 +567,11 @@ class TestDataInspectionTab:
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
-        # UX-52 gave the page one heading level. UX-135 then split that level in
-        # two along the DATA-35 screen split: the *overview* keeps its
-        # subheaders, and every section of the ✏️ Edit screen is one of the add
-        # screen's numbered parts, so its headings are `.sps-wiz-part` markdown.
+        # The page has two heading styles: the *overview* uses subheaders, and
+        # every section of the ✏️ Edit screen is one of the add screen's
+        # numbered parts, so its headings are `.sps-wiz-part` markdown.
         subheaders = [s.value for s in at.subheader]
-        # UX-177: the list of datasets opens the page with no heading of its own.
+        # The list of datasets opens the page with no heading of its own.
         assert f"{ICONS['datasets']} Available datasets" not in subheaders
         section = f"{ICONS['search']} What's in **Synthetic test trial**"
         assert section in subheaders, f"missing stage {section}: {subheaders}"
@@ -591,12 +581,11 @@ class TestDataInspectionTab:
             if str(m.value).startswith('<div class="sps-wiz-part"')
         )
         # `SCANPATH_EXPERIMENTAL=1` in conftest, so Preprocessing renders here
-        # even though PRE-22 holds it back from the release build.
+        # even though a default build hides it.
         for section in ("column mapping", "Recording setup", "Preprocessing"):
             assert section in parts, f"missing part {section}: {parts}"
-        # The raw tables and the stats share ONE tab bar now — the collapsed
-        # "📋 Raw data" expander over a tab bar, and the separate
-        # "📊 Summary statistics" expander below it, are both gone.
+        # The raw tables and the stats share ONE tab bar — no "📋 Raw data" or
+        # "📊 Summary statistics" expander.
         folded = [e.label for e in at.expander]
         assert not any("Raw data" in label for label in folded), folded
         assert not any("Summary statistics" in label for label in folded), folded
@@ -608,24 +597,23 @@ class TestDataInspectionTab:
             "Raw gaze",
         ):
             assert tab in tab_labels, f"missing tab {tab}: {tab_labels}"
-        # The counts are the section's opening answer, so they kept no heading.
+        # The counts are the section's opening answer, so they have no heading.
         assert "Dataset statistics" not in subheaders
 
         metric_labels = [m.label for m in at.metric]
         for headline in ("Participants", "Texts", "Trials", "Fixations", "Word rows"):
             assert headline in metric_labels, f"missing headline metric {headline}"
-        # The second statistics row is gone.
+        # No second statistics row.
         for dropped in ("Mean fixation dur (ms)", "Reading speed (wpm)"):
             assert dropped not in metric_labels, f"{dropped} should be removed"
 
-        # The histogram + per-word measure sections are gone.
+        # No histogram or per-word measure section.
         text = " ".join(subheaders)
         assert "Fixation duration distribution" not in text
         assert "Per-word measure" not in text
 
-        # The filtering note stays under the summary-stats table.
-        # UX-137 moved that caveat onto each spread metric's own ❔ — it was the
-        # only prose on the tab, read once and then never again.
+        # The filtering caveat is on each spread metric's own ❔, not a caption
+        # under the summary-stats table.
         assert not any("computed after filtering" in c.value for c in at.caption)
         spread = [m for m in at.metric if m.label.endswith("per trial")]
         assert spread, [m.label for m in at.metric]
@@ -646,18 +634,16 @@ class TestDataInspectionTab:
 
     def test_top_level_nav_views(self):
         # Top-level navigation is Streamlit's own top nav — `st.navigation(
-        # position="top")` — not a sidebar radio, and not the single toggling
-        # header button it replaced. `main_nav` survives as the mirror every
-        # other reader (the tour, persistence) still consults.
-        # Data Inspection and Share are subtabs of the Scanpath view.
+        # position="top")` — not a radio. `main_nav` is the mirror every other
+        # reader (the tour, persistence) consults.
         from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
 
         at = _make_apptest(synthetic=True)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # No main_nav radio anymore.
+        # No main_nav radio.
         assert not [r for r in at.radio if r.key == "main_nav"], (
-            "top-level nav should no longer be a radio"
+            "top-level nav should not be a radio"
         )
         # The router lands on the default page, and `main_nav` mirrors it.
         assert at.session_state["main_nav"] == _VIEW_SCANPATH
@@ -675,11 +661,11 @@ class TestDataInspectionTab:
 
         `render_nav` reconciles a programmatically-requested view (written to
         `main_nav` from a callback, where `st.switch_page` is illegal) against
-        the router's selection. The first cut compared `main_nav` to the
-        selection directly, so a user's click — which moves the router while
-        `main_nav` still holds last run's view — looked exactly like a request
-        to return, and the nav bounced straight back. The fix compares against
-        what the reconciler itself last mirrored; this pins it.
+        the router's selection. Comparing `main_nav` to the selection directly
+        would make a user's click — which moves the router while `main_nav`
+        still holds last run's view — look exactly like a request to return,
+        and the nav would bounce straight back. The reconciler compares against
+        what it last mirrored itself; this pins it.
         """
         from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
         from scanpath_studio.menu import _MIRROR_KEY, _NAV_PAGES, _PAGES, render_nav
@@ -714,16 +700,13 @@ class TestDataInspectionTab:
         """The nav offers every top-level entry, in order.
 
         `_PAGES` is what `switch_to_view` navigates through, so a missing entry
-        is a view nothing can reach programmatically. DATA-26 added 🗂️ Data
-        **last** of the analysis views: setup comes first in time, but the two
-        analysis views are where the work happens and moving them would cost
-        every user their aim.
+        is a view nothing can reach programmatically. 🗂️ Data comes **last**:
+        setup comes first in time, but the two analysis views are where the
+        work happens.
 
-        Neither ❓ Help nor 💾 Session is here. UX-65 made Help a collapsible nav
-        *section* of dialog-openers (`_HELP_PAGES`), which are actions rather
-        than views — nothing navigates to one and stays — and UX-100 made
-        Session a popover on the title row, for the same reason: you dip into it
-        and carry on, rather than travelling to it.
+        ❓ Help is not here: it is a collapsible nav *section* of dialog-openers
+        (`_HELP_PAGES`), which are actions rather than views — nothing
+        navigates to one and stays.
         """
         from scanpath_studio.constants import (
             _VIEW_CORPUS,
@@ -747,8 +730,8 @@ class TestDataInspectionTab:
 
 @pytest.mark.timeout(120)
 class TestLeavingTheWizard:
-    """BUG-31: navigating away mid-wizard must not switch the app onto the
-    half-built dataset."""
+    """Navigating away mid-wizard must not switch the app onto the half-built
+    dataset."""
 
     def _in_wizard(self):
         """An app with the add-dataset wizard open and rendering.
@@ -797,24 +780,20 @@ class TestLeavingTheWizard:
         view the user declined; clearing the prompt without recording which view
         that was would re-ask it on every rerun.
 
-        **BUG-36 follow-up:** the click-processing run is deliberately *not*
-        re-pinned. `render_nav`'s reconciliation (which `pin_view` drives by
+        The click-processing run is deliberately *not* re-pinned. `render_nav`'s reconciliation (which `pin_view` drives by
         clearing its mirror) calls `st.switch_page` when it fires — a real
         rerun, early in the script, well before the dialog's own button is
         reached — and a button's "just clicked" value is one-shot: valid only
         for the script execution immediately following the actual click, not
-        for one a same-run `st.rerun()` restarts from scratch. Pin_view'ing
-        the same run as the click would silently drop it before the return
-        value ever reads `True` — a race that can't happen in a real browser,
-        since nothing about clicking a dialog button asks the router to
-        switch pages, but very much can here since `pin_view` is a test-only
-        stand-in for the router remembering its page across runs at all. Left
-        unpinned, the run instead resolves the *default* page (Scanpath) —
-        AppTest's router forgets the previous switch between separate `.run()`
-        calls the same way it forgets everything else — so that is also what
-        `WIZARD_STAY_KEY` ends up recording, and the two checks below follow
-        that: an unpinned rerun (same, default page) must not re-ask, while
-        pinning to a genuinely different view (Corpus Analysis) must."""
+        for one a same-run `st.rerun()` restarts from scratch. Pinning the
+        same run as the click would silently drop it before the return value
+        ever reads `True` — a race that can't happen in a real browser, since
+        clicking a dialog button never asks the router to switch pages, but
+        can here, since `pin_view` is a test-only stand-in for the router
+        remembering its page. Left unpinned, the run resolves whichever page
+        AppTest's router lands on, and that is what `WIZARD_STAY_KEY` records;
+        so an unpinned rerun (the same page) must not re-ask, while pinning to
+        a genuinely different view must."""
         at = self._in_wizard()
         pin_view(at, "Corpus Analysis")
         at.run(timeout=60)
@@ -826,9 +805,8 @@ class TestLeavingTheWizard:
         at.run(timeout=60)
         assert not [b for b in at.button if b.key == "wizard_leave_stay"]
         # A *different* view is a new question. Which view the stay recorded
-        # depends on the Streamlit version: AppTest remembers the page a run
-        # finished on since 1.66 (Corpus Analysis), and forgot it before
-        # (Scanpath). So ask from the other of the two.
+        # depends on whether AppTest remembers the page a run finished on
+        # (Corpus Analysis) or not (Scanpath), so ask from the other of the two.
         from scanpath_studio.constants import WIZARD_STAY_KEY
 
         stayed = at.session_state[WIZARD_STAY_KEY]
@@ -845,8 +823,8 @@ class TestLeavingTheWizard:
         `main_nav` (an `on_click` may not call `st.switch_page`), and AppTest's
         router does not follow the `switch_page` the reconciler then issues, so
         it reports the default page instead. What is asserted here is everything
-        that lives in session state, including the part that actually caused the
-        bug: the app must not be left pointing at the half-built upload."""
+        that lives in session state, including the part that matters most: the
+        app must not be left pointing at the half-built upload."""
         at = self._in_wizard()
         previous = at.session_state["_prev_source"]
         pin_view(at, "Corpus Analysis")
@@ -857,13 +835,13 @@ class TestLeavingTheWizard:
         assert at.session_state["_show_upload_wizard"] is False
         assert "_wizard_leave_requested" not in at.session_state
         # Back on the dataset the wizard was opened from, not the half-built one
-        # — the symptom that made this read as data loss.
+        # — which would read as data loss.
         assert at.session_state["data_source_choice"] == previous
 
 
 @pytest.mark.timeout(120)
 class TestDatasetTable:
-    """UX-54: the 🗂️ Data page lists datasets as a table, with the per-row
+    """The 🗂️ Data page lists datasets as a table, with the per-row
     actions in the row they belong to."""
 
     NAME = "My corpus"
@@ -922,7 +900,7 @@ class TestDatasetTable:
         return edit_row_key(token)
 
     def test_the_editor_opens_under_the_table_and_its_stats(self):
-        """UX-197: ✏️ Edit dataset no longer replaces the overview — the table
+        """✏️ Edit dataset does not replace the overview — the table
         and *What's in the dataset* stay on screen, the editor opens under
         them, and the page is brought down to it once."""
         from scanpath_studio.app import _EDITOR_SCROLL_KEY
@@ -965,12 +943,11 @@ class TestDatasetTable:
         assert int(row["Fixations"].iloc[0]) > 0
         assert row["Kind"].iloc[0] == "Private"
         assert set(frame["Kind"]) <= {"Demo", "Manual", "Private", "Public", ""}
-        # UX-174 r2: every row carries the row-wide button that opens it,
-        # keyed by its dataset, and a dataset you added carries Remove too —
-        # the demo and the public corpora have nothing to remove, since Remove
-        # only hid them for the session with no way back. Details and the ⋯
-        # menu are gone: rename and edit live on the open dataset's section,
-        # under the table.
+        # Every row carries the row-wide button that opens it, keyed by its
+        # dataset, and a dataset you added carries Remove too — the demo and
+        # the public corpora have none, since removing one would only hide it
+        # for the session with no way back. No row has a Details or rename
+        # button.
         keys = {b.key for b in at.button}
         for token in frame["_token"]:
             slug = self._slug(token)
@@ -983,7 +960,7 @@ class TestDatasetTable:
                 assert f"{gone}{slug}" not in keys
         assert not [k for k in keys if "rename" in str(k)]
         assert "dataset_edit_btn" not in keys
-        # BUG-113: Status says whether a dataset can be opened — a stored
+        # Status says whether a dataset can be opened — a stored
         # upload is in memory, so it opens at once.
         status = frame.set_index("_token")["Status"]
         assert status[self.NAME] == "Loaded"
@@ -991,8 +968,8 @@ class TestDatasetTable:
         assert frame.set_index("_token")["Counts"][self.NAME] == "Loaded"
         demo = frame[frame["Dataset"].str.contains("demo", case=False)]
         if not demo.empty:
-            # DATA-35's language: the demo is a OneStop subset, so it knows its
-            # language — still on the record, for the Language filter.
+            # The demo is a OneStop subset, so it knows its language — on the
+            # record, for the Language filter.
             assert demo["Language"].iloc[0]
         # Both ways to make a dataset are in the + Add dataset menu.
         assert "create_manual_scanpath_btn" in keys
@@ -1028,9 +1005,9 @@ class TestDatasetTable:
     def test_a_corpus_this_server_cannot_fetch_says_so_instead_of_opening(
         self, monkeypatch
     ):
-        """On the hosted demo, a public corpus that isn't on the server used to
-        open as the bundled demo, under a note that the files were missing. The
-        click now leaves the open dataset alone and says where it does open."""
+        """On the hosted demo, clicking a public corpus that isn't on the server
+        leaves the open dataset alone and says where the corpus does open,
+        rather than opening the bundled demo in its place."""
         from scanpath_studio import datasets
         from scanpath_studio.app import _UNREACHABLE_DATASET_KEY
 
@@ -1070,8 +1047,8 @@ class TestDatasetTable:
         assert at.session_state["data_source_choice"] == target
 
     def test_the_remove_confirmation_counts_the_annotations_it_takes(self):
-        """BUG-95: it used to promise the annotations left, whatever the count
-        — including when they did not."""
+        """It counts the annotations that leave with the upload, rather than
+        promising they leave whatever the count."""
         from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
         from scanpath_studio.app import PENDING_DELETE_KEY
 
@@ -1092,7 +1069,7 @@ class TestDatasetTable:
         assert asks and "its 1 annotation are deleted" in asks[0]
 
     def test_an_uploads_new_name_is_applied_by_save_changes(self):
-        """UX-178: renaming is the editor's **Name** field. An upload's editor
+        """Renaming is the editor's **Name** field. An upload's editor
         widgets are keyed by its name, so the rename waits for ✅ Save changes —
         and until then it is an unsaved change, which ✕ Cancel asks about."""
         from scanpath_studio.tabs import EDITOR_NAME_FIELD_KEY
@@ -1113,7 +1090,7 @@ class TestDatasetTable:
 
     def test_a_built_in_datasets_name_is_an_alias_set_by_save(self):
         """Its name and description wait for ✅ Save changes like the rest of
-        the edit (round 6, improvement A)."""
+        the edit."""
         from scanpath_studio.app import DATASET_ALIASES_KEY, _description_field_key
         from scanpath_studio.constants import DATASET_DESCRIPTIONS_KEY, DEMO_CHOICE
         from scanpath_studio.tabs import EDITOR_NAME_FIELD_KEY
@@ -1153,7 +1130,7 @@ class TestDatasetTable:
         self._click(at, "dataset_sort_dataset")
         self._click(at, f"dataset_row_remove_{self._slug(self.NAME)}")
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # Armed, not removed: UX-79's confirmation still stands between the two.
+        # Armed, not removed: a confirmation stands between the two.
         assert at.session_state[PENDING_DELETE_KEY] == self.NAME
         assert self.NAME in at.session_state["_datasets"]
 
@@ -1165,7 +1142,7 @@ class TestDatasetTable:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state[DATASET_EDITOR_OPEN_KEY] is True
         assert at.session_state["data_source_choice"] == self.NAME
-        # UX-174 r2 — the description is edited on this screen.
+        # The description is edited on this screen.
         from scanpath_studio.app import _description_field_key
 
         assert [t for t in at.text_area if t.key == _description_field_key(self.NAME)]
@@ -1223,7 +1200,7 @@ class TestDatasetTable:
 
     def test_a_description_written_on_the_editor_waits_for_save(self):
         """Typed on ✏️ Edit dataset, it is an unsaved change until ✅ Save
-        changes (round 6, improvement A), which stores it in the descriptions
+        changes, which stores it in the descriptions
         dict the recovery cache persists — not on the upload's entry, whose
         every non-frame field is part of the cache's dataset identity."""
         from scanpath_studio.app import _description_field_key
@@ -1244,7 +1221,7 @@ class TestDatasetTable:
         assert "description" not in at.session_state["_datasets"][self.NAME]
 
     def test_the_annotations_tab_flags_entries_on_trials_it_has_not_loaded(self):
-        """DATA-48: the store is the dataset's own, so the tab lists all of it
+        """The store is the dataset's own, so the tab lists all of it
         — an entry on a trial the dataset has not loaded is flagged in the
         *In dataset* column, not hidden (it would be out of reach otherwise)."""
         from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
@@ -1313,9 +1290,9 @@ class TestDatasetTable:
         self, monkeypatch
     ):
         """PoTeC picked but not on disk: the loader shows the bundled demo in its
-        place (UX-7(b)), and the table used to count those demo rows as PoTeC's
-        *loaded* figures — and remember them. The row keeps its published
-        figures instead, with *Needs download* as a state of its own."""
+        place, and the table must not count those demo rows as PoTeC's
+        *loaded* figures — or remember them. The row keeps its published
+        figures, with *Needs download* as a state of its own."""
         from scanpath_studio import datasets
 
         monkeypatch.setattr(datasets, "potec_present", lambda root: False)
@@ -1345,10 +1322,8 @@ class TestDatasetTable:
     POTEC = "PoTeC — Potsdam Textbook Corpus"
 
     def test_a_missing_corpus_says_so_whether_or_not_it_is_open(self, monkeypatch):
-        """BUG-113: OneStop read *Loaded* while the demo was open and *Needs
-        setup* the moment it was opened — the first was where its remembered
-        counts came from, the second whether its files were there. A row now
-        says the second, the same way whichever dataset is open."""
+        """Status says whether the corpus' files are there, not where its
+        remembered counts came from — the same way whichever dataset is open."""
         from scanpath_studio.constants import DEMO_CHOICE
 
         closed = self._status_with(monkeypatch, opened=DEMO_CHOICE, present=False)
@@ -1365,7 +1340,7 @@ class TestDatasetTable:
         )
 
     def test_the_open_dataset_says_one_sentence_and_its_home_page(self):
-        """UX-177: no *About this dataset* popover — the description, the home
+        """No *About this dataset* popover — the description, the home
         page on its line, and a note only where it changes how a figure is
         read (PoTeC's positions are reconstructed)."""
         from scanpath_studio import datasets
@@ -1383,17 +1358,17 @@ class TestDatasetTable:
             "[Home page ↗](https://github.com/DiLi-Lab/PoTeC)" in c for c in captions
         )
         assert any("reconstructed, not recorded" in c for c in captions)
-        # What the old popover's body wrote (its own label is not in the tree).
+        # What an *About this dataset* popover would write (its own label is
+        # not in the tree).
         tree = str(at._tree)
         assert "Published figures" not in tree
         assert "Where the coordinates come from" not in tree
 
     def test_delete_is_wired_to_the_remover(self):
-        """Regression: UX-64 dropped the ➕ popover that held *Remove a dataset*,
-        leaving `wizard._remove_dataset` with **no caller at all** — deleting an
-        upload was unreachable until this table's ✕ put it back.
+        """`wizard._remove_dataset` must keep a caller: this table's ✕ is the
+        only way to delete an upload, and nothing else would notice it going.
 
-        The ⋯ → Remove click that arms the confirmation is driven for real in
+        The Remove click that arms the confirmation is driven for real in
         `test_remove_arms_the_confirmation_for_its_own_row`; the confirmation's
         own button is inside an ``st.dialog``, which AppTest does not run, and
         the remover itself is covered by `tests/test_wizard_helpers.py`. What
@@ -1401,11 +1376,9 @@ class TestDatasetTable:
         fact, so it is checked as one."""
         import inspect
 
-        # UX-54 r2 put a confirmation between the two: the table's ✕ arms the
-        # pending token, and the confirm button is what calls the remover. UX-79
-        # then made that confirmation a modal, so the chain is one link longer —
-        # the invariant this test exists for is unchanged: something still calls
-        # the remover.
+        # A confirmation sits between the two: the table's ✕ arms the pending
+        # token, and the confirm button in a modal is what calls the remover.
+        # The invariant is that something still calls the remover.
         from scanpath_studio.app import (
             _delete_confirmation_dialog,
             _render_dataset_table_row,
@@ -1426,15 +1399,15 @@ class TestDatasetTable:
 
 @pytest.mark.timeout(90)
 class TestDatasetRename:
-    """DATA-23: a dataset the user added can be renamed after the fact.
+    """A dataset the user added can be renamed after the fact.
 
     The name is the key into the ``_datasets`` store, so these are really about
     everything that key had to drag along with it. ``wizard.rename_dataset`` is
     the whole of that, and it touches only session state — so it is exercised
     directly rather than through a 90-second AppTest boot.
 
-    The rename lives in exactly **one** place: UX-178's **Name** field on
-    ✏️ Edit dataset (a row's menu before UX-174 r2, then a heading button).
+    The rename lives in exactly **one** place: the **Name** field on
+    ✏️ Edit dataset.
     """
 
     NAME = "My corpus"
@@ -1483,7 +1456,7 @@ class TestDatasetRename:
         assert _session["_datasets"]["Other corpus"] == {"words": "Other corpus"}
 
     def test_the_compare_dataset_follows_the_rename(self, _session):
-        """CMP-8's scanpath B names its corpus by the same string."""
+        """Compare's scanpath B names its corpus by the same string."""
         from scanpath_studio import wizard
         from scanpath_studio.session_keys import COMPARE_SOURCE_STATE_KEY
 
@@ -1510,9 +1483,9 @@ class TestDatasetRename:
         assert DATASET_DESCRIPTIONS_KEY in persistence._SESSION_KEYS
 
     def test_removing_an_upload_takes_its_annotations(self, _session):
-        """BUG-95: the confirmation said the annotations leave with the upload,
-        and none did. DATA-48: all of its own go — and none of another
-        dataset's, even on a trial with the same ids."""
+        """The confirmation says the annotations leave with the upload, and
+        they do: all of its own go — and none of another dataset's, even on a
+        trial with the same ids."""
         import scanpath_studio.annotations as annotations_mod
         from scanpath_studio import wizard
         from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
@@ -1535,7 +1508,7 @@ class TestDatasetRename:
         assert _session[ANNOTATIONS_STATE_KEY] == {}
 
     def test_a_renamed_upload_keeps_its_annotations(self, _session):
-        """DATA-48 — the store is keyed by the dataset's name, so it moves."""
+        """The store is keyed by the dataset's name, so it moves."""
         import scanpath_studio.annotations as annotations_mod
         from scanpath_studio import wizard
         from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
@@ -1580,7 +1553,7 @@ class TestDatasetRename:
             assert wizard._safe_dataset_name(label) != label, label
 
     def test_a_name_holding_another_datasets_annotations_is_taken(self, _session):
-        """DATA-48: a stale store under a name must never be inherited."""
+        """A stale store under a name must never be inherited."""
         import scanpath_studio.annotations as annotations_mod
         from scanpath_studio import wizard
 
@@ -1594,7 +1567,7 @@ class TestDatasetRename:
     def test_the_demo_standing_in_for_a_corpus_keeps_the_demos_annotations(
         self, _session
     ):
-        """DATA-48: when a corpus isn't on disk the demo is shown in its place,
+        """When a corpus isn't on disk the demo is shown in its place,
         so a star made there is on the demo's trials and filed as the demo's."""
         import scanpath_studio.annotations as annotations_mod
         from scanpath_studio import app
@@ -1653,7 +1626,7 @@ class TestDatasetRename:
     def test_a_refused_annotation_rename_leaves_the_dataset_as_it_was(
         self, _session, monkeypatch
     ):
-        """DATA-48: the annotations move first; if their rename is refused the
+        """The annotations move first; if their rename is refused the
         frames are not re-keyed either, so nothing is stranded."""
         import scanpath_studio.annotations as annotations_mod
         from scanpath_studio import wizard
@@ -1664,7 +1637,7 @@ class TestDatasetRename:
         assert list(_session["_datasets"]) == [self.NAME]
 
     def test_saving_an_authored_draft_takes_its_annotations(self, _session):
-        """DATA-48: the draft's annotations were made on the scanpath being
+        """The draft's annotations were made on the scanpath being
         saved, so they move to the saved dataset's name."""
         import scanpath_studio.annotations as annotations_mod
         from scanpath_studio import app
@@ -1686,7 +1659,7 @@ class TestDatasetRename:
         assert annotations_mod.store_for(_session, app.AUTHOR_CHOICE) == {}
 
     def test_rename_is_a_field_on_the_editor_and_nowhere_else(self):
-        """UX-178: one rename — ✏️ Edit dataset's **Name** — and no rename
+        """One rename — ✏️ Edit dataset's **Name** — and no rename
         button on the rows or beside the heading."""
         import pandas as pd
 
@@ -1814,7 +1787,7 @@ class TestBuiltInRecordingSetupOverride:
 
 @pytest.mark.timeout(240)
 class TestBuiltInEditorSavesItsMapping:
-    """DATA-62: a built-in dataset's ✏️ Edit dataset screen ends in ✅ Save
+    """A built-in dataset's ✏️ Edit dataset screen ends in ✅ Save
     changes like an upload's. Its mapping panels are a draft while the editor is
     open — the dataset keeps its mapping until Save, and ✕ Cancel discards."""
 
@@ -1886,7 +1859,7 @@ class TestBuiltInEditorSavesItsMapping:
         # Parked, then applied by the next run of the same source only.
         app.restore_builtin_mapping("another source")
         assert state["col_map_fix_timestamp"] == "CURRENT_FIX_END"
-        app._discard_builtin_mapping_edit()  # nothing held any more: a no-op
+        app._discard_builtin_mapping_edit()  # nothing is held now: a no-op
         state[app.BUILTIN_MAPPING_RESTORE_KEY] = {
             "source": "src",
             "keys": {"col_map_fix_timestamp": "CURRENT_FIX_START"},
@@ -1909,9 +1882,9 @@ class TestUnmappedRawDataView:
         from scanpath_studio import app
 
         # A words table whose columns match neither a word/IA id nor box
-        # coordinates — exactly the screenshot's failure. Injected through the
-        # per-table upload seam (AppTest can't drive st.file_uploader); the
-        # Words/IA group gets it, the others stay empty.
+        # coordinates. Injected through the per-table upload seam (AppTest
+        # can't drive st.file_uploader); the Words/IA group gets it, the others
+        # stay empty.
         raw_words = pd.DataFrame(
             {"reader": ["r0", "r0"], "stim": ["b0", "b0"], "token": ["Um", "das"]}
         )
@@ -1927,7 +1900,7 @@ class TestUnmappedRawDataView:
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         # Past the setup wizard (collapsed "Data & mapping" panel), an incomplete
         # mapping still surfaces the raw data so the user can fix it. The raw
-        # tables show in the Data Inspection view.
+        # tables show on the 🗂️ Data page.
         at.session_state["setup_complete"] = True
         pin_data_view(at)
         at.run(timeout=60)
@@ -1945,7 +1918,7 @@ class TestUnmappedRawDataView:
 
     def test_public_datasets_shown_by_default(self, monkeypatch):
         """The Public datasets corpora are offered by default in the flat source
-        picker (DATA-9: each corpus is its own tagged entry, not a category)."""
+        picker (each corpus is its own tagged entry, not a category)."""
         from scanpath_studio import app
 
         monkeypatch.delenv("SCANPATH_PUBLIC_DATASETS", raising=False)
@@ -1972,8 +1945,8 @@ class TestUnmappedRawDataView:
     def test_potec_source_renders(self, monkeypatch):
         """Public datasets → PoTeC loads through the same pipeline as an upload.
 
-        The source is behind the SCANPATH_PUBLIC_DATASETS flag until release —
-        enabled here so the whole path stays tested."""
+        SCANPATH_PUBLIC_DATASETS is set explicitly, so the test does not depend
+        on the default."""
         import pandas as pd
 
         from scanpath_studio import app, datasets
@@ -2010,8 +1983,8 @@ class TestUnmappedRawDataView:
         monkeypatch.setattr(datasets, "potec_present", lambda *a, **k: True)
 
         at = _make_apptest()
-        # DATA-9: each public corpus is a first-class entry in the flat source
-        # picker — select PoTeC by its registry label (the option token).
+        # Each public corpus is a first-class entry in the flat source picker
+        # — select PoTeC by its registry label (the option token).
         potec_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k)
         at.session_state["data_source_choice"] = potec_key
         at.run(timeout=60)
@@ -2025,12 +1998,12 @@ class TestUnmappedRawDataView:
         assert at.session_state["public_dataset_choice"] == potec_key
 
     def test_public_dataset_normalize_failure_is_shown_on_overview(self, monkeypatch):
-        """BUG-100: a public corpus whose raw frames load but whose normalization
-        raises names itself and the reason on the 🗂️ Data overview.
+        """A public corpus whose raw frames load but whose normalization raises
+        names itself and the reason on the 🗂️ Data overview.
 
-        The rejection used to render only into the ✏️ Edit dataset screen, which
-        is hidden until opened — the overview read "Not loaded" and nothing
-        else (OneStop · Ordinary reading's orphan screens, before DATA-63).
+        Rendered only into the ✏️ Edit dataset screen, which is hidden until
+        opened, the rejection would leave the overview reading "Not loaded"
+        and nothing else.
         """
         import pandas as pd
 
@@ -2118,8 +2091,6 @@ class TestUnmappedRawDataView:
         for const in (
             "ONESTOP_PUBLIC_DEFAULT_DIR",
             "POTEC_DEFAULT_DIR",
-            "MULTIPLEYE_DEFAULT_DIR",
-            "EYEGENBENCH_DEFAULT_DIR",
         ):
             monkeypatch.setattr(app, const, str(tmp_path / const.lower()))
         for label in app.public_dataset_registry():
@@ -2133,7 +2104,7 @@ class TestUnmappedRawDataView:
             dir_inputs = [t for t in at.text_input if t.label == "Data directory"]
             assert dir_inputs, f"{label}: expected a Data directory input"
         # PoTeC + OneStop are downloadable → a Download button is offered when the
-        # files are absent; MultiplEYE (no public URL) shows a missing-data note.
+        # files are absent.
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
         at.session_state["public_dataset_choice"] = next(
@@ -2144,451 +2115,10 @@ class TestUnmappedRawDataView:
             "expected a Download button"
         )
 
-    def test_a_publisher_leftover_column_does_not_hijack_the_benchmark_schema(
-        self, tmp_path, monkeypatch
-    ):
-        """A prepared corpus loads by its DECLARED schema, not by auto-detection.
-
-        The bug this pins shipped through a whole branch review because every
-        fixture wrote an idealized frame carrying only the harmonised columns.
-        Real prepared frames carry the publisher's ~190 columns through, and the
-        detector prefers some of them:
-
-        * EMTeC ships `TRIAL_ID`, which outranks `unique_paragraph_id` on the
-          fixations. The words still key on `unique_paragraph_id`, so
-          `broadcast_stimulus_words` joins **nothing** — zero word boxes, no
-          stimulus, no word-level measure, and **no error**, because only the
-          words frame ends up empty and `main`'s empty-pool guard needs all
-          three. The figure still draws 400k fixations over blank space.
-        * Provo and SBSAT ship `page`, which reads as a multipart screen id on
-          the fixations only, and `multipart.validate_matching_parts` then
-          rejects the pair outright.
-
-        Both are app-only: `load_eyegenbench` passes the explicit schemas, so
-        the CLI, the headless API and Comparisons' dataset B were always right —
-        which is the tell. Two surfaces disagreeing about one corpus is the
-        signature this plan has now hit five times.
-        """
-        from scanpath_studio import app
-
-        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
-        root = tmp_path / "bundle"
-        # Both real hijackers at once, on one corpus.
-        _write_benchmark_corpus(
-            root,
-            "Provo",
-            paragraphs=("Provo_a", "Provo_b"),
-            fix_leftovers={"TRIAL_ID": "hijack", "page": 1},
-        )
-        _write_benchmark_manifest(
-            root, [{"name": "Provo", "language": "en", "monitor": [1600, 900]}]
-        )
-        add_benchmark_corpora(monkeypatch, root)
-
-        at = _make_apptest()
-        at.session_state["data_source_choice"] = app.benchmark_corpus_label("Provo")
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # The loud half: `page` must not be read as a screen id.
-        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-        assert not any(
-            "column mapping doesn't work" in str(w.value) for w in at.warning
-        )
-
-        # The silent half, and the one that matters. "No exception" passes on the
-        # zero-boxes bug — that is exactly how it survived a review — so assert on
-        # the mapping actually used, which is the mechanism itself.
-        mapping = at.session_state["_active_column_mapping"] or {}
-        fix_map = mapping.get("fixations") or {}
-        word_map = mapping.get("words") or {}
-        assert fix_map.get("trial") == "unique_paragraph_id", (
-            "the fixations' leftover TRIAL_ID hijacked the trial mapping; the "
-            "words key on unique_paragraph_id, so the broadcast joins NOTHING "
-            f"and the corpus draws with zero word boxes. Got: {fix_map.get('trial')!r}"
-        )
-        assert fix_map.get("trial") == word_map.get("trial"), (
-            "words and fixations must key on the same trial column or they cannot join"
-        )
-        # `page` is a leftover, not a screen: this bundle is single-screen by
-        # contract, and a screen id on one frame only is rejected outright.
-        assert not fix_map.get("screen_id"), fix_map.get("screen_id")
-        assert not word_map.get("screen_id"), word_map.get("screen_id")
-
-        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
-        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
-
-    def test_each_prepared_benchmark_corpus_is_its_own_picker_entry(
-        self, monkeypatch, tmp_path
-    ):
-        """DATA-27 R36/R37: every prepared corpus is a top-level source.
-
-        The first cut of this feature offered ONE "EyeGenBench" entry with a
-        Language/Corpus sub-picker nested inside it; the user's call is that each
-        dataset appears separately, and that the pipeline's name is provenance
-        rather than a source (it is being extracted into its own repository, so
-        anything user-visible carrying it would need renaming later). So: one 🌐
-        entry per corpus, indistinguishable in kind from PoTeC / MultiplEYE /
-        OneStop, and no entry label naming the pipeline.
-
-        `PoTeC` ships **both** natively here and in the benchmark set, and both
-        are kept — the harmonised copy is what makes cross-corpus comparison
-        possible. They are told apart by the property that differs (R37), and the
-        geometry badge is per corpus and must not overclaim uniformity (R34).
-        """
-        from scanpath_studio import app
-
-        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
-        root = tmp_path / "bundle"
-        # Two texts each: the **Narrow by** Text multiselect only renders when
-        # it would offer more than one choice (`controls.render_narrow_by`), and
-        # it is how this test proves the *selected* corpus is what loaded.
-        _write_benchmark_corpus(root, "PoTeC", paragraphs=("PoTeC_a", "PoTeC_b"))
-        _write_benchmark_corpus(root, "Provo", paragraphs=("Provo_a", "Provo_b"))
-        _write_benchmark_manifest(
-            root,
-            [
-                # `language` is an ISO code in the real manifest, never a name
-                # (verified: BSC → 'zh', CopCo → 'da', Provo → 'en').
-                {
-                    "name": "PoTeC",
-                    "language": "de",
-                    "monitor": [1680, 1050],
-                    "monitor_source": "published",
-                    "n_readers": 75,
-                    "n_texts": 12,
-                    "n_fixations": 250000,
-                    "geometry_source": "real",
-                    # Mixed: measured boxes for 9 of the 12 texts.
-                    "paragraphs_without_real_boxes": 3,
-                },
-                {
-                    "name": "Provo",
-                    "language": "en",
-                    "monitor": [1600, 900],
-                    "monitor_source": "published",
-                    "n_readers": 84,
-                    "n_texts": 55,
-                    "n_fixations": 219556,
-                    "geometry_source": "real",
-                    "paragraphs_without_real_boxes": 0,
-                },
-            ],
-        )
-        add_benchmark_corpora(monkeypatch, root)
-
-        at = _make_apptest()
-        at.session_state["data_source_choice"] = app.benchmark_corpus_label("Provo")
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-
-        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
-        options = list(picker.options)
-        # Each corpus is its own entry, tagged 🌐 like every other public corpus,
-        # and — while DATA-27 is on main unfinished — marked (WIP).
-        assert "🌐 Provo (WIP)" in options
-        # …and the one that also ships natively keeps both, distinguished by the
-        # property that differs rather than by the pipeline's name.
-        assert "🌐 PoTeC (harmonised benchmark) (WIP)" in options
-        # The control case, and the reason the marker is keyed on the entry's
-        # `benchmark_dataset` rather than on its label: the NATIVE PoTeC is
-        # finished work and must stay unmarked. A substring test on the label
-        # would mark it too, and this assertion is what would catch that.
-        assert "🌐 PoTeC" in options
-        assert "🌐 PoTeC (WIP)" not in options
-        assert not any("EyeGenBench" in option for option in options), (
-            "the pipeline's name is provenance, not a source — it must not "
-            f"appear in an entry label: {options}"
-        )
-        # Selecting one loads that corpus (its trials, not another's).
-        assert at.session_state["public_dataset_choice"] == app.benchmark_corpus_label(
-            "Provo"
-        )
-        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
-        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
-        captions = " ".join(c.value for c in at.caption)
-        # R35: the manifest's ISO code renders as a display name.
-        assert "English" in captions
-        assert "84 participants" in captions
-        # R34: full coverage → the plain badge.
-        assert "measured word boxes." in captions
-        assert "of 55 texts" not in captions
-
-        # Switching to the other corpus is an ordinary source switch.
-        at.session_state["data_source_choice"] = app.benchmark_corpus_label("PoTeC")
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state["public_dataset_choice"] == app.benchmark_corpus_label(
-            "PoTeC"
-        )
-        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
-        assert set(text_ms.options) == {"PoTeC_a", "PoTeC_b"}
-        captions = " ".join(c.value for c in at.caption)
-        assert "German" in captions
-        # R34: `geometry_source` is the *best tier achieved*, so a corpus with
-        # three unmeasured texts still reads "real" — the rendering must say how
-        # many texts that actually covers rather than implying all of them.
-        assert "measured word boxes for 9 of 12 texts" in captions
-
-    def test_benchmark_canvas_snaps_to_each_corpus_own_monitor(
-        self, monkeypatch, tmp_path
-    ):
-        """R40: each corpus resolves its own monitor from its own manifest row.
-
-        This was R30's defect — one source fronting many corpora meant the
-        registry's single declared monitor stood in for all of them, and the
-        canvas had to be re-snapped from a second session key. With one entry per
-        corpus the registry entry *is* per corpus, so the plain
-        `public_dataset_choice` key carries it.
-
-        The honesty tier survives the simplification: a `monitor_source` of
-        `default` is `eyegenbench_geometry.py`'s generic guess for a corpus that
-        documents no screen, so that entry declares no monitor at all rather than
-        snapping the canvas to an invented one.
-        """
-        from scanpath_studio import app
-
-        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
-        root = tmp_path / "bundle"
-        for name in ("PoTeC", "Provo", "Guessed"):
-            _write_benchmark_corpus(root, name)
-        _write_benchmark_manifest(
-            root,
-            [
-                {
-                    "name": "PoTeC",
-                    "language": "de",
-                    "monitor": [1680, 1050],
-                    "monitor_source": "published",
-                },
-                {
-                    "name": "Provo",
-                    "language": "en",
-                    "monitor": [1920, 1200],
-                    "monitor_source": "derived-from-boxes",
-                },
-                {
-                    "name": "Guessed",
-                    "language": "fr",
-                    "monitor": [1920, 1080],
-                    "monitor_source": "default",
-                },
-            ],
-        )
-        add_benchmark_corpora(monkeypatch, root)
-
-        at = _make_apptest()
-        at.session_state["data_source_choice"] = app.benchmark_corpus_label("PoTeC")
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert (
-            at.session_state["global_canvas_width"],
-            at.session_state["global_canvas_height"],
-        ) == (1680, 1050)
-
-        # Switching corpus re-snaps the canvas — for free, from
-        # `public_dataset_choice` alone.
-        at.session_state["data_source_choice"] = app.benchmark_corpus_label("Provo")
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert (
-            at.session_state["global_canvas_width"],
-            at.session_state["global_canvas_height"],
-        ) == (1920, 1200)
-
-        # An invented ("default") screen must NOT snap the canvas the way the
-        # published / derived-from-boxes ones above do.
-        at2 = _make_apptest()
-        at2.session_state["global_canvas_width"] = 1234
-        at2.session_state["global_canvas_height"] = 999
-        at2.session_state["_canvas_seeded_for"] = ("something", "else")
-        at2.session_state["data_source_choice"] = app.benchmark_corpus_label("Guessed")
-        at2.run(timeout=60)
-        assert not at2.exception, f"Streamlit exceptions: {at2.exception}"
-        assert (
-            at2.session_state["global_canvas_width"],
-            at2.session_state["global_canvas_height"],
-        ) == (1234, 999)
-
-    def test_benchmark_corpus_switch_resets_trial_filters(self, monkeypatch, tmp_path):
-        """R40: switching corpus clears the trial filters and restores them back.
-
-        R31 needed an extra `eyegenbench_dataset` component in
-        `_activate_data_source`'s source key, because `public_dataset_choice` was
-        the same constant for every corpus behind the one source — so a filter
-        narrowed to a PoTeC-only text rode straight into Provo, where no trial
-        could satisfy it and nothing said why the pool went empty. One entry per
-        corpus makes that key correct on its own; this test is R31's, kept, so it
-        proves the simplification is safe rather than a regression.
-        """
-        from scanpath_studio import app
-
-        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
-        root = tmp_path / "bundle"
-        _write_benchmark_corpus(root, "PoTeC", paragraphs=("PoTeC_a", "PoTeC_b"))
-        _write_benchmark_corpus(root, "Provo", paragraphs=("Provo_a", "Provo_b"))
-        _write_benchmark_manifest(
-            root,
-            [
-                {"name": "PoTeC", "language": "de", "monitor": [1680, 1050]},
-                {"name": "Provo", "language": "en", "monitor": [1920, 1080]},
-            ],
-        )
-        add_benchmark_corpora(monkeypatch, root)
-
-        potec = app.benchmark_corpus_label("PoTeC")
-        provo = app.benchmark_corpus_label("Provo")
-
-        at = _make_apptest()
-        at.session_state["data_source_choice"] = potec
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-
-        # R32 canary (M13/N4): the app path must auto-detect a benchmark
-        # corpus' schema. The pre-Task-11R test compared the mapping before and
-        # after the switch, which `_colmap_seeded_for` made obsolete (both
-        # corpora share one schema, so there is nothing to re-seed); the
-        # seeding assertion that replaced it asserted only that *some*
-        # `col_map_words_*` key existed, which `column_mapping_ui` creates
-        # (index 0, `persist_state="session"`) whenever the panel renders at
-        # all — so it pinned "the mapping panel rendered", not "detection
-        # resolved". The three fields R32 is actually about are on the
-        # fixations side, and what matters is the *value*: unresolved, each
-        # falls back to `(none)` and every reader collapses into one synthetic
-        # id, with no error anywhere to say so.
-        # Read the keys one by one: Streamlit 1.64 stopped forwarding the
-        # private `filtered_state` attribute through `AppTest.session_state`.
-        assert {
-            k: at.session_state[k]
-            for k in (
-                "col_map_fix_participant",
-                "col_map_fix_fixation_id",
-                "col_map_fix_word_id",
-            )
-            if k in at.session_state
-        } == {
-            "col_map_fix_participant": "unique_participant_id",
-            "col_map_fix_fixation_id": "fix_index",
-            "col_map_fix_word_id": "ia_index",
-        }
-
-        # Narrow to one PoTeC-only text.
-        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
-        assert set(text_ms.options) == {"PoTeC_a", "PoTeC_b"}
-        text_ms.set_value(["PoTeC_a"])
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state["filter_text_id"] == ["PoTeC_a"]
-
-        # 1. Switching corpus clears the (now-impossible-for-Provo) filter.
-        at.session_state["data_source_choice"] = provo
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state["filter_text_id"] == []
-        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
-        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
-
-        # 2. Switching back restores PoTeC's own stashed filter.
-        at.session_state["data_source_choice"] = potec
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state["filter_text_id"] == ["PoTeC_a"]
-
-    def test_a_stale_corpus_label_lands_on_a_corpus_not_on_the_demo(
-        self, monkeypatch, tmp_path
-    ):
-        """N2: healing a stale *corpus* label.
-
-        The selected corpus can stop existing without anything going wrong — a
-        restored session names a corpus that is no longer added. The generic
-        healing would send it to `entries[0]`, the bundled demo, when an added
-        corpus was right there.
-        """
-        from scanpath_studio import app
-
-        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
-        root = tmp_path / "bundle"
-        _write_benchmark_corpus(root, "Provo", paragraphs=("Provo_a", "Provo_b"))
-        _write_benchmark_manifest(
-            root, [{"name": "Provo", "language": "en", "monitor": [1600, 900]}]
-        )
-        add_benchmark_corpora(monkeypatch, root)
-
-        at = _make_apptest()
-        # "PoTeC — harmonised…" names a corpus that isn't added.
-        at.session_state["data_source_choice"] = app.benchmark_corpus_label("PoTeC")
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state["data_source_choice"] == app.benchmark_corpus_label(
-            "Provo"
-        )
-        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
-        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
-
-    def test_benchmark_reader_count_matches_the_headless_loader(
-        self, monkeypatch, tmp_path
-    ):
-        """DATA-27 R32 — the headline regression pin.
-
-        A benchmark corpus' loader returns *raw, pre-normalization* frames per the
-        registry contract, and `prepare_data` then auto-detects a schema for them
-        with `data.py`'s candidate lists — `eyegenbench.load_eyegenbench` (the
-        headless API/CLI path) instead uses the explicit `EYEGENBENCH_FIX_SCHEMA`.
-        Before R32 those two paths disagreed on three fields
-        (`participant`/`fixation_id`/`word_id`), and with `participant`
-        unresolved every reader collapsed into one synthetic id — so the *same
-        bundle* loaded as N readers headlessly but just 1 in the app, with no
-        error anywhere to say so.
-        """
-        from scanpath_studio import app, eyegenbench
-
-        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
-        root = tmp_path / "bundle"
-        readers = ["r1", "r2", "r3"]
-        _write_benchmark_corpus(root, "BSC", readers=readers, paragraphs=("p1", "p2"))
-        _write_benchmark_manifest(
-            root, [{"name": "BSC", "language": "zh", "monitor": [1024, 768]}]
-        )
-
-        # Headless path: eyegenbench.load_eyegenbench uses EYEGENBENCH_FIX_SCHEMA
-        # directly, so this is the ground truth the app must match.
-        _, headless_fixations = eyegenbench.load_eyegenbench(
-            root, dataset="BSC", names="canonical"
-        )
-        headless_reader_count = headless_fixations["participant_id"].nunique()
-        assert headless_reader_count == 3
-
-        add_benchmark_corpora(monkeypatch, root)
-        at = _make_apptest()
-        at.session_state["data_source_choice"] = app.benchmark_corpus_label("BSC")
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-
-        # `render_narrow_by` only renders the Participant multiselect when it
-        # would offer more than one choice (`controls.py`: `if len(parts) >
-        # 1`) — so a widget lookup that assumes it always renders would raise
-        # `IndexError` on the very failure this test exists to catch, instead
-        # of reporting it. Absent means "the app resolved exactly 1 reader".
-        participant_matches = [
-            m for m in at.multiselect if m.key == "filter_participants"
-        ]
-        if participant_matches:
-            app_reader_count = len(participant_matches[0].options)
-            app_readers = set(participant_matches[0].options)
-        else:
-            app_reader_count = 1
-            app_readers = None
-        assert app_reader_count == headless_reader_count, (
-            f"app auto-detected {app_reader_count} reader(s) but the headless "
-            f"loader (the ground-truth explicit schema) resolves {headless_reader_count} "
-            "— the app's auto-detection disagrees with EYEGENBENCH_FIX_SCHEMA"
-        )
-        assert app_readers == set(readers)
-
     def test_switching_public_dataset_sources_still_clears_filters(self, monkeypatch):
-        """R31 pin: ordinary cross-source switching (not within one EyeGenBench
-        source) must behave exactly as before the fix — a filter set under one
-        registry corpus does not survive a switch to a different one."""
+        """Ordinary cross-source switching between built-in public corpora
+        clears the filters too — a filter set under one registry corpus does
+        not survive a switch to a different one."""
         import pandas as pd
 
         from scanpath_studio import app
@@ -2617,8 +2147,8 @@ class TestUnmappedRawDataView:
             }
         )
         potec_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k)
-        mpe_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "MultiplEYE" in k)
-        for key in (potec_key, mpe_key):
+        onestop_key = app.ONESTOP_REGIME_CHOICES["ordinary"]
+        for key in (potec_key, onestop_key):
             monkeypatch.setitem(
                 app.PUBLIC_DATASET_REGISTRY[key],
                 "loader",
@@ -2641,25 +2171,25 @@ class TestUnmappedRawDataView:
         assert at.session_state["filter_participants"] == ["p1"]
 
         # Mirrors a real click on the flat source picker: `data_source_choice`
-        # carries the concrete registry label directly (DATA-9), not
+        # carries the concrete registry label directly, not
         # `PUBLIC_DATASETS_CHOICE` — that constant only appears pre-healing, on
         # a legacy/first-ever selection, which the first run above already
         # resolved away. Leaving it unset here would let `resolve_data_source`'s
         # healing step re-publish the *old* `public_dataset_choice` from the
         # stale `data_source_choice`, masking the switch entirely.
-        at.session_state["data_source_choice"] = mpe_key
+        at.session_state["data_source_choice"] = onestop_key
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.session_state["public_dataset_choice"] == mpe_key
+        assert at.session_state["public_dataset_choice"] == onestop_key
         assert at.session_state["filter_participants"] == []
 
     def test_public_dataset_canvas_snaps_to_its_monitor(self, monkeypatch):
         """Selecting a public dataset snaps the canvas to its registered monitor,
         even when a previous source left a stale canvas in session state.
 
-        Regression: ``setdefault`` let a returning session keep an old canvas, so
-        a corpus' monitor update (e.g. MultiplEYE → 1920x1080) never showed and the
-        scanpath rendered off-scale."""
+        With ``setdefault`` a returning session would keep an old canvas, so a
+        corpus' monitor update (e.g. PoTeC → 1680x1050) would never show and
+        the scanpath would render off-scale."""
         import pandas as pd
 
         from scanpath_studio import app
@@ -2688,14 +2218,16 @@ class TestUnmappedRawDataView:
                 "word_idx": [0, 1],
             }
         )
-        mpe_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "MultiplEYE" in k)
+        potec_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k)
         monkeypatch.setitem(
-            app.PUBLIC_DATASET_REGISTRY[mpe_key],
+            app.PUBLIC_DATASET_REGISTRY[potec_key],
             "loader",
-            # Loaders take (options_host, location_host) DATA-9 sub-slots now.
+            # Loaders take (options_host, location_host) sub-slots.
             lambda *_slots: (words, fixations),
         )
-        monitor = app.PUBLIC_DATASET_REGISTRY[mpe_key]["monitor"]
+        # These stand-in frames are not PoTeC's, so its schema can't map them.
+        monkeypatch.delitem(app.PUBLIC_DATASET_REGISTRY[potec_key], "declared_schemas")
+        monitor = app.PUBLIC_DATASET_REGISTRY[potec_key]["monitor"]
 
         at = _make_apptest()
         # Simulate a returning session: a stale canvas seeded by a *different* source.
@@ -2703,7 +2235,7 @@ class TestUnmappedRawDataView:
         at.session_state["global_canvas_height"] = 991
         at.session_state["_canvas_seeded_for"] = (app.PUBLIC_DATASETS_CHOICE, "other")
         at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
-        at.session_state["public_dataset_choice"] = mpe_key
+        at.session_state["public_dataset_choice"] = potec_key
         at.run(timeout=60)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -2713,13 +2245,13 @@ class TestUnmappedRawDataView:
         ) == monitor
 
     def test_switching_public_datasets_re_proposes_mapping(self, monkeypatch):
-        """Switching PoTeC → MultiplEYE must re-propose each corpus' mapping.
+        """Switching PoTeC → another corpus must re-propose each corpus' mapping.
 
-        Regression: the `col_map_*` widget keys persisted across the source
-        switch, so PoTeC's Trial → `text_id` stuck to MultiplEYE (which also has a
-        `text_id` column, so the stale-column reset didn't catch it). MultiplEYE's
-        per-page `trial_id` was then ignored and every page collapsed into one
-        stimulus-level trial."""
+        If the `col_map_*` widget keys persisted across the source switch,
+        PoTeC's Trial → `text_id` would stick to the next corpus (which also has
+        a `text_id` column, so the stale-column reset would not catch it). Its
+        per-page `trial_id` would then be ignored and every page would collapse
+        into one stimulus-level trial."""
         import pandas as pd
 
         from scanpath_studio import app
@@ -2749,8 +2281,8 @@ class TestUnmappedRawDataView:
                 "y": [60.0, 60.0],
             }
         )
-        # MultiplEYE-shaped frames: trial is the per-page id; text_id is the stimulus.
-        mpe_w = pd.DataFrame(
+        # Per-page frames: trial is the per-page id; text_id is the stimulus.
+        paged_w = pd.DataFrame(
             {
                 "trial_id": ["X__page_01", "X__page_02"],
                 "text_id": ["X", "X"],
@@ -2762,7 +2294,7 @@ class TestUnmappedRawDataView:
                 "bottom": [80.0, 80.0],
             }
         )
-        mpe_f = pd.DataFrame(
+        paged_f = pd.DataFrame(
             {
                 "participant_id": ["001_ZH_CH_1_ET1"] * 2,
                 "trial_id": ["X__page_01", "X__page_02"],
@@ -2775,29 +2307,29 @@ class TestUnmappedRawDataView:
             }
         )
         potec_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k)
-        mpe_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "MultiplEYE" in k)
+        onestop_key = app.ONESTOP_REGIME_CHOICES["ordinary"]
         monkeypatch.setitem(
             app.PUBLIC_DATASET_REGISTRY[potec_key],
             "loader",
             lambda *_slots: (potec_w, potec_f),
         )
         monkeypatch.setitem(
-            app.PUBLIC_DATASET_REGISTRY[mpe_key],
+            app.PUBLIC_DATASET_REGISTRY[onestop_key],
             "loader",
-            lambda *_slots: (mpe_w, mpe_f),
+            lambda *_slots: (paged_w, paged_f),
         )
 
         at = _make_apptest()
         at.run(timeout=120)  # bundled demo
-        # DATA-9: each corpus is a first-class entry in the flat picker — switch by
+        # Each corpus is a first-class entry in the flat picker — switch by
         # setting the corpus token directly (no separate Public/Dataset two-step).
         at.session_state["data_source_choice"] = potec_key
         at.run(timeout=120)  # PoTeC maps Trial → text_id
-        at.session_state["data_source_choice"] = mpe_key
-        at.run(timeout=120)  # switch to MultiplEYE
+        at.session_state["data_source_choice"] = onestop_key
+        at.run(timeout=120)  # switch to the per-page corpus
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # The picker's label carries the active sort key (UX-10), so match the
+        # The picker's label carries the active sort key, so match the
         # stem rather than the whole string.
         picker = next(
             (s for s in at.selectbox if s.label.startswith("Select trial")), None
@@ -2984,8 +2516,8 @@ class TestColumnMappingBoxWidget:
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         mapping = at.session_state["_box_mapping"]
-        # Origin fields are now the active four (None here — this table has no
-        # x/y/w/h columns); the edge keys are no longer mapped.
+        # After the switch the origin fields are the active four (None here —
+        # this table has no x/y/w/h columns), and the edge keys are unmapped.
         assert mapping["left"] is None and mapping["right"] is None
         assert mapping["top"] is None and mapping["bottom"] is None
 
@@ -3185,7 +2717,7 @@ class TestSetupWizard:
 
     def test_add_data_button_enters_wizard(self):
         """Clicking '➕ Add data' from a built-in source opens the upload wizard.
-        Regression: the handler must run in an on_click callback (Streamlit forbids
+        The handler must run in an on_click callback (Streamlit forbids
         reassigning a widget key inline), and the wizard state rides a plain
         ``_show_upload_wizard`` flag — NOT the data_source_choice radio key, which
         Streamlit garbage-collects while the radio isn't rendered (bouncing the
@@ -3198,8 +2730,8 @@ class TestSetupWizard:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["_show_upload_wizard"] is True
         assert at.session_state["setup_complete"] is False
-        # The wizard owns the page: its sidebar Cancel button shows and the
-        # normal data-source radio is gone.
+        # The wizard owns the page: its Cancel button shows and the normal
+        # data-source radio does not.
         assert any(b.key == "cancel_add_data" for b in at.button)
         assert not any(r.key == "data_source_picker" for r in at.radio)
 
@@ -3260,8 +2792,7 @@ class TestSetupWizard:
         entry = at.session_state["_datasets"][name]
         # The unmapped/unkept column is recorded as dropped (drives the note).
         assert "junk_col" in entry["dropped_columns"]["words"]
-        # The remap form lives in the Data Inspection subtab, which since PERF-3
-        # renders only when it is the open tab.
+        # The remap form lives on the 🗂️ Data page.
         pin_data_view(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -3288,11 +2819,11 @@ class TestSetupWizard:
         assert list(entry["words"]["text"]) == ["Adv", "Adv", "Ele", "Ele"]
 
     def test_saving_a_text_level_aoi_table_keeps_every_trials_boxes(self, monkeypatch):
-        """DATA-39 — an AOI table with no participant column (one row per word
-        per *text*) is broadcast onto the readers at import. ✅ Save changes on
-        the ✏️ Edit dataset screen — what attaching a metadata table there asks
-        for — used to re-derive it onto the ``""`` placeholder reader and never
-        broadcast it back, so every trial lost its word boxes and its text."""
+        """An AOI table with no participant column (one row per word per
+        *text*) is broadcast onto the readers at import. ✅ Save changes on the
+        ✏️ Edit dataset screen — what attaching a metadata table there asks for
+        — re-derives it onto the ``""`` placeholder reader, and must broadcast
+        it back, or every trial loses its word boxes and its text."""
         import pandas as pd
 
         from scanpath_studio import app
@@ -3363,9 +2894,9 @@ class TestSetupWizard:
         assert "_stimulus_words" not in entry["words"].columns
 
     def test_per_table_trial_pickers_and_setup_step(self, monkeypatch):
-        """Group A + C: a Trial ID picker per table (UX-53 r13 dropped the
-        unified picker and its toggle) and the inline Experimental Setup
-        controls both render in the active wizard."""
+        """A Trial ID picker per table (no unified picker and no toggle) and
+        the inline Experimental Setup controls both render in the active
+        wizard."""
         app = self._inject(monkeypatch)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
@@ -3378,7 +2909,7 @@ class TestSetupWizard:
         assert "col_map_words_trial" in ms_keys
         assert "col_map_trial_unified" not in ms_keys
         assert not [t for t in at.toggle if "per table" in (t.label or "")]
-        # 2026-10-09: the recording setup starts on the answers that invent
+        # The recording setup starts on the answers that invent
         # nothing — the screen estimated from the data, visual angle off, the
         # text fitted to the word boxes — each one a row of buttons.
         modes = {c.key: c.value for c in at.segmented_control}
@@ -3400,7 +2931,7 @@ class TestSetupWizard:
         assert "col_map_words_trial" in ms_keys
 
     def test_finalize_button_stores_named_dataset(self, monkeypatch):
-        """Group B.4: clicking 'Use this dataset' persists the normalized frames
+        """Clicking 'Use this dataset' persists the normalized frames
         under a name and switches the data source to it (no re-upload to switch)."""
         app = self._inject(monkeypatch)
         at = _make_apptest()
@@ -3426,7 +2957,7 @@ class TestSetupWizard:
         assert at.session_state["setup_complete"] is True
 
     def test_redesigned_wizard_structure(self, monkeypatch):
-        """UX-114: dataset name at the top, ONE per-table "fields to keep"
+        """Dataset name at the top, ONE per-table "fields to keep"
         picker directly under that table's own mapping (not a separate
         cross-table stage), and an 'Add dataset' button. difficulty_level (a
         detected meta condition) and junk_col (unclaimed) both live on the
@@ -3437,10 +2968,10 @@ class TestSetupWizard:
         answer_setup_step(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # Dataset name moved to the top.
+        # Dataset name at the top.
         assert any(t.key == "wizard_dataset_name" for t in at.text_input)
         ms_keys = {m.key for m in at.multiselect if m.key}
-        # One per-table keep picker (the old cross-table Filter/Keep pair is gone).
+        # One per-table keep picker, no cross-table Filter/Keep pair.
         assert "wizard_keep_col_map_words" in ms_keys
         assert "col_map_fix_optional" not in ms_keys
         assert "col_map_words_optional" not in ms_keys
@@ -3449,9 +2980,9 @@ class TestSetupWizard:
         )
         assert any("difficulty_level" in o for o in keep_ms.options)
         assert any("junk_col" in o for o in keep_ms.options)
-        # UX-148: the chips wrap rather than scroll one row sideways.
+        # The chips wrap rather than scroll one row sideways.
         assert keep_ms.proto.wrap is True
-        # The fixation extras / noise flag are no longer mapping selectboxes.
+        # The fixation extras / noise flag are not mapping selectboxes.
         sel_keys = {s.key for s in at.selectbox if s.key}
         for gone in ("col_map_fix_noise_flag", "col_map_fix_pass_index"):
             assert gone not in sel_keys
@@ -3459,8 +2990,8 @@ class TestSetupWizard:
         assert finalize and "Add dataset" in finalize[0].label
 
     def test_finalize_selects_new_dataset_in_sidebar(self, monkeypatch):
-        """Regression: after '➕ Add data' → 'Use this dataset', the new dataset
-        must appear in the sidebar Data-source picker AND be the selected value.
+        """After '➕ Add data' → 'Use this dataset', the new dataset must appear
+        in the Data-source picker AND be the selected value.
         The real flow renders the picker first (on a built-in source), so the
         finalize switch must not be lost to the widget's frontend reconciliation."""
         self._inject(monkeypatch)
@@ -3478,10 +3009,10 @@ class TestSetupWizard:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         name = at.session_state["data_source_choice"]
         assert name in at.session_state["_datasets"]
-        # DATA-9: flat source selectbox; an uploaded dataset is tagged private
+        # Flat source selectbox; an uploaded dataset is tagged private
         # ("🔒 <name> (yours)") but its option token (and the value) is the name.
         # The dataset picker is on the Scanpath view; Add dataset leaves the
-        # user on the Data page (AppTest remembers it since Streamlit 1.66).
+        # user on the Data page (AppTest remembers it).
         pin_view(at, "Scanpath")
         at.run(timeout=60)
         pickers = [s for s in at.selectbox if s.key == "data_source_picker"]
@@ -3493,7 +3024,7 @@ class TestSetupWizard:
         )
 
     def test_stored_dataset_loads_full_app_without_wizard(self, monkeypatch):
-        """Group B.4: selecting a stored dataset reloads the whole app from the
+        """Selecting a stored dataset reloads the whole app from the
         persisted frames — no wizard, no re-upload — and renders the trial picker."""
         app = self._inject(monkeypatch)
         # First finalize a dataset to capture its persisted store entry.
@@ -3518,7 +3049,7 @@ class TestSetupWizard:
         assert any(k.startswith("single") for k in keys), keys
 
     def test_differing_trial_counts_are_emphasized(self, monkeypatch):
-        """Group C.1c: when the per-table trial coverage differs the wizard says so
+        """When the per-table trial coverage differs the wizard says so
         (an info note when the tables still overlap, not a single green count)."""
         import pandas as pd
 
@@ -3561,7 +3092,7 @@ class TestSetupWizard:
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # UX-67 r2: the count is a caption under each table's own picker, so
+        # The count is a caption under each table's own picker, so
         # differing coverage reads as two different numbers side by side rather
         # than as a sentence about them in a banner.
         captions = [e.value for e in at.caption]
@@ -3569,7 +3100,7 @@ class TestSetupWizard:
         assert any("2 Trial IDs" in c for c in captions), captions
 
     def test_disjoint_trial_ids_warn(self, monkeypatch):
-        """Group C.1c: when the tables share no trial ids at all (a likely mapping
+        """When the tables share no trial ids at all (a likely mapping
         error), the wizard warns rather than just noting differing coverage."""
         import pandas as pd
 
@@ -3616,8 +3147,8 @@ class TestSetupWizard:
 
     @staticmethod
     def _text_level_upload(monkeypatch, *, text_ids=("1_1_Ele", "1_2_Adv")):
-        """DATA-49's repro: fixations whose trial id embeds the reader, plus a
-        text-level AOI table keyed by `unique_paragraph_id` with no reader."""
+        """Fixations whose trial id embeds the reader, plus a text-level AOI
+        table keyed by `unique_paragraph_id` with no reader."""
         import pandas as pd
 
         from scanpath_studio import app
@@ -3663,7 +3194,7 @@ class TestSetupWizard:
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # The repro's mapping: the fixations keyed by their own per-reader
+        # The mapping: the fixations keyed by their own per-reader
         # trial id and reader, the AOI table by its text alone. (Auto-detection
         # proposes the one column both tables share for both.)
         at.multiselect(key="col_map_fix_trial").set_value(["unique_trial_id"])
@@ -3673,8 +3204,8 @@ class TestSetupWizard:
         return at
 
     def test_a_text_level_aoi_table_attaches_by_text_id(self, monkeypatch):
-        """DATA-49: the wizard says which join it used, and the per-reader trial
-        ids no longer read as a mapping error."""
+        """The wizard says which join it used, and the per-reader trial ids do
+        not read as a mapping error."""
         at = self._text_level_upload(monkeypatch)
         captions = " ".join(e.value for e in at.caption)
         assert "Words attach to trials by Text ID" in captions, captions
@@ -3689,7 +3220,7 @@ class TestSetupWizard:
         )
 
     def test_a_partial_join_is_a_warning_not_the_green_caption(self, monkeypatch):
-        """DATA-49 round 4: a join worth acting on is never shown as success."""
+        """A join worth acting on is never shown as success."""
         at = self._text_level_upload(monkeypatch, text_ids=("1_1_Ele", "nope"))
         warn_text = " ".join(e.value for e in at.warning)
         assert "2 of 4 trials have word boxes" in warn_text, warn_text
@@ -3697,7 +3228,7 @@ class TestSetupWizard:
         assert "Words attach to trials" not in captions, captions
 
     def test_an_aoi_table_nothing_joins_blocks_the_add(self, monkeypatch):
-        """DATA-49: no shared trial id and no shared Text ID stops the wizard
+        """No shared trial id and no shared Text ID stops the wizard
         with a message, instead of adding a dataset with no AOIs."""
         at = self._text_level_upload(monkeypatch, text_ids=("x", "y"))
         errors = " ".join(e.value for e in at.error)
@@ -3705,15 +3236,14 @@ class TestSetupWizard:
         assert "_wizard_finalize_payload" not in at.session_state
 
     def test_raw_gaze_only_incomplete_mapping_blocks_finalize(self, monkeypatch):
-        """Bug fix: a raw-gaze-only upload with an unmappable trial id must block
+        """A raw-gaze-only upload with an unmappable trial id must block
         finalize (raw-gaze problems are folded in) instead of storing an empty
         dataset.
 
-        UX-53 changed *how* it blocks, not whether: the button is now **enabled**
-        while incomplete, because a disabled control cannot be pressed and the
-        red required-field marking is triggered by the attempt. What must still
-        hold — and is what this test is really about — is that pressing it stores
-        nothing.
+        The button stays **enabled** while incomplete, because a disabled
+        control cannot be pressed and the red required-field marking is
+        triggered by the attempt. What must hold — and is what this test is
+        really about — is that pressing it stores nothing.
         """
         import pandas as pd
 
@@ -3736,7 +3266,7 @@ class TestSetupWizard:
         # Finalize is shown and pressable; the blocking problem mentions raw gaze.
         finalize = [b for b in at.button if b.key == "wizard_finalize"]
         assert finalize and not finalize[0].disabled
-        # UX-88/UX-90: the page says nothing about what is missing until the
+        # The page says nothing about what is missing until the
         # user tries — so on arrival there is no blocker text to find yet.
         assert not [e for e in at.error if "Raw gaze" in e.value]
 
@@ -3758,11 +3288,11 @@ class TestSetupWizard:
         assert [b for b in at.button if b.key == "wizard_finalize"]
 
     def test_composite_trial_dataset_restores_picker_on_switch_back(self, monkeypatch):
-        """Regression for the review's HIGH finding: a stored dataset whose trial
-        id is composite must restore _composite_trial_columns on reselect,
-        overriding whatever source was loaded last. Since BUG-23 the flag no longer
-        changes the *picker* (there is one picker for every mapping) — it is what
-        lets the trial chips spell the joined id back out."""
+        """A stored dataset whose trial id is composite must restore
+        _composite_trial_columns on reselect, overriding whatever source was
+        loaded last. The flag does not change the *picker* (there is one picker
+        for every mapping) — it is what lets the trial chips spell the joined id
+        back out."""
         import pandas as pd
 
         from scanpath_studio import app
@@ -3837,7 +3367,7 @@ class TestSetupWizard:
         assert not any(k.startswith("single_composite_") for k in keys), keys
 
     def test_recording_setup_writes_shared_global_key(self, monkeypatch):
-        """DATA-22: the Recording-setup step feeds the shared ``global_*`` keys
+        """The Recording-setup step feeds the shared ``global_*`` keys
         the rest of the app reads — the answers the user chose, at once. The
         screen's own starting answer (the estimate) waits for Add dataset, so
         leaving the screen hands the previous dataset nothing."""
@@ -3863,9 +3393,8 @@ class TestSetupWizard:
 
 @pytest.mark.timeout(120)
 class TestCorpusAnalysisTab:
-    """The 'Corpus Analysis' tab hosts the question-oriented analysis sections
-    (Per text / Per participant / Groups). Generations moved to the Scanpath view's
-    Comparisons subtab (ENG-8)."""
+    """The 'Corpus Analysis' view hosts the question-oriented analysis sections
+    (Per text / Per participant / Groups)."""
 
     @pytest.mark.parametrize(
         ("subtab", "view_key"),
@@ -3877,8 +3406,8 @@ class TestCorpusAnalysisTab:
     )
     def test_analysis_sections_render(self, subtab, view_key):
         # Demo source: several participants / trials / texts, so every section
-        # has data. PERF-9 made the subtabs lazy — only the open one runs — so
-        # each section is opened by name through the keyed tab bar.
+        # has data. The subtabs are lazy — only the open one runs — so each
+        # section is opened by name through the keyed tab bar.
         at = _make_apptest()
         at.session_state["main_nav"] = "Corpus Analysis"
         at.session_state["corpus_subtab"] = subtab
@@ -3890,9 +3419,9 @@ class TestCorpusAnalysisTab:
         # single-group view selector (pgrp_view) is present; cmp_view appears only
         # when 'Compare a second group' is on (see test_each_analysis_view_renders).
         assert view_key in keys, f"{view_key} view selector not found"
-        # BUG-26: the Screen picker is offered only by a multipart corpus. The
-        # demo has no `screen_id`, so it must not appear — and its absence is
-        # what pins that every single-screen dataset is untouched by the fix.
+        # The Screen picker is offered only by a multipart corpus. The demo
+        # has no `screen_id`, so it must not appear — every single-screen
+        # dataset is left as it is.
         assert "ptext_screen" not in keys
 
     @pytest.mark.parametrize(
@@ -3900,7 +3429,7 @@ class TestCorpusAnalysisTab:
         [("Per participant", "prdr_view"), ("Groups", "pgrp_view")],
     )
     def test_the_section_caption_names_only_offered_views(self, subtab, view_key):
-        """#374 F15: the caption lists the views in the View list, no others."""
+        """The caption lists the views in the View list, no others."""
         from scanpath_studio import tabs
 
         at = _make_apptest()
@@ -3918,8 +3447,8 @@ class TestCorpusAnalysisTab:
                 assert phrase not in captions, view
 
     def test_per_text_opens_on_the_scanpath_trials_text(self):
-        """#374 F39: Per text opened on the first text, not on the text of the
-        trial the user had open in Scanpath."""
+        """Per text opens on the text of the trial the user has open in
+        Scanpath, not on the first text."""
         from scanpath_studio import api
 
         words = api.load_sample_data(names="canonical").words
@@ -3943,8 +3472,7 @@ class TestCorpusAnalysisTab:
         assert picked.startswith(f"{last} "), picked
 
     def test_data_without_ia_columns_says_it_has_no_measures(self):
-        """AN-32 (reversing BUG-78's derivation): the page computes no reading
-        measure, so boxes + fixations alone (the synthetic trial, a Tobii/SMI
+        """The page computes no reading measure, so boxes + fixations alone (the synthetic trial, a Tobii/SMI
         upload) get the page's "no reading measures" notice, not derived ones."""
         at = _make_apptest(synthetic=True)
         at.session_state["main_nav"] = "Corpus Analysis"
@@ -3954,7 +3482,8 @@ class TestCorpusAnalysisTab:
         assert "ptext_measure" not in {s.key for s in at.selectbox}
 
     def test_only_the_open_subtab_runs(self, monkeypatch):
-        """PERF-9: the hidden Per sentence table ran on every Corpus rerun."""
+        """Only the open subtab runs: the hidden Per sentence table must not
+        run on every Corpus rerun."""
         from scanpath_studio import tabs
 
         calls = []
@@ -3996,8 +3525,8 @@ class TestCorpusAnalysisTab:
             ("cmp_view", "Difference word profile"),
             ("cmp_view", "Paired summary bars"),
             ("cmp_view", "Group means & difference"),
-            # The view's name before its significance tests were removed: a
-            # session still holding it opens the replacement.
+            # An older name of the view: a session still holding it opens the
+            # replacement.
             ("cmp_view", "Effect size + test"),
             ("cmp_view", "Two-group word heatmap"),
         ],
@@ -4106,8 +3635,8 @@ class TestCorpusAnalysisTab:
         )
 
     def test_group_filter_set_mode_renders(self):
-        # The 'Independent filter sets' group-definition mode (the second of the
-        # two modes the user asked for) must render for both the single-group
+        # The 'Independent filter sets' group-definition mode must render for
+        # both the single-group
         # (compare off) and two-group (compare on) cases of the Groups tab.
         single = _make_apptest()
         single.session_state["main_nav"] = "Corpus Analysis"
@@ -4152,13 +3681,13 @@ class TestShareLinkCurrent:
 
 @pytest.mark.timeout(120)
 class TestNavRegressions:
-    """Guards for the sidebar-nav + Trial-Selection-panel refactor."""
+    """Guards for the top nav and the trial-selection controls."""
 
     def test_participant_filter_applies_same_run(self):
-        # The Filter-trials controls live in the Scanpath tab now; changing one
-        # must narrow the trial pool on the SAME rerun (regression: it used to lag
-        # one rerun because the result was read from the previous run's stash).
-        at = _make_apptest()  # bundled 3-participant demo
+        # The Filter-trials controls live in the Scanpath view; changing one
+        # must narrow the trial pool on the SAME rerun, not one rerun late from
+        # the previous run's stash.
+        at = _make_apptest()  # bundled 2-reader demo
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         picker = [s for s in at.selectbox if s.key == "single_trial_id"]
@@ -4178,8 +3707,8 @@ class TestNavRegressions:
         )
 
     def test_share_offers_link_code_and_file(self):
-        """UX-179: 🔗 Share is one switch — Link · Code · File — and File holds
-        the settings file that used to be the 💾 Session dialog's JSON backup."""
+        """🔗 Share is one switch — Link · Code · File — and File holds the
+        settings file."""
         from scanpath_studio.url_state import SHARE_SECTION_KEY, SHARE_SECTIONS
 
         at = _make_apptest(synthetic=True)
@@ -4201,206 +3730,16 @@ class TestNavRegressions:
             "Share → File has no settings download"
         )
         assert [u for u in at.file_uploader if u.key == "plot_config_upload"]
-        # UX-199: what the file holds, and what it does not, beside it.
+        # What the file holds, and what it does not, beside it.
         captions = " ".join(str(c.value) for c in at.caption)
         assert "Includes the figure settings, recording setup and trial" in captions
         assert "excludes trial filters, cohort definitions, annotations" in captions
 
 
-def _mpe_upload_frames():
-    """A tiny MultiplEYE upload: scanpath rows (CamelCase filename) + char AOIs
-    (lowercase filename), each row tagged with its source_file stem."""
-    import pandas as pd
-
-    scan = pd.DataFrame(
-        {
-            "onset": [1000, 1300, 2000],
-            "duration": [200, 180, 210],
-            "name": ["fixation"] * 3,
-            "location_x": [90, 150, 90],
-            "location_y": [65, 65, 65],
-            "page": ["page_1", "page_1", "page_2"],
-            "word_idx": [0, 1, 0],
-        }
-    )
-    scan["source_file"] = "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath"
-
-    def _chars(page, word_idx, word, x0):
-        return [
-            dict(
-                char_idx=word_idx * 2 + i,
-                char=word[i],
-                top_left_x=x0 + i * 20,
-                top_left_y=50,
-                width=20,
-                height=30,
-                char_idx_in_line=word_idx * 2 + i,
-                line_idx=0,
-                page=page,
-                word_idx=word_idx,
-                word_idx_in_line=word_idx,
-                word=word,
-            )
-            for i in range(2)
-        ]
-
-    aoi = pd.DataFrame(
-        _chars("page_1", 0, "AA", 80)
-        + _chars("page_1", 1, "BB", 140)
-        + _chars("page_2", 0, "CC", 80)
-    )
-    aoi["source_file"] = "lit_demo_1_aoi"
-    return scan, aoi
-
-
-@pytest.mark.timeout(60)
-class TestMultiplEYEUploadPreset:
-    """Add-dataset → MultiplEYE format: filename-keyed browser upload."""
-
-    def _seed_preset(self, at, app, monkeypatch, scan, aoi):
-        import pandas as pd
-
-        frames = {"mpe_fix": scan, "mpe_aoi": aoi}
-        monkeypatch.setattr(
-            app,
-            "_read_uploaded_frame",
-            lambda **kw: frames.get(kw["state_prefix"], pd.DataFrame()),
-        )
-        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
-        at.session_state["_show_upload_wizard"] = True
-        at.session_state["setup_complete"] = False
-        at.session_state["wizard_dataset_format"] = "MultiplEYE"
-
-    def test_preset_bypasses_generic_mapping(self, monkeypatch):
-        from scanpath_studio import app
-
-        scan, aoi = _mpe_upload_frames()
-        at = _make_apptest()
-        self._seed_preset(at, app, monkeypatch, scan, aoi)
-        at.run(timeout=60)
-
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.error == [], f"st.error: {[e.value for e in at.error]}"
-        # The preset assembled a finalize payload — with single-literal trial id
-        # (no composite components) and MultiplEYE's filter facets.
-        assert "_wizard_finalize_payload" in at.session_state
-        payload = at.session_state["_wizard_finalize_payload"]
-        assert payload["composite_trial_columns"] == []
-        assert payload["filter_fields"] == ["genre", "session", "is_practice"]
-        # One trial per stimulus with its pages as screens (DATA-24), CamelCase
-        # stimulus (case-match worked), boxes joined.
-        fixations = payload["fixations"]
-        assert set(fixations["trial_id"]) == {"Lit_Demo_1"}
-        assert set(fixations["screen_id"]) == {"page_1", "page_2"}
-        assert not payload["words"].empty
-        # The generic column-mapping widgets are NOT rendered in this format.
-        sel_keys = {s.key for s in at.selectbox}
-        assert "col_map_words_word_id" not in sel_keys
-        assert "col_map_fix_duration" not in sel_keys
-
-    def test_preset_finalize_stores_dataset(self, monkeypatch):
-        from scanpath_studio import app
-
-        scan, aoi = _mpe_upload_frames()
-        at = _make_apptest()
-        self._seed_preset(at, app, monkeypatch, scan, aoi)
-        at.run(timeout=60)
-        finalize = [b for b in at.button if b.key == "wizard_finalize"]
-        assert finalize, "Add dataset button missing"
-        # Finalizing renders the complete app and may build the host's font cache;
-        # use the same explicit budget as the initial preset render instead of
-        # AppTest's three-second default.
-        finalize[0].click().run(timeout=60)
-
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # The dataset was stored and reselected — it renders without re-mapping.
-        assert "_datasets" in at.session_state and at.session_state["_datasets"], (
-            "dataset was not stored"
-        )
-        stored = next(iter(at.session_state["_datasets"].values()))
-        assert not stored["fixations"].empty
-        assert stored["composite_trial_columns"] == []
-
-    def test_preset_unrecognized_filenames_blocks(self, monkeypatch):
-        import pandas as pd
-
-        from scanpath_studio import app
-
-        bad = pd.DataFrame(
-            {
-                "onset": [1],
-                "duration": [1],
-                "location_x": [1.0],
-                "location_y": [1.0],
-                "page": ["page_1"],
-                "word_idx": [0],
-            }
-        )
-        bad["source_file"] = "not_a_multipleye_name"
-        at = _make_apptest()
-        self._seed_preset(at, app, monkeypatch, bad, pd.DataFrame())
-        at.run(timeout=60)
-
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        errors = " ".join(e.value for e in at.error)
-        assert "No MultiplEYE-shaped file names" in errors
-        # No finalize payload when the upload couldn't be parsed.
-        assert "_wizard_finalize_payload" not in at.session_state
-
-    def test_preset_questions_and_participant_metadata(self, monkeypatch):
-        import json
-
-        import pandas as pd
-
-        from scanpath_studio import app
-
-        scan, aoi = _mpe_upload_frames()
-        questions = pd.DataFrame(
-            {
-                "stimulus_name": ["Lit_Demo"],
-                "stimulus_id": [1],
-                "question": ["Why?"],
-                "target": ["Because"],
-                "condition_name": ["local"],
-                "question_no": [1],
-                "condition_no": [1],
-            }
-        )
-        participant = pd.DataFrame(
-            {"participant_id": [1], "session": ["ET1"], "age": [22], "gender": ["F"]}
-        )
-        frames = {
-            "mpe_fix": scan,
-            "mpe_aoi": aoi,
-            "mpe_questions": questions,
-            "mpe_participant": participant,
-        }
-        monkeypatch.setattr(
-            app,
-            "_read_uploaded_frame",
-            lambda **kw: frames.get(kw["state_prefix"], pd.DataFrame()),
-        )
-        at = _make_apptest()
-        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
-        answer_setup_step(at)
-        at.session_state["_show_upload_wizard"] = True
-        at.session_state["setup_complete"] = False
-        at.session_state["wizard_dataset_format"] = "MultiplEYE"
-        at.run(timeout=60)
-
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        payload = at.session_state["_wizard_finalize_payload"]
-        fixations = payload["fixations"]
-        assert fixations["pp_age"].dropna().iloc[0] == 22
-        assert fixations["pp_gender"].dropna().iloc[0] == "F"
-        q = json.loads(fixations["comprehension_questions"].dropna().iloc[0])
-        assert q[0]["target"] == "Because"
-
-
 @pytest.mark.timeout(60)
 class TestGenericFilenamePowers:
-    """Generic wizard powers reusable beyond MultiplEYE: regex filename → columns
-    and the character-AOI aggregation toggle."""
+    """Generic wizard powers: regex filename → columns and the character-AOI
+    aggregation toggle."""
 
     def test_regex_derive_exposes_columns_and_aggregate_toggle(self, monkeypatch):
         import pandas as pd
@@ -4440,7 +3779,6 @@ class TestGenericFilenamePowers:
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         at.session_state["_show_upload_wizard"] = True
         at.session_state["setup_complete"] = False
-        at.session_state["wizard_dataset_format"] = "Generic"
         # Enable filename derivation in regex mode.
         at.session_state["wizard_filename_split"] = True
         at.session_state["wizard_filename_mode"] = "Regex named groups"
@@ -4449,7 +3787,7 @@ class TestGenericFilenamePowers:
         )
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # UX-113: nothing is derived — or offered to map below — until Apply.
+        # Nothing is derived — or offered to map below — until Apply.
         apply_btn = [b for b in at.button if b.key == "wizard_filename_apply"]
         assert apply_btn, "Apply button not rendered"
         apply_btn[0].click().run(timeout=60)
@@ -4463,10 +3801,9 @@ class TestGenericFilenamePowers:
         assert "wizard_aggregate_char_boxes" in {t.key for t in at.toggle}
 
     def test_the_filename_derive_control_sits_above_the_table_rows(self, monkeypatch):
-        """UX-123 keeps "Derive columns from the filename" the first control of
-        the upload part — reserved before the Fixations/AOI rows, filled in once
-        their uploads have run. `scanpath_studio/CLAUDE.md` had drifted to say
-        it sat *below* them (BUG-85); this pins what the note now says."""
+        """The *Derive columns from the filename* control comes first in the
+        upload part — reserved before the Fixations/AOI rows, filled in once
+        their uploads have run."""
         import pandas as pd
 
         from scanpath_studio import app
@@ -4489,7 +3826,6 @@ class TestGenericFilenamePowers:
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         at.session_state["_show_upload_wizard"] = True
         at.session_state["setup_complete"] = False
-        at.session_state["wizard_dataset_format"] = "Generic"
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
@@ -4509,9 +3845,9 @@ class TestGenericFilenamePowers:
         assert keys.index("wizard_filename_split") < fixation_rows[0]
 
     def test_raw_gaze_columns_can_be_derived_from_its_filename(self, monkeypatch):
-        """The derive step ran before the raw-gaze upload, so its Table picker
-        could never offer Raw gaze. Now it can, and Share → Code still tells
-        the file's own columns from the ones made from its name."""
+        """The derive step runs once every upload has, raw gaze included, so its
+        Table picker offers Raw gaze — and Share → Code still tells the file's
+        own columns from the ones made from its name."""
         import pandas as pd
 
         from scanpath_studio import app
@@ -4535,7 +3871,6 @@ class TestGenericFilenamePowers:
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         at.session_state["_show_upload_wizard"] = True
         at.session_state["setup_complete"] = False
-        at.session_state["wizard_dataset_format"] = "Generic"
         at.session_state["wizard_dataset_name"] = "Gaze only"
         at.session_state["wizard_filename_split"] = True
         at.session_state["wizard_filename_mode"] = "Regex named groups"
@@ -4604,7 +3939,6 @@ class TestGenericFilenamePowers:
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         at.session_state["_show_upload_wizard"] = True
         at.session_state["setup_complete"] = False
-        at.session_state["wizard_dataset_format"] = "Generic"
         at.session_state["wizard_filename_split"] = True
         at.session_state["wizard_filename_mode"] = "Regex named groups"
         at.session_state["wizard_filename_regex"] = (
@@ -4658,7 +3992,6 @@ class TestGenericFilenamePowers:
         answer_setup_step(at)
         at.session_state["_show_upload_wizard"] = True
         at.session_state["setup_complete"] = False
-        at.session_state["wizard_dataset_format"] = "Generic"
         at.session_state["wizard_aggregate_char_boxes"] = True
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -4674,7 +4007,7 @@ class TestGenericFilenamePowers:
     def test_aggregate_toggle_exposes_block_field_and_keeps_blocks_apart(
         self, monkeypatch
     ):
-        # UX-113: a "block" column (e.g. a question's stem/target answer
+        # A "block" column (e.g. a question's stem/target answer
         # blocks) each restarting word_idx at 0 must not collapse into one
         # box per shared word_idx once the "AOI block" field is mapped.
         import pandas as pd
@@ -4705,7 +4038,6 @@ class TestGenericFilenamePowers:
         answer_setup_step(at)
         at.session_state["_show_upload_wizard"] = True
         at.session_state["setup_complete"] = False
-        at.session_state["wizard_dataset_format"] = "Generic"
         at.session_state["wizard_aggregate_char_boxes"] = True
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -4728,14 +4060,13 @@ class TestGenericFilenamePowers:
 
 @pytest.mark.timeout(120)
 class TestFigureAndCanvasSubGroups:
-    """UX-48: the 📐 Figure & canvas group renders as four popover sub-groups.
+    """The 📐 Figure & canvas group renders its sub-groups, settings intact.
 
-    The controls moved *containers*, not keys — and every conditional body in
-    the group (the title/caption pattern boxes, the manual grid interval, the
-    colour-bar styling, the custom background picker) now sits one level deeper
-    than before. Streamlit raises on a container it won't nest, so booting with
-    all four bodies open is the regression that catches a bad move; the key
-    assertions are what pin that no setting was dropped on the way.
+    Every conditional body in the group (the title/caption pattern boxes, the
+    manual grid interval, the colour-bar styling, the custom background picker)
+    sits inside a sub-group. Streamlit raises on a container it won't nest, so
+    booting with all four bodies open catches a bad nesting; the key assertions
+    pin that no setting is dropped.
     """
 
     def test_every_sub_group_body_renders_with_its_settings_intact(self):
@@ -4770,11 +4101,10 @@ class TestFigureAndCanvasSubGroups:
     def test_the_group_keeps_its_named_blocks(self):
         """The shape itself: one disclosure, named blocks, nothing nested.
 
-        UX-80 made the group a ``[name | ▾]`` row and its sub-popovers named
-        blocks inside it; UX-81 moved the typography out to 📄 Stimulus → Text
-        and dropped the physical-geometry controls, which the 🗂️ Data page's
-        Recording setup owns. What this pins is that the group did not collapse
-        back into the one flat ~26-row run UX-48 broke up.
+        The group is a ``[name | ▾]`` row with named blocks inside it; the
+        typography is drawn in 📄 Stimulus → Text, and the physical-geometry
+        controls belong to the 🗂️ Data page's Recording setup. What this pins
+        is that the group does not collapse into one flat ~26-row run.
         """
         import inspect
 
@@ -4783,7 +4113,7 @@ class TestFigureAndCanvasSubGroups:
         control_source = inspect.getsource(controls.render_plot_controls)
         canvas_source = inspect.getsource(app.render_canvas_controls)
 
-        # #422: the first block opens the popover, so it draws no rule above it.
+        # The first block opens the popover, so it draws no rule above it.
         assert (
             "_rail_subsection(\n"
             "        figure_grp, f\"{ICONS['screen']} Screen & framing\", first=True\n"
@@ -4805,12 +4135,12 @@ class TestFigureAndCanvasSubGroups:
         assert 'check_label="Crop to data"' in control_source
         assert '"global_fit_to_monitor"' in control_source
         assert "with screen_group, _popover_rows(" in control_source
-        # …and the old flat captions are gone.
+        # …and no flat captions.
         assert 'figure_grp.caption("**Canvas & text**")' not in control_source
         assert 'figure_grp.caption("**Axes & labels**")' not in control_source
 
     def test_text_can_be_switched_off_without_crashing_the_figure_controls(self):
-        """BUG-38: Figure & canvas must not render into a missing Text slot."""
+        """Figure & canvas must not render into a missing Text slot."""
         at = _make_apptest(synthetic=True)
         at.session_state["global_show_labels"] = False
         at.run(timeout=30)
@@ -4821,7 +4151,7 @@ class TestFigureAndCanvasSubGroups:
 
 @pytest.mark.timeout(120)
 class TestResetSettings:
-    """UX-26: the rail's Reset settings action puts the visualization back."""
+    """The rail's Reset settings action puts the visualization back."""
 
     def test_reset_visualization_restores_defaults(self):
         at = _make_apptest(synthetic=True)
@@ -4837,8 +4167,8 @@ class TestResetSettings:
         assert reset, "Reset visualization button not rendered"
         at = reset[0].click().run(timeout=30)
 
-        # BUG-36: the click now only opens a confirmation dialog; the reset
-        # itself happens on the confirm click, one run later.
+        # The click only opens a confirmation dialog; the reset itself
+        # happens on the confirm click, one run later.
         confirm = [b for b in at.button if b.key == "reset_viz_confirm"]
         assert confirm, "Reset confirmation button not rendered"
         assert confirm[0].label == f"{ICONS['reset']} Reset it"
@@ -4863,7 +4193,7 @@ class TestResetSettings:
         assert reset, "Reset visualization button not rendered"
         at = reset[0].click().run(timeout=30)
 
-        # BUG-36: click through the confirmation to actually reset.
+        # Click through the confirmation to actually reset.
         confirm = [b for b in at.button if b.key == "reset_viz_confirm"]
         assert confirm, "Reset confirmation button not rendered"
         at = confirm[0].click().run(timeout=30)
@@ -4890,7 +4220,7 @@ class TestResetSettings:
 
 
 class TestFingerprintMemoIsPerRun:
-    """PERF-3: the cache-key memo must be reset at the top of every script run.
+    """The cache-key memo must be reset at the top of every script run.
 
     The memo makes the same frame *object* hash once instead of ~26 times, which
     is safe only because its lifetime is one run: `app.main` clears it before
@@ -4920,7 +4250,7 @@ class TestFingerprintMemoIsPerRun:
 
 
 class TestOpenTrialFromCorpusTable:
-    """ENG-36: a per-trial row in Corpus Analysis can open that trial.
+    """A per-trial row in Corpus Analysis can open that trial.
 
     The click arrives as a *callback*, before `main` rebuilds the trial pool, so
     it cannot seed the picker itself — `url_state.request_trial` parks it and
@@ -4957,8 +4287,8 @@ class TestOpenTrialFromCorpusTable:
         assert PENDING_TRIAL_KEY not in at.session_state
 
     def test_a_reader_outside_the_pool_is_reported_not_substituted(self):
-        """Open on a reading whose reader is not in the pool used to land on
-        another reader's trial of the same id; now it stays put and says why."""
+        """Open on a reading whose reader is not in the pool stays put and says
+        why, rather than landing on another reader's trial of the same id."""
         from scanpath_studio.url_state import PENDING_TRIAL_KEY
 
         at = _make_apptest()
@@ -5030,14 +4360,14 @@ class TestOpenTrialFromCorpusTable:
 
 
 class TestLazySubtabBodiesStillRender:
-    """ENG-37 — the four on-demand panels are exercised, not just gated.
+    """The four on-demand panels are exercised, not just gated.
 
-    PERF-3 made Comparisons / Line assignment / Export / Data Inspection render
-    only when open, which is right for latency but took ~460 lines of `tabs.py`
-    out of every `AppTest` boot. `TestLazySubtabs` above pins the *gating*; these
-    open each panel on the bundled demo and drive it far enough that its body
+    Comparisons / Line assignment / Export / Data Inspection render only when
+    open, which is right for latency but takes ~460 lines of `tabs.py` out of
+    every `AppTest` boot. `TestLazySubtabs` above pins the *gating*; these open
+    each panel on the bundled demo and drive it far enough that its body
     actually runs — the two heaviest (the ten-algorithm drift grid and the
-    same-text generations comparison) are otherwise never executed by any test.
+    same-text comparison) would otherwise never be executed by any test.
 
     On the bundled demo rather than the synthetic trial: Comparisons needs a
     column that can distinguish several readings of one text, and the drift
@@ -5110,7 +4440,7 @@ class TestLazySubtabBodiesStillRender:
 
 
 class TestAnimationExportRasterBranch:
-    """ENG-37 — the GIF/MP4 export panel, which no test reached before.
+    """The GIF/MP4 export panel's raster branch.
 
     `_render_animation_export` returns early for HTML, so ~100 lines — the
     Chrome pre-flight, the resolution and frame-cap controls, the render-time
@@ -5126,7 +4456,7 @@ class TestAnimationExportRasterBranch:
         return at.run(timeout=60)
 
     def test_it_warns_before_a_render_that_can_only_fail(self, monkeypatch):
-        """ENG-10's pre-flight: no Chrome, no raster export — say so up front."""
+        """The pre-flight: no Chrome, no raster export — say so up front."""
         from scanpath_studio import tabs as tabs_module
 
         monkeypatch.setattr(tabs_module, "chrome_available", lambda: False)
@@ -5165,7 +4495,7 @@ class TestAnimationExportRasterBranch:
 
 
 class TestPendingTrialRequestDoesNotLinger:
-    """ENG-36 — a request the pool has answered "no" must not fire later.
+    """A request the pool has answered "no" must not fire later.
 
     `_apply_pending_trial_selection` holds a request over while `combos` is
     *empty* (still loading), because dropping it there would lose the click. Once
@@ -5269,7 +4599,7 @@ class TestDeepLinkToAFilteredOutReader:
 @pytest.mark.timeout(180)
 class TestRecordingSetupGate(TestSetupWizard):
     """The Recording setup asks for real values but never holds the dataset
-    back (2026-10-09). It starts on the answers that invent nothing, says
+    back. It starts on the answers that invent nothing, says
     which lines are estimates or defaults, and records how each is known — so
     no uploaded dataset silently passes off a guess as a measurement."""
 
@@ -5325,13 +4655,13 @@ class TestRecordingSetupGate(TestSetupWizard):
             "geometry": "assumed",
             "text": "assumed",
         }
-        # A stored upload now records geometry at all — it recorded none before
-        # CMP-8 §1, which is why switching to one left the canvas on the previous
-        # source's monitor.
+        # A stored upload records its geometry, so switching to one does not
+        # leave the canvas on the previous source's monitor.
         assert setup["canvas_width"] == 2560
 
     def test_estimate_from_my_data_is_always_available_and_succeeds(self, monkeypatch):
-        """The escape hatch that keeps the hard gate humane."""
+        """*Estimate from my data* is always offered, and adding with it
+        succeeds."""
         app = self._inject(monkeypatch)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
@@ -5355,11 +4685,11 @@ class TestRecordingSetupGate(TestSetupWizard):
         assert SetupSnapshot.from_dict(entry["setup"]).px_per_degree is None
 
     def test_the_estimate_survives_an_untouched_save_changes(self, monkeypatch):
-        """DATA-46 — the wizard estimated from the raw upload, whose `IA_LEFT` /
-        `CURRENT_FIX_X` it cannot read, so an EyeLink export's "estimate" was the
-        2560 × 1440 default; ✏️ Edit dataset then estimated for real from the
-        stored frames, and ✅ Save changes with nothing touched wrote that over
-        the saved screen."""
+        """The wizard estimates from the normalized frames, so an EyeLink
+        export's estimate is the data's own extent, not the 2560 × 1440 default
+        its raw `IA_LEFT` / `CURRENT_FIX_X` columns would give; and ✅ Save
+        changes with nothing touched on ✏️ Edit dataset keeps the saved screen
+        rather than writing a fresh estimate over it."""
         from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
         from scanpath_studio.data import compute_canvas_size
 
@@ -5403,7 +4733,7 @@ class TestRecordingSetupGate(TestSetupWizard):
 
 
 class TestMetadataBelongsToItsDataset:
-    """DATA-47 through ``app.main`` — a table attached to one dataset stays
+    """Through ``app.main``, a table attached to one dataset stays
     with it: the add wizard starts without it, another dataset does not see it,
     and it is back when its own dataset is selected again."""
 
@@ -5458,14 +4788,14 @@ class TestMetadataBelongsToItsDataset:
 
 
 class TestAnnotationsBelongToTheirDataset:
-    """DATA-48 through ``app.main`` — the issue's repro: star a trial on an
+    """Through ``app.main``: star a trial on an
     uploaded copy of the demo, switch to the Bundled Demo, and the same trial
     must show nothing; switch back and the star is there."""
 
     NAME = "QA Full"
 
     def _at(self, choice=None, carried=None):
-        """A fresh app on ``choice``, carrying the DATA-48 store keys over.
+        """A fresh app on ``choice``, carrying the annotation store keys over.
 
         A fresh ``AppTest`` per step, because AppTest cannot replay a trial
         picker whose option labels changed under it (a ★ appearing) — the flow
@@ -5554,7 +4884,7 @@ class TestAnnotationsBelongToTheirDataset:
 
 
 def test_column_detection_runs_once_per_table_not_on_every_rerun(monkeypatch):
-    """Auto-detecting the mapping reads every value of the box columns (BUG-99),
+    """Auto-detecting the mapping reads every value of the box columns,
     ~1.4 s on OneStop's IA report, and the answer depends only on the table — so
     a rerun that changes a plot setting must not work it out again."""
     from scanpath_studio import app

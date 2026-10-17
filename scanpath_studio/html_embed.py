@@ -1,7 +1,7 @@
 """Same-origin HTML iframe helper shared by plots, tours, and Share.
 
 Also serves the installed plotly package's own ``plotly.min.js`` from this app's
-Streamlit server (ENG-64), so the in-app figures draw without a request to
+Streamlit server, so the in-app figures draw without a request to
 ``cdn.plot.ly`` — offline, in the desktop app, and on the hosted demo alike.
 """
 
@@ -22,17 +22,16 @@ def embed_html_iframe(
 ) -> None:
     """Render script-bearing HTML in an iframe without the deprecated API.
 
-    ``st.iframe`` replaced the old components embed in Streamlit 1.58. Keeping
-    this in one module prevents the plot, guided-tour, and Share surfaces from
-    drifting onto different embed APIs.  The compatibility import is deliberately
-    lazy so current Streamlit runs never import or call the deprecated function.
+    ``st.iframe`` (Streamlit 1.58) supersedes the deprecated components embed.
+    Keeping this in one module prevents the plot, guided-tour, and Share
+    surfaces from drifting onto different embed APIs.
 
     ``alt`` names a *visible* embed — a figure, the Share link box — for
     assistive technology (Streamlit 1.65). The zero-height script carriers
     leave it unset: there is nothing on screen to describe.
 
     ``focusable`` puts the frame in the tab order, and with it the controls
-    inside it (a figure's zoom buttons, #374 F19). Off by default: a script
+    inside it (a figure's zoom buttons). Off by default: a script
     carrier must never take a Tab stop.
     """
     # Tiny script-only embeds need an explicit body. Streamlit's srcdoc
@@ -40,12 +39,12 @@ def embed_html_iframe(
     # body, producing a browser MutationObserver error even with a fixed height.
     # A whole document supplies its own. Which one this is shows in its first
     # bytes — a replay's markup runs to 55 MB, and lower-casing all of it to
-    # look for "<body" cost 0.2 s a rerun (PERF-16).
+    # look for "<body" would cost 0.2 s a rerun.
     # A zero-height script carrier is drawn 1 px tall, and `st.iframe` always
-    # lets its frame scroll: the body's default margin overflowed that pixel and
-    # drew a sliver of scrollbar at the frame's right edge — stray "—" marks on
-    # the tour card, stacked into a "≡" at the top of the page. Its body takes
-    # no room and never scrolls.
+    # lets its frame scroll: the body's default margin would overflow that pixel
+    # and draw a sliver of scrollbar at the frame's right edge (stray "—" marks
+    # on the tour card, stacked into a "≡" at the top of the page). So its body
+    # takes no room and never scrolls.
     source = html
     if not html[:1024].lstrip().lower().startswith(_DOCUMENT_STARTS):
         body = _CARRIER_BODY if int(height) <= 0 else "<body>"
@@ -99,8 +98,8 @@ def plotlyjs_src() -> str:
 
 # Streamlit's component route answers `Cache-Control: public` with no max-age and
 # no validator, so a browser stores the 4.8 MB script but never reuses it: every
-# re-drawn figure (a new srcdoc document) downloaded it again, measured at the
-# full 1.48 MB gzip body per toggle. The Streamlit page outlives its figure
+# re-drawn figure (a new srcdoc document) would download it again, the full
+# 1.48 MB gzip body per toggle. The Streamlit page outlives its figure
 # iframes, so the first draw leaves a Blob URL of the script on it (read back out
 # of the HTTP cache with `force-cache`, not downloaded twice) and later draws load
 # that. `document.write` keeps the load parser-blocking, which the figure's own

@@ -1,4 +1,4 @@
-"""VIZ-50: synthesized raw gaze says so at the plot and in its exports, and a
+"""Synthesized raw gaze says so at the plot and in its exports, and a
 raw-gaze switch with no samples on this trial says why it draws nothing."""
 
 from __future__ import annotations

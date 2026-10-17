@@ -1,11 +1,10 @@
-"""ENG-37: the `render` metadata-attach surface, and the reports it prints.
+"""The `render` metadata-attach surface, and the reports it prints.
 
-DATA-20/DATA-29 made the participant, trial and text tables attachable
-headlessly, and the *report* is most of why: a mistyped id column or a cohort
-file from the wrong study is exactly what you want to hear about before
-rendering three hundred figures. That reporting was the largest untested block
-in `cli.py` — every branch of it writes to stderr and none of it was exercised,
-so a silent regression in "0 matched" would have shipped unnoticed.
+The participant, trial and text tables can be attached headlessly, and the
+*report* matters most: a mistyped id column or a cohort file from the wrong
+study is exactly what you want to hear about before rendering three hundred
+figures. Every branch of that report writes to stderr, so a regression in
+"0 matched" would otherwise go unnoticed.
 
 Everything here runs against the bundled demo, so no corpus is needed.
 """

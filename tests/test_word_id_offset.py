@@ -1,8 +1,8 @@
-"""BUG-8: detect a 1-based fixation ``word_id`` against 0-based word boxes.
+"""Detect a 1-based fixation ``word_id`` against 0-based word boxes.
 
 The bundled OneStop demo's fixation report numbers its word column ``1..N``
 while ``ia.csv``'s ``IA_ID`` runs ``0..N-1``, so every fixation's pre-assigned
-``word_id`` pointed at the *next* word. ``data.detect_word_id_offset`` has to
+``word_id`` points at the *next* word. ``data.detect_word_id_offset`` has to
 catch that without ever firing on a correctly-numbered dataset.
 """
 
@@ -152,8 +152,8 @@ class TestBundledSample:
 
 
 class TestTheShiftIsLoggedQuietly:
-    """BUG-76: the demo trips the shift on every load, and at WARNING it was the
-    first thing `render --sample` and `load_sample_data()` printed."""
+    """The demo trips the shift on every load; at WARNING it would be the first
+    thing `render --sample` and `load_sample_data()` print."""
 
     def test_it_is_info_not_a_warning(self, caplog):
         import logging

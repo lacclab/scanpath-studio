@@ -200,7 +200,7 @@ def test_the_data_page_names_the_dataset_s_own_columns(clean):
 
 
 def test_the_api_reads_frames_under_the_datasets_own_names():
-    """`load_scanpath_data` returns the files' own column names (DATA-66); the
+    """`load_scanpath_data` returns the files' own column names; the
     check must still find their problems, and name the columns as they do."""
     raw = pd.DataFrame(
         {

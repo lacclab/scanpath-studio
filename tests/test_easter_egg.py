@@ -1,4 +1,4 @@
-"""UX-39: the title's triple-click easter egg.
+"""The title's triple-click easter egg.
 
 It is browser-only, so what a test can pin is the *contract* around the script:
 the selector it binds to still matches the header the app renders, the trigger
@@ -36,12 +36,11 @@ def test_script_is_inert_and_self_cleaning() -> None:
 def test_selector_matches_the_header_container_key() -> None:
     """`app._render_about_panel` keys the header container; the selector follows it.
 
-    Matched on the `key=` alone, not on the whole call: UX-38 gave the panel a
+    Matched on the `key=` alone, not on the whole call: the panel takes a
     `host` so the title can render into the menu row's left column, and the call
-    became `(host if host is not None else st).container(...)`. The key — which
-    is what `.st-key-about_header` is built from, and all this selector needs —
-    never changed, so a stricter match was failing on a rewrite that could not
-    break the egg.
+    is `(host if host is not None else st).container(...)`. The key is what
+    `.st-key-about_header` is built from, and all this selector needs, so a
+    stricter match would fail on a rewrite that cannot break the egg.
     """
     from pathlib import Path
 

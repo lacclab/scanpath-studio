@@ -1,11 +1,10 @@
-"""UX-97: a layer's settings stay reachable while the layer toggle is off.
+"""A layer's settings stay reachable while the layer toggle is off.
 
-Each layer section on the Scanpath rail is a `toggle → ⚙️ style → 🧹 filter`
-row. The ▾ that opens the style popover is always clickable, but the popover's
-*body* used to be gated `if show_<layer>:` — so turning a layer off left an
-affordance that opened onto nothing. The controls now always render and are
-greyed instead, which is also what lets a user prepare a layer's styling before
-switching it on.
+Each layer section on the Scanpath rail is a toggle beside a ▾ that opens its
+settings popover. The ▾ is always clickable, so the popover's *body* is never
+gated on `show_<layer>` — that would leave an affordance that opens onto
+nothing. The controls always render and are greyed instead, which also lets a
+user prepare a layer's styling before switching it on.
 
 Two halves are pinned here: the mechanism (`_layer_off` greys whatever renders
 inside it, and folds the reason into each control's help) and the four layers
@@ -78,7 +77,7 @@ class TestTheLayerOffGate:
         # greying rather than leaving the user guessing (as `_mode_gate` does).
         assert "Saccades" in style.proto.help
         assert "Saccade line style." in style.proto.help
-        # The slider *and* its typed box (UX-9) both grey.
+        # The slider *and* its typed box both grey.
         assert at.slider(key="global_saccade_width").proto.disabled
         assert at.number_input(key="global_saccade_width__num").proto.disabled
         # Plus one caption at the head of the popover, for the case where the
@@ -122,7 +121,7 @@ _LAYER_CONTROLS = [
 def test_the_rail_still_renders_a_layers_settings_with_the_layer_off(
     toggle_key, kind, setting_key
 ):
-    """The real rail, not the helper: the popover body is no longer gated away."""
+    """The real rail, not the helper: the popover body is not gated away."""
     at = AppTest.from_file(str(APP_SCRIPT), default_timeout=180)
     at.session_state[toggle_key] = False
     at.run()

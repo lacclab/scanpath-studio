@@ -1,6 +1,6 @@
 """Descriptive statistics + measure validation for the manuscript (Section: Case studies).
 
-Computes, over the bundled 3-participant OneStop demo subset that ships with
+Computes, over the bundled two-participant OneStop demo subset that ships with
 scanpath-studio:
 
 1. Dataset counts (participants, texts, trials, word tokens, fixations).
@@ -8,7 +8,7 @@ scanpath-studio:
    The reported regression rates are the tool's canonical `regression_in_flag` /
    `regression_out_flag` over the words fixated in first pass; the raw EyeLink
    columns are also summarized as a cross-check (they carry '.' sentinels, which
-   the loader reads as "not applicable" -- see BUG-7 in the app repo's tracker).
+   the loader reads as "not applicable").
 3. Spearman correlations between word-level linguistic features (GPT-2
    surprisal, wordfreq frequency, length) and first-pass measures, over
    fixated words.
@@ -25,14 +25,12 @@ scanpath-studio:
    inter-word space as trailing padding. (Verified against the corpus's own
    stimulus images: per line, the ink starts within 3 px of the first box's
    left edge and stops ~1 cell short of the last box's right edge.) Scanpath
-   Studio uses those boxes exactly as given (BUG-83, `measures.word_box_bounds`)
-   — it used to pull every boundary back half a space (BUG-11), which is why an
-   earlier version of this script ran the validation twice — so the comparison
-   isolates the measure definitions from any boundary choice.
+   Studio uses those boxes exactly as given (`measures.word_box_bounds`), so
+   the comparison isolates the measure definitions from any boundary choice.
 
-Run from the app repo so the package + its environment resolve:
+Run from the repo root so the package + its environment resolve:
 
-    cd app && uv run python paper/paper_stats.py
+    uv run python paper/paper_stats.py
 """
 
 from __future__ import annotations
@@ -98,7 +96,7 @@ def validate(
     both = computed.merge(eyelink, on=KEY, suffixes=("_sps", "_el"))
     assert len(both) == len(words), "merge must stay one-to-one"
 
-    # EyeLink regression flags re-parsed from raw (BUG-7: '.' sentinels).
+    # EyeLink regression flags re-parsed from raw ('.' sentinels).
     raw_flags = raw[["participant_id", "unique_trial_id", "IA_ID"]].copy()
     raw_flags.columns = KEY
     raw_flags["reg_in_el"] = eyelink_flag(raw, "IA_REGRESSION_IN").fillna(0)

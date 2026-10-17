@@ -1,4 +1,4 @@
-"""The computation register (VAL-5).
+"""The computation register.
 
 Every operation that **derives or semantically changes a value** a user, an
 export or an API consumer can see, recorded once with its formula, its units,
@@ -13,7 +13,7 @@ This module is data, not behaviour. It exists so that
   the code — every ``aggregation.MEASURES`` entry, every drift-correction
   algorithm and every similarity metric must map to an entry here, and every
   entry must point at a function that exists;
-* ``plans/computation-register.md`` can be generated from one source rather than
+* the methodology page can be generated from one source rather than
   maintained in parallel with it (``python -m scanpath_studio.computations``).
 
 **Verification tiers.** ``A`` a hand-calculated synthetic oracle · ``B`` an
@@ -23,12 +23,11 @@ invariant tests · ``D`` cross-surface parity (UI, API, CLI, export agree).
 **Status is deliberately conservative.** *Verified* means a semantic oracle
 exists and passes — not that a line of code was executed. Tier B is
 systematically absent: it needs an independent implementation to compare
-against, which is #VAL-4, on hold at the user's request until the register
-itself has been read. Every scientific measure therefore reads *Partially
-verified* even where its hand oracle is exact, and that is the honest state of
-the world rather than a gap to paper over. *Convention* marks a choice that
-cannot be right or wrong, only documented — a display transform, a tie-break, a
-default threshold.
+against, which is not built yet. Every scientific measure therefore reads
+*Partially verified* even where its hand oracle is exact, and that is the honest
+state of the world rather than a gap to paper over. *Convention* marks a choice
+that cannot be right or wrong, only documented — a display transform, a
+tie-break, a default threshold.
 """
 
 from __future__ import annotations
@@ -112,18 +111,18 @@ _CLI = "CLI"
 _EXPORT = "Export"
 _CORPUS = "Corpus Analysis"
 _INSPECT = "Data Management"
-# Surfaces held back from the app this release behind `SCANPATH_EXPERIMENTAL=1`,
-# named as such so the register does not advertise a panel a user cannot open.
-_UI_PREPROCESSING = "UI (Preprocessing panel — not in this release, PRE-22)"
-_INSPECT_DERIVED = "Data Management (derived tables — not in this release, UX-126)"
-_API_EXPERIMENTAL = "API (not in this release, PRE-21)"
+# Surfaces that are off unless `SCANPATH_EXPERIMENTAL=1`, named as such so the
+# register does not advertise a panel a user cannot open.
+_UI_PREPROCESSING = "UI (Preprocessing panel — experimental)"
+_INSPECT_DERIVED = "Data Management (derived tables — experimental)"
+_API_EXPERIMENTAL = "API (experimental)"
 # FFD / FPRT / RPD / single-fixation duration, on both paths: computed
 # (`measures.compute_per_word_measures`) and imported
-# (`data._blank_unfixated_measures`, #374).
+# (`data._blank_unfixated_measures`).
 _UNFIXATED_MISSING = (
     "Never fixated ⇒ NaN, not 0, so a skipped word is left out of every mean. "
     "An imported 0 is blanked too, wherever the word's fixation count is 0 — "
-    "or, with no count mapped, its total fixation duration is 0 (BUG-63)."
+    "or, with no count mapped, its total fixation duration is 0."
 )
 
 
@@ -211,7 +210,7 @@ REGISTER: tuple[Computation, ...] = (
         id="norm.flags",
         name="Flag coercion",
         category=CATEGORY_NORMALIZATION,
-        summary="Read EyeLink's string booleans as booleans (BUG-7).",
+        summary="Read EyeLink's string booleans as booleans.",
         formula=(
             "Numbers go by `!= 0`. Strings are matched case-insensitively "
             "against `{'', '.', '0', '0.0', 'false', 'f', 'no', 'n', 'na', "
@@ -244,7 +243,7 @@ REGISTER: tuple[Computation, ...] = (
             "repeat's _r2 suffix, then its Text ID (only a Text ID the fixations "
             "map, and never one the words give to more than one trial). A "
             "trial-ID match always stands; mapped Text IDs that disagree with "
-            "it are warned about (DATA-49)."
+            "it are warned about."
         ),
         code="scanpath_studio/data.py:broadcast_stimulus_words",
         missing=(
@@ -271,7 +270,7 @@ REGISTER: tuple[Computation, ...] = (
             "No matching word box, or no word id (blank, or not a number) ⇒ the "
             "fixation keeps no coordinates — a missing id never matches a box "
             "with none. No x/y mapped and a Word/IA ID column with no numbers "
-            "at all ⇒ UnplacedFixationsError, never an empty figure (#412)."
+            "at all ⇒ UnplacedFixationsError, never an empty figure."
         ),
         tiers="A, C",
         status=STATUS_VERIFIED,
@@ -282,7 +281,7 @@ REGISTER: tuple[Computation, ...] = (
         id="norm.participant_metadata",
         name="Participant metadata join",
         category=CATEGORY_NORMALIZATION,
-        summary="Attach a participant-level table without broadcasting it (DATA-20).",
+        summary="Attach a participant-level table without broadcasting it.",
         formula=(
             "Left join on string `participant_id`. Duplicate ids that agree "
             "are combined field by field (each field keeps the one non-missing "
@@ -328,7 +327,7 @@ REGISTER: tuple[Computation, ...] = (
             "Runs only when the fixations carry no word id. A mapped `word_id` "
             "(on the bundled demo, EyeLink's `CURRENT_FIX_INTEREST_AREA_ID`) is "
             "used exactly as given, blanks included — nothing is computed and "
-            "no blank is filled — unless `overwrite=True`. #BUG-83: geometry "
+            "no blank is filled — unless `overwrite=True`. Geometry "
             "agrees with that column on all 3,208 of the demo's EyeLink-assigned "
             "fixations."
         ),
@@ -377,7 +376,7 @@ REGISTER: tuple[Computation, ...] = (
         id="assign.runs",
         name="Runs and passes",
         category=CATEGORY_ASSIGNMENT,
-        summary="Trial run, line run, and per-word visit/pass indices (PRE-16).",
+        summary="Trial run, line run, and per-word visit/pass indices.",
         formula=(
             "Consecutive fixations on the same word form one *visit*; the n-th "
             "visit to a word is its n-th pass. Line runs break whenever the "
@@ -423,7 +422,7 @@ REGISTER: tuple[Computation, ...] = (
         id="assign.saccade_class",
         name="Saccade reading class",
         category=CATEGORY_ASSIGNMENT,
-        summary="Label each outgoing saccade by its reading role (VIZ-8).",
+        summary="Label each outgoing saccade by its reading role.",
         formula=(
             "From the word and text line of the two fixations, in this order: "
             "refixation (same word), regression (up to an earlier line, or back "
@@ -478,8 +477,8 @@ REGISTER: tuple[Computation, ...] = (
             "Sum of every fixation in the word's **first** run, i.e. before the "
             "gaze leaves the word for the first time — whenever that run starts "
             "(EyeLink's `IA_FIRST_RUN_DWELL_TIME`; not conditioned on first pass, "
-            "as `measure.ffd`). A fixation outside every word ends the run "
-            "(BUG-66), as it does for `measure.second_pass`."
+            "as `measure.ffd`). A fixation outside every word ends the run, "
+            "as it does for `measure.second_pass`."
         ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="first_pass_gaze_duration_ms",
@@ -501,7 +500,7 @@ REGISTER: tuple[Computation, ...] = (
         formula=(
             "Total time from the word's first fixation until the first fixation "
             "on a **later** word — every fixation in between, including a first "
-            "visit to an earlier, skipped word during the regression (BUG-61). "
+            "visit to an earlier, skipped word during the regression. "
             "Matches EyeLink's `IA_REGRESSION_PATH_DURATION` on 1779 of the "
             "bundled demo's 1780 fixated words. Fixations outside every word "
             "neither extend nor close the window."
@@ -575,8 +574,8 @@ REGISTER: tuple[Computation, ...] = (
             "`regression_in_flag` — some later fixation lands on this word after "
             "the gaze had moved past it. `regression_out_flag` — a regression "
             "to an earlier word is made from this word during first pass, before "
-            "the eyes first leave it forwards (EyeLink's `IA_REGRESSION_OUT`, "
-            "BUG-64); a regression from it later in the trial does not count."
+            "the eyes first leave it forwards (EyeLink's `IA_REGRESSION_OUT`); "
+            "a regression from it later in the trial does not count."
         ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="regression_in_flag, regression_out_flag",
@@ -595,11 +594,11 @@ REGISTER: tuple[Computation, ...] = (
         formula=(
             "`char_width = geom.word_char_advance`; "
             "`offset = first_fix_x − word.x` (LTR) or "
-            "`word.x + n·advance − first_fix_x` (RTL, BUG-27); "
+            "`word.x + n·advance − first_fix_x` (RTL); "
             "`landing_position = offset / char_width + 1` — so the first letter "
             "starts at 1 and its center is 1.5. Unclipped: on a tiling corpus "
             "the box's last cell is the space after the word, which belongs to "
-            "it (#BUG-83), so a first fixation there reads `n + 1` to `n + 2`."
+            "it, so a first fixation there reads `n + 1` to `n + 2`."
         ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="initial_landing_position",
@@ -609,7 +608,7 @@ REGISTER: tuple[Computation, ...] = (
             "word's first fixation, first pass or not (as `measure.ffd`)."
         ),
         precedence=(
-            "VAL-5: the scale is `geom.word_char_advance`, not "
+            "The scale is `geom.word_char_advance`, not "
             "`width / len(text)`, which on a tiling corpus puts every landing "
             "~`(n+1)/n` too far into the word."
         ),
@@ -629,9 +628,9 @@ REGISTER: tuple[Computation, ...] = (
         summary="Landing position relative to the word's center.",
         formula=(
             "`landing_position − (1 + len(text) / 2)` — the glyphs span "
-            "`[1, n + 1)`, so that is the word's center (BUG-65). The center of "
+            "`[1, n + 1)`, so that is the word's center. The center of "
             "the *letters*, not of the box: a tiling box's trailing space "
-            "(#BUG-83) would move it half a letter right."
+            "would move it half a letter right."
         ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="initial_landing_distance",
@@ -699,7 +698,7 @@ REGISTER: tuple[Computation, ...] = (
         id="fix.saccade_amplitude",
         name="Saccade amplitude",
         category=CATEGORY_MEASURE,
-        summary="Distance between consecutive fixations — always pixels (BUG-25).",
+        summary="Distance between consecutive fixations — always pixels.",
         formula="`sqrt(dx² + dy²)` between consecutive fixations in the trial.",
         code="scanpath_studio/measures.py:enrich_fixations",
         output="saccade_amplitude",
@@ -715,8 +714,6 @@ REGISTER: tuple[Computation, ...] = (
         ),
         tiers="A, C",
         status=STATUS_VERIFIED,
-        # The history (one column once meant px or deg) is in the changelog.
-        reference="(BUG-25)",
         consumers=(_UI, _API, _EXPORT, _CORPUS),
         tests=("tests/test_measures.py",),
     ),
@@ -752,7 +749,7 @@ REGISTER: tuple[Computation, ...] = (
         code="scanpath_studio/measures.py:rebased_fixation_onsets",
         output="Onset array",
         unit="ms",
-        missing="A backwards clock restarts the accumulation (see VAL-7).",
+        missing="A backwards clock restarts the accumulation.",
         tiers="A, C",
         status=STATUS_PARTIAL,
         consumers=(_UI, _API, _CLI),
@@ -774,7 +771,7 @@ REGISTER: tuple[Computation, ...] = (
             "survivor."
         ),
         precedence=(
-            "#BUG-27: the conversion reads the shared letter scale, so "
+            "The conversion reads the shared letter scale, so "
             '"within 1 character" means the same on every word.'
         ),
         code="scanpath_studio/preprocessing.py:merge_short_fixations",
@@ -838,7 +835,7 @@ REGISTER: tuple[Computation, ...] = (
             "run counts, go-past times and skip flag are then derived from the "
             "fixations on its words; the supplied word measures are not used, "
             "so a sentence with no fixations reads as skipped (which is why "
-            "Corpus Analysis → Per sentence is held back)."
+            "Corpus Analysis → Per sentence is experimental)."
         ),
         code="scanpath_studio/preprocessing.py:sentence_measures",
         output="Sentences table",
@@ -880,7 +877,7 @@ REGISTER: tuple[Computation, ...] = (
         unit="px",
         missing="Proportional fonts make this an approximation.",
         precedence=(
-            "#BUG-27: the advance is the shared letter scale, not `width / "
+            "The advance is the shared letter scale, not `width / "
             "len(text)` — which on a tiling corpus stretched the glyph row "
             "across the trailing inter-word padding, so each character box after "
             "the first sat progressively further right than its glyph."
@@ -913,7 +910,7 @@ REGISTER: tuple[Computation, ...] = (
             "`methods` (default `attach`, `slice`, `consensus`), FFD / FPRT / "
             "RPD / TFD are recomputed per method, and each word's spread (max − "
             "min across methods) is reported beside a per-trial correction "
-            "report (PRE-18)."
+            "report."
         ),
         code="scanpath_studio/preprocessing.py:measure_sensitivity",
         tiers="C",
@@ -925,13 +922,12 @@ REGISTER: tuple[Computation, ...] = (
         id="align.algorithms",
         name="Vertical drift correction",
         category=CATEGORY_PREPROCESSING,
-        summary="Line-assignment algorithms, ported natively (PRE-3).",
+        summary="Line-assignment algorithms, ported natively.",
         formula=(
             "The ten Carr et al. algorithms — `attach`, `chain`, `cluster`, "
             "`compare`, `merge`, `regress`, `segment`, `split`, `stretch`, "
             "`warp` — plus `slice` and a `consensus` vote over them. Each "
-            "reassigns fixation *y* to a text line. Not in this release "
-            "(#PRE-21)."
+            "reassigns fixation *y* to a text line. Experimental."
         ),
         code="scanpath_studio/alignment.py:correct",
         output="Corrected fixation y (display only; exported tables stay raw)",
@@ -1021,7 +1017,7 @@ REGISTER: tuple[Computation, ...] = (
         id="agg.effect_size",
         name="Group means and difference",
         category=CATEGORY_AGGREGATION,
-        summary="Two groups' means, their difference and Cohen's d (AN-21).",
+        summary="Two groups' means, their difference and Cohen's d.",
         formula=(
             "Each value is one participant's mean of the measure (pooled "
             "observations when the data names no participants). "
@@ -1187,7 +1183,7 @@ REGISTER: tuple[Computation, ...] = (
             "or px with `as_fraction=False`"
         ),
         precedence=(
-            "#BUG-83: on a glyph-tight corpus the box is the glyph run, so 0 is "
+            "On a glyph-tight corpus the box is the glyph run, so 0 is "
             "the first letter's edge and 1 the last's. On a tiling corpus the "
             "box's last cell is the space after the word, so the glyphs fill "
             "`[0, n / (n + 1))` and a landing on that space reads just below 1, "
@@ -1228,7 +1224,7 @@ REGISTER: tuple[Computation, ...] = (
         ),
         code="scanpath_studio/similarity.py:normalized_levenshtein",
         unit="dimensionless (0–1)",
-        missing="Not in this release.",
+        missing="Experimental.",
         tiers="A, C",
         status=STATUS_VERIFIED,
         reference="Standard edit-distance scanpath comparison.",
@@ -1320,7 +1316,7 @@ REGISTER: tuple[Computation, ...] = (
             "`assign.in_text`, the drawn outlines, the word heatmaps, the "
             "critical-span frame, drift correction and the model scanpaths. A "
             "position *inside* a word goes through `geom.word_char_advance` "
-            "instead, and where its letters are through `geom.word_glyph_span`; the drawn word label is centered in the box (#BUG-97)."
+            "instead, and where its letters are through `geom.word_glyph_span`; the drawn word label is centered in the box."
         ),
         tiers="A, C",
         status=STATUS_PARTIAL,
@@ -1342,7 +1338,7 @@ REGISTER: tuple[Computation, ...] = (
         unit="px",
         missing="No usable words ⇒ 0.0 (glyph-tight), never a guess.",
         precedence=(
-            "Never moves a box edge (#BUG-83); it only tells "
+            "Never moves a box edge; it only tells "
             "`geom.word_char_advance` and `geom.word_glyph_span` how many "
             "character cells a box holds."
         ),
@@ -1367,9 +1363,9 @@ REGISTER: tuple[Computation, ...] = (
             "The single accessor for the letter scale, as `geom.word_box_bounds` "
             "is for the boundary between words: `measure.landing_position`, "
             "`measure.landing_distance`, `agg.landing_curve` and the saccade "
-            "table's launch/landing letter all read it. #BUG-27 — before that "
-            "each derived its own `width / len(text)`, which is one advance too "
-            "wide on a tiling corpus, by a factor that varied with word length."
+            "table's launch/landing letter all read it. Deriving "
+            "`width / len(text)` instead would be one advance too wide on a "
+            "tiling corpus, by a factor that varies with word length."
         ),
         tiers="A, C",
         status=STATUS_VERIFIED,
@@ -1495,7 +1491,7 @@ REGISTER: tuple[Computation, ...] = (
         unit="ms (recorded) → ms (playback)",
         precedence=(
             "Plotly's own frame queue is never the clock: it rounds every frame "
-            "up to whole display ticks and the error accumulates (BUG-93). "
+            "up to whole display ticks and the error accumulates. "
             "Without the player (`fig.show()`) the figure falls back to it."
         ),
         tiers="C, D",
@@ -1526,7 +1522,7 @@ BY_ID = {entry.id: entry for entry in REGISTER}
 #: Entries the default build does not compute: they need
 #: ``SCANPATH_EXPERIMENTAL=1`` (`constants.computed_measures_enabled`,
 #: `preprocessing_enabled`, `drift_correction_enabled`, `similarity_enabled`).
-#: The page marks them, so it does not present held-back work as shipped.
+#: The page marks them, so it does not present experimental work as shipped.
 EXPERIMENTAL_IDS = frozenset(
     {
         "measure.ffd",
@@ -1561,14 +1557,14 @@ EXPERIMENTAL_IDS = frozenset(
 
 _TRACKER_ID = r"#?[A-Z]{2,5}-\d+"
 _TRACKER_PATTERNS = (
-    # "(BUG-25)", "(#PRE-21)", "(PRE-11/12)", "(BUG-61..66)", "(see VIZ-8)"
+    # "(ABC-25)", "(#ABC-21)", "(ABC-11/12)", "(ABC-61..66)", "(see ABC-8)"
     re.compile(
         rf"\s*\((?:see |cf\. )?{_TRACKER_ID}"
         rf"(?:\s*(?:[,/]|\.\.|and|&)\s*(?:{_TRACKER_ID}|\d+))*\)"
     ),
-    # "only with SCANPATH_EXPERIMENTAL=1 — PRE-22)", "blanked, BUG-63)"
+    # "only with SCANPATH_EXPERIMENTAL=1 — ABC-22)", "blanked, ABC-63)"
     re.compile(rf"\s*[—–,-]\s*{_TRACKER_ID}(?=\))"),
-    # a sentence opening "#BUG-27: " or "#BUG-27 — "
+    # a sentence opening "#ABC-27: " or "#ABC-27 — "
     re.compile(rf"(?:^|(?<=\. )){_TRACKER_ID}(?::| —)\s+"),
 )
 
@@ -1590,12 +1586,12 @@ def _experimental_note(entry: Computation) -> list[str]:
         return []
     if entry.category == CATEGORY_MEASURE:
         body = (
-            "Scanpath Studio does not compute this in this release. A value "
-            "your dataset brings is shown as given, defined by the software "
-            "that exported it."
+            "Scanpath Studio does not compute this by default. A value your "
+            "dataset brings is shown as given, defined by the software that "
+            "exported it."
         )
     else:
-        body = "Not in this release."
+        body = "Off by default; `SCANPATH_EXPERIMENTAL=1` turns it on."
     return ['!!! warning "Experimental"', "", f"    {body}", ""]
 
 
@@ -1624,7 +1620,7 @@ def anchor(entry_id: str) -> str:
 
 
 def to_markdown() -> str:
-    """Render the register as the ``plans/computation-register.md`` page.
+    """Render the register as its Markdown methodology page.
 
     Generated rather than hand-maintained so the documentation cannot drift
     from the catalogue the integrity tests check.
@@ -1664,8 +1660,9 @@ def to_markdown() -> str:
         "Scientific measures therefore read *Partially verified* even where "
         "their hand oracle is exact.",
         "",
-        "Entries marked *experimental* are not in this release. They are "
-        "listed so that their definitions are on record.",
+        "Entries marked *experimental* are off by default "
+        "(`SCANPATH_EXPERIMENTAL=1` turns them on). They are listed so that "
+        "their definitions are on record.",
         "",
     ]
     for category in CATEGORIES:
@@ -1681,9 +1678,9 @@ def to_markdown() -> str:
                 _public(entry.summary),
                 "",
             ]
-            # A held-back entry keeps its heading and summary, which the app's
-            # "Definition" links land on, and nothing a reader would have to
-            # check against a release that does not compute it.
+            # An experimental entry keeps its heading and summary, which the
+            # app's "Definition" links land on, and nothing a reader would have
+            # to check against a build that does not compute it.
             if entry.id in EXPERIMENTAL_IDS:
                 continue
             lines += [f"**Formula.** {_public(entry.formula)}", ""]
@@ -1707,11 +1704,8 @@ def to_markdown() -> str:
 
 
 def main() -> None:  # pragma: no cover - thin CLI wrapper
-    from pathlib import Path
-
-    target = Path(__file__).resolve().parents[1] / "plans" / "computation-register.md"
-    target.write_text(to_markdown(), encoding="utf-8")
-    print(f"Wrote {target} ({len(REGISTER)} entries)")
+    """Print the register as Markdown (`python -m scanpath_studio.computations`)."""
+    print(to_markdown(), end="")
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -36,7 +36,7 @@ At least one of the first three tables below; add others as needed.
 | --- | --- |
 | Fixations | One row per fixation: trial ID, duration, and x/y or a word ID |
 | Words (interest areas) | One row per word: trial ID, word ID and bounding box |
-| Raw gaze | One row per sample: participant ID, trial ID, x and y |
+| Raw gaze | One row per sample: trial ID, x and y |
 | Participants | One row per participant, with metadata |
 | Trials | One row per trial, with metadata |
 | Texts | One row per text, with metadata |
@@ -68,8 +68,15 @@ Corpus Analysis uses the measures you supply.
 1. Choose + → Import files and name the dataset.
 2. Upload your tables and check the column mapping.
 3. Enter the recording screen size and typography where known.
-4. Optionally attach stimulus screenshots from a local folder.
+4. Optionally, on a local or desktop install, attach stimulus screenshots
+   from a folder.
 5. Click Add dataset.
+
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../../assets/workflows/add-your-data_poster.webp" data-autoplay
+       aria-label="Importing fixation and interest-area reports">
+  <source src="../../assets/workflows/add-your-data.mp4" type="video/mp4">
+</video>
 
 ## Load and inspect in code
 
@@ -94,7 +101,7 @@ Load the same files in a script; column names are detected automatically.
         ```
 
     For raw gaze, metadata and explicit column mappings, see the
-    [loaders](../../api.md#load-your-data) and [CLI input options](../../cli.md#render).
+    [loaders](../../api.md#load-your-data) and [CLI input options](../../cli.md#flags-input).
 
 ## Manage datasets
 

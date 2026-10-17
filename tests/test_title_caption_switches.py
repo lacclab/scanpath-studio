@@ -1,4 +1,4 @@
-"""Title and caption each have their own switch; the one they shared before
+"""Title and caption each have their own switch; the older shared one
 (`show_title_caption`) still reads, from a link or a saved config, as both."""
 
 from __future__ import annotations

@@ -1,8 +1,8 @@
 # Contributing a dataset
 
 How to get a public corpus shipped with Scanpath Studio, so every user finds it
-in the dataset picker. Two ship today, OneStop and PoTeC (MultiplEYE is held
-back from this release); this page is the contract for adding another.
+in the dataset picker. Two ship today, OneStop and PoTeC; this page is the
+contract for adding another.
 
 !!! tip "You probably don't need this page"
     To load a corpus **you already have**, no code is needed at all — see
@@ -15,14 +15,13 @@ If your corpus is two tables with recognizable column names, **no**. The generic
 loader already takes a list or glob of files and auto-detects EyeLink, Gazepoint,
 Tobii, SMI, Pupil Labs and snake_case columns.
 
-Adapters exist for what the generic path *can't* guess. That's what the three
+Adapters exist for what the generic path *can't* guess. That's what the two
 existing ones are for:
 
 | Corpus | The problem it solves |
 | --- | --- |
 | **OneStop** | Picking the right regime × part files out of the OSF release, and keeping the parts of one trial from colliding. The columns themselves are already fine. |
 | **PoTeC** | 900 per-trial files to concatenate; word AOIs with no participant column; and fixations with **no coordinates at all** — x/y has to be reconstructed from which character was fixated. |
-| **MultiplEYE** | Participant, session, trial and stimulus exist only in folder and file names; AOIs are per-character and must be combined into words; each page of a stimulus reuses the same screen coordinates, so one reading of a stimulus becomes one trial whose ordered **screens** are its pages and comprehension-question screens. |
 
 If none of that sounds like your corpus, open an
 [issue](https://github.com/lacclab/scanpath-studio/issues) describing its shape
@@ -33,8 +32,8 @@ this".
 
 Nothing corpus-scale goes into the installed package. So in practice a new corpus is
 either **downloaded on demand** into a folder the user picks (PoTeC, OneStop) or
-**read from a directory the user already has** (MultiplEYE). Both look identical
-from the user's side — one picker entry, one `load_*` function.
+**read from a directory the user already has**. Both look identical from the
+user's side — one picker entry, one `load_*` function.
 
 ## What an adapter provides
 
@@ -143,12 +142,15 @@ import time:
 ```python
 "PoTeC — Potsdam Textbook Corpus": dict(
     loader=_load_potec_source,
+    files_present=_potec_files_present,  # the dataset table's Status
+    downloadable=True,             # missing files read "Needs download"
+    declared_schemas=(POTEC_WORD_SCHEMA, POTEC_FIX_SCHEMA),
     monitor=(1680, 1050),          # DELL P2210 — the canvas snaps to this
     short="PoTeC",                 # what the picker shows
     language="German",
-    size="75 readers · 12 texts",
-    description="German reading of biology & physics textbook passages "
-    "(expert/novice readers).",
+    size="75 participants · 12 texts",
+    description="Potsdam Textbook Corpus — German readers, experts and "
+    "novices, reading biology and physics textbook passages.",
     link="https://github.com/DiLi-Lab/PoTeC",
     published_counts={             # the row before anyone opens it
         "Participants": 75,
@@ -157,22 +159,28 @@ import time:
         "Words": 142125,
         "Fixations": 404420,
     },
-    published_counts_source="PoTeC's own README: 75 participants each "
-    "reading all 12 texts, and “900 trials (75 participants * 12 trials)”. "
-    "Word and fixation totals were measured from the released corpus.",
-    geometry="🛠️ **Reconstructed** fixation coordinates — the release keeps "
-    "no recorded (x, y), so each fixation sits at the centre of the "
-    "character it names, from the corpus' own `.ias` boxes.",
+    published_counts_source=(
+        "PoTeC's own README for participants, texts and trials. Words and "
+        "fixations were measured from the released corpus."
+    ),
+    reading_note="Fixation positions are reconstructed, not recorded: "
+    "PoTeC's release keeps no screen coordinates, so each fixation is drawn "
+    "at the center of the character it landed on.",
 ),
 ```
+
+`files_present` wraps your `<corpus>_present` check, and `downloadable` says
+whether the app can fetch what is missing (*Needs download*) or the user has to
+supply it (*Needs setup*).
 
 **`published_counts` is a claim about the corpus, not about a load**, which is
 why `published_counts_source` sits beside it: say which published document each
 figure came from, and say so when you measured one yourself instead. The table
 shows them until the dataset is opened, then shows what actually loaded and
-flags any field where the load exceeds the published figure. `geometry` is the matching honesty
-line for coordinates: whether the boxes and fixation positions are the corpus'
-own, reconstructed, or synthesized.
+flags any field where the load exceeds the published figure. `reading_note` is
+the one provenance sentence shown with the dataset on the Data Management page:
+use it for whatever changes how a figure is read, such as positions that are
+reconstructed or samples that are synthesized.
 
 Each entry is **one top-level source in the picker**, tagged 🌐 and searchable
 beside the demo and the uploads — there is no category to nest under and no
@@ -181,15 +189,9 @@ entries, told apart by the property that actually differs.
 
 **Read the registry through `public_dataset_registry()`, never the dict.** That
 function is what every consumer calls: it returns the static entries above
-*plus* one entry per corpus discovered at runtime (each prepared corpus in a
-local benchmark bundle is composed in there, since it depends on a directory the
-user can change mid-session). The dict answers for the fixed corpora only, so a
-consumer reading it directly silently ignores everything discovered — the reason
+*plus* any entry composed at runtime. The dict answers for the fixed corpora
+only, so a consumer reading it directly silently ignores the rest — the reason
 to touch `PUBLIC_DATASET_REGISTRY` by name is to *add* an entry to it, as above.
-A corpus discovered from a manifest declares `monitor` only when the manifest
-records a real one; an invented default must not snap the canvas, and
-`eyegenbench.declared_monitor(entry)` is the single rule the app and the CLI both
-apply.
 
 Use the shared helpers in the loader so every corpus looks the same:
 `_dataset_dir_input` (the directory box, folder-picker button, and *Expected
@@ -211,18 +213,16 @@ applies — the picker entry is one surface out of four:
   exactly-one-input check so it can't be combined with `--sample`.
 - **Deep link / Share** — you get this for free: `?source=corpus&corpus=<slug>`
   names any entry `public_dataset_registry()` returns, slugged from the entry's
-  `short` (a corpus discovered from a manifest uses its manifest name under a
-  `harmonised-` prefix). Check that your `short` slugifies to something no other
+  `short`. Check that your `short` slugifies to something no other
   entry claims — a slug two entries would answer to is dropped from both rather
   than resolved to a guess, and then neither is shareable. Register the source in
   `_SHAREABLE_SOURCES` only if it needs its **own** token, and add any per-corpus
   options (OneStop's variant / regime / parts) to `_apply_url_preset` /
   `_build_share_query`.
 
-Then add a docs page under **Public corpora** describing the corpus and the modelling
-decisions your adapter makes ([OneStop](guides/loading-data/index.md#onestop) and
-[MultiplEYE](multipleye.md) are the templates), and list it in `mkdocs.yml`'s
-`nav:` — a page that isn't in the nav still builds, but nothing links to it.
+Then describe the corpus, and the modelling decisions your adapter makes, in
+the Data management guide beside
+[OneStop](guides/loading-data/index.md#onestop).
 
 ## Licensing
 
@@ -232,19 +232,18 @@ on the user's behalf.
 
 - **No corpus data is vendored into this repository.** The one exception is the
   bundled demo, a subset of OneStop under OneStop's own license, cited in the
-  README and written into every export bundle so the attribution travels with the
-  data.
+  README and written into every bundle exported from it, so the attribution
+  travels with the data.
 - **Downloads point at the corpus' own host**, reusing the file IDs those projects
   publish.
 - **Ported code is separate.** If your adapter ports logic from the corpus'
   tooling, add a `NOTICE` entry and check the license is compatible with MIT — a
-  GPL dependency isn't acceptable, which is why the drift-correction algorithms in
-  `alignment.py` are a native port rather than a dependency.
+  GPL dependency isn't acceptable.
 
 ## Tests
 
 Cover the loader against a tiny corpus-shaped tree built in `tmp_path` (see the
-`potec_root` / `multipleye_root` fixtures in `tests/test_dataset_support.py`),
+`potec_root` fixture in `tests/test_dataset_support.py`),
 asserting the normalized output exactly — IDs, word text, reconstructed
 coordinates, durations — plus the failure paths: an unknown text ID raises
 `ValueError`, a missing file raises a `FileNotFoundError` whose message tells the
@@ -257,8 +256,8 @@ your `<CORPUS>_DEFAULT_DIR` to the tuple of constants it monkeypatches to an emp
 or fails depending on what the dev machine happens to have downloaded.
 
 If your adapter merges side data (reader metadata, comprehension questions,
-images), add one test per surface including the "file absent → column simply isn't
-there" case; `tests/test_multipleye_enrichment.py` is the model.
+images), add one test per surface, including the "file absent → column simply
+isn't there" case.
 
 Two hard rules: **tests never hit the network** (monkeypatch the downloader or
 build the tree directly), and **expectations are hand-computed**, not snapshots of
@@ -278,7 +277,7 @@ in `app.py`, and the test tree in `tests/test_dataset_support.py`.
 
 One pull request with all of it: the adapter, any optional-field rows in
 `data.py`, the loader and registry entry, the default directory, the CLI
-flag, the API re-export, the tests, and a docs page plus its nav line. In the PR
+flag, the API re-export, the tests, and the docs section. In the PR
 description state the corpus' **license**, a **citation**, its **public URL**, and
 its **on-disk size**.
 
@@ -289,7 +288,7 @@ pip install -e ".[test,lint,docs]"
 pytest
 ruff check .
 ruff format .
-mkdocs build --strict          # if you added or edited a docs page
+mkdocs build --strict          # if you edited the docs
 ```
 
 Add a changelog entry as a file in `changelog.d/` (its README says how), and see

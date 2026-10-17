@@ -2,11 +2,10 @@
 
 ``logging`` and ``print`` only reach the *server* terminal, so this panel is how
 a log line gets in front of a user who is running the hosted demo or the desktop
-bundle. ENG-37 found it was the thinnest-covered module in the package — the only
-part under test was the S10 install-once guard (``tests/test_security_fixes.py``),
-which meant nothing checked that a captured record actually renders, or that a
+bundle. These tests check that a captured record actually renders, and that a
 log message containing HTML can't inject into the panel (it is written with
-``unsafe_allow_html=True``).
+``unsafe_allow_html=True``); the install-once guard is covered in
+``tests/test_security_fixes.py``.
 """
 
 from __future__ import annotations
@@ -89,8 +88,8 @@ def test_the_buffer_is_capped_so_a_chatty_run_cannot_grow_session_state():
 
 
 class TestOnlyTheAppsOwnRecordsAreKept:
-    """UX-37 follow-up ("much too much logs"). The handler sits on the *root*
-    logger, so without a filter the panel fills with third-party chatter."""
+    """The handler sits on the *root* logger, so without a filter the panel
+    fills with third-party chatter."""
 
     def test_a_third_party_info_line_is_dropped(self):
         handler = debug_log._SessionStateHandler()
@@ -128,7 +127,7 @@ class TestOnlyTheAppsOwnRecordsAreKept:
         assert bool(handler.filter(theirs)) is False
 
     def test_install_does_not_raise_the_root_level(self):
-        """Raising root to INFO is what switched on every library in the process.
+        """Raising root to INFO would switch on every library in the process.
 
         The app's own logger carries the level instead; propagation to an
         ancestor's handlers ignores the ancestor's level, so our INFO lines still
@@ -169,7 +168,7 @@ class TestIdenticalLinesCollapse:
 
     def test_a_repeat_moves_back_to_the_newest_position(self, monkeypatch):
         """Interleaved is the shape a rerun actually produces (A, B, A, B …), so
-        collapsing only *consecutive* duplicates would not have helped."""
+        collapsing only *consecutive* duplicates would not help."""
         handler, buf = self._handler_and_buffer(monkeypatch)
         for _ in range(50):
             handler.emit(self._record("A"))
@@ -212,14 +211,14 @@ def _app_records(caplog):
 
     ``caplog`` collects from the root logger, so anything else running in the
     same worker lands in ``caplog.records`` too — Streamlit's bare-mode
-    *"missing ScriptRunContext!"* warning above all (#BUG-39). Asserting on the
+    *"missing ScriptRunContext!"* warning above all. Asserting on the
     whole list makes a test hostage to every library that logs.
     """
     return [r for r in caplog.records if r.name.split(".")[0] == "scanpath_studio"]
 
 
 class TestTheComputationLog:
-    """UX-37 follow-up: the panel is only worth opening if it says what the app
+    """The panel is only worth opening if it says what the app
     actually did. Stages log with their duration; interactions log on change."""
 
     def test_timed_logs_the_duration_and_the_fields(self, caplog):
@@ -280,7 +279,7 @@ def test_the_run_logs_its_computations_and_selections():
 
 
 def _boot_with_debug_open(**session) -> AppTest:
-    """Boot with the ❓ Help → About → Debug modal open (UX-179).
+    """Boot with the ❓ Help → About → Debug modal open.
 
     Its widgets render only while it is open, and `arm_debug_dialog` has to be
     repeated before every run (AppTest replays the whole script rather than
@@ -295,7 +294,7 @@ def _boot_with_debug_open(**session) -> AppTest:
 
 
 def test_the_toggle_is_offered_without_any_url_param():
-    """UX-37: the Debug dialog's toggle is the way in, even on a plain visit."""
+    """The Debug dialog's toggle is the way in, even on a plain visit."""
     at = _boot_with_debug_open(data_source_choice="Synthetic test trial")
     assert not at.exception, at.exception
     toggles = [t for t in at.toggle if t.key == debug_log._DEBUG_TOGGLE_KEY]
@@ -323,7 +322,7 @@ def test_the_toggle_reveals_the_panel():
 
 
 def test_debug_opens_from_about_not_the_help_menu():
-    """#374 F31: Debug left the ❓ Help menu for a button at the foot of About."""
+    """Debug is not in the ❓ Help menu; it is a button at the foot of About."""
     from scanpath_studio import debug_log, menu
 
     assert "help_debug" not in menu._HELP_PAGES
@@ -354,7 +353,7 @@ def test_a_legacy_debug_url_param_still_arms_it():
 
 @pytest.mark.timeout(90)
 class TestTheGroundTruthTrialIsAlwaysAvailable:
-    """The editable sample is public; the old verification fixture is debug-only."""
+    """The editable sample is public; the verification fixture is debug-only."""
 
     def test_it_is_available_with_or_without_debug_mode(self):
         at = AppTest.from_file(APP_SCRIPT)
@@ -371,9 +370,9 @@ class TestTheGroundTruthTrialIsAlwaysAvailable:
         assert "Synthetic test trial" in entries, entries
 
     def test_selecting_it_loads_the_ground_truth_trial(self):
-        """The old `?source=synthetic` link still resolves — the token stays in
-        the share-link wire format — so this drives it the same way. What
-        changed is that it is no longer the only route."""
+        """A `?source=synthetic` link resolves — the token stays in the
+        share-link wire format — so this drives it that way; the debug toggle is
+        the other route."""
         at = AppTest.from_file(APP_SCRIPT)
         at.query_params["source"] = "synthetic"
         at.run(timeout=60)
@@ -402,8 +401,8 @@ def test_the_url_param_does_not_override_turning_it_off():
 
 
 def test_an_abandoned_runs_stop_does_not_escape_the_log_handler(monkeypatch):
-    """UX-166: an abandoned run's session state raises StopException on any
-    access. Escaping `emit`, it threw away the result of every cached build
+    """An abandoned run's session state raises StopException on any
+    access. Escaping `emit`, it would throw away the result of every cached build
     that logs through `timed()`."""
     import logging
 
@@ -420,11 +419,11 @@ def test_an_abandoned_runs_stop_does_not_escape_the_log_handler(monkeypatch):
 
 
 def test_a_rerun_request_is_not_swallowed_by_the_log_handler(monkeypatch):
-    """UX-166 fix-round-1 (T5-2): `ScriptRequests.on_scriptrunner_yield` clears
-    a RERUN request as it hands it over, while a STOP request stays set — so
-    unlike StopException, catching RerunException here would consume the
-    rerun once and for all if `emit` happened to be the first checkpoint after
-    the click. Only StopException may be swallowed."""
+    """`ScriptRequests.on_scriptrunner_yield` clears a RERUN request as it hands
+    it over, while a STOP request stays set — so unlike StopException, catching
+    RerunException here would consume the rerun once and for all if `emit`
+    happened to be the first checkpoint after the click. Only StopException may
+    be swallowed."""
     import logging
 
     from streamlit.runtime.scriptrunner import RerunException
@@ -441,9 +440,9 @@ def test_a_rerun_request_is_not_swallowed_by_the_log_handler(monkeypatch):
 
 
 def test_app_warnings_reach_the_terminal_once():
-    """BUG-100: the root handler switched off logging's ``lastResort``, so app
-    warnings and tracebacks never reached the server terminal. The app logger
-    carries one stderr handler of its own, at WARNING, however often installed."""
+    """A handler on root switches off logging's ``lastResort``, so app warnings
+    and tracebacks would never reach the server terminal. The app logger carries
+    one stderr handler of its own, at WARNING, however often installed."""
     import logging as _logging
 
     from scanpath_studio import debug_log

@@ -89,7 +89,7 @@ data to the online demo. See [Privacy](privacy.md).
 
 Not on a local or desktop install: the app saves your datasets and
 settings on this computer (when it listens only on this computer, as
-`scanpath-studio` and the desktop app do — see [Privacy](privacy.md)), and
+`scanpath-studio` and the desktop app do), and
 **:material/database: Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload,
 so export your annotations and settings before you leave
 ([what to back up](guides/scanpath-visualization/index.md#back-up-your-work)).
@@ -114,8 +114,8 @@ See [Recovery cache](cli.md#cache).
 
 :material/help: **Help → :material/feedback: Send feedback** in the app lists
 where each kind goes — a bug report, a feature request, an idea or comment, or
-a question —
-and shows the version and system details a bug report needs, ready to copy.
+a question — and shows the version and system details a bug report needs, ready
+to copy.
 Nothing is sent from the app: each route is a GitHub page you submit yourself.
 
 Ask in [Discussions → Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a).
@@ -125,10 +125,19 @@ with the version, your operating system and how you run the app (pip, the
 desktop app or the online demo). :material/help: **Help → About** shows the
 version and links both; on the command line, `scanpath-studio --version`.
 
+### How do I update Scanpath Studio? { #updating }
+
+Open :material/help: **Help → About → Check for updates**. In the desktop app,
+choose **Update & restart**. For a Python install, run:
+
+```bash
+pip install -U scanpath-studio
+```
+
 ### Will my links, settings and scripts work after an update?
 
-Scanpath Studio is in beta, so they may not. Until 1.0, any release may change
-the app, its share links and saved settings, the Python API and the CLI. The
+Not necessarily. Until version 1.0, any release may change the app, its share
+links and saved settings, the Python API and the CLI. The
 [changelog](https://github.com/lacclab/scanpath-studio/blob/main/CHANGELOG.md) lists every change. To reproduce a result exactly,
 note the version you used and install that one:
 `pip install scanpath-studio==<version>`.

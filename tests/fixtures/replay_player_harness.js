@@ -1,4 +1,4 @@
-// BUG-93: drive `plots.animation_player_post_script` against a fake Plotly on a
+// Drive `plots.animation_player_post_script` against a fake Plotly on a
 // simulated 60 Hz display, so tests/test_replay_player.py can check *when* each
 // replay frame reaches the screen without a browser.
 //

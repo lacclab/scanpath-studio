@@ -1,7 +1,7 @@
-"""ENG-21: the macOS .app bundle's paths, logging and quit gesture.
+"""The macOS .app bundle's paths, logging and quit gesture.
 
-The icon assertions and the signature gate stay in ``test_desktop_icon.py``;
-this file covers what the signed bundle added.
+The icon assertions and the signature gate are in ``test_desktop_icon.py``;
+this file covers the rest of the signed bundle.
 """
 
 from __future__ import annotations
@@ -62,8 +62,8 @@ def watcher(monkeypatch):
 
 def test_default_binary_is_the_app_bundle_on_macos(monkeypatch):
     # The bundle, not dist/ScanpathStudio/ — PyInstaller's COLLECT leaves that
-    # folder in place beside the .app, so the old path would still resolve and
-    # the smoke test would pass against the artifact CI never ships.
+    # folder in place beside the .app, so that path would still resolve and
+    # the smoke test would pass against an artifact CI never ships.
     monkeypatch.setattr(smoke_test.sys, "platform", "darwin")
     assert smoke_test._default_binary().name == "ScanpathStudio.app"
 
@@ -253,12 +253,12 @@ def test_small_log_is_left_alone(tmp_path, monkeypatch):
 
 
 def test_selfcheck_child_is_told_not_to_redirect_its_output(monkeypatch, tmp_path):
-    """Regression: the selfcheck child is the binary *inside* the .app.
+    """The selfcheck child is the binary *inside* the .app.
 
     Without an explicit env the launcher would redirect before reaching the
     --selfcheck branch, and `capture_output=True` makes stdout a pipe so the
-    isatty() escape does not fire either — so the traceback this phase exists to
-    surface would land in ~/Library/Logs on a throwaway runner, leaving CI red
+    isatty() escape does not fire either — so the traceback the selfcheck exists
+    to surface would land in ~/Library/Logs on a throwaway runner, leaving CI red
     with no reason attached.
     """
     seen = {}
@@ -365,8 +365,8 @@ def test_entitlements_are_the_one_documented_key():
 
 def test_entitlements_carry_no_xml_comment():
     # codesign parses entitlements with AMFI's strict XML reader, which rejects a
-    # "--" inside a comment that plutil and plistlib accept — the first signed
-    # CI run failed on exactly that. Keep the rationale in the spec and the plan.
+    # "--" inside a comment that plutil and plistlib accept, and a signed build
+    # then fails. Keep the rationale in the spec.
     assert "<!--" not in ENTITLEMENTS.read_text(encoding="utf-8")
 
 
@@ -490,7 +490,7 @@ def test_the_launcher_stays_stdlib_only_at_import():
     assert "scanpath_studio" not in header.split('"""', 2)[-1]
 
 
-# --- #394: the launcher's update hooks --------------------------------------
+# --- The launcher's update hooks -------------------------------------------
 
 
 @pytest.fixture

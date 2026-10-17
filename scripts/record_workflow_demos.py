@@ -215,7 +215,6 @@ OVERLAY_JS = f"""
 }})();
 """
 
-#: The page scrolls inside Streamlit's main container, not the window.
 #: Smooth scrolling, as a wheel would do it: ``SCROLL_JS`` moves the page (which
 #: scrolls inside Streamlit's main container, not the window) by ``dy``;
 #: ``REVEAL_JS`` scrolls whichever container clips an element — the page, or a

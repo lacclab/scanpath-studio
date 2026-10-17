@@ -1,9 +1,8 @@
 """Re-export the synthetic ground-truth trial from the package.
 
-The dataset now lives in ``scanpath_studio.synthetic`` so it is a
-single source of truth shared by the test suite and the in-app "Synthetic test
-trial" data source. This shim keeps the historical ``tests.synthetic_data``
-import path working.
+The dataset lives in ``scanpath_studio.synthetic``, a single source of truth
+shared by the test suite and the in-app "Synthetic test trial" data source.
+This module lets tests import it as ``tests.synthetic_data``.
 """
 
 from __future__ import annotations

@@ -1,10 +1,10 @@
 """Raw gaze imported without a clock is numbered, never given a time.
 
-A samples table with coordinates but no timestamp used to be stamped
-``timestamp_ms = 0, 1, 2, …`` — a 1000 Hz sampling rate nothing in the data
-stated — which then reached the plot's colour scale and hover (``t: 2 ms``) and
-the exported table. It now keeps the order as ``sample_index`` (1, 2, … per
-trial) and has no ``timestamp_ms`` at all; a mapped clock is unchanged.
+A samples table with coordinates but no timestamp keeps its order as
+``sample_index`` (1, 2, … per trial) and has no ``timestamp_ms`` at all. Stamping
+it ``timestamp_ms = 0, 1, 2, …`` would state a 1000 Hz sampling rate nothing in
+the data states, and that would reach the plot's colour scale and hover
+(``t: 2 ms``) and the exported table. A mapped clock is unchanged.
 """
 
 from __future__ import annotations

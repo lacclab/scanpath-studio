@@ -1,19 +1,15 @@
-"""VIZ-46 — the app's default colour ranges are per trial, like the API.
+"""The app's default colour ranges are per trial, like the API.
 
 `api.plot_scanpath` leaves `fixation_color_range` / `heatmap_range` at `None`,
-so every builder scales the figure to its own trial. The rail used to
-`setdefault` both slider keys to the *whole dataset's* span the moment the
-sliders rendered, so a default app figure never matched a headless one — the
-heatmap sat on the dataset's longest single fixation while the API used the
-trial's own per-word dwell. The user's call (ENG-63): make the app default per
-trial.
+so every builder scales the figure to its own trial, and a default app figure
+matches a headless one. Rendering the sliders must not seed their keys with
+the *whole dataset's* span.
 
-The fix makes the canonical `global_*` key mean **explicit**: it exists only
-once a range is chosen, and `None` reaches the builders otherwise. These tests
-drive the real rail (`controls.render_plot_controls`) over the bundled demo,
-because the bug lived in what *rendering* the slider did to session state — a
-pure call of `_collect_viz_settings` never rendered it and passed on the old
-code too.
+The canonical `global_*` key means **explicit**: it exists only once a range
+is chosen, and `None` reaches the builders otherwise. These tests drive the
+real rail (`controls.render_plot_controls`) over the bundled demo, because
+what is under test is what *rendering* the slider does to session state — a
+pure call of `_collect_viz_settings` never renders it.
 """
 
 from __future__ import annotations
@@ -249,7 +245,7 @@ class TestAnExplicitRange:
         assert at.session_state["_viz"]["heatmap_range"] is None
 
     def test_unticking_auto_pins_the_dataset_wide_scale(self, two_trials):
-        """The old default is one click away: comparable trials on one scale."""
+        """The dataset-wide scale is one click away: comparable trials on one scale."""
         at = _rail(two_trials[0])
         bounds = at.slider(key=FIX_VIEW).value
         at.checkbox(key=FIX_AUTO).uncheck()
@@ -302,8 +298,8 @@ class TestTheLink:
         assert opened.session_state["_params"]["heatmap_color_range"] == param
 
     def test_an_old_link_carrying_the_dataset_span_keeps_it(self, two_trials):
-        """Every link written before VIZ-46 carried the dataset-wide span the
-        rail seeded. It still means "this explicit range"."""
+        """Links from older versions carry the dataset-wide span as a range;
+        it still means "this explicit range"."""
         probe = _rail(two_trials[0])
         bounds = probe.slider(key=FIX_VIEW).value
         opened = AppTest.from_function(_rail_app)
@@ -335,9 +331,9 @@ class TestTheLink:
 class TestADesign:
     def test_a_design_saved_on_auto_is_not_refilled_by_the_link(self, two_trials):
         """`_apply_url_preset` re-applies a link on every rerun as `setdefault`,
-        so a design that leaves the range unset — which is what *auto* is now —
+        so a design that leaves the range unset — which is what *auto* is —
         would get the link's range back. Choosing a design takes the link's view
-        params off the URL, as the built-in presets always did."""
+        params off the URL, as the built-in presets do."""
         from scanpath_studio.session_keys import DESIGN_PRESETS
 
         at = AppTest.from_function(_rail_app)

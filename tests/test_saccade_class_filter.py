@@ -1,11 +1,9 @@
-"""VIZ-31: the saccade reading-class filter — which classes are drawn at all.
+"""The saccade reading-class filter — which classes are drawn at all.
 
-The Saccades section of the rail grew a 🧹 *filter* sub-section to match the
+The Saccades section of the rail has a 🧹 *filter* sub-section to match the
 fixation one, and what it filters on is ``measures.classify_saccades`` — the
-same split the VIZ-8 "By type" *colouring* uses, applied as visibility instead
-of hue. "Show me only the regressions" is the figure a reading paper asks for;
-before this the closest thing was colouring the other four classes to match the
-background.
+same split the "By type" *colouring* uses, applied as visibility instead of
+hue. "Show me only the regressions" is the figure a reading paper asks for.
 
 Three properties are worth pinning:
 
@@ -15,7 +13,7 @@ Three properties are worth pinning:
   short-circuits it back onto the unclassified fast path (the common case must
   not start paying for a classification pass); and
 * it composes with both class colour modes, filtering on the *unfolded* classes
-  so "regressions only" means the same thing under "By type" and under VIZ-19's
+  so "regressions only" means the same thing under "By type" and under the
   two-way fold.
 
 The wire-format round-trips (share link, saved config) live here too — a
@@ -129,7 +127,7 @@ class TestFilterRemovesSegments:
         assert arrows < arrows_all, "the filter did not thin the arrowhead trace"
 
     def test_arrows_follow_the_filter_in_arc_mode(self, trial):
-        """BUG-9's arch points are per-segment too, so the mask must hold there."""
+        """Arc mode's arch points are per-segment too, so the mask must hold there."""
         words, fixations = trial
         classes = classify_saccades(fixations, words)
         n_regressions = int((classes == "regression").sum())
@@ -185,7 +183,7 @@ class TestComposesWithColourModes:
         assert (lines, arrows) == (n_regressions * 3, n_regressions)
 
     def test_two_way_fold_happens_after_the_filter(self, trial):
-        """VIZ-19 folds skip/refixation/return-sweep into "Forward".
+        """The two-way fold puts skip/refixation/return-sweep into "Forward".
 
         The filter names *unfolded* classes, so asking for return sweeps alone
         must leave one Forward-coloured trace holding only return sweeps — not

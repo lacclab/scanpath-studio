@@ -1,10 +1,11 @@
 """A saved design records every plot control, not just the rail's `global_*` keys.
 
-A design used to snapshot only `global_*` session keys. That is scanpath A's
-filters and styling, but the Compare view keeps its own — each scanpath's styling
-(`cmp{0,1}_*`), scanpath B's filters (`cmp1_fixclass_*`, `cmp1_saccade_classes`),
-the layout and stimulus — and the fixation-index window is a `single_*` key. All
-of them silently survived a design switch instead of being replaced by it.
+The `global_*` session keys are scanpath A's filters and styling, but the
+Compare view keeps its own — each scanpath's styling (`cmp{0,1}_*`), scanpath
+B's filters (`cmp1_fixclass_*`, `cmp1_saccade_classes`), the layout and
+stimulus — and the fixation-index window is a `single_*` key. A design records
+them all, so none of them silently survives a design switch instead of being
+replaced by it.
 
 The second half is a guard rather than a behaviour test: it renders the real
 rail and fails on any plot-control key that is neither recorded by a design nor
@@ -150,7 +151,7 @@ class TestComingBackToTheDesign:
         return _run(at)
 
     def test_compare_on_then_off_keeps_a_saved_design(self, at):
-        """#374 F25: Compare is a mode, so a saved design stays highlighted.
+        """Compare is a mode, so a saved design stays highlighted.
         The built-ins are covered in test_viz_state_transitions: this harness
         renders the rail without the app's palette sync, which a built-in needs."""
         _do(at, "save:mine")

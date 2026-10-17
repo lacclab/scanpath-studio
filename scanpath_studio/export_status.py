@@ -48,7 +48,7 @@ class ExportStatus:
 
     @property
     def remaining_s(self) -> float | None:
-        """Seconds left at the rate observed so far (PERF-6).
+        """Seconds left at the rate observed so far.
 
         ``None`` until the first unit finishes: with nothing done there is no
         rate, and an estimate invented from one would be a guess wearing a
@@ -145,9 +145,9 @@ def export_signature(
 ) -> str:
     """Hash every output-affecting input for safe export-byte reuse.
 
-    ``content`` identifies what is drawn. It used to be the figure's JSON, which
-    costs 12 s to write for a 2,000-frame replay on every rerun; the animation
-    export passes its replay's inputs instead (PERF-16, `tabs._ReplayView`).
+    ``content`` identifies what is drawn. It need not be the figure's JSON,
+    which costs 12 s to write for a 2,000-frame replay on every rerun: the
+    animation export passes its replay's inputs instead (`tabs._ReplayView`).
     """
     if int(width) <= 0 or int(height) <= 0:
         raise ValueError("export width and height must be positive")

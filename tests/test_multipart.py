@@ -1,4 +1,4 @@
-"""Executable specification for multipart logical trials (DATA-21)."""
+"""Executable specification for multipart logical trials."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from scanpath_studio.synthetic import (
     MULTIPART_EXPECTED,
     make_multipart_synthetic_data,
 )
-from scanpath_studio.tabs import _build_compare_meta, _part_catalog_for_display
+from scanpath_studio.tabs import _build_compare_meta
 
 
 def _multipart_navigator_app():
@@ -61,18 +61,6 @@ def test_catalog_and_part_selection_preserve_order_geometry_and_clocks():
         int(fixations["timestamp_ms"].max()),
     ) == MULTIPART_EXPECTED["parent_timestamp_span"]
     assert fixations.groupby(SCREEN_ID)["screen_fixation_id"].min().eq(1).all()
-
-
-def test_multipleye_display_prefers_fixation_order_over_stale_word_order():
-    words, fixations = make_multipart_synthetic_data()
-    words = words.copy()
-    fixations = fixations.assign(screen_kind="reading")
-    words["screen_index"] = words["screen_index"].map({1: 2, 2: 1})
-
-    catalog = _part_catalog_for_display(words, fixations)
-
-    assert catalog[SCREEN_ID].tolist() == MULTIPART_EXPECTED["screens"]
-    assert catalog["screen_index"].tolist() == MULTIPART_EXPECTED["screen_indexes"]
 
 
 def test_scientific_enrichment_and_measures_never_cross_screen_boundary():
@@ -286,7 +274,7 @@ def test_parent_render_draws_only_the_chosen_screens():
 @pytest.mark.parametrize("with_figure", [True, False])
 def test_each_screens_plot_config_records_its_own_canvas(with_figure):
     """The config beside a screen's figure records that screen's canvas, not the
-    dataset's — with or without the figure (BUG-104)."""
+    dataset's — with or without the figure."""
     words, fixations = make_multipart_synthetic_data()
     payload, _ = bulk_export(
         api.list_trials(words, fixations),
@@ -339,11 +327,10 @@ def test_direct_comparison_selects_the_matching_screen_only():
 
 
 def test_comparison_lets_b_choose_its_own_screen_independent_of_a():
-    """UX-112: B's screen is its own choice, not A's forced onto it.
+    """B's screen is its own choice, not A's forced onto it.
 
-    Passing a `compare_screen` is now unconditionally B's own selection —
-    there is no "A's screen" concept left in `_build_compare_meta` at all —
-    so a value that would be meaningless as *A's* screen id (the fixture only
+    A `compare_screen` is always B's own selection — `_build_compare_meta` has
+    no notion of "A's screen" — so a value that would be meaningless as *A's* screen id (the fixture only
     has "intro"/"question") still works correctly as long as it identifies a
     real screen of B's own trial.
     """
@@ -365,12 +352,11 @@ def test_comparison_lets_b_choose_its_own_screen_independent_of_a():
 
 
 def test_cross_dataset_comparison_scopes_b_to_its_own_chosen_screen():
-    """The regression this fix exists for: a cross-dataset multipart B used to
-    come back as *every* screen concatenated (`compare_screen` was force-set
-    to `None` whenever `source is not None`) — each screen its own coordinate
-    space, silently mixed into one frame. B choosing its own screen applies
-    regardless of `source`, so a cross-dataset B is scoped exactly like a
-    same-dataset one."""
+    """A cross-dataset multipart B must not come back as *every* screen
+    concatenated (as it would if `compare_screen` were dropped whenever
+    `source is not None`) — each screen its own coordinate space, silently
+    mixed into one frame. B choosing its own screen applies regardless of
+    `source`, so a cross-dataset B is scoped exactly like a same-dataset one."""
     from scanpath_studio.compare_source import SecondaryDataset
     from scanpath_studio.experimental_setup import SetupSnapshot
 
@@ -414,7 +400,7 @@ def test_in_app_screen_navigator_keeps_parent_and_steps_in_recorded_order():
 def _two_screen_navigators_app():
     """Stand-ins for A's own navigator and B's (`key_prefix="single_compare"`)
     — the two real surfaces in Compare mode, each over its own multipart
-    trial (UX-112)."""
+    trial."""
     from scanpath_studio.multipart import part_catalog
     from scanpath_studio.synthetic import make_multipart_synthetic_data
     from scanpath_studio.tabs import _render_screen_navigator
@@ -426,7 +412,7 @@ def _two_screen_navigators_app():
 
 
 def test_as_and_bs_screen_navigators_stay_independent():
-    """UX-112: distinct keys, so stepping one never touches the other — the
+    """Distinct keys, so stepping one never touches the other — the
     same guarantee the trial pickers already have for A vs B."""
     from streamlit.testing.v1 import AppTest
 
@@ -453,9 +439,9 @@ def _single_screen_navigator_app():
 
 
 def test_the_screen_navigator_steps_with_no_slider():
-    """The screen navigator is a compact cell at the end of the trial row
-    (2026-10-07): a dropdown + ◀ ▶, with no scrubbing slider — a trial has few
-    screens. ◀ ▶ move ``single_screen_id``, and each end disables its step."""
+    """The screen navigator is a compact cell at the end of the trial row: a
+    dropdown + ◀ ▶, with no scrubbing slider — a trial has few screens. ◀ ▶ move
+    ``single_screen_id``, and each end disables its step."""
     from streamlit.testing.v1 import AppTest
 
     at = AppTest.from_function(_multipart_navigator_app).run()
@@ -469,7 +455,7 @@ def test_the_screen_navigator_steps_with_no_slider():
     assert not at.button(key="single_screen_previous").disabled
 
 
-def test_ux47_single_screen_trial_renders_no_slider():
+def test_single_screen_trial_renders_no_slider():
     """A one-option ``st.select_slider`` throws ``RangeError`` in the browser and
     blanks the tab. AppTest runs no frontend, so it cannot catch that directly —
     what it *can* pin is the guard: at one screen, no slider is built at all."""
@@ -481,7 +467,7 @@ def test_ux47_single_screen_trial_renders_no_slider():
     assert len(at.select_slider) == 0
 
 
-def test_ux47_screen_steps_live_in_a_railbtn_cluster():
+def test_screen_steps_live_in_a_railbtn_cluster():
     """The ◀ ▶ pair must sit in a ``railbtn_*`` container.
 
     That key is the whole mechanism behind the alignment: styles.py lays every
@@ -496,7 +482,7 @@ def test_ux47_screen_steps_live_in_a_railbtn_cluster():
     from scanpath_studio.tabs import _render_screen_navigator
 
     source = inspect.getsource(_render_screen_navigator)
-    # UX-112: the key is prefix-parameterized (A's own "single" default, B's
+    # The key is prefix-parameterized (A's own "single" default, B's
     # own "single_compare") rather than the literal "single_screen_trail" —
     # still a `railbtn_*` name, which is the part the shared CSS rule below
     # actually matches on.
@@ -509,11 +495,12 @@ def test_ux47_screen_steps_live_in_a_railbtn_cluster():
 
 
 def test_a_stamped_screen_order_survives_a_mapping_that_does_not_name_it():
-    """BUG-79: UX-88 took `screen_index` out of the mapping, trusting the corpora
-    that stamp it onto their frames — but normalization rebuilt the frame from
-    the mapping, so the stamp was dropped and order re-derived from row order.
-    MultiplEYE's per-reader question order then disagreed between the tables and
-    the 🗂️ Data page crashed. A schema without `screen_index` must keep it."""
+    """`screen_index` is not part of the mapping: the corpora that need it stamp
+    it onto their frames, and normalization, which rebuilds the frame from the
+    mapping, must keep that stamp rather than re-derive order from row order.
+    Otherwise MultiplEYE's per-reader question order disagrees between the
+    tables and the 🗂️ Data page crashes. A schema without `screen_index` must
+    keep it."""
     from scanpath_studio.data import normalize_words, propose_word_schema
 
     words, _ = make_multipart_synthetic_data()
@@ -530,10 +517,10 @@ def test_a_stamped_screen_order_survives_a_mapping_that_does_not_name_it():
 
 
 def test_an_unmapped_screen_index_column_does_not_make_a_table_multipart():
-    """DATA-59: with no screen field mapped, a raw `screen_index` column must not
-    ride through BUG-79's stamp path — it derived a `screen_id` from it, so an
-    AOI table stayed multipart after its screen fields were cleared, and the
-    pair was refused ("Multipart identity is present in only one report")."""
+    """With no screen field mapped, a raw `screen_index` column must not ride
+    through the stamp path above — deriving a `screen_id` from it would leave an
+    AOI table multipart after its screen fields were cleared, and the pair
+    would be refused ("Multipart identity is present in only one report")."""
     from scanpath_studio.data import normalize_fixations, normalize_words
     from scanpath_studio.multipart import has_screen_identity, validate_matching_parts
 
@@ -582,9 +569,9 @@ def test_an_unmapped_screen_index_column_does_not_make_a_table_multipart():
 
 
 def test_a_co_animation_draws_one_screen_of_a_multipart_second_reading():
-    """BUG-85: `trial_b=` cut B to one trial but kept every screen of it, so a
-    multipart B drew all its screens as one trail in A's coordinates — each
-    screen is its own coordinate space. B keeps its first recorded screen, as A
+    """`trial_b=` cuts B to one trial, and a multipart B must not draw all its
+    screens as one trail in A's coordinates — each screen is its own coordinate
+    space. B keeps its first recorded screen, as A
     does without `screen=` and as the app's B navigator starts; B frames cut to
     another screen with `extract_part` pick that one instead."""
     words, fixations = make_multipart_synthetic_data()
@@ -639,7 +626,7 @@ def _per_sentence_app():
 
 
 def test_per_sentence_keeps_each_screens_sentences_apart():
-    """BUG-109: sentence ids restart per screen, so a sentence is keyed by its
+    """Sentence ids restart per screen, so a sentence is keyed by its
     screen too — screen 1's sentence 1 is never averaged with screen 2's."""
     from streamlit.testing.v1 import AppTest
 

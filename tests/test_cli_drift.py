@@ -1,10 +1,10 @@
-"""ENG-22: drift correction (PRE-3) on the `render` CLI surface.
+"""Drift correction on the `render` CLI surface.
 
-`api.plot_scanpath` has taken `drift_correction=` / `drift_connectors=` since
-PRE-3 and the app exposes them under 👁️ Fixations ▾ → Drift correction, but the
-CLI had no matching flags. These tests pin the flags, their mapping onto the
-API call, the validation of the algorithm name, and the fact that leaving them
-off reproduces the uncorrected figure exactly.
+`api.plot_scanpath` takes `drift_correction=` / `drift_connectors=` and the app
+exposes them under 👁️ Fixations ▾ → Drift correction. These tests pin the
+matching `render` flags, their mapping onto the API call, the validation of the
+algorithm name, and the fact that leaving them off reproduces the uncorrected
+figure exactly.
 """
 
 from __future__ import annotations
@@ -96,7 +96,7 @@ def test_render_drift_algorithm_is_case_insensitive(tmp_path, monkeypatch):
 
 
 def test_render_without_drift_flags_keeps_api_defaults(tmp_path, monkeypatch):
-    """Backward compat: no flags → the API's own no-correction defaults."""
+    """No flags → the API's own no-correction defaults."""
     captured = _spy_static(monkeypatch)
     cli.main(["render", "--sample", "-o", str(tmp_path / "x.html")])
     assert captured["kwargs"]["drift_correction"] is None
@@ -149,7 +149,7 @@ def test_render_drift_connectors_without_algorithm_warns(tmp_path, monkeypatch, 
 
 def test_render_animate_warns_drift_is_ignored(tmp_path, monkeypatch, capsys):
     """animate_scanpath takes no drift parameters — say so instead of silently
-    dropping them (the VIZ-21 table: PRE-3 is static-only)."""
+    dropping them."""
     from scanpath_studio import api
 
     captured: dict = {}

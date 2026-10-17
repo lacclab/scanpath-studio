@@ -46,30 +46,53 @@ description: "Download Scanpath Studio for Windows, macOS or Linux, install it w
 
 </div>
 
-Local installs support public corpus downloads. The online demo has limited memory.
+## Your first figure { #explore }
 
-## Explore
+Start with the bundled [OneStop sample](guides/loading-data/index.md#onestop).
+No files to prepare: choose a look and save an interactive figure.
 
-The app opens with a small [OneStop sample](guides/loading-data/index.md#onestop).
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../assets/workflows/design-presets_poster.webp" data-autoplay
+       aria-label="Switching between Scanpath, Heatmap and Illustration designs">
+  <source src="../assets/workflows/design-presets.mp4" type="video/mp4">
+</video>
 
-1. Pick a trial above the plot.
-2. Toggle fixations, saccades, text, word boxes and heatmaps in Plot controls.
-3. Turn on Animate to replay the reading.
-4. Download a figure from Export.
-5. Add your own data with + → Import files.
+<div class="grid cards sps-first-figure" markdown>
 
-## Update { #updating }
+- **1 · Open a reading**
 
-Open :material/help: Help → :material/info: About → Check for updates.
-For the desktop app, choose Update & restart. With pip:
+    In Scanpath, keep **Bundled demo** selected. Use **Select trial** to choose a reading.
 
-```bash
-pip install -U scanpath-studio
-```
+- **2 · Choose a view**
+
+    Click **Heatmap** in Design presets to see where fixation time concentrates.
+    Switch to **Scanpath** to follow the sequence.
+
+- **3 · Save your figure**
+
+    Open **Export → Current figure**, choose **HTML**, then download.
+    Open the saved file to explore the figure in your browser.
+
+</div>
 
 ## Next steps
 
-- [Tutorials](tutorials/index.md): common research tasks
-- [Feature guides](guides/index.md): each view and its controls
-- [Plot gallery](gallery.md): example figures
-- [Python API](api.md) and [CLI reference](cli.md): full technical references
+<div class="grid cards" markdown>
+
+- **[Bring your own data](guides/loading-data/index.md#add-your-own-data)**
+
+    Import your recordings and check the column mapping.
+
+- **[Prepare a figure](tutorials/exporting-figures/export-one-figure.md)**
+
+    Choose a format and size for your paper or slides.
+
+- **[Explore more views](gallery.md)**
+
+    Try an example, then follow its app instructions or the [feature guides](guides/index.md).
+
+- **[Work in code](guides/scanpath-visualization/index.md#render-in-code)**
+
+    Reproduce a view in Python or with the CLI.
+
+</div>

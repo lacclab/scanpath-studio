@@ -1,4 +1,4 @@
-"""ENG-2: the OneStop per-participant shard fast-path.
+"""The OneStop per-participant shard fast-path.
 
 The full lacclab export is ~15 GB of CSV and takes ~3 min to load, so a
 deep-linked page reads one participant's Parquet shard instead

@@ -1,12 +1,11 @@
-"""#412 — a Corpus Analysis group is a set of readings, whichever table has its field.
+"""A Corpus Analysis group is a set of readings, whichever table has its field.
 
-Groups → *Independent filter sets* offers a condition from either table, but
-`aggregation.group_mask` skipped a column the frame it was given did not
-carry. A group defined on ``difficulty_level`` from the Words table therefore
-took *every* fixation: the Adv and Ele groups of the review's probe both
-pooled the 100 ms and the 300 ms fixation (200 ms, n = 2, twice), and each
-counted both readers. A group's fields are now resolved to ``(participant_id,
-trial_id)`` readings across both tables before any measure reads them.
+Groups → *Independent filter sets* offers a condition from either table. A
+group's fields are resolved to ``(participant_id, trial_id)`` readings across
+both tables before any measure reads them, so a group defined on
+``difficulty_level`` from the Words table takes only its own readings'
+fixations — never every fixation of a frame that lacks the column, which would
+pool both readers into both groups.
 """
 
 from __future__ import annotations
@@ -29,7 +28,7 @@ ELE = {"difficulty_level": ["Ele"]}
 
 
 def _frames(owner: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """The review's probe: two readers, one reading each, the condition on
+    """The probe: two readers, one reading each, the condition on
     ``owner``'s table only."""
     words = pd.DataFrame(
         {
@@ -63,7 +62,7 @@ class TestEitherTable:
         assert apply_group(words, adv.spec)["participant_id"].tolist() == ["p_adv"]
 
     def test_the_paired_bars_tell_the_groups_apart(self, owner):
-        """The review's acceptance: 100 ms for Adv, 300 ms for Ele."""
+        """Each group takes its own reading: 100 ms for Adv, 300 ms for Ele."""
         words, fixations = _frames(owner)
         bars = paired_group_summary(
             fixations,
@@ -91,7 +90,7 @@ class TestResolution:
         resolved = resolve_group_spec({"genre": ["news"]}, words, fixations)
         assert not resolved.available and resolved.missing == ("genre",)
         assert apply_group(fixations, resolved.spec).empty
-        # The primitive itself no longer skips a column the frame lacks.
+        # The primitive itself never skips a column the frame lacks.
         assert not group_mask(fixations, ADV).any()
 
     def test_a_reading_the_tables_disagree_on_is_left_out(self):
@@ -102,7 +101,7 @@ class TestResolution:
         assert resolved.spec == {READING_KEY: [("p_ele", "ele")]}
 
     def test_the_fields_and_existing_readings_intersect(self):
-        """A participant pick stays as it is; AN-31's readings intersect."""
+        """A participant pick stays as it is; a spec's own readings intersect."""
         words, fixations = _frames("words")
         spec = {**ADV, "participant_id": ["p_adv"]}
         resolved = resolve_group_spec(spec, words, fixations)

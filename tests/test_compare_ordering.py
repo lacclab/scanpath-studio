@@ -1,4 +1,4 @@
-"""CMP-6/CMP-10: comparison picker sorting mirrors the main trial picker."""
+"""Comparison picker sorting mirrors the main trial picker."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def options():
 
 @pytest.fixture
 def sort_keys():
-    # Keyed by reading, as `trial_sort_keys` gives them (#412).
+    # Keyed by reading, as `trial_sort_keys` gives them.
     diff, same, long = (
         reading_key("p3", "c-diff"),
         reading_key("p2", "c-same"),
@@ -66,7 +66,7 @@ class TestOrderCompareOptions:
         assert _ids(ordered) == ["c-long", "c-diff", "c-same", "c-other"]
 
     def test_readers_of_one_trial_id_sort_by_their_own_values(self):
-        """#412: B's candidates are readings, so a shared id is two of them."""
+        """B's candidates are readings, so a shared id is two of them."""
         options = [("p1", "t", "t [p1]", ""), ("p2", "t", "t [p2]", "")]
         keys = {"n": pd.Series({reading_key("p1", "t"): 5, reading_key("p2", "t"): 1})}
         ordered = _order_compare_options(options, "n", keys)
@@ -82,7 +82,7 @@ class TestOrderCompareOptions:
 
 
 def test_comparison_labels_stay_unique_when_the_qualified_form_is_taken():
-    """Round 11 #6: ``x [p2]`` as a real trial id must not swallow p2's ``x``."""
+    """``x [p2]`` as a real trial id must not swallow p2's ``x``."""
     import pandas as pd
 
     from scanpath_studio.utils import build_comparison_options

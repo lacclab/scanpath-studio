@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Re-capture the docs' app screenshots (ENG-78).
+"""Re-capture the docs' app screenshots.
 
 The feature guides each carry one or two screenshots of the running app. They
 are taken by this script rather than by hand, so that re-capturing them after a

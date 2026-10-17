@@ -1,13 +1,13 @@
-"""DATA-29 — a trial-grain metadata table, the sibling of DATA-20's participant one.
+"""A trial-grain metadata table, the sibling of the participant one.
 
-The rules it inherits are the ones worth pinning: a table is never broadcast onto
-the word/fixation frames, duplicate rows that *disagree* are dropped rather than
-resolved, and an empty constraint is "no constraint" rather than "only the rows
-this table happens to list".
+The rules it shares with the participant table are the ones worth pinning: a
+table is never broadcast onto the word/fixation frames, duplicate rows that
+*disagree* are dropped rather than resolved, and an empty constraint is "no
+constraint" rather than "only the rows this table happens to list".
 
-What is new here is the **key**, which is the user's call: a trial id alone
-(the table describes texts, and every reading of a text inherits its row) or a
-reader *and* a trial id (the table describes readings).
+What differs is the **key**: a trial id alone (the table describes texts, and
+every reading of a text inherits its row) or a reader *and* a trial id (the
+table describes readings).
 """
 
 from __future__ import annotations
@@ -100,7 +100,7 @@ class TestFiltering:
         assert matching == {("p1", "t1")}
 
     def test_a_range_keeps_the_unmeasured(self):
-        """UX-49's rule, one grain down: a range narrows, it does not exclude."""
+        """The range filters' rule, one grain down: a range narrows, it does not exclude."""
         built = metadata.build_trial_metadata(_table(), "trial", keys=KEYS)
         keys = KEYS | {("p1", "t9"), ("p2", "t9")}
         matching = metadata.trials_matching(
@@ -110,7 +110,7 @@ class TestFiltering:
         assert matching == {("p1", "t1"), ("p2", "t1"), ("p1", "t9"), ("p2", "t9")}
 
     def test_a_reader_keyed_range_drops_the_readings_outside_it(self):
-        """The round-7 example: p2 is described, out of range, and stays out.
+        """p2 is described, out of range, and stays out.
 
         p1 is in range, p3's score is missing and p4 has no row: both unknown,
         both kept under the range rule. Without ``keys`` the table's own rows

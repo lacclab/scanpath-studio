@@ -157,7 +157,7 @@ class TestPlotConfigRestore:
         assert ss["global_show_saccade_arrows"] is True
         assert ss["global_show_order"] is False
         assert ss["global_show_stimulus_image"] is True  # round-trips like raw_gaze
-        assert ss["global_anim_autoplay"] is False  # VIZ-10 autoplay round-trips
+        assert ss["global_anim_autoplay"] is False  # autoplay round-trips
         # coloring
         assert ss["global_heatmap_style"] == "Interpolated"
         assert ss["global_color_by"] == "pass_index"
@@ -177,15 +177,16 @@ class TestPlotConfigRestore:
         assert ss["global_canvas_height"] == 1080
         assert ss["global_x_field"] == "x"
         assert ss["global_y_field"] == "y"
-        # selection: single_trial_id holds the reading's option value (#412)
+        # selection: single_trial_id holds the reading's option value
         assert ss["single_select_trial_mode"] == "Trial"
         assert ss["single_trial_id"] == reading_key("p1", "t2")
         assert ss["_skipped"] == []
 
     def test_a_settings_file_leaves_the_column_mapping_alone(self):
-        """UX-179: the mapping is ✏️ Edit dataset → Download setup file's, not this file's.
+        """The mapping belongs to ✏️ Edit dataset → Download setup file, not to
+        this file.
 
-        An old session backup still carries one; restoring it as a settings
+        An old session backup may still carry one; restoring it as a settings
         file must not re-map the open dataset under the user.
         """
         config = _full_config()
@@ -195,8 +196,8 @@ class TestPlotConfigRestore:
 
     def test_restores_text_highlighting_but_not_annotations(self):
         # A schema-2 file also carries text sizing and highlighting, which
-        # re-apply — and annotations, which no longer do (UX-179: they are
-        # 🗂️ Data → Annotations' own file now).
+        # re-apply — and annotations, which do not (they are 🗂️ Data →
+        # Annotations' own file).
         config = dict(_full_config())
         config["schema"] = 2
         config["coloring"] = dict(
@@ -208,7 +209,7 @@ class TestPlotConfigRestore:
             stimulus_image_offset_y=-40.0,
             stimulus_image_scale=1.5,
             saccade_render_mode="Arc",
-            # Snap to line's key before schema 8 (#422) — migrated on read.
+            # Snap to line's key before schema 8 — migrated on read.
             fixation_snap_to_word=True,
             saccade_style="Dashed",
             saccade_width=4.0,
@@ -278,7 +279,7 @@ class TestPlotConfigRestore:
             }
         ]
         ss = _run(_restore_app, _config=config).session_state
-        assert ss["global_color_by"] == "line"  # "line" is a valid option now
+        assert ss["global_color_by"] == "line"  # "line" is a valid option
         assert ss["global_heatmap_norm"] == "Log"
         assert ss["global_scale_text_to_boxes"] is False
         assert ss["global_line_spacing"] == 2.5
@@ -303,7 +304,7 @@ class TestPlotConfigRestore:
         assert ss["global_highlight_text_color"] == "#fedcba"
         assert ss["global_bg_choice"] == "Custom…"
         assert ss["global_bg_custom"] == "#222222"
-        # BATCH A settings round-trip.
+        # Colorbar, symbol and span-border settings round-trip.
         assert ss["global_fixation_colorbar_orientation"] == "Horizontal"
         assert ss["global_fixation_colorbar_tickangle"] == 45
         assert ss["global_fixation_colorbar_tickfont_size"] == 14
@@ -356,7 +357,7 @@ class TestPlotConfigRestore:
             ),
             # No reader named, and two readers have `t1`: reported, not guessed.
             ({"trial_id": "t1"}, None, "belongs to 2 participants"),
-            # Named, the second reader of a shared id is that reader's (#412).
+            # Named, the second reader of a shared id is that reader's.
             (
                 {"participant_id": "p2", "trial_id": "t1"},
                 reading_key("p2", "t1"),
@@ -390,8 +391,8 @@ class TestPlotConfigRestore:
         assert ss["global_base_font_size"] == 72
 
     def test_malformed_numeric_fields_skipped_without_crashing(self):
-        # Guards the bug where int("abc") / int(None) raised and surfaced a
-        # Streamlit error page instead of skipping the field.
+        # int("abc") / int(None) must skip the field, never raise and surface
+        # a Streamlit error page.
         config = {
             "layers": {"words": False},
             "coloring": {"heatmap_style": "Interpolated", "fixation_range": ["lo", 9]},
@@ -509,7 +510,7 @@ class TestApplyUploadedPlotConfig:
 
 def test_build_studio_config_includes_provenance_and_round_trips():
     """The settings-file builder records provenance (app version, data source)
-    and is JSON-serializable. UX-179: it carries the figure only — no
+    and is JSON-serializable. It carries the figure only — no
     annotations, column mapping, metadata tables or saved designs."""
     import json
 
@@ -601,7 +602,7 @@ def test_build_studio_config_includes_provenance_and_round_trips():
         exported_at="2026-06-15T12:00:00",
         compare_styles=compare_styles,
     )
-    # ENG-11: the writer stamps the single-source-of-truth schema constant, so
+    # The writer stamps the single-source-of-truth schema constant, so
     # writer + reader can't drift when the version is bumped.
     from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
 
@@ -624,7 +625,8 @@ def test_build_studio_config_includes_provenance_and_round_trips():
     assert cfg["text"]["text_color"] == "#010203"
     assert cfg["highlighting"]["highlight_text_color"] == "#fedcba"
     assert cfg["highlighting"]["background_color"] == "#222222"
-    # BATCH A settings + per-scanpath comparison styling must be captured too.
+    # Colorbar / symbol / span-border settings + per-scanpath comparison
+    # styling must be captured too.
     assert cfg["coloring"]["fixation_colorbar_orientation"] == "Horizontal"
     assert cfg["coloring"]["fixation_colorbar_tickangle"] == 30
     assert cfg["coloring"]["fixation_colorbar_tickfont_size"] == 14
@@ -675,8 +677,8 @@ def _collect_mapping_app():
 
 def test_collect_column_mapping_excludes_uploader_widgets():
     """The mapping sweep must drop the upload boxes' file_uploader widgets, whose
-    UploadedFile values aren't JSON-serializable (regression: Save & restore
-    download crashed with an active upload)."""
+    UploadedFile values aren't JSON-serializable (Save & restore download
+    would crash with an active upload)."""
     import json
 
     at = AppTest.from_function(_collect_mapping_app)
@@ -691,7 +693,7 @@ def test_collect_column_mapping_excludes_uploader_widgets():
 
 
 class TestConfigMigration:
-    """ENG-11: the Save & restore JSON is versioned. An older upload is upgraded
+    """The Save & restore JSON is versioned. An older upload is upgraded
     to the current schema before its fields are read; a newer upload restores
     best-effort with a warning. These exercise the pure migration core directly
     (no Streamlit runtime) plus two end-to-end restores."""
@@ -774,8 +776,8 @@ class TestConfigMigration:
         assert migrated["future_only"] == 1
 
     def test_a_schema_7_snap_above_words_still_snaps(self):
-        """#422: "Snap above words" became Snap to line, so a file that
-        snapped restores snapped rather than silently unsnapped."""
+        """Schema 7's "Snap above words" is read as Snap to line, so a file
+        that snapped restores snapped rather than silently unsnapped."""
         from scanpath_studio.url_state import _migrate_plot_config
 
         migrated, note = _migrate_plot_config(
@@ -856,7 +858,7 @@ class TestConfigMigration:
         assert not any("newer version" in t.value for t in at.toast)
 
 
-# --- BUG-72: what the saved config and the recovery cache used to leave out ---
+# --- What the saved config and the recovery cache must not leave out --------
 
 
 def _minimal_figure_settings(**extra) -> dict:
@@ -916,8 +918,8 @@ def _build_config_app():
 @pytest.mark.timeout(60)
 class TestSavedStateCoverage:
     def test_the_raw_gaze_layer_is_saved_as_its_switch(self):
-        """Saving on a trial without raw gaze used to record the layer as off —
-        the figure's *effective* value (switch AND samples), not the switch."""
+        """Saving on a trial without raw gaze records the layer's switch, not
+        the figure's *effective* value (switch AND samples), which reads off."""
         from scanpath_studio.session_keys import SINGLE_PLAYBACK_SPEED
 
         at = _run(
@@ -930,7 +932,7 @@ class TestSavedStateCoverage:
         assert at.session_state["global_show_raw_gaze"] is True
 
     def test_the_file_holds_what_share_file_says_it_does(self):
-        """UX-199: Share → File says the file has the figure settings, recording
+        """Share → File says the file has the figure settings, recording
         setup and trial selection, and no trial filters, cohorts, annotations,
         column mapping or data — so a filter set in the session stays out."""
         import json
@@ -1005,7 +1007,7 @@ def test_the_recovery_cache_keeps_compare_mode_and_the_replay_speed(tmp_path):
     assert {key: restored.get(key) for key in expected} == expected
 
 
-# --- BUG-73: an annotations-only backup restores annotations, nothing else ---
+# --- An annotations-only backup changes no view settings ---------------------
 
 
 def test_migrating_an_annotations_only_file_adds_no_plot_section():
@@ -1018,10 +1020,10 @@ def test_migrating_an_annotations_only_file_adds_no_plot_section():
 
 @pytest.mark.timeout(60)
 def test_restoring_annotations_leaves_the_view_settings_alone():
-    """BUG-73: the 2→3 migration stamped `axes` onto every v2 file, which made
-    the reader treat notes-only JSON as a full plot config and reset the grid,
-    illustration label, preprocessing and title to their defaults. Since UX-179
-    the notes themselves are not applied either — the file is a no-op."""
+    """The 2→3 migration must not stamp `axes` onto every v2 file: the reader
+    would then treat notes-only JSON as a full plot config and reset the grid,
+    illustration label, preprocessing and title to their defaults. The notes
+    themselves are not applied either — the file is a no-op."""
     seeded = {
         "global_show_coordinate_grid": True,
         "global_coordinate_grid_auto": False,

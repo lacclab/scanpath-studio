@@ -53,7 +53,7 @@ def main() -> None:
     def _progress(done: int, total: int) -> None:
         print(f"\r  frame {done}/{total}", end="", flush=True)
 
-    # The clip keeps the replay's own clock (BUG-93): reading time / speed.
+    # The clip keeps the replay's own clock: reading time / speed.
     data = export_animation(
         fig,
         fmt="gif",

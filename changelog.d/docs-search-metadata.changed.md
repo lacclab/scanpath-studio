@@ -1,1 +1,0 @@
-Every docs page has its own search title and description, the home page carries a schema.org record for search engines, and the PyPI and Zenodo keywords cover eye trackers, eye movements, gaze, fixations and saccades.

@@ -1,10 +1,9 @@
 """Compare mode warns when the two readings are of **different texts**.
 
 The overlay draws both scanpaths over one set of word boxes, so a mismatched
-pair is not merely uninformative — it is misleading. The note used to exist for
-the animated co-replay only, and only inside the rail's Playback popover; these
-pin the wording and the fact that a matching pair stays quiet. A split layout
-gives each panel its own stimulus, so it says nothing (CMP-23).
+pair is not merely uninformative — it is misleading. These pin the wording and
+the fact that a matching pair stays quiet. A split layout gives each panel its
+own stimulus, so it says nothing.
 """
 
 from __future__ import annotations
@@ -25,9 +24,9 @@ streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 #: configurations as the assertions actually need. Compare mode needs a pool with
 #: more than one trial, so these have to boot the **demo** rather than the
 #: synthetic source the rest of the AppTest suite leans on, which means rendering
-#: every tab over a large dataset. Each boot is therefore a real exposure to
-#: ENG-50 (#152), where an occasional `AppTest` boot hangs until its timeout for
-#: reasons that have nothing to do with this file, so the fewer boots the better.
+#: every tab over a large dataset. Each boot is slow, and an occasional `AppTest`
+#: boot can hang until its timeout for reasons that have nothing to do with this
+#: file, so the fewer boots the better.
 #:
 #: Two suffice. The animating one is seeded with a **non-default** layout, which
 #: lets one run answer all three of "is View greyed", "is Stimulus from still
@@ -78,8 +77,8 @@ class TestDifferentTextsNote:
 
 
 class TestAnimateKeepsTheCompareSettingsOnScreen:
-    """UX-140: Animate used to delete **View** and **Stimulus from** from the
-    Compare ▾ popover. Both render now — one greyed, one live."""
+    """Under Animate, **View** and **Stimulus from** stay in the Compare ▾
+    popover — one greyed, one live."""
 
     def test_the_layout_control_renders_and_is_greyed_under_animate(self):
         at = _compare_app(animate=True, layout="Side by side")
@@ -93,8 +92,8 @@ class TestAnimateKeepsTheCompareSettingsOnScreen:
 
     def test_stimulus_from_stays_usable_under_animate(self):
         """`make_scanpath_animation` reads `compare_stimulus` — it is what stops
-        a cross-dataset co-replay running B's trace over A's text — so hiding it
-        was a bug, not a gate."""
+        a cross-dataset co-replay running B's trace over A's text — so it stays
+        live; hiding it would be a bug, not a gate."""
         at = _compare_app(animate=True, layout="Side by side")
         pick = next(w for w in at.segmented_control if w.key == SINGLE_COMPARE_STIMULUS)
         assert not pick.disabled

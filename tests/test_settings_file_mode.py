@@ -1,8 +1,8 @@
 """A settings file puts the figure back in the mode it was saved in (schema 6).
 
-Share → File used to save A's selection and Compare's *styles* but neither the
-Animate / Compare switches nor which reading B was, so a comparison reopened as
-a single static scanpath — or, in an open session, as A beside whatever B was
+Share → File saves the Animate / Compare switches and which reading B is, beside
+A's selection and Compare's *styles*, so a comparison reopens as one — not as a
+single static scanpath or, in an open session, as A beside whatever B was
 already selected. These drive the real writer (the Share → File panel in the
 full app) and the real reader (a fresh app session handed the file), on a
 multipart dataset so B's second screen is part of the round trip.
@@ -239,9 +239,9 @@ class TestSettingsFileMode:
 @pytest.mark.timeout(300)
 def test_a_settings_file_restores_with_the_preprocessing_panel_shown(monkeypatch):
     """With `SCANPATH_EXPERIMENTAL=1` the 🧹 Preprocessing widgets render before
-    the settings restore runs. Writing their keys then raised "cannot be
-    modified after the widget … is instantiated" and the whole file was refused;
-    they are now staged and applied before those widgets on the next run."""
+    the settings restore runs, and writing their keys then would raise "cannot
+    be modified after the widget … is instantiated" and refuse the whole file;
+    so they are staged and applied before those widgets on the next run."""
     monkeypatch.setenv("SCANPATH_EXPERIMENTAL", "1")
     config = _save(monkeypatch, animate=False, compare=False)
     config["preprocessing"] = {

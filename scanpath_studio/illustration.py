@@ -1,4 +1,4 @@
-"""Detection policy for schematic/altered scanpath labels (VIZ-22)."""
+"""Detection policy for schematic/altered scanpath labels."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from .constants import AUTHOR_CHOICE, SYNTHETIC_CHOICE
 
 #: The reason recorded when *Show* labels a figure nothing was detected on; the
-#: figure draws "Illustration" alone for it (#374).
+#: figure draws "Illustration" alone for it.
 MANUAL_LABEL_REASON = "manual label"
 
 
@@ -26,22 +26,20 @@ def illustration_reasons(
 ) -> list[str]:
     """Return visible, substantive transformations; ignore cosmetic styling.
 
-    #422: VIZ-9's Snap to line and arced saccades count only where they change
-    what is drawn — on the static figure (``static``; the replay and the
-    comparison draw neither) and while the layer each one moves is on: the
-    snap moves the fixations (``show_fixations``), the arcs the saccades
-    (``show_saccades``). Either layer off, the setting is kept but inert.
+    Snap to line and arced saccades count only where they change what is
+    drawn — on the static figure (``static``; the replay and the comparison
+    draw neither) and while the layer each one moves is on: the snap moves the
+    fixations (``show_fixations``), the arcs the saccades (``show_saccades``).
+    Either layer off, the setting is kept but inert.
 
-    CMP-24: in Compare, scanpath B has filters of its own —
-    ``fixation_flags_b`` and a window ``fix_index_range_b`` against B's
-    ``full_fixation_range_b`` — and either one alters the figure as much as A's
-    does, so it discloses the same way.
+    In Compare, scanpath B has filters of its own — ``fixation_flags_b`` and a
+    window ``fix_index_range_b`` against B's ``full_fixation_range_b`` — and
+    either one alters the figure as much as A's does, so it discloses the same
+    way.
 
-    VIZ-45: raw gaze is never a reason. The samples are drawn as recorded —
-    nothing in the app derives fixations (or anything else) from them — so a
-    figure of raw gaze alone is the least transformed figure there is, and the
-    "derived from raw gaze" reason it used to carry named a derivation that
-    never happened."""
+    Raw gaze is never a reason. The samples are drawn as recorded — nothing in
+    the app derives fixations (or anything else) from them — so a figure of
+    raw gaze alone is the least transformed figure there is."""
     reasons: list[str] = []
     if (
         static
@@ -74,8 +72,8 @@ def illustration_reasons(
         for window, full in windows
     ):
         reasons.append("fixation subset")
-    # #374: the app's own made-up sources only, never a user's dataset whose
-    # name happens to contain "synthetic" or "author".
+    # The app's own made-up sources only, never a user's dataset whose name
+    # happens to contain "synthetic" or "author".
     if synthetic or data_source in (SYNTHETIC_CHOICE, AUTHOR_CHOICE):
         reasons.append("synthetic source")
     playback_speed = settings.get("playback_speed", 1.0)

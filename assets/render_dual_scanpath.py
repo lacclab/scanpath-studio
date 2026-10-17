@@ -1,9 +1,8 @@
-"""ENG-16: render the dual-reader README still + docs GIF from the real pipeline.
+"""Render the dual-reader README still + docs GIF from the real pipeline.
 
 Run from the repo root: ``python assets/render_dual_scanpath.py``.
 
-The previous assets were hand-made and didn't correspond to any real reading.
-These build the actual figures the app draws — two readers of the same bundled
+These are the actual figures the app draws — two readers of the same bundled
 demo paragraph — so the README and the docs site show what the tool produces.
 The GIF needs Kaleido + a system Chrome (``plotly_get_chrome -y``); the still
 does not.
@@ -88,8 +87,8 @@ def render_still(words_pair, fix_pair, canvas) -> None:
         STILL_OUT, width=fig.layout.width, height=fig.layout.height, scale=2
     )
     # 2x for crisp text on a HiDPI screen, then quantized: flat colour over white,
-    # so a 256-entry palette is visually lossless and ~5x smaller — which is the
-    # whole point of ENG-16 (the README shouldn't be megabytes).
+    # so a 256-entry palette is visually lossless and ~5x smaller — the README
+    # shouldn't be megabytes.
     Image.open(STILL_OUT).convert("RGB").quantize(
         colors=256, method=Image.MEDIANCUT
     ).save(STILL_OUT, optimize=True)

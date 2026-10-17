@@ -3,27 +3,24 @@
 # Working agreements
 
 `@AGENTS.md` (imported above) is the architecture + conventions map — modules,
-pipeline, canonical columns, code style, the "adding a new …" patterns, and
-releasing. This file adds the cross-cutting workflow rules every contributor
-should follow. The detailed per-module reference + gotchas live in
-[`scanpath_studio/CLAUDE.md`](scanpath_studio/CLAUDE.md) (loads automatically when
-you work under `scanpath_studio/`); contributor setup is in
-[`CONTRIBUTING.md`](CONTRIBUTING.md).
+pipeline, canonical columns, code style, gotchas, the "adding a new …" recipes,
+and releasing. This file adds the workflow rules every contributor follows.
+Contributor setup is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Before every commit / push
 
-- **Run ruff first — always.** `ruff check .` and
-  `ruff format .`. CI's Lint job gates on **both**, so a
-  missed format fails the build. Don't skip it, even for "docs-only" changes.
-- **Add a changelog fragment, never edit `CHANGELOG.md`** (ENG-86). Each item is
-  one file, `changelog.d/<issue>.<group>.md` (`341.fixed.md`; several issues
-  join with `+`), or `changelog.d/<slug>.<group>.md` when there is no issue —
-  the release cites the PR that merged it. It holds one line of plain text: what
+- **Run ruff first — always.** `ruff check .` and `ruff format .`. CI's Lint
+  job gates on **both**, so a missed format fails the build, even for a
+  docs-only change.
+- **Add a changelog fragment, never edit `CHANGELOG.md`.** Each item is one
+  file, `changelog.d/<issue>.<group>.md` (`341.fixed.md`; several issues join
+  with `+`), or `changelog.d/<slug>.<group>.md` when there is no issue — the
+  release cites the PR that merged it. It holds one line of plain text: what
   changed, for the user, with no bullet and no number. Groups are Keep a
-  Changelog's (`added` / `changed` / `fixed`, …). `/release` writes the fragments
-  into `CHANGELOG.md`, so parallel PRs never conflict over it. One line per
-  item, no long form: the reasoning goes in the PR description, or the issue
-  when there is one. See `changelog.d/README.md`.
+  Changelog's (`added` / `changed` / `fixed`, …). `/release` writes the
+  fragments into `CHANGELOG.md`, so parallel PRs never conflict over it. The
+  reasoning goes in the PR description, or the issue when there is one. See
+  `changelog.d/README.md`.
 - **Never add a `Co-Authored-By: Claude …` trailer** (or any AI co-author line)
   to commit messages.
 
@@ -39,6 +36,10 @@ you work under `scanpath_studio/`); contributor setup is in
   to an exact version (the `lint` extra in `pyproject.toml` and the workflows),
   because an unpinned linter reds a branch that changed nothing. Bump those
   deliberately, in their own commit, with whatever their new rules find.
+- **Comments describe the code as it is now.** Explain what it does and why —
+  the constraint, the quirk, the invariant. No issue numbers, dates, review
+  rounds or "used to" history in comments, docstrings or docs: that belongs in
+  the commit message, the PR and the issue.
 
 ## Dev loop
 
@@ -50,39 +51,28 @@ you work under `scanpath_studio/`); contributor setup is in
   the live preview is slow to spin up.
 - **The spatial plot must stay on `tabs._render_true_scale_chart`** (never
   `st.plotly_chart`; the cached replay uses its two halves,
-  `_true_scale_plot_html` + `_render_true_scale_plot` — PERF-16), and
-  deep-link / restore relies on the `global_*` /
-  `single_*` / `filter_*` widget keys — don't rename them. More in
-  `scanpath_studio/CLAUDE.md → Gotchas`.
+  `_true_scale_plot_html` + `_render_true_scale_plot`), and deep-link / restore
+  relies on the `global_*` / `single_*` / `filter_*` widget keys — don't rename
+  them. More under *Gotchas* in `@AGENTS.md`.
 
 ## Tracking work
 
 - **Work lives in [GitHub Issues](https://github.com/lacclab/scanpath-studio/issues)**,
   arranged on the **[Scanpath Studio board](https://github.com/orgs/lacclab/projects/5)**
   (project 5). `gh issue view <n>`, `gh issue create`,
-  `gh project item-list 5 --owner lacclab`. The in-repo tracker that preceded
-  them was migrated on 2026-08-20 (ENG-32) and removed on 2026-09-30 (ENG-84) —
-  see *The archive* at the end of this section.
-- **GitHub's own `#N` is the ID** (since 2026-10-03). New issues get a plain
-  title, no `[PREFIX-N]`, and commits, PRs, fragments and prose cite `#N`.
-  Nothing has to be allocated, so parallel sessions cannot collide. The
-  `[VIZ-37]`-style IDs were the old tracker's and are retired: never mint a new
-  one. The ones already written down stay as they are — the changelog, the docs,
-  the `plans/` notes, code comments, git history and the titles of the issues
-  that carry one still cite them, and `gh issue list --state all --search
-  "VIZ-37"` (or `git log --grep VIZ-37`) still finds them. Don't rewrite old
-  citations; cite `#N` in new text, alongside an old ID only when it is the
-  thing a reader would search for.
-- **Not every change gets an issue, and that is deliberate.** Work that is picked
-  up and finished inside one session, whose reasoning fits in its PR
-  description, is cited by its PR number — its changelog fragment takes a slug
-  name and the release fills the PR number in. An issue is opened when an item
-  needs something an issue is *for*: when it reaches **Review** (the approval
-  gate — the user's sign-off has to have somewhere to happen), when it is
-  blocked on a decision only the user can make (`waiting-on-you`), or when it is
-  carried across sessions and needs a place to hold the brief. Confirmed with
-  the user on 2026-08-28. If you are unsure, open the issue — the cost of one
-  extra is far below the cost of shipping something past the review gate.
+  `gh project item-list 5 --owner lacclab`.
+- **GitHub's own `#N` is the ID.** Issues get a plain title, and commits, PRs
+  and changelog fragments cite `#N`. Older issues and git history also carry
+  `[VIZ-37]`-style IDs from an earlier tracker; never mint a new one, and
+  `gh issue list --state all --search "VIZ-37"` still finds the issue.
+- **Not every change gets an issue.** Work picked up and finished inside one
+  session, whose reasoning fits in its PR description, is cited by its PR
+  number — its changelog fragment takes a slug name and the release fills the
+  PR number in. Open an issue when an item needs what an issue is *for*: when it
+  reaches **Review** (the approval gate — the sign-off needs somewhere to
+  happen), when it is blocked on a decision only the user can make
+  (`waiting-on-you`), or when it is carried across sessions and needs a place to
+  hold the brief. If you are unsure, open the issue.
 - **Prefer GitHub's structured fields to labels.** Status, priority and kind are
   native — the board's `Status` and `Priority` single-selects and the org's
   issue types — so they are *not* also labels. Only two labels remain, for the
@@ -99,22 +89,18 @@ you work under `scanpath_studio/`); contributor setup is in
     with `gh api -X PATCH repos/lacclab/scanpath-studio/issues/<n> -f type=Task`.
   - **Area** → an `area:*` label (`ux`, `compare`, `viz`, `data`, `perf`,
     `analysis`, `preprocessing`, `export`, `validation`, `bug`, `engineering`).
-    It stays a label because there is no field for it.
   - **Blocking the user** → the `waiting-on-you` label; see below.
 - **Approval gate.** Finishing implementation means board Status **Review** with
   the issue **open** — never close it yourself. Closing *is* the sign-off, and it
   is the user's to make. An issue closed without being implemented says why in a
-  closing comment and uses `--reason "not planned"`. This is the gate that makes
-  an issue *required*: an item you are handing back for review needs one, even
-  when it was started an hour ago and finished in the same session — create it
-  at Review rather than leaving the hand-off in chat.
+  closing comment and uses `--reason "not planned"`.
 - **Claim it and move it to *In progress* when you pick it up**, not when you
   finish: `gh issue edit <n> --add-assignee @me`, and set the board's Status.
-  Several sessions and two people share this repo; an unassigned issue reads as
+  Several people and sessions share this repo; an unassigned issue reads as
   unclaimed work.
 
-**Write-up shape.** The issue body is the same four sections the tracker used,
-as markdown headings, in this order:
+**Write-up shape.** The issue body has four sections, as markdown headings, in
+this order:
 
 1. `## Request` — what was asked for, in the asker's terms. **Required.**
 2. `## What was done` — what actually shipped.
@@ -123,35 +109,27 @@ as markdown headings, in this order:
    honestly says "Nothing." — the review is not developer work.
 4. `## Background` — anchors, design calls, gotchas, related issues.
 
-An optional `> blockquote` lede above them is the status / "update as of ⟨date⟩"
-line. A backlog issue has only *Request* (+ *Background*); the middle two are
-required once it reaches *In progress* or *Review*. Link code with
-full blob URLs (`https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/plots.py#L339`)
+An optional `> blockquote` lede above them carries the current status. A backlog
+issue has only *Request* (+ *Background*); the middle two are required once it
+reaches *In progress* or *Review*. Link code with full blob URLs
+(`https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/plots.py#L339`)
 — a relative path renders dead in an issue.
 
 **Waiting on you.** Everything only the *user* can decide goes in one place: a
 `### ⚖ Waiting on you` checklist at the top of the body, plus the
-`waiting-on-you` label — a label rather than a field precisely so
-`gh issue list --label waiting-on-you` answers "what is holding on me" without a
-project call. That covers the design calls that block the work *and*, once it
-is built, the ask to review — name the judgement calls you made and the surfaces
-to click. An issue in *Review* always has at least that entry. Clear an
-item the moment it is answered — tick the box, and record the call under
-*Background* in the same edit — including when you settled it yourself.
+`waiting-on-you` label, so `gh issue list --label waiting-on-you` answers "what
+is holding on me" without a project call. That covers the design calls that
+block the work *and*, once it is built, the ask to review — name the judgement
+calls you made and the surfaces to click. An issue in *Review* always has at
+least that entry. Clear an item the moment it is answered — tick the box, and
+record the call under *Background* in the same edit — including when you
+settled it yourself.
 
 **Keep it current *while* you work.** One commit per feature or fix, not one per
-session, and put the issue in the commit subject — `(#341)` — so the issue and
-the code stay findable from each other (with no issue, the PR's squash-merge
-subject carries its own number). Notice an unrelated problem? Fix it on the spot if it
+session, with the issue in the commit subject — `(#341)` — so the issue and the
+code stay findable from each other (with no issue, the PR's squash-merge subject
+carries its own number). Notice an unrelated problem? Fix it on the spot if it
 is small, otherwise `gh issue create` so it does not get lost.
-
-**The archive.** The 320 items closed before the migration, with their full
-write-ups, lived in `tracker/` until ENG-84 removed it (2026-09-30). They are
-still at the `v0.31.2` tag —
-[`tracker/`](https://github.com/lacclab/scanpath-studio/tree/v0.31.2/tracker), or
-`git show v0.31.2:tracker/data.js` — with `migrated.json` mapping each ID that
-moved to its issue and `to_github_issues.py` as the record of how the move was
-made. Look an old ID up there; nothing new goes into it.
 
 ## On release
 
@@ -161,15 +139,14 @@ See *Releasing* in `@AGENTS.md`: bump `__release__` in
 
 ## Repo automation (`.claude/`)
 
-- **Skills** — `/release`, `/track`, `/new-feature`, `/preflight`,
-  `/paper-figs` and `/gazegenie` package the workflows above; invoke them
-  instead of re-deriving the steps.
+- **Skills** — `/release`, `/track`, `/new-feature` and `/preflight` package the
+  workflows above; invoke them instead of re-deriving the steps.
 - **Hook** — every edited `.py` file is auto-run through `ruff format` +
   `ruff check` (`.claude/hooks/ruff-on-edit.sh`); fix what it reports
   immediately rather than batching.
 - **Subagents** — `surface-parity-reviewer` (four-surface rule, wire-format
   keys, true-scale chart path) and `perf-reviewer` (`@st.cache_data` +
-  `frame_fingerprint` conventions) review a diff; run both before setting a
-  tracker item to *Review*.
+  `frame_fingerprint` conventions) review a diff; run both before setting an
+  issue to *Review*.
 - **Guardrails** — edits to `uv.lock`, `site/`, and `*.egg-info` are denied
   in `.claude/settings.json`; they are generated artifacts.

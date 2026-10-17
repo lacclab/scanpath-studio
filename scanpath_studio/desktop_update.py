@@ -1,9 +1,8 @@
-"""One-click *Update & restart* for the desktop app (#385).
+"""One-click *Update & restart* for the desktop app.
 
 Only the frozen bundle can replace itself, so this belongs to the desktop app
 alone: Help → About → *Check for updates* → **Update & restart**, or
-``ScanpathStudio --update`` headless. The design is Section 3 of
-``plans/139-build-versions-and-updates.md``:
+``ScanpathStudio --update`` headless. An update runs in five steps:
 
 1. :func:`refusal` — can this install update itself at all?
 2. :func:`download` the release's archive and check its sha256 against the
@@ -843,7 +842,7 @@ def relaunch_command(
 
 
 _SH_HELPER = r"""#!/bin/sh
-# Scanpath Studio's update helper (#385), written by desktop_update.helper_script.
+# Scanpath Studio's update helper, written by desktop_update.helper_script.
 # Waits for the app to quit, swaps the new version in, relaunches it, and puts
 # the old version back if the new one never reports in.
 APP_PID=@@PID@@
@@ -994,7 +993,7 @@ rm -f "$STATE/@@PENDING@@" "$STATE/started" "$STATE/booted" "$STATE/helper-start
 log "done"
 """
 
-_PS_HELPER = r"""# Scanpath Studio's update helper (#385), written by desktop_update.helper_script.
+_PS_HELPER = r"""# Scanpath Studio's update helper, written by desktop_update.helper_script.
 # Waits for the app to quit, swaps the new version in, relaunches it, and puts
 # the old version back if the new one never reports in. Windows PowerShell 5.1.
 $AppPid = @@PID@@

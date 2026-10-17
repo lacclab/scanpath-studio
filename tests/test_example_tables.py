@@ -1,4 +1,4 @@
-"""DATA-67: the example import pair, and *Available with this dataset*.
+"""The example import pair, and *Available with this dataset*.
 
 The synthetic trial as an AOI table and a fixation table (`synthetic.py`) that
 import with no manual mapping — the auto-detection's own end-to-end check. Once
@@ -102,7 +102,7 @@ class TestTheWizard:
         return at
 
     def test_the_wizard_offers_no_example_download(self, monkeypatch):
-        """Removed from the add screen (the user's call, 2026-10-09)."""
+        """The add screen offers no example download."""
         at = self._boot(monkeypatch, {})
         at.run(timeout=90)
         assert not at.exception, at.exception

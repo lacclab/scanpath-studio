@@ -47,23 +47,22 @@ from .multipart import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# PERF-3. Per-run memo, `id(frame) -> (frame, fingerprint)`.
+# Per-run memo, `id(frame) -> (weakref, fingerprint)`.
 #
-# Once the expensive subtabs went lazy the biggest remaining cost in a rerun was
-# the cache keys themselves: ~26 calls, 43% of the run, and the same handful of
-# frame OBJECTS over and over — every `_c_*` wrapper re-fingerprints the words
-# and fixations frames `app.main` loaded once. Hashing the same object twice in
-# one run cannot produce two answers, so the second hash onwards is pure waste.
+# The cache keys themselves are a large share of a rerun: ~26 calls, on the
+# same handful of frame OBJECTS over and over — every `_c_*` wrapper
+# re-fingerprints the words and fixations frames `app.main` loaded once.
+# Hashing the same object twice in one run cannot produce two answers, so the
+# second hash onwards is pure waste.
 #
 # Entries hold a **weak** reference to the frame, and the `is` re-check below is
 # what makes an `id()` key safe: a collected frame's id may be reissued to
 # another object, but the entry's ref is dead by then, so the lookup misses. A
-# strong reference would work too — and did, at first — but it pins every frame
-# it has seen. That is worse than it sounds here: `st.cache_data` hands out a
-# fresh object per call, so each run's corpus frames are new objects, and a
-# strong memo kept up to `_FINGERPRINT_MEMO_MAX` of them alive from the end of
-# one run until the top of the next — i.e. for a session's whole idle time, on
-# frames that used to be freed the moment `main()` returned.
+# strong reference would pin every frame it has seen: `st.cache_data` hands out
+# a fresh object per call, so each run's corpus frames are new objects, and a
+# strong memo would keep up to `_FINGERPRINT_MEMO_MAX` of them alive from the
+# end of one run until the top of the next — i.e. for a session's whole idle
+# time, on frames that would otherwise be freed the moment `main()` returns.
 #
 # `threading.local` scopes it to the ScriptRunner thread — one per Streamlit
 # session — so two sessions never share entries and one session's reset can't
@@ -74,7 +73,7 @@ _LOGGER = logging.getLogger(__name__)
 # identity either way, and those frames are the ones about to be reused.)
 #
 # THE ASSUMPTION: a fingerprinted frame is not mutated **in place** part-way
-# through a run. That holds today — the frames the app fingerprints are built by
+# through a run. The frames the app fingerprints are built by
 # `normalize_*` / `filter_*` / `.copy()` and then only read; helpers that add
 # columns (`aggregation.py`) do it to a local copy. A frame with an *assigned*
 # fingerprint (`_STABLE_FINGERPRINTS` below) relies on the same thing for as
@@ -86,12 +85,12 @@ _FINGERPRINT_MEMO = threading.local()
 #: reaches `reset_fingerprint_memo`: keep the memo from growing without bound.
 #: A rerun makes ~26 calls, so the app never reaches this; a bulk export does
 #: (`compute_word_metrics` adds two entries per trial), which is why eviction is
-#: least-recently-used rather than clear-everything — the latter threw away the
-#: hot corpus frames to make room for per-trial temporaries.
+#: least-recently-used rather than clear-everything — the latter would throw
+#: away the hot corpus frames to make room for per-trial temporaries.
 _FINGERPRINT_MEMO_MAX = 64
 
 
-#: PERF-10 → BUG-103: fingerprints the app *knows* rather than computes, so a
+#: Fingerprints the app *knows* rather than computes, so a
 #: large frame is not re-hashed on every rerun. `id → (weakref, fingerprint |
 #: None)`; the weak ref is what makes the id key safe (a reissued id finds a
 #: dead ref), so an entry lives exactly as long as its frame. Three kinds:
@@ -113,15 +112,15 @@ _STABLE_FINGERPRINTS: dict[int, tuple[weakref.ref, tuple | None]] = {}
 #: Dead entries are swept once the registry grows past this. Not a cap — an
 #: entry is only bookkeeping for a frame that is still alive.
 _STABLE_FINGERPRINTS_SWEEP = 64
-#: UX-166 fix-round-2 (Ruling T5-6): guards every iteration/mutation of
-#: `_STABLE_FINGERPRINTS` above. The dict is process-wide, so two script runs
-#: can reach `_register_fingerprints` at once — a superseded run's build publishing
-#: beside the run that replaced it, or two sessions' runs — though no build is
-#: ever shared *across* sessions (`frame_cache`'s identity includes the
-#: session's own store). An unlocked `.items()` iteration racing another
-#: thread's insert raised `RuntimeError: dictionary changed size during
-#: iteration`. Plain `.get` reads (`frame_fingerprint` below) need no lock under
-#: the GIL — only the sweep-and-insert and the write-back do.
+#: Guards every iteration/mutation of `_STABLE_FINGERPRINTS` above. The dict is
+#: process-wide, so two script runs can reach `_register_fingerprints` at once —
+#: a superseded run's build publishing beside the run that replaced it, or two
+#: sessions' runs — though no build is ever shared *across* sessions
+#: (`frame_cache`'s identity includes the session's own store). An unlocked
+#: `.items()` iteration racing another thread's insert raises `RuntimeError:
+#: dictionary changed size during iteration`. Plain `.get` reads
+#: (`frame_fingerprint` below) need no lock under the GIL — only the
+#: sweep-and-insert and the write-back do.
 _STABLE_FINGERPRINTS_LOCK = threading.Lock()
 
 
@@ -158,7 +157,7 @@ def _register_fingerprints(entries: list[tuple[pd.DataFrame, tuple | None]]) -> 
 
 
 def vouch_for_frames(value) -> None:
-    """Mark long-lived frames as never written in place (PERF-10).
+    """Mark long-lived frames as never written in place.
 
     Each is hashed in full the first time its fingerprint is asked for, and that
     answer is kept for as long as the frame lives — for a frame the app holds
@@ -171,7 +170,7 @@ def vouch_for_frames(value) -> None:
 def assign_fingerprint(frame: pd.DataFrame, ident: Hashable) -> None:
     """Give ``frame`` the fingerprint ``("assigned", ident)`` instead of a hash.
 
-    BUG-103. ``ident`` must determine the frame's content — two frames with the
+    ``ident`` must determine the frame's content — two frames with the
     same ``ident`` are taken to be identical, which is exactly what makes the
     caches downstream reuse a result. A frame that already has a fingerprint
     keeps it.
@@ -180,7 +179,7 @@ def assign_fingerprint(frame: pd.DataFrame, ident: Hashable) -> None:
         _register_fingerprints([(frame, ("assigned", ident))])
 
 
-#: BUG-103: the `DataFrame.attrs` entry a cached loader labels its frames with.
+#: The `DataFrame.attrs` entry a cached loader labels its frames with.
 #: Only a carrier: `st.cache_data` hands out a fresh copy per call, and `attrs`
 #: survive the copy, so the label reaches the caller — where `adopt_source`
 #: takes it off again before the frame goes anywhere else. Never read anywhere
@@ -276,12 +275,12 @@ def hashable_key(value):
     return value
 
 
-#: Session-state home of the no-copy frame caches (PERF-6), one entry per slot.
+#: Session-state home of the no-copy frame caches, one entry per slot.
 _FRAME_CACHE_KEY = "_sps_frame_cache"
 
-#: UX-166 "latest request wins" (T5-1): the store key `(_LATEST_REQUESTED,
-#: slot)` — a tuple, so it can never collide with a real (string) slot name —
-#: holds the most recently *requested* key for that slot, recorded by
+#: "Latest request wins": the store key `(_LATEST_REQUESTED, slot)` — a tuple,
+#: so it can never collide with a real (string) slot name — holds the most
+#: recently *requested* key for that slot, recorded by
 #: `frame_cache` on every call, hit or miss. A build that finishes only writes
 #: `store[slot]` while this still names its own key; otherwise a newer request
 #: has already been *made* — whether or not it has itself finished yet, or
@@ -289,10 +288,10 @@ _FRAME_CACHE_KEY = "_sps_frame_cache"
 #: caller) result must not clobber it.
 _LATEST_REQUESTED = "__requested__"
 
-#: PERF-18: the store key `(_EARLIER, slot)` holds a slot's *earlier* entries
+#: The store key `(_EARLIER, slot)` holds a slot's *earlier* entries
 #: — `(key, value)` pairs, most recent first — when it was asked to `keep`
 #: more than one. `store[slot]` stays the current entry, so a one-entry slot
-#: looks exactly as it always did.
+#: holds nothing else.
 _EARLIER = "__earlier__"
 
 
@@ -307,11 +306,11 @@ class _InFlight:
     error: Exception | None = None
 
 
-#: UX-166: builds in progress, so a rerun that asks for the same frame waits
+#: Builds in progress, so a rerun that asks for the same frame waits
 #: for the one already running instead of starting a second. A click during a
 #: long load abandons the running script and starts a new one at once
-#: (`runner.fastReruns`); without this the new run normalized the corpus again
-#: beside the first. `st.cache_data` has the same guarantee through its own
+#: (`runner.fastReruns`); without this the new run would normalize the corpus
+#: again beside the first. `st.cache_data` has the same guarantee through its own
 #: per-key lock.
 _INFLIGHT: dict[tuple, _InFlight] = {}
 _INFLIGHT_LOCK = threading.Lock()
@@ -337,15 +336,15 @@ def _shared_build(
     an ``Exception`` (`progress.Cancelled`, Streamlit's `StopException`) means
     nobody actually finished the build, so a waiter then builds it itself.
 
-    ``lookup``/``publish`` let a cache-shaped caller close UX-166's "latest
+    ``lookup``/``publish`` let a cache-shaped caller close the "latest
     request wins" race: a new owner calls ``lookup()`` right after winning
     ownership — a value another, faster build already published for this
     exact ``ident`` a moment earlier is reused without rebuilding — and a
     successful build calls ``publish(value)`` *before* the in-flight entry is
     popped, so "is this result still wanted, or has a newer request for this
     slot already been made" is decided while this ``ident`` still has exactly
-    one owner. A joined waiter calls its own ``publish(entry.value)`` too
-    (UX-166 fix-round-2, Minor #1 of Ruling T5-5): the owner's own decision was
+    one owner. A joined waiter calls its own ``publish(entry.value)`` too:
+    the owner's own decision was
     made against whatever key was latest *then*, and a request for this exact
     ``ident`` can itself become the latest again before the owner's entry is
     popped — without this, that waiter would still get the right *value* back
@@ -353,10 +352,8 @@ def _shared_build(
 
     Neither ``lookup`` nor ``publish`` is called for a plain (non-cache) use
     of this function, and neither's own failure is allowed to leak the
-    in-flight entry or hang every waiter forever (UX-166 fix-round-2, Ruling
-    T5-5 — a24e105 always popped the entry and signalled ``done``; the "latest
-    request wins" fix lost that guarantee by writing the cleanup out per path
-    instead of in one ``finally``): a failing ``lookup`` is treated as a miss
+    in-flight entry or hang every waiter forever: a failing ``lookup`` is
+    treated as a miss
     (logged at debug, then built normally); a failing ``publish`` is logged as
     a warning and swallowed — the build itself already succeeded, ``entry.ok``
     is already ``True``, and its caller still gets its value either way.
@@ -369,15 +366,14 @@ def _shared_build(
                 entry = _InFlight()
                 _INFLIGHT[ident] = entry
         if owner:
-            # UX-166 fix-round-2 (Ruling T5-5): the whole owner branch is one
-            # try/finally, so the registry pop and `done.set()` ALWAYS run —
-            # whether `lookup`, `build` or `publish` raises, or nothing does.
-            # Without this, a raising `publish` (the reviewer's repro:
-            # `_register_fingerprints` racing another session's concurrent insert)
-            # left the entry registered forever: every waiter already joined
-            # blocks in `entry.done.wait()` with no timeout and no Streamlit
-            # checkpoint to free it, and every later miss for this `ident`
-            # joins the same dead entry and hangs too.
+            # The whole owner branch is one try/finally, so the registry pop
+            # and `done.set()` ALWAYS run — whether `lookup`, `build` or
+            # `publish` raises, or nothing does. Otherwise a raising `publish`
+            # (e.g. `_register_fingerprints` racing another session's
+            # concurrent insert) leaves the entry registered forever: every
+            # waiter already joined blocks in `entry.done.wait()` with no
+            # timeout and no Streamlit checkpoint to free it, and every later
+            # miss for this `ident` joins the same dead entry and hangs too.
             try:
                 hit = _MISSING
                 if lookup is not None:
@@ -421,7 +417,7 @@ def _shared_build(
                 with _INFLIGHT_LOCK:
                     _INFLIGHT.pop(ident, None)
                 entry.done.set()
-        # UX-166: waiting on a build another run started is this run's work too
+        # Waiting on a build another run started is this run's work too
         # — the owner reports into its own task, so without this a gated card
         # over the wait (the Corpus measures, opened afresh each run) never
         # shows. It is also a cancel checkpoint: a waiter whose own task was
@@ -464,17 +460,16 @@ def frame_cache(slot: str, key, build, *, keep: int = 1):
 
     One entry per slot by default, deliberately: keeping the previous corpus
     alive beside the current one costs memory. ``keep`` raises that for a slot
-    where going back is the common move (PERF-18: the normalized pair keeps
-    two, so switching PoTeC → OneStop → PoTeC doesn't normalize PoTeC again —
-    a ~20 s wait at OneStop scale). Falls back to
-    calling ``build`` when there is no session state, which is what the headless
-    API and the CLI see.
+    where going back is the common move (the normalized pair keeps two, so
+    switching PoTeC → OneStop → PoTeC doesn't normalize PoTeC again — a ~20 s
+    wait at OneStop scale). Falls back to calling ``build`` when there is no
+    session state, which is what the headless API and the CLI see.
 
     Keys must be hashable (they are compared with ``==`` and stored as dict
     keys). Concurrent requests for the same slot + key share one build in
     flight (`_shared_build`); a build that finishes only *publishes* — writes
     the entry every later request for that key reuses — while its key is still
-    the slot's most recently requested one (UX-166's "latest request wins"),
+    the slot's most recently requested one ("latest request wins"),
     so a superseded build's late finish can never clobber a newer result. It
     still returns its value to its own caller either way.
     """
@@ -487,7 +482,7 @@ def frame_cache(slot: str, key, build, *, keep: int = 1):
         # which is invisible except as everything being slow.
         _LOGGER.debug("frame_cache falling back to a plain call: %s", exc)
         return build()
-    # UX-166: record this as the slot's latest request on EVERY call — a hit
+    # Record this as the slot's latest request on EVERY call — a hit
     # included, since "the user cancelled back to an earlier dataset" is a hit
     # for the slot's *current* entry, and without recording it here too an
     # abandoned build for a *different* key would still look, to its own late
@@ -511,7 +506,7 @@ def frame_cache(slot: str, key, build, *, keep: int = 1):
                     return old_value
 
     def _lookup() -> Any:
-        # UX-166: a new owner re-checks the store before building — a
+        # A new owner re-checks the store before building — a
         # concurrent build for this exact key may have just published,
         # between our own miss above and winning ownership below.
         with _INFLIGHT_LOCK:
@@ -534,7 +529,7 @@ def frame_cache(slot: str, key, build, *, keep: int = 1):
                     store[(_EARLIER, slot)] = [previous, *earlier][: keep - 1]
                 store[slot] = (key, value)
         if wins:
-            # BUG-103: the key decides the value, so it is the value's ID too.
+            # The key decides the value, so it is the value's ID too.
             _register_fingerprints(
                 [
                     (frame, ("assigned", ("frame_cache", slot, key, label)))
@@ -542,7 +537,7 @@ def frame_cache(slot: str, key, build, *, keep: int = 1):
                 ]
             )
 
-    # UX-166: shared with a build already running for this session, slot and key.
+    # Shared with a build already running for this session, slot and key.
     return _shared_build(
         (id(store), slot, key), build, lookup=_lookup, publish=_publish
     )
@@ -562,7 +557,7 @@ def forget_frame_cache(slot: str) -> None:
 
 
 def clear_frame_cache() -> None:
-    """Drop every no-copy frame cache entry (PERF-6).
+    """Drop every no-copy frame cache entry.
 
     Called by ``app.clear_computation_cache`` alongside ``st.cache_data.clear``:
     the normalized frames are cached *here* rather than there, so clearing only
@@ -575,7 +570,7 @@ def clear_frame_cache() -> None:
 
 
 def reset_fingerprint_memo() -> None:
-    """Drop the per-run fingerprint memo. Called once per script run (PERF-3)."""
+    """Drop the per-run fingerprint memo. Called once per script run."""
     getattr(_FINGERPRINT_MEMO, "cache", {}).clear()
 
 
@@ -586,23 +581,23 @@ def frame_fingerprint(df: pd.DataFrame | None) -> tuple:
     underscore-prefixed (un-hashed) frame argument — so Streamlit never re-hashes
     a multi-million-row frame on every rerun just to look up the cache.
 
-    **Two frames share a fingerprint only when they are the same data**
-    (BUG-103). It is one of:
+    **Two frames share a fingerprint only when they are the same data**. It is
+    one of:
 
     * the ID the app *assigned* the frame — from the loader that read it, the
       ``frame_cache`` entry that holds it, or the step that derived it (see
       ``_STABLE_FINGERPRINTS``). That is what keeps a corpus-sized frame from
       being hashed on every rerun;
-    * otherwise ``(rows, columns, digest)`` over **every** row. Until BUG-103 a
-      frame over 200,000 rows was keyed on ~384 sampled rows, so a corrected
-      re-upload of the same shape matched the old file and was served its
-      results — and its normalized tables, which were then stored as the new
-      dataset — without a word. A full hash costs ~60 ms per million rows, which
-      is why the large frames on the rerun path are assigned an ID instead.
+    * otherwise ``(rows, columns, digest)`` over **every** row, never a
+      sample: a key from sampled rows lets a corrected re-upload of the same
+      shape match the old file and be served its results — and its normalized
+      tables, stored as the new dataset — without a word. A full hash costs
+      ~60 ms per million rows, which is why the large frames on the rerun path
+      are assigned an ID instead.
 
     The per-row hashes are digested **in order** rather than summed. Summing is
     order-invariant, so a frame and a ``sort_values`` of itself — same rows, same
-    index labels, different order — used to share a key while producing different
+    index labels, different order — would share a key while producing different
     results downstream.
 
     ``hash_pandas_object`` raises on columns of unhashable objects (lists/arrays —
@@ -657,10 +652,10 @@ def _compute_frame_fingerprint(df: pd.DataFrame) -> tuple:
         except TypeError:
             # Unhashable cell objects — stringify so content still drives the key.
             per_row = pd.util.hash_pandas_object(frame.astype(str), index=True)
-        # Digest the per-row hashes in ORDER. Summing them (the previous
-        # approach) is order-invariant, so a frame and a `sort_values` of itself
-        # — same rows, same index labels, different order — produced the same
-        # key while yielding different results downstream.
+        # Digest the per-row hashes in ORDER. Summing them is order-invariant,
+        # so a frame and a `sort_values` of itself — same rows, same index
+        # labels, different order — would share a key while yielding different
+        # results downstream.
         return hashlib.blake2b(
             per_row.to_numpy(dtype="uint64").tobytes(), digest_size=16
         ).hexdigest()
@@ -669,8 +664,8 @@ def _compute_frame_fingerprint(df: pd.DataFrame) -> tuple:
         return (n, cols, _hash(df))
     except Exception:
         # Fail CLOSED: a key nothing else can equal, so this frame simply doesn't
-        # share a cache entry. `(n, cols, 0, 0)` failed *open* — every frame of
-        # the same shape collided.
+        # share a cache entry. A constant such as `(n, cols, 0, 0)` would fail
+        # *open* — every frame of the same shape would collide.
         return (n, cols, uuid.uuid4().hex)
 
 
@@ -681,7 +676,7 @@ def _compute_frame_fingerprint(df: pd.DataFrame) -> tuple:
 # folder (containing `ia_Paragraph.csv.zip` and `fixations_Paragraph.csv.zip`),
 # `load_onestop_server_bundle()` returns them as the (words, fixations) tuple
 # the rest of the pipeline expects. The schema is identical to the bundled
-# sample (the sample is a 3-pid subset of OneStop), so no extra normalisation
+# sample (the sample is a small subset of OneStop), so no extra normalisation
 # is required.
 #
 # Drives the "OneStop server bundle" data source option in app.py, used by
@@ -722,7 +717,8 @@ def _onestop_shard_paths(base: Path, pid: str) -> tuple[Path, Path]:
 
 
 def onestop_data_provenance(participant: str | None = None) -> dict:
-    """Where the currently-loaded OneStop data came from, for the Raw Data tab.
+    """Where the currently-loaded OneStop data came from, for the provenance panel
+    (`tabs._render_data_provenance`).
 
     Parses `ONESTOP_DATA_DIR` (typically `…/onestop_<cohort>/reports/<source>/<date>/full/`)
     to surface cohort, export source (lacclab / public / osf), and date in the
@@ -777,7 +773,7 @@ def onestop_data_provenance(participant: str | None = None) -> dict:
     return info
 
 
-# UX-166: the dataset card lists this step.
+# The dataset card lists this step.
 @st.cache_data(show_spinner=False)
 def load_onestop_server_bundle(
     participant: str | None = None,
@@ -793,7 +789,7 @@ def load_onestop_server_bundle(
     RAM for the L2 cohort). Used when no participant is specified, or when
     a deep link points at a pid whose shard hasn't been generated yet.
     """
-    progress.report()  # UX-166: a miss — real work, so the gated card may show
+    progress.report()  # A miss — real work, so the gated card may show
     base = onestop_data_dir()
     if base is None:
         return pd.DataFrame(), pd.DataFrame()
@@ -804,7 +800,7 @@ def load_onestop_server_bundle(
         ia_present = ia_shard.exists()
         fix_present = fix_shard.exists()
         if ia_present and fix_present:
-            # PERF-6: parse only the columns the mapping + registry keep.
+            # Parse only the columns the mapping + registry keep.
             return stamp_source(
                 (
                     read_mapped_table(ia_shard, kind="words"),
@@ -838,9 +834,9 @@ def load_onestop_server_bundle(
             f"fixations_Paragraph.csv.zip."
         )
         return pd.DataFrame(), pd.DataFrame()
-    # PERF-6: an IA report ships 174 columns and a fixation report 300, of
-    # which normalization keeps 27 and 17. Parsing the rest is what made this
-    # path reach ~25 GB resident before a single measure was computed.
+    # An IA report ships 174 columns and a fixation report 300, of which
+    # normalization keeps 27 and 17. Parsing the rest pushes this path to
+    # ~25 GB resident before a single measure is computed.
     words = read_mapped_table(ia_path, kind="words")
     fixations = read_mapped_table(fix_path, kind="fixations")
     return stamp_source((words, fixations))
@@ -857,12 +853,12 @@ def _norm_col(name) -> str:
     letting auto-detection match real-world column names that differ only in
     capitalization or word separators.
 
-    A trailing unit or coordinate-system block is dropped first (DATA-25):
+    A trailing unit or coordinate-system block is dropped first:
     Tobii Pro Lab writes ``Fixation point X [DACS px]``, SMI BeGaze
     ``Fixation Duration [ms]``, Pupil Labs Neon ``fixation x [px]`` and Tobii
     Studio ``FixationPointX (MCSpx)``. Folding the brackets' *letters* into the
-    key (``fixationpointxdacspx``) made every one of them miss a candidate that
-    names the same thing, so the export of three major vendors landed in the
+    key (``fixationpointxdacspx``) would make every one of them miss a candidate
+    that names the same thing, sending three major vendors' exports to the
     manual mapping step. Only one trailing block goes — a bracket in the middle
     of a name is part of the name."""
     text = _TRAILING_UNIT.sub("", str(name))
@@ -874,15 +870,15 @@ _CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 
 
 def _col_tokens(name) -> list[str]:
-    """Split a raw column name into its separator-delimited tokens (DATA-25
-    second pass), each folded like ``_norm_col``.
+    """Split a raw column name into its separator-delimited tokens (for
+    ``pick_column``'s second pass), each folded like ``_norm_col``.
 
     The trailing-unit block is dropped from the *whole* name first, same as
     ``_norm_col`` — so a vendor's ``LEFT_px`` tokenizes to ``["left", "px"]``
     with the unit noise already gone, not left to coincidentally never match
     a candidate."""
     text = _TRAILING_UNIT.sub("", str(name))
-    # DATA-57: a CamelCase name (`BoxLeft`, `AoiTop`) has no separator to split
+    # A CamelCase name (`BoxLeft`, `AoiTop`) has no separator to split
     # on, so a lower→upper case change counts as one.
     text = _CAMEL_BOUNDARY.sub(" ", text)
     return [tok.lower() for tok in _COL_SEPARATORS.split(text) if tok]
@@ -896,7 +892,7 @@ def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
     EyeLink names keep beating Gazepoint), and among equally-normalized columns
     the leftmost one wins.
 
-    If nothing matches exactly, a second pass (DATA-25) catches a vendor
+    If nothing matches exactly, a second pass catches a vendor
     prefix or suffix on a known name — ``AOI_LEFT``, ``LEFT_px`` — by
     splitting each column on its separators and checking whether any *whole*
     token equals a candidate. There is no prefix vocabulary to maintain, and
@@ -909,7 +905,7 @@ def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
     ambiguity, and ambiguity means the manual mapping step, not a guess: the
     safety here is uniqueness, not a whitelist.
 
-    Several survivors get one narrowing step (DATA-60) before that verdict:
+    Several survivors get one narrowing step before that verdict:
     keep only the ones spelled **entirely** in the list's own words — every
     token of the column is a token of some candidate. An AOI export's
     ``AOI_ID`` beside ``AOI_LEFT`` … ``AOI_BOTTOM`` is the case: all five carry
@@ -938,8 +934,8 @@ def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
 
 #: Milliseconds per unit, for a time column whose header names its unit —
 #: Tobii Pro Lab's `Recording timestamp [μs]`, Pupil Labs Neon's
-#: `start timestamp [ns]` (DATA-40). DATA-25 taught auto-detection to look past
-#: that block; this is what reads it.
+#: `start timestamp [ns]`. Auto-detection looks past that block (`_norm_col`);
+#: this is what reads it.
 _TIME_UNIT_MS = {
     "s": 1000.0,
     "sec": 1000.0,
@@ -961,7 +957,7 @@ _SECONDS_WITHOUT_A_SUFFIX = frozenset({"fpogd", "fpogs", "starttimestamp"})
 
 
 def time_unit_ms(column) -> float:
-    """Milliseconds per unit of the time column named ``column`` (DATA-40).
+    """Milliseconds per unit of the time column named ``column``.
 
     Read from the header's trailing unit block (``[s]``, ``(ns)``, ``[μs]``) or,
     for a vendor column that carries none, from its documented unit. Anything
@@ -1006,13 +1002,13 @@ def stable_id(series: pd.Series) -> pd.Series:
     and its fixations report almost always come from two different exports, so
     this is not a rare corpus quirk: it is common for exactly one of the two to
     have that one blank cell the other does not. The trial picker, every
-    metadata join (DATA-20/DATA-29), fixation-to-word assignment, and every
+    metadata join, fixation-to-word assignment, and every
     filter then compare ``"101"`` against ``"101.0"`` as strings and find no
     match, even though both name the same trial.
 
     Dropping a trailing ``.0`` off an otherwise-integer string is the one
     collapse worth making here, and only where the ``.0`` is how *numbers* were
-    written (round 10): a column read as decimals, a float cell in a mixed
+    written: a column read as decimals, a float cell in a mixed
     column, or a text column whose every whole number carries ``.0`` (an id
     column a script wrote out as floats). A text column that spells some whole
     numbers with ``.0`` and some without — ``"1"`` beside ``"1.0"`` — holds
@@ -1047,10 +1043,10 @@ _DIGITS_ONLY = re.compile(r"^\d+$")
 
 def zero_padding_map(ids: Iterable, reference: Iterable) -> dict[str, str]:
     """How ``ids`` would be spelled in ``reference``, when the only thing
-    keeping the two apart is zero-padding (BUG-59).
+    keeping the two apart is zero-padding.
 
-    One table read ``007`` as text and another read it as the number 7, and
-    every join between them then matched nothing — words to fixations, a
+    When one table reads ``007`` as text and another reads it as the number 7,
+    every join between them matches nothing — words to fixations, a
     participant table to the data. Returns ``{"7": "007", …}`` for each id in
     ``ids`` whose zero-padded twin is in ``reference``, and ``{}`` whenever that
     is not the *only* story: if any id already matches as it is, if either side
@@ -1102,10 +1098,10 @@ def compose_id(parts: Iterable) -> str:
 
     The parts are joined with ``_``. A part that itself contains ``_`` or ``\``
     has each one escaped with a ``\`` first, so ``("block_A", "B")`` is
-    ``block\_A_B`` and ``("block", "A_B")`` is ``block_A\_B`` — before the
-    escape both were ``block_A_B``, and two readings became one trial. Parts
-    with neither character, which is almost every id, compose exactly as they
-    always did (``("p1", "t3")`` is still ``p1_t3``). The encoding is
+    ``block\_A_B`` and ``("block", "A_B")`` is ``block_A\_B`` — joined
+    plainly, both would be ``block_A_B``, and two readings would become one
+    trial. Parts with neither character, which is almost every id, join
+    plainly (``("p1", "t3")`` is ``p1_t3``). The encoding is
     reversible, which is what makes it injective: :func:`split_composite_id`
     reads the parts back. :func:`trial_id_series` is the vectorised form.
     """
@@ -1227,8 +1223,8 @@ def _preserve_composite_columns(
     A multi-column trial mapping gets joined into a single opaque ``trial_id``
     (e.g. ``2_1_1_Ele_l37_1129_False``). Keeping the individual component columns
     is what lets the trial chips spell that id back out part by part
-    (``tabs._render_trial_condition_chips``). It no longer changes how the trial
-    is *picked* — BUG-23 made the picker the same for every mapping.
+    (``tabs._render_trial_condition_chips``). It does not change how the trial
+    is *picked*: the picker is the same for every mapping.
     No-op for single-column mappings.
     Rows are 1:1 with ``source`` here (no filtering in the composite path), so a
     positional copy stays aligned."""
@@ -1247,7 +1243,7 @@ def _preserve_composite_columns(
 # conventions — no ALL_CAPS / snake_case twins of the same name needed.
 PARTICIPANT_CANDIDATES = [
     "participant_id",
-    "unique_participant_id",  # EyeGenBench's own harmonized column name (DATA-27)
+    "unique_participant_id",  # EyeGenBench's own harmonized column name
     "subject_id",
     "participant",  # also SMI BeGaze's event export
     "participant_name",  # Tobii Pro Lab `Participant name` / Tobii Studio `ParticipantName`
@@ -1295,8 +1291,8 @@ SCREEN_FIXATION_ID_CANDIDATES = [
 CANVAS_WIDTH_CANDIDATES = ["canvas_width", "screen_width", "monitor_width"]
 CANVAS_HEIGHT_CANDIDATES = ["canvas_height", "screen_height", "monitor_height"]
 # Source column names that identify which *text* (passage) a row belongs to.
-# Output canonical column is `text_id` (was `paragraph_id`); the source names stay
-# as the real-world conventions so auto-detection keeps working.
+# The canonical column is `text_id`; the source names are the real-world
+# conventions, so auto-detection finds them.
 TEXT_ID_CANDIDATES = [
     "unique_paragraph_id",
     "paragraph_id",
@@ -1305,7 +1301,7 @@ TEXT_ID_CANDIDATES = [
     "presented_stimulus_name",  # Tobii Pro Lab — the stimulus *is* the text
     "media_name",  # Tobii Studio / Gazepoint
     "stimulus",  # SMI BeGaze
-    # #374 F13: an EyeLink export's own item column (`item`, `ITEM_ID`, …) —
+    # An EyeLink export's own item column (`item`, `ITEM_ID`, …) —
     # last, so a named text/paragraph column still wins.
     "item",
     "item_id",
@@ -1346,7 +1342,7 @@ WORD_BOTTOM_CANDIDATES = ["IA_BOTTOM", "bottom", "end_y"]
 # (MCSpx)`; SMI BeGaze: `Position X [px]` / `Fixation Position X`; Pupil Labs
 # Neon: `fixation x [px]`. Gazepoint's FPOGX and Pupil Core's `norm_pos_x` are
 # screen *fractions* (0–1), not pixels — matched here so the column is found,
-# and reported as fractions by `screen_fraction_issues` (DATA-40), which is as
+# and reported as fractions by `screen_fraction_issues`, which is as
 # far as the load can go without knowing the screen size.
 FIX_X_CANDIDATES = [
     "x",
@@ -1376,10 +1372,10 @@ FIX_DURATION_CANDIDATES = [
     "CURRENT_FIX_LEN",
     "duration",  # also SMI `Duration [ms]`, Pupil Labs `duration [ms]` / `duration`
     "fixation_duration",  # SMI BeGaze `Fixation Duration [ms]`
-    "fix_duration",  # EyeGenBench's own harmonized column name (DATA-27)
+    "fix_duration",  # EyeGenBench's own harmonized column name
     "eye_movement_event_duration",  # Tobii Pro Lab (current name)
     "gaze_event_duration",  # Tobii Pro Lab (older) / Tobii Studio `GazeEventDuration`
-    "FPOGD",  # Gazepoint — seconds, not ms (`time_unit_ms` converts, DATA-40)
+    "FPOGD",  # Gazepoint — seconds, not ms (`time_unit_ms` converts)
 ]
 FIX_TIMESTAMP_CANDIDATES = [
     "timestamp_ms",
@@ -1399,14 +1395,14 @@ FIX_FIXATION_ID_CANDIDATES = [
     "CURRENT_FIX_INDEX",
     "CURRENT_FIX_NUM",
     "fixation_index",  # also Tobii Studio `FixationIndex`
-    "fix_index",  # EyeGenBench's own harmonized column name (DATA-27)
+    "fix_index",  # EyeGenBench's own harmonized column name
     "eye_movement_type_index",  # Tobii Pro Lab
     "FPOGID",  # Gazepoint
 ]
 FIX_WORD_ID_CANDIDATES = [
     "word_id",
     "IA_ID",
-    "ia_index",  # EyeGenBench's own harmonized column name (DATA-27)
+    "ia_index",  # EyeGenBench's own harmonized column name
     "CURRENT_FIX_INTEREST_AREA_ID",
     "CURRENT_FIX_INTEREST_AREA_INDEX",
     "word_index_in_text",
@@ -1433,20 +1429,20 @@ _BOX_EDGES = ("left", "right", "top", "bottom")
 
 
 def _pick_box_edge_set(words: pd.DataFrame) -> dict[str, str] | None:
-    """The four word-box edge columns, resolved as one set (DATA-57).
+    """The four word-box edge columns, resolved as one set.
 
     ``pick_column`` looks at each edge on its own, and its second pass accepts a
     prefixed or suffixed name (``LEFT_px``, ``aoi_left``) only when it is the
     *only* column carrying that token. An AOI export routinely carries two box
     encodings side by side — EyeLink's ``LEFT_px`` … ``BOTTOM_px`` next to a
-    derived ``aoi_left`` … ``aoi_bottom`` — so every edge was ambiguous and the
-    whole box landed in the manual step. The edges are not independent: they
-    share an affix. So each column naming exactly one edge is keyed by the rest
-    of its name (``*_px``, ``aoi_*``), and a key that covers all four edges is a
-    set. The set that comes **last** in the table wins: a derived box is
-    usually appended after the one the export shipped with, and the columns a
-    lab adds later are the ones it means (``aoi_left`` … then ``LEFT_px`` …
-    picks ``LEFT_px``).
+    derived ``aoi_left`` … ``aoi_bottom`` — so every edge is ambiguous on its
+    own and the whole box would land in the manual step. The edges are not
+    independent: they share an affix. So each column naming exactly one edge
+    is keyed by the rest of its name (``*_px``, ``aoi_*``), and a key that
+    covers all four edges is a set. The set that comes **last** in the table
+    wins: a derived box is usually appended after the one the export shipped
+    with, and the columns a lab adds later are the ones it means
+    (``aoi_left`` … then ``LEFT_px`` … picks ``LEFT_px``).
 
     Returns ``{edge: column}`` plus the shared affix under ``"affix"`` (for
     ``_affix_sibling``), or ``None`` when no complete set exists."""
@@ -1478,7 +1474,7 @@ def _affix_sibling(
     return next((col for col in words.columns if _col_tokens(col) == want), None)
 
 
-#: AN-32 — the per-AOI reading measures a dataset *brings*: the Corpus Analysis
+#: The per-AOI reading measures a dataset *brings*: the Corpus Analysis
 #: page shows these and computes none of them. Each is an optional AOI-table
 #: field, ``(schema key, canonical column, short label, full name, kind,
 #: candidates)``; the candidates lead with EyeLink Data Viewer's interest-area
@@ -1603,9 +1599,9 @@ READING_MEASURE_COLUMNS: tuple[str, ...] = tuple(f[1] for f in READING_MEASURE_F
 def brought_reading_measures(words: pd.DataFrame | None) -> list[str]:
     """The reading-measure columns ``words`` carries — what the dataset brought.
 
-    AN-32 / EXP-23: the Corpus Analysis page and the export show these and
-    compute none, so this only *reads* the frame; an empty list means the
-    dataset has no reading measures."""
+    The Corpus Analysis page and the export show these and compute none, so
+    this only *reads* the frame; an empty list means the dataset has no reading
+    measures."""
     if words is None:
         return []
     return [column for column in READING_MEASURE_COLUMNS if column in words.columns]
@@ -1614,14 +1610,14 @@ def brought_reading_measures(words: pd.DataFrame | None) -> list[str]:
 def _apply_reading_measures(
     df: pd.DataFrame, source: pd.DataFrame, schema: dict
 ) -> None:
-    """Write the mapped reading measures onto ``df`` (AN-32).
+    """Write the mapped reading measures onto ``df``.
 
     A schema that names a measure key decides that measure outright: mapped, the
     column is copied under its canonical name (and wins over the optional-field
     passthrough); cleared, the canonical column is removed even if the
     passthrough carried it — "this dataset has no TFD" has to stay true. A
-    schema without measure keys (a dataset stored before AN-32) is left as the
-    passthrough made it."""
+    schema without measure keys (a dataset stored by an older version) is left
+    as the passthrough made it."""
     for key, canonical, _label, _name, kind, _candidates in READING_MEASURE_FIELDS:
         if key not in schema:
             continue
@@ -1635,7 +1631,7 @@ def _apply_reading_measures(
             del df[canonical]
 
 
-#: The duration measures a word nobody fixated does not have (BUG-63). Total
+#: The duration measures a word nobody fixated does not have. Total
 #: fixation duration is not one of them: the word was read past and got 0 ms.
 UNFIXATED_BLANK_MEASURES: tuple[str, ...] = (
     "first_fixation_ms",
@@ -1647,9 +1643,9 @@ UNFIXATED_BLANK_MEASURES: tuple[str, ...] = (
 
 def _blank_unfixated_measures(df: pd.DataFrame) -> None:
     """Blank the imported FFD / FPRT / RPD / single-fixation duration of a word
-    nobody fixated (BUG-63's rule, on the imported path — #374 F1).
+    nobody fixated (the computed path's rule, applied to imported values).
 
-    An EyeLink IA report writes ``0`` there, and every mean then counted a
+    An EyeLink IA report writes ``0`` there, and every mean would then count a
     skipped word as a 0 ms fixation. "Never fixated" is a fixation count of 0;
     where no count is mapped (or the cell is blank), a total fixation duration
     of 0 says the same. Total fixation duration itself keeps its 0.
@@ -1684,14 +1680,15 @@ def _blank_unfixated_measures(df: pd.DataFrame) -> None:
 def propose_word_schema(words: pd.DataFrame) -> dict[str, str | None]:
     """Return a candidate column mapping for words/IA data without erroring."""
     schema = _propose_word_schema_by_field(words)
-    # BUG-99: a box field is a number, so a column with no number in it is not
-    # one, whatever its name says. OneStop's IA report carries `TOP_LEFT`, the
-    # box corner as the text `(368,186)`; its tokens matched both the x and the
-    # y list, so the load proposed it for both and warned about every cell.
+    # A box field is a number, so a column with no number in it is not one,
+    # whatever its name says. OneStop's IA report carries `TOP_LEFT`, the box
+    # corner as the text `(368,186)`; its tokens match both the x and the y
+    # list, so without this the load would propose it for both and warn about
+    # every cell.
     for key in _BOX_FIELDS:
         if schema[key] and _holds_no_number(words[schema[key]]):
             schema[key] = None
-    # AN-32: every reading measure is proposed too, from its known names.
+    # Every reading measure is proposed too, from its known names.
     # The app's own canonical name is a candidate too, right after EyeLink's,
     # so a table the app itself wrote (an exported words.csv, a normalized
     # frame handed to the API) keeps its measures instead of having the key
@@ -1942,8 +1939,8 @@ def source_file_regex_collisions(
 
     :func:`extract_columns_from_source_file` skips these (so it never clobbers
     real data); the wizard surfaces them so the user can rename the group.
-    ``column`` is accepted for symmetry with its two siblings (UX-113 —
-    "derive from any column", not only ``source_file``) but isn't otherwise
+    ``column`` is accepted for symmetry with its two siblings (the wizard
+    derives from any column, not only ``source_file``) but isn't otherwise
     used: a collision is a collision against ``df``'s columns regardless of
     which column the regex reads from."""
     if not pattern:
@@ -2000,7 +1997,7 @@ def aggregate_char_boxes(
     word schema dict (field → source column). Returns ``df`` unchanged when the
     trial or word-id column isn't mapped, or no box columns are.
 
-    UX-113 — ``schema["block"]``, when mapped, groups words into sub-screen
+    ``schema["block"]``, when mapped, groups words into sub-screen
     blocks that each restart their own local word numbering (e.g. a
     comprehension question's stem/target/distractor answer blocks). Without
     it, two blocks' word 0 would silently aggregate into one merged box. When
@@ -2088,9 +2085,9 @@ def _read_by_extension(
 
     ``sep`` is the delimiter of a text table when the caller already knows it
     (a zip member, which cannot be peeked at); otherwise it is read off the
-    header line (DATA-41).
+    header line.
 
-    ``plan`` (PERF-6) narrows the read to the columns normalization keeps and
+    ``plan`` narrows the read to the columns normalization keeps and
     declares EyeLink's ``.`` missing in the numeric ones. Delimited text and
     Parquet honour it; Excel has no column-projection reader, so it is read
     whole and pruned after.
@@ -2112,17 +2109,17 @@ def _read_by_extension(
         return pd.read_feather(buf, columns=columns)
     if name.endswith((".xlsx", ".xls")):
         if not _is_workbook(buf, name):
-            # BUG-55: EyeLink Data Viewer's "Excel" export is tab-separated text
+            # EyeLink Data Viewer's "Excel" export is tab-separated text
             # with an .xls name — read it as what it is.
             return _read_delimited(buf, sep or _sniff_delimiter(buf, name), plan)
-        # First sheet (e.g. MultiplEYE questions workbook).
+        # First sheet.
         frame = pd.read_excel(buf, **_excel_na_kwargs(buf, plan))
         return frame[[c for c in columns if c in frame.columns]] if columns else frame
     return _read_delimited(buf, sep or _sniff_delimiter(buf, name), plan)
 
 
 #: The delimiters a text table is looked for with, and the one assumed when its
-#: header line settles nothing (DATA-41).
+#: header line settles nothing.
 _DELIMITERS = ("\t", ",", ";", "|")
 _QUOTED = re.compile(r'"[^"]*"')
 
@@ -2135,13 +2132,14 @@ def _default_delimiter(name: str) -> str:
 
 
 def _delimiter_of(header_line: bytes, name: str) -> str:
-    """The delimiter a table's header line uses (DATA-41).
+    """The delimiter a table's header line uses.
 
-    A ``;``-separated CSV (Excel's export wherever the decimal separator is a
-    comma) and a tab-separated ``.txt`` both used to load as a single column
-    holding the whole line. Counting each candidate in the header, outside
-    quotes, is enough: a column name never contains the delimiter, while a
-    sniffer that also reads the rows is misled by the decimal commas in them.
+    Read with a fixed delimiter, a ``;``-separated CSV (Excel's export wherever
+    the decimal separator is a comma) and a tab-separated ``.txt`` would both
+    load as a single column holding the whole line. Counting each candidate in
+    the header, outside quotes, is enough: a column name never contains the
+    delimiter, while a sniffer that also reads the rows is misled by the
+    decimal commas in them.
     A ``.tsv`` is always tab-separated; a header with no candidate in it (a
     one-column table) keeps the extension's default.
     """
@@ -2177,11 +2175,11 @@ def _sniff_delimiter(buf, name: str) -> str:
 
 
 #: The first bytes of a legacy (OLE2) Excel workbook, and of a zip container —
-#: which is what an .xlsx is (BUG-55).
+#: which is what an .xlsx is.
 _OLE2_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 _ZIP_MAGIC = b"PK\x03\x04"
 
-#: Tried in order when a delimited file is not UTF-8 (BUG-55): Windows' default
+#: Tried in order when a delimited file is not UTF-8: Windows' default
 #: for Western European text first, since that is what Excel writes there, then
 #: Latin-1, which decodes any byte and so always ends the search.
 _TEXT_ENCODINGS = ("utf-8", "cp1252", "latin-1")
@@ -2225,8 +2223,8 @@ def _is_workbook(buf, name: str) -> bool:
     """Whether an Excel-named file is a real workbook pandas can open.
 
     A zip container is an .xlsx (openpyxl) and an OLE2 container is a legacy
-    Excel 97–2003 workbook (xlrd, DATA-53); anything else is delimited text
-    wearing an Excel extension (BUG-55).
+    Excel 97–2003 workbook (xlrd); anything else is delimited text
+    wearing an Excel extension.
     """
     head = _peek(buf)
     return head.startswith((_ZIP_MAGIC, _OLE2_MAGIC))
@@ -2244,10 +2242,10 @@ def _can_reread(buf) -> bool:
 
 
 def _read_delimited(buf, sep: str, plan: ReadPlan | None, **extra) -> pd.DataFrame:
-    """``read_csv`` with the encoding fallback a non-UTF-8 export needs (BUG-55).
+    """``read_csv`` with the encoding fallback a non-UTF-8 export needs.
 
-    A CSV saved by Excel on Windows is cp1252, and one umlaut in it made the
-    whole upload fail with a raw ``UnicodeDecodeError``. Each encoding in
+    A CSV saved by Excel on Windows is cp1252, and one umlaut in it would fail
+    the whole upload with a raw ``UnicodeDecodeError``. Each encoding in
     ``_TEXT_ENCODINGS`` is tried in turn; a stream that cannot be rewound (a zip
     member) re-raises, and :func:`_read_zipped_table` retries it from memory.
     A byte-order mark settles the encoding outright (a UTF-16 Data Viewer
@@ -2277,8 +2275,8 @@ def _read_delimited(buf, sep: str, plan: ReadPlan | None, **extra) -> pd.DataFra
 
 
 #: EyeLink writes a value it could not measure as a bare period. Declared
-#: missing for *numeric* columns only: a word whose text is "." is a word
-#: (PERF-6), so a blanket ``na_values="."`` would delete it from the stimulus.
+#: missing for *numeric* columns only: a word whose text is "." is a word, so
+#: a blanket ``na_values="."`` would delete it from the stimulus.
 MISSING_MARKER = "."
 
 #: Schema fields whose values are numbers, and which therefore read the marker
@@ -2307,7 +2305,7 @@ NUMERIC_SCHEMA_FIELDS = frozenset(
 )
 
 #: One number written with a decimal comma (``117,7``) — how a German- or
-#: French-locale export writes every fractional value (BUG-54).
+#: French-locale export writes every fractional value.
 _DECIMAL_COMMA = re.compile(r"^[+-]?\d+,\d+$")
 #: ...and the shape a *thousands* separator gives the same characters
 #: (``1,204``). A column whose every comma looks like this could be either, so it
@@ -2337,9 +2335,10 @@ def _unparsed_cells(values: pd.Series, parsed: pd.Series) -> pd.Series:
 def _to_number(values: pd.Series) -> pd.Series:
     """``pd.to_numeric(errors="coerce")``, reading a decimal-comma column too.
 
-    A decimal-comma export (``117,7``) made every fractional cell unparseable,
-    and NaN then fell through to the silent fallbacks downstream — each fixation
-    snapped to its word's centre, each duration read as 0 (BUG-54). The commas
+    Read plainly, a decimal-comma export (``117,7``) leaves every fractional
+    cell unparseable, and NaN then falls through to the silent fallbacks
+    downstream — each fixation snapped to its word's centre, each duration read
+    as 0. The commas
     are converted only when **every** cell that failed is a decimal-comma number
     and not all of them could be a thousands separator instead; anything else
     stays NaN, for :func:`numeric_parse_issues` to report.
@@ -2463,7 +2462,7 @@ _UNPARSED_CONSEQUENCE = {
     "and left off the plot otherwise",
     "word_id": "those rows have no word id",
 }
-#: The same for the Words table, where x/y are a box's corner, not a gaze (#374).
+#: The same for the Words table, where x/y are a box's corner, not a gaze.
 _UNPARSED_WORD_CONSEQUENCE = dict.fromkeys(
     ("x", "y", "width", "height", "left", "right", "top", "bottom"),
     "those word boxes have no position",
@@ -2477,8 +2476,8 @@ def numeric_parse_issues(
 
     One line per column, naming the table, the column, how many of its cells
     were unreadable, a few examples, and what the load did with those rows —
-    because the load carries on either way, and a column read as all-NaN used to
-    produce a plausible-looking figure with nothing said (BUG-54). A
+    because the load carries on either way, and a column read as all-NaN would
+    otherwise produce a plausible-looking figure with nothing said. A
     decimal-comma column that :func:`_to_number` converts is not an issue; one
     whose commas could equally be thousands separators is, with that named.
     """
@@ -2512,7 +2511,7 @@ def numeric_parse_issues(
         )
         consequence = consequences.get(key, "those cells are left empty")
         if fixations and key == "word_id" and not (schema.get("x") and schema.get("y")):
-            # The word id is these fixations' only position (#412).
+            # The word id is these fixations' only position.
             consequence = (
                 "with no X and Y mapped, those fixations have no position and are "
                 "left off the plot"
@@ -2522,7 +2521,7 @@ def numeric_parse_issues(
 
 
 class UnplacedFixationsError(ValueError):
-    """Fixations whose only position is a Word/IA ID that holds no numbers (#412).
+    """Fixations whose only position is a Word/IA ID that holds no numbers.
 
     With no X and Y mapped, a fixation is placed at the center of the word box
     its Word/IA ID names, and Word/IA IDs are read as numbers: a column of text
@@ -2590,12 +2589,12 @@ def _rows_missing_identity(
 ) -> tuple[pd.Series, pd.Series]:
     """``(blank, unkeyed)`` row masks: rows with no participant or trial id.
 
-    A row missing either cannot belong to any trial, and its NaN crashed the
-    load outright — one ``,,,,`` line, the blank row Excel leaves at the end of
-    a sheet, made the whole dataset impossible to add (BUG-56). ``blank`` is the
+    A row missing either cannot belong to any trial, and its NaN would crash
+    the load outright — one ``,,,,`` line, the blank row Excel leaves at the end
+    of a sheet, would make the whole dataset impossible to add. ``blank`` is the
     rows that hold nothing at all, which are not data and go quietly;
     ``unkeyed`` is the rest, which hold data and are reported. An id that is
-    only whitespace counts as missing (round 10). Only the missing rows are
+    only whitespace counts as missing. Only the missing rows are
     inspected cell by cell, so a clean table costs one ``isna`` and one pass
     over the distinct values per id column.
     """
@@ -2656,7 +2655,7 @@ _FRACTION_BAND = (-0.5, 1.5)
 def screen_fraction_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list:
     """A warning when the mapped X/Y are screen fractions rather than pixels.
 
-    Not converted (DATA-40): the load knows no screen size to scale by, and a
+    Not converted: the load knows no screen size to scale by, and a
     guessed one would put every fixation in the wrong place while looking
     plausible — the one outcome worse than a figure that is obviously wrong.
     """
@@ -2690,10 +2689,10 @@ def normalization_issues(
     raw: pd.DataFrame, schema: dict, *, table: str, fixations: bool = False
 ) -> list[str]:
     """Everything the load will do to ``raw`` under ``schema`` that the user
-    should hear about: rows left out for want of an id (BUG-56), mapped numeric
-    columns that did not parse (BUG-54), and — for ``fixations``, whose X/Y
-    are gaze positions rather than box origins — positions that are screen
-    fractions rather than pixels (DATA-40)."""
+    should hear about: rows left out for want of an id, mapped numeric columns
+    that did not parse, and — for ``fixations``, whose X/Y are gaze positions
+    rather than box origins — positions that are screen fractions rather than
+    pixels."""
     issues = identity_issues(raw, schema, table=table)
     issues += numeric_parse_issues(raw, schema, table=table, fixations=fixations)
     if fixations:
@@ -2726,14 +2725,14 @@ class ReadPlan:
     columns: tuple[str, ...] | None = None
     na_values: dict[str, list[str]] = field(default_factory=dict)
     #: Columns read as the literal text of each cell, with no cell taken as
-    #: missing (BUG-53). The word-text column: "None", "NA" and "null" are
-    #: words a stimulus can contain, and pandas' default NA spellings turned
-    #: every one of them into NaN before normalization saw it.
+    #: missing. The word-text column: "None", "NA" and "null" are words a
+    #: stimulus can contain, and pandas' default NA spellings would turn every
+    #: one of them into NaN before normalization sees it.
     verbatim: tuple[str, ...] = ()
     #: Identity columns (participant, trial, text, screen) read as text, so a
-    #: zero-padded id survives: CSV inference read `007` as the number 7, while
-    #: the same id in a Parquet table stayed "007", and the two tables then
-    #: shared no participant at all (BUG-59). Missing cells stay missing.
+    #: zero-padded id survives: CSV inference reads `007` as the number 7,
+    #: while the same id in a Parquet table stays "007", and the two tables
+    #: would then share no participant at all. Missing cells stay missing.
     identity: tuple[str, ...] = ()
 
     def narrowed_to(self, available: Iterable[str]) -> ReadPlan:
@@ -2742,11 +2741,10 @@ class ReadPlan:
         A multi-file read — several uploads, or several members of one zip —
         plans from the *union* of their headers, and ``usecols`` raises on a
         name the file it is reading does not carry. Narrowing per file is what
-        keeps a heterogeneous set readable, exactly as it was before the read
-        was planned at all (``read_tables``: "fields absent from a file become
-        NaN"). An empty intersection degrades to reading the whole file rather
-        than to reading none of it: a file this plan cannot describe is one
-        there is no basis to prune.
+        keeps a heterogeneous set readable (``read_tables``: "fields absent from
+        a file become NaN"). An empty intersection degrades to reading the
+        whole file rather than to reading none of it: a file this plan cannot
+        describe is one there is no basis to prune.
         """
         if self.columns is None:
             return self
@@ -2780,7 +2778,7 @@ def _read_kwargs(plan: ReadPlan | None) -> dict:
         kwargs["na_values"] = plan.na_values
     if plan.verbatim:
         # A converter receives the cell's raw text before NA detection runs, and
-        # leaves every other column's NA handling exactly as it was (BUG-53).
+        # leaves every other column's NA handling exactly as it was.
         kwargs["converters"] = {column: str for column in plan.verbatim}
     if plan.identity:
         kwargs["dtype"] = {column: str for column in plan.identity}
@@ -2844,7 +2842,7 @@ def verbatim_text_plan(header: Sequence[str], schema: dict | None = None) -> Rea
     """A whole-table words plan: the word text verbatim, the ids as text.
 
     For readers that parse every column (the headless API) but still must not
-    lose a word spelled "None" or "NA" (BUG-53), nor merge reader ``01`` into
+    lose a word spelled "None" or "NA", nor merge reader ``01`` into
     reader ``1`` by reading the ids as numbers. ``schema`` is the caller's own
     word mapping; without one the columns are auto-detected from the header,
     the way the mapping itself will be.
@@ -2904,7 +2902,7 @@ def plan_table_read(
     text_column: str | None = None,
     identity_columns: Iterable[str] = (),
 ) -> ReadPlan:
-    """Narrow a read to the columns ``normalize_*`` keeps (PERF-6).
+    """Narrow a read to the columns ``normalize_*`` keeps.
 
     An EyeLink IA report ships 174 columns and a fixation report 300; the
     mapping plus ``*_OPTIONAL_FIELDS`` claim 27 and 17, and normalization drops
@@ -2918,9 +2916,9 @@ def plan_table_read(
     mapping, exactly as :func:`compute_keep_columns` takes them.
 
     The word-text column — ``text_column`` when the user has mapped one by
-    hand, else the schema's own ``text`` — is read verbatim (BUG-53), and the
-    identity columns — the schema's, plus any ``identity_columns`` the user
-    picked by hand — as text (BUG-59).
+    hand, else the schema's own ``text`` — is read verbatim, and the identity
+    columns — the schema's, plus any ``identity_columns`` the user picked by
+    hand — as text.
     """
     names = list(header)
     present = set(names)
@@ -2959,7 +2957,7 @@ def plan_table_read(
 
 
 #: Schema fields that name *which* participant / trial / text / screen a row
-#: belongs to — read as text, never as numbers (BUG-59).
+#: belongs to — read as text, never as numbers.
 IDENTITY_SCHEMA_FIELDS = ("participant", "trial", "text_id", "screen_id")
 #: The id columns `normalize_*` consults by name rather than through the schema.
 _IDENTITY_SOURCES = ("unique_trial_id", "unique_paragraph_id")
@@ -2986,7 +2984,7 @@ def read_table_columns(file_like_or_path, *, kind: str | None = None) -> list[st
     (Excel, a zip of several members) falls back to reading the table, because
     there is no cheaper way to learn its columns and those formats are not the
     ones that hurt. ``kind`` (``"words"`` / ``"fixations"``) picks a mixed
-    zip's members the way :func:`zip_member_split` does (#374, F3).
+    zip's members the way :func:`zip_member_split` does.
     """
     name = getattr(file_like_or_path, "name", str(file_like_or_path)).lower()
     _rewind(file_like_or_path)
@@ -3019,7 +3017,7 @@ def _header(buf, sep: str) -> list[str]:
 
 def _empty_file_error(name: str) -> ValueError:
     """The error an empty upload raises, in place of pandas' "No columns to
-    parse from file" (BUG-55)."""
+    parse from file"."""
     return ValueError(
         f"'{Path(name).name}' is empty — it has no header row. Check the export "
         "finished writing, then upload it again."
@@ -3036,7 +3034,7 @@ def _member_layout(zf: zipfile.ZipFile, info: zipfile.ZipInfo) -> tuple[list, st
 
     A member stream cannot be rewound, so the encoding fallback runs over just
     the header line held in memory — cut at the newline, never mid-character —
-    and the delimiter (DATA-41) is read off the same line.
+    and the delimiter is read off the same line.
     """
     with zf.open(info) as inner:
         head = inner.read(_HEADER_MAX_BYTES)
@@ -3062,7 +3060,7 @@ def _zipped_table_columns(file_like_or_path, *, kind: str | None = None) -> list
             raise ValueError(
                 "the zip holds no table file (CSV, TSV, TXT, Excel, Parquet or Feather)"
             )
-        # DATA-16/S6: the same declared-size guard the full read applies. A
+        # The same declared-size guard the full read applies. A
         # cheaper way to learn an archive's columns must not also be a way
         # around its decompression limits.
         _check_zip_limits(infos)
@@ -3097,7 +3095,7 @@ def read_mapped_table(
     """Read one words or fixations table, parsing only the columns it needs.
 
     The header-then-plan-then-read pass in one call — what a loader that already
-    knows which table it is reading wants (PERF-6). ``declared`` is a publisher's
+    knows which table it is reading wants. ``declared`` is a publisher's
     own mapping, used in place of auto-detection; ``filter_fields`` are extra
     source columns to keep for trial filtering.
 
@@ -3180,7 +3178,7 @@ def source_labels(paths: Sequence[str]) -> list[str]:
 def source_file_name(label: str) -> str:
     """The file stem inside a :func:`source_labels` label — without the folders
     that qualify it, its ``#n`` occurrence number or a kept extension — for
-    code that parses identity out of a file's name (MultiplEYE uploads)."""
+    code that parses identity out of a file's name."""
     name = re.sub(r"#\d+$", "", str(label).rsplit("/", 1)[-1])
     stem = Path(name).stem
     return stem if Path(name).suffix.lower().lstrip(".") in UPLOAD_FILE_TYPES else name
@@ -3212,22 +3210,22 @@ def _tag_and_concat(
     return pd.concat(frames, ignore_index=True, sort=False)
 
 
-# DATA-16 (security review S6): bound zip decompression. `_read_zipped_table`
-# used to `read()` every member with no ceiling, so a small archive of highly
-# compressible CSV could expand to many gigabytes and OOM-kill the process — on
-# the ~1 GB hosted demo that takes every concurrent visitor's session with it.
-# The limits are deliberately generous: real eye-tracking exports are large (the
-# OneStop reports are hundreds of MB to a few GB of CSV per zipped table), so the
-# absolute caps only catch the honestly-enormous case, and the *ratio* is what
-# actually distinguishes a zip bomb from a big corpus.
+# Bound zip decompression. Reading every member with no ceiling lets a small
+# archive of highly compressible CSV expand to many gigabytes and OOM-kill the
+# process — on the ~1 GB hosted demo that takes every concurrent visitor's
+# session with it. The limits are deliberately generous: real eye-tracking
+# exports are large (the OneStop reports are hundreds of MB to a few GB of CSV
+# per zipped table), so the absolute caps only catch the honestly-enormous
+# case, and the *ratio* is what actually distinguishes a zip bomb from a big
+# corpus.
 #
-# DATA-34 raised the absolute caps (4/8 GB → 32/64 GB) and made all three
-# tunable: a full OneStop fixation report is a single ~8 GB CSV inside its zip,
-# which the old per-member cap refused outright on a workstation with the memory
-# to read it. The caps are a memory guard, not a security boundary — the ratio
-# check is what discriminates a bomb — so the default now suits the machine that
-# actually holds a corpus, and a memory-capped deployment tightens it with the
-# env vars below (read once, at import).
+# All three are tunable, and the absolute caps default high (32/64 GB): a full
+# OneStop fixation report is a single ~8 GB CSV inside its zip, which a tight
+# per-member cap would refuse outright on a workstation with the memory to read
+# it. The caps are a memory guard, not a security boundary — the ratio check is
+# what discriminates a bomb — so the defaults suit the machine that actually
+# holds a corpus, and a memory-capped deployment tightens them with the env vars
+# below (read once, at import).
 ZIP_MAX_MEMBER_ENV = "SCANPATH_ZIP_MAX_MEMBER_GB"
 ZIP_MAX_TOTAL_ENV = "SCANPATH_ZIP_MAX_TOTAL_GB"
 ZIP_MAX_RATIO_ENV = "SCANPATH_ZIP_MAX_RATIO"
@@ -3275,7 +3273,7 @@ def _format_bytes(n: float) -> str:
 
 
 def _check_zip_limits(infos: list[zipfile.ZipInfo]) -> None:
-    """Reject an archive that would decompress past the DATA-16 limits.
+    """Reject an archive that would decompress past the ``ZIP_MAX_*`` limits.
 
     Checks the *declared* sizes (``ZipInfo.file_size``) before a single member is
     opened, so an oversized archive fails fast instead of being discovered by
@@ -3324,8 +3322,8 @@ def _zip_table_members(zf: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
 
     Folders and macOS/dotfile cruft (``__MACOSX``, ``.DS_Store``) are skipped,
     and so is anything that is no table at all: a ``README.md`` shipped beside
-    the data was read as one more table, and its first line taken for a header,
-    so the whole upload failed to parse.
+    the data would be read as one more table, its first line taken for a
+    header, and the whole upload would fail to parse.
     """
     return [
         info
@@ -3345,7 +3343,7 @@ class _BudgetedZipMember(io.RawIOBase):
     (rather than ``read()``-ing the member into one big ``bytes`` first) also
     keeps an honestly enormous CSV — a full OneStop fixation report is ~8 GB
     inside its zip — from needing a second full-size copy of itself in memory
-    before pandas sees a byte of it (DATA-34).
+    before pandas sees a byte of it.
     """
 
     def __init__(
@@ -3379,7 +3377,7 @@ class _BudgetedZipMember(io.RawIOBase):
         return read
 
 
-#: What each table kind's members are called in the mixed-zip message (#374 F3).
+#: What each table kind's members are called in the mixed-zip message.
 _ZIP_KIND_NOUNS = {
     "fixations": ("fixation report", "fixation reports"),
     "words": ("interest-area report", "interest-area reports"),
@@ -3411,13 +3409,14 @@ def table_kind_of_columns(columns: Iterable[str]) -> str | None:
 
 @dataclass(frozen=True)
 class ZipMemberSplit:
-    """Which members of a zip one table reads (#374 F3).
+    """Which members of a zip one table reads.
 
     A ZIP of per-participant folders commonly holds both EyeLink reports. Its
     members are grouped by column set, each set classified by
     :func:`table_kind_of_columns`; when the archive holds both kinds, the table
     being read keeps the members of its own kind and the rest are *left out* —
-    never concatenated into one frame, which put a "fixation" at every word.
+    never concatenated into one frame, which would put a "fixation" at every
+    word.
     """
 
     used: tuple[str, ...]
@@ -3496,7 +3495,7 @@ def _zip_split(
 
 def zip_member_split(file_like_or_path, kind: str | None) -> ZipMemberSplit:
     """Which members of a ``.zip`` the ``kind`` table reads, and which it
-    leaves out (#374 F3) — what the upload row reports. A non-zip, or a zip
+    leaves out — what the upload row reports. A non-zip, or a zip
     holding one kind of table, uses everything."""
     name = getattr(file_like_or_path, "name", str(file_like_or_path))
     if not name.lower().endswith(".zip"):
@@ -3519,10 +3518,10 @@ _SAMPLE_BYTES = 4 * 1024 * 1024
 def read_table_sample(
     file_like_or_path, *, kind: str | None = None, nrows: int = _SAMPLE_ROWS
 ) -> pd.DataFrame:
-    """The first rows of a delimited table, every column parsed (#374 F13).
+    """The first rows of a delimited table, every column parsed.
 
     What the wizard judges an unmapped column's values by, when its planned
-    read (PERF-6) left that column out. Delimited text only — a plain file or
+    read left that column out. Delimited text only — a plain file or
     a zip's first member of ``kind`` (:func:`zip_member_split`); anything else,
     or a file that will not parse, gives an empty frame, which the caller reads
     as "no evidence".
@@ -3560,7 +3559,7 @@ def read_table_sample(
 
 def looks_like_condition(values: pd.Series) -> bool:
     """Whether a column reads as a condition or an item id — a few repeated
-    values, such as ``Adv`` / ``Ele`` or ``2_1`` … ``2_12`` (#374 F13).
+    values, such as ``Adv`` / ``Ele`` or ``2_1`` … ``2_12``.
 
     Between 2 and 50 distinct values, each used at least twice on average; a
     fractional number is a measurement, never a condition."""
@@ -3584,12 +3583,12 @@ def _read_zipped_table(
     ``source_file`` (qualified by its folders when two members share a stem,
     :func:`source_labels`). With ``kind``, an archive that mixes fixation and
     interest-area reports keeps only the members that fit it
-    (:func:`zip_member_split`, #374 F3). pandas infers compression only from string paths, not from
-    uploaded file-like objects, so we open the archive ourselves. Raises
-    ``ValueError`` if the archive holds no data file (macOS ``__MACOSX``/dotfile
-    cruft is ignored), or if it would decompress past the DATA-16 size limits
-    (``ZIP_MAX_*``) — both the declared sizes and the bytes actually read are
-    bounded, so a forged header can't slip past."""
+    (:func:`zip_member_split`). pandas infers compression only from string
+    paths, not from uploaded file-like objects, so we open the archive
+    ourselves. Raises ``ValueError`` if the archive holds no data file (macOS
+    ``__MACOSX``/dotfile cruft is ignored), or if it would decompress past the
+    size limits (``ZIP_MAX_*``) — both the declared sizes and the bytes
+    actually read are bounded, so a forged header can't slip past."""
     with zipfile.ZipFile(file_like_or_path) as zf:
         infos = _zip_table_members(zf)
         if not infos:
@@ -3620,8 +3619,8 @@ def _read_zipped_table(
                     # Columnar/workbook readers seek, so these still land in
                     # memory whole — bounded by the same budget.
                     buf = io.BytesIO(stream.read())
-                    # BUG-84: the header pass dispatches on the name, and an
-                    # unnamed buffer read its binary member as CSV.
+                    # The header pass dispatches on the name, and an unnamed
+                    # buffer would read its binary member as CSV.
                     buf.name = member
                     member_plan = plan
                     if plan is not None and plan.columns:
@@ -3629,7 +3628,7 @@ def _read_zipped_table(
                         buf.seek(0)
                     frames.append(_read_by_extension(buf, name, member_plan))
                 else:
-                    # PERF-6: one archive can hold members with different
+                    # One archive can hold members with different
                     # columns, and the plan is built from their union — narrow
                     # it to this member's own header or `usecols` rejects it.
                     header, sep = _member_layout(zf, info)
@@ -3643,7 +3642,7 @@ def _read_zipped_table(
                             )
                         )
                     except UnicodeDecodeError:
-                        # BUG-55: not UTF-8, and a member stream cannot be
+                        # Not UTF-8, and a member stream cannot be
                         # rewound for the encoding fallback — read it again
                         # into memory, under the same budget, where it can.
                         with zf.open(info) as again:
@@ -3659,14 +3658,14 @@ def _read_zipped_table(
     return _tag_and_concat(frames, source_labels(labels), SOURCE_FILE_COLUMN)
 
 
-# BUG-5: guard the memory-constrained hosted demo against a too-large upload.
+# Guard the memory-constrained hosted demo against a too-large upload.
 # The bytes upload fine; the OOM comes later, when a big (often zipped) table
 # decompresses and pandas holds several copies through parse + normalization —
 # on Streamlit Community Cloud (~1 GB RAM) that silently kills the process with
 # no traceback. Above this raw-upload size the wizard warns and asks for an
 # explicit opt-in before parsing (a one-click confirm locally, real protection on
 # the host). Tuned to sit below the OneStop repeated-reading export
-# (~29–37 MB per zipped table) that first surfaced this.
+# (~29–37 MB per zipped table), which is enough to exhaust that host.
 UPLOAD_SIZE_WARN_BYTES = 25 * 1024 * 1024
 
 
@@ -3684,7 +3683,7 @@ def uploaded_files_total_bytes(uploaded) -> int:
 def upload_exceeds_limit(
     uploaded, threshold_bytes: int = UPLOAD_SIZE_WARN_BYTES
 ) -> bool:
-    """Whether a Streamlit upload's total size is over the guard threshold (BUG-5)."""
+    """Whether a Streamlit upload's total size is over the guard threshold."""
     return uploaded_files_total_bytes(uploaded) > threshold_bytes
 
 
@@ -3695,7 +3694,7 @@ def read_table(
     ``.zip`` wrapping one or more of those (e.g. ``data.csv.zip``). A
     multi-member zip is concatenated like a multi-file upload.
 
-    ``plan`` (PERF-6) is a :class:`ReadPlan` from :func:`plan_table_read`,
+    ``plan`` is a :class:`ReadPlan` from :func:`plan_table_read`,
     narrowing the read to the columns normalization keeps. ``kind``
     (``"words"`` / ``"fixations"``) is the table being read: a zip that mixes
     the two keeps only the members that fit it (:func:`zip_member_split`)."""
@@ -3742,7 +3741,7 @@ def read_tables(
     ``inputs`` may be a single path or file-like object, a glob pattern, or a
     list mixing those (a ``.zip`` member counts as a file too). ``plan_for`` is
     called with each file's column names and returns the :class:`ReadPlan` to
-    read it under (PERF-6); omit it to parse every column. Each part gets a
+    read it under; omit it to parse every column. Each part gets a
     ``source_file`` column holding the file's stem — qualified by its folders
     when two files share one (:func:`source_labels`) — (unless the data already has
     that column, or ``source_column=None``) — *including a single file*, so
@@ -3753,7 +3752,7 @@ def read_tables(
     items = expand_table_inputs(inputs)
     frames, labels = [], []
     for item in items:
-        # PERF-6: each file is planned against its OWN header. One file per
+        # Each file is planned against its OWN header. One file per
         # participant is the common upload shape, and an export can gain or
         # lose a column between them — a shared plan would name a column some
         # file hasn't got, which `usecols` raises on.
@@ -3788,7 +3787,7 @@ def _resolve_sample_image_paths(df: pd.DataFrame) -> pd.DataFrame:
     """Expand the bundled demo's relative ``image_path`` (e.g.
     ``images/2_2_1_Adv__paragraph.png``) into an absolute path under the
     packaged ``sample_data`` directory, so the stimulus-image background layer
-    (``tabs._render_single_trial`` → ``plots.make_scanpath_figure``) can load it
+    (``tabs.render_single_trial_tab`` → ``plots.make_scanpath_figure``) can load it
     via ``os.path.exists``. The CSVs ship a *relative* reference (stable across
     installs); this resolves it at load time against wherever the wheel landed.
     No-op when the column is absent or a value is already absolute."""
@@ -3830,7 +3829,7 @@ def _pattern_placeholders(pattern: str) -> list[str]:
 
 def stimulus_image_source(value: object) -> dict[str, str] | None:
     """A dataset's stored stimulus-image source as ``{"folder", "pattern"}``,
-    or ``None`` when ``value`` names no folder (#417).
+    or ``None`` when ``value`` names no folder.
 
     What the add screen and ✏️ Edit dataset save, read back from session state
     and the recovery cache — so anything malformed is ``None`` rather than an
@@ -3850,7 +3849,7 @@ def stimulus_image_source(value: object) -> dict[str, str] | None:
 
 @dataclass(frozen=True)
 class StimulusImageMatch:
-    """Where a folder + filename pattern found an image, row by row (#417).
+    """Where a folder + filename pattern found an image, row by row.
 
     ``paths`` holds, per row of the frame it was matched on, the file found
     for that row, or ``None``; ``found`` counts the rows with one. ``signature``
@@ -3870,7 +3869,7 @@ class StimulusImageMatch:
         if "image_path" in frame.columns:
             series = series.where(series.notna(), frame["image_path"])
         # `assign` shares the other columns (copy-on-write), where `copy()`
-        # duplicated the whole frame to change one column.
+        # would duplicate the whole frame to change one column.
         return frame.assign(image_path=series)
 
 
@@ -3881,7 +3880,7 @@ def match_stimulus_images(
     *,
     require_exists: bool = True,
 ) -> StimulusImageMatch:
-    """Find each row's stimulus image in ``root`` by ``pattern`` (#417).
+    """Find each row's stimulus image in ``root`` by ``pattern``.
 
     The probing half of `resolve_stimulus_image_paths`, which documents the
     rules; this answers what was found without building a frame, so the app
@@ -3900,15 +3899,16 @@ def match_stimulus_images(
             raise KeyError(key)
 
     def _resolved(values: dict[str, str]) -> str | None:
-        """One placeholder tuple to an absolute path, or None to keep `previous`."""
+        """One placeholder tuple to an absolute path, or None (the row keeps its
+        own `image_path`)."""
         try:
             relative = pattern.format_map(_Row(values))
         except (KeyError, ValueError, AttributeError):
             return None
         # Contained by its *spelling*: a placeholder value cannot climb out of
         # the folder with `..`, while an image the user linked into it from
-        # elsewhere is still theirs to use (resolving the link first refused
-        # every such folder outright).
+        # elsewhere is still theirs to use (resolving the link first would
+        # refuse every such folder outright).
         candidate = Path(os.path.normpath(base / relative))
         try:
             candidate.relative_to(base)
@@ -3920,8 +3920,8 @@ def match_stimulus_images(
             return None
         return str(candidate)
 
-    # Keyed by the *stringified* column label, as the per-row dict was; a
-    # duplicate label keeps the last column, as that dict's later write did.
+    # Keyed by the *stringified* column label; a duplicate label keeps the
+    # last column.
     by_name: dict[str, object] = {str(column): column for column in frame.columns}
     used = [by_name[name] for name in _pattern_placeholders(pattern) if name in by_name]
 
@@ -3974,18 +3974,19 @@ def resolve_stimulus_image_paths(
     parent-traversal patterns are rejected. Rows whose placeholders are missing
     or whose file does not exist keep their previous ``image_path`` value.
 
-    This pure helper is the headless/API surface for VIZ-14 and is also used by
+    This pure helper is the headless/API surface for stimulus images and is
+    also used by
     the desktop-only folder controls and the CLI. It is deliberately
     **undecorated**: the CLI and the API have no Streamlit session to cache
     into, so any caching belongs at a call site rather than here.
 
     **One filesystem probe per distinct placeholder tuple, not per row.** A
     pattern reads a couple of columns, so a fixation frame of millions of rows
-    still resolves only a few hundred distinct paths — where the per-row form
-    this replaced spent two syscalls each (``Path.resolve`` + ``is_file``) on
-    *every* rerun that had a folder attached. Per-row behaviour is unchanged:
-    the fallback is each row's **own** prior ``image_path``, not a shared one,
-    and a NaN placeholder is still absent from the format mapping rather than
+    still resolves only a few hundred distinct paths, where probing per row
+    costs two syscalls each (``Path.resolve`` + ``is_file``) on *every* rerun
+    that has a folder attached. The answer is still per row: the fallback is
+    each row's **own** prior ``image_path``, not a shared one, and a NaN
+    placeholder is absent from the format mapping rather than
     the string ``"nan"`` (which would otherwise resolve ``nan.png`` — a miss
     today, a wrong hit the day such a file exists).
     """
@@ -4036,16 +4037,16 @@ def normalize_raw_gaze(
 ) -> pd.DataFrame:
     """Normalize raw gaze data to canonical column names.
 
-    ``keep_columns`` (UX-120) carries user-chosen extra source columns
-    through verbatim, the same "Extra fields to keep" mechanism
-    :func:`normalize_words`/:func:`normalize_fixations` already have — raw
+    ``keep_columns`` carries user-chosen extra source columns through
+    verbatim, the same "Extra fields to keep" mechanism
+    :func:`normalize_words`/:func:`normalize_fixations` have — raw
     gaze has no optional-fields *registry* of its own (no semantic field
     here is common enough across exports to earn a canonical name the way
     ``saccade_amplitude`` does for fixations), so this only ever carries
     unclaimed columns, via :func:`_carry_extra_columns`.
     """
-    # Samples with no participant or trial id belong to no trial (BUG-56's
-    # rule for the other two tables, round 10).
+    # Samples with no participant or trial id belong to no trial (the rule
+    # the other two tables follow).
     blank, unkeyed = _rows_missing_identity(raw_gaze, schema)
     for issue in identity_issues(raw_gaze, schema, table="Raw gaze", unkeyed=unkeyed):
         warnings.warn(issue.replace("`", "'"), UserWarning, stacklevel=2)
@@ -4064,14 +4065,14 @@ def normalize_raw_gaze(
         df["trial_id"] = trial_id_series(raw_gaze, trial_cols)
         df["unique_trial_id"] = df["trial_id"]
     else:
-        trial_col = trial_cols[0]  # the mapped column (BUG-58)
+        trial_col = trial_cols[0]  # the mapped column
         df["trial_id"] = stable_id(raw_gaze[trial_col])
         if "unique_trial_id" in raw_gaze.columns:
-            # The mapped id *is* the unique trial id (BUG-58) — never the raw
+            # The mapped id *is* the unique trial id — never the raw
             # column's own values, which the trial picker would otherwise key
             # on (`utils.build_combo_options` prefers `unique_trial_id`).
             df["unique_trial_id"] = df["trial_id"]
-    # UX-113: mapped when the export carries its own text/passage column;
+    # Mapped when the export carries its own text/passage column;
     # otherwise raw gaze has no text/passage concept of its own, so mirror
     # trial_id — a raw-gaze-only dataset still needs *a* text_id column for
     # the trial picker (utils.build_combo_options).
@@ -4084,7 +4085,7 @@ def normalize_raw_gaze(
         df["text"] = raw_gaze[schema["text"]].astype(str)
     else:
         df["text"] = ""
-    # UX-113: raw gaze samples are never run through word assignment the way
+    # Raw gaze samples are never run through word assignment the way
     # fixations are (there is no per-sample geometry step for it) — carried
     # through only when the export already names one, not computed.
     if schema.get("word_id"):
@@ -4094,7 +4095,7 @@ def normalize_raw_gaze(
     skip = _schema_source_columns(schema)
     if schema.get("timestamp"):
         onset = schema["timestamp"]
-        df["timestamp_ms"] = _as_ms(_to_number(raw_gaze[onset]), onset)  # DATA-40
+        df["timestamp_ms"] = _as_ms(_to_number(raw_gaze[onset]), onset)
     else:
         # No clock: the samples keep their order (1, 2, … per trial) and no
         # time. Nothing says how far apart they were recorded, so a made-up
@@ -4140,13 +4141,13 @@ STIMULUS_WORDS_FLAG = "_stimulus_words"
 # and the UI hides the participant selector when there's only this one value.
 SYNTHETIC_PARTICIPANT = "(all)"
 
-#: The two keys a stimulus-level AOI table can attach to a reading through
-#: (DATA-49), as the wizard names them.
+#: The two keys a stimulus-level AOI table can attach to a reading through,
+#: as the wizard names them.
 STIMULUS_JOIN_LABELS = {"trial_id": "Trial ID", "text_id": "Text ID"}
 #: The mapped trial id a repeated reading had before
 #: `_disambiguate_repeated_readings` suffixed it with `_r2`, `_r3` … — on the
 #: fixations only, and only when a suffix was given. The stimulus join reads it
-#: so a repeat finds the boxes of what it re-read (BUG-57, DATA-49).
+#: so a repeat finds the boxes of what it re-read.
 BASE_TRIAL_ID = "_base_trial_id"
 #: On a broadcast words copy: the AOI table's own trial id it was copied from
 #: (the reading supplies `trial_id`). ✏️ Edit dataset keeps one copy per value
@@ -4155,7 +4156,7 @@ AOI_TRIAL_ID = "_aoi_trial_id"
 #: Whether this frame's `text_id` came from a mapped Text ID (a schema pick,
 #: auto-detected or not, or a literal `unique_paragraph_id`) rather than the
 #: trial-id fallback — written by `normalize_*` from the schema, so a mapped
-#: Text ID whose values happen to equal the trial ids still counts (DATA-49).
+#: Text ID whose values happen to equal the trial ids still counts.
 TEXT_ID_MAPPED = "_text_id_mapped"
 #: On a fixation: its `timestamp_ms` was made up by `normalize_fixations`
 #: because the table mapped no onset — the reading order 0, 1, 2, …, kept so
@@ -4183,8 +4184,8 @@ def timestamps_synthesized(fixations: pd.DataFrame | None) -> bool:
 
     True when normalization had no onset column to read and numbered the
     fixations instead (:data:`TIMESTAMP_SYNTHESIZED`). A frame without the
-    column — one built by hand, or stored before it existed — counts as
-    recorded, which is what it always did."""
+    column — one built by hand, or stored by an older version — counts as
+    recorded."""
     if fixations is None or TIMESTAMP_SYNTHESIZED not in fixations.columns:
         return False
     return bool(fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool).any())
@@ -4199,7 +4200,7 @@ def user_columns(frame: pd.DataFrame) -> list:
 
     The one list every widget offering a frame's fields should draw from, so a
     bookkeeping column can never surface as a hover field, a Q&A field, a
-    comparison field or a mapping option (DATA-49)."""
+    comparison field or a mapping option."""
     return [c for c in frame.columns if c not in INTERNAL_COLUMNS]
 
 
@@ -4228,11 +4229,11 @@ class StimulusJoinError(ValueError):
     every loader built on it — instead of returning a dataset with no word
     boxes (or, on a multipart dataset, with screens that have none): the
     add-dataset wizard and ✏️ Edit dataset block on it, the headless API raises
-    it, and the CLI prints it (DATA-49)."""
+    it, and the CLI prints it."""
 
 
 class StimulusJoinWarning(UserWarning):
-    """Some readings found no stimulus-level word boxes (DATA-49); the rest did.
+    """Some readings found no stimulus-level word boxes; the rest did.
 
     A ``UserWarning``, like the normalizers' load warnings, so the API and the
     CLI see it; its own class so ✏️ Edit dataset can catch it during a save and
@@ -4245,7 +4246,7 @@ def _count(n: int, singular: str, plural: str) -> str:
 
 @dataclass(frozen=True)
 class StimulusJoin:
-    """How a stimulus-level AOI table attached to the readings (DATA-49).
+    """How a stimulus-level AOI table attached to the readings.
 
     A *reading* is one ``(participant_id, trial_id)`` of the fixations — one
     ``(participant_id, trial_id, screen_id)`` on a multipart dataset, where the
@@ -4413,8 +4414,8 @@ def _text_is_fallback(frame: pd.DataFrame) -> bool:
 
     Read from ``_text_id_mapped``, which ``normalize_*`` write from the schema,
     so a mapped Text ID is mapped even when its values equal the trial ids.
-    Only a frame normalized without it (a stored dataset from before, frames
-    built by hand) falls back to the values: with no Text ID mapped,
+    Only a frame normalized without it (a dataset stored by an older version,
+    frames built by hand) falls back to the values: with no Text ID mapped,
     ``normalize_*`` copy the (unsuffixed) trial id into ``text_id``, so a
     ``text_id`` equal to that id on every row says nothing about texts.
     Compared over distinct pairs, so it is cheap on a million rows."""
@@ -4443,7 +4444,8 @@ def _lookup(
 
     ``table`` is unique on ``_key`` + ``screen``; a left merge keeps the
     readings' order, so the result lines up with them (missing = no match).
-    A blank screen id pairs with a blank one, as the merge always has."""
+    A blank screen id pairs with a blank one (pandas merges NaN keys
+    together)."""
     probe = pd.DataFrame(
         {"_key": keys.to_numpy(), **{c: readings[c].to_numpy() for c in screen}}
     )
@@ -4488,7 +4490,7 @@ def _plan_stimulus_join(
         found = _lookup(readings, _as_key(readings["trial_id"]), table, on_screen)
         if BASE_TRIAL_ID in readings.columns:
             # A repeat's `_r2` tells the readings apart; it never costs the
-            # repeat its boxes (BUG-57): try the id it was recorded under.
+            # repeat its boxes: try the id it was recorded under.
             base = _lookup(readings, _as_key(readings[BASE_TRIAL_ID]), table, on_screen)
             found = np.where(pd.isna(found), base, found)
         return found
@@ -4599,12 +4601,12 @@ def _plan_stimulus_join(
 def plan_stimulus_join(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> StimulusJoin | None:
-    """How :func:`broadcast_stimulus_words` attaches ``words`` (DATA-49).
+    """How :func:`broadcast_stimulus_words` attaches ``words``.
 
     ``None`` when there is nothing to join: the words carry a Participant ID
     (so they are not stimulus-level), or either frame is empty. Otherwise the
     :class:`StimulusJoin` it would make — ``key=None`` when it would refuse.
-    ``harmonize_frames`` runs other fixups first (BUG-59's zero padding), so
+    ``harmonize_frames`` runs other fixups first (zero-padding reconciliation), so
     for the join a load actually made, use :func:`harmonize_frames_with_join`.
     """
     if STIMULUS_WORDS_FLAG not in words.columns or words.empty or fixations.empty:
@@ -4661,7 +4663,7 @@ def _broadcast_stimulus_words(
         columns={_STIMULUS_KEY: AOI_TRIAL_ID}
     )
     if "unique_trial_id" in out.columns:
-        # The reading's id *is* its unique trial id (BUG-58).
+        # The reading's id *is* its unique trial id.
         out["unique_trial_id"] = out["trial_id"]
     return out, join
 
@@ -4680,10 +4682,10 @@ def broadcast_stimulus_words(
     downstream (participant, trial) filtering works unchanged. Words for texts
     nobody read are dropped.
 
-    DATA-49: one rule, per reading, whatever the trial ids look like. A reading
+    One rule, per reading, whatever the trial ids look like. A reading
     takes the boxes of the first AOI trial it finds by its own trial id (ids
     shared across readers), by the id it had before a repeat's ``_r2`` suffix
-    (``_base_trial_id``, BUG-57), or by its **Text ID** (trial ids that embed
+    (``_base_trial_id``), or by its **Text ID** (trial ids that embed
     the reader). The Text-ID route needs a real fixations Text ID (mapped, not
     the trial-id fallback — ``_text_id_mapped``), and never uses one the AOI
     table gives to several trials. A trial-id match always stands; mapped Text
@@ -4702,14 +4704,14 @@ def broadcast_stimulus_words(
 def repair_stranded_stimulus_words(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame] | None:
-    """DATA-39 — re-broadcast a stored AOI table the old ✅ Save changes stranded.
+    """Re-broadcast a stored AOI table an older version's ✅ Save changes stranded.
 
-    Before DATA-39 was fixed, saving an edit to a dataset whose AOI table has no
-    participant column left every word on the ``""`` placeholder reader with
-    the ``_stimulus_words`` flag still set, so no trial found its boxes. A
-    *stored* frame can only carry that flag through that bug —
-    ``broadcast_stimulus_words`` always drops it — so its presence is the
-    diagnosis, and running the broadcast it missed is the repair. Returns the
+    Older versions, saving an edit to a dataset whose AOI table has no
+    participant column, left every word on the ``""`` placeholder reader with
+    the ``_stimulus_words`` flag still set, so no trial found its boxes.
+    ``broadcast_stimulus_words`` always drops that flag, so a *stored* frame
+    that still carries it is the diagnosis, and running the broadcast it
+    missed is the repair. Returns the
     repaired ``(words, fixations)``, or ``None`` when there is nothing to repair
     or the frames will not harmonize (the dataset is then left as it was).
     """
@@ -4744,10 +4746,10 @@ def fill_fixation_xy_from_words(
     box keep NaN coordinates. Rows that already have coordinates are left
     untouched.
 
-    A missing key is no key (#412): pandas joins NaN to NaN, so a fixation with
-    no ``word_id`` — one whose Word/IA ID did not parse as a number, say — used
-    to land on the first box that had none either, and a table of text ids
-    (``w1``, ``w2`` …) put every fixation on one word. Rows missing any key are
+    A missing key is no key: pandas joins NaN to NaN, so a fixation with no
+    ``word_id`` — one whose Word/IA ID did not parse as a number, say — would
+    land on the first box that has none either, and a table of text ids
+    (``w1``, ``w2`` …) would put every fixation on one word. Rows missing any key are
     left out on both sides, so they keep NaN coordinates."""
     if fixations.empty or words.empty:
         return fixations
@@ -4756,7 +4758,7 @@ def fill_fixation_xy_from_words(
         return fixations
     from .measures import word_box_bounds
 
-    # The interest area's own centre (BUG-83), which is inside the box the
+    # The interest area's own centre, which is inside the box the
     # assignment will then test it against.
     x0, y0, x1, y1 = word_box_bounds(words)
     keys = grouping_columns(words, include_word=True)
@@ -4778,7 +4780,7 @@ def _reconcile_participant_asymmetry(
     """Re-key word boxes to the synthetic participant when the fixations have no
     participant but the words do.
 
-    With participant now optional per table, a fixations table can be
+    With participant optional per table, a fixations table can be
     participant-less (every row stamped ``SYNTHETIC_PARTICIPANT``) while the words
     table still carries real participant ids. The trial picker keys off the
     fixations, so it offers ``(all)`` — but the boxes are keyed by the real ids
@@ -4818,7 +4820,7 @@ def _key_frame(frame: pd.DataFrame, ids: pd.Series) -> pd.DataFrame:
 
 
 def detect_word_id_offset(words: pd.DataFrame, fixations: pd.DataFrame) -> int:
-    """Detect a 1-based fixation ``word_id`` against 0-based word boxes (BUG-8).
+    """Detect a 1-based fixation ``word_id`` against 0-based word boxes.
 
     Some exports (the bundled OneStop demo among them) number the fixation
     report's word column ``1..N`` while the interest-area table numbers its rows
@@ -4890,14 +4892,14 @@ def correct_word_id_offset(
     No-op unless :func:`detect_word_id_offset` finds an unambiguous shift.
     Renumbering someone's ids is never silent — it's logged at INFO, which
     `debug_log.install_log_capture` surfaces in the in-app 🐛 Debug panel. Not a
-    `st.warning`, and not a WARNING either (BUG-76): the bundled demo corpus
-    trips this on *every* load, so a banner would be permanent furniture on the
-    landing view, and a WARNING was the first line `render --sample`,
-    `load_sample_data()` and the README quickstart printed to a new user's
+    `st.warning`, and not a WARNING either: the bundled demo corpus trips this
+    on *every* load, so a banner would be permanent furniture on the landing
+    view, and a WARNING would be the first line `render --sample`,
+    `load_sample_data()` and the README quickstart print to a new user's
     terminal — about a correction that needs nothing from them.
 
     ``offset`` is :func:`detect_word_id_offset`'s answer when the caller
-    already asked it (DATA-66's harmonize report).
+    already asked it (as :func:`harmonize_frames_reporting` does).
     """
     if offset is None:
         offset = detect_word_id_offset(words, fixations)
@@ -4920,7 +4922,7 @@ def _pad_ids(frame: pd.DataFrame, column: str, mapping: dict) -> pd.DataFrame:
     Padding a trial id also pads what was copied from it: a repeat's
     ``_base_trial_id``, and a fallback ``text_id`` (no Text ID mapped, so it
     *is* the trial id) — left at "7" beside a trial "007" it would read as a
-    real Text ID of its own (DATA-49)."""
+    real Text ID of its own."""
     frame = frame.copy()
     if column == "trial_id":
         if "text_id" in frame.columns:
@@ -4940,10 +4942,10 @@ def _restore_zero_padding(
     fixations: pd.DataFrame,
     padded: list[tuple[str, str]] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Spell a zero-padded id the same way in both frames (BUG-59).
+    """Spell a zero-padded id the same way in both frames.
 
-    A CSV read ``007`` as 7 while a Parquet table kept "007", and the two
-    tables then shared no participant — every fixation drew over no text. When
+    When a CSV reads ``007`` as 7 while a Parquet table keeps "007", the two
+    tables share no participant — every fixation draws over no text. When
     padding is the only difference (:func:`zero_padding_map`), the side that
     lost its zeros is given them back, and the rename is logged — and recorded
     in ``padded`` as ``(table, column)`` when given.
@@ -4997,19 +4999,19 @@ def harmonize_frames_with_join(
 ) -> tuple[pd.DataFrame, pd.DataFrame, StimulusJoin | None]:
     """Cross-frame fixups applied right after normalization.
 
-    Match zero-padded ids the two tables spell differently (BUG-59), broadcast
+    Match zero-padded ids the two tables spell differently, broadcast
     stimulus-level words across participants, reconcile a participant-less
     fixations table with participant-bearing words, correct a 1-based fixation
-    ``word_id`` (BUG-8), then fill missing fixation coordinates from word-box
+    ``word_id``, then fill missing fixation coordinates from word-box
     centers. Call whenever both frames are available (the API and the app both
     route through this). Also returns the :class:`StimulusJoin` a
     stimulus-level AOI table was attached by — ``None`` for a per-reader one —
-    which the add-dataset wizard states (DATA-49)."""
+    which the add-dataset wizard states."""
     words, fixations, join, _rewrites = harmonize_frames_reporting(words, fixations)
     return words, fixations, join
 
 
-#: DATA-66: a column whose values normalization or the fixups changed, as
+#: A column whose values normalization or the fixups changed, as
 #: ``(table, column, how)`` — ``how`` follows the source column's name in its
 #: label ("CURRENT_FIX_INTEREST_AREA_ID − 1"), since a header the file used must
 #: not sit over values the file never held. ``column_names.with_rewrites``
@@ -5021,9 +5023,9 @@ def harmonize_frames_reporting(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame, StimulusJoin | None, tuple[Rewrite, ...]]:
     """:func:`harmonize_frames_with_join`, also saying which columns' values it
-    changed (:data:`Rewrite`): ids it zero-padded (BUG-59), a fixation
-    ``word_id`` shifted onto 0-based boxes (BUG-8), fixation positions filled
-    from word boxes, and a repeated reading's ``_rN`` trial id (BUG-57)."""
+    changed (:data:`Rewrite`): ids it zero-padded, a fixation ``word_id``
+    shifted onto 0-based boxes, fixation positions filled from word boxes, and
+    a repeated reading's ``_rN`` trial id."""
     from .preprocessing import add_text_direction
 
     rewrites: list[Rewrite] = []
@@ -5087,16 +5089,15 @@ def _disambiguate_repeated_readings(
     OneStop L2's per-pid parquet shards don't carry a `unique_trial_id` column,
     so the schema-inference fallback uses `unique_paragraph_id` — but that's
     the same string for both readings of a repeated-reading trial. Without
-    this fix, the two readings' fixations collapse into one scanpath (and into
-    one row of the trial picker), which is what the cached PNG thumbnails
-    (which filter on TRIAL_INDEX) correctly avoid. We rank by TRIAL_INDEX so
+    this, the two readings' fixations collapse into one scanpath (and into one
+    row of the trial picker). We rank by TRIAL_INDEX so
     the chronologically-first reading keeps its original id; later readings
     get `_r2`, `_r3`, … appended.
 
     Groups on the already-computed ``df["participant_id"]`` (1:1 with ``source``),
     so a composite participant id is handled without recomputing the join.
 
-    #412: a suffixed id never lands on a trial the participant already has —
+    A suffixed id never lands on a trial the participant already has —
     see :func:`_colliding_repeat_ids` for the spelling it takes instead.
     """
     if trial_col == "unique_trial_id":
@@ -5114,7 +5115,7 @@ def _disambiguate_repeated_readings(
         }
     )
     # A reading with no index of its own keeps its id unsuffixed rather than
-    # crashing the cast (BUG-56).
+    # crashing the cast.
     rank = (
         grouper.groupby(["_pk", "_tc"])["_idx"]
         .rank(method="dense")
@@ -5134,7 +5135,7 @@ def _disambiguate_repeated_readings(
     df["trial_id"] = ids
     if record_base and (rank > 1).any():
         # What the reading was recorded under, so a table keyed by the stimulus
-        # still finds a repeat's boxes (BUG-57 / DATA-49's trial join).
+        # still finds a repeat's boxes (the stimulus join's trial route).
         df[BASE_TRIAL_ID] = base
     return df
 
@@ -5144,8 +5145,8 @@ def _colliding_repeat_ids(
 ) -> dict[tuple[str, str, int], str]:
     """The repeated readings whose ``<id>_r<n>`` a participant already has.
 
-    ``(participant, id, n)`` → the id that reading takes instead (#412). A
-    reader with two readings of ``a`` and a recorded trial ``a_r2`` used to
+    ``(participant, id, n)`` → the id that reading takes instead. A reader
+    with two readings of ``a`` and a recorded trial ``a_r2`` would otherwise
     get ``a_r2`` twice, merging two readings into one scanpath. Such a repeat
     lengthens the separator until the spelling is free — ``a__r2``, then
     ``a___r2`` … — checked against every id the participant has in the source
@@ -5207,8 +5208,8 @@ def has_explicit_trial_index(frame: pd.DataFrame) -> bool:
 
 def trial_order_label(frame: pd.DataFrame) -> str:
     """The axis title for :func:`derive_trial_index`'s values: the column it
-    reads, or how it ordered the trials without one (#374 F35 — the demo
-    carries both ``trial_index`` and ``TRIAL_INDEX``, which differ)."""
+    reads, or how it ordered the trials without one (the demo carries both
+    ``trial_index`` and ``TRIAL_INDEX``, which differ)."""
     for col in ("trial_index", "TRIAL_INDEX"):
         if col in frame.columns:
             return f"Trial order ({col})"
@@ -5268,7 +5269,7 @@ def derive_trial_index(frame: pd.DataFrame) -> pd.Series:
 # Each entry: (source, dest, kind, category) where `kind` ∈
 # {numeric, string, boolean, passthrough} and `category` ∈
 # {measure, linguistic, meta} groups the fields in the UI. Matched by exact
-# source name (same as the legacy keep-lists this replaced).
+# source name.
 # ---------------------------------------------------------------------------
 WORD_OPTIONAL_FIELDS = [
     ("IA_FIRST_FIXATION_DURATION", "first_fixation_ms", "numeric", "measure"),
@@ -5280,8 +5281,8 @@ WORD_OPTIONAL_FIELDS = [
         "numeric",
         "measure",
     ),
-    # Compatibility aliases retained for existing datasets/API consumers; the
-    # PRE-4 canonical field above is the one measure computation consults.
+    # Compatibility aliases kept for existing datasets/API consumers; the
+    # canonical field above is the one measure computation consults.
     (
         "IA_SECOND_RUN_DWELL_TIME",
         "higher_pass_fixation_duration_ms",
@@ -5356,9 +5357,9 @@ WORD_OPTIONAL_FIELDS = [
     ("dspan_ind_end", "dspan_ind_end", "passthrough", "meta"),
     ("is_in_aspan", "is_in_aspan", "boolean", "meta"),
     ("is_in_dspan", "is_in_dspan", "boolean", "meta"),
-    # MultiplEYE side-data (also see FIX_OPTIONAL_FIELDS): the comprehension
-    # questions JSON + the per-trial stimulus-image path + the genre facet, kept
-    # so the panels / image layer can read them off the word frame too.
+    # Side data (also see FIX_OPTIONAL_FIELDS): the comprehension questions
+    # JSON + the per-trial stimulus-image path + the genre facet, kept so the
+    # panels / image layer can read them off the word frame too.
     ("comprehension_questions", "comprehension_questions", "passthrough", "meta"),
     ("image_path", "image_path", "passthrough", "meta"),
     ("image_x", "image_x", "numeric", "meta"),
@@ -5368,16 +5369,9 @@ WORD_OPTIONAL_FIELDS = [
     ("stimulus_font_px", "stimulus_font_px", "numeric", "meta"),
     ("stimulus_font_family", "stimulus_font_family", "passthrough", "meta"),
     ("genre", "genre", "string", "meta"),
-    # DATA-24 multipart screens: what a screen *is* (`reading` / `question` on
-    # MultiplEYE — a trial mixes both, and their fixations have different
-    # provenance), and which block of a question screen a word belongs to
-    # (`stem` / `target` / `distractor_a`… — a per-word facet).
+    # Multipart screens: what a screen *is* (e.g. `reading` / `question` — a
+    # trial can mix both, and their fixations can have different provenance).
     ("screen_kind", "screen_kind", "passthrough", "meta"),
-    ("aoi_block", "aoi_block", "passthrough", "meta"),
-    # DATA-27: which tier the EyeGenBench word boxes came from --
-    # "real" | "reconstructed" | "synthesized". Carried so the UI can badge a
-    # reconstructed layout rather than pass it off as the original screen.
-    ("geometry_source", "geometry_source", "passthrough", "meta"),
 ]
 
 FIX_OPTIONAL_FIELDS = [
@@ -5401,15 +5395,15 @@ FIX_OPTIONAL_FIELDS = [
     ("reread", "pass_index", "numeric", "fixation"),
     ("saccade_type", "saccade_type", "string", "fixation"),
     ("NEXT_SAC_DIRECTION", "saccade_type", "string", "fixation"),
-    # BUG-25: `saccade_amplitude` is *pixels* — either the source column of that
+    # `saccade_amplitude` is *pixels* — either the source column of that
     # name, or (when absent) the euclidean distance measures.py computes from
     # X/Y. EyeLink's two amplitude columns are **degrees of visual angle**, and
     # they are two *different* saccades — the one leaving this fixation and the
     # one that arrived at it — so each keeps its own canonical name with the unit
     # in it. They are deliberately NOT aliased onto `saccade_amplitude`: that
-    # made one column mean px or deg depending on which columns the export
-    # happened to carry (~78x apart on the bundled demo), under a hard-coded
-    # "px" label. Converting instead would need `pixels_per_degree`, which is
+    # would make one column mean px or deg depending on which columns the
+    # export happened to carry (~78x apart on the bundled demo), under a
+    # hard-coded "px" label. Converting instead would need `pixels_per_degree`, which is
     # ASSUMED on every built-in corpus.
     ("saccade_amplitude", "saccade_amplitude", "numeric", "fixation"),
     ("NEXT_SAC_AMPLITUDE", "next_saccade_amplitude_deg", "numeric", "fixation"),
@@ -5421,10 +5415,9 @@ FIX_OPTIONAL_FIELDS = [
     ("blink", "is_blink", "boolean", "fixation"),
     ("blink_flag", "is_blink", "boolean", "fixation"),
     ("BLINK", "is_blink", "boolean", "fixation"),
-    # MultiplEYE trial-level facets + side-data → Trial Info chips / filter
-    # facets / the comprehension panel / the stimulus-image layer. All are
-    # MultiplEYE-specific source names (carried only when the loader emits them),
-    # so they're inert for other corpora.
+    # Trial-level facets + side data → Trial Info chips / filter facets / the
+    # comprehension panel / the stimulus-image layer. Carried only when the
+    # data has them, so they're inert for other corpora.
     ("genre", "genre", "string", "meta"),
     ("session", "session", "string", "meta"),
     ("participant", "participant", "string", "meta"),
@@ -5436,26 +5429,8 @@ FIX_OPTIONAL_FIELDS = [
     ("image_y", "image_y", "numeric", "meta"),
     ("stimulus_font_px", "stimulus_font_px", "numeric", "meta"),
     ("stimulus_font_family", "stimulus_font_family", "passthrough", "meta"),
-    # Reader metadata merged from participant_data.csv (namespaced pp_*).
-    ("pp_age", "pp_age", "numeric", "meta"),
-    ("pp_gender", "pp_gender", "string", "meta"),
-    ("pp_native_language", "pp_native_language", "string", "meta"),
-    ("pp_years_education", "pp_years_education", "numeric", "meta"),
-    ("pp_education_level", "pp_education_level", "string", "meta"),
-    # DATA-24: which kind of screen a fixation happened on (see the word table).
+    # Which kind of screen a fixation happened on (see the word table).
     ("screen_kind", "screen_kind", "passthrough", "meta"),
-    # DATA-27: which tier the EyeGenBench word boxes came from --
-    # "real" | "reconstructed" | "synthesized". Carried so the UI can badge a
-    # reconstructed layout rather than pass it off as the original screen.
-    ("geometry_source", "geometry_source", "passthrough", "meta"),
-    # DATA-31: whether EyeGenBench retained the recorded vertical coordinate or
-    # placed this fixation at its word box's centre.
-    ("fixation_y_source", "fixation_y_source", "passthrough", "meta"),
-    # DATA-27: EyeGenBench's own composite trial id, kept for traceability back to the
-    # benchmark. Deliberately NOT named `unique_trial_id` — normalize_fixations used to
-    # key trial_id on any column with that literal name (BUG-58), and the normalized
-    # frame's own `unique_trial_id` is the mapped trial id, so these would not survive.
-    ("eyegenbench_trial_id", "eyegenbench_trial_id", "passthrough", "meta"),
 ]
 
 
@@ -5493,20 +5468,20 @@ def dropped_columns(
 
 
 # EyeLink writes a missing value as the string ``'.'`` and booleans as ``'0'`` /
-# ``'1'``, so a whole flag column arrives as *strings* (BUG-7). A plain
+# ``'1'``, so a whole flag column arrives as *strings*. A plain
 # ``astype(bool)`` then reads every non-empty string as True — including ``'0'``
-# and ``'.'`` — and `regression_in_flag` came out True for every row in the
+# and ``'.'`` — which would make `regression_in_flag` True for every row in the
 # bundled demo. Anything a reader would write for "false" or "missing" has to be
 # recognised before the cast.
 _FALSEY_FLAG_STRINGS = {"", ".", "0", "0.0", "false", "f", "no", "n", "na", "nan", "-"}
 
 
 def coerce_flag(col: pd.Series) -> pd.Series:
-    """Coerce a flag-like column to real booleans (BUG-7).
+    """Coerce a flag-like column to real booleans.
 
     Numbers go by ``!= 0``; strings are matched against the sentinels above
     (case-insensitively) rather than by truthiness. NaN / missing is ``False``,
-    which is what every downstream flag consumer already assumed.
+    which is what every downstream flag consumer assumes.
     """
     if pd.api.types.is_bool_dtype(col):
         return col.fillna(False).astype(bool)
@@ -5555,7 +5530,7 @@ def coerce_bool_or_na(col: pd.Series) -> pd.Series:
     ``true/false``, ``t/f``, ``yes/no``, ``y/n``, ``1/0`` (any case, trimmed)
     are read by their meaning — never by truthiness, under which the string
     ``"False"`` is true. Missing cells and any other spelling are ``<NA>``, so
-    a caller decides what an unknown means (round 11).
+    a caller decides what an unknown means.
     """
     if pd.api.types.is_bool_dtype(col):
         return col.astype("boolean")
@@ -5582,8 +5557,8 @@ def coerce_measure_flag(col: pd.Series) -> pd.Series:
     :func:`coerce_flag` reads a missing cell as ``False``, which is right for an
     operational flag (blink, excluded) and wrong for a measure: EyeLink writes
     ``.`` in ``IA_REGRESSION_IN`` for a word with no first pass, where the
-    measure is undefined, not "no regression". As ``False`` those rows lowered
-    every rate and counted as readers behind it."""
+    measure is undefined, not "no regression". As ``False`` those rows would
+    lower every rate and count as readers behind it."""
     flags = coerce_flag(col).astype("boolean")
     if pd.api.types.is_bool_dtype(col) and not col.isna().any():
         return flags
@@ -5642,10 +5617,10 @@ def categorize_columns(raw: pd.DataFrame, schema: dict, registry: list) -> dict:
     registry entries present in the frame (each ``{source, dest, category}``);
     ``unclaimed`` = everything else (offered as filter fields / extra keeps).
 
-    AN-32: a registry column mapped as a *reading measure* is not also a
-    detected extra — `IA_DWELL_TIME` mapped as TFD was offered, pre-kept, as
-    `total_fixation_duration_ms` — and a source the registry lists twice (a
-    compatibility alias) is detected once, under its first entry. Only the
+    A registry column mapped as a *reading measure* is not also a detected
+    extra (otherwise `IA_DWELL_TIME` mapped as TFD would be offered again,
+    pre-kept, as `total_fixation_duration_ms`), and a source the registry lists
+    twice (a compatibility alias) is detected once, under its first entry. Only the
     measure mapping claims a column here: a registry column the Trial ID is
     composed from (`repeated_reading_trial`) is still a detected trial
     condition, which is what offers it as a trial filter."""
@@ -5708,17 +5683,16 @@ def _copy_screen_fields(
             continue
         values = source[column]
         df[destination] = _to_number(values) if numeric else values
-    # BUG-79: UX-88 took `screen_index` out of the mapping on the premise that
-    # the public corpora stamp it onto their frames — but this function rebuilds
-    # the frame from the mapping, so the stamp was dropped and screen order
-    # re-derived from row order: AOI-file order on the words, each reader's
-    # onset order on the fixations. MultiplEYE's per-reader question order then
-    # conflicted and the 🗂️ Data page crashed. A canonical column rides through
-    # — but only onto a frame the mapping made multipart (DATA-59). With no
-    # screen field mapped, a raw `screen_index` column is just a column: riding
-    # it through derived a `screen_id` from it, so clearing the screen fields
-    # in the mapping still made the AOI table multipart while the fixations
-    # were not, and the pair was refused.
+    # This function rebuilds the frame from the mapping, so a `screen_index`
+    # the public corpora stamp onto their frames would otherwise be dropped and
+    # screen order re-derived from row order: AOI-file order on the words, each
+    # reader's onset order on the fixations — which conflict on MultiplEYE's
+    # per-reader question order. So a canonical `screen_index` rides through —
+    # but only onto a frame the mapping made multipart. With no screen field
+    # mapped, a raw `screen_index` column is just a column: riding it through
+    # would derive a `screen_id` from it, so clearing the screen fields in the
+    # mapping would still make the AOI table multipart while the fixations were
+    # not, and the pair would be refused.
     if (
         SCREEN_ID in df.columns
         and SCREEN_INDEX not in df.columns
@@ -5735,20 +5709,20 @@ def _text_id_values(
     write: the mapped Text ID, else a literal ``unique_paragraph_id``, else the
     trial id before any repeat suffix.
 
-    The mapped column, always (#412) — BUG-58's rule for the Trial ID, applied
-    to the Text ID. A literal ``unique_paragraph_id`` column used to win over
-    whatever the mapping named, so a Text ID picked by hand was silently
-    replaced on any table that carried one, and a stimulus-level AOI table
-    joined to its fixations on the wrong text. Auto-detection proposes
-    ``unique_paragraph_id`` first, so it is still the text id by default, and
-    it is still the fallback when no Text ID is mapped at all.
+    The mapped column, always — the Trial ID's rule, applied to the Text ID.
+    If a literal ``unique_paragraph_id`` column won over whatever the mapping
+    named, a Text ID picked by hand would be silently replaced on any table
+    that carried one, and a stimulus-level AOI table would join to its
+    fixations on the wrong text. Auto-detection proposes
+    ``unique_paragraph_id`` first, so it is the text id by default, and it is
+    the fallback when no Text ID is mapped at all.
     """
     if schema.get("text_id"):
         # str or list (a composite text id, joined like the trial id).
         return trial_id_series(source, schema["text_id"])
     if "unique_paragraph_id" in source.columns:
         return stable_id(source["unique_paragraph_id"])
-    # DATA-49: a repeated reading's text is the id it was suffixed from — the
+    # A repeated reading's text is the id it was suffixed from — the
     # text a stimulus-level AOI table knows it by.
     return unsuffixed
 
@@ -5762,7 +5736,7 @@ def _text_id_mapped_flag(
     ``unique_paragraph_id`` is mapped. On ✏️ Edit dataset the proposal maps
     Text ID to the stored ``text_id`` column itself, which says nothing new: the
     stored frame's own flag is kept, and a frame stored without one gets none
-    (so its values decide, as before)."""
+    (so its values decide)."""
     text = schema.get("text_id")
     if renormalizing and text and trial_mapping_columns(text) == ["text_id"]:
         if TEXT_ID_MAPPED in source.columns:
@@ -5778,7 +5752,7 @@ def _drop_reserved_columns(
 
     The pipeline reads those names as its own bookkeeping — a join route, the
     stimulus flag, the Edit-dataset collapse key — so an incoming column that
-    carries one must not reach any of them (DATA-49); normalization rebuilds
+    carries one must not reach any of them; normalization rebuilds
     them. The names are the pipeline's own, so the usual source is a table
     Scanpath Studio wrote being loaded again, a normal round-trip: logged at
     INFO, not warned about. One the mapping names is the user's data and is
@@ -5829,11 +5803,11 @@ def normalize_words(
         df["unique_trial_id"] = df["trial_id"]
         unsuffixed = df["trial_id"]
     else:
-        # The mapped column, always (BUG-58). A literal `unique_trial_id`
-        # column used to win over whatever the mapping named, so a Trial ID
-        # picked by hand was silently replaced on any table that carried one —
-        # and a pair where only one side did joined on nothing. Auto-detection
-        # proposes `unique_trial_id` first, so it is still used by default.
+        # The mapped column, always. If a literal `unique_trial_id` column
+        # won over whatever the mapping named, a Trial ID picked by hand would
+        # be silently replaced on any table that carried one — and a pair where
+        # only one side did would join on nothing. Auto-detection proposes
+        # `unique_trial_id` first, so it is used by default.
         trial_col = trial_cols[0]
         df["trial_id"] = stable_id(words[trial_col])
         # The id before any repeat suffix names the text that was read.
@@ -5841,7 +5815,7 @@ def normalize_words(
         if schema.get("participant"):
             df = _disambiguate_repeated_readings(df, words, trial_col)
         if "unique_trial_id" in words.columns:
-            # The mapped id *is* the unique trial id (BUG-58) — never the raw
+            # The mapped id *is* the unique trial id — never the raw
             # column's own values, which the trial picker would otherwise key
             # on (`utils.build_combo_options` prefers `unique_trial_id`).
             df["unique_trial_id"] = df["trial_id"]
@@ -5858,7 +5832,7 @@ def normalize_words(
     df = _copy_screen_fields(df, words, schema)
     df["word_id"] = _to_number(words[schema["word_id"]])
     if schema.get("text"):
-        # BUG-53: a missing cell is an empty word, never NaN — pandas 3's
+        # A missing cell is an empty word, never NaN — pandas 3's
         # `astype(str)` keeps NaN as NaN, and every " ".join over a trial's text
         # downstream then raises on the float.
         text = words[schema["text"]]
@@ -5891,7 +5865,7 @@ def normalize_words(
         _carry_extra_columns(
             df, words, keep_columns, _schema_source_columns(schema) | emitted
         )
-    # AN-32: after the passthrough and the extras, so the mapping has the last
+    # After the passthrough and the extras, so the mapping has the last
     # word on every measure it names.
     _apply_reading_measures(df, words, schema)
     _blank_unfixated_measures(df)
@@ -5928,7 +5902,7 @@ def normalize_fixations(
         df["unique_trial_id"] = df["trial_id"]
         unsuffixed = df["trial_id"]
     else:
-        trial_col = trial_cols[0]  # the mapped column (BUG-58)
+        trial_col = trial_cols[0]  # the mapped column
         df["trial_id"] = stable_id(fixations[trial_col])
         # The id before any repeat suffix names the text that was read.
         unsuffixed = df["trial_id"]
@@ -5937,7 +5911,7 @@ def normalize_fixations(
                 df, fixations, trial_col, record_base=True
             )
         if "unique_trial_id" in fixations.columns:
-            # The mapped id *is* the unique trial id (BUG-58) — never the raw
+            # The mapped id *is* the unique trial id — never the raw
             # column's own values, which the trial picker would otherwise key
             # on (`utils.build_combo_options` prefers `unique_trial_id`).
             df["unique_trial_id"] = df["trial_id"]
@@ -5955,10 +5929,10 @@ def normalize_fixations(
             df[coord] = _to_number(fixations[schema[coord]])
         else:
             df[coord] = np.nan
-    # An unreadable duration / onset still falls back to 0, but no longer
-    # silently: `_warn_numeric_issues` below names the column (BUG-54).
-    # DATA-40: a duration / onset in seconds (Gazepoint), microseconds (Tobii)
-    # or nanoseconds (Pupil Labs Neon) is read in milliseconds.
+    # An unreadable duration / onset falls back to 0, but not silently:
+    # `_warn_normalization_issues` above names the column. A duration / onset
+    # in seconds (Gazepoint), microseconds (Tobii) or nanoseconds (Pupil Labs
+    # Neon) is read in milliseconds.
     duration = schema["duration"]
     df["duration_ms"] = _as_ms(_to_number(fixations[duration]), duration).fillna(0)
 
@@ -5985,7 +5959,7 @@ def normalize_fixations(
     else:
         df["word_id"] = np.nan
 
-    # pass_index / saccade_type / saccade_amplitude / eye are no longer schema
+    # pass_index / saccade_type / saccade_amplitude / eye are not schema
     # fields — they ride through _apply_optional_fields (FIX_OPTIONAL_FIELDS) when
     # the data carries them. saccade_amplitude is also recomputed from X/Y by
     # measures.enrich_fixations when absent.
@@ -6069,11 +6043,11 @@ def repeat_bases(fixations: pd.DataFrame | None) -> dict:
     """Each repeated reading's ``(reader, trial id)`` → the trial id it was
     recorded under.
 
-    From ``_base_trial_id`` when the fixations carry it. A stored frame from
-    before DATA-49 does not, so its suffixes are read back instead: a trial
+    From ``_base_trial_id`` when the fixations carry it. A frame stored by an
+    older version does not, so its suffixes are read back instead: a trial
     ``X_rN`` of a reader who also has a trial ``X`` is the repeat
-    ``_disambiguate_repeated_readings`` made of it. Only the pre-provenance
-    Edit-dataset path uses the second form, to fold a stored repeat's copy of
+    ``_disambiguate_repeated_readings`` made of it. Only the Edit-dataset path
+    for such a frame uses the second form, to fold a stored repeat's copy of
     the boxes back into the AOI trial it copied."""
     if fixations is None or fixations.empty or "trial_id" not in fixations:
         return {}
@@ -6172,13 +6146,13 @@ def remap_normalized_frame(
     so the frame's identity columns stay consistent with the composite path and
     downstream readers of ``unique_text_id`` keep working.
 
-    DATA-39: a **words** frame remapped with no Participant is a stimulus-level
+    A **words** frame remapped with no Participant is a stimulus-level
     AOI table, exactly as it was at import — ``normalize_words`` re-flags it for
     ``broadcast_stimulus_words``. But the stored frame was *already* broadcast
     (one copy of every trial's words per reader), so only the first reader's
     copy of each trial is kept here, and the caller must run
-    ``harmonize_frames`` to broadcast it again. Skipping either step is the bug
-    this fixes: without the collapse every reader gets every reader's boxes;
+    ``harmonize_frames`` to broadcast it again. Skipping either step breaks the
+    dataset: without the collapse every reader gets every reader's boxes;
     without the harmonize every word is left on the ``""`` placeholder reader,
     so no trial finds its boxes and the scanpath plot loses its AOIs and its
     text. The collapse picks a *reader*, never a key: deduplicating on
@@ -6201,7 +6175,8 @@ def remap_normalized_frame(
         and BASE_TRIAL_ID not in working.columns
         and BASE_TRIAL_ID not in derived
     ):
-        # A fixations frame stored before `_base_trial_id` existed: give its
+        # A fixations frame stored without `_base_trial_id` (by an older
+        # version): give its
         # repeats the id they were recorded under, so the join still finds
         # their boxes after the save.
         bases = _map_repeats(working, repeat_of)
@@ -6215,7 +6190,7 @@ def remap_normalized_frame(
         and not working.empty
     ):
         if AOI_TRIAL_ID in working.columns:
-            # Broadcast here (DATA-49): each copy names the AOI trial it came
+            # Broadcast here: each copy names the AOI trial it came
             # from, whichever route it took — so one reading's copy of each AOI
             # trial, stamped back with that trial's own id, *is* the stimulus
             # table again. No guessing from content, no suffixed repeats left.
@@ -6226,7 +6201,8 @@ def remap_normalized_frame(
                 + working["trial_id"].astype(str)
             )
         else:
-            # Stored before the provenance column: joined by trial id, so the
+            # Stored without the provenance column (by an older version):
+            # joined by trial id, so the
             # readers of a stimulus share its trial id — except a repeat, whose
             # copy carries its `_r2` id. Fold it back into the trial it copied
             # (`repeat_of`, from the fixations), or it would become a phantom
@@ -6331,14 +6307,15 @@ def filter_data(
 
 @dataclass(frozen=True)
 class TrialSelection:
-    """What the trial-level filters keep, resolved to readings (#412).
+    """What the trial-level filters keep, resolved to readings.
 
     A condition such as ``difficulty_level`` may live on the Words table only,
     the Fixations table only, or both. Filtering each table by its own column
-    left the other table's rows of an excluded reading in place, and the trial
-    pool — built from every table — kept offering it. So each filter is decided
-    once per reading, ``(participant_id, trial_id)``, from the tables that
-    carry its column, and that one answer is applied to every table.
+    would leave the other table's rows of an excluded reading in place, and the
+    trial pool — built from every table — would keep offering it. So each
+    filter is decided once per reading, ``(participant_id, trial_id)``, from
+    the tables that carry its column, and that one answer is applied to every
+    table.
 
     ``kept`` are the readings the tables know that the filters keep. A reading
     neither of them knows (one only the raw-gaze samples have) has no value for
@@ -6377,8 +6354,8 @@ class TrialFilterResult:
 #: The columns a reading is keyed by.
 READING_KEY_COLUMNS = ("participant_id", "trial_id")
 
-#: #412 — `distinct_key_codes`' memo, ``(id(frame), columns) → (weak ref,
-#: codes, keys)``. Across reruns, unlike PERF-3's per-run fingerprint memo: the
+#: `distinct_key_codes`' memo, ``(id(frame), columns) → (weak ref, codes,
+#: keys)``. Across reruns, unlike the per-run fingerprint memo: the
 #: frames on the rerun path are the same objects run after run (`frame_cache`,
 #: the stored datasets) and are never written in place
 #: (tests/test_frame_immutability.py), so their codes cannot go stale. The weak
@@ -6394,12 +6371,12 @@ _KEY_CODES_MAX = 12
 def distinct_key_codes(
     frame: pd.DataFrame, columns: Sequence[str] = READING_KEY_COLUMNS
 ) -> tuple[np.ndarray, pd.Index]:
-    """Each row of ``frame`` as a code into its distinct ``columns`` keys (#412).
+    """Each row of ``frame`` as a code into its distinct ``columns`` keys.
 
     Returns ``(codes, keys)``: ``keys[codes[i]]`` is row ``i``'s key, the keys
     spelled as strings (a ``MultiIndex`` for several columns), as `trial_keys`
     compares them. One grouping pass on the columns as they are (~30 ms per
-    million rows; stringifying every row first cost 20× that on numeric ids),
+    million rows; stringifying every row first costs 20× that on numeric ids),
     then a lookup per *distinct* key — so the trial filters, a group's mask
     and the trial pool each cost a ``bincount`` or an index lookup on a frame
     whose codes are known. Remembered per frame object across reruns
@@ -6441,8 +6418,8 @@ def carries_mapped_text(frame: pd.DataFrame) -> bool:
     """Whether ``frame``'s ``text_id`` came from a mapped Text ID.
 
     Read off ``_text_id_mapped`` only, so it is one pass over a boolean column:
-    a frame without the flag (built by hand, stored before it) counts as
-    mapped, which is what every frame was taken to be before."""
+    a frame without the flag (built by hand, or stored by an older version)
+    counts as mapped."""
     if TEXT_ID_MAPPED not in frame.columns:
         return True
     return bool(frame[TEXT_ID_MAPPED].fillna(False).astype(bool).any())
@@ -6519,7 +6496,7 @@ def _resolve_trial_filters(
                 inside = numbers.between(lo, hi).fillna(False).astype(bool)
                 return inside.to_numpy(), numbers.notna().to_numpy()
 
-            # UX-49: a range is a narrowing control, so a reading with no value
+            # A range is a narrowing control, so a reading with no value
             # is kept unless *Keep unknown values* is off for this column.
             rules.append((col, _in_range, col not in dropping, owners))
     if not rules:
@@ -6577,7 +6554,7 @@ def select_trials(
     """Narrow words + fixations by participant and by trial-level filters.
 
     ``metadata`` maps a column name to the set of allowed values (membership).
-    A falsy selection means "no constraint". ``ranges`` (UX-49) is the
+    A falsy selection means "no constraint". ``ranges`` is the
     *continuous* counterpart: column → ``(lo, hi)`` inclusive bounds for a
     numeric trial-level column. **A reading with no value survives a range**:
     a range is a narrowing control, so a reader missing a comprehension score
@@ -6585,20 +6562,19 @@ def select_trials(
     columns whose researcher unticked *Keep unknown values*: there, a reading
     with no value is left out with the rest.
 
-    #412: every condition and range is decided **per reading**, from whichever
+    Every condition and range is decided **per reading**, from whichever
     of the two tables carries its column, and the answer applies to both —
     a filter on a column only the Words table has narrows the fixations too.
     A reading the deciding tables disagree on is left out and listed in the
     result's ``conflicts`` (see :class:`TrialSelection`). A column neither table
-    carries is ignored, as before.
+    carries is ignored.
     """
     w, f = words, fixations
     # `None` is "no constraint"; an **empty list is a constraint that nothing
-    # satisfies** and must empty the pool. The two were conflated while every
-    # producer could only emit None-or-non-empty, but DATA-20's metadata
-    # narrowing intersects sets and can legitimately land on zero readers —
-    # under the old falsy test that silently applied no filter at all, so an
-    # impossible combination showed the *whole* corpus.
+    # satisfies** and must empty the pool. The metadata narrowing intersects
+    # sets and can legitimately land on zero readers — a falsy test would
+    # silently apply no filter at all, so an impossible combination would show
+    # the *whole* corpus.
     if participants is not None:
         # participant_id is already string after normalization (as the metadata
         # filters below also assume), so skip a full-column .astype(str) recast.
@@ -6654,7 +6630,7 @@ def select_trials_cached(
     *,
     slot: str,
 ) -> TrialFilterResult:
-    """`select_trials` over a pool, worked out once per filter change (#412).
+    """`select_trials` over a pool, worked out once per filter change.
 
     Deciding each filter per reading is a grouping pass over each table, so
     the answer is kept in the `frame_cache` ``slot`` — one per pool (the
@@ -6695,7 +6671,7 @@ def select_readings(
     fixations: pd.DataFrame | None,
     conditions: dict,
 ) -> TrialSelection | None:
-    """The readings matching every ``{column: allowed values}`` condition (#412).
+    """The readings matching every ``{column: allowed values}`` condition.
 
     The trial filters' rule (`select_trials`) for a Corpus Analysis cohort:
     each condition is decided per reading from the tables that carry its
@@ -6718,7 +6694,7 @@ def select_readings(
 def trial_filter_conflict_note(
     conflicts: dict, label=str, *, subject: str | None = None, limit: int = 3
 ) -> str:
-    """One sentence per filtered column whose two tables disagree (#412).
+    """One sentence per filtered column whose two tables disagree.
 
     ``label`` names a column for the reader (the app passes the dataset's own
     names); ``subject`` is what leaves the trials out — the column's filter by
@@ -6757,7 +6733,7 @@ def trial_keys(frame: pd.DataFrame) -> set:
 
 
 def names_readings(frame: pd.DataFrame | None) -> bool:
-    """Whether ``frame``'s rows are readings a trial pool may list (#412).
+    """Whether ``frame``'s rows are readings a trial pool may list.
 
     Not a stimulus-level AOI table that has not been broadcast onto the
     readings yet (`broadcast_stimulus_words`): its rows sit on the placeholder
@@ -6773,7 +6749,7 @@ def names_readings(frame: pd.DataFrame | None) -> bool:
 
 
 def trial_pool(*frames: pd.DataFrame | None) -> pd.DataFrame:
-    """The ``(participant_id, trial_id)`` readings any of ``frames`` has (#412).
+    """The ``(participant_id, trial_id)`` readings any of ``frames`` has.
 
     **The one trial-pool rule** the app's picker (`utils.combo_source`), the
     API's `list_trials`, the CLI's ``render --list-trials`` and the export
@@ -6795,11 +6771,11 @@ def trial_pool(*frames: pd.DataFrame | None) -> pd.DataFrame:
 
 
 def text_ids(*frames: pd.DataFrame | None) -> set[str]:
-    """The distinct text ids across every frame that carries one (DATA-50).
+    """The distinct text ids across every frame that carries one.
 
     ``unique_text_id`` when any frame has it, else ``text_id`` — one id space,
-    never a union of the two. Counting the words table alone said **0 texts**
-    for a fixations-only dataset whose fixations name twelve.
+    never a union of the two. Counting the words table alone would say
+    **0 texts** for a fixations-only dataset whose fixations name twelve.
     """
     present = [f for f in frames if f is not None and not f.empty]
     column = (
@@ -6817,7 +6793,7 @@ def text_ids(*frames: pd.DataFrame | None) -> set[str]:
 def filter_frame_to_keys(frame: pd.DataFrame, keys: set) -> pd.DataFrame:
     """Keep only rows whose ``(participant_id, trial_id)`` is in ``keys``.
 
-    Single-frame counterpart of :func:`filter_to_keys`. BUG-12: the raw-gaze
+    Single-frame counterpart of :func:`filter_to_keys`. The raw-gaze
     samples table has to be narrowed by the annotation filters (favorites /
     tags) exactly like the words and fixations frames, or a sample row for an
     unstarred trial survives "⭐ Favorites only". Vectorized via a MultiIndex
@@ -6855,19 +6831,19 @@ def raw_gaze_in_pool(
     *,
     keep_unknown: bool = True,
 ) -> pd.DataFrame:
-    """The raw-gaze rows of the trials in the current pool (VIZ-45).
+    """The raw-gaze rows of the trials in the current pool.
 
     A trial the words or fixations table knows is in the pool when it survived
     the filters there, so its samples follow it. A trial **only the raw gaze
     knows** — a raw-gaze-only dataset's every trial, or the samples-only trials
     of a dataset that has fixations for others — has nothing there to survive,
-    and used to be dropped for it: the old narrowing kept only the participants
-    and trials the other two tables listed. Those trials stay, narrowed only by
+    so narrowing to the participants and trials the other two tables list would
+    drop it. Those trials stay, narrowed only by
     what applies to the samples themselves (participant, annotations, the
     trial-metadata keys — applied to ``raw_gaze`` before this) — unless
     ``keep_unknown`` is off: a condition filter on the other two tables cannot
     say such a trial has the value it asks for, so it leaves it out
-    (`TrialSelection.keeps_unknown`, #412).
+    (`TrialSelection.keeps_unknown`).
 
     ``words_all`` / ``fixations_all`` are the frames *before* the filters, which
     is what tells "filtered out" from "never there". Returns ``raw_gaze`` itself
@@ -6934,9 +6910,9 @@ def _known_trial_keys(
 
 
 # ---------------------------------------------------------------------------
-# VAL-7 — is a "trial" actually more than one reading?
+# Is a "trial" actually more than one reading?
 #
-# The inverse of BUG-23. A Trial ID mapping that does not fully identify a
+# A Trial ID mapping that does not fully identify a
 # reading concatenates several readings into one `trial_id`, and nothing about
 # the result looks wrong: the figure renders as an ordinary scanpath with a lot
 # of regressions. Three independent signals catch it, and a fourth names the fix.
@@ -6995,7 +6971,7 @@ def trial_identity_key(frame: pd.DataFrame) -> list[str]:
 def _sample_trials(
     words: pd.DataFrame, fixations: pd.DataFrame, limit: int | None, seed: int
 ) -> tuple[pd.DataFrame, pd.DataFrame, int | None]:
-    """Narrow both frames to ``limit`` trials, or leave them alone (VAL-7).
+    """Narrow both frames to ``limit`` trials, or leave them alone.
 
     Samples the *trial keys* rather than rows, so a chosen trial arrives whole —
     a half-read trial would look exactly like the two-readings-under-one-id
@@ -7014,7 +6990,7 @@ def _sample_trials(
     return kept_words, kept_fixations, len(keys)
 
 
-#: Trials VAL-7's identity check examines by default before it starts sampling.
+#: Trials the identity check examines by default before it starts sampling.
 #: Measured on the full OneStop corpus (24,046 trials, 5.0 M rows): the census
 #: takes 4.23 s on every dataset load, for one warning line, and this sample
 #: takes 1.15 s. Most of what remains is fixed — narrowing two multi-million-row
@@ -7032,7 +7008,7 @@ def diagnose_trial_identity(
     sample_trials: int | None = None,
     seed: int = 0,
 ) -> dict[str, object]:
-    """Report evidence that one ``trial_id`` covers more than one reading (VAL-7).
+    """Report evidence that one ``trial_id`` covers more than one reading.
 
     ``sample_trials`` caps how many trials are examined; ``None`` scans them all
     (what the 🗂️ Data page's *Check every trial* button asks for). The sample is
@@ -7155,7 +7131,7 @@ def diagnose_trial_identity(
     report["multi_valued_columns"] = dict(
         sorted(multi.items(), key=lambda kv: (-kv[1], kv[0]))
     )
-    # #374 F3: when `source_file` is what varies, the files may be two kinds of
+    # When `source_file` is what varies, the files may be two kinds of
     # table joined into one (a fixation report and an interest-area report) —
     # adding `source_file` to the Trial ID would only hide that.
     report["mixed_source_shapes"] = SOURCE_FILE_COLUMN in multi and any(
@@ -7166,7 +7142,7 @@ def diagnose_trial_identity(
 
 
 def _mixed_source_shapes(frame: pd.DataFrame | None) -> bool:
-    """Whether the files behind ``frame`` filled different columns (#374 F3).
+    """Whether the files behind ``frame`` filled different columns.
 
     Each ``source_file``'s rows are reduced to the set of columns they hold any
     value in; two files of one export share that set, while a fixation report
@@ -7256,7 +7232,7 @@ def diagnose_filters(
     fixations: pd.DataFrame,
     steps: Sequence[tuple],
 ) -> list[dict]:
-    """Attribute an empty trial pool to the filter(s) that caused it (UX-7).
+    """Attribute an empty trial pool to the filter(s) that caused it.
 
     ``steps`` is ``(label, apply)`` or ``(label, apply, keys)``, where
     ``apply(words, fixations)`` returns the frames with *only that one* filter
@@ -7316,9 +7292,9 @@ def compute_canvas_size(
     y_candidates: list[float] = []
 
     def extent(frame: pd.DataFrame, position: str, size: str | None = None) -> float:
-        # Coerced (BUG-54): the wizard estimates from the *raw* upload, where a
-        # column that merely happens to be named `x` can be text — a
-        # decimal-comma export, a unit suffix — and `float(max())` raised.
+        # Coerced: the wizard estimates from the *raw* upload, where a column
+        # that merely happens to be named `x` can be text — a decimal-comma
+        # export, a unit suffix — on which `float(max())` raises.
         if position not in frame.columns:
             return np.nan
         value = _to_number(frame[position])
@@ -7351,13 +7327,13 @@ def canvas_geometry_frames(
     fixation_schema: dict | None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """The mapped geometry of *raw* tables, in the canonical columns
-    :func:`compute_canvas_size` reads (DATA-46).
+    :func:`compute_canvas_size` reads.
 
     The add-dataset wizard asks for the screen before anything is normalized, so
     it only has the upload as read — ``IA_LEFT`` and ``CURRENT_FIX_X``, not
     ``x``. Handed straight to :func:`compute_canvas_size`, an EyeLink export has
-    no column called ``x``, and the "estimate" was the default screen under
-    another name. This projects just the mapped coordinate columns (word boxes
+    no column called ``x``, and the "estimate" would be the default screen
+    under another name. This projects just the mapped coordinate columns (word boxes
     as edges *or* origin + size, fixation x/y) onto ``x``/``y``/``width``/
     ``height`` — cheap, and correct for any mapping the user has picked so far.
     A field that is not mapped yet is simply absent.
@@ -7403,10 +7379,11 @@ def canvas_geometry_frames(
     return word_geometry, fixation_geometry
 
 
-# Primary EyeLink IA measures. When a words frame already carries all of these
-# (a pre-aggregated export, e.g. OneStop), the fixation-based recompute is a
-# fallback whose output is discarded by the "existing values win" merge — so we
-# skip it entirely. See compute_per_word_measures for the precedence rule.
+# Primary EyeLink IA measures — the headline columns a pre-aggregated export
+# (e.g. OneStop) carries. Not read: `_compute_word_metrics_cached` recomputes
+# whenever fixations exist, since the computed path adds measures such exports
+# lack, and existing values win column by column (see
+# compute_per_word_measures for the precedence rule).
 _PREAGGREGATED_METRIC_COLUMNS = [
     "first_fixation_ms",
     "first_pass_gaze_duration_ms",
@@ -7437,7 +7414,7 @@ def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Dat
 def preprocess_fixation_stage(
     words: pd.DataFrame, fixations: pd.DataFrame, settings: dict
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Cached PRE-1 stage; disabled returns the original fixation object."""
+    """Cached preprocessing stage; disabled returns the original fixation object."""
     if not settings.get("enabled"):
         return fixations, pd.DataFrame()
     key = (
@@ -7446,12 +7423,12 @@ def preprocess_fixation_stage(
         tuple(sorted(settings.items())),
     )
     result = _preprocess_fixation_stage_cached(words, fixations, settings, key)
-    # BUG-103: a fresh copy out of the cache each rerun, named by its inputs.
+    # A fresh copy out of the cache each rerun, named by its inputs.
     assign_derived(result, "preprocess_fixation_stage", (words, fixations), settings)
     return result
 
 
-#: Ceiling on the caches keyed by a *single trial's* frames (PERF-6). Without
+#: Ceiling on the caches keyed by a *single trial's* frames. Without
 #: one, a bulk export over OneStop's 20,000 trials leaves 20,000 result frames
 #: behind it — each computed once and never asked for again. Large enough that
 #: stepping back and forth through a few dozen trials still hits the cache,
@@ -7485,9 +7462,10 @@ def _compute_word_metrics_cached(
         return _words.copy()
 
     # Existing IA measures still win column-by-column inside the measure
-    # function, but PRE-4 adds measures EyeLink exports do not usually carry.
-    # Compute whenever fixations exist so those missing fields are not silently
-    # absent merely because the four legacy headline columns were pre-aggregated.
+    # function, but the computed path adds measures EyeLink exports do not
+    # usually carry. Compute whenever fixations exist so those missing fields
+    # are not silently absent merely because the four headline columns were
+    # pre-aggregated.
     enriched = (
         compute_per_word_measures(_fixations, _words)
         if not _fixations.empty
@@ -7583,7 +7561,7 @@ def _compute_word_metrics_cached(
         )
     for col in ["skip_flag", "regression_in_flag", "regression_out_flag"]:
         if col in metrics.columns:
-            # BUG-7: same sentinel-aware coercion as normalization — a frame can
+            # Same sentinel-aware coercion as normalization — a frame can
             # reach here carrying raw `'0'` / `'.'` strings (a pre-computed IA
             # measure joined straight in), and a truthiness cast would flag every
             # row True.
@@ -7608,7 +7586,7 @@ def default_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> dict:
 def _default_filters_cached(
     _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
 ) -> dict:
-    # UX-166: keyed on the filtered pair, so this misses on every filter change
+    # Keyed on the filtered pair, so this misses on every filter change
     # while everything upstream hits — the report shows the gated dataset card
     # while the new pool is worked out, not only once the trial list builds.
     progress.report()

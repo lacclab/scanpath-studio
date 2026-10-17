@@ -131,7 +131,7 @@ def _full_config() -> dict:
         "coloring": {
             "color_by": "pass_index",
             "heatmap_metric": "counts",
-            "heatmap_style": "Interpolated",
+            "heatmap_style": "Smoothed",
             "show_colorbars": True,
             "fixation_range": [150.0, 250.0],
             "heatmap_range": [120.0, 280.0],
@@ -159,7 +159,7 @@ class TestPlotConfigRestore:
         assert ss["global_show_stimulus_image"] is True  # round-trips like raw_gaze
         assert ss["global_anim_autoplay"] is False  # autoplay round-trips
         # coloring
-        assert ss["global_heatmap_style"] == "Interpolated"
+        assert ss["global_heatmap_style"] == "Smoothed"
         assert ss["global_color_by"] == "pass_index"
         assert ss["global_heatmap_metric"] == "counts"
         assert ss["global_show_fixation_colorbar"] is True
@@ -234,7 +234,7 @@ class TestPlotConfigRestore:
             "critical_span_style": "Mark border",
             "fixation_flags": {
                 "short": {
-                    "mode": "Discard",
+                    "mode": "Hide",
                     "threshold_ms": 70,
                     "symbol": "triangle-up-open",
                     "color": "#ff7f0e",
@@ -286,7 +286,7 @@ class TestPlotConfigRestore:
         assert ss["global_font_family"] == "Courier New"
         assert ss["global_critical_span_style"] == "Mark border"
         assert ss["global_fixclass_oob_mode"] == "Highlight"
-        assert ss["global_fixclass_short_mode"] == "Discard"
+        assert ss["global_fixclass_short_mode"] == "Hide"
         assert ss["global_fixclass_short_threshold_ms"] == 70
         assert ss["global_saccade_style"] == "Dashed"
         assert ss["global_saccade_width"] == 4.0
@@ -395,14 +395,14 @@ class TestPlotConfigRestore:
         # a Streamlit error page.
         config = {
             "layers": {"words": False},
-            "coloring": {"heatmap_style": "Interpolated", "fixation_range": ["lo", 9]},
+            "coloring": {"heatmap_style": "Smoothed", "fixation_range": ["lo", 9]},
             "canvas_px": {"width": "abc", "height": None},
             "sizing": {"base_font_size": "huge", "marker_size_range": ["x", 30]},
         }
         ss = _run(_restore_app, _config=config).session_state  # must not raise
         # good fields still applied
         assert ss["global_show_words"] is False
-        assert ss["global_heatmap_style"] == "Interpolated"
+        assert ss["global_heatmap_style"] == "Smoothed"
         # malformed numerics skipped, not applied
         for key in (
             "global_canvas_width",
@@ -957,7 +957,7 @@ class TestSavedStateCoverage:
     def test_speed_legend_and_blink_flags_round_trip(self):
         from scanpath_studio.session_keys import SINGLE_PLAYBACK_SPEED
 
-        blink = {"mode": "Discard", "symbol": "star", "color": "#123456"}
+        blink = {"mode": "Hide", "symbol": "star", "color": "#123456"}
         at = _run(
             _build_config_app,
             _figure_settings=_minimal_figure_settings(fixation_flags={"blink": blink}),
@@ -975,7 +975,7 @@ class TestSavedStateCoverage:
         assert ss["_config"]["compare_view"]["legend"] is True
         assert ss[SINGLE_PLAYBACK_SPEED] == 4.0
         assert ss["global_show_compare_legend"] is True
-        assert ss["global_fixclass_blink_mode"] == "Discard"
+        assert ss["global_fixclass_blink_mode"] == "Hide"
         assert ss["global_fixclass_blink_symbol"] == "star"
         assert ss["global_fixclass_blink_color"] == "#123456"
 

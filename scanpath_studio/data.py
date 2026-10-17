@@ -679,7 +679,7 @@ def _compute_frame_fingerprint(df: pd.DataFrame) -> tuple:
 # sample (the sample is a small subset of OneStop), so no extra normalisation
 # is required.
 #
-# Drives the "OneStop server bundle" data source option in app.py, used by
+# Drives the "OneStop (local export)" data source option in app.py, used by
 # an external review-app deep-link integration (single pid+trial into this UI).
 # ---------------------------------------------------------------------------
 
@@ -753,7 +753,7 @@ def onestop_data_provenance(participant: str | None = None) -> dict:
     # timestamp of the bytes the page is rendering right now.
     if participant:
         ia_shard, fix_shard = _onestop_shard_paths(base, participant)
-        info["loaded_from"] = "per-pid shard"
+        info["loaded_from"] = "per-participant Parquet file"
         info["ia_shard"] = str(ia_shard)
         info["fix_shard"] = str(fix_shard)
         if ia_shard.is_file():
@@ -763,7 +763,7 @@ def onestop_data_provenance(participant: str | None = None) -> dict:
     else:
         ia_csv = base / "ia_Paragraph.csv.zip"
         fix_csv = base / "fixations_Paragraph.csv.zip"
-        info["loaded_from"] = "full CSV.zip export"
+        info["loaded_from"] = "full OneStop CSV export"
         if ia_csv.is_file():
             info["ia_shard"] = str(ia_csv)
             info["ia_shard_mtime"] = ia_csv.stat().st_mtime
@@ -998,7 +998,7 @@ def stable_id(series: pd.Series) -> pd.Series:
     Plain ``.astype(str)`` spells the *same* id two ways when one file's id
     column is read as whole numbers and another's is read as decimals — and it
     takes only one blank cell anywhere in an otherwise-integer CSV column to
-    flip the whole column from ``int64`` to ``float64``. A trial's AOI table
+    flip the whole column from ``int64`` to ``float64``. A trial's Words table
     and its fixations report almost always come from two different exports, so
     this is not a rare corpus quirk: it is common for exactly one of the two to
     have that one blank cell the other does not. The trial picker, every
@@ -1475,7 +1475,7 @@ def _affix_sibling(
 
 
 #: The per-AOI reading measures a dataset *brings*: the Corpus Analysis
-#: page shows these and computes none of them. Each is an optional AOI-table
+#: page shows these and computes none of them. Each is an optional Words-table
 #: field, ``(schema key, canonical column, short label, full name, kind,
 #: candidates)``; the candidates lead with EyeLink Data Viewer's interest-area
 #: report names (``IA_*``), then the plain spellings other exports use. The
@@ -1522,7 +1522,7 @@ READING_MEASURE_FIELDS: tuple[tuple[str, str, str, str, str, tuple[str, ...]], .
     (
         "measure_second_pass",
         "second_pass_duration_ms",
-        "2nd pass",
+        "Second pass",
         "Second-pass duration, ms",
         "numeric",
         ("IA_SECOND_RUN_DWELL_TIME", "second_pass_duration"),
@@ -1530,7 +1530,7 @@ READING_MEASURE_FIELDS: tuple[tuple[str, str, str, str, str, tuple[str, ...]], .
     (
         "measure_single_fix",
         "single_fixation_duration_ms",
-        "Single fix.",
+        "Single fixation",
         "Single-fixation duration, ms",
         "numeric",
         ("IA_SINGLE_FIXATION_DURATION", "single_fixation_duration", "SFD"),
@@ -1538,7 +1538,7 @@ READING_MEASURE_FIELDS: tuple[tuple[str, str, str, str, str, tuple[str, ...]], .
     (
         "measure_nfix",
         "n_fixations",
-        "Fix. count",
+        "Fixation count",
         "Number of fixations on the word",
         "numeric",
         ("IA_FIXATION_COUNT", "fixation_count", "n_fixations"),
@@ -1554,7 +1554,7 @@ READING_MEASURE_FIELDS: tuple[tuple[str, str, str, str, str, tuple[str, ...]], .
     (
         "measure_reg_in",
         "regression_in_flag",
-        "Reg. in",
+        "Regression in",
         "Regressed into (0/1)",
         "boolean",
         ("IA_REGRESSION_IN", "regression_in_flag"),
@@ -1562,7 +1562,7 @@ READING_MEASURE_FIELDS: tuple[tuple[str, str, str, str, str, tuple[str, ...]], .
     (
         "measure_reg_out",
         "regression_out_flag",
-        "Reg. out",
+        "Regression out",
         "Regressed out of (0/1)",
         "boolean",
         ("IA_REGRESSION_OUT", "regression_out_flag"),
@@ -1570,7 +1570,7 @@ READING_MEASURE_FIELDS: tuple[tuple[str, str, str, str, str, tuple[str, ...]], .
     (
         "measure_reg_in_count",
         "number_of_regressions_in",
-        "Reg. in (n)",
+        "Regressions in (n)",
         "Number of regressions into the word",
         "numeric",
         ("IA_REGRESSION_IN_COUNT", "number_of_regressions_in", "regression_in_count"),
@@ -1578,7 +1578,7 @@ READING_MEASURE_FIELDS: tuple[tuple[str, str, str, str, str, tuple[str, ...]], .
     (
         "measure_landing_position",
         "initial_landing_position",
-        "Landing pos.",
+        "Landing position",
         "Initial landing position, letters",
         "numeric",
         ("IA_FIRST_FIXATION_LANDING_POSITION", "initial_landing_position"),
@@ -1586,7 +1586,7 @@ READING_MEASURE_FIELDS: tuple[tuple[str, str, str, str, str, tuple[str, ...]], .
     (
         "measure_landing_distance",
         "initial_landing_distance",
-        "Landing dist.",
+        "Landing distance",
         "Centered initial landing distance, letters",
         "numeric",
         ("initial_landing_distance", "landing_distance"),
@@ -1678,7 +1678,7 @@ def _blank_unfixated_measures(df: pd.DataFrame) -> None:
 
 
 def propose_word_schema(words: pd.DataFrame) -> dict[str, str | None]:
-    """Return a candidate column mapping for words/IA data without erroring."""
+    """Return a candidate column mapping for Words table data without erroring."""
     schema = _propose_word_schema_by_field(words)
     # A box field is a number, so a column with no number in it is not one,
     # whatever its name says. OneStop's IA report carries `TOP_LEFT`, the box
@@ -1792,16 +1792,16 @@ def propose_raw_gaze_schema(raw_gaze: pd.DataFrame) -> dict[str, str | None]:
 
 
 def validate_word_schema(schema: dict[str, str | None]) -> list:
-    """Return a list of human-readable problems with a words/IA schema.
+    """Return a list of human-readable problems with a Words table schema.
 
-    Participant ID is optional: word/AoI tables without one are treated as
+    Participant ID is optional: Words tables without one are treated as
     stimulus-level (one row per word per *text*, not per reading) and are
     broadcast across the participants found in the fixations — see
     ``broadcast_stimulus_words``."""
     problems = []
     for key, label in [
         ("trial", "Trial ID"),
-        ("word_id", "Word/IA ID"),
+        ("word_id", "Word ID"),
     ]:
         if not schema.get(key):
             problems.append(f"missing {label}")
@@ -1815,7 +1815,7 @@ def validate_word_schema(schema: dict[str, str | None]) -> list:
 def validate_fix_schema(schema: dict[str, str | None]) -> list:
     """Return a list of human-readable problems with a fixations schema.
 
-    X/Y coordinates are optional when a Word/IA ID is mapped: AOI-sequence
+    X/Y coordinates are optional when a Word ID is mapped: AOI-sequence
     datasets (fixations recorded as "which word", not "which pixel") get
     coordinates from the matching word-box centers — see
     ``fill_fixation_xy_from_words``."""
@@ -1831,8 +1831,7 @@ def validate_fix_schema(schema: dict[str, str | None]) -> list:
     has_xy = schema.get("x") and schema.get("y")
     if not has_xy and not schema.get("word_id"):
         problems.append(
-            "missing X and Y, or a Word/IA ID to place each fixation at its "
-            "word's center"
+            "missing X and Y, or a Word ID to place each fixation at its word's center"
         )
     return problems
 
@@ -1984,7 +1983,7 @@ def aggregate_char_boxes(
 ) -> pd.DataFrame:
     """Collapse character-level AOI rows into one bounding box per word.
 
-    For interest-area tables shipped one row per *character* (e.g. CJK corpora
+    For Words tables shipped one row per *character* (e.g. CJK corpora
     that have no whitespace word boundaries), aggregate the characters of each
     word — grouped by the mapped trial id + word id (plus participant / text id /
     screen id when mapped) — into a single bounding box: min/max over the mapped
@@ -2521,10 +2520,10 @@ def numeric_parse_issues(
 
 
 class UnplacedFixationsError(ValueError):
-    """Fixations whose only position is a Word/IA ID that holds no numbers.
+    """Fixations whose only position is a Word ID that holds no numbers.
 
     With no X and Y mapped, a fixation is placed at the center of the word box
-    its Word/IA ID names, and Word/IA IDs are read as numbers: a column of text
+    its Word ID names, and Word IDs are read as numbers: a column of text
     ids (``w1``, ``w2`` …) leaves every fixation without a position. Raised by
     :func:`normalize_fixations` — so by the headless API and every loader built
     on it — rather than load a dataset with nothing to draw: the add-dataset
@@ -2536,7 +2535,7 @@ def unplaced_fixations_issue(
 ) -> str | None:
     """The :class:`UnplacedFixationsError` message for ``raw`` under ``schema``.
 
-    ``None`` unless X or Y is unmapped, a Word/IA ID is mapped, and not one of
+    ``None`` unless X or Y is unmapped, a Word ID is mapped, and not one of
     its filled cells reads as a number. A few unreadable ids among numbers are
     :func:`numeric_parse_issues`' warning instead: only those fixations are left
     off the plot.
@@ -2555,11 +2554,11 @@ def unplaced_fixations_issue(
         return None
     examples = ", ".join(f"'{v}'" for v in failed.drop_duplicates().head(3))
     return (
-        f"{table}: the Word/IA ID column `{column}` holds no numbers (e.g. "
+        f"{table}: the Word ID column `{column}` holds no numbers (e.g. "
         f"{examples}). Without X and Y, a fixation is placed at the center of "
-        "the word box its Word/IA ID names, and Word/IA IDs must be numbers, so "
+        "the word box its Word ID names, and Word IDs must be numbers, so "
         "none of these fixations can be placed. Map the fixations' X and Y, or "
-        "use numeric Word/IA IDs in both tables."
+        "use numeric Word IDs in both tables."
     )
 
 
@@ -3384,7 +3383,7 @@ _ZIP_KIND_NOUNS = {
     "words": ("interest-area report", "interest-area reports"),
 }
 #: The wizard row each kind belongs in, as the message names it.
-_ZIP_KIND_ROWS = {"fixations": "Fixations", "words": "Words"}
+_ZIP_KIND_ROWS = {"fixations": "Fixations", "words": "Words table"}
 
 
 def table_kind_of_columns(columns: Iterable[str]) -> str | None:
@@ -4129,7 +4128,7 @@ def infer_fix_schema(fixations: pd.DataFrame) -> dict[str, str] | None:
     return schema
 
 
-# Placeholder participant id for stimulus-level word/AoI tables (no participant
+# Placeholder participant id for stimulus-level Words tables (no participant
 # column — one row per word per text, shared by every reading). The marker
 # column flags the frame so broadcast_stimulus_words() knows to expand it.
 STIMULUS_PARTICIPANT = ""
@@ -4142,7 +4141,7 @@ STIMULUS_WORDS_FLAG = "_stimulus_words"
 # and the UI hides the participant selector when there's only this one value.
 SYNTHETIC_PARTICIPANT = "(all)"
 
-#: The two keys a stimulus-level AOI table can attach to a reading through,
+#: The two keys a stimulus-level Words table can attach to a reading through,
 #: as the wizard names them.
 STIMULUS_JOIN_LABELS = {"trial_id": "Trial ID", "text_id": "Text ID"}
 #: The mapped trial id a repeated reading had before
@@ -4150,7 +4149,7 @@ STIMULUS_JOIN_LABELS = {"trial_id": "Trial ID", "text_id": "Text ID"}
 #: fixations only, and only when a suffix was given. The stimulus join reads it
 #: so a repeat finds the boxes of what it re-read.
 BASE_TRIAL_ID = "_base_trial_id"
-#: On a broadcast words copy: the AOI table's own trial id it was copied from
+#: On a broadcast words copy: the Words table's own trial id it was copied from
 #: (the reading supplies `trial_id`). ✏️ Edit dataset keeps one copy per value
 #: of it to get the stimulus table back (`remap_normalized_frame`).
 AOI_TRIAL_ID = "_aoi_trial_id"
@@ -4224,7 +4223,7 @@ def shareable_frame(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 class StimulusJoinError(ValueError):
-    """A stimulus-level AOI table that the readings in the fixations can't use.
+    """A stimulus-level Words table that the readings in the fixations can't use.
 
     Raised by :func:`broadcast_stimulus_words` — so by ``harmonize_frames`` and
     every loader built on it — instead of returning a dataset with no word
@@ -4247,11 +4246,11 @@ def _count(n: int, singular: str, plural: str) -> str:
 
 @dataclass(frozen=True)
 class StimulusJoin:
-    """How a stimulus-level AOI table attached to the readings.
+    """How a stimulus-level Words table attached to the readings.
 
     A *reading* is one ``(participant_id, trial_id)`` of the fixations — one
     ``(participant_id, trial_id, screen_id)`` on a multipart dataset, where the
-    counts are of *reading screens*. Each takes the boxes of the AOI table's
+    counts are of *reading screens*. Each takes the boxes of the Words table's
     trial it is matched to by the first of these that finds one: its own trial
     id, the trial id it had before a repeat's ``_r2`` suffix
     (``_base_trial_id``), or its Text ID. ``by_trial`` were matched the first
@@ -4259,7 +4258,7 @@ class StimulusJoin:
     tables map a real Text ID and the reading's disagrees with the matched AOI
     trial's, it is counted in ``text_mismatches`` (``mismatch_example`` =
     ``(reading's, AOI trial's)``) and warned about, never redirected.
-    ``ambiguous_texts`` are Text IDs the AOI table gives to more than one of its
+    ``ambiguous_texts`` are Text IDs the Words table gives to more than one of its
     trials; ``ambiguous_readings`` of the unmatched readings name one of them,
     and ``missing_screen_readings`` match an AOI trial that has no boxes for
     their screen (``missing_screens``, examples)."""
@@ -4458,7 +4457,7 @@ def _plan_stimulus_join(
 ) -> tuple[StimulusJoin, pd.DataFrame, list[str]]:
     """The join, the fixations' distinct readings, and the reading key.
 
-    Each reading's ``_STIMULUS_KEY`` is the AOI table trial whose boxes it
+    Each reading's ``_STIMULUS_KEY`` is the Words table trial whose boxes it
     takes (missing when none): its exact trial id, else its unsuffixed one,
     else — only when the fixations map a real Text ID — its Text ID's one
     trial. Vectorised over *distinct* keys (one ``drop_duplicates`` per frame
@@ -4470,7 +4469,7 @@ def _plan_stimulus_join(
     reading_key = ["participant_id", "trial_id", *screen]
     has_text = "text_id" in words.columns and "text_id" in fixations.columns
     # A fixations Text ID that is only its own trial id names no text, so it
-    # can neither find a text's boxes nor contradict them; the AOI table's
+    # can neither find a text's boxes nor contradict them; the Words table's
     # fallback text *is* its stimulus id, which a real reading Text ID can use.
     reading_text_real = has_text and not _text_is_fallback(fixations)
     aoi_text_real = has_text and not _text_is_fallback(words)
@@ -4526,7 +4525,7 @@ def _plan_stimulus_join(
         if reading_text_real:
             text_key = ["text_id", *screen]
             # A Text ID stands in for the trial only where it names one set of
-            # boxes: one the AOI table gives to several of its trials (two
+            # boxes: one the Words table gives to several of its trials (two
             # versions of a paragraph, an article id over paragraph boxes) would
             # hand a reading all of them. Only those texts are left out.
             per_text = words[[*text_key, "trial_id"]]
@@ -4642,8 +4641,8 @@ def _broadcast_stimulus_words(
         _LOGGER.info(join.describe())
     screen = reading_key[2:]
     on = [_STIMULUS_KEY, *screen]
-    # The AOI table supplies the boxes (and its own Text ID); the reading
-    # supplies its identity — the AOI table's trial id is the stimulus', not
+    # The Words table supplies the boxes (and its own Text ID); the reading
+    # supplies its identity — the Words table's trial id is the stimulus', not
     # the reading's, and it stays on each copy as `_aoi_trial_id`.
     stimulus = words.drop(
         columns=[c for c in (STIMULUS_WORDS_FLAG, AOI_TRIAL_ID) if c in words]
@@ -4671,11 +4670,11 @@ def broadcast_stimulus_words(
 ) -> pd.DataFrame:
     """Give every reading its own copy of the stimulus-level boxes of its text.
 
-    Datasets like PoTeC ship word/AoI tables per *text* (no participant
+    Datasets like PoTeC ship Words tables per *text* (no participant
     column) while fixations are per participant × text. After normalization,
     such words carry the ``_stimulus_words`` flag; this gives each reading —
     each ``(participant_id, trial_id[, screen_id])`` of the fixations — the
-    boxes of the AOI table's trial it belongs to, stamped with that reading's
+    boxes of the Words table's trial it belongs to, stamped with that reading's
     own ids (the AOI trial it came from kept as ``_aoi_trial_id``), so
     downstream (participant, trial) filtering works unchanged. Words for texts
     nobody read are dropped.
@@ -4702,9 +4701,9 @@ def broadcast_stimulus_words(
 def repair_stranded_stimulus_words(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame] | None:
-    """Re-broadcast a stored AOI table an older version's ✅ Save changes stranded.
+    """Re-broadcast a stored Words table an older version's ✅ Save changes stranded.
 
-    Older versions, saving an edit to a dataset whose AOI table has no
+    Older versions, saving an edit to a dataset whose Words table has no
     participant column, left every word on the ``""`` placeholder reader with
     the ``_stimulus_words`` flag still set, so no trial found its boxes.
     ``broadcast_stimulus_words`` always drops that flag, so a *stored* frame
@@ -4745,7 +4744,7 @@ def fill_fixation_xy_from_words(
     untouched.
 
     A missing key is no key: pandas joins NaN to NaN, so a fixation with no
-    ``word_id`` — one whose Word/IA ID did not parse as a number, say — would
+    ``word_id`` — one whose Word ID did not parse as a number, say — would
     land on the first box that has none either, and a table of text ids
     (``w1``, ``w2`` …) would put every fixation on one word. Rows missing any key are
     left out on both sides, so they keep NaN coordinates."""
@@ -4821,7 +4820,7 @@ def detect_word_id_offset(words: pd.DataFrame, fixations: pd.DataFrame) -> int:
     """Detect a 1-based fixation ``word_id`` against 0-based word boxes.
 
     Some exports (the bundled OneStop demo among them) number the fixation
-    report's word column ``1..N`` while the interest-area table numbers its rows
+    report's word column ``1..N`` while the Words table numbers its rows
     ``0..N-1``, so every fixation's pre-assigned ``word_id`` points at the *next*
     word. ``measures.assign_fixations_to_words`` keeps existing ids, so the
     computed reading measures then attach to the wrong words.
@@ -5003,7 +5002,7 @@ def harmonize_frames_with_join(
     ``word_id``, then fill missing fixation coordinates from word-box
     centers. Call whenever both frames are available (the API and the app both
     route through this). Also returns the :class:`StimulusJoin` a
-    stimulus-level AOI table was attached by — ``None`` for a per-reader one —
+    stimulus-level Words table was attached by — ``None`` for a per-reader one —
     which the add-dataset wizard states."""
     words, fixations, join, _rewrites = harmonize_frames_reporting(words, fixations)
     return words, fixations, join
@@ -5689,7 +5688,7 @@ def _copy_screen_fields(
     # but only onto a frame the mapping made multipart. With no screen field
     # mapped, a raw `screen_index` column is just a column: riding it through
     # would derive a `screen_id` from it, so clearing the screen fields in the
-    # mapping would still make the AOI table multipart while the fixations were
+    # mapping would still make the Words table multipart while the fixations were
     # not, and the pair would be refused.
     if (
         SCREEN_ID in df.columns
@@ -5710,7 +5709,7 @@ def _text_id_values(
     The mapped column, always — the Trial ID's rule, applied to the Text ID.
     If a literal ``unique_paragraph_id`` column won over whatever the mapping
     named, a Text ID picked by hand would be silently replaced on any table
-    that carried one, and a stimulus-level AOI table would join to its
+    that carried one, and a stimulus-level Words table would join to its
     fixations on the wrong text. Auto-detection proposes
     ``unique_paragraph_id`` first, so it is the text id by default, and it is
     the fallback when no Text ID is mapped at all.
@@ -5721,7 +5720,7 @@ def _text_id_values(
     if "unique_paragraph_id" in source.columns:
         return stable_id(source["unique_paragraph_id"])
     # A repeated reading's text is the id it was suffixed from — the
-    # text a stimulus-level AOI table knows it by.
+    # text a stimulus-level Words table knows it by.
     return unsuffixed
 
 
@@ -5788,7 +5787,7 @@ def normalize_words(
         # str or list (a composite participant id, joined like the trial id).
         df["participant_id"] = trial_id_series(words, schema["participant"])
     else:
-        # Stimulus-level word/AoI table (one row per word per text, shared by
+        # Stimulus-level Words table (one row per word per text, shared by
         # all participants) — broadcast_stimulus_words() expands it across the
         # participants found in the fixations.
         df["participant_id"] = STIMULUS_PARTICIPANT
@@ -6145,7 +6144,7 @@ def remap_normalized_frame(
     downstream readers of ``unique_text_id`` keep working.
 
     A **words** frame remapped with no Participant is a stimulus-level
-    AOI table, exactly as it was at import — ``normalize_words`` re-flags it for
+    Words table, exactly as it was at import — ``normalize_words`` re-flags it for
     ``broadcast_stimulus_words``. But the stored frame was *already* broadcast
     (one copy of every trial's words per reader), so only the first reader's
     copy of each trial is kept here, and the caller must run
@@ -6733,7 +6732,7 @@ def trial_keys(frame: pd.DataFrame) -> set:
 def names_readings(frame: pd.DataFrame | None) -> bool:
     """Whether ``frame``'s rows are readings a trial pool may list.
 
-    Not a stimulus-level AOI table that has not been broadcast onto the
+    Not a stimulus-level Words table that has not been broadcast onto the
     readings yet (`broadcast_stimulus_words`): its rows sit on the placeholder
     participant and name texts, not readings. Once `harmonize_frames` has run,
     every word row carries a real reading — a fixations reading it was copied

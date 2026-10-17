@@ -452,7 +452,7 @@ def test_fix_schema_requires_xy_or_word_id():
     no_position = pd.DataFrame(
         {"participant_id": ["p"], "trial_id": ["t"], "duration_ms": [100]}
     )
-    with pytest.raises(ValueError, match="Word/IA ID"):
+    with pytest.raises(ValueError, match="Word ID"):
         sps.load_scanpath_data(fixations=no_position, names="canonical")
 
 
@@ -1828,7 +1828,7 @@ def test_a_missing_public_corpus_is_offered_but_disabled_never_loaded():
     assert "as the main dataset" in why  # names the fix, not just the failure
     assert at.session_state["_loaded_absent"] is None
     # The always-available sources are offered ready.
-    assert options["Bundled Demo"][0] is True
+    assert options["Bundled demo"][0] is True
     assert options["Synthetic test trial"][0] is True
     assert options["My upload"][0] is True
 
@@ -1846,7 +1846,7 @@ def _secondary_load_app():
 
     from scanpath_studio.compare_source import load_secondary_dataset
 
-    source = load_secondary_dataset("Bundled Demo")
+    source = load_secondary_dataset("Bundled demo")
     st.session_state["_name"] = source.name
     st.session_state["_rows"] = len(source.fixations)
     st.session_state["_trials"] = len(source.combos)
@@ -1863,7 +1863,7 @@ def test_a_built_in_source_loads_with_its_own_combos_and_screen():
     at.run(timeout=60)
     assert not at.exception, at.exception
 
-    assert at.session_state["_name"] == "Bundled Demo"
+    assert at.session_state["_name"] == "Bundled demo"
     assert at.session_state["_rows"] > 0
     assert at.session_state["_trials"] > 0
     assert at.session_state["_canvas"] == (2560, 1440)

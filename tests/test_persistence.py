@@ -139,14 +139,14 @@ def test_round_trip_datasets_settings_mappings_and_annotations(tmp_path):
             ("p1", "t1"): {"star": True, "tags": ["Review"], "note": "check"}
         },
         # Descriptions, for an upload and for a built-in alike.
-        "_dataset_descriptions": {"My corpus": "A pilot.", "Bundled Demo": ""},
+        "_dataset_descriptions": {"My corpus": "A pilot.", "Bundled demo": ""},
     }
     assert save_state(source, tmp_path)
     restored = {}
     assert restore_state(restored, tmp_path)
     assert restored["_dataset_descriptions"] == {
         "My corpus": "A pilot.",
-        "Bundled Demo": "",
+        "Bundled demo": "",
     }
     pd.testing.assert_frame_equal(
         restored["_datasets"]["My corpus"]["words"],
@@ -162,7 +162,7 @@ def test_round_trip_datasets_settings_mappings_and_annotations(tmp_path):
 
     annotations_mod.activate_dataset(restored, restored["data_source_choice"])
     assert restored["trial_annotations"] == {}
-    annotations_mod.activate_dataset(restored, "Bundled Demo")
+    annotations_mod.activate_dataset(restored, "Bundled demo")
     assert restored["trial_annotations"][("p1", "t1")]["note"] == "check"
 
 
@@ -293,7 +293,7 @@ class TestAnnotationsPerDataset:
         legacy = {
             "schema": persistence.SCHEMA_VERSION,
             "datasets": {},
-            "session": {"data_source_choice": "Bundled Demo"},
+            "session": {"data_source_choice": "Bundled demo"},
             "annotations": [
                 {
                     "participant_id": "p1",
@@ -318,7 +318,7 @@ class TestAnnotationsPerDataset:
 
         assert save_state(session, tmp_path)
         manifest = json.loads((tmp_path / "manifest.json").read_text("utf-8"))
-        assert list(manifest["annotations"]["datasets"]) == ["Bundled Demo"]
+        assert list(manifest["annotations"]["datasets"]) == ["Bundled demo"]
         assert "unassigned" not in manifest["annotations"]
 
 
@@ -958,7 +958,7 @@ class TestAMalformedCacheNeverStopsTheApp:
         assert restore_state(session, tmp_path)
         import scanpath_studio.annotations as annotations_mod
 
-        annotations_mod.activate_dataset(session, "Bundled Demo")
+        annotations_mod.activate_dataset(session, "Bundled demo")
         assert list(session[ANNOTATIONS_STATE_KEY]) == [("p1", "t1")]
 
         self._write(tmp_path, self._manifest(annotations={"a": 1}))
@@ -1452,8 +1452,8 @@ def test_a_built_in_datasets_own_setup_survives_a_cache_round_trip(tmp_path):
 
     own = SetupSnapshot(monitor_width_mm=400.0).to_dict()
     session = {
-        DATASET_SETUP_OVERRIDES_KEY: {"Bundled Demo": own, "junk": "not a setup"},
-        SETUP_OVERRIDE_FOR_KEY: "Bundled Demo",
+        DATASET_SETUP_OVERRIDES_KEY: {"Bundled demo": own, "junk": "not a setup"},
+        SETUP_OVERRIDE_FOR_KEY: "Bundled demo",
         SETUP_OVERRIDE_RESTORE_KEY: {
             "global_monitor_width_mm": 597.0,
             "global_font_family": None,
@@ -1463,8 +1463,8 @@ def test_a_built_in_datasets_own_setup_survives_a_cache_round_trip(tmp_path):
     assert save_state(session, tmp_path)
     restored = {}
     assert restore_state(restored, tmp_path)
-    assert restored[DATASET_SETUP_OVERRIDES_KEY] == {"Bundled Demo": own}
-    assert restored[SETUP_OVERRIDE_FOR_KEY] == "Bundled Demo"
+    assert restored[DATASET_SETUP_OVERRIDES_KEY] == {"Bundled demo": own}
+    assert restored[SETUP_OVERRIDE_FOR_KEY] == "Bundled demo"
     assert restored[SETUP_OVERRIDE_RESTORE_KEY] == {
         "global_monitor_width_mm": 597.0,
         "global_font_family": None,

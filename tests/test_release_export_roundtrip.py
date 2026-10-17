@@ -156,7 +156,7 @@ def test_bundle_settings_restore_the_rendered_style(monkeypatch):
         "fixation_outline_width": 2,
         "heatmap_opacity": 0.3,
         "show_plot_frame": False,
-        "fixation_flags": {"long": {"mode": "Discard", "threshold_ms": 500}},
+        "fixation_flags": {"long": {"mode": "Hide", "threshold_ms": 500}},
         "preprocessing": {"discard_blink_adjacent": False},
     }
     _, config = _bundle(monkeypatch, words, fixations, settings)
@@ -177,7 +177,7 @@ def test_bundle_settings_restore_the_rendered_style(monkeypatch):
         "global_fixation_outline_width": 2,
         "global_heatmap_opacity": 0.3,
         "global_show_plot_frame": False,
-        "global_fixclass_long_mode": "Discard",
+        "global_fixclass_long_mode": "Hide",
         "global_base_font_size": 18,
         "global_font_family": "Arial",
         "global_preproc_blink_adjacent": False,

@@ -304,7 +304,7 @@ class TestAppLaunches:
 
     def test_new_viz_toggles_build_without_error(self):
         # Flip several plot options (color-by-line — the "line" option in the
-        # color-by selector — the out-of-bounds highlight, gray background)
+        # color-by selector — the outside-the-text highlight, gray background)
         # and confirm those code paths build without error. These pre-set values
         # mimic a Save & restore: the widgets must honour them (no inline
         # value=/index= override — see _VIZ_WIDGET_DEFAULTS) rather than reset.
@@ -412,7 +412,7 @@ class TestAppLaunches:
         assert scope_radios, "bulk-export scope radio missing"
         assert scope_radios[0].options[:3] == [
             "This trial",
-            "All, ignoring filters",
+            "All trials, ignoring filters",
             "All filtered trials",
         ], f"unexpected scope options: {scope_radios[0].options}"
 
@@ -942,7 +942,7 @@ class TestDatasetTable:
         assert int(row["Participants"].iloc[0]) > 0
         assert int(row["Fixations"].iloc[0]) > 0
         assert row["Kind"].iloc[0] == "Private"
-        assert set(frame["Kind"]) <= {"Demo", "Manual", "Private", "Public", ""}
+        assert set(frame["Kind"]) <= {"Demo", "Hand-drawn", "Private", "Public", ""}
         # Every row carries the row-wide button that opens it, keyed by its
         # dataset, and a dataset you added carries Remove too — the demo and
         # the public corpora have none, since removing one would only hide it
@@ -1693,7 +1693,7 @@ class TestBuiltInRecordingSetupOverride:
     ✅ Save changes, never rewriting what the corpus declares, and put back
     when another dataset is opened."""
 
-    PREFIX = "edit_src_Bundled Demo_setup"
+    PREFIX = "edit_src_Bundled demo_setup"
 
     @staticmethod
     def _run(at):
@@ -1772,9 +1772,9 @@ class TestBuiltInRecordingSetupOverride:
         self._run(at)
         assert at.session_state["global_monitor_width_mm"] == 400.0
 
-        # Reset to source setup, saved: the corpus' declared setup again.
+        # Reset to the corpus's setup, saved: the corpus' declared setup again.
         self._open(at)
-        at.button(key="edit_src_Bundled Demo_reset").click()
+        at.button(key="edit_src_Bundled demo_reset").click()
         self._run(at)
         assert (
             at.segmented_control(key=f"{self.PREFIX}_geometry_mode").value != _GEOM_KNOW
@@ -1881,9 +1881,9 @@ class TestUnmappedRawDataView:
 
         from scanpath_studio import app
 
-        # A words table whose columns match neither a word/IA id nor box
+        # A words table whose columns match neither a word id nor box
         # coordinates. Injected through the per-table upload seam (AppTest
-        # can't drive st.file_uploader); the Words/IA group gets it, the others
+        # can't drive st.file_uploader); the Words table group gets it, the others
         # stay empty.
         raw_words = pd.DataFrame(
             {"reader": ["r0", "r0"], "stim": ["b0", "b0"], "token": ["Um", "das"]}
@@ -1909,7 +1909,7 @@ class TestUnmappedRawDataView:
         # The guidance banner names the missing field…
         warnings = " ".join(w.value for w in at.warning)
         assert "column mapping" in warnings.lower()
-        assert "Word/IA ID" in warnings
+        assert "Word ID" in warnings
         # …and the raw uploaded table is rendered so the user can inspect it.
         frames = [df.value for df in at.dataframe]
         assert any(list(f.columns) == ["reader", "stim", "token"] for f in frames), (
@@ -2384,7 +2384,7 @@ class TestGroupedUploadMapping:
         assert "col_map_words_word_id" in sel_keys
 
     def test_words_only_upload_renders(self, monkeypatch):
-        # Single-report upload: only a Words/IA table — the missing fixations
+        # Single-report upload: only a Words table — the missing fixations
         # side becomes a canonical empty frame and the app still renders.
         import pandas as pd
 
@@ -2409,7 +2409,7 @@ class TestGroupedUploadMapping:
         assert at.error == [], f"st.error: {[e.value for e in at.error]}"
         sel_keys = {s.key for s in at.selectbox}
         multi_keys = {m.key for m in at.multiselect}
-        # The Words/IA mapping renders (its Participant multiselect + the word
+        # The Words table mapping renders (its Participant multiselect + the word
         # column mapping); the (un-uploaded) Fixations table gets no mapping, and
         # the app got past mapping (no unmapped-view warning).
         assert "col_map_words_participant" in multi_keys
@@ -2456,7 +2456,7 @@ class TestGroupedUploadMapping:
 
 
 def _box_mapping_script():
-    """Render only the Words/IA column-mapping panel for an edges-format table,
+    """Render only the Words table column-mapping panel for an edges-format table,
     stashing the resulting mapping in session_state for assertions."""
     import pandas as pd
     import streamlit as st
@@ -2477,7 +2477,7 @@ def _box_mapping_script():
     )
     st.session_state["_box_mapping"] = column_mapping_ui(
         df,
-        table_label="Words/IA",
+        table_label="Words table",
         state_key_prefix="col_map_words",
         field_specs=WORD_FIELD_SPECS,
         proposed=propose_word_schema(df),
@@ -2485,7 +2485,7 @@ def _box_mapping_script():
 
 
 class TestColumnMappingBoxWidget:
-    """The Words/IA box mapping shows one coordinate-format radio + 4 fields, yet
+    """The Words table box mapping shows one coordinate-format radio + 4 fields, yet
     still returns all eight box keys (the inactive four set to None)."""
 
     def test_edges_default_and_full_mapping(self):
@@ -2820,7 +2820,7 @@ class TestSetupWizard:
         assert list(entry["words"]["text"]) == ["Adv", "Adv", "Ele", "Ele"]
 
     def test_saving_a_text_level_aoi_table_keeps_every_trials_boxes(self, monkeypatch):
-        """An AOI table with no participant column (one row per word per
+        """A Words table with no participant column (one row per word per
         *text*) is broadcast onto the readers at import. ✅ Save changes on the
         ✏️ Edit dataset screen — what attaching a metadata table there asks for
         — re-derives it onto the ``""`` placeholder reader, and must broadcast
@@ -3196,7 +3196,7 @@ class TestSetupWizard:
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # The mapping: the fixations keyed by their own per-reader
-        # trial id and reader, the AOI table by its text alone. (Auto-detection
+        # trial id and reader, the Words table by its text alone. (Auto-detection
         # proposes the one column both tables share for both.)
         at.multiselect(key="col_map_fix_trial").set_value(["unique_trial_id"])
         at.multiselect(key="col_map_fix_participant").set_value(["participant_id"])
@@ -3441,8 +3441,7 @@ class TestCorpusAnalysisTab:
         offered = next(s for s in at.selectbox if s.key == view_key).options
         captions = " ".join(c.value for c in at.caption)
         for view, phrase in tabs._VIEW_PHRASES.items():
-            # Options are what the picker shows (`tabs._view_label`).
-            if tabs._view_label(view) in offered:
+            if view in offered:
                 assert phrase in captions, view
             elif view in tabs._COMPUTED_READER_VIEWS:
                 assert phrase not in captions, view
@@ -3512,9 +3511,9 @@ class TestCorpusAnalysisTab:
     @pytest.mark.parametrize(
         ("view_key", "view"),
         [
-            ("ptext_view", "Word × reader heatmap"),
+            ("ptext_view", "Word × participant heatmap"),
             ("ptext_view", "Cohort profile"),
-            ("ptext_view", "Word difficulty on stimulus"),
+            ("ptext_view", "Measure on the stimulus"),
             ("ptext_view", "Measure vs feature"),
             ("ptext_view", "Skip / regression rate"),
             ("prdr_view", "Reading summary"),
@@ -3522,13 +3521,10 @@ class TestCorpusAnalysisTab:
             ("prdr_view", "Landing-position curve"),
             ("prdr_view", "Per-trial trend"),
             ("pgrp_view", "Word profile"),
-            ("pgrp_view", "Reader summary table"),
+            ("pgrp_view", "Participant summary table"),
             ("cmp_view", "Difference word profile"),
-            ("cmp_view", "Paired summary bars"),
+            ("cmp_view", "Side-by-side summary bars"),
             ("cmp_view", "Group means & difference"),
-            # An older name of the view: a session still holding it opens the
-            # replacement.
-            ("cmp_view", "Effect size + test"),
             ("cmp_view", "Two-group word heatmap"),
         ],
     )
@@ -3724,7 +3720,7 @@ class TestNavRegressions:
         assert not [u for u in at.file_uploader if u.key == "plot_config_upload"]
 
         at.session_state[SUBTAB_KEY] = SUBTAB_SHARE
-        at.session_state[SHARE_SECTION_KEY] = "File"
+        at.session_state[SHARE_SECTION_KEY] = "Settings file"
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert [d for d in at.download_button if d.key == "plot_config_download"], (
@@ -3782,7 +3778,7 @@ class TestGenericFilenamePowers:
         at.session_state["setup_complete"] = False
         # Enable filename derivation in regex mode.
         at.session_state["wizard_filename_split"] = True
-        at.session_state["wizard_filename_mode"] = "Regex named groups"
+        at.session_state["wizard_filename_mode"] = "Extract with a regex"
         at.session_state["wizard_filename_regex"] = (
             r"(?P<pid>p\d+)_(?P<trial>t\d+)_scan"
         )
@@ -3874,7 +3870,7 @@ class TestGenericFilenamePowers:
         at.session_state["setup_complete"] = False
         at.session_state["wizard_dataset_name"] = "Gaze only"
         at.session_state["wizard_filename_split"] = True
-        at.session_state["wizard_filename_mode"] = "Regex named groups"
+        at.session_state["wizard_filename_mode"] = "Extract with a regex"
         at.session_state["wizard_filename_regex"] = (
             r"(?P<reader>p\d+)_(?P<item>t\d+)_gaze"
         )
@@ -3941,7 +3937,7 @@ class TestGenericFilenamePowers:
         at.session_state["_show_upload_wizard"] = True
         at.session_state["setup_complete"] = False
         at.session_state["wizard_filename_split"] = True
-        at.session_state["wizard_filename_mode"] = "Regex named groups"
+        at.session_state["wizard_filename_mode"] = "Extract with a regex"
         at.session_state["wizard_filename_regex"] = (
             r"(?P<reader>p\d+)_(?P<item>t\d+)_gaze"
         )
@@ -4790,7 +4786,7 @@ class TestMetadataBelongsToItsDataset:
 
 class TestAnnotationsBelongToTheirDataset:
     """Through ``app.main``: star a trial on an
-    uploaded copy of the demo, switch to the Bundled Demo, and the same trial
+    uploaded copy of the demo, switch to the Bundled demo, and the same trial
     must show nothing; switch back and the star is there."""
 
     NAME = "QA Full"
@@ -4868,7 +4864,7 @@ class TestAnnotationsBelongToTheirDataset:
         assert len(store) == 1 and next(iter(store.values()))["star"] is True
         assert any("★" in o for o in self._picker_options(at))
 
-        # The Bundled Demo has the same (participant, trial) ids — and no star.
+        # The Bundled demo has the same (participant, trial) ids — and no star.
         at = self._at(DEMO_CHOICE, self._carry(at))
         assert at.session_state[annotations_mod.OWNER_KEY] == DEMO_CHOICE
         assert at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY] == {}

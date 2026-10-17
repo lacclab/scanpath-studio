@@ -178,7 +178,7 @@ class TestSaccadeColorByType:
         fig = make_scanpath_figure(
             normalized_words_df,
             normalized_fixations_df,
-            **_scanpath_kwargs(),  # saccade_color_mode defaults to "Uniform"
+            **_scanpath_kwargs(),  # saccade_color_mode defaults to "One color"
         )
         assert [t for t in fig.data if t.name == "saccades"]
         assert not [t for t in fig.data if t.legendgroup == "saccade_type"]
@@ -333,14 +333,12 @@ class TestHeatmapNormalization:
         assert lin and len(lin) == len(log)
         assert lin != log  # log scaling remaps the box tints
 
-    def test_interpolated_log_changes_z(
-        self, normalized_words_df, normalized_fixations_df
-    ):
+    def test_smoothed_log_changes_z(self, normalized_words_df, normalized_fixations_df):
         def heat_z(norm):
             fig = make_scanpath_figure(
                 normalized_words_df,
                 normalized_fixations_df,
-                **self._heat_kwargs("Interpolated", norm),
+                **self._heat_kwargs("Smoothed", norm),
             )
             t = next(t for t in fig.data if t.name == "Fixation heatmap")
             import numpy as np
@@ -914,10 +912,10 @@ class TestMakeScanpathFigure:
         )
         assert isinstance(fig, go.Figure)
 
-    def test_make_scanpath_figure_interpolated_heatmap(
+    def test_make_scanpath_figure_smoothed_heatmap(
         self, normalized_words_df, normalized_fixations_df
     ):
-        """heatmap_style='Interpolated' adds a smooth go.Heatmap density trace."""
+        """heatmap_style='Smoothed' adds a smooth go.Heatmap density trace."""
         fig = make_scanpath_figure(
             normalized_words_df,
             normalized_fixations_df,
@@ -933,7 +931,7 @@ class TestMakeScanpathFigure:
             show_order=False,
             show_saccades=False,
             show_heatmap=True,
-            heatmap_style="Interpolated",
+            heatmap_style="Smoothed",
             color_by="duration_ms",
             heatmap_metric="duration_ms",
             marker_size_range=(8, 24),
@@ -2310,10 +2308,10 @@ class TestPlotEnhancements:
         fig = self._figure(synthetic_words_df, synthetic_fixations_df)
         assert fig.layout.plot_bgcolor is None
 
-    def test_out_of_bounds_overlay_trace(
+    def test_outside_the_text_overlay_trace(
         self, synthetic_words_df, synthetic_fixations_df
     ):
-        # The synthetic trial has exactly one out-of-bounds fixation.
+        # The synthetic trial has exactly one outside-the-text fixation.
         fig = self._figure(
             synthetic_words_df,
             synthetic_fixations_df,
@@ -2321,31 +2319,33 @@ class TestPlotEnhancements:
                 "oob": {"mode": "Highlight", "symbol": "x", "color": "#d62728"}
             },
         )
-        oob = [t for t in fig.data if t.name == "Out of bounds"]
+        oob = [t for t in fig.data if t.name == "Outside the text"]
         assert len(oob) == 1
         assert len(oob[0].x) == 1  # one off-text fixation
 
-    def test_out_of_bounds_discard_drops_fixation(
+    def test_outside_the_text_hide_drops_fixation(
         self, synthetic_words_df, synthetic_fixations_df
     ):
-        # Discarding out-of-bounds fixations removes them from the marker trace
+        # Hiding outside-the-text fixations removes them from the marker trace
         # (viz-only) without adding a highlight overlay.
         base = self._figure(synthetic_words_df, synthetic_fixations_df)
         n_base = len(next(t for t in base.data if t.name == "Fixations").x)
         fig = self._figure(
             synthetic_words_df,
             synthetic_fixations_df,
-            fixation_flags={"oob": {"mode": "Discard"}},
+            fixation_flags={"oob": {"mode": "Hide"}},
         )
         n_kept = len(next(t for t in fig.data if t.name == "Fixations").x)
         assert n_kept == n_base - 1
-        assert not any(t.name == "Out of bounds" for t in fig.data)
+        assert not any(t.name == "Outside the text" for t in fig.data)
 
     def test_fixation_flags_absent_by_default(
         self, synthetic_words_df, synthetic_fixations_df
     ):
         fig = self._figure(synthetic_words_df, synthetic_fixations_df)
-        assert not any(t.name in ("Out of bounds", "Short", "Long") for t in fig.data)
+        assert not any(
+            t.name in ("Outside the text", "Short", "Long") for t in fig.data
+        )
 
     def test_color_by_line_legend(self, synthetic_words_df, synthetic_fixations_df):
         # Two lines in the layout -> two "line:" legend entries.
@@ -2926,7 +2926,7 @@ class TestNonFiniteValues:
         raw = fixations[["participant_id", "trial_id", "x", "y"]].assign(
             timestamp_ms=[0, 1, 2]
         )
-        for style in ("Word boxes", "Interpolated", "Density"):
+        for style in ("Word boxes", "Smoothed", "Density"):
             make_scanpath_figure(
                 words,
                 fixations,

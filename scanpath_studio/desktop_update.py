@@ -1562,7 +1562,12 @@ def _short_reason(error: BaseException, limit: int = 160) -> str:
 
 
 #: The steps the About card and ``--update`` name, in order.
-STEPS = ("Downloading", "Checking it", "Testing the new version", "Restarting")
+STEPS = (
+    "Downloading",
+    "Checking the download",
+    "Testing the new version",
+    "Restarting",
+)
 
 
 def prepare(

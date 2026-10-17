@@ -13,7 +13,7 @@ def test_substantive_transformations_trigger_label_but_cosmetics_do_not():
         {"saccade_render_mode": "Arc"}
     )
     assert "flagged fixations hidden" in illustration_reasons(
-        {"fixation_flags": {"short": {"mode": "Discard"}}}
+        {"fixation_flags": {"short": {"mode": "Hide"}}}
     )
 
 

@@ -68,7 +68,7 @@ class WizardStep:
 #: no open state. `part()` renders each as a one-line numbered headline. The
 #: dataset name is its own numbered part rather than an unlabeled header above
 #: everything, and Recording setup is its own rather than a sub-heading nested
-#: inside "Upload data tables" — they read as one flat sequence.
+#: inside "Data tables & column mapping" — they read as one flat sequence.
 #:
 #: The fourth, *Stimulus images* (a folder of screenshots saved with the
 #: dataset), is optional and last. Only a local install draws it (a path on the
@@ -76,7 +76,9 @@ class WizardStep:
 #: it is left out.
 STEPS: tuple[WizardStep, ...] = (
     WizardStep("name", 1, "Name & description", "What to call it", True),
-    WizardStep("data", 2, "Upload data tables", "The tables you exported", True),
+    WizardStep(
+        "data", 2, "Data tables & column mapping", "The tables you exported", True
+    ),
     WizardStep("setup", 3, "Recording setup", "The screen it was recorded on", True),
     WizardStep(
         "images", 4, "Stimulus images", "Screenshots of what was on screen", False

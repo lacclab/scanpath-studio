@@ -1,6 +1,6 @@
 """Build a small, representative demo subset from the OneStop eye-tracking exports.
 
-The bundled sample data ships with the wheel and powers the "Bundled Demo"
+The bundled sample data ships with the wheel and powers the "Bundled demo"
 mode. We aim for a corpus that lets users actually exercise every feature
 without uploading their own data: a handful of participants reading the same
 paragraphs at both Adv and Ele difficulty levels.
@@ -86,7 +86,7 @@ IA_KEEP_COLUMNS = [
     # Critical-/distractor-span columns enable the Hunting-condition overlay
     # in plots.py / tabs.py. Bool flags drive the per-word coloring; the
     # ind_* + indices columns are normalized through but not yet read by the
-    # app — they're kept for parity with the OneStop server bundle, so the demo
+    # app — they're kept for parity with the OneStop local export, so the demo
     # and a server bundle carry the same metadata table.
     "question_preview",
     "is_in_aspan",

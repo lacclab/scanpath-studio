@@ -49,7 +49,7 @@ _IMAGE_URI = (
 
 # ---------------------------------------------------------------------------
 # Fixtures: a 6-word / 2-line trial, with a highlight column and one fixation
-# parked outside every box (for the out-of-bounds flag).
+# parked outside every box (for the outside-the-text flag).
 # ---------------------------------------------------------------------------
 
 
@@ -345,7 +345,7 @@ class TestAnimationSaccadeArrows:
 
 
 class TestAnimationFixationFlags:
-    _SHORT = {"short": {"mode": "Discard", "threshold_ms": 80}}
+    _SHORT = {"short": {"mode": "Hide", "threshold_ms": 80}}
     _OOB_HIGHLIGHT = {"oob": {"mode": "Highlight", "symbol": "x", "color": "#00ff00"}}
 
     def test_discard_drops_the_fixation_from_the_replay(self):
@@ -357,7 +357,7 @@ class TestAnimationFixationFlags:
     def test_discard_does_not_re_frame_the_view(self):
         """Like the static figure, the axes are computed before the filter."""
         fixations = _fixations(out_of_bounds=True)
-        flags = {"oob": {"mode": "Discard"}}
+        flags = {"oob": {"mode": "Hide"}}
         plain = _anim(fixations=fixations)
         filtered = _anim(fixations=fixations, fixation_flags=flags)
         assert tuple(filtered.layout.yaxis.range) == tuple(plain.layout.yaxis.range)
@@ -370,14 +370,14 @@ class TestAnimationFixationFlags:
     def test_highlight_overlays_reveal_with_the_replay(self):
         fixations = _fixations(out_of_bounds=True)
         fig = _anim(fixations=fixations, fixation_flags=self._OOB_HIGHLIGHT)
-        overlay = [t for t in fig.data if t.name == "Out of bounds"]
+        overlay = [t for t in fig.data if t.name == "Outside the text"]
         assert len(overlay) == 1
         assert overlay[0].marker.symbol == "x"
         assert overlay[0].marker.color == "#00ff00"
         assert overlay[0].showlegend
         # Exactly one fixation is flagged, and it is not the first — so nothing
         # shows at frame zero and exactly one point shows at the end.
-        idx = _trace_index(fig, "Out of bounds")
+        idx = _trace_index(fig, "Outside the text")
         assert sum(v is not None for v in overlay[0].x) == 0
         last = _frame_trace(fig, fig.frames[-1], idx)
         assert [v for v in last.y if v is not None] == pytest.approx([360.0])
@@ -386,7 +386,9 @@ class TestAnimationFixationFlags:
 
     def test_no_flags_adds_no_overlay(self):
         fig = _anim(fixations=_fixations(out_of_bounds=True))
-        assert not [t for t in fig.data if t.name in ("Short", "Long", "Out of bounds")]
+        assert not [
+            t for t in fig.data if t.name in ("Short", "Long", "Outside the text")
+        ]
 
 
 class TestAnimationColorbarStyle:

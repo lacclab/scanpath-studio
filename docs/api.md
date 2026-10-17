@@ -76,7 +76,7 @@ print(words[columns].head(3))
 
 ::: scanpath_studio.datasets.load_onestop
 
-## Author a scanpath
+## Draw a scanpath
 
 ::: scanpath_studio.api.build_authored_scanpath
 

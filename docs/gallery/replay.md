@@ -18,7 +18,7 @@ print(gallery_figure("replay"))
 
 === "In the app"
 
-    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight → Show.
+    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
     2. Turn on Animate. In Filters & highlights ▾ → Fixations → Index range, choose 1–40.
     3. Set speed to ×2 in Animate ▾ and press Play; save a replay from Export → Current figure.
 

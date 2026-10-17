@@ -444,7 +444,7 @@ def capture(page: Page) -> None:
             "show_heatmap": 0,
             "show_raw_gaze": 0,
             "full_monitor": 0,
-            "palette": "Default (colourblind-safe)",
+            "palette": "Default (colorblind-safe)",
         },
     )
     set_fix_window(page, *SENTENCE_FIXATIONS)

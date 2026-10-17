@@ -2,7 +2,7 @@
 
 The replay's visible labels, its hover and the static figure all show
 ``order_in_trial``, never 1..n over whatever reached the replay: a later screen
-of a multipart trial, a fixation window or a *Discard* must not renumber the
+of a multipart trial, a fixation window or a *Hide* must not renumber the
 survivors in the replay alone. These pin the three surfaces to one number per
 fixation.
 """
@@ -122,7 +122,7 @@ def test_later_screen_keeps_its_parent_trial_indices():
 
 def test_discard_keeps_the_survivors_numbers():
     words, fixations = _frames()
-    cfg = _settings(fixation_flags={"short": {"mode": "Discard", "threshold_ms": 150}})
+    cfg = _settings(fixation_flags={"short": {"mode": "Hide", "threshold_ms": 150}})
     static = make_scanpath_figure(words, fixations, settings=cfg)
     replay = make_scanpath_animation(words, fixations, settings=cfg)
     assert _static_labels(static) == ["2", "3"]
@@ -199,7 +199,7 @@ def test_order_label_formatting(values, expected):
 def test_co_animation_labels_match_the_static_comparison():
     words, fixations = _frames(order=(501, 502, 503))
     words_b, fixations_b = _frames("q", order=(11, 12, 13))
-    cfg = _settings(fixation_flags={"short": {"mode": "Discard", "threshold_ms": 150}})
+    cfg = _settings(fixation_flags={"short": {"mode": "Hide", "threshold_ms": 150}})
     replay = make_scanpath_animation(
         words, fixations, fixations_b=fixations_b, words_b=words_b, settings=cfg
     )

@@ -18,7 +18,7 @@ print(gallery_figure("scanpath"))
 
 === "In the app"
 
-    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight → Show.
+    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
     2. Keep the Scanpath design preset, with Fixations, Saccades and Stimulus on.
     3. Use Export → Current figure to save it.
 

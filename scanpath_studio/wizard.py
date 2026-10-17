@@ -99,6 +99,7 @@ from .experimental_setup import (
     FONT_UNITS,
     GENERIC_FONT,
     OTHER_FONT,
+    SETUP_GROUP_LABELS,
     SETUP_GROUPS,
     Provenance,
     SetupSnapshot,
@@ -995,22 +996,18 @@ _FILENAME_DERIVE_LINE_COUNT_KEY = "wizard_filename_line_count"
 #: two stay in sync.
 _FILENAME_REGEX_EXAMPLE = r"(?P<session>\d+_\w+_ET\d)_.*_(?P<stimulus>.+)_scanpath"
 
-#: The three tables a derivation line can target, display label to
-#: the `col_map_*_header` prefix its derived columns publish into
+#: The three tables a derivation line can target, by the name the picker
+#: shows and saved setups carry, to the `col_map_*_header` prefix its derived columns publish into
 #: (`_wizard_filename_derive`'s "make it mappable below" step).
 _DERIVE_TABLE_PREFIX = {
     "Fixations": "col_map_fix",
-    "Words / IA": "col_map_words",
+    "Words table": "col_map_words",
     "Raw gaze": "col_map_raw_gaze",
 }
 
 #: The word table's one name on the add and edit screens; every label and
 #: message reads it from here.
 WORDS_TABLE_LABEL = "Words (interest areas)"
-
-#: How the derive picker shows each table (its values stay the keys above,
-#: which saved setups carry).
-_DERIVE_TABLE_DISPLAY = {"Words / IA": WORDS_TABLE_LABEL}
 
 #: The one-line caption above each upload row: what goes there, in
 #: EyeLink's terms.
@@ -1030,8 +1027,8 @@ META_ROW_CAPTIONS = {
 #: What each table must map, said under its caption until a file is in — the
 #: mapping fields themselves say it once one is.
 ROW_NEEDS = {
-    "fixations": "Needs a Trial ID, a Duration, and X and Y or a Word/IA ID.",
-    "words": "Needs a Trial ID, a Word/IA ID and each word's box.",
+    "fixations": "Needs a Trial ID, a Duration, and X and Y or a Word ID.",
+    "words": "Needs a Trial ID, a Word ID and each word's box.",
     "raw_gaze": "Needs a Trial ID, X and Y.",
 }
 
@@ -1155,7 +1152,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     # Every table, always — including empty ones — so a line whose
     # saved config named a table that has since lost its upload still has a
     # defined (if inert) frame to look up below, no special-casing needed.
-    frames = {"Fixations": raw_fix, "Words / IA": raw_words, "Raw gaze": raw_gaze}
+    frames = {"Fixations": raw_fix, "Words table": raw_words, "Raw gaze": raw_gaze}
     table_options = [label for label, fr in frames.items() if not fr.empty] or [
         "Fixations"
     ]
@@ -1199,8 +1196,6 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             key=table_key,
             label_visibility="collapsed",
             help="The uploaded table to derive from. Its columns are offered next.",
-            # The value stays "Words / IA" — saved setups name it.
-            format_func=lambda t: _DERIVE_TABLE_DISPLAY.get(t, t),
         )
         table_frame = frames[selected_table]
         table_columns = (
@@ -1224,7 +1219,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         )
         mode = mode_col.selectbox(
             "How",
-            ["Split on a delimiter", "Regex named groups"],
+            ["Split on a delimiter", "Extract with a regex"],
             key=mode_key,
             label_visibility="collapsed",
             help="How to pull columns out of the chosen column's text.",
@@ -1299,7 +1294,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         key="wizard_filename_apply",
         width="stretch",
         disabled=any(
-            d["mode"] == "Regex named groups" and not d["pattern"] for d in drafts
+            d["mode"] == "Extract with a regex" and not d["pattern"] for d in drafts
         ),
         help="Derive the columns above and make them available to map below.",
     )
@@ -1454,7 +1449,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             )
 
     raw_fix = frames["Fixations"]
-    raw_words = frames["Words / IA"]
+    raw_words = frames["Words table"]
     raw_gaze = frames["Raw gaze"]
     return raw_words, raw_fix, raw_gaze
 
@@ -1479,7 +1474,7 @@ def _wizard_trial_step(
 
     Returns the one thing that is not a count — the warning that the two
     tables' trial ids do not line up at all — for the caller to draw once the
-    Participant ID is mapped too: an AOI table with no Participant ID is
+    Participant ID is mapped too: a Words table with no Participant ID is
     stimulus-level and attaches by Text ID when the trial ids differ, and the
     wizard states that join (or refuses it) above Add dataset instead.
     """
@@ -1900,7 +1895,7 @@ def _mapping_keys_from_schemas(schemas: dict) -> dict:
             continue
         for field, value in schema.items():
             # The identity pickers are multiselects: Trial ID everywhere, and
-            # Participant / Text ID on the Fixations and Words rows.
+            # Participant / Text ID on the Fixations and Words table rows.
             if field == "trial" or (
                 table != "raw_gaze" and field in ("participant", "text_id")
             ):
@@ -2473,12 +2468,6 @@ _SCREEN_ESTIMATE = "Estimate from my data"
 _SCREEN_DEFAULT = "Use a common default (2560×1440)"
 
 _GEOM_KNOW = "I know them"
-#: The setup headings as drawn — what blockers name.
-_SETUP_HEADINGS = {
-    "screen": "Screen",
-    "geometry": "Physical size",
-    "text": "Text size",
-}
 # The stored answers keep their long wording: setup files name them.
 # What the buttons say is `_SETUP_CHOICE_LABELS`.
 _GEOM_DEFAULT = "Use typical lab values (screen 597 mm wide, viewed from 800 mm)"
@@ -2536,7 +2525,7 @@ _SETUP_CHOICE_LABELS = {
     _SCREEN_ESTIMATE: "Estimate from my data",
     _SCREEN_DEFAULT: "Common 2560×1440",
     _GEOM_KNOW: "I know it",
-    _GEOM_DEFAULT: "Typical 597 mm",
+    _GEOM_DEFAULT: "Typical (597 mm)",
     _GEOM_SKIP: "Off",
     # 📄 Stimulus → Text's checkbox says the same.
     _TEXT_BOXES: "Fit to word boxes",
@@ -2692,13 +2681,13 @@ def _wizard_setup_step(
     # --- Screen -------------------------------------------------------------
     value_col, how_col = _setup_row(
         host,
-        "Screen",
+        SETUP_GROUP_LABELS["screen"],
         "The presentation monitor's resolution in pixels. Figures are drawn in "
         "these coordinates.",
     )
     screen_mode = _setup_choice(
         how_col,
-        "Screen",
+        SETUP_GROUP_LABELS["screen"],
         [_SCREEN_KNOW, _SCREEN_ESTIMATE, _SCREEN_DEFAULT],
         screen_key,
         persist,
@@ -2774,9 +2763,10 @@ def _wizard_setup_step(
         )
         if keep_saved and (est_w, est_h) != (canvas_w, canvas_h):
             line.button(
-                f"↻ {est_w} × {est_h} px now",
+                f"Re-estimate ({est_w} × {est_h} px)",
                 key=f"{key_prefix}_setup_reestimate_btn",
                 type="tertiary",
+                icon=ICONS["refresh"],
                 on_click=lambda: st.session_state.__setitem__(reestimate_key, True),
                 help="Estimate the screen again from this dataset's mapped data. "
                 "Nothing changes until you save.",
@@ -2789,7 +2779,7 @@ def _wizard_setup_step(
         line.markdown("**2560 × 1440 px**", width="content")
         _setup_badge(line, "assumed", "A common 1440p monitor, not this study's.")
 
-    # --- Physical size (the monitor's width) -------------------------------
+    # --- Monitor width ----------------------------------------------------
     # Nothing draws in degrees, so the only thing the physical size does is
     # turn a point-sized font into pixels (the DPI). The viewing distance is
     # not asked: the snapshot keeps the value it already had (the dataset's, or
@@ -2797,14 +2787,14 @@ def _wizard_setup_step(
     # its provenance says how the *width* is known.
     value_col, how_col = _setup_row(
         host,
-        "Physical size",
+        SETUP_GROUP_LABELS["geometry"],
         "The monitor's physical width (the visible display area, not the "
         "diagonal). It gives the screen's DPI, which converts a font size in "
         "points to pixels. With Off, a point size is read as pixels.",
     )
     geom_mode = _setup_choice(
         how_col,
-        "Physical size",
+        SETUP_GROUP_LABELS["geometry"],
         [_GEOM_KNOW, _GEOM_DEFAULT, _GEOM_SKIP],
         geom_key,
         persist,
@@ -2843,7 +2833,7 @@ def _wizard_setup_step(
         line = value_col.container(
             horizontal=True, vertical_alignment="center", gap="small"
         )
-        line.markdown("No physical size", width="content")
+        line.markdown("No monitor width", width="content")
         _setup_badge(
             line,
             "off",
@@ -2855,7 +2845,7 @@ def _wizard_setup_step(
     # word boxes* with its line spacing, or a size in px or pt.
     value_col, how_col = _setup_row(
         host,
-        "Text size",
+        SETUP_GROUP_LABELS["text"],
         "How big the reading text was drawn. Word labels use this size so the "
         "figure matches what the participant saw. **Fit to word boxes** takes "
         "it from the boxes: the distance between lines ÷ the line spacing. Line "
@@ -2976,7 +2966,7 @@ def _wizard_setup_step(
                 note,
                 "entered",
                 "Points are converted to pixels with the monitor's width, set "
-                "under *Physical size → I know it*. Without it, the size is read "
+                "under *Monitor width → I know it*. Without it, the size is read "
                 "as pixels.",
             )
         elif unit == "pt":
@@ -3072,9 +3062,9 @@ def _wizard_setup_step(
     )
 
     # The ask for real values: only while a line is on an estimate or a
-    # default. Physical size *off* is an answer, not a guess, so it is not one.
+    # default. Monitor width *off* is an answer, not a guess, so it is not one.
     guessed = [
-        _SETUP_HEADINGS[group]
+        SETUP_GROUP_LABELS[group]
         for group, provenance in snapshot.provenance.items()
         if provenance in (Provenance.ESTIMATED, Provenance.ASSUMED)
     ]
@@ -3553,7 +3543,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # though the two share one heading.
     s_map = s1
 
-    # === Upload data tables: intro note ======================================
+    # === Data tables & column mapping: intro note ======================================
     # The run-locally tip keeps its always-created container: a *conditional*
     # child here shifts the element tree mid-parse and Streamlit leaves a
     # greyed-out ghost of the whole upload group on screen.
@@ -3775,7 +3765,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             _wizard_text_ids(raw_words, word_schema, raw_fix, fix_schema),
         )
 
-    # === Upload data tables: per-table upload + mapping rows ================
+    # === Data tables & column mapping: per-table upload + mapping rows ================
 
     # This screen's dropdowns hold column names, so their option lists
     # get to be wider than the selects they drop from (see the docstring — it is
@@ -4039,14 +4029,14 @@ def _render_data_setup(active: bool) -> _UploadResult:
             cells=_cells_for("text_id"),
             extras_host=id_extras,
         )
-        # An AOI table with no Participant ID is stimulus-level and
+        # A Words table with no Participant ID is stimulus-level and
         # attaches by Text ID when the trial ids differ, so disjoint trial ids
         # are no mapping error there: the join is stated (or refused) above
         # Add dataset instead.
         if disjoint_trials and word_schema.get("participant"):
             id_extras.warning(disjoint_trials)
-        # Word/IA ID — the fixations table's own `word_id` says which AOI a
-        # fixation hit; the AOI table's is which AOI a row *is*. Different
+        # Word ID — the fixations table's own `word_id` says which AOI a
+        # fixation hit; the Words table's is which AOI a row *is*. Different
         # columns, same slot: both tables read it as identity.
         for slug, raw, specs, proposal, schema, present in screen_specs:
             if not present or slug not in cells:
@@ -4061,7 +4051,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     ["word_id"],
                 )
             )
-        # Each table's own id: Fixation ID for Fixations, Word text/label
+        # Each table's own id: Fixation ID for Fixations, Word text
         # for AOI.
         if has_fix:
             fix_schema.update(
@@ -4152,7 +4142,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 key="wizard_aggregate_char_boxes",
                 help="For a Words table with one row per *character* (e.g. Chinese "
                 "or Japanese): merge the characters sharing a Trial ID and "
-                "Word/IA ID into one word box.",
+                "Word ID into one word box.",
             )
             # Only relevant once aggregating — a table whose rows are
             # grouped into sub-screen blocks that each restart their own word
@@ -4344,7 +4334,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     s6 = body.container()
 
     setup_blockers = [
-        _SETUP_HEADINGS[g] for g, p in setup_snapshot.provenance.items() if p is None
+        SETUP_GROUP_LABELS[g] for g, p in setup_snapshot.provenance.items() if p is None
     ]
     # `nothing_uploaded` is its own term (not folded into `problems`/
     # `setup_blockers`): a restored setup config can answer every group with
@@ -4503,7 +4493,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             ):
                 s6.warning(f"{ICONS['warning']} {line}")
 
-    # An AOI table with no Participant ID is shared by the readings
+    # A Words table with no Participant ID is shared by the readings
     # of its texts, so say which key attached it — the trial ID or the Text
     # ID — and how many readings got boxes. A join that reaches none never
     # gets here: `_normalize_pair` raised, and the error above blocks the add.

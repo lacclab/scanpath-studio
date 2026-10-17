@@ -19,7 +19,7 @@ print(gallery_figure("highlighted-text"))
 === "In the app"
 
     1. Select the bundled demo, participant `l37_1129`, trial `l37_1129_2_1_1_Ele_r0`. Reset visualization.
-    2. In Stimulus → Highlight, turn on Show and choose `is_in_aspan` as the word column.
+    2. In Stimulus → Highlight words, turn on Show and choose `is_in_aspan` as the word column.
     3. Turn off Saccades. The orange words mark the trial’s answer span.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)

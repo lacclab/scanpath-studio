@@ -563,7 +563,7 @@ def load_potec(
 #     of the public schema, so it flows through the same pipeline (and its
 #     ``unique_paragraph_id`` wins in normalization). No download — a local path.
 #
-# Distinct from the env-var "OneStop server bundle" source
+# Distinct from the env-var "OneStop (local export)" source
 # (``data.load_onestop_server_bundle``), which serves a lacclab export via
 # ``$ONESTOP_DATA_DIR`` and its per-pid shards for review-app deep links.
 # ---------------------------------------------------------------------------
@@ -754,6 +754,10 @@ def _onestop_part_paths(
     return _onestop_report_path(root, kind, regime, part)
 
 
+#: What the download progress calls each OneStop report kind.
+_ONESTOP_REPORT_NAMES = {"ia": "interest-area", "fixations": "fixation"}
+
+
 def _normalize_onestop_parts(parts: Iterable[str] | None) -> list:
     """Validate + order a requested parts selection (defaults to Paragraph)."""
     if not parts:
@@ -829,7 +833,7 @@ def download_onestop(
             # interrupted write (killed process / full disk) never leaves a
             # truncated .csv.zip that `dest.is_file()` would then skip forever —
             # forcing a manual delete. The reports are large, so the window is real.
-            detail = f"{part} {kind} report"
+            detail = f"{part} {_ONESTOP_REPORT_NAMES[kind]} report"
             _fetch_to_file(pin.url, dest, detail=detail)
             try:
                 _check_download_size(dest.stat().st_size, pin, detail)

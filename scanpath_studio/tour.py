@@ -194,7 +194,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 dataset_editor=True,
             ),
             TutorialStep(
-                "Verify what was parsed",
+                "Check what was loaded",
                 f"**{ICONS['search']} What's in the … dataset** opens on "
                 f"{ICONS['stats']} Stats, with the counts and their spread. It is "
                 "the quickest check that the mapping worked. The six raw tables "
@@ -237,7 +237,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         docs_url=f"{DOCS_TUTORIALS_URL}data-filtering/",
         steps=(
             TutorialStep(
-                "Narrow the review pool",
+                "Narrow the trials",
                 f"The {ICONS['trial_filter']} filter beside the trial picker, "
                 "opened here for you, holds the text and participant pickers "
                 "(*All texts* / *All participants* until you narrow), then the "
@@ -249,7 +249,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Review one trial at a time",
                 "Use the **Select trial** dropdown, the slider (it shows *index / "
-                "total*) or ◀ ▶ to step through the pool you just narrowed.",
+                "total*) or ◀ ▶ to step through the trials you just narrowed to.",
                 ".st-key-tour_grp_trial_picker",
             ),
             TutorialStep(
@@ -308,7 +308,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Keep the figure reproducible",
                 f"**{ICONS['share']} Share** offers a **Link**, **Code** or a "
-                "settings **File**. None of them holds the data, so keep the "
+                "**Settings file**. None of them holds the data, so keep the "
                 "original data too.",
                 ".st-key-tutorial_share",
                 subtab=SUBTAB_SHARE,
@@ -656,7 +656,7 @@ _SPOTLIGHT_STEPS = [
     {
         "selector": ".st-key-tour_grp_narrow_by",
         "popover": FUNNEL_TRIGGER,
-        "title": f"{ICONS['trial_filter']} Narrow the pool",
+        "title": f"{ICONS['trial_filter']} Narrow the trials",
         # The icon, not the word: the trigger beside the picker is Streamlit's
         # Material funnel (`tabs._FILTER_ICON`), and "the funnel" sent readers
         # hunting for an emoji the app never draws.
@@ -697,7 +697,7 @@ _SPOTLIGHT_STEPS = [
     },
     {
         "selector": NAV_SELECTOR,
-        "title": f"{ICONS['nav']} The nav",
+        "title": f"{ICONS['nav']} The menu bar",
         "body": f"**{ICONS['view_scanpath']} Scanpath** is this view. "
         f"**{ICONS['view_corpus']} Corpus Analysis** pools all participants; "
         f"**{ICONS['view_data']} Data Management** lists your "
@@ -837,11 +837,11 @@ def _set_guide_folded(kind: str, folded: bool) -> None:
 def _render_guide_fold_button(kind: str, name: str) -> None:
     """The card's — button, pinned to its top-right corner (left of a ✕)."""
     st.button(
-        f"— {spoken(f'Fold the {name}')}",
+        f"— {spoken(f'Minimize the {name}')}",
         key=f"guide_fold_{kind}",
         on_click=_set_guide_folded,
         args=(kind, True),
-        help=f"Fold the {name} to a small tab. Drag it by its title to move it.",
+        help=f"Minimize the {name} to a small tab. Drag it by its title to move it.",
     )
 
 
@@ -1659,10 +1659,10 @@ def tutorial_availability(
 #: What a rule lacks when the trial filters, not the dataset, are
 #: why a tutorial cannot start.
 _FILTERED_REASONS = {
-    "has_trials": "no trial is left in the pool.",
-    "has_visual_data": "the pool has no words or fixations.",
-    "has_comparable_readings": "no two trials in the pool share a text.",
-    "has_corpus_variation": "the pool holds one trial.",
+    "has_trials": "no trial is left.",
+    "has_visual_data": "no trial left has words or fixations.",
+    "has_comparable_readings": "no two trials left share a text.",
+    "has_corpus_variation": "only one trial is left.",
 }
 
 
@@ -2331,7 +2331,7 @@ _WIZARD_GUIDE_STEPS = [
         "step_id": "name",
     },
     {
-        "title": "2 · Upload data tables",
+        "title": "2 · Data tables & column mapping",
         "body": (
             "Each table is uploaded and mapped in its own row: Fixations, "
             "Words (interest areas), Raw gaze, then Participant/Trial/Text "
@@ -2345,7 +2345,7 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "3 · Recording setup",
         "body": (
-            "Say how you know the screen, physical size, text size and font "
+            "Say how you know the screen, monitor width, text size and font "
             "the data was recorded with. Each line starts from an estimate or a "
             "default, marked as such. Every figure is drawn to this setup, so "
             "choose *I know it* wherever you know the real value."
@@ -2419,8 +2419,8 @@ def _exit_wizard_guide() -> None:
 
 
 def _wizard_guide_progress(step_idx: int, step: dict) -> str:
-    """Where the guide is, counted in the screen's own parts ("2 · Upload data
-    tables" is part 2), not in cards: neither the overview card nor the
+    """Where the guide is, counted in the screen's own parts ("2 · Data tables &
+    column mapping" is part 2), not in cards: neither the overview card nor the
     closing Save card is a part, and a card count under a "2 ·" heading would
     contradict the parts the screen numbers."""
     n_parts = sum(1 for s in _wizard_guide_steps() if s["step_id"])

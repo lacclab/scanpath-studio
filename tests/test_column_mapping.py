@@ -107,7 +107,7 @@ class TestTrialMappingMultiselect:
 
 class TestFixationFieldSpecs:
     """The Fixations panel's required markers must match validate_fix_schema:
-    Participant/Trial/Duration are required; X/Y are conditional on a Word/IA ID
+    Participant/Trial/Duration are required; X/Y are conditional on a Word ID
     (AOI-sequence data), so they must not be hard-required."""
 
     def test_required_flags_match_validator(self):
@@ -117,7 +117,7 @@ class TestFixationFieldSpecs:
         assert required == {"participant", "trial", "duration"}
 
     def test_aoi_only_fixations_pass_validation(self):
-        # A Word/IA ID with no X/Y is valid (AOI-sequence fixations).
+        # A Word ID with no X/Y is valid (AOI-sequence fixations).
         from scanpath_studio.data import validate_fix_schema
 
         schema = {
@@ -135,7 +135,7 @@ class TestFixationFieldSpecs:
 
         schema = {"participant": "p", "trial": "t", "duration": "d"}
         problems = validate_fix_schema(schema)
-        assert any("X, Y" in p or "Word/IA" in p for p in problems)
+        assert any("X, Y" in p or "Word ID" in p for p in problems)
 
     def test_fixation_extras_are_kept_not_mapped(self):
         # pass_index / saccade_type / saccade_amplitude / eye are not explicit

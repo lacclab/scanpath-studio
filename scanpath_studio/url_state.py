@@ -59,6 +59,7 @@ from .constants import (
     ICONS,
     LEGACY_MARKER_SIZE_SCALE,
     LEGEND_ARRANGEMENTS,
+    LEGEND_KIND_LABELS,
     MANUAL_SAMPLE_CHOICE,
     MARKER_DURATION_BOUNDS,
     MARKER_SIZE_SCALES,
@@ -342,11 +343,8 @@ def _parse_saccade_style_label(v) -> str:
 
 
 def _parse_heatmap_style(value) -> str:
-    """A heatmap style; an older link's *Duration mass* opens as
-    *Interpolated*, the smoothed style it was a variant of."""
-    if value == "Duration mass":
-        return "Interpolated"
-    if value not in ("Word boxes", "Interpolated"):
+    """A heatmap style: Word boxes or Smoothed."""
+    if value not in ("Word boxes", "Smoothed"):
         raise ValueError(f"not one of the widget's options: {value!r}")
     return value
 
@@ -583,7 +581,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "cmp_layout": "single_compare_layout",
     "cmp_stimulus": "single_compare_stimulus",
     # Colour-bar orientation, the span's border colour, and the fixation
-    # flags. *Discard* changes which fixations are drawn at all, so a link
+    # flags. *Hide* changes which fixations are drawn at all, so a link
     # without it would show the recipient a different scanpath — and without
     # the Illustration label the sender's figure carried.
     "fixation_colorbar_orientation": "global_fixation_colorbar_orientation",
@@ -676,7 +674,7 @@ _SHARE_FLOAT_PARAMS = {
     "fixation_opacity": "global_fixation_opacity",
     # Where on its line a snapped fixation sits, in line heights.
     "snap_position": "global_fixation_snap_position",
-    # The Interpolated heatmap's fixed blur σ (px); its Auto switch is a toggle.
+    # The Smoothed heatmap's fixed blur σ (px); its Auto switch is a toggle.
     "heatmap_sigma_px": "global_heatmap_sigma_px",
     # Image-stimulus opacity (applies to dataset images too, so worth
     # sharing; the uploaded image itself can't ride a link).
@@ -1150,7 +1148,7 @@ def _apply_url_preset() -> str | None:
     session_state values are picked up as the widgets' initial values.
 
     URL schema (all params optional):
-        ?source=onestop          → force "OneStop server bundle" data source
+        ?source=onestop          → force "OneStop (local export)" data source
                                    (also demo / synthetic / upload — see main())
         ?source=corpus&corpus=potec
                                  → a public corpus: one entry of
@@ -2463,12 +2461,12 @@ def _restore_plot_config(
     if "heatmap_style" in coloring:
         style = coloring["heatmap_style"]
         put_valid(
-            style in ("Word boxes", "Interpolated", "Duration mass"),
+            style in ("Word boxes", "Smoothed"),
             "global_heatmap_style",
-            "Interpolated" if style == "Duration mass" else style,
+            style,
             "heatmap style",
         )
-    # The Interpolated blur: Auto, and the fixed σ (px) used when it is off.
+    # The Smoothed blur: Auto, and the fixed σ (px) used when it is off.
     # Absent from a file written before it existed: automatic, as then.
     if isinstance(config.get("coloring"), dict):
         put(
@@ -2743,7 +2741,7 @@ def _restore_plot_config(
             try:
                 spec = normalize_legend_layout({kind: legends[kind]})[kind]
             except (ValueError, TypeError, AttributeError):
-                skipped.append(f"{kind.replace('_', ' ')} legend")
+                skipped.append(f"{LEGEND_KIND_LABELS[kind]} legend")
                 continue
             if spec["size"] is not None:
                 spec["size"] = _legend_size(spec["size"])
@@ -2987,7 +2985,7 @@ def _restore_plot_config(
         # The rail's `_drop_stale` clears this if it isn't a column in the
         # restored-onto data, so it needs no validation against words here.
         put("global_highlight_column", highlighting["highlight_column"])
-    # Fixation classification: short/long/out-of-bounds highlight or discard.
+    # Fixation classification: short/long/outside-the-text highlight or hide.
     flags = highlighting.get("fixation_flags")
     if isinstance(flags, dict):
         # `blink` too — the writer saves all four categories.
@@ -3916,7 +3914,11 @@ def _snippet_source(data_choice: str) -> SnippetSource:
     never sees it, so quoting it back in a copyable snippet would hand every
     visitor the server's layout. There the snippet carries a placeholder.
     """
-    from scanpath_studio.app import _download_target, local_filesystem_enabled
+    from scanpath_studio.app import (
+        _dataset_display_name,
+        _download_target,
+        local_filesystem_enabled,
+    )
 
     def root(key: str, placeholder: str, *, downloadable: bool = False) -> str:
         if not local_filesystem_enabled():
@@ -3926,18 +3928,20 @@ def _snippet_source(data_choice: str) -> SnippetSource:
         fallback = _download_target(placeholder) if downloadable else placeholder
         return str(st.session_state.get(key) or fallback)
 
+    # The name the dataset picker shows, which the snippet's notes quote.
+    shown = _dataset_display_name(data_choice)
     if data_choice == DEMO_CHOICE:
-        return SnippetSource(kind=SOURCE_DEMO, label=DEMO_CHOICE)
+        return SnippetSource(kind=SOURCE_DEMO, label=shown)
     if data_choice == SYNTHETIC_CHOICE:
-        return SnippetSource(kind=SOURCE_SYNTHETIC, label=SYNTHETIC_CHOICE)
+        return SnippetSource(kind=SOURCE_SYNTHETIC, label=shown)
     if data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
         return SnippetSource(
             kind=SOURCE_AUTHOR,
-            label=AUTHOR_CHOICE,
+            label=shown,
             options={"path": "scanpath.json"},
             note=(
                 "An authored scanpath exists only in the app. Save it first with "
-                "**Download authoring file** on *Author a scanpath* (the file is "
+                "**Download draft (JSON)** on *Draw a scanpath* (the file is "
                 "`scanpath.json`, which the snippet reads), then run the snippet "
                 "in the same folder."
             ),
@@ -3985,7 +3989,7 @@ def _snippet_source(data_choice: str) -> SnippetSource:
                 "parts": ["Paragraph"],
             },
             note=(
-                "The app read this from the OneStop server bundle "
+                "The app read this from OneStop (local export) "
                 "(`$ONESTOP_DATA_DIR`). The snippet uses the public `load_onestop` "
                 "loader, which expects the report files for each regime and part "
                 "in that folder. If your folder is laid out differently, point the "
@@ -4000,21 +4004,21 @@ def _snippet_source(data_choice: str) -> SnippetSource:
         # rather than the generic two-table loader it could never have run.
         return SnippetSource(
             kind=SOURCE_RAW_GAZE,
-            label=data_choice,
+            label=shown,
             note=UNKNOWN_SOURCE_NOTE,
         )
     if isinstance(stored, dict):
         from scanpath_studio.column_names import stored_source_recipe
 
         return upload_source(
-            data_choice,
+            shown,
             stored_source_recipe(stored),
             words=_has_rows(stored.get("words")),
             fixations=_has_rows(stored.get("fixations")),
         )
     return SnippetSource(
         kind=SOURCE_UNKNOWN,
-        label=data_choice,
+        label=shown,
         note=UNKNOWN_SOURCE_NOTE,
     )
 
@@ -4070,7 +4074,7 @@ def _render_code_snippet_body(data_choice: str) -> None:
     )
     flavor_col, explicit_col = st.columns([2, 3], vertical_alignment="center")
     flavor = flavor_col.segmented_control(
-        "Flavour",
+        "Code language",
         options=_SNIPPET_FLAVORS,
         default=_SNIPPET_FLAVORS[0],
         key=SNIPPET_FLAVOR_KEY,
@@ -4116,7 +4120,7 @@ def _render_code_snippet_body(data_choice: str) -> None:
 #: keeps one tab bar per page, and only the chosen part is drawn.
 SHARE_LINK = "Link"
 SHARE_CODE = "Code"
-SHARE_FILE = "File"
+SHARE_FILE = "Settings file"
 SHARE_SECTIONS = (SHARE_LINK, SHARE_CODE, SHARE_FILE)
 SHARE_SECTION_KEY = "share_section"
 
@@ -4124,14 +4128,14 @@ SHARE_SECTION_KEY = "share_section"
 def _render_share_body(
     data_choice: str, settings_file=None, *, visible: bool = True
 ) -> None:
-    """Render the **Share** subtab: **Link · Code · File**, one at a time.
+    """Render the **Share** subtab: **Link · Code · Settings file**, one at a time.
 
     - **Link** — a deep link to the current view (data source + trial +
       visualization settings). Streamlit reruns after every relevant control
       change, so the query handed to the embedded **Refresh & Copy** button
       already reflects the current view when the user clicks it.
     - **Code** — the API / CLI snippet that reproduces the figure.
-    - **File** — a settings file to download or restore, drawn by
+    - **Settings file** — a settings file to download or restore, drawn by
       ``settings_file``: a zero-argument callable from ``app.main``, which holds
       the resolved figure settings it writes. ``None`` where there is no figure
       to describe, and the option says so rather than vanishing. It runs only

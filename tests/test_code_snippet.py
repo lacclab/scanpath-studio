@@ -32,7 +32,7 @@ def _state(kind: str = "static", **overrides) -> cs.FigureState:
     )
 
 
-DEMO = cs.SnippetSource(kind=cs.SOURCE_DEMO, label="Bundled Demo")
+DEMO = cs.SnippetSource(kind=cs.SOURCE_DEMO, label="Bundled demo")
 
 
 # ---------------------------------------------------------------------------
@@ -246,14 +246,14 @@ def test_the_fixation_flags_reach_the_cli_one_category_per_flag():
         _state(
             figure={
                 "fixation_flags": {
-                    "short": {"mode": "Discard", "threshold_ms": 80.0},
+                    "short": {"mode": "Hide", "threshold_ms": 80.0},
                     "long": {"mode": "Off", "threshold_ms": 800.0},
                     "oob": {"mode": "Highlight", "symbol": "x", "color": "#ff0000"},
                 }
             }
         ),
     )
-    assert "--fixation-flag short=discard,threshold_ms=80" in code.cli
+    assert "--fixation-flag short=hide,threshold_ms=80" in code.cli
     # An Off category is the builder's default, so it is not written at all.
     assert "long=" not in code.cli
     # The `#` in a colour makes shlex quote the whole value — which is the point
@@ -724,7 +724,7 @@ def test_figure_code_rejects_an_unknown_flavour():
 def test_a_palette_is_expanded_not_named():
     """`palette` is a preset over colour keys, not a figure keyword — a snippet
     that named it would drift the moment the preset's values changed."""
-    code = api.figure_code(palette="Print / greyscale")
+    code = api.figure_code(palette="Print / grayscale")
     assert "palette=" not in code
     assert "saccade_color=" in code
 
@@ -743,7 +743,7 @@ def _rendered_figures(monkeypatch, argv_list) -> list:
     return figures
 
 
-@pytest.mark.parametrize("palette", ["Print / greyscale", "High contrast"])
+@pytest.mark.parametrize("palette", ["Print / grayscale", "High contrast"])
 def test_a_palette_choice_reproduces_through_the_cli(
     tmp_path, monkeypatch, capsys, palette
 ):
@@ -1130,7 +1130,7 @@ def test_the_onestop_server_bundle_says_which_loader_it_is_not():
 
     source = _resolve_source(ONESTOP_CHOICE)
     assert source.options["variant"] == "lacclab"
-    assert "server bundle" in source.note
+    assert "OneStop (local export)" in source.note
 
 
 def test_a_shared_deployment_never_quotes_the_servers_data_path(monkeypatch):
@@ -1564,11 +1564,11 @@ def test_a_real_choice_survives_the_normalization():
 
     touched = _snippet_settings_at_api_defaults(
         {
-            "fixation_flags": {"short": {"mode": "Discard", "threshold_ms": 80.0}},
+            "fixation_flags": {"short": {"mode": "Hide", "threshold_ms": 80.0}},
             "saccade_class_colors": {**SACCADE_CLASS_COLORS, "regression": "#000000"},
         }
     )
-    assert touched["fixation_flags"]["short"]["mode"] == "Discard"
+    assert touched["fixation_flags"]["short"]["mode"] == "Hide"
     assert touched["saccade_class_colors"]["regression"] == "#000000"
 
 

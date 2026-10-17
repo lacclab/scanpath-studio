@@ -1263,7 +1263,7 @@ def test_the_illustration_preset_alone_is_unchanged(tmp_path, monkeypatch):
     assert captured["color_by"] == UNIFORM_COLOR_FIELD
     assert captured["show_word_labels"] is True
     assert captured["show_words"] is False
-    assert captured["saccade_color_mode"] == "Uniform"
+    assert captured["saccade_color_mode"] == "One color"
 
 
 def test_render_color_by_line_colours_each_fixation_by_its_line(tmp_path):
@@ -1548,13 +1548,13 @@ def test_render_forwards_fixation_flags_one_category_per_flag(tmp_path, monkeypa
         monkeypatch,
         [
             "--fixation-flag",
-            "short=discard,threshold_ms=80",
+            "short=hide,threshold_ms=80",
             "--fixation-flag",
             "oob=highlight,symbol=x,color=#ff0000",
         ],
     )
     flags = captured["fixation_flags"]
-    assert flags["short"] == {"mode": "Discard", "threshold_ms": 80.0}
+    assert flags["short"] == {"mode": "Hide", "threshold_ms": 80.0}
     assert flags["oob"] == {"mode": "Highlight", "symbol": "x", "color": "#ff0000"}
     # A category nobody named is absent, which the builder reads as Off.
     assert "long" not in flags
@@ -1563,12 +1563,12 @@ def test_render_forwards_fixation_flags_one_category_per_flag(tmp_path, monkeypa
 @pytest.mark.parametrize(
     "bad",
     [
-        "nosuch=discard",
+        "nosuch=hide",
         "short=nosuch",
         "short",
-        "oob=discard,threshold_ms=80",  # oob has no duration threshold
-        "short=discard,color=red",  # not #RRGGBB
-        "short=discard,symbol=wiggle",
+        "oob=hide,threshold_ms=80",  # oob has no duration threshold
+        "short=hide,color=red",  # not #RRGGBB
+        "short=hide,symbol=wiggle",
     ],
 )
 def test_a_malformed_fixation_flag_is_refused(tmp_path, monkeypatch, bad):
@@ -1628,7 +1628,7 @@ def test_render_unrecognised_columns_point_at_the_schema_flag(tmp_path):
     message = str(excinfo.value)
     assert "--word-schema '{" in message
     assert "word_schema=" not in message
-    assert "Word/IA ID" in message
+    assert "Word ID" in message
 
 
 def test_render_maps_unrecognised_columns_with_the_schema_flags(tmp_path):

@@ -404,9 +404,6 @@ if TYPE_CHECKING:
 #: The Corpus Analysis subtabs, in bar order — also the values the keyed tab bar
 #: (`corpus_subtab`) takes, so a test or a tutorial can open one by name.
 CORPUS_SUBTABS = ("Per text", "Per sentence", "Per participant", "Groups")
-#: Old subtab labels a bookmarked `?corpus_subtab=` may still carry, and the
-#: subtab each opens ("Per reader" opens "Per participant").
-CORPUS_SUBTAB_ALIASES = {"Per reader": "Per participant"}
 
 
 def corpus_subtabs() -> tuple[str, ...]:
@@ -417,22 +414,6 @@ def corpus_subtabs() -> tuple[str, ...]:
         for name in CORPUS_SUBTABS
         if name != "Per sentence" or sentence_analysis_enabled()
     )
-
-
-def _accept_old_corpus_subtab() -> None:
-    """Open the current subtab for an old label a link may still carry.
-
-    The tab bar is bound to `?corpus_subtab=` and Streamlit drops a value that
-    is not one of its labels, so an old link would land on Per text. The current
-    label is set through session state, which Streamlit then writes back to the
-    URL."""
-    held = st.session_state.get(CORPUS_SUBTAB)
-    if held in CORPUS_SUBTAB_ALIASES:
-        st.session_state[CORPUS_SUBTAB] = CORPUS_SUBTAB_ALIASES[held]
-    elif held is None:
-        wanted = st.query_params.get(CORPUS_SUBTAB)
-        if wanted in CORPUS_SUBTAB_ALIASES:
-            st.session_state[CORPUS_SUBTAB] = CORPUS_SUBTAB_ALIASES[wanted]
 
 
 def _safe_filename(text: str) -> str:
@@ -1387,7 +1368,7 @@ def _render_print_size(fig_width: int, fig_height: int) -> None:
         min_value=1.0,
         max_value=2000.0,
         step=1.0,
-        placeholder="Screen size",
+        placeholder=f"{_PNG_EXPORT_SCALE}× screen size",
         key=EXPORT_FIGURE_WIDTH,
         help=width_help,
         label_visibility="collapsed",
@@ -1673,7 +1654,7 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
         )
 
     # The figure's own clock, so the clip lasts exactly what its replay
-    # does — also when the Discard flags drop fixations, which the builder does.
+    # does — also when the Hide flags drop fixations, which the builder does.
     frame_ms = replay.clip_frame_ms
     clip_s = frame_ms * n_frames / 1000.0
 
@@ -1985,7 +1966,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         ),
         saccade_width=viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH),
         saccade_opacity=viz_settings.get("saccade_opacity", 1.0),
-        saccade_color_mode=viz_settings.get("saccade_color_mode", "Uniform"),
+        saccade_color_mode=viz_settings.get("saccade_color_mode", "One color"),
         saccade_class_colors=viz_settings.get("saccade_class_colors"),
         saccade_type_legend=viz_settings.get("saccade_type_legend", True),
         show_color_legend=viz_settings.get("show_color_legend", True),
@@ -3855,7 +3836,7 @@ def _render_paragraph_panel(
     if "text" not in trial_words.columns or trial_words.empty:
         if bare:
             # The subtab is on screen, so an empty body reads as broken.
-            # The stimulus comes from the words/AOI table — a raw-gaze-only or a
+            # The stimulus comes from the Words table — a raw-gaze-only or a
             # fixations-only trial has none.
             st.caption(
                 f"{ICONS['info']} No stimulus text for this trial. The text comes "
@@ -7477,7 +7458,7 @@ def render_single_trial_tab(
     # Animate popover.
     if animate and not fig_fixations.empty and anim_timing_slot is not None:
         # Quote the same timeline the replay draws. The animation
-        # builder drops Discard-mode fixation classes internally; apply the
+        # builder drops Hide-mode fixation classes internally; apply the
         # shared classifier here too so the info cannot count hidden rows.
         info_fixations = _discard_flagged_fixations(
             fig_fixations,
@@ -8702,21 +8683,6 @@ def _c_trial_keys(_frame, fkey):
 
 _AGG_OPTIONS = ["mean", "median", "sum"]
 
-#: What a Corpus Analysis view is called on screen. The stored option (the
-#: widget's value, the recipe's ``view``) keeps the internal name on the left.
-_VIEW_LABELS = {
-    "Per-reader profiles": "Per-participant profiles",
-    "Word × reader heatmap": "Word × participant heatmap",
-    "Word difficulty on stimulus": "Measure on the stimulus",
-    "Reader summary table": "Participant summary table",
-    "Paired summary bars": "Side-by-side summary bars",
-}
-
-
-def _view_label(view: str) -> str:
-    return _VIEW_LABELS.get(view, view)
-
-
 _SPREAD_OPTIONS = ["SD", "SEM", "IQR", "Bootstrap CI"]
 
 
@@ -8790,7 +8756,7 @@ _COMPUTED_READER_VIEWS = frozenset(
         "Reading summary",
         "Progressive vs regressive",
         "Landing-position curve",
-        "Reader summary table",
+        "Participant summary table",
     }
 )
 
@@ -8806,7 +8772,7 @@ _VIEW_PHRASES = {
     "Per-trial trend": "their per-trial trend",
     "Distributions": "distribution summaries",
     "Word profile": "the cohort word profile",
-    "Reader summary table": "a per-participant summary table",
+    "Participant summary table": "a per-participant summary table",
     "Group trend": "the group's trend",
 }
 
@@ -9568,7 +9534,7 @@ def _corpus_unavailable_notice(
     measures are mapped, and draws its sections greyed so what it *would* offer
     stays visible.
 
-    A dataset with **no AOI table at all** — raw gaze only, or fixations
+    A dataset with **no Words table at all** — raw gaze only, or fixations
     only — has nowhere to map a measure, so it is told that instead, and a
     raw-gaze one is told that the samples carry no measures either."""
     editable = _active_stored_dataset() is not None
@@ -9943,7 +9909,6 @@ def _render_corpus_analysis_body(
     #
     with st.container(key="tutorial_corpus_subtabs"):
         names = corpus_subtabs()
-        _accept_old_corpus_subtab()
         panes = st.tabs(
             list(names),
             # Keyed, like the Scanpath subtabs — a plain `st.tabs` runs every
@@ -10004,7 +9969,7 @@ def _c_sentence_measures(_words, _fix, fwkey, ffkey):
 #: unit — the columns of `preprocessing.sentence_measures`.
 _SENTENCE_MEASURE_LABELS = {
     "total_dur": "Total fixation duration (ms)",
-    "total_n_fixations": "Fixations",
+    "total_n_fixations": "Total fixations",
     "firstpass_dur": "First-pass duration (ms)",
     "firstpass_n_fixations": "First-pass fixations",
     "gopast": "Go-past duration (ms)",
@@ -10017,9 +9982,9 @@ _SENTENCE_MEASURE_LABELS = {
     "lookback_n_fixations": "Look-back fixations",
     "lookfrom_dur": "Later rereading (ms)",
     "lookfrom_n_fixations": "Later rereading fixations",
-    "nrun": "Runs",
+    "nrun": "Number of runs",
     "rate_wpm": "Reading rate (words/min)",
-    "n_words": "Words",
+    "n_words": "Sentence length (words)",
 }
 
 
@@ -10293,15 +10258,14 @@ def render_per_text_tab(
     view = top[1].selectbox(
         "View",
         [
-            "Per-reader profiles",
-            "Word × reader heatmap",
+            "Per-participant profiles",
+            "Word × participant heatmap",
             "Cohort profile",
-            "Word difficulty on stimulus",
+            "Measure on the stimulus",
             "Measure vs feature",
             "Skip / regression rate",
         ],
         key="ptext_view",
-        format_func=_view_label,
     )
     fw = dict(
         canvas_width=canvas_width,
@@ -10360,7 +10324,7 @@ def render_per_text_tab(
     normalize = _normalize_toggle(
         c[3],
         key="ptext_norm",
-        disabled=measure.is_rate or view == "Word difficulty on stimulus",
+        disabled=measure.is_rate or view == "Measure on the stimulus",
     )
     _measure_note(
         c[0],
@@ -10368,13 +10332,13 @@ def render_per_text_tab(
         (
             f"Each value is one participant on one word (the {agg} of their "
             "trials of this text)."
-            if view in ("Per-reader profiles", "Word × reader heatmap")
+            if view in ("Per-participant profiles", "Word × participant heatmap")
             else f"Each word's value is the {agg} across its participants."
         )
-        + (_Z_NOTE if normalize and view != "Word difficulty on stimulus" else ""),
+        + (_Z_NOTE if normalize and view != "Measure on the stimulus" else ""),
     )
 
-    if view == "Per-reader profiles":
+    if view == "Per-participant profiles":
         overlay = c[2].checkbox(f"Cohort {agg}", value=True, key="ptext1_overlay")
         per = _c_per_reader_word(
             words_filtered,
@@ -10424,7 +10388,7 @@ def render_per_text_tab(
                 normalize=normalize,
             ),
         )
-    elif view == "Word × reader heatmap":
+    elif view == "Word × participant heatmap":
         per = _c_per_reader_word(
             words_filtered,
             text_col,
@@ -10510,7 +10474,7 @@ def render_per_text_tab(
                 min_readers=min_readers,
             ),
         )
-    elif view == "Word difficulty on stimulus":  # reads viz_settings
+    elif view == "Measure on the stimulus":  # reads viz_settings
         agg_words = _c_word_box_aggregate(
             words_filtered, text_col, text_id, measure.key, agg, fkey, screen_id
         )
@@ -10774,7 +10738,7 @@ def render_per_reader_tab(
                 label,
                 fmt.format(value) if value is not None else "—",
                 delta=(
-                    f"{_ordinal(round(pct))} pct of {n_others}"
+                    f"{_ordinal(round(pct))} percentile of {n_others}"
                     if pct is not None
                     else None
                 ),
@@ -10795,7 +10759,7 @@ def render_per_reader_tab(
         )
         trials = trials[trials["participant_id"].astype(str) == str(pid)]
         with st.expander("Summary tables", expanded=False):
-            reader_table, trial_table = st.tabs(["Reader", "Trials"])
+            reader_table, trial_table = st.tabs(["Participant", "Trials"])
             with reader_table:
                 selected_reader = cohort[
                     cohort["participant_id"].astype(str) == str(pid)
@@ -11024,7 +10988,12 @@ def render_per_group_tab(
     """*What does this group look like?* — a cohort by the active filter.
 
     The one-group case of the Groups tab (wrapped by ``render_groups_tab``)."""
-    views = ["Distributions", "Word profile", "Reader summary table", "Group trend"]
+    views = [
+        "Distributions",
+        "Word profile",
+        "Participant summary table",
+        "Group trend",
+    ]
     if not computed_measures_enabled():
         views = [v for v in views if v not in _COMPUTED_READER_VIEWS]
     st.caption(
@@ -11071,7 +11040,7 @@ def render_per_group_tab(
         return
     if st.session_state.get("pgrp_view") not in (None, *views):
         del st.session_state["pgrp_view"]
-    view = st.selectbox("View", views, key="pgrp_view", format_func=_view_label)
+    view = st.selectbox("View", views, key="pgrp_view")
     fw = dict(
         canvas_width=canvas_width,
         base_font_size=base_font_size,
@@ -11178,7 +11147,7 @@ def render_per_group_tab(
                 counts={"group_readers": n_readers, "group_fixations": n_fix},
             ),
         )
-    elif view == "Reader summary table":
+    elif view == "Participant summary table":
         table = _c_cohort_summary(
             words_g, fix_g, frame_fingerprint(words_g), frame_fingerprint(fix_g)
         )
@@ -11242,7 +11211,7 @@ def render_per_group_tab(
             help="How the measure is combined within each trial (across its words / fixations).",
         )
         show_readers = c[2].checkbox(
-            "Each participant", value=False, key="pgrp17_readers"
+            "Show each participant", value=False, key="pgrp17_readers"
         )
         _measure_note(
             c[0],
@@ -11301,7 +11270,6 @@ def render_per_group_tab(
 
 
 _GROUP_MEANS_VIEW = "Group means & difference"
-_GROUP_MEANS_VIEW_LEGACY = "Effect size + test"
 
 
 def _fmt_stat(value, digits: int = 2) -> str:
@@ -11361,21 +11329,16 @@ def render_group_comparison_tab(
             else " · no participant in both."
         )
     )
-    # A session still holding the old view name "Effect size + test" opens
-    # its replacement.
-    if st.session_state.get("cmp_view") == _GROUP_MEANS_VIEW_LEGACY:
-        st.session_state["cmp_view"] = _GROUP_MEANS_VIEW
     view = st.selectbox(
         "View",
         [
             "Overlaid distributions",
             "Difference word profile",
-            "Paired summary bars",
+            "Side-by-side summary bars",
             _GROUP_MEANS_VIEW,
             "Two-group word heatmap",
         ],
         key="cmp_view",
-        format_func=_view_label,
     )
     fw = dict(
         canvas_width=canvas_width,
@@ -11438,7 +11401,9 @@ def render_group_comparison_tab(
             key="cmp19_agg",
             help="How each word's value is combined across each group's participants, before A−B.",
         )
-        min_readers = _min_readers_input(c[3], key="cmp19_min", label="Min per group")
+        min_readers = _min_readers_input(
+            c[3], key="cmp19_min", label="Min participants per group"
+        )
         _measure_note(
             st,
             measure,
@@ -11486,7 +11451,7 @@ def render_group_comparison_tab(
                 counts={"group_a_readers": readers_a, "group_b_readers": readers_b},
             ),
         )
-    elif view == "Paired summary bars":
+    elif view == "Side-by-side summary bars":
         all_measures = available_measures(words_filtered, fixations_filtered)
         labels = {m.label: m.key for m in all_measures}
         default = [
@@ -11812,7 +11777,10 @@ def render_alignment_comparison_tab(
             "[doi:10.3758/s13428-021-01554-0](https://doi.org/10.3758/s13428-021-01554-0)."
         )
         for method in alignment.ALGORITHMS:
-            st.markdown(f"- **{method}** — {alignment.METHOD_CITATIONS[method]}")
+            st.markdown(
+                f"- **{alignment.method_label(method)}** — "
+                f"{alignment.METHOD_CITATIONS[method]}"
+            )
 
     if trial_fixations.empty or trial_words.empty:
         st.info("This trial has no fixations or no word boxes to align.")
@@ -11909,12 +11877,19 @@ def render_alignment_comparison_tab(
         trial_fixations, trial_words
     )
     st.dataframe(
-        sensitivity_report,
+        sensitivity_report.assign(
+            algorithm=sensitivity_report["algorithm"].map(alignment.method_label)
+        ),
         hide_index=True,
         width="stretch",
         column_config={
-            "average_y_correction": st.column_config.NumberColumn(format="%.1f px"),
-            "max_y_correction": st.column_config.NumberColumn(format="%.1f px"),
+            "algorithm": st.column_config.TextColumn("Algorithm"),
+            "average_y_correction": st.column_config.NumberColumn(
+                "Mean vertical correction", format="%.1f px"
+            ),
+            "max_y_correction": st.column_config.NumberColumn(
+                "Largest vertical correction", format="%.1f px"
+            ),
         },
     )
     st.caption(
@@ -11926,7 +11901,7 @@ def render_alignment_comparison_tab(
     # there is only a single line, where they would all be no-ops).
     panels = [("Original (uncorrected)", None)]
     if not single_line:
-        panels += [(a.title(), a) for a in alignment.ALGORITHMS]
+        panels += [(alignment.method_label(a), a) for a in alignment.ALGORITHMS]
 
     # Estimate a uniform cell height so panels line up (mirrors the
     # Comparisons grid).
@@ -12813,7 +12788,7 @@ def render_fixations_tab(fixations_filtered: pd.DataFrame) -> None:
 
 
 def render_words_tab(words_filtered: pd.DataFrame) -> None:
-    """Render the raw Words/IA (AOI) table, as uploaded/mapped — no computation.
+    """Render the raw Words table, as uploaded/mapped — no computation.
 
     The table as given: the per-word reading measures derived from it
     (`compute_word_metrics`'s FFD/FPRT/RPD/TFD/…) are not raw data and do not
@@ -13157,7 +13132,7 @@ def _render_data_provenance() -> None:
     """Show a 'source / cohort / date / file mtime' banner above the Raw Data
     sub-tabs so reviewers can verify which OneStop export they're looking at.
 
-    Only renders when ONESTOP_DATA_DIR is set (i.e. OneStop server bundle is
+    Only renders when ONESTOP_DATA_DIR is set (i.e. the OneStop local export is
     the active data source). For uploads / bundled demo, falls through silently.
     """
     from datetime import datetime
@@ -13348,8 +13323,8 @@ def _dataset_statistics(
 _WORD_MAPPING_LABELS = {
     "participant": "Participant ID",
     "trial": "Trial ID",
-    "word_id": "Word/IA ID",
-    "text": "Word text/label",
+    "word_id": "Word ID",
+    "text": "Word text",
     "text_id": "Text ID",
     "line": "Line index",
     "left": "Box left",
@@ -13370,7 +13345,7 @@ _FIX_MAPPING_LABELS = {
     "timestamp": "Timestamp (ms)",
     "fixation_id": "Fixation ID",
     "text_id": "Text ID",
-    "word_id": "Word/IA ID",
+    "word_id": "Word ID",
 }
 _RAW_GAZE_MAPPING_LABELS = {
     "participant": "Participant ID",
@@ -13378,7 +13353,7 @@ _RAW_GAZE_MAPPING_LABELS = {
     "x": "X coordinate",
     "y": "Y coordinate",
     "timestamp": "Timestamp (ms)",
-    "text": "Word text/label",
+    "text": "Word text",
 }
 _MAPPING_TABLES = [
     ("Words (interest areas)", "words", _WORD_MAPPING_LABELS),
@@ -14702,7 +14677,7 @@ def _apply_remap() -> None:
         # An added table is raw: its names are its own.
         new_names[table_key] = from_schema(table_key, schema, raw.columns).to_payload()
     # The same cross-frame fixups for the tables this save *remapped*. A
-    # remapped AOI table with no Participant comes back stimulus-level (the
+    # remapped Words table with no Participant comes back stimulus-level (the
     # first reader's copy of each trial, on the "" placeholder reader), and
     # only `harmonize_frames` broadcasts it back onto the readers in the
     # fixations; without it no trial would find its word boxes, so every
@@ -15080,7 +15055,7 @@ def aggregate_key(name: str) -> str:
 def _render_aggregate_toggle(name: str, *, adding: bool) -> None:
     """The add screen's third AOI line, on the edit screen.
 
-    Live only while an AOI table is being **added**: aggregation collapses raw
+    Live only while a Words table is being **added**: aggregation collapses raw
     character rows into one box per word, and a table already in the dataset was
     normalized on the way in — its character rows no longer exist, so the
     honest answer for one is "upload the file again", not a toggle that would
@@ -15095,7 +15070,7 @@ def _render_aggregate_toggle(name: str, *, adding: bool) -> None:
         disabled=not adding,
         # Read only by Save changes (`_apply_remap`), so a toggle needs no rerun.
         on_change="ignore",
-        help="For interest-area tables with one row per *character*, as in some "
+        help="For Words tables with one row per *character*, as in some "
         "CJK corpora. Merges each word's characters (grouped by the Trial and "
         "Word ids above) into one bounding box."
         if adding
@@ -15730,9 +15705,9 @@ def _render_remap_editor(
     word_frame = stored.get("words")
     fixation_frame = stored.get("fixations")
     # The add screen offers *Scale to the word boxes* whenever
-    # there is an AOI table at all (`has_boxes=has_words`), not only when every
+    # there is a Words table at all (`has_boxes=has_words`), not only when every
     # box column is mapped. This screen has to ask the same thing of **either**
-    # source of an AOI table: the one already stored, or one sitting in the
+    # source of a Words table: the one already stored, or one sitting in the
     # uploader above and not yet saved — added != {} the moment a table is
     # attached there, well before ✅ Save changes runs, and the option
     # disappearing until after the save would be backwards: it is exactly the
@@ -15838,8 +15813,8 @@ def dataset_editor_is_dirty() -> bool:
 #: one. ``_remap_*`` keys, so ✕ Cancel and ✅ Save changes sweep them with the
 #: rest of the edit: which dataset's form is open (its widgets are forgotten
 #: when a new edit opens, so a cancelled answer never comes back), what it
-#: holds, what it held when it opened, a pending *Reset to source setup*, and
-#: whether it differs.
+#: holds, what it held when it opened, a pending *Reset to the corpus's
+#: setup*, and whether it differs.
 _BUILTIN_SETUP_OPEN_KEY = "_remap_builtin_setup_open"
 _BUILTIN_SETUP_PENDING_KEY = "_remap_builtin_setup_pending"
 _BUILTIN_SETUP_BASELINE_KEY = "_remap_builtin_setup_baseline"
@@ -15859,7 +15834,7 @@ def _forget_builtin_setup_widgets(token: str) -> None:
 
 
 def _reset_builtin_setup(token: str) -> None:
-    """*Reset to source setup*: redraw the form at the corpus' own values.
+    """*Reset to the corpus's setup*: redraw the form at the corpus' own values.
     Nothing is dropped until ✅ Save changes (`commit_builtin_setup`)."""
     _forget_builtin_setup_widgets(token)
     st.session_state[_BUILTIN_SETUP_RESET_KEY] = token
@@ -15879,9 +15854,10 @@ def _setup_groups_differing(a, b) -> list[str]:
             "scale_text_to_boxes",
         ),
     }
-    labels = {"screen": "Screen", "geometry": "Physical size", "text": "Text size"}
+    from scanpath_studio.experimental_setup import SETUP_GROUP_LABELS
+
     return [
-        labels[group]
+        SETUP_GROUP_LABELS[group]
         for group, names in fields.items()
         if a.provenance[group] != b.provenance[group]
         or any(getattr(a, n) != getattr(b, n) for n in names)
@@ -15900,7 +15876,8 @@ def render_builtin_setup_editor(
     this dataset has now — the user's own, if they saved one, else what the
     corpus declares. ✅ Save changes keeps a changed form as this dataset's own
     setup (`commit_builtin_setup`); ✕ Cancel discards it. The corpus' declared
-    values are never rewritten, so *Reset to source setup* can always go back.
+    values are never rewritten, so *Reset to the corpus's setup* can always go
+    back.
     """
     from scanpath_studio.app import (
         cached_canvas_size,
@@ -15929,7 +15906,7 @@ def render_builtin_setup_editor(
             + ". The corpus's own setup is kept; reset to go back to it."
         )
         action.button(
-            f"{ICONS['reset']} Reset to source setup",
+            f"{ICONS['reset']} Reset to the corpus's setup",
             key=f"{_builtin_setup_prefix(token)}_reset",
             on_click=_reset_builtin_setup,
             args=(token,),
@@ -16008,9 +15985,9 @@ _EDITOR_KEY_NOISE = ("_cell", "_upload", "_header")
 
 #: Each table's name in a setup-file note.
 _SETUP_TABLE_NAMES = {
-    "words": "Words",
-    "fixations": "Fixations",
-    "raw_gaze": "Raw gaze",
+    "words": "Words table",
+    "fixations": "Fixations table",
+    "raw_gaze": "Raw gaze table",
 }
 _BOX_EDGE_KEYS = ("left", "right", "top", "bottom")
 _BOX_ORIGIN_KEYS = ("x", "y", "width", "height")
@@ -16295,19 +16272,19 @@ def render_trial_identity_section() -> None:
         )
     rows = [
         {
-            "Signal": "Duplicated word rows",
+            "Check": "Duplicated word rows",
             "Count": int(report.get("duplicate_word_rows") or 0),
             "What it means": "A word box appears more than once in one trial. "
             "Each word should have one row per trial.",
         },
         {
-            "Signal": "Trials with a repeated fixation id",
+            "Check": "Trials with a repeated fixation id",
             "Count": int(report.get("repeated_fixation_id_trials") or 0),
             "What it means": "Two fixations in one trial share an id. This "
             "check needs no word boxes.",
         },
         {
-            "Signal": "Trials whose clock runs backwards",
+            "Check": "Trials whose clock runs backwards",
             "Count": int(report.get("backwards_clock_trials") or 0),
             "What it means": "The timestamp jumps back mid-trial, which usually "
             "means a second recording started.",
@@ -16326,7 +16303,7 @@ def render_trial_identity_section() -> None:
             )
             st.dataframe(
                 [
-                    {"Column": col, "Trials with >1 value": count}
+                    {"Column": col, "Trials with more than one value": count}
                     for col, count in multi.items()
                 ],
                 hide_index=True,
@@ -16466,9 +16443,8 @@ def _render_setup_provenance_note(host=None) -> None:
             else f"{snapshot.base_font_size} px · {snapshot.font_family}"
         ),
     }
-    labels = {"screen": "Screen", "geometry": "Physical size", "text": "Text size"}
     for cell, group in zip(box.columns(3, gap="medium"), SETUP_GROUPS):
-        label = html.escape(labels.get(group, SETUP_GROUP_LABELS[group]))
+        label = html.escape(SETUP_GROUP_LABELS[group])
         value = html.escape(values[group])
         provenance = html.escape(
             str(snapshot.provenance[group] or "not answered").capitalize()
@@ -16501,10 +16477,8 @@ def _render_arrived_provenance_note(snapshot, *, host=None) -> None:
     arrived = st.session_state.get(SETUP_PROVENANCE_STATE_KEY)
     if not isinstance(arrived, dict) or not arrived:
         return
-    labels = {"screen": "Screen", "geometry": "Physical size", "text": "Text size"}
     differing = [
-        f"{labels.get(group, SETUP_GROUP_LABELS[group])}: "
-        f"**{str(arrived[group]).capitalize()}**"
+        f"{SETUP_GROUP_LABELS[group]}: **{str(arrived[group]).capitalize()}**"
         for group in SETUP_GROUPS
         if group in arrived and arrived[group] != str(snapshot.provenance[group])
     ]
@@ -16527,8 +16501,8 @@ def _c_derived_tables(
     raw_gaze_fingerprint,
     pixels_per_degree_value: float | None,
 ) -> dict:
-    """The seven derived tables (stimuli, sentences, saccades, trials, readers,
-    characters, cleaning QA), built once per dataset.
+    """The seven derived tables (stimuli, sentences, saccades, trial summary,
+    participant summary, characters, cleaning report), built once per dataset.
 
     They sit in tabs, and Streamlit renders every tab's body on every run —
     only the *display* is client-side — so uncached they would be rebuilt on
@@ -16560,10 +16534,10 @@ def _c_derived_tables(
             raw_gaze=_raw_gaze,
             words=_words,
         ),
-        "Trials": trial_summary_table(measured_words, _fixations),
-        "Readers": reader_summary_table(measured_words, _fixations),
+        "Trial summary": trial_summary_table(measured_words, _fixations),
+        "Participant summary": reader_summary_table(measured_words, _fixations),
         "Characters": character_grid(_words),
-        "Cleaning QA": cleaning_report(_fixations),
+        "Cleaning report": cleaning_report(_fixations),
     }
 
 
@@ -16704,7 +16678,7 @@ def _render_dataset_stats_tab(
             st.dataframe(parts, hide_index=True, width="stretch")
 
     # Provenance is a fact about the *dataset*, so it sits with the counts.
-    # Silent for every source but a OneStop server bundle.
+    # Silent for every source but a OneStop local export.
     _render_data_provenance()
 
 
@@ -16724,7 +16698,7 @@ def dataset_capabilities(
 
     Read off the same checks the app already makes, never a new rule: the
     trials with fixations (what the Scanpath view draws), the reading measures
-    the AOI table brought (`data.brought_reading_measures`, all Corpus
+    the Words table brought (`data.brought_reading_measures`, all Corpus
     Analysis shows), the trials the raw gaze covers, and the multipart
     screens (`multipart.part_catalog`, the 📊 Stats tab's Screens count).
     """
@@ -17005,13 +16979,13 @@ def render_data_inspection_tab(
             frame_fingerprint(raw_gaze_filtered),
             ppd,
         )
-        # *Cleaning QA* is the preprocessing pipeline's own provenance table
+        # *Cleaning report* is the preprocessing pipeline's own provenance table
         # — one row per trial saying what that stage excluded and why — so it
         # is shown only while preprocessing is enabled. The other six are
         # plain analysis tables (some live in `preprocessing.py`); they are
         # unaffected.
         if not preprocessing_enabled():
-            derived = {k: v for k, v in derived.items() if k != "Cleaning QA"}
+            derived = {k: v for k, v in derived.items() if k != "Cleaning report"}
         with st.expander(
             f"{ICONS['derived_tables']} Derived analysis tables: "
             + " · ".join(derived),

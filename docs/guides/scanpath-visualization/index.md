@@ -114,7 +114,7 @@ Each of these files can be saved and loaded again:
 
 | What | Where |
 | --- | --- |
-| figure settings | **:material/share: Share → File** |
+| figure settings | **:material/share: Share → Settings file** |
 | favorites, tags and notes | **:material/database: Data Management → Annotations → Export** |
 | column mapping and recording setup | **:material/edit: Edit dataset → Download setup file** |
 | saved figure designs | **:material/palette: My designs → Export** |

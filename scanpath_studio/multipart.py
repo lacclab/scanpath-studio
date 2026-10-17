@@ -127,7 +127,7 @@ def normalize_screen_identity(frame: pd.DataFrame) -> pd.DataFrame:
 
 #: What a user calls each screen column in a message (the add screen's names).
 _FIELD_LABELS = {
-    SCREEN_INDEX: "`screen_index`",
+    SCREEN_INDEX: "Screen number",
     CANVAS_WIDTH: "Screen canvas width",
     CANVAS_HEIGHT: "Screen canvas height",
 }

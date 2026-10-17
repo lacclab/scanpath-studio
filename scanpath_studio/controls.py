@@ -17,6 +17,7 @@ from streamlit_sortables import sort_items
 
 from . import column_names as cn
 from .alignment import ALGORITHMS as ALIGN_ALGORITHMS
+from .alignment import method_label as align_method_label
 from .annotations import has_screen_annotations, known_tags
 from .constants import (
     BACKGROUND_PRESETS,
@@ -94,7 +95,6 @@ from .constants import (
     drift_correction_enabled,
     icon_html,
     icons_to_html,
-    palette_label,
     palette_settings,
     spoken,
     upload_limit_mb,
@@ -744,7 +744,7 @@ _VIZ_WIDGET_DEFAULTS = {
     # refixation / return sweep / regression). "By type" splits the saccade trace
     # into one colour per class with a small legend; the five class colours are
     # each restorable, so seed them here.
-    "global_saccade_color_mode": "Uniform",
+    "global_saccade_color_mode": "One color",
     # Show the saccade-type colour key on the plot (default on). Optional,
     # like the other legends.
     "global_saccade_type_legend": True,
@@ -873,9 +873,9 @@ _VIZ_WIDGET_DEFAULTS = {
     # Session State API" warning when a restore pre-sets them.
     "global_critical_span_style": "Mark text",
     "global_span_border_color": "#000000",
-    # Fixation classification (viz-only). SHORT / LONG / OUT-OF-BOUNDS / BLINK
-    # each get a mode (Off | Highlight | Discard); Highlight overlays a marker in
-    # the chosen symbol+colour, Discard hides them from the plot only (reading
+    # Fixation classification (viz-only). SHORT / LONG / OUTSIDE-THE-TEXT / BLINK
+    # each get a mode (Off | Highlight | Hide); Highlight overlays a marker in
+    # the chosen symbol+colour, Hide hides them from the plot only (reading
     # measures and export tables are untouched). Short/long thresholds in ms
     # follow eyekit's discard_short (~80) / discard_long (~800).
     "global_fixclass_short_mode": "Off",
@@ -963,7 +963,7 @@ _OUT_OF_TEXT_MARKERS = {
 
 # Fixation-classification modes: a category can be left alone, marked with
 # an overlay marker, or hidden from the plot (viz-only — never changes measures).
-_FIXCLASS_MODES = ("Off", "Highlight", "Discard")
+_FIXCLASS_MODES = ("Off", "Highlight", "Hide")
 
 
 #: The four fixation classes: ``(key prefix, row title, help, has a ms
@@ -973,27 +973,32 @@ _FIXCLASS_CATEGORIES = (
     ("long", "Long", "Fixations longer than the ms threshold.", True),
     (
         "oob",
-        "Out of bounds",
+        "Outside the text",
         "Fixations in no word box (gaps between lines count).",
         False,
     ),
-    ("blink", "Blink", "Fixations at or next to a blink; needs a blink column.", False),
+    (
+        "blink",
+        "Near a blink",
+        "Fixations at or next to a blink; needs a blink column.",
+        False,
+    ),
 )
 
 
 def _render_fixation_cleaning(
     *, disabled: bool = False, reason: str = "", prefix: str = "global"
 ) -> None:
-    """Short / long / out-of-bounds / blink visual filtering controls.
+    """Short / long / outside-the-text / blink visual filtering controls.
 
-    Viz-only: highlight or discard, with customizable short/long thresholds.
+    Viz-only: highlight or hide, with customizable short/long thresholds.
     One table row per class — its mode, then the ms threshold (short and long
     only), then the marker and colour a *Highlight* draws with — under a
     captioned header. What a mode leaves idle is greyed, not hidden. Every value
     rides a ``{prefix}_fixclass_<class>_*`` key (seeded in
     ``_VIZ_WIDGET_DEFAULTS``).
 
-    All three builders consume ``fixation_flags``: in the replay *Discard* drops
+    All three builders consume ``fixation_flags``: in the replay *Hide* drops
     the rows before the frames are built and *Highlight* overlays them as the
     trail reaches them; the comparison builders take one set per scanpath.
     ``prefix`` is the key namespace — ``global`` for A (and every non-compare
@@ -1009,7 +1014,7 @@ def _render_fixation_cleaning(
         else [label_w, rest * 0.5, rest * 0.5]
     )
     mode_help = _gated_help(
-        "**Highlight** marks these fixations. **Discard** hides their markers; "
+        "**Highlight** marks these fixations. **Hide** hides their markers; "
         "saccades and the heatmap still use them, and measures and exports "
         "don't change.",
         reason,
@@ -1111,12 +1116,12 @@ def _fixation_filter_badge(prefix: str = "global") -> str:
         for name in ("short", "long", "oob", "blink")
     ]
     n_active = sum(mode != "Off" for mode in active)
-    n_discard = sum(mode == "Discard" for mode in active)
+    n_hidden = sum(mode == "Hide" for mode in active)
     if not n_active:
         return ""
     detail = f"{n_active} on"
-    if n_discard:
-        detail += f", {n_discard} discarding"
+    if n_hidden:
+        detail += f", {n_hidden} hiding"
     return f" · {detail}"
 
 
@@ -1492,7 +1497,7 @@ _VIEW_PRESETS: dict[str, dict[str, object]] = {
         "global_show_raw_gaze": False,
         "global_saccade_render_mode": "Arc",
         "global_fixation_snap_to_line": True,
-        "global_saccade_color_mode": "Uniform",
+        "global_saccade_color_mode": "One color",
         "global_fixation_opacity": 1.0,
     },
     "reading_order": {
@@ -2376,7 +2381,7 @@ def _active_palette() -> str | None:
 
     A palette is one-way (it writes the ordinary colour keys and never reads
     them back), so without this the selector would keep reading
-    "Colourblind-safe" after the user has hand-edited one of its colours —
+    "Default (colorblind-safe)" after the user has hand-edited one of its colours —
     naming a property the figure no longer has.
     """
     ss = st.session_state
@@ -2528,14 +2533,14 @@ WORD_FIELD_SPECS: list[dict] = [
     },
     {
         "key": "word_id",
-        "label": "Word/IA ID",
+        "label": "Word ID",
         "required": True,
         "help": "ID of each word (interest area). Fixations are matched to words "
         "by it, and it sets the word order within a trial.",
     },
     {
         "key": "text",
-        "label": "Word text/label",
+        "label": "Word text",
         "required": False,
         "help": "The word's text; drawn on the stimulus and shown in tooltips.",
     },
@@ -2628,13 +2633,13 @@ FIX_FIELD_SPECS: list[dict] = [
         "label": "X coordinate",
         "required": False,
         "help": "Fixation pixel X. For AOI-only data, leave empty and map "
-        "Word/IA ID; those fixations are placed at word-box centers.",
+        "Word ID; those fixations are placed at word-box centers.",
     },
     {
         "key": "y",
         "label": "Y coordinate",
         "required": False,
-        "help": "Fixation pixel Y. Leave empty for AOI-only data (map Word/IA ID instead).",
+        "help": "Fixation pixel Y. Leave empty for AOI-only data (map Word ID instead).",
     },
     {
         "key": "duration",
@@ -2677,7 +2682,7 @@ FIX_FIELD_SPECS: list[dict] = [
     },
     {
         "key": "word_id",
-        "label": "Word/IA ID",
+        "label": "Word ID",
         "required": False,
         "help": "Which word/AOI each fixation landed on. When mapped, it is used "
         "instead of matching fixations to word boxes by position. For AOI-only "
@@ -2724,7 +2729,7 @@ RAW_GAZE_FIELD_SPECS: list[dict] = [
         "help": "Which screen of a multi-screen trial this sample is on.",
     },
     # text_id/word_id round out the row to the same six identity fields
-    # Fixations/AOI map (Trial · Screen · Participant · Text · Word/IA
+    # Fixations/AOI map (Trial · Screen · Participant · Text · Word ID
     # · text-or-id). Both optional — a raw-gaze-only dataset with no such
     # column works without them (see `data.normalize_raw_gaze`).
     {
@@ -2736,14 +2741,14 @@ RAW_GAZE_FIELD_SPECS: list[dict] = [
     },
     {
         "key": "word_id",
-        "label": "Word/IA ID",
+        "label": "Word ID",
         "required": False,
         "help": "Which word/AOI each gaze sample landed on, if your export has "
         "it. The app does not assign gaze samples to words.",
     },
     {
         "key": "text",
-        "label": "Word text/label",
+        "label": "Word text",
         "required": False,
         "help": "Optional word/label associated with the sample.",
     },
@@ -4718,7 +4723,7 @@ def _render_heatmap_blur_row(
     disabled: bool,
     reason: str | None,
 ) -> None:
-    """``Blur | ☑ Auto | σ px``: the Interpolated heatmap's Gaussian σ.
+    """``Blur | ☑ Auto | σ px``: the Smoothed heatmap's Gaussian σ.
 
     The box always shows the σ in use: on Auto, the one the figure computes
     from this trial (`plots.interpolated_sigma_px`, greyed); off, the fixed
@@ -4727,7 +4732,7 @@ def _render_heatmap_blur_row(
     from scanpath_studio.plots import _compute_axis_ranges, interpolated_sigma_px
 
     help_text = _gated_help(
-        "Interpolated only: the Gaussian blur's σ, in px. Auto: 2% of the "
+        "Smoothed only: the Gaussian blur's σ, in px. Auto: 2% of the "
         "larger span of fixations and word boxes, at least 8 px.",
         reason,
     )
@@ -5283,7 +5288,7 @@ def render_compare_filters(host, compare_fixations: pd.DataFrame | None) -> None
     Rendered into the slot ``render_plot_controls`` reserved under A's filters —
     after the rail, because B is picked (and its fixations loaded) below it. The
     same three filters A has: the fixation-index window, the short / long /
-    out-of-bounds / blink flags, and which saccade classes are drawn. Every value
+    outside-the-text / blink flags, and which saccade classes are drawn. Every value
     rides B's own keys (``session_keys.COMPARE_B_FILTER_STATE_KEYS`` and
     ``single_compare_fix_range``), so the two readings are filtered apart.
     """
@@ -5737,8 +5742,8 @@ _LEGEND_ROW_HELP = {
     "size_key": "The duration size key. Its circles are drawn at the marker "
     "sizes; edit the durations it shows in 👁️ Fixations ▾ → Durations.",
     "highlight": "The note naming the highlighted words. Pick the words and "
-    "their color in 📄 Stimulus ▾ → Highlight. It is one line, so it has no "
-    "arrangement.",
+    "their color in 📄 Stimulus ▾ → Highlight words. It is one line, so it "
+    "has no arrangement.",
 }
 
 
@@ -6057,7 +6062,7 @@ def _collect_viz_settings(
         saccade_opacity=float(ss.get("global_saccade_opacity", 1.0)),
         # Colour-by-reading-type mode + the per-class palette + optional
         # colour-key legend.
-        saccade_color_mode=ss.get("global_saccade_color_mode") or "Uniform",
+        saccade_color_mode=ss.get("global_saccade_color_mode") or "One color",
         saccade_type_legend=bool(ss.get("global_saccade_type_legend", True)),
         show_color_legend=bool(ss.get("global_show_color_legend", True)),
         show_highlight_legend=bool(ss.get("global_show_highlight_legend", True)),
@@ -6267,7 +6272,6 @@ def corpus_style_controls(
             key="global_palette",
             persist_state="session",
             on_change=_on_palette_change,
-            format_func=palette_label,
             help="Same palette as the Scanpath view; designs and Share links keep it.",
         )
         columns = st.columns(2)
@@ -6661,7 +6665,7 @@ def render_plot_controls(
     # No `help=`: Streamlit draws it as a `?` icon, and the rail's head is kept
     # clear of those. A selectbox has no second hover target, so what each
     # palette *is* reads off the option names themselves ("Default
-    # (colourblind-safe)", "Print / greyscale", "High contrast"), and "any change
+    # (colorblind-safe)", "Print / grayscale", "High contrast"), and "any change
     # reads Custom" is visible the moment it happens. The full explanation lives
     # in the docs.
     viz.selectbox(
@@ -6670,7 +6674,6 @@ def render_plot_controls(
         key="global_palette",
         persist_state="session",
         on_change=_on_palette_change,
-        format_func=palette_label,
     )
 
     # Keep the palette controls visually separate from the bordered layer cards.
@@ -6930,7 +6933,7 @@ def render_plot_controls(
         by_help = _gated_help(
             "The column that colors the markers. **One color**: the "
             "color in the box beside it. A numeric column: the color scale "
-            "beside it. **Line** or a categorical column: a discrete palette. In "
+            "beside it. **Text line** or a categorical column: a discrete palette. In "
             "Compare, both scanpaths share the mapping.",
             metric_reason,
         )
@@ -6960,7 +6963,7 @@ def render_plot_controls(
             color_fields,
             {
                 UNIFORM_COLOR_FIELD: "One color",
-                "line": "Line" + cn.COMPUTED_SUFFIX,
+                "line": "Text line" + cn.COMPUTED_SUFFIX,
             },
             roles=True,
         )
@@ -7010,7 +7013,7 @@ def render_plot_controls(
             _dis, _tip = _layer_gate(
                 metric_disabled or discrete,
                 _gated_help(
-                    "The color scale for a numeric column. Not used for **Line** or "
+                    "The color scale for a numeric column. Not used for **Text line** or "
                     "a categorical column.",
                     metric_reason,
                 ),
@@ -7145,7 +7148,7 @@ def render_plot_controls(
             bar_idle = f"{ICONS['warning']} No color bar: the markers are one color."
         elif raw_cmin is None:
             bar_idle = (
-                f"{ICONS['warning']} No color bar for **Line** or a categorical "
+                f"{ICONS['warning']} No color bar for **Text line** or a categorical "
                 f"color. Its legend is in {ICONS['figure']} **Figure & canvas** ▾ "
                 f"→ **Legends** → **{LEGEND_KIND_LABELS['colors']}**."
             )
@@ -7175,6 +7178,7 @@ def render_plot_controls(
                 "selectbox",
                 "Drift correction",
                 options=_ALIGN_OPTIONS,
+                format_func=align_method_label,
                 key="global_align_algorithm",
                 persist_state="session",
                 help="Move each fixation vertically onto the text line an "
@@ -7363,7 +7367,7 @@ def render_plot_controls(
         mode_disabled, mode_help = _layer_gate(
             class_disabled,
             _gated_help(
-                "Uniform: one color. Forward / regression: two colors. By type: "
+                "One color: all saccades alike. Forward / regression: two colors. By type: "
                 "forward, skip, refixation, return sweep and regression.",
                 class_reason,
             ),
@@ -7399,7 +7403,7 @@ def render_plot_controls(
         # keeps the uniform swatch rather than showing five dead class ones.
         if comparing:
             _compare_saccade_color_picker(swatch_col, 0)
-        elif color_mode == "Uniform" or class_disabled:
+        elif color_mode == "One color" or class_disabled:
             swatch_disabled, swatch_help = _layer_gate(
                 _dis,
                 _gated_help(
@@ -7427,7 +7431,7 @@ def render_plot_controls(
                 "leave."
                 if color_mode == "By type"
                 else "Skips, refixations and return sweeps count as forward; "
-                "saccades that start or land off the text are Other."
+                "saccades that start or land off the text are *Off the text*."
             )
             swatch_disabled, _ = _layer_gate(False, None)
             for start in range(0, len(classes), 3):
@@ -7592,8 +7596,8 @@ def render_plot_controls(
             persist_state="session",
             disabled=_cls_dis,
             help=_gated_help(
-                "Draw only saccades of these types (Other: starts or lands off "
-                "the text). Empty draws all.",
+                "Draw only saccades of these types (*Off the text*: starts or lands "
+                "outside every word box). Empty draws all.",
                 _cls_reason,
             ),
         )
@@ -7667,7 +7671,7 @@ def render_plot_controls(
             animating, comparing, **_static_only
         )
         span_on, span_rest = _check_row(
-            "Highlight",
+            "Highlight words",
             key="global_highlight_span_on",
             persist_state="session",
             on_change=_on_span_toggle,
@@ -7852,7 +7856,7 @@ def render_plot_controls(
     # need a distinct frame contract. The toggle itself is on the section's
     # row; this block only owns the style popover's contents, in the
     # Fixations layout — a *Style* row (the style picker, plus
-    # Interpolated's Blur, greyed for Word boxes), then one *Color* group:
+    # Smoothed's Blur, greyed for Word boxes), then one *Color* group:
     # what is mapped and its colorscale, the scaling, the range.
     with (
         heatmap_grp,
@@ -7869,7 +7873,7 @@ def render_plot_controls(
         style_disabled, style_help = _layer_gate(
             heat_disabled or comparing,
             _gated_help(
-                "Word boxes: color each word box by its fixations. Interpolated: "
+                "Word boxes: color each word box by its fixations. Smoothed: "
                 "the fixations blurred with a Gaussian (see Blur), scaled to the "
                 "figure's peak. Compare always uses word boxes.",
                 "Comparison heatmaps use split word boxes."
@@ -7883,7 +7887,7 @@ def render_plot_controls(
             section_help=style_help,
         ).selectbox(
             "Style",
-            options=["Word boxes", "Interpolated"],
+            options=["Word boxes", "Smoothed"],
             key="global_heatmap_style",
             persist_state="session",
             disabled=style_disabled,
@@ -7893,7 +7897,7 @@ def render_plot_controls(
         _render_heatmap_blur_row(
             trial_fixations,
             words,
-            disabled=heat_disabled or comparing or heat_style != "Interpolated",
+            disabled=heat_disabled or comparing or heat_style != "Smoothed",
             reason="Comparison heatmaps use split word boxes."
             if comparing
             else heat_reason,
@@ -8016,7 +8020,7 @@ def render_plot_controls(
         # One opacity for the heatmap; Auto keeps each style's own.
         opacity_help = _gated_help(
             "Heatmap opacity. Auto: 0.5 for Word boxes (0.35 for a trial with "
-            "no word boxes) and 0.45 for Interpolated. Untick to set one value "
+            "no word boxes) and 0.45 for Smoothed. Untick to set one value "
             "for both styles." + (" Shared by both scanpaths." if comparing else ""),
             heat_reason,
         )

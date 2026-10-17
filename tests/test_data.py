@@ -795,7 +795,7 @@ class TestUnreadableNumbers:
 
 
 class TestTextWordIds:
-    """Word/IA IDs are read as numbers, so text ids (`w1`, `w2`) parse to NaN —
+    """Word IDs are read as numbers, so text ids (`w1`, `w2`) parse to NaN —
     and pandas joins NaN to NaN, so without a guard every coordinate-less
     fixation would be placed on the first word's box."""
 
@@ -870,7 +870,7 @@ class TestTextWordIds:
             self._load(self._words(), self._fixations())
         message = str(raised.value)
         assert message.startswith(
-            "Fixations: the Word/IA ID column `id` holds no numbers (e.g. 'w1', 'w2')."
+            "Fixations: the Word ID column `id` holds no numbers (e.g. 'w1', 'w2')."
         )
         assert "Map the fixations' X and Y" in message
         assert isinstance(raised.value, ValueError)  # for API callers
@@ -903,7 +903,7 @@ class TestTextWordIds:
         assert fixations["x"].tolist() == [10.0, 110.0]
 
     def test_an_edit_that_leaves_only_text_ids_is_refused(self):
-        """✏️ Edit dataset re-normalizes the stored frame: a Word/IA ID moved
+        """✏️ Edit dataset re-normalizes the stored frame: a Word ID moved
         onto a kept text column, with X and Y cleared, is the same mapping."""
         stored = normalize_fixations(
             self._fixations(ids=(1, 2), label=["w1", "w2"], fx=[1.0, 2.0], fy=[0, 0]),
@@ -1504,7 +1504,7 @@ class TestMappedTextIdWins:
         )
 
     def test_the_tables_join_on_the_mapped_text_id(self):
-        """The AOI table is stimulus-level and joins its fixations by Text ID
+        """The Words table is stimulus-level and joins its fixations by Text ID
         only, so a stray column overriding the mapping would fail the load."""
         from scanpath_studio import api
 

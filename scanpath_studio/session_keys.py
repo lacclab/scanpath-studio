@@ -76,7 +76,7 @@ GLOBAL_HOLLOW_FIXATIONS = "global_hollow_fixations"
 GLOBAL_SCALE_TEXT_TO_BOXES = "global_scale_text_to_boxes"
 GLOBAL_COLOR_BY = "global_color_by"
 GLOBAL_HEATMAP_STYLE = "global_heatmap_style"
-# The Interpolated heatmap's blur: automatic, or a fixed σ in px.
+# The Smoothed heatmap's blur: automatic, or a fixed σ in px.
 GLOBAL_HEATMAP_SIGMA_AUTO = "global_heatmap_sigma_auto"
 GLOBAL_HEATMAP_SIGMA_PX = "global_heatmap_sigma_px"
 GLOBAL_HEATMAP_NORM = "global_heatmap_norm"
@@ -446,8 +446,8 @@ PARAM_DATASET = "dataset"
 
 # Streamlit 1.65 `bind="query-params"` widgets: the widget key IS the URL param,
 # and its value is the option's label verbatim — so neither the key nor the
-# labels (`tabs.CORPUS_SUBTABS`) can be renamed without breaking a bookmarked
-# view — unless the old label stays readable (`tabs.CORPUS_SUBTAB_ALIASES`).
+# labels (`tabs.CORPUS_SUBTABS`) can be renamed without changing what a
+# bookmarked view opens.
 # Streamlit reads and writes these itself; `_apply_url_preset` and
 # `_build_share_query` never see them.
 CORPUS_SUBTAB = "corpus_subtab"

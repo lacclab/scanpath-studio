@@ -117,7 +117,7 @@ _CANONICAL_LABELS: dict[str, str] = {
     "gaze_duration_ms": "Gaze duration (ms)",
     "run": "Run",
     "linerun": "Line run",
-    "word_runid": "Word run id",
+    "word_runid": "Word run ID",
     "word_run": "Word run",
     "word_run_fix": "Fixation in word run",
     "nrun": "Runs on word",
@@ -129,7 +129,7 @@ _CANONICAL_LABELS: dict[str, str] = {
     "original_duration_ms": "Original duration (ms)",
     "y_original": "Y before correction",
     "y_correction": "Y correction",
-    "alignment_agreement": "Line agreement",
+    "alignment_agreement": "Algorithms agreeing on line",
 }
 
 
@@ -719,7 +719,7 @@ def from_schema(
     elif paragraph:
         out["text_id"] = out["unique_text_id"] = SourceName(("unique_paragraph_id",))
     else:
-        out["text_id"] = SourceName((), GENERATED, "the trial id")
+        out["text_id"] = SourceName((), GENERATED, "the trial ID")
     for key, canonical in _SCREEN_FIELDS:
         if schema.get(key):
             out[canonical] = SourceName((str(schema[key]),))

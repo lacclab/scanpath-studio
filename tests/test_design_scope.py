@@ -30,17 +30,17 @@ NOT_A_DESIGN_SETTING = {
 }
 
 B_FILTERS = {
-    "cmp1_fixclass_short_mode": "Discard",
+    "cmp1_fixclass_short_mode": "Hide",
     "cmp1_fixclass_short_threshold_ms": 120,
     "cmp1_fixclass_long_mode": "Highlight",
-    "cmp1_fixclass_oob_mode": "Discard",
-    "cmp1_fixclass_blink_mode": "Discard",
+    "cmp1_fixclass_oob_mode": "Hide",
+    "cmp1_fixclass_blink_mode": "Hide",
     "cmp1_saccade_classes": ["regression"],
 }
 STYLES = {"cmp0_fix_color": "#123456", "cmp1_saccade_width": 5.5}
 MODES = {"single_compare_toggle": True, "single_playback_speed": 2.0}
 A_FILTERS = {
-    "global_fixclass_short_mode": "Discard",
+    "global_fixclass_short_mode": "Hide",
     "global_saccade_classes": ["forward", "regression"],
 }
 
@@ -133,7 +133,7 @@ class TestADesignRecordsTheFilters:
         _do(at, "save:mine")
         _do(at, "apply:mine")
         assert at.session_state["_quick_view_selection"] == "design:mine"
-        at.session_state["cmp1_fixclass_short_mode"] = "Discard"
+        at.session_state["cmp1_fixclass_short_mode"] = "Hide"
         _run(at)
         assert at.session_state["_quick_view_selection"] == "custom"
 
@@ -170,7 +170,7 @@ class TestComingBackToTheDesign:
         _do(at, "apply:mine")
         _run(at)
         at.session_state[sk.SINGLE_COMPARE_TOGGLE] = True
-        at.session_state["global_fixclass_short_mode"] = "Discard"
+        at.session_state["global_fixclass_short_mode"] = "Hide"
         _run(at)
         at.session_state[sk.SINGLE_COMPARE_TOGGLE] = False
         _run(at)

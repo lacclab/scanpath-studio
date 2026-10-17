@@ -131,7 +131,7 @@ class FigureSettings:
     #: The heatmap's opacity; ``None`` keeps each style's own
     #: (`heatmap_style_opacity`).
     heatmap_opacity: float | None = None
-    #: The Interpolated heatmap's Gaussian σ in px; ``None`` picks it from the
+    #: The Smoothed heatmap's Gaussian σ in px; ``None`` picks it from the
     #: data (`interpolated_sigma_px`).
     heatmap_sigma_px: float | None = None
     marker_size_range: tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE
@@ -186,7 +186,7 @@ class FigureSettings:
     saccade_opacity: float = 1.0
     #: The direction arrowheads' size, in px.
     saccade_arrow_size: float = DEFAULT_SACCADE_ARROW_SIZE
-    saccade_color_mode: str = "Uniform"
+    saccade_color_mode: str = "One color"
     saccade_class_colors: dict | None = None
     saccade_type_legend: bool = True
     #: The legend of a categorical ``color_by`` (and the Highlight entries,
@@ -342,7 +342,7 @@ class FigureSettings:
 #: ``word-boxes`` and ``mark-border`` work) and refuses anything else, so a
 #: script never gets the default drawn in place of a value it misspelt.
 FIGURE_OPTION_CHOICES: dict[str, tuple[str, ...]] = {
-    "heatmap_style": ("Word boxes", "Interpolated"),
+    "heatmap_style": ("Word boxes", "Smoothed"),
     "heatmap_norm": ("Linear", "Log"),
     "critical_span_style": ("Mark text", "Mark border", "None"),
     "saccade_color_mode": tuple(SACCADE_COLOR_MODES),
@@ -399,25 +399,20 @@ def normalize_option_value(name: str, value: object) -> object:
 #: The palettes' short names: no spaces or brackets, so a shell needs
 #: no quotes — `render --palette print`. The app's own names work too.
 PALETTE_SLUGS = {
-    "default": "Default (colourblind-safe)",
-    "print": "Print / greyscale",
+    "default": "Default (colorblind-safe)",
+    "print": "Print / grayscale",
     "high-contrast": "High contrast",
 }
 _PALETTE_ALIASES = {
-    "colourblindsafe": "Default (colourblind-safe)",
-    "colorblindsafe": "Default (colourblind-safe)",
-    # The names the app shows (US spelling, `PALETTE_LABELS`).
-    "defaultcolorblindsafe": "Default (colourblind-safe)",
-    "greyscale": "Print / greyscale",
-    "grayscale": "Print / greyscale",
-    "printgrayscale": "Print / greyscale",
+    "colorblindsafe": "Default (colorblind-safe)",
+    "grayscale": "Print / grayscale",
 }
 
 
 def normalize_palette(value: object) -> str:
     """The palette ``value`` names — its app name, short name (``print``) or
     any spelling of either — else ``ValueError`` listing them."""
-    from .constants import PALETTES, palette_label
+    from .constants import PALETTES
 
     key = _choice_key(value)
     for name in PALETTES:
@@ -430,7 +425,7 @@ def normalize_palette(value: object) -> str:
         return _PALETTE_ALIASES[key]
     raise ValueError(
         f"Unknown palette {value!r}; choose one of {', '.join(PALETTE_SLUGS)} "
-        f"({', '.join(palette_label(name) for name in PALETTES)})."
+        f"({', '.join(PALETTES)})."
     )
 
 
@@ -565,7 +560,7 @@ def _compute_axis_ranges(
     whole presentation screen is shown and the scanpath appears at its true
     on-monitor position rather than the view cropping to the data extent. The
     returned data mins/maxs still describe the actual data (they size the
-    interpolated heatmap grid), so only the visible window changes.
+    smoothed heatmap grid), so only the visible window changes.
 
     Cropped, the data is padded by ``crop_margin`` screen px on every side, or
     — ``None``, the default — by 5% of its extent on each axis, at least
@@ -1378,7 +1373,7 @@ def _fixation_category_labels(
     """The discrete label each fixation is coloured by, or ``None`` when the
     colouring is not discrete (uniform, numeric, or a column the frame lacks).
 
-    The same labels the static figure draws: ``"Line N"`` / ``"Out of bounds"``
+    The same labels the static figure draws: ``"Line N"`` / ``"No line"``
     for colour-by-line, against ``words``' own geometry; a categorical column's
     values as strings, ``"(missing)"`` for a gap. Aligned to ``fixations``.
     """
@@ -1391,7 +1386,7 @@ def _fixation_category_labels(
 
         line_ids = assign_fixation_lines(fixations, words)
         return line_ids.map(
-            lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "Out of bounds"
+            lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "No line"
         )
     if (
         not color_by
@@ -3055,7 +3050,7 @@ def _fixation_order_labels(ordered: pd.DataFrame) -> list[str]:
 
     The trial's own ``order_in_trial``, as the static figure, the comparison
     and every hover show it — so a later screen of a multipart trial, a
-    fixation window or a *Discard* keeps its gaps (501, 502 …) instead of
+    fixation window or a *Hide* keeps its gaps (501, 502 …) instead of
     renumbering what is left 1..n. A row without an index gets no label, as
     on the static figure. Only a frame with no usable index at all (no column,
     or nothing numeric in it) falls back to the ordinal 1..n."""
@@ -3890,8 +3885,8 @@ def _add_raw_gaze_layer(
     return True
 
 
-# Fixation classification (viz-only): SHORT / LONG / OUT-OF-BOUNDS /
-# BLINK-ADJACENT, each Off / Highlight / Discard. Thresholds come from the
+# Fixation classification (viz-only): SHORT / LONG / OUTSIDE-THE-TEXT /
+# BLINK-ADJACENT, each Off / Highlight / Hide. Thresholds come from the
 # caller's flags dict; these are the fallbacks the app's own controls default to.
 _FIX_FLAG_SHORT_MS = 80.0
 _FIX_FLAG_LONG_MS = 800.0
@@ -3899,8 +3894,8 @@ _FIX_FLAG_CATEGORIES = ("short", "long", "oob", "blink")
 _FIX_FLAG_LABELS = {
     "short": "Short",
     "long": "Long",
-    "oob": "Out of bounds",
-    "blink": "Blink-adjacent",
+    "oob": "Outside the text",
+    "blink": "Near a blink",
 }
 
 
@@ -3914,8 +3909,8 @@ def _fixation_flag_masks(
     """Boolean mask per fixation-flag category, over ``fixations``' index.
 
     ``{"short": …, "long": …, "oob": …, "blink": …}``, or ``{}`` when nothing
-    is flagged. Out-of-bounds needs word boxes on spatial axes — without them
-    no fixation counts as out of bounds. Shared by the static figure and the
+    is flagged. Outside-the-text needs word boxes on spatial axes — without them
+    no fixation counts as outside the text. Shared by the static figure and the
     animated replay so the two classify identically.
     """
     if not flags or fixations.empty:
@@ -3947,7 +3942,7 @@ def _discard_flagged_fixations(
     *,
     spatial_axes: bool = True,
 ) -> pd.DataFrame:
-    """Drop the fixations whose flag mode is *Discard* (viz-only).
+    """Drop the fixations whose flag mode is *Hide* (viz-only).
 
     Changes only what is DRAWN — the returned frame feeds the markers, the
     fixation-index labels and the marker-size scaling; reading measures and
@@ -3958,7 +3953,7 @@ def _discard_flagged_fixations(
         return fixations
     drop = pd.Series(False, index=fixations.index)
     for category, mask in masks.items():
-        if (flags or {}).get(category, {}).get("mode") == "Discard":
+        if (flags or {}).get(category, {}).get("mode") == "Hide":
             drop = drop | mask
     return fixations[~drop] if bool(drop.any()) else fixations
 
@@ -4240,7 +4235,7 @@ def _render_scanpath_figure(
         y_max = (
             y_max_data if y_max_data is not None else float(fixations[y_field].max())
         )
-        if heatmap_style == "Interpolated":
+        if heatmap_style == "Smoothed":
             _add_interpolated_heatmap(
                 fig,
                 fixations,
@@ -4423,8 +4418,8 @@ def _render_scanpath_figure(
         # ``render_fix`` == fixations unless Snap to line is on, in which case
         # the markers, order labels and colour-by-line use the snapped y.
         ordered = render_fix.sort_values("timestamp_ms")
-        # Fixation classification (viz-only): SHORT / LONG / OUT-OF-BOUNDS /
-        # BLINK-ADJACENT, each Off / Highlight / Discard. Apply Discard here —
+        # Fixation classification (viz-only): SHORT / LONG / OUTSIDE-THE-TEXT /
+        # BLINK-ADJACENT, each Off / Highlight / Hide. Apply Hide here —
         # drop those rows from `ordered` so they vanish from the markers,
         # fixation-index labels and marker-size scaling (the saccade layer above
         # still bridges across them).
@@ -4448,7 +4443,7 @@ def _render_scanpath_figure(
                 else assign_fixation_lines(ordered, words)
             )
             color_data = line_ids.map(
-                lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "Out of bounds"
+                lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "No line"
             )
             color_label = "line"
             is_numeric_color = False
@@ -4609,7 +4604,7 @@ def _render_scanpath_figure(
 
         # Highlight overlays: mark the flagged fixations in the chosen marker +
         # colour, on top of the regular markers. Masks are recomputed on the
-        # (post-discard) `ordered`; out-of-bounds needs word boxes + spatial
+        # (post-hide) `ordered`; outside-the-text needs word boxes + spatial
         # axes, short/long are duration-based and apply anywhere.
         if flags:
             _overlay = _fixation_flag_masks(
@@ -4804,7 +4799,7 @@ def _heatmap_title(base: str, norm: str) -> str:
 
 #: Each heatmap style's own opacity, kept while ``heatmap_opacity`` is unset.
 #: "Density" is the Word boxes style drawn without word boxes.
-HEATMAP_STYLE_OPACITY = {"Word boxes": 0.5, "Density": 0.35, "Interpolated": 0.45}
+HEATMAP_STYLE_OPACITY = {"Word boxes": 0.5, "Density": 0.35, "Smoothed": 0.45}
 
 
 def heatmap_style_opacity(style: str, opacity: float | None = None) -> float:
@@ -5131,7 +5126,7 @@ def _gaussian_blur_2d(
     return out
 
 
-# Interpolated-heatmap tuning. The Gaussian sigma defaults to a fraction of the
+# Smoothed-heatmap tuning. The Gaussian sigma defaults to a fraction of the
 # larger data span — enough to merge a fixation cluster into one smooth blob
 # without bleeding across neighbouring text lines.
 _INTERP_GRID = 240  # cells along the wider axis
@@ -5140,7 +5135,7 @@ _INTERP_MIN_SIGMA_PX = 8.0
 
 
 def interpolated_sigma_px(x_span: float, y_span: float) -> float:
-    """The Interpolated heatmap's automatic Gaussian σ, in px: 2% of the data's
+    """The Smoothed heatmap's automatic Gaussian σ, in px: 2% of the data's
     larger span (fixations, word boxes and shown raw gaze), at least 8 px."""
     return max(_INTERP_MIN_SIGMA_PX, _INTERP_SIGMA_FRAC * max(x_span, y_span))
 
@@ -5181,7 +5176,7 @@ def _add_interpolated_heatmap(
     sigma_px: float | None = None,
     title: str | None = None,
 ) -> None:
-    """Smooth, word-box-independent fixation heatmap (Gaussian-interpolated).
+    """Smooth, word-box-independent fixation heatmap (Gaussian-smoothed).
 
     Bins the fixations onto a fine grid (weighted by duration when ``weights``
     is given), then blurs with a Gaussian — the classic eye-movement heatmap
@@ -5251,7 +5246,7 @@ def _add_interpolated_heatmap(
             y=(y_edges[:-1] + y_edges[1:]) / 2.0,
             z=z,
             colorscale=heatmap_colorscale,
-            opacity=heatmap_style_opacity("Interpolated", opacity),
+            opacity=heatmap_style_opacity("Smoothed", opacity),
             showscale=show_colorbars,
             # z is a Gaussian-smoothed density in arbitrary (weighted) units, not
             # the per-word counts/ms the `heatmap_range` slider is calibrated for,
@@ -6133,7 +6128,7 @@ def _render_scanpath_animation(
     - ``show_saccade_arrows`` adds the direction arrowheads, each revealed with
       the saccade it belongs to rather than all at frame zero;
     - ``fixation_flags`` applies the fixation-flag classification
-      (:func:`_fixation_flag_masks`): *Discard* drops those fixations from the
+      (:func:`_fixation_flag_masks`): *Hide* drops those fixations from the
       replay entirely, *Highlight* overlays them in their flag marker as the
       replay reaches them.
 
@@ -6263,7 +6258,7 @@ def _render_scanpath_animation(
             word_hover_fields=word_hover_fields,
         )
 
-    # Fixation flags, mirroring the static figure: *Discard* drops
+    # Fixation flags, mirroring the static figure: *Hide* drops
     # the flagged rows before the specs are built, so they vanish from the trail,
     # the saccade polyline, the index labels and the marker-size scaling. Applied
     # AFTER the axis ranges above, exactly as in `make_scanpath_figure` — the view
@@ -6313,7 +6308,7 @@ def _render_scanpath_animation(
         **_settings_size_scale(settings),
     )
     # The words frame each surviving scanpath is flagged against (the highlight
-    # overlay's out-of-bounds test). `_scanpath_anim_specs` skips empty
+    # overlay's outside-the-text test). `_scanpath_anim_specs` skips empty
     # scanpaths, so apply the same skip rule here to stay aligned with `specs`.
     surviving = [
         (w, f, style)
@@ -6407,7 +6402,7 @@ def _render_scanpath_animation(
 
             line_ids = assign_fixation_lines(ordered0, words)
             color_data = line_ids.map(
-                lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "Out of bounds"
+                lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "No line"
             )
             color_label = "line"
             is_numeric_color = False
@@ -7265,7 +7260,7 @@ def _add_comparison_fixation_trace(
     point of the split word boxes is lost under two full sets of markers.
 
     ``fixation_flags`` and ``saccade_classes`` are *this* scanpath's
-    filters, applied as the static figure applies them — *Discard* drops markers
+    filters, applied as the static figure applies them — *Hide* drops markers
     and their index labels (the saccades still bridge across them), *Highlight*
     overlays its marker, and hidden saccade classes lose their line and arrow.
     Both need ``trial_words`` for the geometry they classify against.
@@ -7277,7 +7272,7 @@ def _add_comparison_fixation_trace(
     if trial_fix.empty:
         return
     if category_colors is not None:
-        # Positional, before *Discard* drops rows, so the two stay aligned.
+        # Positional, before *Hide* drops rows, so the two stay aligned.
         trial_fix = trial_fix.assign(_category_color=list(category_colors))
     words_for_flags = trial_words if trial_words is not None else pd.DataFrame()
     keep = _visible_saccade_classes(saccade_classes)

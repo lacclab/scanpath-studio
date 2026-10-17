@@ -152,7 +152,7 @@ ones. Fixations are enriched with `saccade_amplitude`, `progression`,
 `is_regression`, incoming/outgoing angles, and run/pass columns.
 
 **Corpus Analysis shows only the measures the dataset brought**, mapped as
-optional AOI-table fields (`data.READING_MEASURE_FIELDS`, schema keys
+optional Words-table fields (`data.READING_MEASURE_FIELDS`, schema keys
 `measure_*`, auto-detected from EyeLink `IA_*` names). Without one it shows a
 notice and greys its sections. The measures the app computes itself are off by
 default — see *Experimental features*.
@@ -171,7 +171,7 @@ the box that starts there. Positions *inside* a word go through
 `word_char_advance` / `word_glyph_span`.
 
 The **fixation→word assignment** is the data's own when the fixation table maps
-a Word/IA ID — used exactly as given, a blank staying blank. Only when it has
+a Word ID — used exactly as given, a blank staying blank. Only when it has
 none does `measures.assign_fixations_to_words` derive it from geometry:
 box containment, else `word_id = NaN` (no snapping to a nearby word). That
 assignment feeds the reading measures and the "out-of-text" flag

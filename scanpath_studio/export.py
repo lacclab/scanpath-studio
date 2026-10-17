@@ -531,7 +531,7 @@ def table_pattern_fields(
     """``{table: {"table.field": value}}`` for one trial.
 
     ``metadata_rows`` is this trial's row of each attached metadata table
-    (``metadata.pattern_rows``); the fixations and AOI tables contribute their
+    (``metadata.pattern_rows``); the fixations and Words tables contribute their
     saved fields that are constant within the trial. Grouped by table so the
     *Available fields* list can head each group; :func:`pattern_fields`
     flattens it."""
@@ -1284,10 +1284,12 @@ def _render_scope_picker(
         index=default_index,
         key=f"{key_prefix}_scope",
         # The stored value stays "All"; only what the radio shows says more.
-        format_func=lambda label: "All, ignoring filters" if label == "All" else label,
+        format_func=lambda label: (
+            "All trials, ignoring filters" if label == "All" else label
+        ),
         horizontal=True,
-        help="Pick the trials to export. *All, ignoring filters* also includes "
-        "trials the trial filters hide.",
+        help="Pick the trials to export. *All trials, ignoring filters* also "
+        "includes trials the trial filters hide.",
         label_visibility="collapsed",
     )
     scope, export_unfiltered = options_map[scope_label]
@@ -1536,10 +1538,10 @@ def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
             return default
         return value
 
-    heading, fields_slot = st.columns([5, 1], vertical_alignment="bottom")
+    heading, fields_slot = st.columns([4, 1], vertical_alignment="bottom")
     heading.markdown("### File naming")
     with fields_slot.popover(
-        "Fields", help="Placeholders available in the path pattern."
+        "Placeholders", help="The `{…}` fields the path pattern can use."
     ):
         st.markdown(available)
     path_pattern = _pattern_input(
@@ -1675,7 +1677,7 @@ def render_export_options(
         separable_layers = panel_field(
             st,
             "toggle",
-            "Separable layers",
+            "Layers as separate files",
             value=False,
             key=f"{key_prefix}_layers",
             help="Export each visual layer as a separate file.",
@@ -1718,7 +1720,7 @@ def render_export_options(
                     "Fixations",
                     "Raw gaze",
                     "Word measures",
-                    *(["Full measure family"] if computed_measures_enabled() else []),
+                    *(["Computed measures"] if computed_measures_enabled() else []),
                 ],
                 selection_mode="multi",
                 default=[],
@@ -1732,7 +1734,7 @@ def render_export_options(
         include_fixations = "Fixations" in tabular
         include_raw_gaze = "Raw gaze" in tabular
         include_measures = "Word measures" in tabular
-        include_analysis_family = "Full measure family" in tabular
+        include_analysis_family = "Computed measures" in tabular
         any_table = bool(tabular)
         if any_table:
             table_format = (

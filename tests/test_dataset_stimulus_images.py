@@ -53,7 +53,7 @@ class TestTheStoredSource:
         source = {
             DATASET_STIMULUS_IMAGES_KEY: {
                 "My corpus": {"folder": "/imgs", "pattern": "{trial_id}.png"},
-                "Bundled Demo": {"folder": "", "pattern": "x"},
+                "Bundled demo": {"folder": "", "pattern": "x"},
                 "Broken": "not a source",
             }
         }

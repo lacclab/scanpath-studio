@@ -1321,7 +1321,7 @@ def get_app_css() -> str:
         cursor: help;
     }
     /* A title that should stand out among plainer field titles on the
-       same screen (the upload wizard's own table titles: Fixations, Words/IA,
+       same screen (the upload wizard's own table titles: Fixations, Words table,
        Raw gaze, Participant/Trial metadata). Bolder and a touch larger than
        the ordinary `.sps-flabel`, short of a full heading. */
     .sps-flabel-emph {

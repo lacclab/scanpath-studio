@@ -113,5 +113,5 @@ def test_the_documented_smoothed_heatmap_flags_parse():
     text = (DOCS / "cli.md").read_text(encoding="utf-8")
     fragment = re.search(r"`(--heatmap-style [^`]+)`", text).group(1)
     args = cli._render_parser().parse_args(["--sample", *shlex.split(fragment)])
-    assert args.heatmap_style == "interpolated"
+    assert args.heatmap_style == "smoothed"
     assert args.heatmap_sigma == 20

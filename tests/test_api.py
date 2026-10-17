@@ -275,8 +275,8 @@ def test_propose_schema_is_the_documented_repair_path():
     # "aoi", which is itself a WORD_ID_CANDIDATES entry; see
     # TestPickColumnPrefixSuffixSecondPass in test_data.py).
     renamed = words_raw.rename(columns={"IA_ID": "internal_id"})
-    # `IA_ID` was the only Word/IA ID candidate present, so detection fails…
-    with pytest.raises(ValueError, match="missing Word/IA ID"):
+    # `IA_ID` was the only Word ID candidate present, so detection fails…
+    with pytest.raises(ValueError, match="missing Word ID"):
         sps.load_scanpath_data(words=renamed, fixations=fix_raw, names="canonical")
 
     schema = api.propose_schema(renamed, "words")
@@ -1107,25 +1107,16 @@ def test_a_failed_layer_export_leaves_no_empty_folder(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize(
     "spelling",
-    [
-        "print",
-        "Print / greyscale",
-        "Print / grayscale",
-        "PRINT / GRAYSCALE",
-        "grayscale",
-        "greyscale",
-    ],
+    ["print", "Print / grayscale", "PRINT / GRAYSCALE", "grayscale"],
 )
-def test_a_palette_is_found_in_either_spelling(spelling):
-    """The palette names use US spelling; the British spellings still resolve."""
+def test_a_palette_is_found_by_any_of_its_names(spelling):
+    """A palette is found by its name (US spelling) or short name, any case."""
     from scanpath_studio.api import resolve_palette
     from scanpath_studio.constants import PALETTES
 
     name = resolve_palette(spelling)
     assert name in PALETTES and "print" in name.lower()
-    assert resolve_palette("Default (colorblind-safe)") == resolve_palette(
-        "Default (colourblind-safe)"
-    )
+    assert resolve_palette("default") == "Default (colorblind-safe)"
 
 
 def test_a_canvas_size_string_is_refused(sample):

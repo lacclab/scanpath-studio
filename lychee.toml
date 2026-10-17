@@ -19,4 +19,7 @@ exclude = [
   # Publishers answer a DOI's redirect with 403 to anything that is not a
   # browser; the DOIs themselves are stable identifiers.
   '^https://doi\.org/',
+  # The benchmark-corpus pipeline's repository is private until it is
+  # released; its page (docs/benchmark-corpora.md) is excluded from the site.
+  '^https://github\.com/EyeBench/EyeGenBench',
 ]

@@ -65,6 +65,8 @@ scanpath_studio/
 │  ├─ metadata.py        participant / trial / text metadata tables (never broadcast onto frames)
 │  ├─ annotations.py     favorites / tags / notes, one store per dataset
 │  ├─ datasets.py        public-corpus loaders: PoTeC, OneStop
+│  ├─ eyegenbench.py, eyegenbench_geometry.py
+│  │                     harmonised benchmark corpora from a locally prepared bundle (experimental)
 │  ├─ compare_source.py  Compare's second dataset (scanpath B): widget-free readiness + loading
 │  ├─ experimental_setup.py
 │  │                     display-geometry conversions + `SetupSnapshot` with per-group provenance
@@ -231,7 +233,8 @@ Some finished-but-unvalidated or unfinished features are off unless
   refused, the export bundle offers no measure family, and Corpus Analysis drops
   the views computed from fixations; the computation register marks these
   entries `computations.EXPERIMENTAL_IDS`;
-- Corpus Analysis's *Per sentence* subtab.
+- Corpus Analysis's *Per sentence* subtab;
+- the harmonised benchmark corpora.
 
 Hidden, not broken: the code and its tests stay, CLI flags still parse (they
 are only hidden from `--help`), and the docs site does not describe them.

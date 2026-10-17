@@ -366,6 +366,13 @@ def test_an_animation_carries_its_playback_settings():
         ),
         (
             cs.SnippetSource(
+                kind=cs.SOURCE_BENCHMARK, options={"root": "d/b", "dataset": "ZuCo"}
+            ),
+            "load_eyegenbench(",
+            "--eyegenbench-dataset ZuCo",
+        ),
+        (
+            cs.SnippetSource(
                 kind=cs.SOURCE_FILES,
                 options={"words": ["w.csv"], "fixations": ["f1.csv", "f2.csv"]},
             ),
@@ -2074,6 +2081,7 @@ def test_render_args_hand_their_schemas_to_the_snippet_source():
     args = argparse.Namespace(
         authoring=None,
         potec=None,
+        eyegenbench=None,
         onestop=None,
         source=None,
         words=["w.csv"],

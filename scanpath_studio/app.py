@@ -89,6 +89,9 @@ from scanpath_studio.constants import (
     _VIEW_DATA,
     _VIEW_SCANPATH,
     AUTHOR_CHOICE,
+    BENCHMARK_LABEL_SUFFIX,
+    BENCHMARK_SHORT_SUFFIX,
+    BENCHMARK_WIP_SUFFIX,
     CITATION,
     DATA_EDITOR_KEY,
     DATA_EDITOR_OFFSCREEN_KEY,
@@ -108,6 +111,7 @@ from scanpath_studio.constants import (
     DEMO_CHOICE,
     DOWNLOAD_DIR_ENV,
     DOWNLOAD_DIR_KEY,
+    EYEGENBENCH_DEFAULT_DIR,
     FOCUS_MAPPING_KEY,
     FONT_FAMILY,
     ICONS,
@@ -133,7 +137,9 @@ from scanpath_studio.constants import (
     WIZARD_LEAVE_KEY,
     WIZARD_STAY_KEY,
     WORD_LABEL_COLOR,
+    benchmark_corpora_enabled,
     icon_html,
+    language_display,
     plural,
     preprocessing_enabled,
     spoken,
@@ -1726,6 +1732,21 @@ folder you let **Download** populate:
 ```
 """
 
+_EYEGENBENCH_STRUCTURE_MD = """\
+**Expected layout** — a bundle built by
+`python scripts/prepare_eyegenbench.py --all` (or any subset of corpora). No
+download here: build the bundle locally, then point this at where it wrote
+the files.
+```
+<dir>/
+├─ manifest.json              # one entry per prepared corpus
+└─ <corpus name>/              # e.g. PoTeC, Provo, …
+   ├─ words.parquet
+   ├─ fixations.parquet
+   └─ participants.parquet
+```
+"""
+
 
 def _onestop_structure_md(regime: str) -> str:
     """Expected-files note for one OneStop regime's dataset."""
@@ -2103,6 +2124,13 @@ def _onestop_files_present(regime: str) -> bool:
     )
     parts = datasets.onestop_regime_parts(regime)
     return datasets.onestop_present(root, regime=regime, parts=parts)
+
+
+def _benchmark_files_present(dataset: str) -> bool:
+    from scanpath_studio.eyegenbench import eyegenbench_present
+
+    root = _dataset_folder("eyegenbench", EYEGENBENCH_DEFAULT_DIR)
+    return eyegenbench_present(root, dataset)
 
 
 # Session slot describing a data source the user selected but that
@@ -2543,30 +2571,321 @@ def _load_onestop_regime_source(
         return pd.DataFrame(), pd.DataFrame()
 
 
-# A `files_present` check that trips over a malformed file must degrade to "not
-# here", not crash the app: `KeyError` is in here because it escapes the usual IO
-# triple.
+# The dataset card lists this step.
+@st.cache_data(show_spinner=False)
+def _cached_eyegenbench_raw_frames(
+    root: str, dataset: str
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Cached raw ``(words, fixations)`` for one EyeGenBench corpus.
+
+    Cached on ``(root, dataset)`` so re-runs (toggling viz controls) don't
+    re-read the Parquet files. Keyed on plain strings, not the manifest entry
+    dict, so the cache survives an unrelated manifest re-read."""
+    from scanpath_studio.eyegenbench import eyegenbench_raw_frames
+
+    return stamp_source(eyegenbench_raw_frames(root, dataset=dataset))
+
+
+# A malformed manifest (an entry with no `name`, a `datasets` value that isn't a
+# list of objects) must degrade to a load error, not crash the app: `KeyError`
+# is in here because it escapes the usual IO triple and every reader of a
+# manifest reads entry keys.
 _MANIFEST_ERRORS = (FileNotFoundError, ValueError, OSError, KeyError)
+
+
+def added_benchmark_datasets() -> tuple:
+    """Manifest entries for the benchmark corpora the user added — none yet.
+
+    Nothing is discovered automatically: listing every corpus in a bundle found
+    on disk would put data in the picker that nobody had chosen, so a corpus is
+    listed only because someone added it. The flow that adds one — choose a
+    folder, scan it, pick the corpora — is not built yet, so this is empty, and
+    the per-corpus machinery it feeds (the registry entry, the loader, the
+    geometry badge, the share-link slug, Compare and the code snippet) is
+    reached only by tests, which replace this function.
+    """
+    return ()
+
+
+# geometry_source values are eyegenbench_geometry.py's GEOMETRY_REAL /
+# _RECONSTRUCTED / _SYNTHESIZED (that module owns the tiering; not touched
+# here). Surfaced on each corpus' entry so a user can tell which they're looking
+# at rather than trusting a blanket claim in the description.
+_EYEGENBENCH_GEOMETRY_BADGES = {
+    "real": f"{ICONS['geometry_real']} **Real** screen geometry — measured word boxes.",
+    "reconstructed": f"{ICONS['geometry_reconstructed']} **Reconstructed** geometry — no measured boxes for "
+    "this corpus; derived from its documented display setup.",
+    "synthesized": f"{ICONS['geometry_synthesized']} **Synthesized** geometry — no measured boxes or "
+    "documented display setup; a default layout was assumed.",
+}
+
+
+def _geometry_coverage_note(entry) -> str:
+    """How much of a ``real`` corpus is actually measured, or ``""``.
+
+    The single source for that qualifier: the badge and the picker description
+    print it in the same panel, one line apart, so two spellings of the rule is
+    how one of them ends up claiming uniform geometry the other has just denied.
+    Empty when the corpus is uniform, or when the tier is one that already
+    says *no* measured boxes.
+
+    ``n_texts`` is missing from no real manifest, but when it is the note goes
+    vague rather than silent: "some texts aren't measured" is worse copy
+    than a count and a better claim than a confident, possibly-wrong "Real".
+
+    The counts are read through `eyegenbench.entry_count`, which is also what
+    keeps a hand-mangled manifest from raising out of the *picker build* — this
+    runs for every added corpus via `_benchmark_description`. An
+    unreadable count lands in the same vaguer wording as an absent one: it is
+    the honest answer either way, and it is never worth taking the source
+    list down over a typo in a number.
+    """
+    from scanpath_studio.eyegenbench import entry_count
+
+    if str(entry.get("geometry_source") or "").strip() != "real":
+        return ""
+    missing = entry_count(entry, "paragraphs_without_real_boxes")
+    if missing is not None and missing <= 0:
+        return ""
+    total = entry_count(entry, "n_texts")
+    covered = (
+        f"measured word boxes for {max(total - missing, 0)} of {total} texts"
+        if missing is not None and total
+        else "measured word boxes for some but not all texts"
+    )
+    return f"{covered}; the rest fall back to reconstructed layout"
+
+
+def geometry_badge(entry) -> str:
+    """The one-line geometry-provenance badge for a manifest entry.
+
+    `eyegenbench_geometry.py` promotes a whole corpus to ``real`` when **any**
+    paragraph has measured word boxes — the scalar means *best tier achieved*,
+    and it keeps that meaning (the per-word column already refines it, and
+    changing it would ripple into the manifest contract, the CLI and the API).
+    What must not happen is a *rendering* that implies uniformity: a corpus with
+    one measured text in a thousand would otherwise read as "✅ Real — measured
+    word boxes". So whenever ``paragraphs_without_real_boxes`` is non-zero the
+    real badge says how many texts it actually covers, and plain "Real" is
+    reserved for full coverage.
+
+    The reconstructed / synthesized badges need no such qualifier: they already
+    say *no* measured boxes, which is exactly what a non-zero count means there.
+    """
+    source = str(entry.get("geometry_source") or "").strip()
+    if not source:
+        return ""
+    badge = _EYEGENBENCH_GEOMETRY_BADGES.get(source)
+    if badge is None:
+        return f"Screen geometry: {source}"
+    if note := _geometry_coverage_note(entry):
+        badge = f"{ICONS['geometry_real']} **Real** screen geometry — {note}."
+    try:
+        recorded_y = float(entry.get("recorded_fixation_y_fraction", 0.0))
+    except (TypeError, ValueError):
+        recorded_y = 0.0
+    if recorded_y >= 0.9995:
+        y_note = "Recorded fixation y."
+    elif recorded_y > 0:
+        y_note = (
+            f"Recorded fixation y for {recorded_y:.0%}; other y positions use "
+            "word-box centers."
+        )
+    else:
+        y_note = "Fixation y uses word-box centers."
+    return f"{badge} {y_note}"
+
+
+def benchmark_corpus_label(name: str) -> str:
+    """The registry key for a prepared corpus named ``name``."""
+    return f"{name}{BENCHMARK_LABEL_SUFFIX}"
 
 
 def picker_name_for(choice: str, registry: dict | None = None) -> str:
     """Exactly the name the **Data source** picker renders for ``choice``.
 
     Anything that tells a user to "select X" must quote this, not the registry
-    key. The two differ: the picker shows the entry's `short`, so *"PoTeC —
-    Potsdam Textbook Corpus"* is offered as *"PoTeC"*. A remedy naming a string
-    that appears nowhere in the list is worse than no remedy — the reader hunts
-    for it and concludes the app is broken.
+    key. The two differ: the picker shows the entry's `short`, with a (WIP)
+    marker on top of it for a benchmark corpus, so *"Provo — harmonised benchmark
+    corpus"* is offered as *"Provo (WIP)"*. A remedy naming a string that appears
+    nowhere in the list is worse than no remedy — the reader hunts for it and
+    concludes the app is broken.
 
-    Pass ``registry`` when formatting a list of options, so one run formats
-    every option against **one** snapshot. Re-resolving per option lets an
-    option's rendered text change underneath a widget mid-run, and Streamlit
-    finds the selected value's formatted form no longer among its own options.
+    Pass ``registry`` when formatting a list of options: the added corpora can
+    change at runtime, so one run must format every option against
+    **one** snapshot. Re-resolving per option lets an option's rendered text
+    change underneath a widget mid-run, and Streamlit finds the selected value's
+    formatted form no longer among its own options.
     """
     spec = (registry if registry is not None else public_dataset_registry()).get(choice)
     if spec is None:
         return choice
-    return str(spec.get("short") or choice)
+    name = str(spec.get("short") or choice)
+    return f"{name}{BENCHMARK_WIP_SUFFIX}" if spec_is_benchmark(spec) else name
+
+
+def mark_wip_if_benchmark(choice: str) -> str:
+    """``choice`` with the (WIP) marker when it names a harmonised corpus.
+
+    The marker has to reach **every** picker that offers these corpora, not just
+    the data-source one: Compare's *Dataset B* selectbox can load a corpus
+    as scanpath B, and a user who only ever meets it there would publish a
+    comparison against an unfinished feature without being told. Display-only in
+    both places, and the same predicate decides both.
+    """
+    spec = public_dataset_registry().get(choice)
+    return f"{choice}{BENCHMARK_WIP_SUFFIX}" if spec_is_benchmark(spec) else choice
+
+
+def spec_is_benchmark(spec) -> bool:
+    """True for a registry entry this feature owns: a prepared benchmark corpus.
+
+    Dispatches on the entry's own `benchmark_dataset` field (set by
+    `_benchmark_registry_entries`) — the same discriminator `compare_source`
+    uses, and deliberately **not** on the label's text: PoTeC and OneStop each
+    ship natively *and* harmonised, so a substring test on the label would sweep
+    the native entries in too.
+    """
+    if not isinstance(spec, dict):
+        return False
+    return bool(spec.get("benchmark_dataset"))
+
+
+def _benchmark_short_name(name: str) -> str:
+    """The picker's display name for a prepared corpus.
+
+    PoTeC and OneStop ship **both** natively in this app and in the benchmark
+    set, and both are kept: the harmonised versions are what make
+    cross-corpus comparison possible, which is the point of a harmonised suite.
+    They are distinguished by the property that actually differs — one is the
+    publisher's own release, the other a re-derived harmonisation — rather than
+    by naming the pipeline (which is being extracted into its own repository, so
+    anything user-visible carrying its name would need renaming later).
+
+    The overlap is computed against the static built-ins rather than hard-coded,
+    so adding a native corpus that a bundle also carries disambiguates itself.
+    """
+    natives = {
+        str(spec.get("short") or "").lower()
+        for spec in PUBLIC_DATASET_REGISTRY.values()
+    }
+    if name.lower() in natives:
+        return f"{name}{BENCHMARK_SHORT_SUFFIX}"
+    return name
+
+
+def _benchmark_size_caption(entry) -> str:
+    """``"84 participants · 55 texts · 219,556 fixations"`` from a manifest entry.
+
+    Counts that don't parse are simply left out of the caption — via the same
+    `entry_count` the geometry note reads, rather than a second hand-rolled
+    ``try``.
+    """
+    from scanpath_studio.eyegenbench import entry_count
+
+    parts = []
+    for key, singular in (
+        ("n_readers", "participant"),
+        ("n_texts", "text"),
+        ("n_fixations", "fixation"),
+    ):
+        if count := entry_count(entry, key):
+            parts.append(f"{count:,} {singular}{'' if count == 1 else 's'}")
+    return " · ".join(parts)
+
+
+def _benchmark_description(entry, *, harmonised_overlap: bool) -> str:
+    """The one-line description under a prepared corpus' picker entry.
+
+    Carries the provenance ("EyeGenBench" belongs here, not in the label) and —
+    for a corpus this app also ships natively — the fidelity difference, which is
+    the whole reason both are offered.
+    """
+    from scanpath_studio.eyegenbench import entry_name
+
+    name = entry_name(entry)
+    lead = (
+        f"{name}, re-derived by EyeGenBench into the benchmark's common "
+        f"schema — the same corpus as this app's own {name} entry, prepared for "
+        "cross-corpus comparison rather than the publisher's own geometry."
+        if harmonised_overlap
+        else f"{name} — a public reading corpus, harmonized by EyeGenBench to "
+        "one common schema."
+    )
+    tail = []
+    if source := str(entry.get("geometry_source") or "").strip():
+        # Same qualifier as the badge rendered beside this — a bare
+        # "Screen geometry: real" next to "measured word boxes for 9 of 12
+        # texts" would overclaim one line away from the badge that qualifies it.
+        note = _geometry_coverage_note(entry)
+        tail.append(f"Screen geometry: {source}" + (f" — {note}" if note else ""))
+    if license_ := str(entry.get("license") or "").strip():
+        tail.append(f"License: {license_}")
+    if citation := str(entry.get("citation") or "").strip():
+        tail.append(citation)
+    return lead + (" " + ". ".join(tail) + "." if tail else "")
+
+
+def _benchmark_dir_input(loc) -> str:
+    """The shared bundle-directory input, rendered by every benchmark entry.
+
+    One session key (`eyegenbench_dir`) across all of them: the corpora live in
+    one prepared bundle, so pointing any entry somewhere else moves them all.
+    """
+    return _dataset_dir_input(
+        loc,
+        default_dir=EYEGENBENCH_DEFAULT_DIR,
+        dir_help="Folder holding a prepared benchmark bundle. Build one with "
+        "`python scripts/prepare_eyegenbench.py --all` — there is no download "
+        "from here.",
+        structure_md=_EYEGENBENCH_STRUCTURE_MD,
+        key_prefix="eyegenbench",
+    )
+
+
+def _load_benchmark_source(
+    options_host=None, location_host=None, *, dataset: str = ""
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Location controls + loader for **one** prepared benchmark corpus.
+
+    A peer of `_load_potec_source`: one entry, one
+    corpus, no sub-picker. The returned raw frames go through the same
+    normalization as an upload, so the Column-mapping panels still appear.
+    """
+    from scanpath_studio.eyegenbench import entry_name, eyegenbench_present
+
+    opt = options_host if options_host is not None else st.container()
+    loc = location_host if location_host is not None else st.container()
+    root = _benchmark_dir_input(loc)
+    try:
+        present = eyegenbench_present(root, dataset)
+    except _MANIFEST_ERRORS:
+        present = False
+    ready = _dataset_access_status(
+        loc,
+        root=root,
+        present=present,
+        key_prefix="eyegenbench",
+        # The name the picker shows for this corpus, not a hand-built one. The
+        # "(harmonised benchmark)" suffix is added only when a native entry of
+        # the same name exists (`_benchmark_short_name`), so a hand-built label
+        # could call Provo "Provo (harmonised benchmark)" while the picker
+        # calls it "Provo (WIP)".
+        label=picker_name_for(benchmark_corpus_label(dataset)),
+    )
+    if not ready:
+        return load_sample_data()
+    entry = next(
+        (e for e in added_benchmark_datasets() if entry_name(e) == dataset),
+        None,
+    )
+    if entry and (badge := geometry_badge(entry)):
+        opt.caption(badge)
+    try:
+        return _cached_eyegenbench_raw_frames(root, dataset)
+    except _MANIFEST_ERRORS as exc:
+        loc.error(f"Couldn't load '{dataset}' from `{root}`: {exc}")
+        return pd.DataFrame(), pd.DataFrame()
 
 
 # Registry behind the "Public datasets" source: label → loader (renders its own
@@ -2666,10 +2985,10 @@ def _onestop_regime_entry(regime: str) -> dict:
         # The dataset table's Status, for a row that is not open.
         files_present=partial(_onestop_files_present, regime),
         downloadable=True,
-        # OneStop presentation monitor (full-screen px coords). Sourced from
-        # Berzak et al. 2025, Sci Data 12:1995, Methods → Apparatus, which
-        # states the Dell U2715H at 2560 px × 1440 px over a 597 mm × 336 mm
-        # display area.
+        # OneStop presentation monitor (full-screen px coords). Sourced in
+        # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]` — Berzak et al. 2025,
+        # Sci Data 12:1995, Methods → Apparatus, which states the Dell U2715H
+        # at 2560 px × 1440 px over a 597 mm × 336 mm display area.
         monitor=(2560, 1440),
         # Distinct per regime: `short` is the stable identifier a Share link's
         # corpus slug and the code snippet are derived from.
@@ -2708,7 +3027,8 @@ PUBLIC_DATASET_REGISTRY: dict = {
         },
         published_counts_source=(
             "PoTeC's own README for participants, texts and trials. Words and "
-            "fixations were measured from the released corpus."
+            "fixations were measured from the released corpus; the fixation "
+            "total agrees with the harmonized bundle's manifest to the row."
         ),
         # Word boxes come from the corpus' own `.ias` character files, but the
         # release discards the recorded screen (x, y) — `datasets._potec_fixations`
@@ -2833,9 +3153,9 @@ def dataset_about(token: str, registry: dict | None = None) -> dict:
                 "link",
                 "reading_note",
                 # The published figures ride this same lookup rather
-                # than a second one, so a public corpus and a packaged source
-                # answer for themselves the same way — and an upload answers
-                # `{}`.
+                # than a second one, so a public corpus, a packaged source and a
+                # prepared benchmark corpus all answer for themselves the same
+                # way — and an upload answers `{}`.
                 "published_counts",
                 "published_counts_source",
             )
@@ -2864,13 +3184,85 @@ def synthesized_raw_gaze_note(token: str | None) -> str:
     return str(about.get("reading_note") or "")
 
 
-def public_dataset_registry() -> dict:
-    """Every public corpus on offer.
+def _benchmark_registry_entries() -> dict:
+    """One registry entry per benchmark corpus the user added.
 
-    `PUBLIC_DATASET_REGISTRY` is the literal home of the built-in corpora, and
-    every consumer calls this instead of reading the dict.
+    Built from those corpora's manifest entries (`added_benchmark_datasets`),
+    so it varies at runtime — which is why the registry as a whole is a
+    function. Each entry has the same shape as the static built-ins above
+    (`short` / `language` / `size` / `description` / `link` / `monitor`) and is
+    presented identically: one 🌐 entry in the flat picker, nothing nested.
+
+    ``monitor`` is **omitted** when the manifest's ``monitor_source`` is
+    ``default`` — that value is `eyegenbench_geometry.py`'s generic guess for a
+    corpus that documents no screen, and declaring it here would make the canvas
+    snap to it as though it were measured (the registry has no "declared but not
+    authoritative" tier — a declared monitor *is* the authoritative one). Without
+    it the canvas falls back to data extents, which is the honest answer. The
+    condition itself is `eyegenbench.declared_monitor`, which the CLI reads too.
     """
-    return dict(PUBLIC_DATASET_REGISTRY)
+    from scanpath_studio.eyegenbench import declared_monitor, entry_name
+
+    entries: dict = {}
+    for entry in added_benchmark_datasets():
+        # `entry_name` owns the "a row with no usable name is skipped" rule.
+        if not (name := entry_name(entry)):
+            continue
+        short = _benchmark_short_name(name)
+        spec = dict(
+            loader=partial(_load_benchmark_source, dataset=name),
+            # No download: a bundle is prepared by a script.
+            files_present=partial(_benchmark_files_present, name),
+            short=short,
+            language=language_display(entry.get("language")),
+            size=_benchmark_size_caption(entry),
+            description=_benchmark_description(entry, harmonised_overlap=short != name),
+            # The geometry badge, resolved once here rather than only inside the loader,
+            # so the Data page can show it without re-reading the manifest.
+            reading_note=geometry_badge(entry),
+            link="https://github.com/EyeBench/EyeGenBench",
+            # The manifest already counts each corpus, so a prepared
+            # row arrives with its figures — the same numbers `size` renders as
+            # a caption, one column each.
+            published_counts=benchmark_published_counts(entry),
+            published_counts_source=(
+                "The prepared bundle's own manifest. Texts counts *distinct* "
+                "texts, so a corpus with repeated readings publishes fewer than "
+                "the app counts reading instances."
+            ),
+            # Marks the entry as coming from a prepared bundle, and names the
+            # corpus inside it. `compare_source` dispatches on this rather than
+            # sniffing the label, and the share link's corpus slug is built
+            # from it.
+            benchmark_dataset=name,
+        )
+        # The one screen-honesty rule, shared with the CLI (`cli.render
+        # --eyegenbench`) so the same corpus can't render at an invented
+        # 1920×1080 on one surface and at data extents on the other.
+        if monitor := declared_monitor(entry):
+            spec["monitor"] = monitor
+        entries[benchmark_corpus_label(name)] = spec
+    return entries
+
+
+def public_dataset_registry() -> dict:
+    """Every public corpus on offer: the static built-ins ∪ the added corpora.
+
+    `PUBLIC_DATASET_REGISTRY` is the literal home of the built-in corpora, whose
+    entries are fixed at import time. The benchmark corpora a user adds can't be,
+    so they are composed in here and every consumer calls this instead of reading
+    the dict. Nothing is discovered: a corpus is here only because someone added
+    it.
+
+    The harmonised benchmark corpora are held back unless
+    ``SCANPATH_EXPERIMENTAL`` is on. Gating here, the one place every consumer
+    reads, is what hides them from the picker, the 🗂️ Data page, Compare's
+    second dataset and share links at once.
+    """
+    registry = dict(PUBLIC_DATASET_REGISTRY)
+    if benchmark_corpora_enabled():
+        registry.update(_benchmark_registry_entries())
+    return registry
 
 
 def _load_public_dataset(
@@ -3699,10 +4091,20 @@ def _apply_declared_schema(proposed: dict, declared: dict | None) -> dict:
 def declared_schemas_for(data_choice: str) -> tuple[dict | None, dict | None]:
     """The ``(word, fix)`` schemas the selected source publishes, or ``(None, None)``.
 
-    A corpus whose identity is a published contract declares its schema on its
-    registry entry (``declared_schemas``): PoTeC's Trial ID is the reader *and*
-    the text, which no column name says and detection would guess as the text
-    alone.
+    A prepared benchmark corpus has a **known** schema — the prep script wrote
+    it — and every other surface loads one through it
+    (`eyegenbench.load_eyegenbench`, so `render --eyegenbench`, the headless API
+    and Comparisons' dataset B all agree). Auto-detection would guess wrong on
+    real bundles: the prepared
+    frames carry the publisher's ~190 leftover columns through, so EMTeC's
+    fixations detect `trial="TRIAL_ID"` against the words' `unique_paragraph_id`
+    and broadcast **zero** word boxes — silently, since only the words frame
+    ends up empty and the empty-pool guard never fires.
+
+    A native corpus whose identity is a published contract declares its schema
+    on its registry entry (``declared_schemas``): PoTeC's Trial ID is the reader
+    *and* the text, which no column name says and detection would guess as the
+    text alone.
     """
     if data_choice != PUBLIC_DATASETS_CHOICE:
         return None, None
@@ -3716,7 +4118,14 @@ def declared_schemas_for(data_choice: str) -> tuple[dict | None, dict | None]:
     if spec and spec.get("declared_schemas"):
         word_schema, fix_schema = spec["declared_schemas"]
         return dict(word_schema), dict(fix_schema)
-    return None, None
+    if not spec or not spec.get("benchmark_dataset"):
+        return None, None
+    from scanpath_studio.eyegenbench import (
+        EYEGENBENCH_FIX_SCHEMA,
+        EYEGENBENCH_WORD_SCHEMA,
+    )
+
+    return dict(EYEGENBENCH_WORD_SCHEMA), dict(EYEGENBENCH_FIX_SCHEMA)
 
 
 def _proposed_schema(kind: str, frame: pd.DataFrame) -> dict:
@@ -4620,8 +5029,10 @@ def resolve_data_source(host=None) -> str:
         kinds[name] = (
             "✏️" if st.session_state["_datasets"][name].get("authoring") else "🔒"
         )
-    # Every public corpus is its own 🌐 entry. Resolved once and reused below so
-    # the whole run agrees on one snapshot of the registry.
+    # Every added benchmark corpus is in here as its own
+    # 🌐 entry, exactly like the built-ins — `public_dataset_registry()` composes
+    # the two. Resolved once and reused below so the whole run agrees on one
+    # snapshot of a registry that depends on a directory the user can change.
     registry = public_dataset_registry() if public_datasets_enabled() else {}
     for label in registry:
         entries.append(label)
@@ -4652,10 +5063,23 @@ def resolve_data_source(host=None) -> str:
         st.session_state["data_source_choice"] = corpus or entries[0]
 
     # Heal a stale/invalid selection (e.g. a removed dataset) so the picker never
-    # errors on an option that is no longer in the list.
+    # errors on an option that is no longer in the list. A stale benchmark
+    # *corpus* label (the bundle directory was repointed, or that corpus was
+    # removed from it) lands on another added corpus in preference to
+    # `entries[0]` (the demo) whenever one is reachable.
     stale = str(st.session_state.get("data_source_choice") or "")
     if stale not in entries:
-        st.session_state["data_source_choice"] = entries[0]
+        healed = ""
+        if stale.endswith(BENCHMARK_LABEL_SUFFIX):
+            healed = next(
+                (
+                    label
+                    for label, spec in registry.items()
+                    if spec.get("benchmark_dataset")
+                ),
+                "",
+            )
+        st.session_state["data_source_choice"] = healed or entries[0]
     choice = st.session_state["data_source_choice"]
 
     # Publish what the main-view picker renders from. It runs inside the tab,
@@ -4940,14 +5364,18 @@ def render_data_source_picker(host=None) -> None:
 
     def _entry_label(token: str) -> str:
         # Reads the `registry` snapshot resolved just above rather than calling
-        # `public_dataset_registry()` per token, so one run formats its options
-        # against one snapshot.
+        # `public_dataset_registry()` per token: the added corpora can change at
+        # runtime, so one run must format its options against one
+        # snapshot.
         tag = kinds.get(token, "")
         if token in registry:
             # `picker_name_for` is the single definition of what this list shows
-            # — the entry's `short`. Anything that tells the user to "select X"
-            # reads it too, so the two cannot drift. The snapshot is passed in
-            # for the reason above.
+            # — the entry's `short` plus, for a benchmark corpus, a (WIP)
+            # marker. Formatting only: the entry's key, its `short` and
+            # its share slug are untouched, so dropping the marker later
+            # invalidates no link and no saved config. Anything that tells the
+            # user to "select X" reads it too, so the two cannot drift. The
+            # snapshot is passed in for the reason above.
             name = _dataset_display_name(token, registry)
         elif token in uploaded:
             name = f"{_dataset_display_name(token, registry)} (yours)"
@@ -5068,9 +5496,9 @@ class DatasetRowCounts:
 
     ``source`` says which of the two the row is showing — ``"loaded"`` (counted
     from rows this session holds) or ``"published"`` (the figures the corpus'
-    own documentation states) — and it is one or the other, never a mixture:
-    back-filling a measured row's gaps from the catalogue would make it read as
-    one set of measurements while being two.
+    own documentation, or a bundle manifest, states) — and it is one or the
+    other, never a mixture: back-filling a measured row's gaps from the
+    catalogue would make it read as one set of measurements while being two.
 
     ``differences`` is the check this type exists for. It holds every field
     both sides know and disagree on, as ``(published, loaded)``.
@@ -5126,11 +5554,32 @@ def dataset_row_counts(
 def published_dataset_counts(token: str, registry: dict | None = None) -> dict:
     """The figures this catalogue publishes for a dataset, or ``{}``.
 
-    Reached through `dataset_about`, so a public corpus and a packaged source
-    answer the same way — and an upload answers ``{}``, which is the honest
-    answer: nothing here knows anything about it.
+    Reached through `dataset_about`, so a public corpus, a packaged source and a
+    prepared benchmark corpus all answer the same way — and an upload answers
+    ``{}``, which is the honest answer: nothing here knows anything about it.
     """
     return dict(dataset_about(token, registry).get("published_counts") or {})
+
+
+def benchmark_published_counts(entry) -> dict:
+    """A prepared corpus' manifest counts, as dataset-table fields.
+
+    The bundle already records `n_readers` / `n_texts` / `n_fixations` per
+    corpus — the same numbers this table wants, one column each instead of the
+    one sentence `_benchmark_size_caption` renders them as.
+
+    A count `entry_count` cannot read comes back ``None``, and an absent one
+    ``0``; **neither is published**. Publishing either would assert a corpus with
+    no readers, which is exactly the overclaim `entry_count` warns against.
+    """
+    from scanpath_studio.eyegenbench import entry_count
+
+    fields = (
+        ("Participants", "n_readers"),
+        ("Texts", "n_texts"),
+        ("Fixations", "n_fixations"),
+    )
+    return {field: count for field, key in fields if (count := entry_count(entry, key))}
 
 
 def _counts_store() -> dict:
@@ -5415,7 +5864,9 @@ def _overview_sentence(text: str) -> tuple[str, str]:
     """Split a dataset description into its opening sentence and the rest.
 
     The 🗂️ Data page shows the first sentence as the overview under "What's in
-    this dataset".
+    this dataset". Every catalogue description is one sentence, so this only
+    trims a prepared benchmark corpus', whose tail is its geometry, license and
+    citation.
 
     A boundary inside a `code span` does not count. A description can end on a
     module path (``python -m scanpath_studio.update_sample_data``), and cutting
@@ -7026,7 +7477,8 @@ def resolve_source_monitor(
     ):
         return override.canvas_width, override.canvas_height, True
     # OneStop server bundle + bundled demo share the same experimental setup
-    # (Dell U2715H, 2560x1440) — cited once at `constants.DEFAULT_FIGURE_SIZE`.
+    # (Dell U2715H, 2560x1440) — cited once in
+    # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]`.
     if data_choice in (ONESTOP_CHOICE, DEMO_CHOICE):
         return 2560, 1440, True
     if data_choice == MANUAL_SAMPLE_CHOICE:
@@ -7284,8 +7736,8 @@ def source_setup_snapshot(
     ✏️ Edit dataset's *Reset to source setup* returns to.
 
     A corpus that declares its monitor reports it as measured; one that does
-    not gets the extent of its data, estimated, as `compare_source.snapshot_for`
-    does.
+    not (a prepared benchmark corpus whose manifest invents its screen) gets
+    the extent of its data, estimated, as `compare_source.snapshot_for` does.
     """
     declared = _declared_setup_snapshot(data_choice)
     if declared is not None:
@@ -7365,9 +7817,10 @@ def seed_canvas_state(
         text true-to-scale: see `plots._word_label_font_px`.
     """
     # OneStop server bundle + bundled demo share the same experimental setup
-    # (Dell U2715H, 2560x1440 — cited at `constants.DEFAULT_FIGURE_SIZE`).
-    # Data-derived extents undershoot — text only fills part of the screen — so
-    # hard-default to the real monitor here.
+    # (Dell U2715H, 2560x1440 — cited in
+    # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]`). Data-derived extents
+    # undershoot — text only fills part of the screen — so hard-default to the
+    # real monitor here.
     # ``monitor_is_authoritative`` = the source declares a real presentation
     # monitor (OneStop/demo or a public-dataset registry entry), so the canvas
     # should snap to it rather than to data-derived extents.
@@ -7411,7 +7864,7 @@ def seed_canvas_state(
     # (the key is unchanged, so the snap doesn't re-fire).
     #
     # `public_dataset_choice` is a correct per-corpus key on its own: every
-    # corpus is its own registry entry.
+    # prepared benchmark corpus is its own registry entry.
     #
     # Except where a share link has just said otherwise. A link seeds
     # these keys before this first run gets here, and carries the canvas / font
@@ -8724,8 +9177,8 @@ def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
     # The trial-filter stash is keyed per *corpus*: a filter narrowed to a value
     # only one corpus has (a text id, a reader) must not ride into the next one,
     # where no trial can satisfy it and nothing says why the pool went empty.
-    # `public_dataset_choice` alone is enough for that: every corpus is its own
-    # registry entry.
+    # `public_dataset_choice` alone is enough for that: every corpus, prepared
+    # benchmark ones included, is its own registry entry.
     source_key = (data_choice, st.session_state.get("public_dataset_choice"))
     if st.session_state.get("_filters_for") == source_key:
         return preprocessing
@@ -9175,7 +9628,8 @@ def _run_app() -> None:
         )
     elif url_source == CORPUS_SOURCE_TOKEN:
         # `?source=corpus&corpus=<slug>` names ONE entry of
-        # `public_dataset_registry()`. Writing the registry label into
+        # `public_dataset_registry()` — a built-in public corpus or a locally
+        # prepared one, identically. Writing the registry label into
         # `data_source_choice` is all the picker's healing path needs: it accepts
         # the label as an entry and collapses it back to PUBLIC_DATASETS_CHOICE,
         # re-stashing it on `public_dataset_choice` itself. Seeding that key here
@@ -9196,9 +9650,12 @@ def _run_app() -> None:
                 "data_source_choice", corpus_choice
             )
         elif slug:
-            # A corpus this app does not offer. Say which corpus was named and
-            # leave the picker exactly where it was — never wedge it, and never
-            # silently open a different corpus.
+            # The common case, not an edge case: the recipient has no prepared
+            # bundle, or a different subset of one. Say which corpus was named
+            # and leave the picker exactly where it was — never wedge it, and
+            # never silently open a different corpus. There is no remedy to
+            # name: the app does not discover corpora, and nothing in it adds
+            # one yet.
             page_notices.warning(
                 f"This link opens the dataset `{slug}`, which isn't available "
                 "here. The link's view settings still apply to whatever you open."
@@ -9867,6 +10324,11 @@ def _run_app() -> None:
         # collapsed into one per text. Clearing on source change lets each
         # corpus auto-detect its own mapping; same-source reruns (and restores)
         # keep their keys. Mirrors the canvas re-seed in seed_canvas_state.
+        #
+        # Two harmonised benchmark corpora share one schema, so switching between
+        # them re-proposes a mapping that auto-detects to the same thing — the
+        # cost of one key covering every corpus, and the same trade every other
+        # pair of sources already makes.
         source_key = (data_choice, st.session_state.get("public_dataset_choice"))
         if st.session_state.get("_colmap_seeded_for") != source_key:
             reset_column_mapping()
@@ -9912,9 +10374,9 @@ def _run_app() -> None:
             allow_override=mapping_editor_rendered,
             # Mode A of the Data page's one Column mapping section.
             mapping_host=mapping_body_slot,
-            # A corpus that publishes its schema starts from it, not from
-            # auto-detection. The panels stay editable — this only changes what
-            # they start at.
+            # A prepared benchmark corpus publishes its schema; auto-detection
+            # must not re-guess it from the publisher's leftover columns. The
+            # panels stay editable — this only changes what they start at.
             declared_word_schema=declared_word_schema,
             declared_fix_schema=declared_fix_schema,
             # The add-dataset wizard writes these same `col_map_*` keys

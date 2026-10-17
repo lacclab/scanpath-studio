@@ -65,6 +65,21 @@ def similarity_enabled() -> bool:
     return experimental_features_enabled()
 
 
+def benchmark_corpora_enabled() -> bool:
+    """Whether the harmonised benchmark corpora are offered.
+
+    Off unless ``SCANPATH_EXPERIMENTAL`` is set: a bundle can only be built
+    with the EyeGenBench pipeline, which is not public yet, and the corpora are
+    unfinished work — the picker marks each one (WIP). The app does not
+    discover them: a corpus is listed only once someone adds it. Off, this also
+    keeps an added corpus out of `app.public_dataset_registry`, and hides
+    `render`'s ``--eyegenbench`` / ``--eyegenbench-dataset`` flags from
+    ``--help``. Hidden, not removed: those flags still parse, and
+    `eyegenbench.load_eyegenbench` is untouched.
+    """
+    return experimental_features_enabled()
+
+
 def preprocessing_enabled() -> bool:
     """Whether the soft-exclusion / merge pipeline is exposed **in the app**.
 
@@ -129,8 +144,9 @@ def derived_analysis_tables_enabled() -> bool:
 FONT_FAMILY = "monospace"
 
 # The demo corpus' own presentation monitor, so a figure with no declared
-# canvas still renders true-to-scale. Sourced from Berzak et al. 2025, Sci Data
-# 12:1995 — Dell U2715H, 2560 px × 1440 px over 597 mm × 336 mm.
+# canvas still renders true-to-scale. Sourced once, in
+# `eyegenbench_geometry.DISPLAY_SPECS["onestop"]` (Berzak et al. 2025, Sci Data
+# 12:1995 — Dell U2715H, 2560 px × 1440 px over 597 mm × 336 mm).
 DEFAULT_FIGURE_SIZE = (2560, 1440)
 
 # Reading text is drawn true-to-scale: one line of text fills ``1/line_spacing``
@@ -694,6 +710,101 @@ DEMO_CHOICE = "Bundled Demo"
 SYNTHETIC_CHOICE = "Synthetic test trial"
 PUBLIC_DATASETS_CHOICE = "Public datasets"
 POTEC_DEFAULT_DIR = "data/PoTeC"
+EYEGENBENCH_DEFAULT_DIR = "data/EyeGenBench"
+# Every prepared benchmark corpus is its own top-level entry in the flat
+# data-source picker, exactly like PoTeC / OneStop — there is no
+# "EyeGenBench" source fronting them. **"EyeGenBench" is provenance, not a
+# source**: it names the pipeline that harmonises the corpora, so it appears in
+# descriptions and help strings only — never in an entry label, which is built
+# from the corpus' manifest name (`app.py`).
+# The suffix that distinguishes a harmonised corpus from a *native* entry for the
+# same corpus (PoTeC, OneStop ship both ways). Applied by property — the
+# harmonised copy is re-derived and its geometry may be weaker — never by vendor
+# name.
+BENCHMARK_SHORT_SUFFIX = " (harmonised benchmark)"
+# The registry-key suffix. Keys must be unique across the whole registry, and a
+# native entry's key is `"<Corpus> — <full name>"`, so this shape can't collide.
+BENCHMARK_LABEL_SUFFIX = " — harmonised benchmark corpus"
+# The harmonised corpora are unfinished work, so each wears this in the source
+# picker. It is **display only** — appended by `app._entry_label` at render
+# time, never stored on the entry. Putting it on the registry key or on `short`
+# would change the picker's stored `data_source_choice` value and (for a
+# built-in) the `?corpus=` slug, so removing it later would break links and
+# saved configs written while it was there; as a formatting step it is one line
+# to delete. Nothing derives identity from it.
+BENCHMARK_WIP_SUFFIX = " (WIP)"
+
+# A benchmark manifest records `language` as an **ISO 639-1 code**
+# ('zh', 'da', 'en', …), not a name, and the picker shows it to a reader. A small
+# explicit table beats a dependency for a field this narrow; unknown codes fall
+# back to the code itself (never "Unknown" — the code is real information, and
+# inventing a placeholder for it loses that).
+LANGUAGE_NAMES = {
+    "ar": "Arabic",
+    "bg": "Bulgarian",
+    "ca": "Catalan",
+    "cs": "Czech",
+    "da": "Danish",
+    "de": "German",
+    "el": "Greek",
+    "en": "English",
+    "es": "Spanish",
+    "et": "Estonian",
+    "eu": "Basque",
+    "fa": "Persian",
+    "fi": "Finnish",
+    "fr": "French",
+    "ga": "Irish",
+    "he": "Hebrew",
+    "hi": "Hindi",
+    "hr": "Croatian",
+    "hu": "Hungarian",
+    "id": "Indonesian",
+    "is": "Icelandic",
+    "it": "Italian",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "lt": "Lithuanian",
+    "lv": "Latvian",
+    "mk": "Macedonian",
+    "ml": "Malayalam",
+    "nl": "Dutch",
+    "no": "Norwegian",
+    "pl": "Polish",
+    "pt": "Portuguese",
+    "ro": "Romanian",
+    "ru": "Russian",
+    "sk": "Slovak",
+    "sl": "Slovenian",
+    "sq": "Albanian",
+    "sr": "Serbian",
+    "sv": "Swedish",
+    "ta": "Tamil",
+    "th": "Thai",
+    "tr": "Turkish",
+    "uk": "Ukrainian",
+    "ur": "Urdu",
+    "vi": "Vietnamese",
+    "zh": "Chinese",
+}
+
+
+def language_display(value) -> str:
+    """An ISO language code (or comma-joined list of them) as display names.
+
+    A multilingual corpus records several codes in one field (`"en,de,ru"` — MECO,
+    celer), so each part is mapped and the list re-joined. An unrecognised code
+    renders as itself: it still identifies the language to anyone who knows it,
+    which "Unknown" does not. A blank/absent value gives ``""`` so the caller can
+    drop the caption rather than print an empty label.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    parts = [part.strip() for part in text.split(",") if part.strip()]
+    return ", ".join(LANGUAGE_NAMES.get(part.lower(), part) for part in parts)
+
+
 ONESTOP_CHOICE = "OneStop server bundle"
 # Public OneStop (OSF download-on-demand) — distinct from the env-var
 # ONESTOP_CHOICE server bundle. Each reading regime is its own dataset in the
@@ -1106,6 +1217,10 @@ ICONS: dict[str, str] = {
     "step_action": ":material/error:",
     "step_todo": ":material/radio_button_unchecked:",
     "step_optional": ":material/remove:",
+    # Geometry provenance of a dataset's word boxes.
+    "geometry_real": ":material/verified:",
+    "geometry_reconstructed": ":material/build:",
+    "geometry_synthesized": ":material/science:",
     # Alerts, toasts and inline status.
     "warning": ":material/warning:",
     "error": ":material/block:",

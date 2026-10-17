@@ -73,6 +73,7 @@ SOURCE_FILES = "files"
 SOURCE_AUTHOR = "author"
 SOURCE_POTEC = "potec"
 SOURCE_ONESTOP = "onestop"
+SOURCE_BENCHMARK = "benchmark"
 #: A dataset recorded as raw gaze alone — no words or fixations table,
 #: so its data half is the samples (``options["raw_gaze"]``, the paths) and the
 #: builder is handed ``None`` for the other two.
@@ -130,10 +131,11 @@ def source_canvas(kind: str) -> tuple[int, int] | None:
     source on the same screen: `render --sample` draws the demo at its real
     2560×1440 monitor, and the Python snippet ``api.figure_code`` writes must
     too, rather than estimate a screen from the data extents. ``None`` means
-    the screen is read off the data."""
+    the screen is read off the data (or, for a benchmark corpus, its
+    manifest)."""
     if kind in (SOURCE_DEMO, SOURCE_ONESTOP):
-        # OneStop's Dell U2715H (Berzak et al. 2025); the demo is a subset of
-        # OneStop.
+        # OneStop's Dell U2715H — cited in eyegenbench_geometry.DISPLAY_SPECS
+        # ["onestop"] (Berzak et al. 2025); the demo is a subset of OneStop.
         from .constants import DEFAULT_FIGURE_SIZE
 
         return tuple(DEFAULT_FIGURE_SIZE)
@@ -292,6 +294,17 @@ def _onestop_python(source: SnippetSource) -> list[str]:
     return lines
 
 
+def _benchmark_python(source: SnippetSource) -> list[str]:
+    dataset = str(source.options.get("dataset") or "PoTeC")
+    return [
+        "from scanpath_studio.eyegenbench import load_eyegenbench",
+        "",
+        "words, fixations = load_eyegenbench(",
+        f"    {_py(_root(source, 'data/eyegenbench'))}, dataset={_py(dataset)}",
+        ")",
+    ]
+
+
 def _unknown_python(source: SnippetSource) -> list[str]:
     if source.options.get("keep_columns"):
         return [
@@ -340,6 +353,15 @@ def _onestop_cli(source: SnippetSource) -> list[str]:
     for part in source.options.get("parts") or ["Paragraph"]:
         argv += ["--onestop-part", str(part)]
     return argv
+
+
+def _benchmark_cli(source: SnippetSource) -> list[str]:
+    return [
+        "--eyegenbench",
+        _root(source, "data/eyegenbench"),
+        "--eyegenbench-dataset",
+        str(source.options.get("dataset") or "PoTeC"),
+    ]
 
 
 def _unknown_cli(source: SnippetSource) -> list[str]:
@@ -538,6 +560,7 @@ _SOURCE_WRITERS: dict[str, tuple[Any, Any]] = {
     SOURCE_AUTHOR: (_author_python, _author_cli),
     SOURCE_POTEC: (_potec_python, _potec_cli),
     SOURCE_ONESTOP: (_onestop_python, _onestop_cli),
+    SOURCE_BENCHMARK: (_benchmark_python, _benchmark_cli),
     SOURCE_RAW_GAZE: (_raw_gaze_only_python, _raw_gaze_only_cli),
     SOURCE_UPLOAD: (_upload_python, _upload_cli),
     SOURCE_UNKNOWN: (_unknown_python, _unknown_cli),

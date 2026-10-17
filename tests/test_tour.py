@@ -1055,7 +1055,8 @@ class TestSpotlightSelectorsResolve:
         assert "f\"{ICONS['figure']} **Figure & canvas**\"" in control_source
         # The typography draws always, greyed while Text is off.
         assert "text_disabled=not show_labels" in control_source
-        assert "display = host if bare else host.expander" in canvas_source
+        # Drawn inside a popover, so it must never open an expander of its own.
+        assert ".expander(" not in canvas_source
         assert 'viz.expander("🖥️ Canvas & text"' not in control_source
         assert 'viz.expander("📐 Figure & axes"' not in control_source
 

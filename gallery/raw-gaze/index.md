@@ -2,7 +2,7 @@
 
 Samples under translucent fixations. The demo samples are synthetic.
 
-1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_2_2_Adv_r0`. Start with Reset visualization, turn off Stimulus → Highlight → Show.
+1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_2_2_Adv_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
 1. Turn on Raw gaze and turn off Saccades.
 1. In Fixations ▾ → Marker → Opacity, choose 0.35 so the samples show through.
 

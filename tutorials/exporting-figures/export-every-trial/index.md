@@ -4,7 +4,7 @@ Build a ZIP of static figures and data tables for a set of trials.
 
 1. [Set the figure's design](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-one-figure/#1-choose-the-view) once. Each exported trial uses that design, without animation or a comparison partner.
 1. Open Export → Export bundle and select this trial, the active filtered pool, or the whole dataset.
-1. Choose figure and table formats and check the filename pattern. For editing individual layers later, enable separable layers.
+1. Choose figure and table formats and check the filename pattern. For editing individual layers later, turn on **Layers as separate files**.
 1. Build and download the bundle, then inspect one exported figure.
 
 \[!\[

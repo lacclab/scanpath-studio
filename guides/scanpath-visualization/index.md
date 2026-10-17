@@ -86,7 +86,7 @@ Each of these files can be saved and loaded again:
 
 | What                               | Where                                      |
 | ---------------------------------- | ------------------------------------------ |
-| figure settings                    | **Share → File**                           |
+| figure settings                    | **Share → Settings file**                  |
 | favorites, tags and notes          | **Data Management → Annotations → Export** |
 | column mapping and recording setup | **Edit dataset → Download setup file**     |
 | saved figure designs               | **My designs → Export**                    |

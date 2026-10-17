@@ -18,7 +18,7 @@ For a consistent offset, check [coordinate units and screen setup](https://laccl
 
 ## 3. Replay the recording
 
-Turn on Animate to inspect fixation order and timing. To mark short, long or out-of-bounds fixations, use Plot controls → Filters & highlights → Fixations and choose Highlight. Gaps and unusual scanpaths alone do not establish their cause.
+Turn on Animate to inspect fixation order and timing. To mark short or long fixations, or fixations outside the text, use Plot controls → Filters & highlights → Fixations and choose Highlight. Gaps and unusual scanpaths alone do not establish their cause.
 
 \[!\[
 

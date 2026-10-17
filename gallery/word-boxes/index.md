@@ -2,7 +2,7 @@
 
 Fixation time within each word’s bounding box.
 
-1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight → Show.
+1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
 1. Turn on Heatmap. In Heatmap ▾, choose Word boxes and weight by fixation duration.
 1. Turn off Fixations and Saccades; keep Stimulus on.
 

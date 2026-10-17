@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_tabs_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-17 12:18 +0000
+            created at 2026-10-17 19:44 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -129,7 +129,7 @@
     <p class="pln"><span class="n"><a id="t47" href="#t47">47</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t48" href="#t48">48</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t49" href="#t49">49</a></span><span class="t"><span class="key">def</span> <span class="nam">make_synthetic_words</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">pd</span><span class="op">.</span><span class="nam">DataFrame</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t50" href="#t50">50</a></span><span class="t">    <span class="str">&quot;&quot;&quot;Return the normalized words/IA frame for the synthetic trial.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t50" href="#t50">50</a></span><span class="t">    <span class="str">&quot;&quot;&quot;Return the normalized Words table frame for the synthetic trial.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t51" href="#t51">51</a></span><span class="t">    <span class="nam">n</span> <span class="op">=</span> <span class="nam">len</span><span class="op">(</span><span class="nam">_WORD_TEXT</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t52" href="#t52">52</a></span><span class="t">    <span class="key">return</span> <span class="nam">pd</span><span class="op">.</span><span class="nam">DataFrame</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t53" href="#t53">53</a></span><span class="t">        <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
@@ -221,7 +221,7 @@
     <p class="pln"><span class="n"><a id="t139" href="#t139">139</a></span><span class="t"><span class="com"># named the way the add wizard&#x27;s auto-detection reads it, so the pair maps</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t140" href="#t140">140</a></span><span class="t"><span class="com"># without a single manual pick (`tests/test_example_tables.py` holds it to that).</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t141" href="#t141">141</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t142" href="#t142">142</a></span><span class="t"><span class="com">#: The AOI table&#x27;s columns, in file order.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t142" href="#t142">142</a></span><span class="t"><span class="com">#: The Words table&#x27;s columns, in file order.</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t143" href="#t143">143</a></span><span class="t"><span class="nam">EXAMPLE_AOI_COLUMNS</span> <span class="op">=</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t144" href="#t144">144</a></span><span class="t">    <span class="str">&quot;participant_id&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t145" href="#t145">145</a></span><span class="t">    <span class="str">&quot;trial_id&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -249,9 +249,9 @@
     <p class="pln"><span class="n"><a id="t167" href="#t167">167</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t168" href="#t168">168</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t169" href="#t169">169</a></span><span class="t"><span class="key">def</span> <span class="nam">example_import_tables</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">tuple</span><span class="op">[</span><span class="nam">pd</span><span class="op">.</span><span class="nam">DataFrame</span><span class="op">,</span> <span class="nam">pd</span><span class="op">.</span><span class="nam">DataFrame</span><span class="op">]</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t170" href="#t170">170</a></span><span class="t">    <span class="str">&quot;&quot;&quot;The synthetic trial as an AOI table and a fixation table to import.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t170" href="#t170">170</a></span><span class="t">    <span class="str">&quot;&quot;&quot;The synthetic trial as a Words table and a fixation table to import.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t171" href="#t171">171</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t172" href="#t172">172</a></span><span class="t"><span class="str">    The AOI table carries two of the trial&#x27;s hand-traced reading measures</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t172" href="#t172">172</a></span><span class="t"><span class="str">    The Words table carries two of the trial&#x27;s hand-traced reading measures</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t173" href="#t173">173</a></span><span class="t"><span class="str">    (``EXPECTED``) so the example shows that a dataset brings its own: the app</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t174" href="#t174">174</a></span><span class="t"><span class="str">    computes none for Corpus Analysis. The fixation table has no word</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t175" href="#t175">175</a></span><span class="t"><span class="str">    ids: the app assigns each fixation to the word box it falls in.</span>&nbsp;</span><span class="r"></span></p>
@@ -350,7 +350,7 @@
             <a class="nav" href="z_370c57a259db20f3_tabs_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-17 12:18 +0000
+            created at 2026-10-17 19:44 +0000
         </p>
     </div>
 </footer>

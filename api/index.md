@@ -34,9 +34,9 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 | load_sample_raw_gaze                 | Load the bundled demo's raw gaze: what the app overlays on it.                   |
 | load_potec                           | Load PoTeC as normalized `(words, fixations)` frames, ready to plot.             |
 | load_onestop                         | Load OneStop as normalized `(words, fixations)` frames, ready to plot.           |
-| **Author a scanpath**                |                                                                                  |
+| **Draw a scanpath**                  |                                                                                  |
 | build_authored_scanpath              | Build normalized word and fixation frames from hand-authored reading events.     |
-| load_authored_scanpath               | Load an authoring file as normalized word and fixation frames.                   |
+| load_authored_scanpath               | Load a draft file as normalized word and fixation frames.                        |
 | **Inspect**                          |                                                                                  |
 | list_trials                          | List every plottable trial: one row per participant and trial.                   |
 | list_parts                           | List the ordered screens of multipart data, optionally for one trial.            |
@@ -451,7 +451,7 @@ pid, tid = sps.list_trials(words, fixations).iloc[0]  # one reading
 fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
 ```
 
-## Author a scanpath
+## Draw a scanpath
 
 ### build_authored_scanpath
 
@@ -464,7 +464,7 @@ Build normalized word and fixation frames from hand-authored reading events.
 Parameters:
 
 - **`text`** (`str`) – The text to lay out as word boxes. Explicit line breaks are kept.
-- **`events`** (`DataFrame | None`, default: `None` ) – The fixations, one row each, with the columns the app's Author a scanpath table has (fixation_id, order_in_trial, word_id, x, y, duration_ms). Left out, each word gets one fixation at its center.
+- **`events`** (`DataFrame | None`, default: `None` ) – The fixations, one row each, with the columns the app's Draw a scanpath table has (fixation_id, order_in_trial, word_id, x, y, duration_ms). Left out, each word gets one fixation at its center.
 - **`**layout_options`** (`Any`, default: `{}` ) – Passed to authoring.layout_text (canvas_width, margin, character_width, word_height, line_height).
 
 Returns:
@@ -477,11 +477,11 @@ Returns:
 load_authored_scanpath(source)
 ```
 
-Load an authoring file as normalized word and fixation frames.
+Load a draft file as normalized word and fixation frames.
 
 Parameters:
 
-- **`source`** (`str | Path`) – The JSON the app's Download authoring file saves: its path, or its text.
+- **`source`** (`str | Path`) – The JSON the app's Download draft (JSON) saves on Draw a scanpath: its path, or its text.
 
 Returns:
 

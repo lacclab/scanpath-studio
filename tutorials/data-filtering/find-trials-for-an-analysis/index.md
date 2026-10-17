@@ -7,8 +7,8 @@ Locate trials containing particular fixation patterns.
 1. Set the relevant category to Highlight:
 
    - Short or Long, with a duration threshold in milliseconds
-   - Out of bounds, for fixations outside every word box
-   - Blink, if your data includes a blink column
+   - Outside the text, for fixations outside every word box
+   - Near a blink, if your data includes a blink column
 
 1. Step through the trials. In Annotations, tag those that meet your analysis criteria, for example `include`.
 

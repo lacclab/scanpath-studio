@@ -2880,7 +2880,7 @@ follow the app's plot rail.</p>
 <tr>
 <td><code>fixation_flags</code><br><code>--fixation-flag</code></td>
 <td><code>None</code></td>
-<td>The app's Filters &amp; highlights for fixations, repeatable. SPEC is CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB] with CATEGORY one of short, long, oob (outside every word box), blink and MODE one of off, highlight, discard — e.g. <code>--fixation-flag</code> short=discard,threshold_ms=80. discard drops those fixations from the drawing only; measures and exports are untouched. threshold_ms applies to short/long only.</td>
+<td>The app's Filters &amp; highlights for fixations, repeatable. SPEC is CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB] with CATEGORY one of short, long, oob (outside every word box), blink and MODE one of off, highlight, hide — e.g. <code>--fixation-flag</code> short=hide,threshold_ms=80. hide drops those fixations from the drawing only; measures and exports are untouched. threshold_ms applies to short/long only.</td>
 </tr>
 <tr>
 <td><code>fixation_snap_to_line</code><br><code>--snap-fixations</code></td>
@@ -2948,8 +2948,8 @@ follow the app's plot rail.</p>
 </tr>
 <tr>
 <td><code>saccade_color_mode</code><br><code>--saccade-color-by-type</code><br><code>--saccade-color-by-direction</code></td>
-<td><code>'Uniform'</code></td>
-<td>Color each saccade by its reading type (forward / skip / refixation / return sweep / regression) instead of one uniform color. One of <code>'Uniform'</code>, <code>'Forward / regression'</code>, <code>'By type'</code>. <em>Plot and compare only.</em></td>
+<td><code>'One color'</code></td>
+<td>Color each saccade by its reading type (forward / skip / refixation / return sweep / regression) instead of one uniform color. One of <code>'One color'</code>, <code>'Forward / regression'</code>, <code>'By type'</code>. <em>Plot and compare only.</em></td>
 </tr>
 <tr>
 <td><code>saccade_class_colors</code><br><code>--saccade-type-color</code></td>
@@ -3101,7 +3101,7 @@ follow the app's plot rail.</p>
 <tr>
 <td><code>heatmap_style</code><br><code>--heatmap-style</code></td>
 <td><code>'Word boxes'</code></td>
-<td>Heatmap geometry. One of <code>'Word boxes'</code>, <code>'Interpolated'</code>. <em>Plot and compare only.</em></td>
+<td>Heatmap geometry. One of <code>'Word boxes'</code>, <code>'Smoothed'</code>. <em>Plot and compare only.</em></td>
 </tr>
 <tr>
 <td><code>heatmap_metric</code><br><code>--heatmap-metric</code></td>
@@ -3131,7 +3131,7 @@ follow the app's plot rail.</p>
 <tr>
 <td><code>heatmap_sigma_px</code><br><code>--heatmap-sigma</code></td>
 <td><code>None</code></td>
-<td>Gaussian σ in px for <code>--heatmap-style</code> interpolated. <em>Plot and compare only.</em></td>
+<td>Gaussian σ in px for <code>--heatmap-style</code> smoothed. <em>Plot and compare only.</em></td>
 </tr>
 <tr>
 <td><code>word_heatmap_col</code><br><code>--word-heatmap-col</code></td>
@@ -3479,7 +3479,7 @@ follow the app's plot rail.</p>
 <tr>
 <td><code>fixation_flags_b</code><br><code>--compare-fixation-flag</code></td>
 <td><code>None</code></td>
-<td>Filters &amp; highlights for the SECOND scanpath only, repeatable; same SPEC as <code>--fixation-flag</code>, e.g. <code>--compare-fixation-flag</code> short=discard,threshold_ms=80. Replaces <code>--fixation-flag</code> for B. <em>Animate only.</em></td>
+<td>Filters &amp; highlights for the SECOND scanpath only, repeatable; same SPEC as <code>--fixation-flag</code>, e.g. <code>--compare-fixation-flag</code> short=hide,threshold_ms=80. Replaces <code>--fixation-flag</code> for B. <em>Animate only.</em></td>
 </tr>
 <tr>
 <td><code>background_image_b</code><br><code>--stimulus-image-b</code></td>

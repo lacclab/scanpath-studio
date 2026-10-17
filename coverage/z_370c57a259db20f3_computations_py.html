@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_constants_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-17 12:18 +0000
+            created at 2026-10-17 19:44 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -216,7 +216,7 @@
     <p class="run run2"><span class="n"><a id="t134" href="#t134">134</a></span><span class="t">        <span class="nam">id</span><span class="op">=</span><span class="str">&quot;norm.words&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t135" href="#t135">135</a></span><span class="t">        <span class="nam">name</span><span class="op">=</span><span class="str">&quot;Word table normalization&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t136" href="#t136">136</a></span><span class="t">        <span class="nam">category</span><span class="op">=</span><span class="nam">CATEGORY_NORMALIZATION</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t137" href="#t137">137</a></span><span class="t">        <span class="nam">summary</span><span class="op">=</span><span class="str">&quot;Map an arbitrary word/IA export onto the canonical word columns.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t137" href="#t137">137</a></span><span class="t">        <span class="nam">summary</span><span class="op">=</span><span class="str">&quot;Map an arbitrary word or interest-area export onto the canonical word columns.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t138" href="#t138">138</a></span><span class="t">        <span class="nam">formula</span><span class="op">=</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t139" href="#t139">139</a></span><span class="t">            <span class="str">&quot;For each canonical field, `pick_column` walks a candidate list and &quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t140" href="#t140">140</a></span><span class="t">            <span class="str">&quot;takes the first column that exists; the user&#x27;s mapping overrides it. &quot;</span>&nbsp;</span><span class="r"></span></p>
@@ -351,7 +351,7 @@
     <p class="run run2"><span class="n"><a id="t269" href="#t269">269</a></span><span class="t">        <span class="nam">missing</span><span class="op">=</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t270" href="#t270">270</a></span><span class="t">            <span class="str">&quot;No matching word box, or no word id (blank, or not a number) &#8658; the &quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t271" href="#t271">271</a></span><span class="t">            <span class="str">&quot;fixation keeps no coordinates &#8212; a missing id never matches a box &quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t272" href="#t272">272</a></span><span class="t">            <span class="str">&quot;with none. No x/y mapped and a Word/IA ID column with no numbers &quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t272" href="#t272">272</a></span><span class="t">            <span class="str">&quot;with none. No x/y mapped and a Word ID column with no numbers &quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t273" href="#t273">273</a></span><span class="t">            <span class="str">&quot;at all &#8658; UnplacedFixationsError, never an empty figure.&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t274" href="#t274">274</a></span><span class="t">        <span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t275" href="#t275">275</a></span><span class="t">        <span class="nam">tiers</span><span class="op">=</span><span class="str">&quot;A, C&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -895,12 +895,12 @@
     <p class="run run2"><span class="n"><a id="t813" href="#t813">813</a></span><span class="t">    <span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t814" href="#t814">814</a></span><span class="t">    <span class="nam">Computation</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t815" href="#t815">815</a></span><span class="t">        <span class="nam">id</span><span class="op">=</span><span class="str">&quot;pre.cleaning_report&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t816" href="#t816">816</a></span><span class="t">        <span class="nam">name</span><span class="op">=</span><span class="str">&quot;Cleaning QA report&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t816" href="#t816">816</a></span><span class="t">        <span class="nam">name</span><span class="op">=</span><span class="str">&quot;Cleaning report&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t817" href="#t817">817</a></span><span class="t">        <span class="nam">category</span><span class="op">=</span><span class="nam">CATEGORY_PREPROCESSING</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t818" href="#t818">818</a></span><span class="t">        <span class="nam">summary</span><span class="op">=</span><span class="str">&quot;What the preprocessing pass would remove, and why.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t819" href="#t819">819</a></span><span class="t">        <span class="nam">formula</span><span class="op">=</span><span class="str">&quot;Counts per exclusion reason over the unfiltered frame.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t820" href="#t820">820</a></span><span class="t">        <span class="nam">code</span><span class="op">=</span><span class="str">&quot;scanpath_studio/preprocessing.py:cleaning_report&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t821" href="#t821">821</a></span><span class="t">        <span class="nam">output</span><span class="op">=</span><span class="str">&quot;Cleaning QA table&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t821" href="#t821">821</a></span><span class="t">        <span class="nam">output</span><span class="op">=</span><span class="str">&quot;Cleaning report table&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t822" href="#t822">822</a></span><span class="t">        <span class="nam">tiers</span><span class="op">=</span><span class="str">&quot;C&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t823" href="#t823">823</a></span><span class="t">        <span class="nam">status</span><span class="op">=</span><span class="nam">STATUS_PARTIAL</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t824" href="#t824">824</a></span><span class="t">        <span class="nam">consumers</span><span class="op">=</span><span class="op">(</span><span class="nam">_UI_PREPROCESSING</span><span class="op">,</span> <span class="nam">_API</span><span class="op">,</span> <span class="nam">_CLI</span><span class="op">,</span> <span class="nam">_EXPORT</span><span class="op">,</span> <span class="nam">_INSPECT_DERIVED</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -1196,7 +1196,7 @@
     <p class="run run2"><span class="n"><a id="t1114" href="#t1114">1114</a></span><span class="t">            <span class="str">&quot;in pixels.&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1115" href="#t1115">1115</a></span><span class="t">        <span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1116" href="#t1116">1116</a></span><span class="t">        <span class="nam">code</span><span class="op">=</span><span class="str">&quot;scanpath_studio/aggregation.py:reader_summary_table&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1117" href="#t1117">1117</a></span><span class="t">        <span class="nam">output</span><span class="op">=</span><span class="str">&quot;Readers table&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1117" href="#t1117">1117</a></span><span class="t">        <span class="nam">output</span><span class="op">=</span><span class="str">&quot;Participant summary table&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1118" href="#t1118">1118</a></span><span class="t">        <span class="nam">unit</span><span class="op">=</span><span class="str">&quot;ms, px, counts, proportions&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1119" href="#t1119">1119</a></span><span class="t">        <span class="nam">tiers</span><span class="op">=</span><span class="str">&quot;C, D&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t1120" href="#t1120">1120</a></span><span class="t">        <span class="nam">status</span><span class="op">=</span><span class="nam">STATUS_PARTIAL</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -1801,7 +1801,7 @@
             <a class="nav" href="z_370c57a259db20f3_constants_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.16.2">coverage.py v7.16.2</a>,
-            created at 2026-10-17 12:18 +0000
+            created at 2026-10-17 19:44 +0000
         </p>
     </div>
 </footer>

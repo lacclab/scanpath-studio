@@ -3237,7 +3237,7 @@ has a flag.</p>
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span>--participant<span class="w"> </span>p1<span class="w"> </span>--trial<span class="w"> </span>t3<span class="w"> </span>--output<span class="w"> </span>scanpath.svg
 <a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
-<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># An authoring file saved from the app's Author a scanpath screen</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># A draft file saved from the app's Draw a scanpath screen</span>
 <a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--authoring<span class="w"> </span>authored-scanpath.json<span class="w"> </span>-o<span class="w"> </span>authored.html
 <a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
 <a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># A public corpus, loaded the way the app loads it (PoTeC downloads on first use)</span>
@@ -3291,7 +3291,7 @@ has a flag.</p>
 </tr>
 <tr>
 <td>smooth the heatmap</td>
-<td><code>--heatmap-style interpolated --heatmap-sigma 20</code> (σ in px; leave it out for an automatic σ)</td>
+<td><code>--heatmap-style smoothed --heatmap-sigma 20</code> (σ in px; leave it out for an automatic σ)</td>
 </tr>
 <tr>
 <td>style the word boxes</td>
@@ -3649,7 +3649,7 @@ like the <a href="../figure-options/">figure options</a> they set.</p>
 <td><code>--authoring</code></td>
 <td><code>PATH</code></td>
 <td>—</td>
-<td>An authoring file from the app's Author a scanpath screen.</td>
+<td>A draft file from the app's Draw a scanpath screen.</td>
 </tr>
 <tr>
 <td><code>--words</code></td>
@@ -3796,7 +3796,7 @@ like the <a href="../figure-options/">figure options</a> they set.</p>
 <td><code>--fixation-flag</code></td>
 <td><code>SPEC</code></td>
 <td>—</td>
-<td>The app's Filters &amp; highlights for fixations, repeatable. SPEC is CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB] with CATEGORY one of short, long, oob (outside every word box), blink and MODE one of off, highlight, discard — e.g. <code>--fixation-flag</code> short=discard,threshold_ms=80. discard drops those fixations from the drawing only; measures and exports are untouched. threshold_ms applies to short/long only.</td>
+<td>The app's Filters &amp; highlights for fixations, repeatable. SPEC is CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB] with CATEGORY one of short, long, oob (outside every word box), blink and MODE one of off, highlight, hide — e.g. <code>--fixation-flag</code> short=hide,threshold_ms=80. hide drops those fixations from the drawing only; measures and exports are untouched. threshold_ms applies to short/long only.</td>
 </tr>
 <tr>
 <td><code>--snap-fixations</code></td>
@@ -4184,7 +4184,7 @@ like the <a href="../figure-options/">figure options</a> they set.</p>
 </tr>
 <tr>
 <td><code>--heatmap-style</code></td>
-<td><code>word-boxes</code>, <code>interpolated</code></td>
+<td><code>word-boxes</code>, <code>smoothed</code></td>
 <td>—</td>
 <td>Heatmap geometry (default: word-boxes).</td>
 </tr>
@@ -4192,7 +4192,7 @@ like the <a href="../figure-options/">figure options</a> they set.</p>
 <td><code>--heatmap-sigma</code></td>
 <td><code>PX</code></td>
 <td>—</td>
-<td>Gaussian σ in px for <code>--heatmap-style</code> interpolated (default: 2% of the data's larger span, at least 8 px).</td>
+<td>Gaussian σ in px for <code>--heatmap-style</code> smoothed (default: 2% of the data's larger span, at least 8 px).</td>
 </tr>
 <tr>
 <td><code>--heatmap-colorscale</code></td>
@@ -4210,7 +4210,7 @@ like the <a href="../figure-options/">figure options</a> they set.</p>
 <td><code>--heatmap-opacity</code></td>
 <td><code>O</code></td>
 <td>—</td>
-<td>Heatmap opacity, 0.05–1.0 (default: each style's own — word boxes 0.5, or 0.35 with no word boxes; interpolated 0.45).</td>
+<td>Heatmap opacity, 0.05–1.0 (default: each style's own — word boxes 0.5, or 0.35 with no word boxes; smoothed 0.45).</td>
 </tr>
 <tr>
 <td><code>--heatmap-range</code></td>
@@ -4777,7 +4777,7 @@ like the <a href="../figure-options/">figure options</a> they set.</p>
 <td><code>--compare-fixation-flag</code></td>
 <td><code>SPEC</code></td>
 <td>—</td>
-<td>Filters &amp; highlights for the SECOND scanpath only, repeatable; same SPEC as <code>--fixation-flag</code>, e.g. <code>--compare-fixation-flag</code> short=discard,threshold_ms=80. Replaces <code>--fixation-flag</code> for B.</td>
+<td>Filters &amp; highlights for the SECOND scanpath only, repeatable; same SPEC as <code>--fixation-flag</code>, e.g. <code>--compare-fixation-flag</code> short=hide,threshold_ms=80. Replaces <code>--fixation-flag</code> for B.</td>
 </tr>
 <tr>
 <td><code>--compare-saccade-classes</code></td>

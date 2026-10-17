@@ -2434,8 +2434,8 @@
 <div class="tabbed-content">
 <div class="tabbed-block">
 <ol>
-<li>Select the bundled demo in Scanpath, then participant <code>l37_1129</code> and trial <code>l37_1129_2_1_1_Ele_r0</code>. Start with Reset visualization, turn off Stimulus → Highlight → Show.</li>
-<li>Turn on Heatmap. In Heatmap ▾, choose Interpolated and weight by fixation duration.</li>
+<li>Select the bundled demo in Scanpath, then participant <code>l37_1129</code> and trial <code>l37_1129_2_1_1_Ele_r0</code>. Start with Reset visualization, turn off Stimulus → Highlight words → Show.</li>
+<li>Turn on Heatmap. In Heatmap ▾, choose Smoothed and weight by fixation duration.</li>
 <li>Turn off Fixations and Saccades; keep Stimulus on.</li>
 </ol>
 <p><a href="https://scanpath-studio.streamlit.app">Open the demo</a> · <a href="../../guides/scanpath-visualization/controls/">All controls</a></p>
@@ -2443,7 +2443,7 @@
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele_r0<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--heatmap<span class="w"> </span>--heatmap-style<span class="w"> </span>interpolated<span class="w"> </span>--no-fixations<span class="w"> </span>--no-saccades<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--heatmap<span class="w"> </span>--heatmap-style<span class="w"> </span>smoothed<span class="w"> </span>--no-fixations<span class="w"> </span>--no-saccades<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>--highlight-column<span class="w"> </span><span class="s1">''</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>-o<span class="w"> </span>heatmap.html
 </code></pre></div>
@@ -2459,7 +2459,7 @@
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">pid</span><span class="p">,</span>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">tid</span><span class="p">,</span>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">show_heatmap</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">heatmap_style</span><span class="o">=</span><span class="s2">"Interpolated"</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">heatmap_style</span><span class="o">=</span><span class="s2">"Smoothed"</span><span class="p">,</span>
 <a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">highlight_column</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">show_fixations</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
 <a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">show_saccades</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>

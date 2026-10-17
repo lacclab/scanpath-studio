@@ -2882,7 +2882,7 @@ and narrow, sort or label the list.</p>
 <td>The dataset the page shows.</td>
 </tr>
 <tr>
-<td><strong>+</strong> → <strong>Create manually</strong></td>
+<td><strong>+</strong> → <strong>Draw a scanpath</strong></td>
 <td>Add a dataset by manual illustration: write a text and place its fixations by hand.</td>
 </tr>
 <tr>
@@ -3169,7 +3169,7 @@ own saved designs:</p>
 <tbody>
 <tr>
 <td><strong>Line</strong> → <strong>Color</strong></td>
-<td>Choose what decides the saccade color: one color for all; forward saccades and regressions in two colors; or a color per saccade type (forward, skip, refixation, return sweep, regression), with a legend. Forward / regression and by type need a word ID for each fixation, the word it landed on, mapped in your fixations table (such as EyeLink's <code>CURRENT_FIX_INTEREST_AREA_ID</code>); without one every saccade reads as <em>other</em>.</td>
+<td>Choose what decides the saccade color: one color for all; forward saccades and regressions in two colors; or a color per saccade type (forward, skip, refixation, return sweep, regression), with a legend. Forward / regression and by type need a word ID for each fixation, the word it landed on, mapped in your fixations table (such as EyeLink's <code>CURRENT_FIX_INTEREST_AREA_ID</code>); without one every saccade is drawn as <em>Off the text</em>.</td>
 </tr>
 <tr>
 <td><strong>Line</strong> → color box</td>
@@ -3234,7 +3234,7 @@ own saved designs:</p>
 </tr>
 <tr>
 <td><strong>Font</strong></td>
-<td>Choose the stimulus text font (typeface); <em>Other…</em> takes any font name.</td>
+<td>Choose the stimulus text font (typeface); <em>Other font…</em> takes any font name.</td>
 </tr>
 <tr>
 <td><strong>Color</strong> → text color</td>
@@ -3245,11 +3245,11 @@ own saved designs:</p>
 <td>Choose the plot background color: a preset, or any color in the box beside it.</td>
 </tr>
 <tr>
-<td><strong>Highlight</strong> → <strong>Show</strong></td>
+<td><strong>Highlight words</strong> → <strong>Show</strong></td>
 <td>Highlight words in the stimulus text, such as the answer span.</td>
 </tr>
 <tr>
-<td><strong>Highlight</strong> → <strong>Highlight words by</strong></td>
+<td><strong>Highlight words</strong> → word column</td>
 <td>Choose which words to highlight: a true/false word column, such as the critical span.</td>
 </tr>
 <tr>
@@ -3320,11 +3320,11 @@ own saved designs:</p>
 <tbody>
 <tr>
 <td><strong>Style</strong></td>
-<td>Choose the heatmap style: colored word boxes, or a smooth interpolated map.</td>
+<td>Choose the heatmap style: colored word boxes, or a smoothed map (a Gaussian blur of the fixations).</td>
 </tr>
 <tr>
 <td><strong>Blur</strong></td>
-<td>Set the heatmap blur: how far each fixation spreads, for the interpolated style; <strong>Auto</strong> picks it.</td>
+<td>Set the heatmap blur: how far each fixation spreads, for the smoothed style; <strong>Auto</strong> picks it.</td>
 </tr>
 <tr>
 <td><strong>Color</strong> → <strong>By</strong></td>
@@ -3340,7 +3340,7 @@ own saved designs:</p>
 </tr>
 <tr>
 <td><strong>Range</strong></td>
-<td>For word-box heatmaps, fix the color range across trials. <strong>Auto</strong> fits each trial. Interpolated heatmaps use each figure's own peak.</td>
+<td>For word-box heatmaps, fix the color range across trials. <strong>Auto</strong> fits each trial. Smoothed heatmaps use each figure's own peak.</td>
 </tr>
 <tr>
 <td><strong>Opacity</strong></td>
@@ -3398,15 +3398,15 @@ own saved designs:</p>
 </tr>
 <tr>
 <td><strong>Short</strong> / <strong>Long</strong></td>
-<td>Find short or long fixations by a duration threshold (ms): <strong>Highlight</strong> marks them, <strong>Discard</strong> hides them.</td>
+<td>Find short or long fixations by a duration threshold (ms): <strong>Highlight</strong> marks them, <strong>Hide</strong> hides their markers.</td>
 </tr>
 <tr>
-<td><strong>Out of bounds</strong></td>
-<td>Highlight or discard out-of-bounds fixations, which land in no word box.</td>
+<td><strong>Outside the text</strong></td>
+<td>Highlight or hide fixations that land in no word box.</td>
 </tr>
 <tr>
-<td><strong>Blink</strong></td>
-<td>Highlight or discard fixations at or next to a blink (needs a blink column).</td>
+<td><strong>Near a blink</strong></td>
+<td>Highlight or hide fixations at or next to a blink (needs a blink column).</td>
 </tr>
 <tr>
 <td>marker and color</td>
@@ -3479,7 +3479,7 @@ own saved designs:</p>
 </tr>
 <tr>
 <td><strong>Legends</strong> → <strong>Show</strong></td>
-<td>Show or hide each legend: Compare (A/B), Saccade types, Fixation colors, Size key or Text highlight.</td>
+<td>Show or hide each legend: Compare (A/B), Saccade types, Fixation colors, Fixation sizes or Text highlight.</td>
 </tr>
 <tr>
 <td><strong>Legends</strong> → <strong>Position</strong></td>
@@ -3635,7 +3635,7 @@ into a <strong>Scanpath A</strong> and a <strong>Scanpath B</strong> group.</p>
 </tr>
 <tr>
 <td></td>
-<td><strong>Separable layers</strong></td>
+<td><strong>Layers as separate files</strong></td>
 <td>Export each visual layer (fixations, saccades, word boxes…) as its own file, to stack in a vector editor.</td>
 </tr>
 <tr>
@@ -3660,12 +3660,12 @@ into a <strong>Scanpath A</strong> and a <strong>Scanpath B</strong> group.</p>
 </tr>
 <tr>
 <td></td>
-<td><strong>Code</strong> → <strong>Flavour</strong>, <strong>Show every option</strong></td>
+<td><strong>Code</strong> → <strong>Python</strong> / <strong>CLI</strong>, <strong>Show every option</strong></td>
 <td>Get the Python or command-line code that redraws this figure, for scripts and reproduction.</td>
 </tr>
 <tr>
 <td></td>
-<td><strong>File</strong> → <strong>Download settings</strong> / <strong>Restore settings</strong></td>
+<td><strong>Settings file</strong> → <strong>Download settings</strong> / <strong>Restore settings</strong></td>
 <td>Save the plot settings to a file, or load (restore) a saved settings file.</td>
 </tr>
 </tbody>

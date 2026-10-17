@@ -2,7 +2,7 @@
 
 Two complete readings of a shorter text, labeled Reader A and Reader B.
 
-1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_2_4_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight → Show.
+1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_2_4_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
 1. Turn on Compare. In Trial B, select participant `l7_1090`, trial `l7_1090_2_2_4_Ele_r0`.
 1. In Compare ▾, choose Overlay and set Label A / Label B to Reader A / Reader B. Leave both fixation ranges unrestricted.
 1. In Figure & canvas, choose Crop to data with a 50 px margin. Under Legends, place the comparison legend above the plot and hide the duration size key.

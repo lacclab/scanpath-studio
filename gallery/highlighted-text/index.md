@@ -3,7 +3,7 @@
 Highlight a selected text span alongside its fixations.
 
 1. Select the bundled demo, participant `l37_1129`, trial `l37_1129_2_1_1_Ele_r0`. Reset visualization.
-1. In Stimulus → Highlight, turn on Show and choose `is_in_aspan` as the word column.
+1. In Stimulus → Highlight words, turn on Show and choose `is_in_aspan` as the word column.
 1. Turn off Saccades. The orange words mark the trial’s answer span.
 
 [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)

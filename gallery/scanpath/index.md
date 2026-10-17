@@ -2,7 +2,7 @@
 
 Fixations and saccades over the text.
 
-1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight → Show.
+1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
 1. Keep the Scanpath design preset, with Fixations, Saccades and Stimulus on.
 1. Use Export → Current figure to save it.
 

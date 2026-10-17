@@ -1,6 +1,6 @@
 # About Scanpath Studio
 
-**Scanpath Studio v0.39.0** — interactive visualization of eye movements in reading.
+**Scanpath Studio v0.39.1** — interactive visualization of eye movements in reading.
 
 Developed by [Omer Shubi](https://omershubi.github.io/), [Keren Gruteke Klein](https://kerengruteke.github.io/), [Maya Grossman](https://www.linkedin.com/in/maya-harram-32b547292/), [Ella Lion](https://ella-lion.github.io/), [Deborah N. Jakobi](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/jakobi.html), [David R. Reich](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/reich.html), [Lena Jäger](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/group-leader/jaeger.html), and [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/), at the Technion and the University of Zurich.
 
@@ -24,14 +24,14 @@ Show BibTeX and APA
              Berzak, Yevgeni},
   title   = {{Scanpath Studio}},
   year    = {2026},
-  version = {0.39.0},
+  version = {0.39.1},
   doi     = {10.5281/zenodo.22933884},
   url     = {https://doi.org/10.5281/zenodo.22933884},
   license = {MIT},
 }
 ```
 
-Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.39.0) [Computer software]. https://doi.org/10.5281/zenodo.22933884
+Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.39.1) [Computer software]. https://doi.org/10.5281/zenodo.22933884
 
 If you use the bundled demo, also cite [OneStop Eye Movements](https://doi.org/10.1038/s41597-025-06272-2). [Full citation details](https://lacclab.github.io/scanpath-studio/cite/index.md).
 

@@ -172,6 +172,7 @@ The **Stimulus** switch draws the text and the stimulus image; its **▾** holds
 | Control | What it does |
 | --- | --- |
 | **Text** → **Show** | Show the stimulus text, the words the participant read, at their place on the screen. |
+| **Text** → **Redact** | Draw a rounded block over each word's letters instead of the word, in the text color, and hide the word in the hovers, so a figure shows where the text was without showing what it said. |
 | **Fit** → **Fit to word boxes** | Size the stimulus text to fill its word boxes, instead of a fixed font size. |
 | **Spacing** | Set the stimulus text line spacing: how far apart the lines are, in font sizes. |
 | **Size** | Set the stimulus text font size, in px or pt. |

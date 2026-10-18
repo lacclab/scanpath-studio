@@ -1434,6 +1434,7 @@ _CLI_EMITTERS: dict[str, Any] = {
     "order_font_size": _int_valued("--order-font-size"),
     "order_font_color": _valued("--order-font-color"),
     "text_color": _valued("--text-color"),
+    "redact_text": _flag_when("--redact-text", True),
     "highlight_text_color": _valued("--highlight-text-color"),
     "span_border_color": _valued("--span-border-color"),
     "background_color": _valued("--background-color"),

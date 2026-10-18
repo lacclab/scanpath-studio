@@ -457,6 +457,7 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "preproc_blink_adjacent": "global_preproc_blink_adjacent",
     "show_words": "global_show_words",
     "show_labels": "global_show_labels",
+    "redact_text": "global_redact_text",
     # The 📄 Stimulus section's master switch (default on, so always
     # emitted — a link/config without it restores as "on").
     "show_stimulus": "global_show_stimulus",
@@ -2930,6 +2931,11 @@ def _restore_plot_config(
     tc = text.get("text_color")
     if isinstance(tc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", tc):
         put("global_text_color", tc)
+    # A file saved without the switch shows the words: it never redacted them.
+    if "redact_text" in text:
+        put("global_redact_text", bool(text["redact_text"]))
+    elif has_valid_plot_section:
+        put("global_redact_text", False)
     word_hover_fields = text.get(
         "word_hover_fields",
         ["text", "word_id", "line_idx", "total_fixation_duration_ms"]

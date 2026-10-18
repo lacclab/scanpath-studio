@@ -1224,6 +1224,13 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Reading-text color (default: #000000).",
     )
     viz.add_argument(
+        "--redact-text",
+        action="store_true",
+        help="Draw a rounded block over each word's letters instead of the "
+        "word, in the text color, and hide the word in the hovers: the figure "
+        "keeps the text's layout, not its words.",
+    )
+    viz.add_argument(
         "--highlight-text-color",
         metavar="COLOR",
         help="Color of the --highlight-column words under --critical-span-style "
@@ -1858,6 +1865,7 @@ _NONE_WHEN_EMPTY = frozenset(
 #: flipped, so a bare `render` keeps handing the builder its own defaults.
 _SWITCH_OPTION_FLAGS = {
     "hollow_fixations": True,
+    "redact_text": True,
     "color_by_line": True,
     "show_fixation_colorbar": False,
     "show_heatmap_colorbar": False,

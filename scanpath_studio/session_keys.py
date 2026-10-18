@@ -47,6 +47,8 @@ GLOBAL_WORD_BOX_LINE_OPACITY = "global_word_box_line_opacity"
 GLOBAL_WORD_BOX_FILL_COLOR = "global_word_box_fill_color"
 GLOBAL_WORD_BOX_FILL_OPACITY = "global_word_box_fill_opacity"
 GLOBAL_SHOW_LABELS = "global_show_labels"
+# 📄 Stimulus → Text → Redact: a block over each word instead of the word.
+GLOBAL_REDACT_TEXT = "global_redact_text"
 # The 📄 Stimulus section's master switch.
 GLOBAL_SHOW_STIMULUS = "global_show_stimulus"
 GLOBAL_SHOW_FIX = "global_show_fix"
@@ -528,6 +530,7 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         **DESIGN_TOGGLE_PARAMS,
         "show_words": GLOBAL_SHOW_WORDS,
         "show_labels": GLOBAL_SHOW_LABELS,
+        "redact_text": GLOBAL_REDACT_TEXT,
         "show_stimulus": GLOBAL_SHOW_STIMULUS,
         "show_fixations": GLOBAL_SHOW_FIX,
         "show_order": GLOBAL_SHOW_ORDER,
@@ -1143,6 +1146,7 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_LINE_SPACING,
         GLOBAL_FONT_FAMILY,
         GLOBAL_TEXT_COLOR,
+        GLOBAL_REDACT_TEXT,
         GLOBAL_WORD_HOVER_FIELDS,
         GLOBAL_FIXATION_HOVER_FIELDS,
         # highlighting

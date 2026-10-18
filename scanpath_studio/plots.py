@@ -213,6 +213,10 @@ class FigureSettings:
     fixation_symbol: str = DEFAULT_FIXATION_SYMBOL
     text_color: str = WORD_LABEL_COLOR
     highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR
+    #: Draw each word as a rounded block over its letters instead of the word,
+    #: and mask its text in every hover (`redact_word_text`), so the figure
+    #: carries the layout of the text but none of its words.
+    redact_text: bool = False
     background_color: str | None = None
     color_by_line: bool = False
     fixation_flags: dict | None = None
@@ -539,6 +543,39 @@ def _finite_for_plotting(
         if column in drop_on:
             drop |= mask
     return out[~drop] if drop.any() else out
+
+
+#: What a redacted letter becomes: a block, or the full-width placeholder for a
+#: full-width (CJK) letter, so the masked text keeps each word's length and the
+#: letter widths the font fit reads (`_latin_advance`, `_width_fit_font`).
+_REDACTED_CHAR = "█"
+_REDACTED_FULLWIDTH_CHAR = "〓"
+
+
+def redact_word_text(words: pd.DataFrame | None) -> pd.DataFrame | None:
+    """``words`` with every letter of its ``text`` masked, for ``redact_text``.
+
+    Masked at the builders' door, so no layer of the figure — the labels, the
+    word and fixation hovers, the HTML a figure is saved as — carries a word.
+    The direction each word was written in is kept as ``right_to_left``, which
+    the masked text no longer shows."""
+    if words is None or words.empty or "text" not in words.columns:
+        return words
+    from .preprocessing import detect_right_to_left
+
+    out = words.copy()
+    present = words["text"].notna()
+    text = words["text"].where(present, "").astype(str)
+    if "right_to_left" not in out.columns:
+        out["right_to_left"] = text.map(detect_right_to_left)
+    masked = text.map(
+        lambda word: "".join(
+            _REDACTED_FULLWIDTH_CHAR if _is_fullwidth(ch) else _REDACTED_CHAR
+            for ch in word
+        )
+    )
+    out["text"] = masked.where(present, words["text"])
+    return out
 
 
 def _compute_axis_ranges(
@@ -3275,6 +3312,87 @@ def _place_highlight_key(
     )
 
 
+#: A redaction block's height, in ems of the label font: about a letter's
+#: ascender-to-baseline, so a block covers where the word was drawn without
+#: touching the line above or below.
+_REDACTION_BLOCK_EM = 0.7
+#: The blocks' corner radius, as a share of the block's height (capped at half
+#: its width, so a one-letter word stays a rounded block).
+_REDACTION_CORNER_SHARE = 0.35
+#: Points along each rounded corner's quarter circle.
+_REDACTION_CORNER_STEPS = 6
+
+
+def _add_redaction_blocks(
+    fig: go.Figure,
+    words: pd.DataFrame,
+    centre_x: np.ndarray,
+    centre_y: np.ndarray,
+    *,
+    block_height: float,
+    color: str | Sequence[str],
+    row: int | None = None,
+    col: int | None = None,
+) -> None:
+    """A solid, round-cornered block over each word's letters, where its
+    label would be.
+
+    As wide as the word's glyph run (`measures.word_glyph_span`) — not its
+    interest area, which on a tiling corpus carries the space after it — and
+    centred where the label is centred, so the blocks keep the gaps between
+    words. One filled trace per colour (a highlighted span is its own), each
+    block a closed outline between ``None`` separators. The plot's equal
+    aspect keeps the corners' arcs, drawn in data units, circular."""
+    from .measures import word_glyph_span
+
+    _, run = word_glyph_span(words)
+    half_w = run / 2.0
+    half_h = block_height / 2.0
+    colors = (
+        np.asarray(color, dtype=object)
+        if not isinstance(color, str)
+        else np.full(len(words), color, dtype=object)
+    )
+    ok = np.isfinite(centre_x) & np.isfinite(centre_y) & np.isfinite(run) & (run > 0)
+    # Each corner's quarter circle, counter-clockwise from the (+x, +y) one;
+    # `side_x` / `side_y` say which way each corner's centre sits from the
+    # block's middle.
+    arc = np.linspace(0.0, np.pi / 2.0, _REDACTION_CORNER_STEPS)
+    theta = np.concatenate([quarter * np.pi / 2.0 + arc for quarter in range(4)])
+    side_x = np.repeat([1.0, -1.0, -1.0, 1.0], _REDACTION_CORNER_STEPS)
+    side_y = np.repeat([1.0, 1.0, -1.0, -1.0], _REDACTION_CORNER_STEPS)
+    for fill in pd.unique(colors[ok]):
+        pick = ok & (colors == fill)
+        w = half_w[pick][:, None]
+        radius = np.minimum(
+            np.minimum(_REDACTION_CORNER_SHARE * block_height, w), half_h
+        )
+        xs = centre_x[pick][:, None] + side_x * (w - radius) + radius * np.cos(theta)
+        ys = (
+            centre_y[pick][:, None]
+            + side_y * (half_h - radius)
+            + radius * np.sin(theta)
+        )
+        gap = np.full((pick.sum(), 1), None, dtype=object)
+        xs = np.hstack([xs.astype(object), xs[:, :1], gap]).ravel()
+        ys = np.hstack([ys.astype(object), ys[:, :1], gap]).ravel()
+        trace = go.Scatter(
+            x=xs,
+            y=ys,
+            mode="lines",
+            fill="toself",
+            fillcolor=fill,
+            line=dict(width=0, color=fill),
+            hoverinfo="skip",
+            showlegend=False,
+            name="words",
+        )
+        if row is not None and col is not None:
+            fig.add_trace(trace, row=row, col=col)
+        else:
+            fig.add_trace(trace)
+
+
 def _add_word_label_trace(
     fig: go.Figure,
     words: pd.DataFrame,
@@ -3287,7 +3405,16 @@ def _add_word_label_trace(
     highlight_text_color: str = _CRITICAL_TEXT_COLOR,
     word_hover_measure: str | None = None,
     word_hover_fields: Sequence[str] | None = None,
+    redact: bool = False,
+    px_per_unit: float = 1.0,
 ) -> None:
+    """The reading text: each word centred in its box, with the word hover.
+
+    ``redact`` draws a solid block over each word's letters instead
+    (`_add_redaction_blocks`; the caller has masked the text with
+    `redact_word_text`), and the hover rides on invisible markers.
+    ``base_font_size`` is in screen px, ``px_per_unit`` screen px per data
+    unit."""
     if words.empty or "text" not in words.columns:
         return
     customdata = None
@@ -3356,17 +3483,38 @@ def _add_word_label_trace(
         f"\u2067{_plotly_literal(value)}\u2069" if is_rtl else _plotly_literal(value)
         for value, is_rtl in zip(words["text"].astype(str), rtl)
     ]
+    label_y = words["y"] + words["height"] / 2
+    if redact:
+        _add_redaction_blocks(
+            fig,
+            words,
+            label_x,
+            label_y.to_numpy(dtype=float),
+            block_height=_REDACTION_BLOCK_EM * base_font_size / (px_per_unit or 1.0),
+            color=label_color,
+            row=row,
+            col=col,
+        )
+        # The hover stays on each word's middle, on a marker nobody sees.
+        drawn = dict(
+            mode="markers",
+            marker=dict(size=max(float(base_font_size), 4.0), opacity=0),
+        )
+    else:
+        drawn = dict(
+            mode="text",
+            textposition="middle center",
+            textfont=dict(color=label_color, size=base_font_size, family=font_family),
+        )
     trace = go.Scatter(
         x=label_x,
-        y=words["y"] + words["height"] / 2,
+        y=label_y,
         text=label_text,
-        mode="text",
-        textposition="middle center",
         showlegend=False,
-        textfont=dict(color=label_color, size=base_font_size, family=font_family),
         hovertemplate=hover,
         customdata=customdata,
         name="words",
+        **drawn,
     )
     if row is not None and col is not None:
         fig.add_trace(trace, row=row, col=col)
@@ -4208,6 +4356,8 @@ def _render_scanpath_figure(
                 highlight_text_color=highlight_text_color,
                 word_hover_measure=word_hover_measure,
                 word_hover_fields=word_hover_fields,
+                redact=settings.redact_text,
+                px_per_unit=scale,
             )
 
     if _add_raw_gaze_layer(
@@ -6256,6 +6406,8 @@ def _render_scanpath_animation(
             highlight_text_color=highlight_text_color,
             word_hover_measure=word_hover_measure,
             word_hover_fields=word_hover_fields,
+            redact=settings.redact_text,
+            px_per_unit=scale,
         )
 
     # Fixation flags, mirroring the static figure: *Hide* drops
@@ -8210,6 +8362,8 @@ def _make_split_comparison_figure(
                 highlight_text_color=highlight_text_color,
                 word_hover_measure=word_hover_measure,
                 word_hover_fields=word_hover_fields,
+                redact=settings.redact_text,
+                px_per_unit=panel_scale,
             )
 
         xaxis_key = "xaxis" if idx == 0 else f"xaxis{idx + 1}"
@@ -8622,6 +8776,8 @@ def _render_comparison_figure(
                 highlight_text_color=highlight_text_color,
                 word_hover_measure=word_hover_measure,
                 word_hover_fields=word_hover_fields,
+                redact=settings.redact_text,
+                px_per_unit=overlay_scale,
             )
 
     _add_category_legend(fig, category_legend, category_label or "")
@@ -9849,6 +10005,8 @@ def make_scanpath_figure(
     resolved = _with_stimulus_pages(resolved, (words, fixations))
     fields_xy = (resolved.x_field, resolved.y_field)
     words = _finite_for_plotting(words, drop_on=_WORD_BOX_COLUMNS)
+    if resolved.redact_text:
+        words = redact_word_text(words)
     fixations = _finite_for_plotting(fixations, fields_xy)
     raw_gaze = _finite_for_plotting(raw_gaze)
     with _labelled_columns(resolved.column_labels):
@@ -9928,6 +10086,8 @@ def build_scanpath_replay(
     )
     words = _finite_for_plotting(words, drop_on=_WORD_BOX_COLUMNS)
     words_b = _finite_for_plotting(words_b, drop_on=_WORD_BOX_COLUMNS)
+    if resolved.redact_text:
+        words, words_b = redact_word_text(words), redact_word_text(words_b)
     fixations = _finite_for_plotting(fixations)
     fixations_b = _finite_for_plotting(fixations_b)
     with _labelled_columns(resolved.column_labels):
@@ -10055,6 +10215,8 @@ def make_comparison_figure(
                 resolved, page(trial_b if resolved.compare_stimulus == "b" else trial_a)
             )
     words = _finite_for_plotting(words, drop_on=_WORD_BOX_COLUMNS)
+    if resolved.redact_text:
+        words = redact_word_text(words)
     fixations = _finite_for_plotting(fixations)
     raw_gaze = _finite_for_plotting(raw_gaze)
     with _labelled_columns(resolved.column_labels):

@@ -548,6 +548,7 @@ def _restore_config_app():
             "line_spacing": 3.0,
             "font_family": "Arial",
             "text_color": "#010203",
+            "redact_text": True,
         },
         "highlighting": {
             "critical_span_style": "Mark text",

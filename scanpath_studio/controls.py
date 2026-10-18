@@ -728,6 +728,7 @@ _VIZ_WIDGET_DEFAULTS = {
     # analytical overlays, off by default and one click (or one design preset) away.
     "global_show_words": False,
     "global_show_labels": True,
+    "global_redact_text": False,
     # The 📄 Stimulus section's own master switch — on by default, so a fresh
     # session shows the reading text (the image layer is off by default).
     "global_show_stimulus": True,
@@ -6112,6 +6113,7 @@ def _collect_viz_settings(
         fix_index_range=fix_index_range,
         highlight_text_color=ss.get("global_highlight_text_color"),
         text_color=ss.get("global_text_color", WORD_LABEL_COLOR),
+        redact_text=bool(ss.get("global_redact_text")),
         color_by_line=color_by == "line",
         # Fixation classification + compare-overlay legend.
         fixation_flags=_collect_fixation_flags(),
@@ -7620,13 +7622,22 @@ def render_plot_controls(
                 f"{ICONS['warning']} **{ICONS['stimulus']} Stimulus** is off, so "
                 "nothing below shows in the plot. Your settings are kept."
             )
-        show_labels, _ = _check_row(
+        show_labels, text_rest = _check_row(
             "Text",
             key="global_show_labels",
             persist_state="session",
             help="Draw the reading text. Font and size start from the dataset's "
             "Recording setup (Data page); changes here apply to this figure "
             "only.",
+        )
+        text_rest.checkbox(
+            "Redact",
+            key="global_redact_text",
+            persist_state="session",
+            disabled=not show_labels,
+            help="A rounded block over each word's letters instead of the word, "
+            "and the word masked in the hovers: the figure keeps the layout of "
+            "the text but none of its words.",
         )
         # The typography that draws this text lives beside the layer
         # that draws it. Reserved here and filled by the single

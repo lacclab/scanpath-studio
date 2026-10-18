@@ -1986,6 +1986,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         highlight_text_color=viz_settings.get(
             "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
         ),
+        redact_text=viz_settings.get("redact_text", False),
         color_by_line=viz_settings.get("color_by_line", False),
         fixation_flags=viz_settings.get("fixation_flags"),
         span_border_color=viz_settings.get("span_border_color", "#000000"),
@@ -10518,6 +10519,7 @@ def render_per_text_tab(
                 "heatmap_colorscale", DEFAULT_HEATMAP_COLORSCALE
             ),
             text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
+            redact_text=viz_settings.get("redact_text", False),
             background_color=viz_settings.get("background_color"),
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,

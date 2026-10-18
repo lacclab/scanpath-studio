@@ -85,6 +85,15 @@ When you run it locally or as the desktop app, nowhere: it stays on your
 computer. There are no accounts and no analytics. Don't upload identifiable
 data to the online demo. See [Privacy](privacy.md).
 
+### Can I share a figure without showing the text?
+
+Yes. Turn on **Stimulus → Text → Redact**: each word becomes a rounded block
+over its letters, so the figure keeps the layout of the text but none of its
+words, and the hovers and saved HTML hide them too. Turn off the stimulus
+image as well, since it shows the screen as it was. On the command line it is
+`render --redact-text`, and in Python `redact_text=True`. The data tables and
+exports still hold the words.
+
 ### Will a refresh lose my work?
 
 Not on a local or desktop install: the app saves your datasets and

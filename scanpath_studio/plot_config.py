@@ -333,6 +333,7 @@ def build_plot_config(
             ),
             "font_family": font_family,
             "text_color": figure_settings.get("text_color", WORD_LABEL_COLOR),
+            "redact_text": bool(figure_settings.get("redact_text", False)),
             "word_hover_fields": list(viz_settings.get("word_hover_fields") or []),
             "fixation_hover_fields": list(
                 viz_settings.get("fixation_hover_fields") or []

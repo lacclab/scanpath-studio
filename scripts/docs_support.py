@@ -328,6 +328,7 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
     "Text and stimulus": (
         "show_word_labels",
         "text_color",
+        "redact_text",
         "line_spacing",
         "scale_text_to_boxes",
         "highlight_column",

@@ -75,3 +75,24 @@ def test_schematic_is_two_lines_and_its_saccades_fit_the_canvas():
     assert x.max() <= max(figure.layout.xaxis.range)
     assert y.min() >= min(figure.layout.yaxis.range)
     assert y.max() <= max(figure.layout.yaxis.range)
+
+
+def test_redacted_example_draws_blocks_and_no_words():
+    example = gallery._build("redacted-text")
+    figure = example["fig"]
+    assert any(t.name == "words" and t.fill == "toself" for t in figure.data)
+    words = example["words"]
+    trial = words[words["unique_trial_id"] == example["tid"]]
+    long_words = {w for w in trial["IA_LABEL"].astype(str) if len(w) >= 8}
+    assert long_words
+    payload = figure.to_json()
+    assert not [word for word in long_words if word in payload]
+
+
+def test_annotated_example_carries_title_caption_and_both_legends():
+    figure = gallery._build("title-caption-legend")["fig"]
+    notes = " ".join(str(note.text) for note in figure.layout.annotations or ())
+    assert figure.layout.title.text == "One reader, one article"
+    assert "Marker size: fixation duration" in notes
+    assert "ms" in notes  # the fixation-size key
+    assert any(t.showlegend and t.name == "Forward" for t in figure.data)

@@ -214,6 +214,39 @@ def _highlighted_text() -> dict:
     return locals()
 
 
+def _redacted_text() -> dict:
+    words, fixations = sps.load_sample_data()
+    pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+    fig = sps.plot_scanpath(
+        words, fixations, pid, tid, highlight_column=None, redact_text=True
+    )
+    return locals()
+
+
+def _title_caption_legend() -> dict:
+    words, fixations = sps.load_sample_data()
+    pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+    fig = sps.plot_scanpath(
+        words,
+        fixations,
+        pid,
+        tid,
+        highlight_column=None,
+        saccade_color_mode="By type",
+        title="One reader, one article",
+        title_font_size=34,
+        caption="Marker size: fixation duration. Line color: saccade type.",
+        caption_font_size=20,
+        legend_layout={
+            "saccades": {"position": "right-outside", "size": 18},
+            "size_key": {"position": "bottom-right-outside", "size": 18},
+        },
+        fit_to_monitor=False,
+        crop_margin=60,
+    )
+    return locals()
+
+
 def _across_experiment() -> dict:
     from scanpath_studio.aggregation import metric_by_trial_index
     from scanpath_studio.data import derive_trial_index
@@ -294,6 +327,18 @@ EXAMPLES = (
         "Highlighted text",
         "Mark a selected text span alongside its fixations.",
         _highlighted_text,
+    ),
+    Example(
+        "redacted-text",
+        "Redacted text",
+        "A block over each word’s letters: the layout of the text, none of its words.",
+        _redacted_text,
+    ),
+    Example(
+        "title-caption-legend",
+        "Title, caption & legend",
+        "A titled, captioned figure with its legends placed around the plot.",
+        _title_caption_legend,
     ),
     Example(
         "across-experiment",

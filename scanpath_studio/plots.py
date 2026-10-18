@@ -213,7 +213,7 @@ class FigureSettings:
     fixation_symbol: str = DEFAULT_FIXATION_SYMBOL
     text_color: str = WORD_LABEL_COLOR
     highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR
-    #: Draw each word as a solid block over its letters instead of the word,
+    #: Draw each word as a rounded block over its letters instead of the word,
     #: and mask its text in every hover (`redact_word_text`), so the figure
     #: carries the layout of the text but none of its words.
     redact_text: bool = False

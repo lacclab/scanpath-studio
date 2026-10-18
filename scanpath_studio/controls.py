@@ -7635,7 +7635,7 @@ def render_plot_controls(
             key="global_redact_text",
             persist_state="session",
             disabled=not show_labels,
-            help="A solid block over each word's letters instead of the word, "
+            help="A rounded block over each word's letters instead of the word, "
             "and the word masked in the hovers: the figure keeps the layout of "
             "the text but none of its words.",
         )

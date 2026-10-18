@@ -45,7 +45,7 @@ Each layer is one line: a switch, and a **▾** with its settings.
 | Palette | one color scheme for the whole figure, such as colorblind-safe or print |
 | :material/blur_on: Fixations | markers: size, color, order |
 | :material/arrow_outward: Saccades | lines and arrows, colored by direction or reading type |
-| :material/article: Stimulus | text, span highlight, stimulus image, font and background |
+| :material/article: Stimulus | text (or redacted blocks), span highlight, stimulus image, font and background |
 | :material/crop_square: Word boxes | each word's interest area: outline and fill, color and opacity |
 | :material/local_fire_department: Heatmap | where fixations concentrate, by count or duration |
 | :material/grain: Raw gaze | the gaze samples as recorded |

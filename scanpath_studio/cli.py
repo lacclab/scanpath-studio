@@ -1226,9 +1226,9 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--redact-text",
         action="store_true",
-        help="Draw a solid block over each word's letters instead of the word, "
-        "and mask it in the hovers: the figure keeps the text's layout, not its "
-        "words.",
+        help="Draw a rounded block over each word's letters instead of the "
+        "word, in the text color, and hide the word in the hovers: the figure "
+        "keeps the text's layout, not its words.",
     )
     viz.add_argument(
         "--highlight-text-color",

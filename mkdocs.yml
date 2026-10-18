@@ -168,6 +168,8 @@ nav:
       - Raw gaze: gallery/raw-gaze.md
       - Replay: gallery/replay.md
       - Highlighted text: gallery/highlighted-text.md
+      - Redacted text: gallery/redacted-text.md
+      - Title, caption & legend: gallery/title-caption-legend.md
       - Across the experiment: gallery/across-experiment.md
   - Reference:
       - Python API: api.md

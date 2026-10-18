@@ -3316,6 +3316,11 @@ def _place_highlight_key(
 #: ascender-to-baseline, so a block covers where the word was drawn without
 #: touching the line above or below.
 _REDACTION_BLOCK_EM = 0.7
+#: The blocks' corner radius, as a share of the block's height (capped at half
+#: its width, so a one-letter word stays a rounded block).
+_REDACTION_CORNER_SHARE = 0.35
+#: Points along each rounded corner's quarter circle.
+_REDACTION_CORNER_STEPS = 6
 
 
 def _add_redaction_blocks(
@@ -3329,13 +3334,15 @@ def _add_redaction_blocks(
     row: int | None = None,
     col: int | None = None,
 ) -> None:
-    """A solid block over each word's letters, where its label would be.
+    """A solid, round-cornered block over each word's letters, where its
+    label would be.
 
     As wide as the word's glyph run (`measures.word_glyph_span`) — not its
     interest area, which on a tiling corpus carries the space after it — and
     centred where the label is centred, so the blocks keep the gaps between
     words. One filled trace per colour (a highlighted span is its own), each
-    block a closed outline between ``None`` separators."""
+    block a closed outline between ``None`` separators. The plot's equal
+    aspect keeps the corners' arcs, drawn in data units, circular."""
     from .measures import word_glyph_span
 
     _, run = word_glyph_span(words)
@@ -3347,13 +3354,28 @@ def _add_redaction_blocks(
         else np.full(len(words), color, dtype=object)
     )
     ok = np.isfinite(centre_x) & np.isfinite(centre_y) & np.isfinite(run) & (run > 0)
+    # Each corner's quarter circle, counter-clockwise from the (+x, +y) one;
+    # `side_x` / `side_y` say which way each corner's centre sits from the
+    # block's middle.
+    arc = np.linspace(0.0, np.pi / 2.0, _REDACTION_CORNER_STEPS)
+    theta = np.concatenate([quarter * np.pi / 2.0 + arc for quarter in range(4)])
+    side_x = np.repeat([1.0, -1.0, -1.0, 1.0], _REDACTION_CORNER_STEPS)
+    side_y = np.repeat([1.0, 1.0, -1.0, -1.0], _REDACTION_CORNER_STEPS)
     for fill in pd.unique(colors[ok]):
         pick = ok & (colors == fill)
-        x0, x1 = centre_x[pick] - half_w[pick], centre_x[pick] + half_w[pick]
-        y0, y1 = centre_y[pick] - half_h, centre_y[pick] + half_h
-        gap = np.full(pick.sum(), None, dtype=object)
-        xs = np.column_stack([x0, x1, x1, x0, x0, gap]).ravel()
-        ys = np.column_stack([y0, y0, y1, y1, y0, gap]).ravel()
+        w = half_w[pick][:, None]
+        radius = np.minimum(
+            np.minimum(_REDACTION_CORNER_SHARE * block_height, w), half_h
+        )
+        xs = centre_x[pick][:, None] + side_x * (w - radius) + radius * np.cos(theta)
+        ys = (
+            centre_y[pick][:, None]
+            + side_y * (half_h - radius)
+            + radius * np.sin(theta)
+        )
+        gap = np.full((pick.sum(), 1), None, dtype=object)
+        xs = np.hstack([xs.astype(object), xs[:, :1], gap]).ravel()
+        ys = np.hstack([ys.astype(object), ys[:, :1], gap]).ravel()
         trace = go.Scatter(
             x=xs,
             y=ys,

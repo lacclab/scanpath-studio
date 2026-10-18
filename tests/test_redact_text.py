@@ -40,6 +40,19 @@ def _leaks(fig) -> list[str]:
     return [word for word in SECRET if word in payload]
 
 
+def _extents(trace) -> list[tuple[float, float, float, float]]:
+    """``(x0, x1, y0, y1)`` of each block in a block trace."""
+    out, xs, ys = [], [], []
+    for x, y in zip(trace.x, trace.y, strict=True):
+        if x is None:
+            out.append((min(xs), max(xs), min(ys), max(ys)))
+            xs, ys = [], []
+        else:
+            xs.append(float(x))
+            ys.append(float(y))
+    return out
+
+
 def _blocks(fig) -> list:
     return [t for t in fig.data if t.name == "words" and t.fill == "toself"]
 
@@ -73,10 +86,11 @@ def test_static_figure_draws_blocks_and_no_words(words, fixations):
     assert _leaks(fig) == []
     blocks = _blocks(fig)
     assert len(blocks) == 1
-    xs = np.array([v for v in blocks[0].x if v is not None], dtype=float)
-    widths = xs.reshape(-1, 5)[:, 1] - xs.reshape(-1, 5)[:, 0]
     _, run = word_glyph_span(words)
-    assert np.allclose(widths, run)
+    assert np.allclose([x1 - x0 for x0, x1, _, _ in _extents(blocks[0])], run)
+    # 0.7 em of the label font tall, whatever the word's width.
+    heights = {round(y1 - y0, 6) for _, _, y0, y1 in _extents(blocks[0])}
+    assert len(heights) == 1
     # The hover marker stays, on each word, invisible.
     hover = next(t for t in fig.data if t.name == "words" and t.mode == "markers")
     assert hover.marker.opacity == 0

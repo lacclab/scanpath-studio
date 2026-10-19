@@ -166,6 +166,52 @@ def test_round_trip_datasets_settings_mappings_and_annotations(tmp_path):
     assert restored["trial_annotations"][("p1", "t1")]["note"] == "check"
 
 
+class TestADatasetWithoutRawGaze:
+    """A dataset with no raw gaze stores no raw-gaze file, and restores with
+    the empty frame it had — from this cache and from one that still holds the
+    empty file an earlier save wrote."""
+
+    def test_no_raw_gaze_file_is_written(self, tmp_path):
+        assert save_state({"_datasets": {"Corpus": _dataset()}}, tmp_path)
+        entry = _manifest(tmp_path)["datasets"]["Corpus"]
+        assert set(entry["frames"]) == {"words", "fixations"}
+        assert entry["rows"] == {"words": 1, "fixations": 1, "raw_gaze": 0}
+        assert not list((tmp_path / "datasets").glob("*raw_gaze*"))
+
+        restored = {}
+        assert restore_state(restored, tmp_path)
+        gaze = restored["_datasets"]["Corpus"]["raw_gaze"]
+        assert isinstance(gaze, pd.DataFrame) and gaze.empty
+        assert cache_status(tmp_path)["datasets"][0]["rows"]["raw_gaze"] == 0
+
+    def test_raw_gaze_with_rows_is_still_written(self, tmp_path):
+        dataset = {**_dataset(), "raw_gaze": pd.DataFrame({"x": [1.0], "y": [2.0]})}
+        assert save_state({"_datasets": {"Corpus": dataset}}, tmp_path)
+        assert _frame_files(tmp_path, "Corpus")["raw_gaze"].is_file()
+        restored = {}
+        assert restore_state(restored, tmp_path)
+        pd.testing.assert_frame_equal(
+            restored["_datasets"]["Corpus"]["raw_gaze"], dataset["raw_gaze"]
+        )
+
+    def test_an_older_cache_with_the_empty_file_still_restores(self, tmp_path):
+        assert save_state({"_datasets": {"Corpus": _dataset()}}, tmp_path)
+        manifest = _manifest(tmp_path)
+        legacy = "datasets/0123456789abcdef-raw_gaze.parquet"
+        pd.DataFrame().to_parquet(tmp_path / legacy)
+        manifest["datasets"]["Corpus"]["frames"]["raw_gaze"] = legacy
+        (tmp_path / "manifest.json").write_text(json.dumps(manifest), "utf-8")
+
+        restored = {}
+        assert restore_state(restored, tmp_path)
+        assert restored["_datasets"]["Corpus"]["raw_gaze"].empty
+        assert not persistence.failed_datasets(restored)
+        # The next save reuses the entry it restored, the old file with it.
+        restored["global_show_heatmap"] = True
+        assert save_state(restored, tmp_path)
+        assert _frame_files(tmp_path, "Corpus")["raw_gaze"].is_file()
+
+
 class TestAnnotationsModuleImport:
     """`scanpath_studio/__init__.py` has `from __future__ import annotations`,
     so until the submodule is imported the package attribute `annotations` is
@@ -727,7 +773,8 @@ def test_the_save_after_a_rename_does_not_rewrite_the_frames(tmp_path):
 
     assert save_state(session, tmp_path)
     assert frame_path.stat().st_mtime_ns == before
-    assert len(list((tmp_path / "datasets").glob("*.parquet"))) == 3
+    # Words and fixations; the dataset has no raw gaze, so no file for it.
+    assert len(list((tmp_path / "datasets").glob("*.parquet"))) == 2
 
 
 def test_rename_without_a_cache_on_disk_is_a_no_op_not_an_error(tmp_path):
@@ -1546,7 +1593,7 @@ class TestEachCachedDatasetRestoresOnItsOwn:
         assert set(datasets) == {"good", "damaged"}
         assert datasets["damaged"] == before  # verbatim
         others = self._files(cache, "damaged")
-        assert others["fixations"].is_file() and others["raw_gaze"].is_file()
+        assert others["fixations"].is_file()
         assert all(path.is_file() for path in self._files(cache, "good").values())
         assert not words.exists()  # nothing invented, either
 

@@ -68,6 +68,7 @@ from .constants import (
     _VIEW_SCANPATH,
     CITATION,
     ICONS,
+    STREAMLIT_PRIVACY_URL,
     SUBTAB_ANNOTATIONS,
     SUBTAB_COMPARISONS,
     SUBTAB_EXPORT,
@@ -2138,12 +2139,13 @@ def _where_data_goes() -> str:
         )
         return (
             "To the server this app runs on, not your computer. A file you "
-            f"upload is processed there and {kept}. The app has no accounts, "
-            "database or analytics, but don't upload identifiable data to a "
-            "server you don't control. To keep your data on your computer, run "
+            f"upload is processed there and {kept}. The app itself has no "
+            "accounts, database or analytics. The online demo runs on Streamlit "
+            "Community Cloud, whose page around the app has its own analytics "
+            f"([privacy policy]({STREAMLIT_PRIVACY_URL}) ↗). To keep your data "
+            "on your computer, run "
             "the app locally (`pip install scanpath-studio`, then "
-            "`scanpath-studio`). A bare `streamlit run` also needs "
-            "`--server.address=127.0.0.1`."
+            "`scanpath-studio`)."
         )
     answer = (
         "Nowhere. It stays on your computer, and the app has no accounts, "

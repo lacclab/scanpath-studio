@@ -637,6 +637,46 @@ class TestFaq:
         assert local.startswith("Nowhere")
         assert "recovery copy" in local and "server" not in local
 
+    def test_about_says_where_data_goes_for_this_run(self):
+        """About's privacy line is the short form of this answer, decided by
+        the same tests, and points to it."""
+        from scanpath_studio.app import _about_privacy_line
+
+        local = _about_privacy_line(local=True, saving=True)
+        assert "It stays on this computer." in local and "saved here" in local
+        assert "server" not in local
+        assert "saved" not in _about_privacy_line(local=True, saving=False)
+
+        hosted = _about_privacy_line(local=False, saving=False)
+        assert "stays on this computer" not in hosted
+        assert "Streamlit Community Cloud" in hosted and "not kept" in hosted
+        opted_in = _about_privacy_line(local=False, saving=True)
+        assert "recovery copy is kept there" in opted_in
+        assert "not kept" not in opted_in and "Community Cloud" not in opted_in
+
+        for line in (local, hosted, opted_in):
+            assert "*Where does my data go?*" in line
+            assert len(line) <= 300, "one or two lines in About"
+
+    def test_about_shows_the_line_for_a_hosted_run(self, monkeypatch):
+        from streamlit.testing.v1 import AppTest
+
+        from scanpath_studio import app, persistence
+
+        monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "0")
+        monkeypatch.setattr(app, "server_bound_to_loopback", lambda: False)
+
+        def about():
+            from scanpath_studio import app
+
+            app._about_dialog()
+
+        at = AppTest.from_function(about).run()
+        assert not at.exception, at.exception
+        body = " ".join(str(md.value) for md in at.markdown)
+        assert "Your data." in body and "not kept" in body
+        assert "stays on this computer" not in body
+
     def test_no_entry_is_for_someone_editing_the_code(self):
         """The FAQ has no "I edited the code and nothing changed?": it is
         contributor material, which CONTRIBUTING.md keeps, and this dialog

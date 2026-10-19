@@ -754,6 +754,13 @@ class TestRecoveryCachePanelFlow:
         _clean(at, "cache panel:")
         body = " ".join(str(m.value) for m in at.markdown)
         assert "**Saved here:**" in body
+        # The wizard's buttons say "Upload", so the note never says nothing is
+        # uploaded. Under AppTest the server is not on loopback, where the
+        # files did leave the browser's machine, so that sentence is left out.
+        captions = " ".join(str(c.value) for c in at.caption)
+        assert "saved as you work" in captions
+        assert "Nothing is uploaded" not in captions
+        assert "Nothing leaves this computer" not in captions
         # The folder is on the page itself, not behind a popover.
         assert f"**Folder:** `{tmp_path}`" in body
 
@@ -765,6 +772,17 @@ class TestRecoveryCachePanelFlow:
         labels = {p.proto.popover.label for p in at.get("popover")}
         gone = {"Clear recovery cache", "Reset everything", "What's saved, and where"}
         assert not labels & gone, labels
+
+    def test_a_loopback_run_says_nothing_leaves_this_computer(
+        self, tmp_path, monkeypatch
+    ):
+        from scanpath_studio import app
+
+        monkeypatch.setattr(app, "server_bound_to_loopback", lambda: True)
+        at = self._boot_local(tmp_path, monkeypatch)
+        _clean(at, "cache panel:")
+        captions = " ".join(str(c.value) for c in at.caption)
+        assert "restored next time. Nothing leaves this computer." in captions
 
     def test_clear_what_is_saved_lists_then_starts_over(self, tmp_path, monkeypatch):
         """The confirmation names what goes, and a confirmed clear

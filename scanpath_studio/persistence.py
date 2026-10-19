@@ -129,6 +129,9 @@ _CACHE_FAILURE_KEY = "_local_persistence_cache_failure"
 #: removes it.
 _FAILED_METADATA_KEY = "_local_persistence_failed_metadata"
 _FRAME_KEYS = ("words", "fixations", "raw_gaze")
+#: Frames a dataset often lacks, written only when they hold rows; a missing
+#: one restores as an empty frame (:func:`_read_dataset`).
+_OPTIONAL_FRAME_KEYS = ("raw_gaze",)
 #: The attached metadata tables live beside the manifest, not in it, and are
 #: rewritten only when their content changes: the manifest is rewritten on
 #: every durable settings change (a layer toggle, a trial switch), and a trial
@@ -422,6 +425,11 @@ def _write_dataset(payload: dict, frames_dir: Path, written: list[Path]) -> dict
 
     Each path goes into ``written`` before its write, so a save that fails
     can remove what it left (see :func:`save_state`).
+
+    A dataset without raw gaze writes no raw-gaze file: its entry names none,
+    and :func:`_read_dataset` gives back the empty frame such a dataset
+    carries. Words and fixations are always written, since an empty one can
+    still hold the columns the app reads.
     """
     token = _new_token()
     metadata = {k: _json_safe(v) for k, v in payload.items() if k not in _FRAME_KEYS}
@@ -431,6 +439,9 @@ def _write_dataset(payload: dict, frames_dir: Path, written: list[Path]) -> dict
         frame = payload.get(frame_key)
         if not isinstance(frame, pd.DataFrame):
             frame = pd.DataFrame()
+        if frame_key in _OPTIONAL_FRAME_KEYS and frame.empty:
+            frame_rows[frame_key] = 0
+            continue
         filename = f"{token}-{frame_key}.parquet"
         written.append(frames_dir / filename)
         _atomic_parquet(frame, frames_dir / filename)

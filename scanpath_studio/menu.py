@@ -232,7 +232,17 @@ def render_nav() -> str:
     )
     requested = st.session_state.get("main_nav")
     mirrored = st.session_state.get(_MIRROR_KEY)
-    if requested in _PAGES and requested != active and requested != mirrored:
+    # On a session's first run (nothing mirrored yet), a page the URL names —
+    # `/data`, `/corpus-analysis` — is where the user asked to go, and wins over
+    # the view the recovery cache restored into `main_nav`. Only the bare root
+    # (the default page) resumes the last view.
+    url_named_page = _MIRROR_KEY not in st.session_state and active != _VIEW_SCANPATH
+    if (
+        requested in _PAGES
+        and requested != active
+        and requested != mirrored
+        and not url_named_page
+    ):
         st.session_state[_MIRROR_KEY] = requested
         switch_to_view(requested)  # reruns
     st.session_state["main_nav"] = active

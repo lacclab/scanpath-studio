@@ -1364,9 +1364,17 @@ def rename_cached_dataset(
 
 
 def restore_local_state(
-    session, url: str, *, protect_data_source: bool = False
+    session,
+    url: str,
+    *,
+    protect_data_source: bool = False,
+    protect_view: bool = False,
 ) -> bool:
     """Restore this machine's cached session, once, and say whether to announce it.
+
+    ``protect_data_source`` keeps the stored dataset choice out (a link named
+    its own), and ``protect_view`` the stored view (a link opens on the view it
+    was made for, not on whichever one this machine used last).
 
     The return value is **not** "a manifest was applied" — that is
     :func:`restore_state`'s answer. Every rerun writes the cache, so a session
@@ -1411,6 +1419,8 @@ def restore_local_state(
         except OSError:
             pass  # a cache we cannot write to simply goes without the breaker
     protected = {"data_source_choice"} if protect_data_source else set()
+    if protect_view:
+        protected.add("main_nav")
     if not restore_state(session, root, skip_session_keys=protected):
         _finish_restore(session)
         return False

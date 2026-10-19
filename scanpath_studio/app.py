@@ -8816,7 +8816,13 @@ def _run_app() -> None:
     )
     with restoring:
         restored = restore_local_state(
-            st.session_state, app_url, protect_data_source=url_source is not None
+            st.session_state,
+            app_url,
+            protect_data_source=url_source is not None,
+            # A link opens on the view it was made for; only a bare visit
+            # resumes the view this machine was on last. The app never writes
+            # query parameters itself, so any here came with the link.
+            protect_view=bool(st.query_params),
         )
     # Streamlit matches a rerun's elements to the last run's by position,
     # so a notice that shows on one run only (the unavailable-link warning below)

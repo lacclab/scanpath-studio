@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from scanpath_studio.constants import md_literal
 from scanpath_studio.controls import (
     active_filter_keys,
     describe_filter_keys,
@@ -149,7 +150,8 @@ def test_corpus_analysis_names_the_filtered_pool_and_clears_it():
     assert not at.exception, at.exception
     line = _pool_line(at)
     assert line.startswith("**12 of 24 trials · 1 of 2 participants**")
-    assert "Participant: l7\\_1090" in line
+    # The filter value is drawn as written, never as markdown.
+    assert md_literal("Participant: l7_1090") in line
     # The Scanpath funnel's own panel, under the same keys.
     assert at.multiselect(key="filter_participants").value == [reader]
     clear = at.button(key="corpus_pool_clear")

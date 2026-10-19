@@ -73,6 +73,7 @@ from .constants import (
     SUBTAB_EXPORT,
     SUBTAB_SHARE,
     drift_correction_enabled,
+    md_literal,
     preprocessing_enabled,
     similarity_enabled,
     spoken,
@@ -1530,7 +1531,7 @@ def _welcome_body(body: str) -> str:
     if not name:
         return body
     lead, _, rest = body.partition("**Next**")
-    return f"{lead}**{name}** is open; **Next**{rest}" if rest else body
+    return f"{lead}**{md_literal(name)}** is open; **Next**{rest}" if rest else body
 
 
 def _arm_tour() -> None:

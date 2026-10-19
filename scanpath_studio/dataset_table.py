@@ -26,6 +26,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
+from scanpath_studio.constants import DATASET_NAME_MAX_CHARS
+
 #: The dataset table's count fields, in display order — and the only field names
 #: a catalogue entry may publish figures under. A typo would otherwise
 #: be dropped in silence; `tests/test_dataset_published_counts.py` checks every
@@ -101,6 +103,16 @@ COUNTS_EXPLANATION = (
 
 #: Kind is ordered by what a row is, not alphabetically, when it is sorted.
 KIND_ORDER: tuple[str, ...] = ("Demo", "Hand-drawn", "Private", "Public")
+
+
+def short_name(name: str, limit: int = DATASET_NAME_MAX_CHARS) -> str:
+    """``name`` cut to ``limit`` characters, an ellipsis marking the cut.
+
+    For text that names a dataset in passing (a tooltip, a button's help). A
+    name stored before the name fields had a limit can be any length.
+    """
+    name = str(name)
+    return name if len(name) <= limit else name[: limit - 1].rstrip() + "…"
 
 
 def format_count(value: int) -> str:

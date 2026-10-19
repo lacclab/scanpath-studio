@@ -16,7 +16,7 @@ import pytest
 
 from scanpath_studio import controls
 from scanpath_studio import menu as menu_mod
-from scanpath_studio.constants import DEMO_CHOICE, ICONS
+from scanpath_studio.constants import DATASET_NAME_MAX_CHARS, DEMO_CHOICE, ICONS
 from scanpath_studio.wizard import _SCREEN_KNOW, _SETUP_MODE_KEYS
 from tests.conftest import (
     APP_SCRIPT,
@@ -2969,8 +2969,10 @@ class TestSetupWizard:
         answer_setup_step(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # Dataset name at the top.
+        # Dataset name at the top, as long as the dataset table can show.
         assert any(t.key == "wizard_dataset_name" for t in at.text_input)
+        name_field = at.text_input(key="wizard_dataset_name")
+        assert name_field.proto.max_chars == DATASET_NAME_MAX_CHARS
         ms_keys = {m.key for m in at.multiselect if m.key}
         # One per-table keep picker, no cross-table Filter/Keep pair.
         assert "wizard_keep_col_map_words" in ms_keys

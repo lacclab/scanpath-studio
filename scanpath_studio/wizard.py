@@ -111,7 +111,7 @@ from .experimental_setup import (
 )
 from .fields import switch, tooltip
 from .menu import view_label
-from .persistence import is_loopback_url, rename_cached_dataset
+from .persistence import is_loopback_url, persistence_enabled, rename_cached_dataset
 from .session_keys import COMPARE_SOURCE_STATE_KEY
 from .styles import mapping_menu_css
 from .tabs import _collect_column_mapping
@@ -3573,10 +3573,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
         )
         app_url = str(getattr(st.context, "url", "") or "")
         if not is_loopback_url(app_url):
+            # Said from this server's own state, as the About line and the FAQ
+            # do: a self-hosted server may keep a recovery copy, and only the
+            # online demo is Community Cloud.
+            kept = (
+                "a recovery copy is kept there" if persistence_enabled() else "not kept"
+            )
             intro.markdown(
-                f"{ICONS['tip']} This online demo runs on Streamlit Community "
-                "Cloud: uploads are processed there and not kept. "
-                "**Working with your own data?** Use the "
+                f"{ICONS['tip']} Uploads are processed on the server this app "
+                "runs on (Streamlit Community Cloud, for the online demo) and "
+                f"{kept}. **Working with your own data?** Use the "
                 f"[desktop app]({CITATION['desktop_url']}) ↗ (Windows, macOS, "
                 "Linux). It keeps your data on your computer and handles larger "
                 "datasets than this hosted copy. Or install it with pip:\n\n"

@@ -180,6 +180,7 @@ from scanpath_studio.data import (
     diagnose_trial_identity,
     empty_fixations_frame,
     empty_words_frame,
+    explain_read_error,
     filter_data,
     filter_frame_to_keys,
     filter_to_keys,
@@ -188,6 +189,7 @@ from scanpath_studio.data import (
     frame_fingerprint,
     harmonize_frames_reporting,
     hashable_key,
+    header_only_error,
     infer_raw_gaze_schema,
     load_onestop_server_bundle,
     load_sample_data,
@@ -199,6 +201,7 @@ from scanpath_studio.data import (
     onestop_data_dir,
     onestop_full_bundle_exists,
     plan_table_read,
+    pop_read_notes,
     preprocess_fixation_stage,
     propose_fix_schema,
     propose_raw_gaze_schema,
@@ -4316,14 +4319,40 @@ def _read_uploaded_frame(
         st.session_state.pop(f"{state_prefix}_header", None)
         files = uploaded if multi else [uploaded]
         names = ", ".join(str(getattr(f, "name", "the file")) for f in files)
-        messages.error(
-            f"Couldn't read **{names}**: {exc}. Check it is a table file with one "
-            "header row, or remove it with the ✕ on its chip."
-        )
+        say_read_error(messages, names, exc)
         return pd.DataFrame()
     # This upload's own fingerprint ID, before the wizard derives anything from it.
     adopt_source(frame)
+    files = uploaded if multi else [uploaded]
+    named = str(getattr(files[0], "name", "the file")) if len(files) == 1 else ""
+    for note in pop_read_notes(frame):
+        messages.warning(f"**{named}**: {note}" if named else note)
+    if frame.empty and len(frame.columns):
+        # Readable, so no error; but with no rows the table counts as not
+        # uploaded, and the footer's reason for a disabled ✅ Add dataset
+        # points back here.
+        names = ", ".join(str(getattr(f, "name", "the file")) for f in files)
+        messages.warning(
+            header_only_error(names).sentence(f"**{names}**")
+            + " To remove the file, click the ✕ next to its name."
+        )
     return frame
+
+
+def say_read_error(host, name: str, exc: BaseException) -> None:
+    """A table file the readers refused, said in ``host``: what is wrong in
+    plain words, then the reader's own message folded away beneath it.
+
+    One wording for every upload box — the wizard's tables, the Data page's raw
+    gaze and the metadata tables."""
+    error = explain_read_error(name, exc)
+    shown = name if error.name == Path(str(name)).name else error.name
+    host.error(
+        error.sentence(f"**{shown}**")
+        + " To remove the file, click the ✕ next to its name."
+    )
+    if error.detail:
+        host.expander("Technical detail").code(error.detail, language=None)
 
 
 def _read_upload(uploaded, state_prefix: str, *, multi: bool, kind) -> pd.DataFrame:
@@ -4458,7 +4487,7 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
                     lambda: read_table(uploaded_raw_gaze),
                 )
             except Exception as exc:  # unreadable file — say so, keep the page
-                cfg.error(f"Couldn't read **{uploaded_raw_gaze.name}**: {exc}")
+                say_read_error(cfg, uploaded_raw_gaze.name, exc)
                 return pd.DataFrame()
             proposed = propose_raw_gaze_schema(raw_gaze_df)
             initial_problems = validate_raw_gaze_schema(proposed)
@@ -8597,7 +8626,7 @@ def _render_backup_reminder(host, active_view: str) -> None:
         f"annotations from {ICONS['view_data']} **Data Management → Annotations** and each "
         "dataset's mapping from "
         f"{ICONS['edit']} **Edit dataset → Download setup file**. "
-        f"[What to back up ↗]({BACKUP_GUIDE_URL})"
+        f"[How to keep copies of your work ↗]({BACKUP_GUIDE_URL})"
     )
     row = box.container(horizontal=True, gap="small")
     if active_view != _VIEW_DATA:

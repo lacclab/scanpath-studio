@@ -1863,16 +1863,16 @@ def _wizard_table_keep_picker(
     return chosen, meta_fields
 
 
-#: Part 2 opens on **Start from**: from scratch, from a dataset already added
+#: Part 2 opens on **Start from**: an empty form, a dataset already added
 #: (its mapping, kept fields, column derivation and recording setup, copied —
 #: no file needed), or from a setup file saved with ⬇️ Download setup file.
 _START_FROM_KEY = "wizard_start_from"
-_START_SCRATCH = "Scratch"
+_START_SCRATCH = "An empty form"
 _START_DATASET = "A dataset you added"
 _START_FILE = "A setup file"
 _COPY_FROM_KEY = "wizard_copy_from"
 #: What the screen held before a setup was applied: ``{key: (present, value)}``,
-#: which Undo — or going back to *Scratch* — puts back.
+#: which Undo — or going back to *An empty form* — puts back.
 _RESTORE_UNDO_KEY = "_wizard_restore_undo"
 #: A finished upload's own wizard choices that its stored entry keeps nowhere
 #: else — the column derivation and the kept fields — so *A dataset you added*
@@ -2113,14 +2113,14 @@ def _undo_setup_restore() -> None:
 
 def _undo_and_start_from_scratch() -> None:
     """The applied line's Undo: the setup goes, and *Start from* goes back to
-    Scratch with it."""
+    *An empty form* with it."""
     _undo_setup_restore()
     st.session_state[_START_FROM_KEY] = _START_SCRATCH
 
 
 def _start_from_changed() -> None:
-    """Choosing *Scratch* after a setup was applied undoes it — that is what
-    starting from scratch means."""
+    """Choosing *An empty form* after a setup was applied undoes it — that is
+    what starting from an empty form means."""
     if st.session_state.get(_START_FROM_KEY) == _START_SCRATCH:
         _undo_setup_restore()
 
@@ -2176,7 +2176,8 @@ def _wizard_restore_config(host) -> None:
 
 
 def _render_start_from(host) -> None:
-    """Part 2's first line: start from scratch, or from a setup that exists."""
+    """Part 2's first line: start from an empty form, or from a setup that
+    exists."""
     uploads = list(st.session_state.get("_datasets") or {})
     options = [_START_SCRATCH, *([_START_DATASET] if uploads else []), _START_FILE]
     if st.session_state.get(_START_FROM_KEY) not in options:
@@ -2529,7 +2530,7 @@ _SETUP_CHOICE_LABELS = {
     _GEOM_SKIP: "Off",
     # 📄 Stimulus → Text's checkbox says the same.
     _TEXT_BOXES: "Fit to word boxes",
-    _TEXT_FONT: "I know the size",
+    _TEXT_FONT: "I know it",
     _TEXT_DEFAULT: "Default 16 px",
     _FONT_KNOW: "I know it",
     _FONT_UNKNOWN: "Not sure",
@@ -3074,7 +3075,7 @@ def _wizard_setup_step(
             + ("is" if len(guessed) == 1 else "are")
             + " an estimate or a default. If you know the real "
             + ("value" if len(guessed) == 1 else "values")
-            + ", choose *I know it*. Every figure is drawn to this setup."
+            + ", choose *I know it*. Every figure is drawn with these values."
             + (
                 " You can also add the dataset now and change them later."
                 if initial is None
@@ -3313,15 +3314,17 @@ def _wizard_name_header(host, active: bool) -> None:
         return
     st.session_state.setdefault("wizard_dataset_name", _default_dataset_name())
     box = host.container(key="wiz_name_box")
+    name_help = "Shown in the dataset list so you can switch back to it."
+    # Titled *Name* like ✏️ Edit dataset's field and the setup guide's card,
+    # in the same dotted-underline form as *Description* below it.
+    inline_field_label(box, "Name", name_help)
     box.text_input(
-        "Dataset name",
+        "Name",
         key="wizard_dataset_name",
-        help="Shown in the dataset list so you can switch back to it.",
+        help=name_help,
         placeholder="Name this dataset",
         # Streamlit 1.65: a cleared name is not committed — the last one stays.
         required=True,
-        # The numbered part heading above already says this — the widget's
-        # own label would repeat it.
         label_visibility="collapsed",
     )
     # Optional, and edited later on ✏️ Edit dataset.
@@ -4614,6 +4617,24 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 wizard_schemas.get(table),
                 names=ColumnNames.from_payload(names),
             )
+        # Files attached, and none gave a row — each says why beside its own
+        # upload. "Upload a table to get started" would contradict a page that
+        # already holds some, so the button's reason says what is really
+        # wrong, and is said above it too: a disabled button's hover is easy
+        # never to find.
+        rowless = nothing_uploaded and any(
+            st.session_state.get(f"{prefix}_upload")
+            for prefix in _WIZARD_MAPPING_PREFIXES
+        )
+        rowless_reason = (
+            "None of the uploaded tables has any rows to add. The message beside "
+            "each upload says why."
+        )
+        if active and rowless:
+            s6.warning(
+                f"{ICONS['warning']} **{ICONS['confirm']} Add dataset** is off: "
+                + rowless_reason
+            )
         # The two things you can do with a finished setup share one row — save
         # it for next time, or add it — the same on all three endings.
         _wizard_footer(
@@ -4621,8 +4642,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
             disabled=blocked,
             on_click=_finalize_wizard_dataset,
             help_text=(
-                f"Upload a Fixations, {WORDS_TABLE_LABEL} or Raw gaze table above "
-                "to get started."
+                rowless_reason
+                if rowless
+                else f"Upload a Fixations, {WORDS_TABLE_LABEL} or Raw gaze table "
+                "above to get started."
                 if nothing_uploaded
                 else "Answer Recording setup first: " + ", ".join(setup_blockers)
                 if setup_blockers

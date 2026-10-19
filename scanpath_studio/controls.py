@@ -2612,8 +2612,9 @@ FIX_FIELD_SPECS: list[dict] = [
     {
         "key": "participant",
         "label": "Participant ID",
-        "required": True,
-        "help": "Which participant produced this fixation.",
+        "required": False,
+        "help": "Which participant produced this fixation. Leave empty for a "
+        "single participant.",
     },
     {
         "key": "trial",
@@ -2713,8 +2714,9 @@ RAW_GAZE_FIELD_SPECS: list[dict] = [
     {
         "key": "participant",
         "label": "Participant ID",
-        "required": True,
-        "help": "Which participant produced this gaze sample.",
+        "required": False,
+        "help": "Which participant produced this gaze sample. Leave empty for a "
+        "single participant.",
     },
     {
         "key": "trial",

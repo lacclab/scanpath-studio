@@ -125,6 +125,10 @@ def get_app_css() -> str:
     .st-key-data_overview_offscreen { display: none !important; }
     .st-key-data_dataset_editor_offscreen { display: none !important; }
 
+    /* The add-dataset wizard's watcher (`wizard_watch`): a script with
+       nothing to show, drawn on every run at the top of the page's notices. */
+    .st-key-wizard_watch { display: none !important; }
+
     /* 📂 Available datasets as a focused table, built from keyed
        containers (`app.render_dataset_table`): `dsrow_head` + one
        `dsrow_<slug>` line per dataset (`dsrow_current_<slug>` for the open

@@ -8,6 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/);
 `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.41.0] - 2026-10-19
+
+### Added
+- Stimulus → Text → Redact (render --redact-text, redact_text=) draws a rounded block over each word's letters instead of the word, for figures that must not show the stimulus text. ([#482](https://github.com/lacclab/scanpath-studio/issues/482))
+- The plot gallery has two new examples: Redacted text, and Title, caption & legend. ([#484](https://github.com/lacclab/scanpath-studio/issues/484))
+
+### Changed
+- The docs screenshots and the export-bundle, add-your-data and share-link videos were re-captured, so they show the app's current labels. ([#480](https://github.com/lacclab/scanpath-studio/issues/480))
+- About, citation and privacy information are on one page, with a shorter citation for the bundled demo. ([#486](https://github.com/lacclab/scanpath-studio/issues/486))
+- The gallery's Fully customizable example (renamed) comes last, with one fixation per word. ([#486](https://github.com/lacclab/scanpath-studio/issues/486))
+- The documentation and README are copy-edited for clarity and consistency with the app: current control names, one set of terms throughout, and a few corrected claims. ([#486](https://github.com/lacclab/scanpath-studio/issues/486))
+- The plot gallery's app instructions are written for your own data, not for specific demo trials. ([#486](https://github.com/lacclab/scanpath-studio/issues/486))
+- Reading schematic comes just before Fully customizable, and both use the same six-fixation reading. ([#486](https://github.com/lacclab/scanpath-studio/issues/486))
+- The figure options are part of the Python API reference, with their defaults and CLI flags. ([#486](https://github.com/lacclab/scanpath-studio/issues/486))
+- The replay example in the docs says how to play it and how to make one from your own data. ([#486](https://github.com/lacclab/scanpath-studio/issues/486))
+
+### Fixed
+- The build line under About no longer counts the hosted demo's release merges as commits after the release. ([#481](https://github.com/lacclab/scanpath-studio/issues/481))
+- Maya Grossman's LinkedIn link in the app and the docs is fixed. ([#486](https://github.com/lacclab/scanpath-studio/issues/486))
+- The homepage workflow videos' captions are orange on a dark background throughout. ([#486](https://github.com/lacclab/scanpath-studio/issues/486))
+
 ## [0.40.0] - 2026-10-17
 
 ### Changed

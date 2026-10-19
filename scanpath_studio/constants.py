@@ -647,15 +647,30 @@ def upload_identity(uploaded) -> tuple[str | None, str]:
     return getattr(uploaded, "file_id", None), digest
 
 
+#: The software's authors as ``(given names, family names)``, in citation order.
+#: The package ships without ``CITATION.cff``, so the app's citation is built
+#: from these; ``tests/test_citation.py`` keeps them equal to the file's
+#: ``authors``.
+CITATION_AUTHORS = (
+    ("Omer", "Shubi"),
+    ("Keren", "Gruteke Klein"),
+    ("Maya", "Grossman"),
+    ("Ella", "Lion"),
+    ("Deborah N.", "Jakobi"),
+    ("David R.", "Reich"),
+    ("Lena", "Jäger"),
+    ("Yevgeni", "Berzak"),
+)
+
 CITATION = {
-    "authors": (
-        "Omer Shubi, Keren Gruteke Klein, Maya Grossman, Ella Lion, Deborah N. Jakobi, "
-        "David R. Reich, Lena Jäger, Yevgeni Berzak"
-    ),
+    "authors": ", ".join(f"{given} {family}" for given, family in CITATION_AUTHORS),
+    # Title, DOI, license and year are CITATION.cff's `title`, `doi`, `license`
+    # and the year of `date-released`, kept equal by tests/test_citation.py.
     "title": "Scanpath Studio",
-    # The Zenodo *concept* DOI — resolves to the latest archived
-    # release. Kept equal to CITATION.cff's `doi` by tests/test_citation.py.
+    # The Zenodo *concept* DOI — resolves to the latest archived release.
     "doi": "10.5281/zenodo.22933884",
+    "license": "MIT",
+    "year": 2026,
     "url": "https://github.com/lacclab/scanpath-studio",
     "docs_url": "https://lacclab.github.io/scanpath-studio/",
     # Where a user asks, reports, and gets the desktop app.

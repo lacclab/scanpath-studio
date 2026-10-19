@@ -1432,26 +1432,12 @@ def maybe_show_about() -> None:
 @guarded()
 def _about_dialog() -> None:
     """The About modal: version, authors, links, citation, AI-assistance note."""
-    from scanpath_studio import __release__, __version__
+    from scanpath_studio import __version__
+    from scanpath_studio.citation import software_bibtex
 
     # Triple-click the heading.
     render_easter_egg()
 
-    bibtex = (
-        "@software{Shubi_Scanpath_Studio_2026,\n"
-        "author = {Shubi, Omer and Gruteke Klein, Keren and Grossman, Maya and "
-        "Lion, Ella and "
-        'Jakobi, Deborah N. and Reich, David R. and J{\\"a}ger, Lena and '
-        "Berzak, Yevgeni},\n"
-        f"doi = {{{CITATION['doi']}}},\n"
-        "license = {MIT},\n"
-        "month = jun,\n"
-        "title = {{Scanpath Studio}},\n"
-        f"url = {{{CITATION['url']}}},\n"
-        f"version = {{{__release__}}},\n"
-        "year = {2026}\n"
-        "}"
-    )
     st.markdown(
         f"**Scanpath Studio** v{__version__} — interactive visualization of eye "
         "movements in reading."
@@ -1483,7 +1469,7 @@ Developed by [Omer Shubi](https://omershubi.github.io/),
         f"**{ICONS['docs']} Citing Scanpath Studio.** A paper is in preparation."
     )
     with st.expander("Show BibTeX", expanded=False):
-        st.code(bibtex, language="bibtex", wrap_lines=True)
+        st.code(software_bibtex(), language="bibtex", wrap_lines=True)
         st.markdown(
             """
 If you use the bundled demo data, also cite

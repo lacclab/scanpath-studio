@@ -96,6 +96,7 @@ scanpath_studio/
    │                     `compare_scanpaths`, `save_figure`, `figure_code`, …)
    ├─ cli.py             `scanpath-studio`: `run`, `render`, `corpus`, `check`, `cache`, `version`, `analyze`
    ├─ __init__.py        `__release__`, the lazy `__version__`, and lazy re-exports of `api.py`
+   ├─ citation.py        the BibTeX / APA entries shown in About and on the docs' Cite page
    ├─ build_info.py      which build this is (release, git checkout, desktop stamp, VCS install)
    ├─ updates.py         *Check for updates* against the latest GitHub release (on request only)
    └─ desktop_update.py  the desktop app's own *Update & restart*
@@ -587,7 +588,9 @@ Priority, the approval gate — are in `CLAUDE.md` → *Tracking work*.
 2. Bump `__release__` in `scanpath_studio/__init__.py` — the single source of
    truth for the release number; `pyproject.toml` reads it dynamically.
 3. Bump `version` + `date-released` in `CITATION.cff` to match
-   (`tests/test_citation.py` enforces version parity).
+   (`tests/test_citation.py` enforces version parity). On the first release of
+   a new year, bump `constants.CITATION["year"]` too — the in-app and docs
+   citation's year, which the same test holds to `date-released`.
 4. Commit on a branch and land it through a PR — `main` is protected. Once it
    has merged, tag the merge commit on `main` with `v<version>` and push the
    tag (`publish.yml` refuses a tag that does not match `__release__`).

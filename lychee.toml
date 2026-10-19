@@ -2,6 +2,12 @@
 # .github/workflows/links.yml, or locally with `lychee --config lychee.toml
 # 'docs/**/*.md' README.md CONTRIBUTING.md`.
 
+# External links only. Internal ones belong to `mkdocs build --strict`, and the
+# raw-HTML image and video paths in the docs are written for the built site's
+# directory URLs (`page/`), so read from the Markdown source they resolve one
+# level too high.
+scheme = ["https", "http"]
+
 max_retries = 3
 timeout = 20
 # 429 is a rate limit, not a dead link.
@@ -19,4 +25,6 @@ exclude = [
   # Publishers answer a DOI's redirect with 403 to anything that is not a
   # browser; the DOIs themselves are stable identifiers.
   '^https://doi\.org/',
+  # LinkedIn answers anything that is not a signed-in browser with status 999.
+  '^https://(www\.)?linkedin\.com/',
 ]

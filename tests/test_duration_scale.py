@@ -476,13 +476,13 @@ def _link_app():
     }
 
 
-def _open_link(params: dict) -> dict:
+def _open_link(params: dict, warnings: tuple[str, ...] = ()) -> dict:
     at = AppTest.from_function(_link_app)
     for key, value in params.items():
         at.query_params[key] = value
     at.run(timeout=30)
     assert not at.exception, at.exception
-    assert [w.value for w in at.warning] == []
+    assert [w.value for w in at.warning] == list(warnings)
     return at.session_state["_seen"]
 
 
@@ -521,7 +521,13 @@ def test_a_bare_trial_link_gets_the_new_default():
 
 
 def test_a_hand_written_out_of_range_link_is_clamped():
-    seen = _open_link({"marker_size_scale": "sqrt", "marker_duration_range": "1,99999"})
+    seen = _open_link(
+        {"marker_size_scale": "sqrt", "marker_duration_range": "1,99999"},
+        warnings=(
+            "The link's marker_duration_range=1,99999 is outside the control's "
+            "range; used 10,3000.",
+        ),
+    )
     assert seen["global_marker_duration_range"] == (10, 3000)
 
 

@@ -28,6 +28,7 @@ from .constants import (
     CITATION,
     DATASET_ADDED_KEY,
     DATASET_DESCRIPTIONS_KEY,
+    DATASET_NAME_MAX_CHARS,
     DATASET_STIMULUS_IMAGES_KEY,
     DEFAULT_LINE_SPACING,
     DEMO_CHOICE,
@@ -244,7 +245,9 @@ def _safe_dataset_name(name: str | None, *, exclude: str | None = None) -> str:
     "My corpus" into "My corpus (2)" on a capitalisation fix."""
     import scanpath_studio.annotations as _annotations
 
-    name = (name or "").strip() or _default_dataset_name()
+    # The fields stop typing at the limit; a name from a setup file is cut to it.
+    name = (name or "").strip()[:DATASET_NAME_MAX_CHARS].rstrip()
+    name = name or _default_dataset_name()
     if name in app.reserved_source_names():
         name = f"{name} (uploaded)"
     existing = {
@@ -3318,6 +3321,7 @@ def _wizard_name_header(host, active: bool) -> None:
         key="wizard_dataset_name",
         help="Shown in the dataset list so you can switch back to it.",
         placeholder="Name this dataset",
+        max_chars=DATASET_NAME_MAX_CHARS,
         # Streamlit 1.65: a cleared name is not committed — the last one stays.
         required=True,
         # The numbered part heading above already says this — the widget's

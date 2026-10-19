@@ -44,9 +44,10 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
    is the single source of truth; `pyproject.toml` reads it dynamically — do
    NOT edit a version in `pyproject.toml`.
 4. **Citation** — set `version` and `date-released` (today, ISO format) in
-   `CITATION.cff` to match.
+   `CITATION.cff` to match. If the year changed, set `CITATION["year"]` in
+   `scanpath_studio/constants.py` to it as well.
 5. **Verify parity** — run `pytest tests/test_citation.py` (it enforces
-   version parity between `__init__.py` and `CITATION.cff`).
+   version and release-year parity between the package and `CITATION.cff`).
 6. **Full test run** — `pytest -n auto`. Stop and report failures; do not
    release a failing tree.
 7. **Commit + PR** — commit the changes (the three files plus the deleted fragments) with message `Release v<version>`

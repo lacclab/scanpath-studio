@@ -27,6 +27,10 @@ runOnSave = true
 # — the CLI passes it explicitly, because this file is only read when the app is
 # launched from this directory.
 maxUploadSize = 5000
+# No first-run terminal prompt for an email address (Streamlit's newsletter),
+# which would hold `streamlit run` until it is answered. The CLI passes the same
+# value as a flag.
+showEmailPrompt = false
 
 [client]
 # No Deploy button. "viewer" drops Streamlit's developer-only toolbar

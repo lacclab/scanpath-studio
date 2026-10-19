@@ -91,7 +91,9 @@ have it set up.
 
 When you run Scanpath Studio locally or as the desktop app, your data stays on
 your computer. There are no accounts, and `scanpath-studio` and the desktop app
-send no usage statistics. Don't upload identifiable data to the online demo.
+send no usage statistics. The online demo runs on Streamlit Community Cloud,
+whose page around the app has its own analytics
+([privacy policy](https://streamlit.io/privacy-policy)).
 See [Your data](about.md#your-data) for what a local install saves, where,
 and how to clear it.
 

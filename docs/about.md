@@ -73,7 +73,8 @@ computer, so a refresh or a restart picks up where you left off.
 
 The online demo saves nothing. A file you upload there is processed on
 Streamlit Community Cloud and not kept, so closing or refreshing the tab loses
-it. Export your annotations and settings before you leave
+it. The app itself has no analytics, but Community Cloud's page around the app
+does; see its [privacy policy](https://streamlit.io/privacy-policy). Export your annotations and settings before you leave
 ([what to back up](guides/scanpath-visualization/index.md#back-up-your-work)).
 
 ## Questions and feedback

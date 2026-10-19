@@ -647,6 +647,10 @@ def upload_identity(uploaded) -> tuple[str | None, str]:
     return getattr(uploaded, "file_id", None), digest
 
 
+#: The privacy policy of Streamlit Community Cloud, which hosts the online demo
+#: and runs its own analytics in the page around the app.
+STREAMLIT_PRIVACY_URL = "https://streamlit.io/privacy-policy"
+
 CITATION = {
     "authors": (
         "Omer Shubi, Keren Gruteke Klein, Maya Grossman, Ella Lion, Deborah N. Jakobi, "

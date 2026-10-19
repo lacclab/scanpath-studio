@@ -3574,7 +3574,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
         app_url = str(getattr(st.context, "url", "") or "")
         if not is_loopback_url(app_url):
             intro.markdown(
-                f"{ICONS['tip']} **Working with your own data?** Use the "
+                f"{ICONS['tip']} This online demo runs on Streamlit Community "
+                "Cloud: uploads are processed there and not kept. "
+                "**Working with your own data?** Use the "
                 f"[desktop app]({CITATION['desktop_url']}) ↗ (Windows, macOS, "
                 "Linux). It keeps your data on your computer and handles larger "
                 "datasets than this hosted copy. Or install it with pip:\n\n"

@@ -18,9 +18,9 @@ print(gallery_figure("heatmap"))
 
 === "In the app"
 
-    1. Load your data and select a participant and trial in Scanpath.
-    2. Turn on Heatmap. In Heatmap ▾, choose Smoothed and weight by fixation duration.
-    3. Turn off Fixations and Saccades; keep Stimulus on.
+    1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    2. Turn on :material/local_fire_department: **Heatmap**. In **Heatmap** ▾ → **Style**, choose **Smoothed**. Keep **Color** → **By** at **Duration (ms)**.
+    3. Turn off :material/blur_on: **Fixations** and :material/arrow_outward: **Saccades**, and keep :material/article: **Stimulus** on.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
 

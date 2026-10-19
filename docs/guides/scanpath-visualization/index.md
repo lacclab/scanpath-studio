@@ -13,9 +13,10 @@ description: "Visualize eye movements over the text: fixations, saccades, word b
 3. The trial's summary.
 4. The figure.
 5. Plot controls.
-6. Annotations, Stimulus & context, Comparisons, Export and Share.
+6. The tabs: Annotations, Stimulus & context, Comparisons, Export and Share.
 
-The Scanpath view draws one reading on the screen it was recorded on.
+The :material/route: **Scanpath** view draws one reading at a time, at the size of
+the screen it was recorded on.
 
 !!! tip "Looking for a specific button?"
 
@@ -25,32 +26,40 @@ The Scanpath view draws one reading on the screen it was recorded on.
 
 ## Choose a trial
 
-Pick a trial above the plot. The filter (:material/filter_alt:) beside it
-narrows the list by text, participant, condition or annotation, and **⇅** sorts
-it. A trial with several screens gets a second navigator to move between them.
-When several participants have the same trial ID, each reading is in the list
-on its own, with its participant in brackets, `3 [p2]`.
+Pick a trial in **Select trial** above the plot, or step through the list with
+**◀ ▶**. The filter (:material/filter_alt:) beside it narrows the list by text,
+participant, condition or annotation, and **⇅** sorts it. On a trial recorded
+over several screens, **Screen** picks the screen to draw. When several
+participants have the same trial ID, the list shows each reading with its
+participant in brackets, such as `3 [p2]`.
+
+[All controls → Trial control bar](controls.md#trial-control-bar) describes
+each control.
 
 ## Control the layers
 
-The **:material/tune: Plot controls** column holds every setting of the figure.
-Each layer is one line: a switch, and a **▾** with its settings.
+The :material/tune: **Plot controls** column, on the right of the plot, holds
+the figure's settings. Each layer has a row with a switch that turns it on or
+off and a **▾** that opens its settings.
 
 | Section | What it controls |
 | --- | --- |
-| :material/movie: Animate | play the reading as a video, at a speed you choose |
-| :material/compare: Compare | a second reading beside or over this one |
-| Design presets | restyle the whole figure in one click: Scanpath, Heatmap, Illustration or your last custom settings |
-| :material/palette: My designs | save the current settings as a design, apply it again in one click, or export it to share or use on another computer |
-| Palette | one color scheme for the whole figure, such as colorblind-safe or print |
-| :material/blur_on: Fixations | markers: size, color, order |
-| :material/arrow_outward: Saccades | lines and arrows, colored by direction or reading type |
-| :material/article: Stimulus | text (or redacted blocks), span highlight, stimulus image, font and background |
-| :material/crop_square: Word boxes | each word's interest area: outline and fill, color and opacity |
-| :material/local_fire_department: Heatmap | where fixations concentrate, by count or duration |
-| :material/grain: Raw gaze | the gaze samples as recorded |
-| :material/filter_list: Filters & highlights | which fixations and saccades are drawn, and which stand out |
-| :material/aspect_ratio: Figure & canvas | screen framing, axes and grid, title and labels, hover fields, legends |
+| :material/movie: **Animate** | replay the fixations in the order they happened, at a speed you choose |
+| :material/compare: **Compare** | draw a second reading over this one, beside it or below it |
+| **Design presets** | restyle the whole figure in one click: **Scanpath**, **Heatmap**, **Illustration**, or **Custom** for your most recent settings |
+| :material/palette: **My designs** | save the current settings as a design, apply it again in one click, or export your designs to share them or use them on another computer |
+| **Palette** | one color scheme for the whole figure: **Default (colorblind-safe)**, **Print / grayscale** or **High contrast** |
+| :material/blur_on: **Fixations** | the fixation markers: color, shape and size, and the fixation index |
+| :material/arrow_outward: **Saccades** | the saccade lines and arrows, in one color, by direction or by saccade type |
+| :material/article: **Stimulus** | the text (or redacted blocks), highlighted words, the stimulus image, the font and the background |
+| :material/crop_square: **Word boxes** | each word's box: outline and fill, color and opacity |
+| :material/local_fire_department: **Heatmap** | where fixations concentrate, by fixation count or duration |
+| :material/grain: **Raw gaze** | the gaze samples as recorded |
+| :material/filter_list: **Filters & highlights** | which fixations and saccades are drawn, and which stand out |
+| :material/aspect_ratio: **Figure & canvas** | screen framing, axes and grid, title and labels, hover fields and legends |
+
+[All controls → Plot controls](controls.md#plot-controls) describes every
+setting in each menu.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../assets/workflows/plot-controls_poster.webp" data-autoplay
@@ -64,9 +73,12 @@ Each layer is one line: a switch, and a **▾** with its settings.
 | --- | --- |
 | **Annotations** | Star, tag and write notes on the trial, to find or filter it later. |
 | **Stimulus & context** | The trial's context, such as its title, question and answers, and its highlighted word spans. |
-| **Comparisons** | Compare this trial with other trials that match it on a field you choose, such as other readings of the same text, shown side by side. |
-| **Export** | Download the figure (PNG, SVG, PDF, HTML) or the video (HTML, GIF, MP4), or a zip bundle of figures and data for many trials. |
-| **Share** | A link that reopens this view (for whoever has the same dataset loaded), the Python or command-line code that redraws the figure, or a settings file. |
+| **Comparisons** | Show the other trials that share a field with this one, such as other readings of the same text, in a grid of small figures. |
+| **Export** | Download the figure on screen (PNG, SVG, PDF or HTML) or its replay (HTML, GIF or MP4), or build a zip bundle of figures and data for many trials. |
+| **Share** | **Link** reopens this trial with these settings for anyone who has the same dataset. **Code** gives the Python or CLI code that redraws the figure. **Settings file** saves the plot settings and restores them. |
+
+[All controls → Under the plot](controls.md#under-the-plot) lists each tab's
+controls.
 
 ??? example "Watch the tabs under the figure"
 
@@ -78,8 +90,9 @@ Each layer is one line: a switch, and a **▾** with its settings.
 
 ## Render in code
 
-Set up a figure in the app, then open Share → Code for its Python or CLI
-recipe. For uploaded data, replace the placeholder file paths with your own.
+Set up a figure in the app, then open **Share** → **Code** for the Python or
+CLI code that redraws it. For a dataset you imported, replace the placeholder
+file paths with your own.
 
 ??? example "Python and CLI: render the demo"
 
@@ -101,23 +114,26 @@ recipe. For uploaded data, replace the placeholder file paths with your own.
         ```
 
     For your own files, use the [data loaders](../loading-data/index.md#load-and-inspect-in-code).
-    Figure settings are listed in the [API options](../../api.md#figure-options)
-    and [CLI options](../../cli.md#common-tasks).
+    The [figure options table](../../api.md#figure-options) lists every figure
+    setting with its Python keyword and CLI flag. For more CLI examples, see
+    [Common tasks](../../cli.md#common-tasks).
 
-The [gallery](../../gallery.md) gives app, CLI and Python instructions for
-heatmaps, comparisons, replays and other views.
-For [batch exports and GIF/MP4](../exporting/index.md), see Export and share.
+The [gallery](../../gallery.md) shows how to make heatmaps, comparisons,
+replays and other figures in the app, the CLI and Python. For batch export and
+GIF or MP4 replays, see [Export and share](../exporting/index.md).
 
 ## Back up your work
 
-Each of these files can be saved and loaded again:
+You can save each of these to a file and load it again:
 
 | What | Where |
 | --- | --- |
-| figure settings | **:material/share: Share → Settings file** |
-| favorites, tags and notes | **:material/database: Data Management → Annotations → Export** |
-| column mapping and recording setup | **:material/edit: Edit dataset → Download setup file** |
-| saved figure designs | **:material/palette: My designs → Export** |
+| figure settings | :material/share: **Share** → **Settings file** |
+| favorites, tags and notes | :material/database: **Data Management** → **Annotations** → **Export** |
+| column mapping and recording setup | :material/edit: **Edit dataset** → **Download setup file** |
+| saved figure designs | :material/palette: **My designs** → **Export** |
 
-None of them holds your data, so load the same data before restoring one. On
-your own computer, the app also keeps your datasets and work between sessions.
+None of these files holds your data, so load the same data before you restore
+one. In the desktop app or a local install, the app also keeps your datasets,
+annotations and designs between sessions. See :material/database: **Data
+Management** → :material/history: **Saved on this computer**.

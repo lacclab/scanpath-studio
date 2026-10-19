@@ -29,7 +29,10 @@ def test_only_the_highlight_example_marks_the_demo_answer_span():
 def test_comparison_contains_every_fixation_for_both_readers():
     figure = gallery._build("comparison")["fig"]
     _, fixations = sps.load_sample_data(names="canonical")
-    for label, participant in (("Reader A", "l37_1129"), ("Reader B", "l7_1090")):
+    for label, participant in (
+        ("Participant A", "l37_1129"),
+        ("Participant B", "l7_1090"),
+    ):
         expected = fixations[
             (fixations.participant_id == participant)
             & (fixations.trial_id == f"{participant}_2_2_4_Ele_r0")
@@ -118,7 +121,7 @@ def test_redacted_example_draws_blocks_and_no_words():
 def test_annotated_example_carries_title_caption_and_both_legends():
     figure = gallery._build("title-caption-legend")["fig"]
     notes = " ".join(str(note.text) for note in figure.layout.annotations or ())
-    assert figure.layout.title.text == "One reader, one article"
+    assert figure.layout.title.text == "One participant, one article"
     assert "Marker size: fixation duration" in notes
     assert "ms" in notes  # the fixation-size key
     assert any(t.showlegend and t.name == "Forward" for t in figure.data)

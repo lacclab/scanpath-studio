@@ -107,7 +107,7 @@ if TYPE_CHECKING:
 def build_authored_scanpath(
     text: str, events: pd.DataFrame | None = None, **layout_options: Any
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Build normalized word and fixation frames from hand-authored reading events.
+    """Build normalized Words and Fixations frames from a hand-drawn scanpath.
 
     Args:
         text: The text to lay out as word boxes. Explicit line breaks are kept.
@@ -132,7 +132,7 @@ def build_authored_scanpath(
 def load_authored_scanpath(
     source: str | Path,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Load a draft file as normalized word and fixation frames.
+    """Load a draft file as normalized Words and Fixations frames.
 
     Args:
         source: The JSON the app's **Download draft (JSON)** saves on *Draw a
@@ -816,7 +816,7 @@ def load_scanpath_data(
     keep_columns: Iterable[str] | None = None,
     names: str = NAMES_SOURCE,
 ) -> ScanpathData:
-    """Load and normalize a words table and/or a fixations table.
+    """Load and normalize a Words table, a Fixations table, or both.
 
     Columns keep the names your files give them: ``CURRENT_FIX_DURATION``, not
     ``duration_ms``. A column Scanpath Studio built, converted, computed or changed
@@ -831,27 +831,27 @@ def load_scanpath_data(
 
     - **One table is enough.** Leave out the table a dataset doesn't have: it comes back
       as an empty frame, and the plots skip that layer.
-    - **Stimulus-level words.** A words table without a participant column holds each
+    - **Stimulus-level words.** A Words table without a participant column holds each
       text's word boxes once, and they are copied onto every trial in the fixations.
-      Each trial is matched by its trial id, else the trial id it had before a repeat's
-      ``_r2`` suffix, else its ``text_id`` (for trial ids that embed the participant).
+      Each trial is matched by its trial ID, else the trial ID it had before a repeat's
+      ``_r2`` suffix, else its ``text_id`` (for trial IDs that embed the participant).
       Trials that match none raise a ``data.StimulusJoinWarning`` (a ``UserWarning``).
-    - **Fixations without x/y** but with a word or AOI id are placed at the centers of
-      their word boxes.
+    - **Fixations without x/y** but with a word ID are placed at the centers of their
+      word boxes.
     - **Bookkeeping columns.** Columns named in ``data.INTERNAL_COLUMNS`` are the
       pipeline's own; ``data.drop_internal_columns`` removes them.
 
     Args:
-        words: The words (AOI) table: a DataFrame; a ``.csv``, ``.tsv``, ``.txt``,
+        words: The Words table, one word box per row: a DataFrame; a ``.csv``, ``.tsv``, ``.txt``,
             ``.tab``, ``.parquet``, ``.feather``, ``.xlsx`` or ``.xls`` file, or a
             ``.zip`` of them; a glob pattern; or a list of paths. Several files (one per
             participant and/or text) are concatenated, with each file's stem in a
             ``source_file`` column.
-        fixations: The fixations table, in any form ``words`` takes.
-        word_schema: A mapping from field to column name for the words table, replacing
+        fixations: The Fixations table, in any form ``words`` takes.
+        word_schema: A mapping from field to column name for the Words table, replacing
             auto-detection. Start from
             [`propose_schema`][scanpath_studio.api.propose_schema].
-        fix_schema: The same for the fixations table.
+        fix_schema: The same for the Fixations table.
         trial_parts_manifest: A nested parent-trial/parts definition, for datasets whose
             tables identify screens through arbitrary selector columns. Explicit
             ``screen_id`` / ``screen_index`` columns can instead be mapped in each
@@ -882,11 +882,11 @@ def load_scanpath_data(
             column names auto-detection looked for, and the columns the table has.
         ValueError: ``image_root`` does not exist, or ``image_pattern`` is absolute or
             climbs out of it.
-        data.StimulusJoinError: A stimulus-level words table shares neither a trial id
+        data.StimulusJoinError: A stimulus-level Words table shares neither a trial ID
             nor a ``text_id`` with any trial (or, multipart, with every screen a trial
             has fixations on). A ``ValueError``.
-        data.UnplacedFixationsError: The fixations map no x/y and their word/AOI id
-            column holds no numbers, so none could be placed. A ``ValueError``.
+        data.UnplacedFixationsError: The fixations map no x/y and their word ID column
+            holds no numbers, so none could be placed. A ``ValueError``.
     """
     _check_names_choice(names)
     if words is None and fixations is None:
@@ -1087,12 +1087,12 @@ def load_participant_metadata(
 
     Args:
         table: A DataFrame, or a path or glob to a CSV, TSV, Parquet or Excel file, or a
-            list of them, stacked into one table. It holds an id column plus anything
+            list of them, stacked into one table. It holds an ID column plus anything
             known about each participant (``native_language``, ``age``, a comprehension
             score).
-        id_column: The participant-id column. Defaults to the first recognized spelling
+        id_column: The participant ID column. Defaults to the first recognized spelling
             (``participant_id``, ``subject``, ``RECORDING_SESSION_LABEL``, …).
-        participants: A normalized frame or a list of ids to validate the join against.
+        participants: A normalized frame or a list of IDs to validate the join against.
             The result's ``.report`` then names the participants missing from either
             side.
 
@@ -1103,7 +1103,7 @@ def load_participant_metadata(
     Examples:
         ```python
         words, fixations = sps.load_sample_data()
-        meta = sps.load_participant_metadata("readers.csv", participants=fixations)
+        meta = sps.load_participant_metadata("participants.csv", participants=fixations)
         meta.names  # ('native_language', 'age')
         ```
     """
@@ -1144,18 +1144,18 @@ def load_trial_metadata(
     grain down. Nothing is broadcast onto the words or fixations frames.
 
     **The key is yours to state, and it changes what the table means.** Keyed by trial
-    id alone, a row describes a *text*, and every trial of it inherits that row. Keyed
+    ID alone, a row describes a *text*, and every trial of it inherits that row. Keyed
     by participant **and** trial (``participant_column``), a row describes one *trial*.
     Nothing in a file says which a corpus is, so this is never inferred.
 
     Args:
         table: A DataFrame or file(s), as `load_participant_metadata` takes, stacked
-            into one table. It holds a trial-id column plus anything known about each
+            into one table. It holds a trial ID column plus anything known about each
             trial (a list name, a condition, a per-trial comprehension score).
-        id_column: The trial-id column. Defaults to the first recognized spelling
+        id_column: The trial ID column. Defaults to the first recognized spelling
             (``trial_id``, ``item_id``, ``TRIAL_INDEX``, …).
-        participant_column: The participant-id column, to key each row by participant
-            and trial. Left out, rows are keyed by trial id alone.
+        participant_column: The participant ID column, to key each row by participant
+            and trial. Left out, rows are keyed by trial ID alone.
         trials: A normalized fixations or words frame, or any frame with
             ``participant_id`` and ``trial_id``, to validate the join against. The
             result's ``.report`` then names the trials missing from either side.
@@ -1217,12 +1217,12 @@ def load_text_metadata(
 
     Args:
         table: A DataFrame or file(s), as `load_participant_metadata` takes, stacked
-            into one table. It holds a text-id column plus anything known about each
+            into one table. It holds a text ID column plus anything known about each
             text (genre, difficulty, a stimulus-level comprehension score).
-        id_column: The text-id column, or several columns that build a composite id, as
-            the data's own Text ID mapping can. Defaults to the first recognized
+        id_column: The text ID column, or several columns that build a composite ID, as
+            the Text ID mapping can. Defaults to the first recognized
             spelling (``text_id``, ``paragraph_id``, ``stimulus_id``, …).
-        texts: A normalized fixations or words frame, or any iterable of text ids, to
+        texts: A normalized fixations or words frame, or any iterable of text IDs, to
             validate the join against. The result's ``.report`` then names the texts
             missing from either side.
 
@@ -1262,9 +1262,10 @@ def load_text_metadata(
 
 
 def load_sample_data(*, names: str = NAMES_SOURCE) -> ScanpathData:
-    """Load the bundled OneStop demo, normalized and ready to plot.
+    """Load the bundled demo, normalized and ready to plot.
 
-    Two participants, twelve trials each, every one with fixations. The frames carry the
+    The bundled demo is a subset of OneStop: two participants, twelve trials each, every
+    one with fixations. The frames carry the
     demo's recorded screen (OneStop's 2560×1440), so ``plot_scanpath`` draws them on it
     without a ``canvas_size``, as ``scanpath-studio render --sample`` does.
 
@@ -1821,7 +1822,7 @@ def list_trials(
         raw_gaze: A frame from [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze].
 
     Returns:
-        The participant and trial ids, sorted by participant, then trial, under the
+        The participant and trial IDs, sorted by participant, then trial, under the
             names the frames carry.
     """
     words, word_names = _named_in(words, "words", optional=True)
@@ -2369,7 +2370,8 @@ def figure_options(kind: str = "static", *, choices: bool = False) -> dict:
 
     The defaults are what a call actually renders with, the app's Scanpath design, so a
     script can diff its intended settings against what it would get. The *Figure
-    options* page of these docs lists them by section, with their ``render`` flags.
+    options* section of the API reference lists them by section, with their ``render``
+    flags.
 
     Args:
         kind: ``"static"`` for [`plot_scanpath`][scanpath_studio.api.plot_scanpath],
@@ -2541,9 +2543,9 @@ def plot_scanpath(
             [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data], or ``None``
             for a dataset recorded as raw gaze alone.
         fixations: The normalized fixations frame, or ``None`` likewise.
-        participant: The participant id. It may be left out when the frames hold one
+        participant: The participant ID. It may be left out when the frames hold one
             trial.
-        trial: The trial id. It may be left out when the frames hold one trial.
+        trial: The trial ID. It may be left out when the frames hold one trial.
         screen: The screen of a multipart trial to draw. Left out, the first recorded
             screen; coordinate spaces are never concatenated.
         canvas_size: The monitor size in px, ``(width, height)``. Estimated from the
@@ -2561,9 +2563,11 @@ def plot_scanpath(
             but ``None`` or ``"off"`` raises ``ValueError``.
         drift_connectors: Experimental, with ``drift_correction``.
         fix_index_range: ``(start, end)``: draw only fixations ``start`` to ``end`` of
-            the trial, 1-based and both inclusive. The app's fixation-index window.
-        illustration: Apply the Illustration preset: fixations snapped to their lines,
-            arced saccades, uniform colors, no heatmap or word boxes. Keywords you pass
+            the trial, 1-based and both inclusive. The app's **Filters & highlights** →
+            **Fixations** → *Index range*.
+        illustration: Apply the Illustration design: fixations snapped to their lines,
+            arced saccades, one color for the fixations and one for the saccades, no
+            heatmap or word boxes. Keywords you pass
             still win.
         illustration_label: ``"auto"`` labels the figure an illustration when it no
             longer shows the data as recorded; ``"show"`` and ``"hide"`` decide it.
@@ -2581,10 +2585,10 @@ def plot_scanpath(
               app's names) sets a group of colors at once. A color you pass explicitly
               wins.
             - ``show_stimulus_image=True`` draws the trial's own stimulus page under the
-              scanpath, as the app's 📄 Stimulus → image does: the ``image_path`` its
+              scanpath, as the app's **Stimulus** → **Image** does: the ``image_path`` its
               rows carry (from ``load_scanpath_data(image_root=…)`` or
               [`attach_stimulus_images`][scanpath_studio.api.attach_stimulus_images];
-              the demo ships its pages), at its ``image_x`` / ``image_y``. A
+              the bundled demo ships its pages), at its ``image_x`` / ``image_y``. A
               ``background_image=`` you pass wins.
             - ``fixation_snap_to_line=True`` moves each fixation up or down onto its
               text line, keeping its x: its word's line, else the nearest.
@@ -2750,9 +2754,9 @@ def animate_scanpath(
     """Build the animated replay of one trial's scanpath, or of two on one clock.
 
     Save it as interactive HTML with [`save_figure`][scanpath_studio.api.save_figure],
-    whose page keeps the replay's clock itself, or rasterize it to GIF or MP4 with
-    `animation_export.export_animation`, which lasts as long. ``fig.show()`` plays it on
-    Plotly's own frame queue, which runs slow.
+    whose page keeps the replay's timing, or render it to GIF or MP4 with
+    `animation_export.export_animation`, which keeps the same timing. ``fig.show()``
+    plays it on Plotly's frame queue, which runs slower than the reading did.
 
     The replay takes a subset of [`plot_scanpath`][scanpath_studio.api.plot_scanpath]'s
     options (``figure_options("animation")``), and the ones they share default alike, so
@@ -2800,8 +2804,8 @@ def animate_scanpath(
             ``fixations_b`` when they are given, else in ``words`` / ``fixations``, as
             [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] takes it.
         dataset_b: The name of B's dataset, when it is another one. The pair is then
-            checked as an overlay, and B's participant ids are prefixed with it, so a
-            hover says whose participant it is.
+            checked as an overlay, and B's participant IDs are prefixed with it, so a
+            hover says which dataset the participant is from.
         setup: A's `experimental_setup.SetupSnapshot`, the screen the overlay check
             reads. A side without one is read off its data: the extent of that one
             trial, which rarely spans the whole screen, so state both when you know
@@ -3230,8 +3234,8 @@ def render_parent_trial(
     Args:
         words: The normalized words frame.
         fixations: The normalized fixations frame.
-        participant: The participant id.
-        trial: The parent trial's id.
+        participant: The participant ID.
+        trial: The parent trial's ID.
         animate: Build replays with
             [`animate_scanpath`][scanpath_studio.api.animate_scanpath] instead of
             [`plot_scanpath`][scanpath_studio.api.plot_scanpath]'s figures.
@@ -3239,8 +3243,8 @@ def render_parent_trial(
             ``layout.meta['transition_after_ms']`` records the delay before the next
             screen: zero for ``"instant"``, the observed parent-clock gap for
             ``"recorded"``.
-        screens: Only these screen ids (one may be given as a string), in the trial's
-            own order, as the app's Export → *Screens* does. ``None`` renders them all.
+        screens: Only these screen IDs (one may be given as a string), in the trial's
+            order, as the app's **Export** → *Screens* does. ``None`` renders them all.
             Each figure's ``screen_index`` meta stays the screen's place in the trial.
         **options: Passed to [`plot_scanpath`][scanpath_studio.api.plot_scanpath] or
             [`animate_scanpath`][scanpath_studio.api.animate_scanpath].
@@ -3250,7 +3254,7 @@ def render_parent_trial(
             A single-screen trial gives ``{"screen-1": figure}``.
 
     Raises:
-        ValueError: A screen id the trial does not have, or ``screens`` for a trial with
+        ValueError: A screen ID the trial does not have, or ``screens`` for a trial with
             no screens to choose from.
     """
     if transition_mode not in {"instant", "recorded"}:
@@ -3413,9 +3417,9 @@ def compare_scanpaths(
 
     **Two datasets.** ``words_b`` / ``fixations_b`` draw B from a *different* dataset.
     Two datasets can hold the same ``(participant_id, trial_id)``, so B's participant
-    ids are namespaced with ``dataset_b`` inside the merged frames; without that, one
-    trial would silently render as two. The frames you pass in are never modified, and
-    only the trace labels show the namespace.
+    IDs are prefixed with ``dataset_b`` inside the merged frames. Without that, the
+    figure could draw the wrong reading, or rows of both mixed into one. The frames you
+    pass in are not modified, and only the trace labels show the prefix.
 
     **The overlay gate.** An overlay needs both readings on screens of the same size, or
     it raises ``ValueError`` (the app falls back to side by side). That holds across
@@ -3453,7 +3457,7 @@ def compare_scanpaths(
             another dataset's.
         words_b: B's words frame, to draw B from another dataset.
         fixations_b: B's fixations frame, likewise.
-        dataset_b: The name B's participant ids are namespaced with.
+        dataset_b: The name B's participant IDs are prefixed with.
         raw_gaze: Samples from [`load_raw_gaze`][scanpath_studio.api.load_raw_gaze],
             drawn under each reading's scanpath in its color. It serves both readings of
             one dataset; across datasets it is A's. Passing it turns the layer on;
@@ -3868,10 +3872,11 @@ def save_figure_layers(
 ) -> dict:
     """Save a scanpath figure as one file per layer, for editing.
 
-    Each *visible* layer (word boxes, fixations, saccades, heatmap, labels, stimulus
-    image, frame) is the full figure with only that layer's elements, on a transparent
-    background, at the same size and axis ranges. The files line up exactly when stacked
-    in Illustrator or Inkscape.
+    Each *visible* layer (stimulus image, heatmap, word boxes, saccades, fixations, raw
+    gaze, labels, frame) is the full figure with only that layer's elements, on a
+    transparent background, at the same size and axis ranges. The files line up when
+    stacked in Illustrator or Inkscape. The app's Export bundle writes the same files
+    under *Layers as separate files*.
 
     Args:
         fig: A scanpath figure.
@@ -3940,7 +3945,7 @@ def figure_code(
 ) -> str:
     """Write the API or CLI code that reproduces a figure.
 
-    The headless twin of the app's 🔗 Share → *Reproduce this figure in code* block. Give
+    The headless form of the app's **Share** → **Code**. Give
     it the arguments you would give [`plot_scanpath`][scanpath_studio.api.plot_scanpath]
     (``kind="static"``), [`animate_scanpath`][scanpath_studio.api.animate_scanpath]
     (``"animation"``) or [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths]
@@ -3960,9 +3965,9 @@ def figure_code(
             "fixations": [...]}`` and so on. With ``show_raw_gaze=True``, ``"raw_gaze"``
             (and an optional ``"raw_gaze_schema"``) names the raw-gaze files; the demo
             uses its own.
-        participant: The participant id. Left empty, the snippet renders the first
+        participant: The participant ID. Left empty, the snippet renders the first
             available trial, as ``render`` does.
-        trial: The trial id, likewise.
+        trial: The trial ID, likewise.
         screen: A's screen of a multipart trial (``screen=``, ``--screen``).
         compare: B's ``(participant, trial)``, for a comparison or a co-animation.
         compare_screen: B's screen (``screen_b=``, ``--compare-screen``).
@@ -3980,7 +3985,7 @@ def figure_code(
         compare_labels: The two trace labels, when they are not the composed defaults:
             ``labels=`` and ``--label-a`` / ``--label-b``.
         canvas_size: The monitor size. Defaults to the screen ``render`` assumes for the
-            source (the demo's 2560×1440, PoTeC's 1680×1050, …), so both forms draw the
+            source (the bundled demo's 2560×1440, PoTeC's 1680×1050, …), so both forms draw the
             same figure.
         base_font_size: As the builders take it.
         font_family: As the builders take it.
@@ -4106,9 +4111,9 @@ def cache_status() -> dict:
 
     A local or desktop app stores completed uploaded datasets, column mappings, view
     settings, saved designs, metadata tables and annotations under your cache folder, so
-    a refresh or a restart resumes where it left off. A hosted deployment never does.
-    The same information is in the app's 🗂️ Data Management → *Saved on this computer*,
-    and in ``scanpath-studio cache``.
+    a refresh or a restart resumes where it left off. A hosted deployment, such as the
+    online demo, keeps none. The same information is on the app's **Data Management**
+    page under *Saved on this computer*, and in ``scanpath-studio cache``.
 
     | Key | What it holds |
     | --- | --- |

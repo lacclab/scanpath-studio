@@ -31,12 +31,13 @@ print(api_index())
 
 ## Column names
 
-Columns keep the names your files give them. The demo's word table calls its
-word id `IA_ID` and its total fixation duration `IA_DWELL_TIME`, and every
-function and option takes those names. A column Scanpath Studio made keeps its
-internal name. `load_scanpath_data(..., names="canonical")` gives the internal
-names, which are the same for every dataset. On the bundled demo, the first
-steps print this (run when the docs are built):
+Columns keep the names your files give them. The bundled demo's Words table
+calls its word ID column `IA_ID` and its total fixation duration
+`IA_DWELL_TIME`, and every function and option takes those names. A column
+Scanpath Studio made keeps its internal name.
+`load_scanpath_data(..., names="canonical")` gives the internal names, which are
+the same for every dataset. On the bundled demo, the first steps print this
+(run when the docs are built):
 
 ```python exec="true" source="above" result="text" session="api"
 import scanpath_studio as sps
@@ -66,7 +67,7 @@ print(words[columns].head(3))
 
 ::: scanpath_studio.api.load_text_metadata
 
-## Load the demo and public corpora
+## Load the bundled demo and public datasets
 
 ::: scanpath_studio.api.load_sample_data
 
@@ -106,8 +107,9 @@ print(words[columns].head(3))
 
 Set layers, colors, sizes and legends with keyword arguments to `plot_scanpath`,
 `animate_scanpath` or `compare_scanpaths`. The tables below list each option's
-default and matching CLI `render` flag, grouped like the app's plot rail.
-Descriptions name any builders an option is limited to.
+default and matching CLI `render` flag, under the section names of the app's
+:material/tune: **Plot controls**. A description ends by naming the builders an
+option is limited to, if any.
 
 For options with a fixed set of values, case, spaces, `-` and `_` are ignored;
 other values raise a `ValueError`. A `--no-…` flag turns off an option that is
@@ -126,11 +128,10 @@ print(figure_options_reference(heading="###"))
 
 ## Reproduce a figure in code
 
-The app's :material/share: **Share** subtab shows the API or CLI code that rebuilds the figure
-currently on screen — paste it into a notebook or terminal to get the same
-figure. `figure_code` is the headless
-form of that block, and `render --print-code` prints it for an invocation you
-already have.
+The app's :material/share: **Share** tab → **Code** shows the Python or CLI
+code that rebuilds the figure on screen. Paste it into a notebook or a terminal
+to get the same figure. `figure_code` writes the same code without the app, and
+`render --print-code` prints it for a `render` command you already have.
 
 ```python exec="true" source="above" result="python" session="api"
 print(

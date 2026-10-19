@@ -150,7 +150,7 @@ nav:
       - Scanpath visualization:
           - guides/scanpath-visualization/index.md
           - All controls: guides/scanpath-visualization/controls.md
-      - Data management: guides/loading-data/index.md
+      - Data Management: guides/loading-data/index.md
       - Corpus Analysis:
           - guides/corpus-workspace/index.md
       - Export and share: guides/exporting/index.md
@@ -162,7 +162,7 @@ nav:
       - Word-box heatmap: gallery/word-boxes.md
       - Fixations by line: gallery/text-lines.md
       - Saccade types: gallery/saccade-types.md
-      - Two readers: gallery/comparison.md
+      - Two participants: gallery/comparison.md
       - Raw gaze: gallery/raw-gaze.md
       - Replay: gallery/replay.md
       - Highlighted text: gallery/highlighted-text.md
@@ -238,6 +238,10 @@ plugins:
         desktop.md: install.md#install
         getting-started.md: install.md
         export-troubleshooting.md: faq.md#export-fails
+        # Folded into About and the Python API page.
+        cite.md: about.md#cite-scanpath-studio
+        privacy.md: about.md#privacy
+        figure-options.md: api.md#figure-options
   # Runs the pages' `exec="true"` fences: the gallery, printed example output,
   # and the generated references (scripts/docs_support.py).
   - markdown-exec

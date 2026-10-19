@@ -46,15 +46,16 @@ with Different Reading Regimes*, Scientific Data.
 ## Privacy
 
 With the desktop app or a local install, your recordings stay on your computer
-and are processed locally. The online demo processes uploads on its hosted
-server.
+and are processed locally. The online demo processes the files you upload on
+its hosted server.
 
 ## Questions and feedback
 
 [Ask a question](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a),
 [report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md),
-or [request a feature](https://github.com/lacclab/scanpath-studio/issues).
-For a bug report, include the version, operating system and how you run the app.
+or [request a feature](https://github.com/lacclab/scanpath-studio/issues/new?template=feature_request.md).
+For a bug report, include the version, your operating system and how you run
+the app. The app shows its version in :material/help: **Help** → :material/info: **About**.
 
 <div class="sps-development-note" markdown>
 

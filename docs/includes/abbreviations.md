@@ -5,5 +5,5 @@
 *[FPRT]: First-pass reading time (gaze duration): the fixations on a word from the first one until the eyes first leave it
 *[RPD]: Regression-path duration (go-past time): from the first fixation on a word until the eyes move on to a later word
 *[TFD]: Total fixation duration: every fixation on a word, rereadings included
-*[DPI]: Dots per inch: how many display pixels make an inch
+*[DPI]: Dots per inch: how many image pixels fill one inch of the printed figure
 *[RTL]: Right-to-left script

@@ -18,9 +18,9 @@ print(gallery_figure("highlighted-text"))
 
 === "In the app"
 
-    1. Load a word table with a true/false column marking the words you want to highlight, along with your fixations. Select a participant and trial in Scanpath.
-    2. In Stimulus → Highlight words, turn on Show and choose that word column.
-    3. Choose a highlight color. Turn off Saccades if you want to show just the highlighted text and fixations.
+    1. Load a Words table with a true/false column that marks the words to highlight, and your Fixations table. Open the dataset in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    2. In :material/article: **Stimulus** ▾, tick **Highlight words** and choose that column.
+    3. Under **Style**, keep **Mark text** and pick the highlight color in the box beside it. To show only the highlighted text and the fixations, turn off :material/arrow_outward: **Saccades**.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
 

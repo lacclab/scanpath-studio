@@ -4,25 +4,26 @@ description: "Feature guides to Scanpath Studio: scanpath visualization, loading
 
 # Feature guides
 
-Each guide covers the app, with Python and CLI examples beside the relevant
-features. For step-by-step workflows, see the [tutorials](../tutorials/index.md).
+Each guide explains one part of the app, with Python and CLI examples where
+they apply. For step-by-step workflows, see the [tutorials](../tutorials/index.md).
 
 <div class="grid cards" markdown>
 
 - :material-eye:{ .lg .middle } **[Scanpath visualization](scanpath-visualization/index.md)**
 
-    Layers, filtering, replay, and comparison — including across datasets.
+    Layers, filters, replay, and comparison, also across two datasets.
 
-- :material-database-import:{ .lg .middle } **[Data management](loading-data/index.md)**
+- :material-database-import:{ .lg .middle } **[Data Management](loading-data/index.md)**
 
-    Sources, upload, column mapping, and the recording setup.
+    Built-in and public datasets, importing your files, column mapping and the
+    recording setup.
 
 - :material-chart-box:{ .lg .middle } **[Corpus Analysis](corpus-workspace/index.md)**
 
-    Per text, Per participant and Groups, from the measures your data brings.
+    Per text, Per participant and Groups, from the reading measures in your data.
 
 - :material-file-export:{ .lg .middle } **[Export and share](exporting/index.md)**
 
-    Figure downloads, share links, batch rendering and replay export.
+    Figure downloads, share links and code, batch export and replay export.
 
 </div>

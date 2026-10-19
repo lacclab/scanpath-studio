@@ -17,8 +17,8 @@ it:
 | [`version`](#version) | Show the build, and whether a newer release is out |
 
 Each command takes `--help`, and `scanpath-studio --version` prints the version.
-A word that is not a command is an error naming the closest one, rather than
-an argument passed on to Streamlit.
+A word that is not a command is an error that suggests the closest command. It
+is not passed on to Streamlit.
 
 ## Launch the app
 
@@ -32,20 +32,20 @@ scanpath-studio --download-dir D:\corpora  # where ⬇ Download saves public dat
 `scanpath-studio run …` is the same. Any other launch flag is passed on to
 `streamlit run`.
 
-The app listens on this computer only (`127.0.0.1`). It has no login, so
-serving it to other machines is a deliberate step. Pass
-`--server.address 0.0.0.0` (or set `server.address` in a Streamlit
-`config.toml`, or `STREAMLIT_SERVER_ADDRESS`), and only on a network you trust:
+The app listens on this computer only (`127.0.0.1`), and it has no login. To
+serve it to other machines on a network you trust, pass
+`--server.address 0.0.0.0`, or set `server.address` in a Streamlit
+`config.toml` or `STREAMLIT_SERVER_ADDRESS`:
 
 ```bash
 scanpath-studio --server.address 0.0.0.0
 ```
 
-Served on a network, the app also turns off everything that reads or writes the
-server's own folders, since any visitor could use them: the *Data directory*
-box, the :material/folder_open: folder picker, and ⬇ Download for the public
-corpora and stimulus-image folders. On a lab server you trust, turn them back
-on with `SCANPATH_LOCAL_FS=1`
+Served on a network, the app turns off the controls that read or write the
+server's folders, because any visitor could use them. These are the *Data
+directory* box, the :material/folder_open: folder picker, and ⬇ Download for
+the public datasets and stimulus-image folders. On a lab server you trust, turn
+them back on with `SCANPATH_LOCAL_FS=1`
 (`SCANPATH_LOCAL_FS=1 scanpath-studio --server.address 0.0.0.0`).
 
 ## render
@@ -58,13 +58,13 @@ design unless a flag changes it, and every [figure option](api.md#figure-options
 has a flag.
 
 ```bash
-# The trials there are to pick from
+# List the trials to pick from
 scanpath-studio render --sample --list-trials
 
 # The bundled demo
 scanpath-studio render --sample -o scanpath.html
 
-# Your own data (replace p1 / t3 with ids from --list-trials)
+# Your own data (replace p1 / t3 with IDs from --list-trials)
 scanpath-studio render \
   --words ia.csv --fixations fixations.csv \
   --participant p1 --trial t3 --output scanpath.svg
@@ -72,13 +72,13 @@ scanpath-studio render \
 # A draft file saved from the app's Draw a scanpath screen
 scanpath-studio render --authoring authored-scanpath.json -o authored.html
 
-# A public corpus, loaded the way the app loads it (PoTeC downloads on first use)
+# A public dataset, loaded as the app loads it (downloaded on first use)
 scanpath-studio render --potec ./potec --list-trials
 scanpath-studio render --onestop ./onestop --onestop-variant public \
   --onestop-regime ordinary --onestop-part Paragraph --list-trials
 ```
 
-The Python API loads the same corpora with
+The Python API loads the same datasets with
 [`load_potec`][scanpath_studio.datasets.load_potec] and
 [`load_onestop`][scanpath_studio.datasets.load_onestop].
 
@@ -88,23 +88,23 @@ The Python API loads the same corpora with
 | --- | --- |
 | add a layer | `--word-boxes`, `--fixation-index`, `--heatmap` |
 | hide a layer | `--no-text`, `--no-fixations`, `--no-saccades` |
-| animate | `--animate`, optionally `--playback-speed X`. Every styling flag the replay can draw is honored; the rest are named in a warning |
-| set the display geometry | `--canvas WIDTHxHEIGHT`. `--crop-to-data` frames the data instead of the whole monitor, with `--crop-margin PX` around it (default: 5% of its extent, at least 20 px) |
+| animate | `--animate`, optionally `--playback-speed X`. The replay uses every styling flag it can draw and names the rest in a warning |
+| set the screen size | `--canvas WIDTHxHEIGHT`. `--crop-to-data` frames the data instead of the whole screen, with `--crop-margin PX` around it (default: 5% of the data's extent, at least 20 px) |
 | color fixations | `--color-by FIELD`, including a column of your own once `--keep-columns COLUMN…` carries it through loading |
 | size fixations by duration | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--no-duration-size-legend` |
 | draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; `--animate` and `--compare-with` honor it too) |
-| draw the stimulus | `--stimulus-image PATH` for one image. `--show-stimulus-image` draws each trial's own page, the `image_path` its rows carry (`--sample` ships its pages). `--image-root DIR --image-pattern '{text_id}.png'` fills `image_path` from a folder |
+| draw the stimulus | `--stimulus-image PATH` for one image. `--show-stimulus-image` draws each trial's stimulus image, named in the `image_path` column (`--sample` ships its images). `--image-root DIR --image-pattern '{text_id}.png'` fills `image_path` from a folder |
 | smooth the heatmap | `--heatmap-style smoothed --heatmap-sigma 20` (σ in px; leave it out for an automatic σ) |
-| style the word boxes | `--word-box-color`, `--word-box-line-opacity`, `--word-box-fill-color`, `--word-box-fill-opacity` (0 draws outlines only, or fill only) |
+| style the word boxes | `--word-box-color`, `--word-box-line-opacity`, `--word-box-fill-color`, `--word-box-fill-opacity`. A fill opacity of 0 draws outlines only, and a line opacity of 0 the fill only |
 | size the figure | `--width`, `--height`, `--scale`. For print, `--width-mm MM` or `--width-in IN` with `--dpi N` (default 300) |
-| title and caption it | `--title`, `--caption` |
-| export editable layers | `--separable-layers` |
+| add a title and caption | `--title`, `--caption` |
+| write each layer to its own file | `--separable-layers` |
 | print the equivalent code | `--print-code python` (or `cli` / `both`), plus `--print-code-explicit` |
 
 ### Compare two scanpaths
 
 `--compare-with PARTICIPANT:TRIAL` draws a second trial, B, beside or over the
-first. It is the headless form of the app's **Compare** mode.
+first. It does what the app's :material/compare: **Compare** does.
 
 ```bash
 # Two participants on the same paragraph, overlaid
@@ -116,12 +116,12 @@ scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
   --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 --compare-stimulus b \
   -o compare_b.html
 
-# Side by side: each panel draws its own trial's stimulus
+# Side by side: each panel draws its trial's stimulus
 scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
   --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 \
   --compare-layout side-by-side -o compare.svg
 
-# Each scanpath styled
+# A style for each scanpath
 scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
   --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 \
   --style-a fix_color=#D55E00,opacity=0.5 --style-b saccade_style=dash \
@@ -145,9 +145,9 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 | name the two scanpaths | `--label-a TEXT --label-b TEXT` (both or neither) |
 | style each scanpath | `--style-a SPEC`, `--style-b SPEC` ([keys below](#style-keys)) |
 | leave out the A/B legend | `--no-compare-legend` |
-| give B its own stimulus page (split layouts) | `--stimulus-image-b PATH`, with `--stimulus-image-size-b WxH` / `--stimulus-image-origin-b X,Y` |
+| give B a separate stimulus image (side by side or stacked) | `--stimulus-image-b PATH`, with `--stimulus-image-size-b WxH` / `--stimulus-image-origin-b X,Y` |
 | take B from another dataset | `--compare-words PATH… --compare-fixations PATH…`, plus `--compare-raw-gaze PATH…` and `--compare-dataset-name NAME` |
-| declare the screens | `--canvas WxH`, `--compare-canvas WxH` |
+| set the two screen sizes | `--canvas WxH`, `--compare-canvas WxH` |
 | replay both on one clock | add `--animate` (HTML output) |
 
 `--label-a` / `--label-b` and `--style-a` / `--style-b` apply to the
@@ -182,40 +182,39 @@ ignores the `box_*` keys and `raw_gaze_color`.
 
 - `--compare-with` cannot be combined with `--all-screens` or `--screens`. A
   comparison is one figure of two trials, each drawn from one screen. B's
-  `--compare-screen` is looked up in B's own trial, so it can be a later page,
-  or a page of the second dataset.
+  `--compare-screen` is looked up in B's trial, so it can be a later screen,
+  or a screen of the second dataset.
 - **An overlay of two datasets needs matching canvases.** On two different
-  canvases, `--compare-layout overlay` fails rather than falling back, and so
-  does `--animate`, which replays both scanpaths in one coordinate space. Use
+  canvases, `--compare-layout overlay` exits with an error, and so does
+  `--animate`, which replays both scanpaths in one coordinate space. Use
   `--compare-layout side-by-side` or `stacked`, without `--animate`. Two
-  screens of one dataset whose canvases differ are refused the same way.
+  screens of one dataset with different canvases are refused the same way.
   Nothing is rescaled.
-- Without `--compare-canvas`, the second dataset's screen is read off its data,
-  as A's is when neither `--canvas` nor a built-in source gives one. That
-  extent rarely spans the whole screen, so state both screens when you know
-  them.
-- A second dataset is loaded from **files only**. Any corpus you can load in
-  Python can still be B through
-  [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths], which takes
-  B's frames directly.
+- Without `--compare-canvas`, the second dataset's screen size is estimated
+  from its data, as A's is when neither `--canvas` nor a built-in source gives
+  one. The data rarely spans the whole screen, so give both screen sizes when
+  you know them.
+- A second dataset can only be loaded from files. In Python,
+  [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] takes B's frames
+  directly, so any dataset you can load can be B.
 
 ### Raw gaze
 
-`--raw-gaze PATH…` reads a third table, with its columns auto-detected like
+`--raw-gaze PATH…` reads a Raw gaze table, with its columns auto-detected like
 `--fixations`, and draws the plotted trial's samples under the fixations. With
-`--compare-with` it covers both scanpaths, each in its own color, and
-`--compare-raw-gaze PATH…` is B's when B comes from another dataset.
-`--animate` ignores it with a warning.
+`--compare-with` it covers both scanpaths, each in its scanpath's color.
+`--compare-raw-gaze PATH…` gives B's samples when B comes from another
+dataset. `--animate` ignores raw gaze with a warning.
 
 ```bash
 scanpath-studio render --sample -p l37_1129 -t l37_1129_2_2_2_Adv_r0 \
   --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
 ```
 
-On its own, with no other input, `--raw-gaze` is the dataset: `--list-trials`
-lists its trials and `render` draws the chosen trial's samples as recorded.
-No fixations are detected from them, so `--animate` and `--compare-with` exit
-with that reason instead.
+When `--raw-gaze` is the only input, it is the dataset. `--list-trials` lists
+its trials, and `render` draws the chosen trial's samples as recorded. No
+fixations are detected from them, so `--animate` and `--compare-with` exit
+with an error that says so.
 
 ```bash
 scanpath-studio render --raw-gaze gaze_samples.csv --list-trials
@@ -225,14 +224,14 @@ scanpath-studio render --raw-gaze gaze_samples.csv -t t3 -o samples.png
 ### Multipart trials and many trials
 
 `render` writes one trial per run. For many figures, use the
-[Python batch recipe](guides/exporting/index.md#batch-pattern) or the app's
-**Export → Export bundle**.
+[Python batch recipe](guides/exporting/index.md#batch-pattern) or the
+**Export bundle** on the app's :material/file_export: **Export** tab.
 
 A multipart trial is the exception. `--all-screens` writes one
 `__screen-001-<id>` file per screen of the selected trial, and
 `--screens Title,Paragraph` writes only the screens named, each still numbered
-by its place in the trial. `--trial-parts-manifest manifest.json` assigns
-arbitrary source rows to screens.
+by its place in the trial. When your tables have no screen column,
+`--trial-parts-manifest manifest.json` assigns source rows to screens.
 
 ```bash
 scanpath-studio render --words ia.csv --fixations fix.csv --list-parts
@@ -265,9 +264,9 @@ required field, not only the one that failed. It is the same dict
 
 ## render flags
 
-Every `render` flag, generated from the parser the command uses, so the
-defaults and help are the ones `--help` prints. The figure flags are grouped
-like the [figure options](api.md#figure-options) they set.
+Every `render` flag, generated from the command's parser, with the defaults
+and help that `--help` prints. The figure flags are grouped like the
+[figure options](api.md#figure-options) they set.
 
 ```python exec="true" idprefix="flags-"
 from docs_support import cli_reference
@@ -277,8 +276,7 @@ print(cli_reference("render", heading="###"))
 
 ## corpus
 
-`corpus` goes the other way from `render`: it reads a tidy CSV you already
-have and renders a styled corpus figure, as
+`corpus` renders a styled corpus figure from a tidy CSV you already have, as
 [`plot_corpus_figure`][scanpath_studio.api.plot_corpus_figure] does. For
 `--kind profile` the CSV needs `word_id` and `value` columns.
 
@@ -298,9 +296,9 @@ print(cli_reference("corpus"))
 on your tables without opening the app. It looks for:
 
 - fixations lasting 0 ms or less, or with an infinite duration or onset;
-- fixations and raw-gaze samples with no finite position;
+- fixations and raw gaze samples with no finite position;
 - word boxes with no area or no finite position;
-- per-screen screen sizes that are not finite and positive.
+- screen sizes that are not finite and positive.
 
 Each finding gives the rows and trials affected, a few example rows, and what
 the app does with them. `check` changes nothing and exits 0 whatever it finds.
@@ -320,10 +318,10 @@ print(cli_reference("check"))
 
 ## cache
 
-A local or desktop run caches your session on your own machine, so a refresh
-or a restart resumes where you left off: uploaded datasets, column mappings,
-view settings, saved designs, metadata tables and annotations. `cache` shows
-what is stored and removes it.
+A local or desktop run saves your session on your computer, so a refresh or a
+restart resumes where you left off. It saves uploaded datasets, column
+mappings, view settings, saved designs, metadata tables and annotations.
+`cache` shows what is stored and can delete it.
 
 ```bash
 scanpath-studio cache            # datasets, rows, size, folder, last written
@@ -339,8 +337,9 @@ print(cli_reference("cache"))
 ```
 
 The same information is at the foot of the **:material/database: Data
-Management** page, under **Saved on this computer**. A running app writes a new
-copy at its next change, so clear the cache with the app closed.
+Management** page, under **:material/history: Saved on this computer**. A
+running app writes a new copy at its next change, so clear the cache with the
+app closed.
 
 | To | Use |
 | --- | --- |
@@ -353,8 +352,8 @@ Hosted deployments do not cache by default.
 ## version
 
 `version` says which build this is and how it was installed. `--check` also
-asks GitHub whether a newer release is out and prints the command that updates
-your install. It is the only time the command uses the network.
+asks GitHub whether a newer release is out and says how to update your install.
+Only `--check` uses the network.
 
 ```bash
 scanpath-studio version           # the build, and how it was installed

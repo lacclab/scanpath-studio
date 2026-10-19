@@ -8,8 +8,8 @@ hide:
 # Plot gallery
 
 Choose a figure to see how to make it with your own data in the app. The CLI
-and Python recipes reproduce each pictured example using sample or downloadable
-data.
+and Python recipes reproduce each pictured example from the bundled demo or from
+downloadable data.
 
 ```python exec="true" html="true"
 from gallery_examples import gallery_cards

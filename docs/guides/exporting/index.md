@@ -1,19 +1,19 @@
 ---
-description: "Export eye-tracking figures as PNG, SVG or animated replays, export every trial at once, and share a view as a link or as Python and CLI code."
+description: "Export eye-tracking figures as PNG, SVG or animated replays, export many trials at once, and share a view as a link or as Python and CLI code."
 ---
 
 # Export and share
 
-Save a figure, export a batch, or reuse a view in the app or in code.
+Save a figure, export many trials at once, or reuse a view in the app or in code.
 
 ## In the app
 
 | Goal | Where |
 | --- | --- |
-| Save the figure or replay on screen | Export → Current figure |
-| Export many trials and their tables | Export → Export bundle |
-| Share a view or copy its code | Share → Link or Code |
-| Reuse the design | My designs, or Share → File |
+| Save the figure or replay on screen | :material/file_export: **Export** → **Current figure** |
+| Export many trials and their tables | :material/file_export: **Export** → **Export bundle** |
+| Share a view or copy its code | :material/share: **Share** → **Link** or **Code** |
+| Reuse the figure settings | :material/palette: **My designs**, or :material/share: **Share** → **Settings file** |
 
 For step-by-step instructions, see the [export tutorials](../../tutorials/exporting-figures/index.md).
 
@@ -23,21 +23,28 @@ For step-by-step instructions, see the [export tutorials](../../tutorials/export
   <source src="../../assets/workflows/share-link.mp4" type="video/mp4">
 </video>
 
-A shared link reopens the view for someone with the same dataset loaded.
+A link reopens the trial and its settings for anyone who has the same dataset.
+[All controls → Under the plot](../scanpath-visualization/controls.md#under-the-plot)
+says what the recipient needs.
 
 ## Reproduce a figure { #from-the-app-to-a-script }
 
-Open Share → Code and copy Python or CLI. The snippet carries the figure's
-settings and your column mapping; replace any placeholder file paths.
+Open **Share** → **Code** and copy the Python or CLI code. It carries the
+figure's settings and your column mapping. For a dataset you imported, replace
+the placeholder file paths with your own.
 [Render in code](../scanpath-visualization/index.md#render-in-code) shows a minimal example.
 
-For a print-sized PNG, Python's `save_figure` accepts `width_mm` and `dpi`;
-the CLI uses `--width-mm` and `--dpi`. Use `save_figure_layers` or
-`render --separable-layers` for editable layers.
+For a PNG at print size, pass `width_mm` and `dpi` to `save_figure`, or
+`--width-mm` and `--dpi` to `render`. To edit the layers in a vector editor,
+save each layer to a separate file with `save_figure_layers` or
+`render --separable-layers`. In the app's export bundle, this is
+**Layers as separate files**.
 
 ## Batch export { #batch-pattern }
 
-Export → Export bundle uses the chosen trials in the app. For a scripted
+In the app, **Export bundle** → **Trials to include** picks the trials:
+**This trial**, **All filtered trials**, **All trials of one participant**,
+**All trials of one text** or **All trials, ignoring filters**. For a scripted
 batch, loop over the trial list:
 
 ??? example "Python: one HTML figure per trial"
@@ -57,12 +64,13 @@ batch, loop over the trial list:
     ```
 
     Use the [data loaders](../loading-data/index.md#load-and-inspect-in-code)
-    for your own files. The CLI's `render` writes one trial per invocation.
+    for your own files. The CLI's `render` writes one trial per run.
 
 ## Replay export { #replays-as-gif-or-mp4 }
 
-With Animate on, Export → Current figure saves HTML, GIF or MP4.
-The CLI's `render --animate` saves interactive HTML. For a GIF or MP4 in Python:
+With :material/movie: **Animate** on, **Export** → **Current figure** saves the
+replay as HTML, GIF or MP4. The CLI's `render --animate` saves interactive HTML
+only. For a GIF or MP4 in Python:
 
 ??? example "Python: save a GIF or MP4"
 

@@ -137,6 +137,7 @@ from scanpath_studio.constants import (
     SELECTOR_ROW_GRID,
     SELECTOR_ROW_TRIO,
     SELECTOR_SCREEN_TRACK,
+    SETUP_OVERRIDE_FOR_KEY,
     SUBTAB_ANNOTATIONS,
     SUBTAB_COMPARISONS,
     SUBTAB_EXPORT,
@@ -14747,28 +14748,18 @@ def _apply_remap() -> None:
     new_entry["composite_trial_columns"] = comp if len(comp) > 1 else []
     setup_payload = st.session_state.get("_remap_pending_setup")
     if isinstance(setup_payload, dict):
-        from scanpath_studio.experimental_setup import SetupSnapshot
-
         new_entry["setup"] = dict(setup_payload)
-        setup = SetupSnapshot.from_dict(setup_payload, fallback=SetupSnapshot())
-        # Apply the saved dataset facts to the live figure immediately. These
-        # are the same wire keys the add flow publishes on finalize.
-        st.session_state.update(
-            {
-                "global_canvas_width": setup.canvas_width,
-                "global_canvas_height": setup.canvas_height,
-                "global_monitor_width_mm": setup.monitor_width_mm,
-                "global_viewing_distance_mm": setup.viewing_distance_mm,
-                "global_base_font_size": setup.base_font_size,
-                # The setup's size is in px; a point size left on
-                # would replace it.
-                "global_use_stimulus_font_pt": False,
-                "global_font_family": setup.font_family,
-                "global_line_spacing": setup.line_spacing,
-                "global_scale_text_to_boxes": setup.scale_text_to_boxes,
-            }
-        )
     st.session_state["_datasets"][name] = new_entry
+    if isinstance(setup_payload, dict):
+        from scanpath_studio.app import _apply_dataset_values, upload_setup_values
+
+        # The saved setup shows at once when the figure holds this dataset's;
+        # another dataset's figure is left alone, and this one's applies when
+        # it is next opened (`app.seed_canvas_state`).
+        if st.session_state.get(SETUP_OVERRIDE_FOR_KEY) == name and (
+            values := upload_setup_values(name)
+        ):
+            _apply_dataset_values(name, values)
     # The description and the metadata tables are part of the
     # same save; committed under the old name, which the rename below carries.
     from scanpath_studio.app import commit_editor_staging

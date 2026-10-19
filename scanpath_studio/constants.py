@@ -801,9 +801,10 @@ DEFAULT_STIMULUS_IMAGE_PATTERN = "{text_id}.png"
 #: setup on its own ``_datasets`` entry instead. A recovery-cache session key,
 #: like the descriptions, for the same reason.
 DATASET_SETUP_OVERRIDES_KEY = "_dataset_setup_overrides"
-#: Which dataset's override the ``global_*`` setup keys hold now, and what they
-#: held before it was applied — put back when that dataset is left or its
-#: override is reset (the same stash-and-restore shape as the font snap). Both
+#: Which dataset's own setup the ``global_*`` setup keys hold now — a saved
+#: override, or an added dataset's recorded setup — and what they held before
+#: it was applied: put back when that dataset is left or its override is reset
+#: (the same stash-and-restore shape as the font snap). Both
 #: persisted, so a relaunch onto the dataset does not stash the override as its
 #: own "before".
 SETUP_OVERRIDE_FOR_KEY = "_setup_override_for"

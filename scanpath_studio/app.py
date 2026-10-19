@@ -126,6 +126,7 @@ from scanpath_studio.constants import (
     RAW_GAZE_SNAP_RESTORE_KEY,
     SETUP_OVERRIDE_FOR_KEY,
     SETUP_OVERRIDE_RESTORE_KEY,
+    SETUP_OVERRIDE_SESSION_KEYS,
     SYNTHETIC_CHOICE,
     TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
@@ -3677,6 +3678,7 @@ def load_bundled_demo() -> None:
     st.session_state["setup_complete"] = True
     st.session_state.pop(WIZARD_LEAVE_KEY, None)
     st.session_state.pop(WIZARD_STAY_KEY, None)
+    restore_setup_before_wizard()
     reset_column_mapping()
 
 
@@ -4893,6 +4895,7 @@ def leave_add_data_wizard() -> None:
     )
     st.session_state["_show_upload_wizard"] = False
     st.session_state["setup_complete"] = True
+    restore_setup_before_wizard()
 
 
 def stay_in_wizard() -> None:
@@ -7230,16 +7233,68 @@ def _apply_dataset_values(
     st.session_state[SETUP_OVERRIDE_FOR_KEY] = token
 
 
-def upload_font_family(name: str | None) -> str | None:
-    """The typeface an added dataset was set up with (the add and edit
-    screens' *Font* question), or ``None`` when ``name`` is no added dataset.
-    One set up before that question, or answered *I don't know*, has the
-    default font."""
+def upload_setup_values(name: str | None) -> dict | None:
+    """The ``global_*`` values an added dataset's recording setup puts on the
+    figure, or ``None`` when ``name`` is no added dataset.
+
+    Only what its setup records: the screen, the physical size (unless it was
+    skipped) and the text sizing each when stored. The typeface always — one
+    set up before the add screen's *Font* question, or answered *I don't know*,
+    has the default font.
+    """
     stored = (st.session_state.get("_datasets") or {}).get(name) if name else None
     if not isinstance(stored, dict):
         return None
     setup = stored.get("setup") if isinstance(stored.get("setup"), dict) else {}
-    return str(SetupSnapshot.from_dict(setup, fallback=SetupSnapshot()).font_family)
+    snapshot = SetupSnapshot.from_dict(setup, fallback=SetupSnapshot())
+    keys = {"global_font_family"}
+    if {"canvas_width", "canvas_height"} <= setup.keys():
+        keys |= {"global_canvas_width", "global_canvas_height"}
+    if {"monitor_width_mm", "viewing_distance_mm"} <= setup.keys() and (
+        snapshot.geometry_provenance is not Provenance.SKIPPED
+    ):
+        keys |= {
+            "global_monitor_width_mm",
+            "global_viewing_distance_mm",
+            "global_display_dpi",
+        }
+    if {"base_font_size", "line_spacing", "scale_text_to_boxes"} & setup.keys():
+        keys |= {
+            "global_base_font_size",
+            "global_use_stimulus_font_pt",
+            "global_line_spacing",
+            "global_scale_text_to_boxes",
+        }
+    return {
+        key: value
+        for key, value in setup_override_session_values(snapshot).items()
+        if key in keys
+    }
+
+
+#: What the figure's setup keys held when ➕ Add dataset was opened. The add
+#: screen publishes the answers the user chooses onto those shared keys as they
+#: are given; leaving it — adding the dataset or cancelling — puts these back,
+#: so the answers stay with the new dataset and never reach the one it was
+#: opened over.
+WIZARD_SETUP_BEFORE_KEY = "_wizard_setup_before"
+
+
+def remember_setup_before_wizard() -> None:
+    """Note the figure's setup keys as ➕ Add dataset opens."""
+    st.session_state[WIZARD_SETUP_BEFORE_KEY] = {
+        key: st.session_state.get(key) for key in SETUP_OVERRIDE_SESSION_KEYS
+    }
+
+
+def restore_setup_before_wizard() -> None:
+    """Put back the setup keys the add screen found (`remember_setup_before_wizard`)."""
+    before = st.session_state.pop(WIZARD_SETUP_BEFORE_KEY, None)
+    for key, value in (before or {}).items():
+        if value is None:
+            st.session_state.pop(key, None)
+        else:
+            st.session_state[key] = value
 
 
 def save_dataset_setup_override(token: str, payload: dict | None) -> None:
@@ -7573,17 +7628,16 @@ def seed_canvas_state(
         and (override := dataset_setup_override(override_token)) is not None
     ):
         _apply_setup_override(override_token, override, frozenset(from_link))
-    # An added dataset's font is its own in the same way: entering it draws the
-    # text in the font it was set up with, and leaving it puts back the font the
-    # figure had — or every dataset opened after it would inherit it.
+    # An added dataset's recording setup is its own in the same way: entering
+    # it draws it on the screen, and with the text, it was set up with, and
+    # leaving it puts back what the figure had — or every dataset opened after
+    # it, the demo included, would inherit that screen and text sizing.
     elif (
         override_token
         and st.session_state.get(SETUP_OVERRIDE_FOR_KEY) != override_token
-        and (font := upload_font_family(override_token)) is not None
+        and (values := upload_setup_values(override_token)) is not None
     ):
-        _apply_dataset_values(
-            override_token, {"global_font_family": font}, frozenset(from_link)
-        )
+        _apply_dataset_values(override_token, values, frozenset(from_link))
 
     # The remaining widget defaults, seeded here rather than beside their
     # widgets so a caller can resolve the settings without rendering the panel.

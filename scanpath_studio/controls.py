@@ -2612,8 +2612,9 @@ FIX_FIELD_SPECS: list[dict] = [
     {
         "key": "participant",
         "label": "Participant ID",
-        "required": True,
-        "help": "Which participant produced this fixation.",
+        "required": False,
+        "help": "Which participant produced this fixation. Leave empty for a "
+        "single participant.",
     },
     {
         "key": "trial",
@@ -2713,8 +2714,9 @@ RAW_GAZE_FIELD_SPECS: list[dict] = [
     {
         "key": "participant",
         "label": "Participant ID",
-        "required": True,
-        "help": "Which participant produced this gaze sample.",
+        "required": False,
+        "help": "Which participant produced this gaze sample. Leave empty for a "
+        "single participant.",
     },
     {
         "key": "trial",
@@ -3058,6 +3060,7 @@ def column_mapping_ui(
     stack_labels: bool | None = None,
     dataset: object = None,
     option_labels: dict | None = None,
+    box_format_lock: str | None = None,
 ) -> dict[str, str | None]:
     """Render a column-mapping expander letting users override the inferred mapping.
 
@@ -3088,6 +3091,12 @@ def column_mapping_ui(
     ``dataset`` names the data this mapping is for, so picks made for one
     dataset never carry into another with the same headers — see
     :func:`forget_mapping_for_other_table`.
+
+    ``box_format_lock`` is the reason the word box can only be *Origin + size*
+    here — ✏️ Edit dataset's stored Words table, whose edges were turned into
+    a width and a height when it was added. The format radio is then drawn
+    disabled with the reason beneath it, and the box maps as origin + size
+    whatever it holds; its stored value is never rewritten.
     """
     forget_mapping_for_other_table(df, state_key_prefix, field_specs, dataset=dataset)
     # Offer the file's full header, not `df.columns`: the planned read narrows
@@ -3413,6 +3422,8 @@ def column_mapping_ui(
                     f'<div class="sps-box-title">{title}</div>',
                     unsafe_allow_html=True,
                 )
+            # `st.radio` cannot disable one option, so a locked format
+            # disables the whole radio and says why under it.
             chosen = head.radio(
                 "Coordinate format",
                 options=list(_BOX_SUBFIELDS),
@@ -3420,7 +3431,12 @@ def column_mapping_ui(
                 horizontal=True,
                 label_visibility="collapsed",
                 persist_state="session",
+                disabled=box_format_lock is not None,
+                help=box_format_lock,
             )
+            if box_format_lock is not None:
+                head.caption(box_format_lock)
+                return BOX_FORMAT_ORIGIN
             return chosen
 
         def _render_multi(spec: dict, default, label: str) -> list[str]:

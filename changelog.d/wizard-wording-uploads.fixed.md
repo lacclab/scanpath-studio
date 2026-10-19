@@ -1,0 +1,1 @@
+The import wizard now says plainly why an uploaded file can't be used (empty, header only, not a text table, not a Parquet file), skips and reports rows with more fields than the header instead of reading them shifted, and says why Add dataset is off.

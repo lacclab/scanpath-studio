@@ -2318,7 +2318,8 @@ _WIZARD_GUIDE_STEPS = [
         "body": (
             "Turn your eye-tracking tables into a dataset: name it, upload and "
             "map each table, describe the recording setup, then save it. "
-            "Follow along with **Next**, or **Skip** to dive in."
+            "Press **Next** to go through the steps one by one, or **Skip guide** "
+            "to close this guide."
         ),
         "selector": "",
         "step_id": None,
@@ -2326,9 +2327,9 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "1 · Name & description",
         "body": (
-            "Name it. The name shows on the "
+            "Give the dataset a **Name**. It shows on the "
             f"{ICONS['view_data']} **Data Management** page and in the dataset "
-            "picker. A description is optional."
+            "picker. A **Description** is optional."
         ),
         "selector": ".st-key-wiz_part_name",
         "step_id": "name",
@@ -2336,10 +2337,10 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "2 · Data tables & column mapping",
         "body": (
-            "Each table is uploaded and mapped in its own row: Fixations, "
-            "Words (interest areas), Raw gaze, then Participant/Trial/Text "
-            "metadata. Under each mapping, pick which extra columns to keep. "
-            "Anything still missing is listed "
+            "Upload and map each table in its own row: Fixations, Words "
+            "(interest areas), Raw gaze, then Participant, Trial and Text "
+            "metadata. Under each mapping, add other columns in "
+            "**Extra fields to keep**. Anything still missing is listed "
             f"above **{ICONS['confirm']} Add dataset**."
         ),
         "selector": ".st-key-wiz_part_data",
@@ -2348,9 +2349,9 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "3 · Recording setup",
         "body": (
-            "Say how you know the screen, monitor width, text size and font "
-            "the data was recorded with. Each line starts from an estimate or a "
-            "default, marked as such. Every figure is drawn to this setup, so "
+            "Give the screen, monitor width, text size and font used when the "
+            "data was recorded. Each line starts with an estimate or a default "
+            "value, and says which. Every figure is drawn with these values, so "
             "choose *I know it* wherever you know the real value."
         ),
         "selector": ".st-key-wiz_part_setup",
@@ -2436,7 +2437,10 @@ def _wizard_guide_progress(step_idx: int, step: dict) -> str:
 
 
 def _wizard_guide_buttons(back_col, exit_col, next_col, step_idx: int, n: int) -> None:
-    """Back · Skip · Next (or ✓ Got it on the last step), one column each."""
+    """Back · Skip guide · Next (or ✓ Got it on the last step), one column each.
+
+    *Skip guide*, not *Skip*: the Words table has a mapping field called
+    **Skip** (EyeLink's ``IA_SKIP``) on the same screen."""
     back_col.button(
         "← Back",
         key="wizard_sp_back",
@@ -2446,7 +2450,7 @@ def _wizard_guide_buttons(back_col, exit_col, next_col, step_idx: int, n: int) -
     )
     if step_idx < n - 1:
         exit_col.button(
-            "Skip",
+            "Skip guide",
             key="wizard_sp_exit",
             width="stretch",
             on_click=_exit_wizard_guide,

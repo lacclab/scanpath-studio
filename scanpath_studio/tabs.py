@@ -221,12 +221,14 @@ from scanpath_studio.data import (
     drop_internal_columns,
     empty_fixations_frame,
     empty_words_frame,
+    explain_read_error,
     filter_to_keys,
     frame_cache,
     frame_fingerprint,
     harmonize_frames_reporting,
     has_explicit_trial_index,
     hashable_key,
+    header_only_error,
     identity_text_plan,
     normalize_fixations,
     normalize_raw_gaze,
@@ -13521,13 +13523,19 @@ def _restored_metadata_note(host, attached, *, grain: str, on_detach) -> None:
 
 
 class _MetadataReadError(Exception):
-    """One of a metadata table's files could not be read; names which."""
+    """One of a metadata table's files could not be read; names which, in the
+    words every upload box uses (`app.say_read_error`)."""
 
     def __init__(self, name: str, cause: Exception) -> None:
-        super().__init__(
-            f"Could not read {name}. Check that it is a CSV, TSV, Parquet or "
-            f"Excel table with one header row. ({cause})"
-        )
+        self.name = name
+        self.cause = cause
+        super().__init__(explain_read_error(name, cause).sentence())
+
+    def say(self) -> None:
+        """The message, where the metadata table's uploader is."""
+        from scanpath_studio.app import say_read_error
+
+        say_read_error(st, self.name, self.cause)
 
 
 def _metadata_upload_signature(uploads) -> tuple:
@@ -13559,9 +13567,14 @@ def _read_metadata_uploads(uploads) -> pd.DataFrame:
     frames = []
     for upload in uploads:
         try:
-            frames.append(read_table(upload))
+            frame = read_table(upload)
         except Exception as exc:  # unreadable file — the caller names it
             raise _MetadataReadError(upload.name, exc) from exc
+        if frame.empty and len(frame.columns):
+            # Attached, it would join nothing and say nothing.
+            error = header_only_error(upload.name)
+            raise _MetadataReadError(upload.name, error) from error
+        frames.append(frame)
     if len(frames) == 1:
         return frames[0]
     return pd.concat(frames, ignore_index=True, sort=False)
@@ -13692,7 +13705,7 @@ def _participant_metadata_body(
             try:
                 st.session_state[md.RAW_SESSION_KEY] = _read_metadata_uploads(uploads)
             except _MetadataReadError as exc:  # say which file, keep the page
-                st.error(str(exc))
+                exc.say()
                 return
             st.session_state[md.FILE_SESSION_KEY] = signature
             st.session_state[_PM_NAME_KEY] = _metadata_upload_name(uploads)
@@ -13889,7 +13902,7 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
                     uploads
                 )
             except _MetadataReadError as exc:  # say which file, keep the page
-                st.error(str(exc))
+                exc.say()
                 return
             st.session_state[md.TRIAL_FILE_SESSION_KEY] = signature
             st.session_state[_TM_NAME_KEY] = _metadata_upload_name(uploads)
@@ -14106,7 +14119,7 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
                     uploads
                 )
             except _MetadataReadError as exc:  # say which file, keep the page
-                st.error(str(exc))
+                exc.say()
                 return
             st.session_state[md.TEXT_FILE_SESSION_KEY] = signature
             st.session_state[_TXM_NAME_KEY] = _metadata_upload_name(uploads)
@@ -15071,6 +15084,39 @@ def _render_aggregate_toggle(name: str, *, adding: bool) -> None:
     )
 
 
+#: Why ✏️ Edit dataset's *Word box* format is fixed for a stored Words table.
+STORED_BOX_FORMAT_REASON = (
+    "Word boxes are stored as position + size. Edges were converted when the "
+    "dataset was added."
+)
+
+
+def box_edges_note(stored: dict) -> str | None:
+    """What ✏️ Edit dataset says under *Word box* when the dataset was added
+    with each box's edges (EyeLink's ``IA_LEFT`` … ``IA_BOTTOM``).
+
+    The editor maps the *stored* frame, which holds every box as its top-left
+    corner and size — the edges were turned into a width and a height when the
+    dataset was added, and are not columns of it any more. So the box shows as
+    *Origin + size* here whatever the add screen showed; this says which
+    edges it came from, so the two screens do not seem to disagree. ``None``
+    when the box was read as x/y/width/height to begin with.
+    """
+    names = ColumnNames.from_payload((stored.get("column_names") or {}).get("words"))
+    restated, _unresolved = source_schema(
+        {"x": "x", "y": "y", "width": "width", "height": "height"}, names
+    )
+    edges = [(restated or {}).get(side) for side in ("left", "right", "top", "bottom")]
+    if not all(isinstance(edge, str) for edge in edges):
+        return None
+    left, right, top, bottom = edges
+    return (
+        f"Added from each box's edges ({left}, {right}, {top}, {bottom}). It is "
+        "stored, and edited here, as its top-left corner and size: Box width is "
+        f"{right} − {left}, Box height {bottom} − {top}."
+    )
+
+
 def _render_remap_fields(
     name: str, stored: dict, problems: dict, composite: list, added: dict | None = None
 ) -> dict:
@@ -15147,6 +15193,12 @@ def _render_remap_fields(
             # auto-detect — say so. A table being added *is* auto-detected.
             detected_label=detected_labels.get(table_key, "currently mapped"),
             option_labels=stored_labels.get(table_key),
+            # A stored Words table holds x/y/width/height only, so its box
+            # cannot be mapped as edges; a table being added still can.
+            box_format_lock=STORED_BOX_FORMAT_REASON
+            if table_key == "words"
+            and detected_labels.get(table_key) == "currently mapped"
+            else None,
         )
 
     # A stored table's columns are canonical; offer them by the
@@ -15189,6 +15241,10 @@ def _render_remap_fields(
             pending[table].update(_cell(cell, table, field))
             seen.add((table, field))
         if extra == "aggregate" and "words" in frames:
+            if "words" not in (added or {}):
+                note = box_edges_note(stored)
+                if note:
+                    st.caption(f"{ICONS['info']} {note}")
             _render_aggregate_toggle(name, adding="words" in (added or {}))
 
     # Anything the rows above do not name — a field added to the specs since, or

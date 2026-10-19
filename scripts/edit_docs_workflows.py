@@ -1,20 +1,45 @@
 """Build the homepage's concise task montages from the app recordings.
 
-Run with Python from the repo root; ffmpeg must be on PATH. The PDF scenes
-were captured from the running app; the final scene follows a verified PDF
-download. Source clips remain intact for use in the individual feature guides.
+Run from the repo root once ``record_workflow_demos.py`` has written the source
+clips; ffmpeg must be on PATH::
+
+    uv run --with playwright python scripts/edit_docs_workflows.py
+
+Each scene's caption is the recorder's own bar — its pill, font and orange
+badge, drawn by the same ``demoHud`` in headless Chrome — with the scene's
+number in the badge where a source clip counts its clicks. The PDF scenes were
+captured from the running app; the final scene follows a verified PDF download.
+Source clips remain intact for use in the individual feature guides.
 """
 
 from __future__ import annotations
 
+import base64
 import subprocess
 import tempfile
 from pathlib import Path
 
+import streamlit
+from capture_docs_screenshots import find_chrome
+from playwright.sync_api import Page, sync_playwright
+from record_workflow_demos import OVERLAY_JS, VIEWPORT
+
 ROOT = Path(__file__).resolve().parents[1]
 VIDEOS = ROOT / "docs/assets/workflows"
 STILLS = ROOT / "assets/workflow-sources"
-FONT = "Arial"
+#: The montages' frame, and how far the recordings' viewport is scaled to fit
+#: it — the caption is drawn at the same scale, so it matches the source bars.
+WIDTH, HEIGHT = 1280, 800
+SCALE = WIDTH / VIEWPORT["width"]
+#: Room around the pill for its shadow.
+SHADOW = 16
+#: The face the app and the recorder's bar are set in, from Streamlit's own
+#: static files, so the caption renders the same on any machine.
+FONT_FILE = next(
+    (Path(streamlit.__file__).parent / "static" / "static" / "media").glob(
+        "SourceSansVF-Upright*.woff2"
+    )
+)
 # (source, start, duration, caption); time ranges omit the source clips' extra
 # trial steps, replay-speed adjustment, and click-count closing cards.
 EDITS = {
@@ -47,33 +72,73 @@ def run(*args: str) -> None:
     subprocess.run(["ffmpeg", "-y", "-v", "error", *args], check=True)
 
 
+def render_caption(page: Page, caption: str, label: str, out: Path) -> tuple[int, int]:
+    """Draw ``caption`` as the recorder's bar into ``out``, a transparent PNG at
+    the montage's scale; return where its top-left corner sits in the frame."""
+    page.evaluate("([c, l]) => window.demoHud(0, c, null, null, l)", [caption, label])
+    box = page.locator("#demo-hud").bounding_box()
+    clip = {
+        "x": box["x"] - SHADOW,
+        "y": max(0, box["y"] - SHADOW),
+        "width": box["width"] + 2 * SHADOW,
+        "height": box["height"] + 2 * SHADOW,
+    }
+    page.screenshot(path=str(out), clip=clip, omit_background=True)
+    return round(clip["x"] * SCALE), round(clip["y"] * SCALE)
+
+
+def caption_page(browser) -> Page:
+    """A blank page at the recordings' viewport, with the recorder's overlay."""
+    page = browser.new_page(viewport=VIEWPORT, device_scale_factor=SCALE)
+    font = base64.b64encode(FONT_FILE.read_bytes()).decode()
+    page.set_content(
+        "<style>@font-face{font-family:'Source Sans 3';font-weight:200 900;"
+        f"src:url(data:font/woff2;base64,{font}) format('woff2')}}"
+        "html,body{background:transparent;margin:0}</style>"
+    )
+    page.evaluate(OVERLAY_JS)
+    page.evaluate("document.fonts.ready")
+    return page
+
+
 def main() -> None:
-    with tempfile.TemporaryDirectory(prefix="docs-video-edit-") as temp:
+    with (
+        tempfile.TemporaryDirectory(prefix="docs-video-edit-") as temp,
+        sync_playwright() as pw,
+    ):
         folder = Path(temp)
+        browser = pw.chromium.launch(executable_path=find_chrome())
+        page = caption_page(browser)
         for name, scenes in EDITS.items():
             parts = []
             for index, (source, start, duration, caption) in enumerate(scenes):
                 output = folder / f"{name}-{index}.mp4"
+                pill = folder / f"{name}-{index}.png"
+                x, y = render_caption(
+                    page, caption, f"{index + 1} of {len(scenes)}", pill
+                )
                 is_still = source.endswith(".png")
                 path = STILLS / source if is_still else VIDEOS / f"{source}.mp4"
                 inputs = ["-loop", "1"] if is_still else ["-ss", str(start)]
                 filters = (
-                    "scale=1280:800:force_original_aspect_ratio=decrease,"
-                    "pad=1280:800:(ow-iw)/2:(oh-ih)/2:white,setsar=1,fps=20,"
-                    # Cover the source clip's counts rather than imply a count
-                    # for the montage.
-                    "drawbox=x=600:y=0:w=680:h=50:color=white:t=fill,"
-                    f"drawtext=font='{FONT}':text='{caption}':"
-                    "fontsize=17:fontcolor=0xd55e00:x=w-tw-28:y=16:"
-                    "box=1:boxcolor=0x111827:boxborderw=10"
+                    f"[0:v]scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=decrease,"
+                    f"pad={WIDTH}:{HEIGHT}:(ow-iw)/2:(oh-ih)/2:white,setsar=1,fps=20,"
+                    # Cover the source clip's own bar, whose click count would
+                    # describe that clip rather than the montage.
+                    "drawbox=x=600:y=0:w=680:h=56:color=white:t=fill[base];"
+                    f"[base][1:v]overlay=x={x}:y={y}:shortest=1"
                 )
                 run(
                     *inputs,
                     "-i",
                     str(path),
+                    "-loop",
+                    "1",
+                    "-i",
+                    str(pill),
                     "-t",
                     str(duration),
-                    "-vf",
+                    "-filter_complex",
                     filters,
                     "-an",
                     "-c:v",
@@ -117,6 +182,7 @@ def main() -> None:
                 str(VIDEOS / f"{name}_poster.webp"),
             )
             print(name, flush=True)
+        browser.close()
 
 
 if __name__ == "__main__":

@@ -84,6 +84,7 @@ from .constants import (
     UNIFORM_COLOR_FIELD,
     canonical_legend_position,
     drift_correction_enabled,
+    md_literal,
     onestop_regime_for_choice,
     plural,
     preprocessing_enabled,
@@ -1506,7 +1507,10 @@ def missing_dataset_message(
     name: str, participant: str | None = None, trial: str | None = None
 ) -> str:
     """What a recipient reads when a link names a dataset they don't have."""
-    shown = str(name).replace("*", r"\*")
+    # Every part comes from the link, so none of it is read as markdown.
+    shown = md_literal(name)
+    participant = md_literal(participant) if participant else participant
+    trial = md_literal(trial) if trial else trial
     if trial and participant:
         what = f"trial {trial} of participant {participant} in **{shown}**"
     elif trial:

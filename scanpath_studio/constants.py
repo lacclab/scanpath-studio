@@ -1137,7 +1137,40 @@ def plural(count: int, noun: str, plural_noun: str | None = None) -> str:
     return f"{count:,} {word}"
 
 
-_MARKDOWN_SPECIALS = re.compile(r"([\\`*_{}\[\]<>()#+\-.!|~:$])")
+#: The longest dataset name the name fields accept. A name stored before the
+#: limit loads as it is; the dataset table shortens it on screen.
+DATASET_NAME_MAX_CHARS = 80
+
+#: Characters Streamlit's markdown acts on anywhere in a line: emphasis, code,
+#: links, raw HTML and entities, tables, strikethrough, ``$…$`` math and the
+#: ``:red[…]`` / ``:material/…:`` / ``:smile:`` shortcodes.
+_MARKDOWN_ACTIVE = re.compile(r"[\\`*_\[\]<>#|~$:&]")
+#: A list or heading marker that only acts at the start of a block: ``- ``,
+#: ``+ ``, ``1. ``, ``1) ``.
+_MARKDOWN_LEADING = re.compile(r"^(\s*\d*)([-+.)])")
+
+
+def _char_ref(match: re.Match) -> str:
+    return f"&#{ord(match.group(match.lastindex or 0))};"
+
+
+def md_literal(text: object) -> str:
+    """``text`` drawn exactly as written wherever Streamlit renders markdown.
+
+    For a user's own words — a dataset name, a filter value — inside a
+    ``st.markdown`` / caption / alert / toast / button label / ``help=``
+    string. Each character markdown would act on becomes a numeric character
+    reference (``*`` → ``&#42;``), which markdown shows as the character and
+    never parses. A backslash is not enough: Streamlit expands
+    ``:material/…:`` even after ``\\:``. The result is HTML-safe as element
+    text too (``<``, ``>`` and ``&`` are among the characters replaced), so it
+    can sit inside a ``<span>`` drawn with ``unsafe_allow_html``.
+
+    Not for a widget's *options* (a selectbox draws them as plain text) or a
+    plain-text surface such as a file name: the references would show.
+    """
+    escaped = _MARKDOWN_ACTIVE.sub(_char_ref, str(text))
+    return _MARKDOWN_LEADING.sub(lambda m: m.group(1) + _char_ref(m), escaped, 1)
 
 
 def spoken(name: str) -> str:
@@ -1155,8 +1188,7 @@ def spoken(name: str) -> str:
     ``aria-label`` as well, asterisks and all, so a popover is named with a
     plain label clipped by key instead (`styles.py`).
     """
-    escaped = _MARKDOWN_SPECIALS.sub(r"\\\1", name)
-    return f"*{escaped}*"
+    return f"*{md_literal(name)}*"
 
 
 def icon_html(concept: str) -> str:

@@ -29,7 +29,7 @@ from collections.abc import Iterable
 import pandas as pd
 import streamlit as st
 
-from .constants import ICONS, upload_limit_mb
+from .constants import ICONS, md_literal, upload_limit_mb
 from .data import respell_reading
 from .fields import PANEL_LABEL_W, panel_field, row_label
 from .session_keys import COMPARE_SOURCE_STATE_KEY
@@ -1083,7 +1083,7 @@ def _import_dataset_annotations(
     note = f"Imported {_plural(applied, 'annotation')}."
     source = file_dataset(text)
     if source and source != dataset_name:
-        note = f"Imported {_plural(applied, 'annotation')} exported from **{source}**."
+        note = f"Imported {_plural(applied, 'annotation')} exported from **{md_literal(source)}**."
     if skipped:
         note += (
             f" Skipped {_plural(skipped, 'annotation')} on trials this dataset "

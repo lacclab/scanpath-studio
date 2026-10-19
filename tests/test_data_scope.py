@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from scanpath_studio.constants import md_literal
 from tests.conftest import APP_SCRIPT, pin_data_view, pin_view
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -47,7 +48,7 @@ def test_the_data_page_names_the_scope_of_its_counts():
 
     scoped = _captions(at, "12 of 24 trials · 1 of 2 participants · filtered")
     assert len(scoped) == 7, scoped
-    assert all("Participant: l7\\_1090" in c for c in scoped)
+    assert all(md_literal("Participant: l7_1090") in c for c in scoped)
     # The table and the capabilities block say they did not follow.
     assert _captions(at, "Whole datasets, before the trial filters")
     assert _captions(at, "Available with this dataset** · whole dataset")

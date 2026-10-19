@@ -99,6 +99,7 @@ from scanpath_studio.constants import (
     DATASET_COUNTS_STORE_KEY,
     DATASET_DESCRIPTIONS_KEY,
     DATASET_EDITOR_OPEN_KEY,
+    DATASET_NAME_MAX_CHARS,
     DATASET_SETUP_OVERRIDES_KEY,
     DATASET_STIMULUS_IMAGES_KEY,
     DEFAULT_BACKGROUND_COLOR,
@@ -134,6 +135,7 @@ from scanpath_studio.constants import (
     WIZARD_STAY_KEY,
     WORD_LABEL_COLOR,
     icon_html,
+    md_literal,
     plural,
     preprocessing_enabled,
     spoken,
@@ -1191,7 +1193,7 @@ def render_cache_recovery_notice(host, app_url: str, *, key: str) -> bool:
     )
     for index, (name, reason) in enumerate(sorted(failed.items())):
         row = box.container(horizontal=True, vertical_alignment="center")
-        row.markdown(f"**{name}**: {reason}")
+        row.markdown(f"**{md_literal(name)}**: {reason}")
         row.button(
             "Retry",
             icon=ICONS["refresh"],
@@ -3917,6 +3919,7 @@ def _render_dataset_load_failure(name: str, problems: list) -> None:
     the mapping, or back to the demo.
     """
     rejected = [p for p in problems if p.startswith(MAPPING_FAILURE_LEAD)]
+    name = md_literal(name)
     with st.container(border=True, key="dataset_load_failure_panel"):
         if rejected:
             for problem in rejected:
@@ -5279,7 +5282,7 @@ def _delete_confirmation_dialog(
             else " and column mapping"
         )
         st.warning(
-            f"Remove **{_dataset_display_name(token)}**? Its tables{taken} are "
+            f"Remove **{md_literal(_dataset_display_name(token))}**? Its tables{taken} are "
             "deleted from the app and from what is saved on this computer. This "
             "can't be undone."
         )
@@ -5290,7 +5293,8 @@ def _delete_confirmation_dialog(
             )
     else:
         st.caption(
-            f"Remove **{_dataset_display_name(token)}** from the dataset list for "
+            f"Remove **{md_literal(_dataset_display_name(token))}** from the dataset "
+            "list for "
             "this session? Its data files are not deleted."
         )
     remaining = [entry for entry in available if entry != token]
@@ -5353,7 +5357,8 @@ def _render_delete_confirmation(host, tokens: list, uploaded: set[str]) -> None:
 
 def _unique_dataset_alias(requested: str, token: str, tokens: list[str]) -> str:
     """A non-empty display name that does not duplicate another table row."""
-    base = requested.strip() or _dataset_display_name(token)
+    base = requested.strip()[:DATASET_NAME_MAX_CHARS].rstrip()
+    base = base or _dataset_display_name(token)
     used = {
         _dataset_display_name(other).casefold() for other in tokens if other != token
     }
@@ -5772,8 +5777,9 @@ def render_dataset_inspection_head(token: str) -> None:
     ✏️ **Edit** is not here: it is on the dataset's row of 📂 Available
     datasets, beside Remove (`_render_dataset_table_row`).
     """
-    # The name alone: "the `Dataset 1` dataset" would say it twice.
-    label = _dataset_display_name(token).replace("*", r"\*")
+    # The name alone: "the `Dataset 1` dataset" would say it twice. A name
+    # stored before the name fields had a limit is shortened for the heading.
+    label = md_literal(dataset_table.short_name(_dataset_display_name(token)))
     st.subheader(f"{ICONS['search']} What's in **{label}**")
     _render_dataset_overview(token, registry=public_dataset_registry())
 
@@ -5838,6 +5844,7 @@ def render_name_field(host, token: str) -> None:
         "Name",
         key=EDITOR_NAME_FIELD_KEY,
         required=True,
+        max_chars=DATASET_NAME_MAX_CHARS,
         # An upload stages its name on change; a built-in's is read only by
         # Save changes / Cancel, so it needs no rerun.
         on_change=_stage_upload_name if uploaded else "ignore",
@@ -5869,8 +5876,7 @@ def dataset_added_message(
             readers |= set(frame["participant_id"].dropna().astype(str))
     readers.discard("")  # a stimulus-level word table's placeholder
     trials = count_trials(words, fixations)
-    shown = name.replace("*", r"\*")
-    head = f"**{shown}** added"
+    head = f"**{md_literal(name)}** added"
     if not trials:
         return f"{head}."
     return f"{head}: {plural(trials, 'trial')}, {plural(len(readers), 'participant')}."
@@ -6520,7 +6526,7 @@ def _unreachable_dataset_dialog(token: str) -> None:
     a dialog body is a fragment.
     """
     registry = public_dataset_registry()
-    name = _dataset_display_name(token, registry)
+    name = md_literal(_dataset_display_name(token, registry))
     if (registry.get(token) or {}).get("downloadable"):
         st.markdown(
             f"**{name}** downloads the first time you open it, and this server "
@@ -6769,6 +6775,11 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
     datasets you added only.
     """
     slug = _dataset_row_slug(row.token)
+    # The name is the user's own text: drawn literally, never as markdown, and
+    # a long one shortened in the help text (the cell clamps it with CSS and
+    # carries the whole name as its tooltip).
+    named = md_literal(row.name)
+    short = md_literal(dataset_table.short_name(row.name))
     line = grid.container(
         # The open row's key carries `current`, which is what the tint keys on.
         key=f"dsrow_current_{slug}" if row.active else f"dsrow_{slug}",
@@ -6778,7 +6789,7 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         wrap=False,
     )
     line.button(
-        f"Open {row.name}",
+        f"Open {named}",
         key=f"dataset_open_{slug}",
         type="tertiary",
         on_click=_open_dataset_row,
@@ -6797,7 +6808,7 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         wrap=True,
     )
     name.markdown(
-        f'<span class="sps-ds-name">{html.escape(row.name)}</span>',
+        f'<span class="sps-ds-name" title="{html.escape(row.name)}">{named}</span>',
         unsafe_allow_html=True,
         width="content",
     )
@@ -6847,7 +6858,7 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
     # Every dataset can be edited — its name, description, setup and
     # metadata; the hand-drawn sample on its authoring canvas.
     actions.button(
-        f"Edit {row.name}",
+        f"Edit {named}",
         icon=ICONS["edit"],
         key=f"dataset_row_edit_{slug}",
         type="tertiary",
@@ -6855,7 +6866,7 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         args=(row.token,),
         help="Open the editor to change the text, drag fixations, or edit their timing."
         if row.token == MANUAL_SAMPLE_CHOICE
-        else f"Edit {row.name}: its name, description, column mapping, "
+        else f"Edit {short}: its name, description, column mapping, "
         "recording setup, location and metadata tables.",
     )
     # Only a dataset you added can be removed. For the demo, a public corpus
@@ -6869,13 +6880,13 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         )
         return
     actions.button(
-        f"Remove {row.name}",
+        f"Remove {named}",
         icon=ICONS["delete"],
         key=f"dataset_row_remove_{slug}",
         type="tertiary",
         on_click=_arm_dataset_row,
         args=(PENDING_DELETE_KEY, row.token),
-        help=f"Delete {row.name}, its tables and annotations, after a "
+        help=f"Delete {short}, its tables and annotations, after a "
         "confirmation. Your original files are not touched.",
     )
 
@@ -8291,6 +8302,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         else "My saved scanpath",
         key=name_key,
         required=True,
+        max_chars=DATASET_NAME_MAX_CHARS,
         # Read only by the Save dataset callback.
         on_change="ignore",
     )
@@ -8553,7 +8565,7 @@ def _dataset_cancel(token: str, task_key: tuple) -> loading.Cancel | None:
             return None
         back = DEMO_CHOICE
     return loading.Cancel(
-        f"Back to {_dataset_display_name(back)}",
+        f"Back to {md_literal(_dataset_display_name(back))}",
         _cancel_dataset_load,
         args=(task_key, token, _dataset_display_name(token), back),
     )
@@ -8579,7 +8591,7 @@ def _render_cancelled_load_notice(host) -> None:
         key="sps_cancelled_notice", horizontal=True, vertical_alignment="center"
     )
     # As wide as its words, so Try again sits beside them, not across the page.
-    row.caption(f"Stopped loading **{note['name']}**.", width="content")
+    row.caption(f"Stopped loading **{md_literal(note['name'])}**.", width="content")
     row.button(
         "Try again",
         key="sps_try_again",
@@ -9455,13 +9467,15 @@ def _run_app() -> None:
         builtin_saved = st.session_state.pop(BUILTIN_MAPPING_SAVED_KEY, None)
         if builtin_saved is not None:
             dataset_table_slot.success(
-                f"**{_dataset_display_name(str(builtin_saved))}** updated. "
+                f"**{md_literal(_dataset_display_name(str(builtin_saved)))}** "
+                "updated. "
                 "Your changes are saved.",
                 icon=ICONS["success"],
             )
         if saved:
             dataset_table_slot.success(
-                f"**{_dataset_display_name(str(saved))}** updated. The mapping, "
+                f"**{md_literal(_dataset_display_name(str(saved)))}** updated. "
+                "The mapping, "
                 "recording setup and any table you added are saved.",
                 icon=ICONS["success"],
             )
@@ -10224,8 +10238,13 @@ def _run_app() -> None:
             scope_note=dataset_table_scope_note(
                 filtered=trials_filtered,
                 stand_in_for=(
-                    _dataset_display_name(
-                        str(st.session_state.get("data_source_choice") or data_choice)
+                    md_literal(
+                        _dataset_display_name(
+                            str(
+                                st.session_state.get("data_source_choice")
+                                or data_choice
+                            )
+                        )
                     )
                     if st.session_state.get(_PLACEHOLDER_SHOWN_KEY)
                     else None

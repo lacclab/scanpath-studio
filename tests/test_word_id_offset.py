@@ -136,7 +136,7 @@ class TestBundledSample:
         from scanpath_studio import api
 
         words, fixations = api.load_sample_data(names="canonical")
-        trial = "l37_1129_2_2_1_Adv_r0"
+        trial = "l37_1129_2_2_1_Adv"
         tw = words[words["trial_id"] == trial]
         tf = fixations[fixations["trial_id"] == trial].sort_values("order_in_trial")
         # Both tables now run over the same id range.

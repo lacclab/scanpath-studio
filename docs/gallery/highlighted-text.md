@@ -28,7 +28,7 @@ print(gallery_figure("highlighted-text"))
 
     ```bash
     scanpath-studio render --sample \
-      -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+      -p l37_1129 -t l37_1129_2_1_1_Ele \
       --highlight-column is_in_aspan --critical-span-style mark-text \
       --no-saccades -o highlighted-text.html
     ```

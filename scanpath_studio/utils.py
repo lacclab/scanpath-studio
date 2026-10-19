@@ -932,7 +932,7 @@ def _trial_display_label(trial_id) -> str:
 
 # --- A trial id spelled out part by part --------------------------------------
 # A trial id is usually several ids joined with "_" — OneStop's
-# `l37_1129_2_2_1_Adv_r0` is reader `l37_1129`, text `2_2_1_Adv`, first reading.
+# `l37_1129_2_2_1_Adv_r1` is reader `l37_1129`, text `2_2_1_Adv`, reading `r1`.
 # The pickers show it with " · " between the parts so you can tell where one
 # ends, which a plain split on "_" cannot do: the reader id has an underscore of
 # its own. So the parts are found from the ids the trial is known to be made of —
@@ -947,8 +947,9 @@ def _trial_display_label(trial_id) -> str:
 TRIAL_ID_PART_SEPARATOR = " · "
 
 #: The reading number a first reading carries, which the display leaves
-#: out. OneStop composes `_r0` / `_r1`; `data._disambiguate_repeated_readings`
-#: leaves a first reading unsuffixed and numbers the next `_r2`.
+#: out. A OneStop report that mixes both readings composes `_r0` / `_r1`;
+#: `data._disambiguate_repeated_readings` leaves a first reading unsuffixed
+#: and numbers the next `_r2`.
 FIRST_READING = "r0"
 
 _READING_SUFFIX = re.compile(r"_(r\d+)$")
@@ -1869,7 +1870,7 @@ def friendly_trial_label(
 
 def _trial_id_remainder(trial_id: str, text_id: str, participant_id: str) -> str:
     """``trial_id`` with its text id and leading participant id taken out —
-    ``"r0"`` from ``"l37_1129_2_2_1_Adv_r0"`` — or ``""`` when nothing is left."""
+    ``"r1"`` from ``"l37_1129_2_2_1_Adv_r1"`` — or ``""`` when nothing is left."""
     at = trial_id.lower().find(text_id.lower())
     rest = trial_id[:at] + "_" + trial_id[at + len(text_id) :] if at >= 0 else trial_id
     participant = str(participant_id)

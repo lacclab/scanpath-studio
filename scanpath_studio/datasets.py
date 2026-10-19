@@ -895,13 +895,18 @@ def _compose_onestop_ids(frame: pd.DataFrame) -> pd.DataFrame:
             return frame
         frame = frame.copy()
         reading = data.coerce_flag(frame["repeated_reading_trial"]).astype(int)
-        frame["unique_trial_id"] = (
+        trial = (
             frame["participant_id"].astype(str)
             + "_"
             + frame["unique_paragraph_id"].astype(str)
-            + "_r"
-            + reading.astype(str)
         )
+        # A regime is one reading — first or repeated — so in a regime's
+        # reports each reader reads a paragraph once and reader + paragraph is
+        # the trial. Only a report that mixes both readings needs the flag to
+        # tell them apart, as `_r0` / `_r1`.
+        if reading.nunique() > 1:
+            trial = trial + "_r" + reading.astype(str)
+        frame["unique_trial_id"] = trial
     return frame
 
 

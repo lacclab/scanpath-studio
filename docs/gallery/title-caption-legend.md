@@ -32,7 +32,7 @@ print(gallery_figure("title-caption-legend"))
 
     ```bash
     scanpath-studio render --sample \
-      -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+      -p l37_1129 -t l37_1129_2_1_1_Ele \
       --saccade-color-by-type \
       --title "One participant, one article" --title-size 34 \
       --caption "Marker size: fixation duration. Line color: saccade type." --caption-size 20 \

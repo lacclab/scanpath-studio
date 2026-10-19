@@ -3171,10 +3171,10 @@ class TestSetupWizard:
             {
                 "participant_id": ["l37", "l37", "l42", "l42"],
                 "unique_trial_id": [
-                    "l37_1129_1_1_Ele_r0",
-                    "l37_1129_1_2_Adv_r0",
-                    "l42_1129_1_1_Ele_r0",
-                    "l42_1129_1_2_Adv_r0",
+                    "l37_1129_1_1_Ele",
+                    "l37_1129_1_2_Adv",
+                    "l42_1129_1_1_Ele",
+                    "l42_1129_1_2_Adv",
                 ],
                 "unique_paragraph_id": [*text_ids, *text_ids],
                 "CURRENT_FIX_X": [5.0, 5.0, 5.0, 5.0],
@@ -4352,7 +4352,7 @@ class TestOpenTrialFromCorpusTable:
         at.session_state["main_nav"] = "Corpus Analysis"
         at.run(timeout=60)
 
-        target = "l7_1090_2_1_1_Ele_r0"
+        target = "l7_1090_2_1_1_Ele"
         assert target != picked_trial_id(booted_on)
         at.session_state[PENDING_TRIAL_KEY] = {
             "participant_id": None,
@@ -4647,7 +4647,7 @@ class TestDeepLinkToAFilteredOutReader:
 
     def test_reports_once_and_does_not_fire_when_the_reader_returns(self):
         participant = "l37_1129"
-        trial = "l37_1129_2_2_2_Adv_r0"
+        trial = "l37_1129_2_2_2_Adv"
         at = _make_apptest()
         at.run(timeout=180)
         assert not at.exception, at.exception

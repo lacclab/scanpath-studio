@@ -1,12 +1,10 @@
 #!/usr/bin/env python
-"""Record the README's opening animation: a captioned session in the running app.
+"""Record the README's opening animation: a short session in the running app.
 
 ``make_hero_gif.py`` renders one figure's replay; this captures the application
-itself, on the Scanpath page — replaying a reading, the Heatmap preset, building
-a figure layer by layer, filtering saccades, redacting the text, comparing two
-participants side by side, then Export and Share — between a title card and a
-closing card, so the first thing a README reader sees is what using the tool
-looks like. Writes
+itself — stepping through trials, switching on the heatmap, replaying a reading,
+comparing two readers, and opening Corpus Analysis — so the first thing a README
+reader sees is what using the tool looks like. Writes
 ``docs/assets/app_demo.gif`` for the README and, from the same recording, the
 docs home page's ``app_demo.mp4`` and its ``app_demo_poster.webp``::
 
@@ -57,13 +55,6 @@ GIF_SPEEDUP = 1.3
 #: Where the pointer rests between clicks: in the gutter between the figure
 #: (which ends near x = 1234 at this width) and the plot controls (x = 1298).
 PARK = (1266, 560)
-#: This demo's own playback: its session is long, so it plays faster than the
-#: workflow demos, and its GIF is a little narrower to stay under camo's 5 MB.
-DEMO_SPEEDUP = 1.75
-DEMO_GIF_WIDTH = 1120
-#: How much faster the waits on a rerun play than the rest (`Session.warp`).
-WAIT_SPEEDUP = 12.0
-ICON = base64.b64encode((ROOT / "docs" / "assets" / "icon.png").read_bytes()).decode()
 
 #: Local-dev chrome that has no place in the recording.
 HIDE_CSS = """
@@ -116,103 +107,6 @@ TO_TOP_JS = """() => {
   document.querySelectorAll('[data-testid="stMain"], [data-testid="stAppViewContainer"]')
     .forEach(el => (el.scrollTop = 0));
 }"""
-
-#: The caption pill along the bottom, and the full-screen title / closing card.
-OVERLAY_CSS = """
-#demo-caption{position:fixed;left:50%;bottom:46px;transform:translate(-50%,24px);
- opacity:0;transition:opacity .35s ease,transform .35s ease;z-index:2147483646;
- background:#0f1219;color:#fff;font:600 30px/1.2 'Source Sans Pro','Segoe UI',sans-serif;
- padding:16px 30px 16px 26px;border-radius:16px;box-shadow:0 10px 34px rgba(0,0,0,.28);
- display:flex;align-items:center;gap:16px;white-space:nowrap;pointer-events:none}
-#demo-caption.on{opacity:1;transform:translate(-50%,0)}
-#demo-caption .dot{width:16px;height:16px;border-radius:50%;background:#ff7f0e;
- box-shadow:0 0 0 4px rgba(255,127,14,.25)}
-#demo-card{position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;
- align-items:center;justify-content:center;gap:22px;background:#0f1219;color:#fff;
- font-family:'Source Sans Pro','Segoe UI',sans-serif;opacity:0;transition:opacity .5s ease;
- pointer-events:none;text-align:center}
-#demo-card.on{opacity:1}
-#demo-card img{width:150px;height:150px;border-radius:30px}
-#demo-card h1{font-size:76px;font-weight:700;margin:0;letter-spacing:-1px}
-#demo-card h1 b{color:#ff7f0e}
-#demo-card p{font-size:32px;color:#c3cbd9;margin:0}
-#demo-card .tags{display:flex;gap:14px;margin-top:10px}
-#demo-card .tags span{border:1.5px solid #3a4558;border-radius:999px;padding:8px 20px;
- font-size:22px;color:#dfe5ee}
-#demo-card code{font:600 30px 'Consolas','Menlo',monospace;background:#1b2230;color:#5aaee0;
- padding:14px 28px;border-radius:12px;border:1px solid #2c3647}
-"""
-
-#: `window.demoCaption(text)` and `window.demoCard(html)`; a falsy argument
-#: fades the overlay out. Both live outside Streamlit's root, so reruns keep them.
-OVERLAY_JS = """
-(() => {
-  if (window !== window.top) return;
-  const overlay = (id) => {
-    let el = document.getElementById(id);
-    if (!el) {
-      el = document.createElement('div');
-      el.id = id;
-      document.body.appendChild(el);
-    }
-    return el;
-  };
-  window.demoCaption = (text) => {
-    const el = overlay('demo-caption');
-    if (!text) return el.classList.remove('on');
-    el.innerHTML = '<span class="dot"></span><span>' + text + '</span>';
-    requestAnimationFrame(() => el.classList.add('on'));
-  };
-  window.demoCard = (html) => {
-    const el = overlay('demo-card');
-    if (!html) return el.classList.remove('on');
-    el.innerHTML = html;
-    requestAnimationFrame(() => el.classList.add('on'));
-  };
-})();
-"""
-
-#: Ease the main column's scroll to ``y`` over ``ms`` milliseconds.
-SCROLL_JS = """async ([y, ms]) => {
-  const el = [...document.querySelectorAll(
-    '[data-testid="stMain"], [data-testid="stAppViewContainer"]')]
-    .find(e => e.scrollHeight > e.clientHeight);
-  if (!el) return;
-  const y0 = el.scrollTop, t0 = performance.now();
-  await new Promise(done => {
-    const step = now => {
-      const k = Math.min(1, (now - t0) / ms);
-      const e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-      el.scrollTop = y0 + (y - y0) * e;
-      k < 1 ? requestAnimationFrame(step) : done();
-    };
-    requestAnimationFrame(step);
-  });
-}"""
-
-#: Whether the switch under a key is drawn on. Its input's `checked` can be
-#: stale after the app writes the key itself, so this reads the track: opaque
-#: blue when on; grey when off, or a faint blue under the pointer.
-SWITCH_ON_JS = """(key) => {
-  const track = document.querySelector(`.st-key-${key} label > div`);
-  const [r, , b, a = 1] = getComputedStyle(track).backgroundColor
-    .match(/[\\d.]+/g).map(Number);
-  return a > 0.9 && b > r + 60;
-}"""
-
-INTRO = f"""
-<img src="data:image/png;base64,{ICON}" alt="">
-<h1>Scanpath <b>Studio</b></h1>
-<p><b style="color:#fff">See how people read.</b> &nbsp;Explore eye movements in reading.</p>
-"""
-
-OUTRO = f"""
-<img src="data:image/png;base64,{ICON}" alt="" style="width:120px;height:120px">
-<h1>Scanpath <b>Studio</b></h1>
-<div class="tags"><span>Web app</span><span>Desktop</span><span>Python API</span><span>CLI</span></div>
-<code>pip install scanpath-studio</code>
-<p style="font-size:26px">Free &amp; open source &nbsp;·&nbsp; lacclab.github.io/scanpath-studio</p>
-"""
 
 
 class Pointer:
@@ -335,211 +229,65 @@ def close_tour(page: Page) -> None:
         settle(page)
 
 
+def glide_click(pointer: Pointer, target: Locator, hold: float = 0.0) -> None:
+    """Move the pointer to ``target`` the way a hand would, then click it."""
+    page = pointer.page
+    # Streamlit keeps hidden copies of some controls (a popover's, a rerun's).
+    target = target.filter(visible=True).first
+    box = target.bounding_box()
+    if box is None:
+        raise RuntimeError(f"{target} is not on screen")
+    pointer.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, steps=18)
+    page.wait_for_timeout(250)
+    pointer.click()
+    page.evaluate(TO_TOP_JS)
+    pointer.move(*PARK, steps=10)
+    if hold:
+        page.wait_for_timeout(int(hold * 1000))
+
+
 def switch(page: Page, key: str) -> Locator:
     """The toggle rendered under Streamlit key ``key``."""
     return page.locator(f".st-key-{key} label")
 
 
-class Session:
-    """The recording's pointer, plus the stretches spent waiting on a rerun.
-
-    Those waits are fast-forwarded in the output (`warp`): a rerun reads as the
-    app thinking, not as the feature being shown.
-    """
-
-    def __init__(self, pointer: Pointer) -> None:
-        self.pointer = pointer
-        self.page = pointer.page
-        self.busy: list[tuple[float, float]] = []
-
-    def idle(self, quiet: float = 0.5, timeout: float = 120) -> None:
-        """Wait for Streamlit to go quiet, leaving the scroll position alone."""
-        status = self.page.locator('[data-testid="stStatusWidget"]')
-        t0 = time.time()
-        deadline = t0 + timeout
-        while time.time() < deadline:
-            if not status.count():
-                self.wait(int(quiet * 1000))
-                if not status.count():
-                    break
-            self.wait(200)
-        # The final `quiet` stretch plays at speed: it is the result on screen.
-        t1 = time.time() - quiet
-        if t1 - t0 > 0.3:
-            self.busy.append((t0, t1))
-
-    def warp(self, t: float) -> float:
-        """A frame's wall-clock time ``t`` in the output, waits fast-forwarded."""
-        cut = sum(max(0.0, min(t, b) - a) for a, b in self.busy)
-        return t - cut * (1 - 1 / WAIT_SPEEDUP)
-
-    def wait(self, ms: int) -> None:
-        self.page.wait_for_timeout(ms)
-
-    def park(self) -> None:
-        self.pointer.move(*PARK, steps=8)
-
-    def glide(self, target: Locator, click: bool = True) -> None:
-        """Move the pointer to ``target`` the way a hand would, and click it."""
-        # Streamlit keeps hidden copies of some controls (a popover's, a rerun's).
-        target = target.filter(visible=True).first
-        target.wait_for(state="visible", timeout=90_000)
-        box = target.bounding_box()
-        if box is None:
-            raise RuntimeError(f"{target} is not on screen")
-        x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
-        self.pointer.move(x, y, steps=11)
-        self.wait(200)
-        if click:
-            self.pointer.click()
-
-    def toggle(self, key: str, on: bool) -> None:
-        """Set the rail switch ``key`` to ``on``, again if a rerun moved it."""
-        for _ in range(4):
-            self.idle(quiet=0.4)
-            if self.page.evaluate(SWITCH_ON_JS, key) == on:
-                return
-            self.glide(switch(self.page, key))
-            self.wait(500)
-        self.idle()
-
-    def popover(self, key: str) -> Locator:
-        """Open the rail popover ``key``; its body."""
-        self.glide(self.page.locator(f".st-key-{key} button"))
-        self.wait(700)
-        return self.page.locator('[data-testid="stPopoverBody"]').filter(visible=True)
-
-    def close_popover(self) -> None:
-        self.page.keyboard.press("Escape")
-        self.park()
-        self.idle()
-
-    def pick(self, key: str, option: str, nth: int = 0) -> None:
-        """In the rail popover ``key``, pick ``option`` in its ``nth`` selectbox."""
-        body = self.popover(key)
-        self.glide(body.locator("[role=combobox]").nth(nth))
-        self.wait(400)
-        self.glide(self.page.locator("[role=option]", has_text=option))
-        self.idle()
-        self.wait(900)
-        self.close_popover()
-
-    def tab(self, name: str) -> None:
-        """Open the subtab ``name``, again if a late rerun moved it."""
-        tab = self.page.get_by_role("tab", name=name, exact=True)
-        for _ in range(4):
-            self.glide(tab)
-            self.wait(400)
-            if tab.filter(visible=True).first.get_attribute("aria-selected") == "true":
-                break
-            self.idle()
-        self.idle()
-
-    def caption(self, text: str | None) -> None:
-        self.page.evaluate("(t) => window.demoCaption(t)", text)
-
-    def card(self, html: str | None) -> None:
-        self.page.evaluate("(h) => window.demoCard(h)", html)
-
-    def scroll(self, y: int, ms: int = 900) -> None:
-        self.page.evaluate(SCROLL_JS, [y, ms])
-
-
-def story(s: Session) -> None:
-    """The recorded session: the Scanpath page, scene by scene."""
-    page = s.page
-    s.wait(1700)
-    s.card(None)
-    s.wait(400)
-
-    s.caption("Replay the reading, fixation by fixation")
-    s.toggle("single_animate", True)
-    s.park()
-    s.idle()
-    s.wait(5200)
-    s.toggle("single_animate", False)
-
-    s.caption("See where participants dwell")
-    s.glide(page.locator(".st-key-viz_view_heatmap button"))
-    s.park()
-    s.idle()
-    s.wait(1800)
-
-    s.caption("Build your figure layer by layer")
-    # A popover setting comes first: the first layer switch flipped right
-    # after a preset is put back, while one after any other change holds.
-    s.pick("split_mode_rail_heatmap_popover", "Oranges", nth=2)
-    s.wait(600)
-    s.toggle("global_show_fix", True)
-    s.pick("split_mode_rail_fix_popover", "Duration (ms)")
-    s.toggle("global_show_saccades", True)
-    arrows = s.popover("split_mode_rail_sac_popover").locator("label", has_text="Show")
-    s.glide(arrows)
-    s.idle()
-    s.wait(900)
-    s.close_popover()
-    s.toggle("global_show_words", True)
-    s.wait(500)
-    s.toggle("global_show_heatmap", False)
-    s.park()
-    s.idle()
-    s.wait(1200)
-
-    s.caption("Filter saccades by type")
-    body = s.popover("split_mode_rail_filter_popover")
-    s.glide(body.locator('button[aria-label="Remove Forward"]'))
-    s.idle()
-    s.close_popover()
-    s.wait(1900)
-
-    s.caption("Redact the text in one click")
-    for hold in (1900, 0):
-        body = s.popover("split_mode_rail_stim_popover")
-        s.glide(body.locator("label", has_text="Redact"))
-        s.idle()
-        s.close_popover()
-        s.wait(hold)
-
-    s.caption("Compare two participants, side by side")
-    s.toggle("single_compare_toggle", True)
-    body = s.popover("split_mode_compare_popover")
-    s.glide(body.locator("button, label", has_text="Side by side"))
-    s.idle()
-    s.close_popover()
-    s.wait(2600)
-    s.toggle("single_compare_toggle", False)
-
-    s.caption("Publication-ready export")
-    s.idle(quiet=1.0)
-    s.tab("Export")
-    s.scroll(700, 1100)
-    s.wait(400)
-    for fmt in ("SVG", "PDF"):
-        s.glide(page.locator('[data-testid="stRadio"] label', has_text=fmt))
-        s.idle()
-        s.wait(400)
-    s.glide(page.locator('[data-testid="stDownloadButton"] button'), click=False)
-    s.wait(700)
-    s.scroll(1150, 1400)
-    s.wait(1500)
-
-    s.caption("Share a link — or the code that redraws it")
-    s.scroll(360, 800)
-    s.tab("Share")
-    s.scroll(700, 900)
-    s.wait(1000)
-    code_tab = page.locator("button, [role=tab], label", has_text="Code")
-    s.glide(code_tab.filter(visible=True).last)
-    snippet = page.locator("code", has_text="plot_scanpath").filter(visible=True)
-    snippet.first.wait_for(timeout=90_000)
-    s.idle()
-    s.scroll(1000, 900)
-    s.wait(2600)
-
-    s.caption(None)
-    s.pointer.move(-40, -40)
-    s.card(OUTRO)
-    s.wait(3600)
+def story(pointer: Pointer) -> None:
+    """The recorded session, about half a minute of it."""
+    page = pointer.page
+    page.wait_for_timeout(1200)
+    # Step through a few trials.
+    for _ in range(2):
+        glide_click(pointer, page.locator(".st-key-single_next_trial button"))
+        settle(page, quiet=0.8)
+        page.wait_for_timeout(700)
+    # Where did the reader dwell?
+    glide_click(pointer, switch(page, "global_show_heatmap"))
+    settle(page, quiet=0.8)
+    page.wait_for_timeout(1600)
+    glide_click(pointer, switch(page, "global_show_heatmap"))
+    settle(page, quiet=0.6)
+    # Replay the reading.
+    glide_click(pointer, switch(page, "single_animate"))
+    settle(page, quiet=0.8)
+    pointer.move(*PARK, steps=12)
+    page.wait_for_timeout(5500)
+    glide_click(pointer, switch(page, "single_animate"))
+    settle(page, quiet=0.6)
+    # Two readers of the same text.
+    glide_click(pointer, switch(page, "single_compare_toggle"))
+    settle(page, quiet=0.8)
+    page.wait_for_timeout(2200)
+    glide_click(pointer, switch(page, "single_compare_toggle"))
+    settle(page, quiet=0.6)
+    # And the corpus as a whole.
+    glide_click(
+        pointer,
+        page.locator('[data-testid="stTopNavLink"]:has-text("Corpus Analysis")').first,
+    )
+    settle(page, quiet=1.0)
+    close_tour(page)
+    pointer.move(*PARK, steps=10)
+    page.wait_for_timeout(2500)
 
 
 def _frames_input(listing: Path) -> list[str]:
@@ -547,83 +295,54 @@ def _frames_input(listing: Path) -> list[str]:
     return ["-f", "concat", "-safe", "0", "-i", str(listing)]
 
 
-def _ffmpeg(*args: str) -> None:
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *args], check=True)
-
-
-def encode_gif(
-    listing: Path,
-    out: Path,
-    *,
-    width: int = GIF_WIDTH,
-    speedup: float = GIF_SPEEDUP,
-    colors: int = GIF_COLORS,
-) -> None:
-    """The recorded frames as a palette-optimised GIF.
-
-    The frames are first resampled to a fixed rate on disk. With palettegen and
-    paletteuse in one graph over the concat input, ffmpeg can drop every frame
-    queued before the palette is ready, leaving only the last few seconds.
-    """
+def encode_gif(listing: Path, out: Path) -> None:
+    """The recorded frames as a palette-optimised GIF."""
+    scale = f"setpts=PTS/{GIF_SPEEDUP},fps={GIF_FPS},scale={GIF_WIDTH}:-1:flags=lanczos"
     out.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as tmp:
-        frames = Path(tmp) / "%05d.png"
-        palette = Path(tmp) / "palette.png"
-        scale = f"setpts=PTS/{speedup},fps={GIF_FPS},scale={width}:-1:flags=lanczos"
-        _ffmpeg(*_frames_input(listing), "-vf", scale, str(frames))
-        fixed = ["-framerate", str(GIF_FPS), "-i", str(frames)]
-        _ffmpeg(
-            *fixed,
-            "-vf",
-            f"palettegen=max_colors={colors}:stats_mode=diff",
-            str(palette),
-        )
-        _ffmpeg(
-            *fixed,
-            "-i",
-            str(palette),
-            "-lavfi",
-            "[0:v][1:v]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle",
-            "-loop",
-            "0",
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error"]
+        + _frames_input(listing)
+        + [
+            "-filter_complex",
+            f"[0:v]{scale},split[a][b];"
+            f"[a]palettegen=max_colors={GIF_COLORS}:stats_mode=diff[p];"
+            "[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle",
             str(out),
-        )
+        ],
+        check=True,
+    )
     print(f"wrote {out} ({out.stat().st_size / 1e6:.1f} MB)", flush=True)
 
 
-def encode_mp4(
-    listing: Path, out: Path, *, width: int = GIF_WIDTH, speedup: float = GIF_SPEEDUP
-) -> None:
+def encode_mp4(listing: Path, out: Path) -> None:
     """The same frames as `encode_gif`, as H.264 — what the docs page plays."""
-    scale = f"setpts=PTS/{speedup},fps={GIF_FPS * 2},scale={width}:-2"
-    _ffmpeg(
-        *_frames_input(listing),
-        "-vf",
-        scale,
-        "-c:v",
-        "libx264",
-        "-crf",
-        "26",
-        "-preset",
-        "slow",
-        "-pix_fmt",
-        "yuv420p",
-        "-movflags",
-        "+faststart",
-        "-an",
-        str(out),
+    scale = f"setpts=PTS/{GIF_SPEEDUP},fps={GIF_FPS * 2},scale={GIF_WIDTH}:-2"
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error"]
+        + _frames_input(listing)
+        + [
+            "-vf",
+            scale,
+            "-c:v",
+            "libx264",
+            "-crf",
+            "26",
+            "-preset",
+            "slow",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            "-an",
+            str(out),
+        ],
+        check=True,
     )
     poster = out.with_name(f"{out.stem}_poster.webp")
-    _ffmpeg(
-        "-i",
-        str(out),
-        "-vframes",
-        "1",
-        "-c:v",
-        "libwebp",
-        "-quality",
-        "85",
-        str(poster),
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error", "-i", str(out), "-vframes", "1"]
+        + ["-c:v", "libwebp", "-quality", "85", str(poster)],
+        check=True,
     )
     print(f"wrote {out} ({out.stat().st_size / 1e6:.1f} MB) and {poster.name}")
 
@@ -636,22 +355,20 @@ def record(url: str, frames: Path) -> Path:
             viewport=VIEWPORT, device_scale_factor=1, color_scheme="light"
         )
         context.add_init_script(CURSOR_JS)
-        context.add_init_script(OVERLAY_JS)
         page = context.new_page()
-        session = Session(Pointer(page))
+        pointer = Pointer(page)
         # The deep link sets the replay to ×3: at real time a few seconds of GIF
         # show a handful of fixations.
         page.goto(f"{url}/?playback_speed=3", wait_until="domcontentloaded")
         settle(page, quiet=3.0)
-        page.add_style_tag(content=HIDE_CSS + OVERLAY_CSS)
+        page.add_style_tag(content=HIDE_CSS)
         close_tour(page)
         settle(page, quiet=2.0)
-        session.card(INTRO)
-        page.wait_for_timeout(800)
+        pointer.move(*PARK)
         screencast = Screencast(page, frames)
         screencast.start()
-        story(session)
-        listing = screencast.stop(session.warp)
+        story(pointer)
+        listing = screencast.stop()
         browser.close()
     return listing
 
@@ -668,8 +385,8 @@ def main() -> None:
     try:
         with tempfile.TemporaryDirectory() as tmp:
             listing = record(url, Path(tmp))
-            encode_gif(listing, OUT, width=DEMO_GIF_WIDTH, speedup=DEMO_SPEEDUP)
-            encode_mp4(listing, OUT.with_suffix(".mp4"), speedup=DEMO_SPEEDUP)
+            encode_gif(listing, OUT)
+            encode_mp4(listing, OUT.with_suffix(".mp4"))
     finally:
         if app is not None:
             app.terminate()

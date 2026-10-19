@@ -391,8 +391,14 @@ class TestThePageDrawsTheToolbarAboveTheFigure:
             fit_window=True,
             toolbar=toolbar,
         )
-        assert '<div id="truescale-k-transport" style="height:32px;">' in html
-        assert html.index("truescale-k-transport") < html.index('id="fit-k"')
+        slot = html.index('<div id="truescale-k-transport" style="height:32px;')
+        fit = html.index('id="fit-k"')
+        # The zoom buttons end the toolbar row, not float over the plot's
+        # top-left, where the title or the legend is.
+        zoom = html.index('id="zoombar-k"')
+        assert slot < zoom < fit
+        assert "order:99;" in html[zoom : html.index(">", zoom)]
+        assert "position:absolute" not in html[zoom : html.index(">", zoom)]
         assert "var BAR = 32;" in html
         assert iframe_height == height + 12 + REPLAY_TOOLBAR_PX
         static_html, static_height = tabs._true_scale_html(
@@ -405,6 +411,8 @@ class TestThePageDrawsTheToolbarAboveTheFigure:
         )
         assert '<div id="truescale-k-transport"' not in static_html
         assert "var BAR = 0;" in static_html
+        zoom = static_html.index('id="zoombar-k"')
+        assert "position:absolute" in static_html[zoom : static_html.index(">", zoom)]
         assert static_height == height + 12
 
     def test_a_first_replay_reserves_the_toolbar_not_the_band(self):

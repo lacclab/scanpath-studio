@@ -682,9 +682,8 @@ _TRUE_SCALE_TEMPLATE = """
     size.style.marginLeft = left + "px";
     var fitLeft = Math.max(0, Math.round((outer.clientWidth - W * base) / 2));
     var zb = wrap && wrap.querySelector("[data-toolbar]");
-    if (zb) {
+    if (zb && !(transport && transport.contains(zb))) {
       zb.style.left = fitLeft + 4 + "px";
-      zb.style.top = BAR + 4 + "px";
     }
     // The toolbar spans the fitted figure, whatever the zoom.
     if (transport) {
@@ -923,6 +922,11 @@ _TRUE_SCALE_TEMPLATE = """
 </script>
 """
 
+#: Where the zoom buttons sit: over the plot's top-left corner, or at the end
+#: of a replay's toolbar row (`_true_scale_html`).
+_ZOOM_TOOLBAR_FLOAT = "position:absolute;top:4px;left:4px;z-index:5;"
+_ZOOM_TOOLBAR_IN_ROW = "order:99;flex:none;margin-left:auto;"
+
 _ZOOM_TOOLBAR = """
   <div id="zoombar-__KEY__" data-toolbar style="position:absolute;top:4px;left:4px;z-index:5;
        display:flex;gap:2px;align-items:center;padding:2px 4px;
@@ -975,17 +979,23 @@ def _true_scale_html(
         # the window's height (`growCap`); the script sizes the frame to match.
         scale_js = "Math.min(avail / W, growCap())"
         iframe_height = height + 12 + toolbar
-    transport = (
-        f'<div id="{_true_scale_plot_id(key)}-transport" '
-        f'style="height:{toolbar}px;"></div>'
-        if toolbar
-        else ""
-    )
     zoom_toolbar = (
         _ZOOM_TOOLBAR.replace("__BTN__", _ZOOM_BUTTON_CSS).replace("__KEY__", key)
         if zoomable
         else ""
     )
+    transport = ""
+    if toolbar:
+        # The zoom buttons end the replay's toolbar row instead of floating
+        # over the plot's top-left corner, where a title or legend sits.
+        # `order` keeps them last whenever the player adds its controls.
+        transport = (
+            f'<div id="{_true_scale_plot_id(key)}-transport" '
+            f'style="height:{toolbar}px;display:flex;align-items:center;">'
+            + zoom_toolbar.replace(_ZOOM_TOOLBAR_FLOAT, _ZOOM_TOOLBAR_IN_ROW)
+            + "</div>"
+        )
+        zoom_toolbar = ""
     # The plot goes in last, so the other substitutions scan the template, not a
     # replay's megabytes of JSON — and cannot rewrite a placeholder-like string
     # inside the figure.

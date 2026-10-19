@@ -31,7 +31,7 @@ Bring your own data, or start with the bundled demo.
 
 <video class="sps-shot" controls muted loop playsinline preload="metadata"
        poster="assets/app_demo_poster.webp" data-autoplay
-       aria-label="Using Scanpath Studio: stepping through trials, a heatmap, a replay, a two-participant comparison and Corpus Analysis">
+       aria-label="Using Scanpath Studio: a replay, the Heatmap preset, a figure built layer by layer, saccade filters, redacted text, two participants side by side, Export and Share">
   <source src="assets/app_demo.mp4" type="video/mp4">
 </video>
 

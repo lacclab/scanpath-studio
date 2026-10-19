@@ -2,9 +2,9 @@
 
 Fixations and saccades over the text.
 
-1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
-1. Keep the Scanpath design preset, with Fixations, Saccades and Stimulus on.
-1. Use Export → Current figure to save it.
+1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
+1. In **Design presets**, click **Scanpath**. It turns on **Fixations**, **Saccades** and **Stimulus**.
+1. Save the figure from **Export** → **Current figure**.
 
 [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
 

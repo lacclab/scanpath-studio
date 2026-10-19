@@ -4,11 +4,11 @@ Save a scanpath, heatmap or comparison at the size you need.
 
 ## 1. Choose the view
 
-Select a trial in Scanpath. Choose a design preset or adjust the layers in Plot controls. Turn on Compare if the figure needs two readings. Check that text and markers are readable and nothing is clipped.
+Pick a trial in the **Scanpath** view. Choose one of the **Design presets**, or set the layers in the Plot controls. Turn on **Compare** if the figure needs two readings. Check that text and markers are readable and nothing is clipped.
 
 ## 2. Set the format and size
 
-Open Export → Current figure.
+Open the **Export** tab and find **Current figure**. Choose the **Download format**:
 
 | Output             | Format     |
 | ------------------ | ---------- |
@@ -16,11 +16,11 @@ Open Export → Current figure.
 | Vector figure      | SVG or PDF |
 | Interactive figure | HTML       |
 
-For a print PNG, set Width and DPI. For HTML that opens offline, tick Self-contained HTML.
+For a print PNG, set **Width** and **DPI**. For HTML that opens offline, tick **Self-contained HTML**.
 
 ## 3. Download
 
-Use the download button for the chosen format.
+Click the download button for the chosen format, such as **⬇ Download PNG**.
 
 \[!\[
 
@@ -30,7 +30,7 @@ Use the download button for the chosen format.
 
 ## 4. Reuse the design or share the figure
 
-- My designs in Plot controls saves the look for other trials.
-- Share → Link reopens the trial and settings; uploaded data must be loaded separately.
-- [Share → Code](https://lacclab.github.io/scanpath-studio/guides/exporting/#from-the-app-to-a-script) gives Python or CLI code to redraw the figure.
-- Share → File saves the settings to load again.
+- **My designs** in the Plot controls saves the look for other trials.
+- **Share** → **Link** reopens the trial and its settings. The link does not carry data you uploaded, so load that data separately.
+- [**Share** → **Code**](https://lacclab.github.io/scanpath-studio/guides/exporting/#from-the-app-to-a-script) gives Python or CLI code that redraws the figure.
+- **Share** → **Settings file** → **Download settings** saves the settings, and **Restore settings** loads them again.

@@ -2,10 +2,10 @@
 
 Review recordings collected by one experimenter.
 
-1. Keep an experimenter field when importing the data, or attach it in a participants table if each participant has one experimenter.
-1. Open the filter button beside Select trial and choose the experimenter. Participants-table fields appear under By participant.
+1. Keep the experimenter column when you import the data, under **Extra fields to keep**. If each participant had one experimenter, you can instead attach it in a participant metadata table.
+1. Open the filter () beside **Select trial** and choose the experimenter. Columns of a participant metadata table are under **By participant**.
 1. [Inspect and replay their trials](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/#2-inspect-a-trial).
-1. Tag trials `review` in Annotations and note recurring observations.
+1. In **Annotations**, tag trials `review` and note recurring problems.
 1. [Export the review](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/#5-save-the-review).
 
-To compare experimenters, turn on Compare, filter each scanpath's trial list by a different experimenter, and select readings of the same text.
+To compare experimenters, turn on **Compare**. Use the filter on each scanpath's row to pick a different experimenter, and choose readings of the same text.

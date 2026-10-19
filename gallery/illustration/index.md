@@ -1,11 +1,11 @@
 # Reading schematic
 
-A hand-drawn two-line text, with fixations snapped to its lines and arced saccades.
+A hand-drawn two-line text, with one fixation per word in reading order: The → cat → sat → on → the → mat. Fixations sit on the lines and saccades are arcs.
 
-1. Download the [words](https://lacclab.github.io/scanpath-studio/gallery/illustration/words.csv) and [fixations](https://lacclab.github.io/scanpath-studio/gallery/illustration/fixations.csv), then choose + → Import files in the app.
-1. Add the two tables as a dataset, with Recording setup → Screen → I know it set to 450 × 340. Select its only trial and Reset visualization.
-1. In Fixations → Snap, choose To line and show the reading order. In Saccades → Shape, choose Arc.
-1. In Figure & canvas, hide the duration size key and set the Illustration label text to “Illustration · hand-drawn”.
+1. Load your Words and Fixations tables, or the example [words](https://lacclab.github.io/scanpath-studio/gallery/illustration/words.csv) and [fixations](https://lacclab.github.io/scanpath-studio/gallery/illustration/fixations.csv). For the example, set **Recording setup** → **Screen** to **I know it**, 450 × 340 px.
+1. Open the dataset in the **Scanpath** view and pick a trial in **Select trial**.
+1. In **Fixations** ▾, tick **Snap** → **To line** and **Fixation index** → **Show**. In **Saccades** ▾ → **Shape**, choose **Arc**.
+1. In **Figure & canvas** ▾ → **Legends**, untick **Show** for **Fixation sizes**. Under **Title & labels** → **Illustration**, enter “Illustration · hand-drawn” in **Text**.
 
 [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
 
@@ -22,11 +22,18 @@ scanpath-studio render --words words.csv --fixations fixations.csv \
 ```
 import scanpath_studio as sps
 
-from scanpath_studio.measures import fixation_in_text_mask
-from scanpath_studio.synthetic import load_synthetic_data
+from scanpath_studio.synthetic import make_synthetic_words
 
-words, fixations = load_synthetic_data()
-fixations = fixations[fixation_in_text_mask(fixations, words)].copy()
+words = make_synthetic_words()
+fixations = words[["participant_id", "trial_id", "text_id", "word_id"]].copy()
+fixations["x"] = words["x"] + words["width"] / 2
+fixations["y"] = words["y"] + words["height"] / 2
+fixations["duration_ms"] = [100, 150, 120, 200, 90, 110]
+fixations["timestamp_ms"] = (
+    fixations["duration_ms"].cumsum() - fixations["duration_ms"]
+)
+fixations["order_in_trial"] = range(1, len(fixations) + 1)
+fixations["pass_index"] = 1
 pid, tid = "synthetic", "synthetic_2line_demo"
 fig = sps.plot_scanpath(
     words,

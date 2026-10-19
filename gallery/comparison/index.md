@@ -1,18 +1,19 @@
-# Two readers
+# Two participants
 
-Two complete readings of a shorter text, labeled Reader A and Reader B.
+Two complete readings of a shorter text, labeled Participant A and Participant B.
 
-1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_2_4_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
-1. Turn on Compare. In Trial B, select participant `l7_1090`, trial `l7_1090_2_2_4_Ele_r0`.
-1. In Compare ▾, choose Overlay and set Label A / Label B to Reader A / Reader B. Leave both fixation ranges unrestricted.
-1. In Figure & canvas, choose Crop to data with a 50 px margin. Under Legends, place the comparison legend above the plot and hide the duration size key.
+1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
+1. Turn on **Compare**. In **Trial B**, choose another participant's reading of the same text.
+1. In **Compare** ▾, set **View** to **Overlay**, and name the two readings in **Label A** and **Label B**. To compare the complete readings, keep the **Index range** of both scanpaths at the full range, under **Filters & highlights** ▾ → **Fixations · A** and **Fixations · B**.
+1. In **Figure & canvas** ▾ → **Screen & framing**, tick **Frame** → **Crop to data**. Untick **Margin** → **Auto** and enter 50 px.
+1. Under **Legends**, set **Compare (A/B)** to **Top center, outside** and **Side by side**, with text size 24. Untick **Show** for **Fixation sizes**.
 
 [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md)
 
 ```
 scanpath-studio render --sample \
   -p l37_1129 -t l37_1129_2_2_4_Ele_r0 \
-  --compare-with l7_1090:l7_1090_2_2_4_Ele_r0 --compare-legend --label-a "Reader A" --label-b "Reader B" \
+  --compare-with l7_1090:l7_1090_2_2_4_Ele_r0 --compare-legend --label-a "Participant A" --label-b "Participant B" \
   --legend compare=top-center-outside,side-by-side,24 --no-duration-size-legend \
   --crop-to-data --crop-margin 50 \
   --highlight-column '' \
@@ -30,7 +31,7 @@ fig = sps.compare_scanpaths(
     (pid, tid),
     ("l7_1090", "l7_1090_2_2_4_Ele_r0"),
     highlight_column=None,
-    labels=("Reader A", "Reader B"),
+    labels=("Participant A", "Participant B"),
     fit_to_monitor=False,
     crop_margin=50,
     show_legend=True,

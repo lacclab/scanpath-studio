@@ -1,11 +1,11 @@
-# Hearts & arrows
+# Fully customizable
 
-Make a figure for a talk or teaching: pink hearts for fixations, purple arrows for the eye’s movements. This short, hand-drawn example is an illustration.
+Make a figure for a talk or teaching: pink hearts for fixations, purple arrows for the eye’s movements. This hand-drawn illustration follows The → cat → sat → on → the → mat, with one fixation per word.
 
-1. Download the [words](https://lacclab.github.io/scanpath-studio/gallery/hearts-arrows/words.csv) and [fixations](https://lacclab.github.io/scanpath-studio/gallery/hearts-arrows/fixations.csv). Choose + → Import files and add both tables. In Recording setup, choose Screen → I know it and enter 450 × 300. Add the dataset, then select the only trial and Reset visualization.
-1. In **Fixations → Marker**, choose **Heart**, set the color to `#d12d72`, size range to **18–30**, and opacity to **0.85**. Under **Snap**, choose **To line**. Turn off **Fixation index**.
-1. In **Saccades**, set **Shape** to **Arc**. Under **Line**, use `#4f46a5` and width **2.5**. Turn on **Direction arrows** with size **12**.
-1. In **Figure & canvas**, hide the duration size key and set the Illustration label to “Illustration · hand-drawn”. Keep text highlighting off.
+1. Load your Words and Fixations tables, or the example [words](https://lacclab.github.io/scanpath-studio/gallery/hearts-arrows/words.csv) and [fixations](https://lacclab.github.io/scanpath-studio/gallery/hearts-arrows/fixations.csv). For the example, set **Recording setup** → **Screen** to **I know it**, 450 × 300 px. Open the dataset in the **Scanpath** view and pick a trial in **Select trial**.
+1. In **Fixations** ▾ → **Marker**, set **Shape** to **♥ Heart**. Keep **Color** at **One color** and set its box to `#d12d72`. Set **Size** to **18–30** and **Opacity** to **0.85**. Tick **Snap** → **To line**, and leave **Fixation index** → **Show** unticked.
+1. In **Saccades** ▾, set **Shape** to **Arc**. Under **Line**, keep **Color** at **One color** with `#4f46a5`, and set **Width** to **2.5**. Tick **Direction arrows** and set **Arrow size** to **12**.
+1. In **Figure & canvas** ▾ → **Legends**, untick **Show** for **Fixation sizes**. Under **Title & labels** → **Illustration**, enter “Illustration · hand-drawn” in **Text**. Leave **Stimulus** ▾ → **Highlight words** unticked.
 
 Save the look under **My designs** to apply it to your own data.
 
@@ -27,11 +27,18 @@ scanpath-studio render --words words.csv --fixations fixations.csv \
 ```
 import scanpath_studio as sps
 
-from scanpath_studio.measures import fixation_in_text_mask
-from scanpath_studio.synthetic import load_synthetic_data
+from scanpath_studio.synthetic import make_synthetic_words
 
-words, fixations = load_synthetic_data()
-fixations = fixations[fixation_in_text_mask(fixations, words)].copy()
+words = make_synthetic_words()
+fixations = words[["participant_id", "trial_id", "text_id", "word_id"]].copy()
+fixations["x"] = words["x"] + words["width"] / 2
+fixations["y"] = words["y"] + words["height"] / 2
+fixations["duration_ms"] = [100, 150, 120, 200, 90, 110]
+fixations["timestamp_ms"] = (
+    fixations["duration_ms"].cumsum() - fixations["duration_ms"]
+)
+fixations["order_in_trial"] = range(1, len(fixations) + 1)
+fixations["pass_index"] = 1
 pid, tid = "synthetic", "synthetic_2line_demo"
 fig = sps.plot_scanpath(
     words,

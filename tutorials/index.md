@@ -26,4 +26,4 @@ Choose a task. For installation, see [Get started](https://lacclab.github.io/sca
   - [Compare groups or conditions](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/compare-groups/index.md)
   - [See progression over time](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/progression-over-time/index.md)
 
-In the app, open Help → Tutorials for guided tours of the controls.
+In the app, open **Help** → **Tutorials** for guided tours of the controls.

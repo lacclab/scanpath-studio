@@ -1,9 +1,9 @@
 # Select participants by a field
 
-Select readers using metadata such as native language, age or group.
+Select participants using metadata such as native language, age or group.
 
-1. Attach a table with one row per participant and a participant ID column: use Metadata → Participants when adding a dataset, or Data Management → Edit dataset → Data tables & column mapping afterwards.
-1. Open the filter button beside Select trial, then By participant.
+1. Attach a participant metadata table, with one row per participant and a participant ID column. When you add a dataset, use **Metadata** → **Participants**. For a loaded dataset, use **Data Management** → **Edit dataset** → **Data tables & column mapping**.
+1. Open the filter () beside **Select trial** and find **By participant**.
 1. Choose a field and the values or range to keep.
 1. Check the remaining participant IDs and [export the selection](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/#every-task-ends-the-same-way).
 

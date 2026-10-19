@@ -5,9 +5,9 @@
 1. The trial's summary.
 1. The figure.
 1. Plot controls.
-1. Annotations, Stimulus & context, Comparisons, Export and Share.
+1. The tabs: Annotations, Stimulus & context, Comparisons, Export and Share.
 
-The Scanpath view draws one reading on the screen it was recorded on.
+The **Scanpath** view draws one reading at a time, at the size of the screen it was recorded on.
 
 Looking for a specific button?
 
@@ -15,27 +15,31 @@ Looking for a specific button?
 
 ## Choose a trial
 
-Pick a trial above the plot. The filter () beside it narrows the list by text, participant, condition or annotation, and **⇅** sorts it. A trial with several screens gets a second navigator to move between them. When several participants have the same trial ID, each reading is in the list on its own, with its participant in brackets, `3 [p2]`.
+Pick a trial in **Select trial** above the plot, or step through the list with **◀ ▶**. The filter () beside it narrows the list by text, participant, condition or annotation, and **⇅** sorts it. On a trial recorded over several screens, **Screen** picks the screen to draw. When several participants have the same trial ID, the list shows each reading with its participant in brackets, such as `3 [p2]`.
+
+[All controls → Trial control bar](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/#trial-control-bar) describes each control.
 
 ## Control the layers
 
-The **Plot controls** column holds every setting of the figure. Each layer is one line: a switch, and a **▾** with its settings.
+The **Plot controls** column, on the right of the plot, holds the figure's settings. Each layer has a row with a switch that turns it on or off and a **▾** that opens its settings.
 
-| Section              | What it controls                                                                                                     |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Animate              | play the reading as a video, at a speed you choose                                                                   |
-| Compare              | a second reading beside or over this one                                                                             |
-| Design presets       | restyle the whole figure in one click: Scanpath, Heatmap, Illustration or your last custom settings                  |
-| My designs           | save the current settings as a design, apply it again in one click, or export it to share or use on another computer |
-| Palette              | one color scheme for the whole figure, such as colorblind-safe or print                                              |
-| Fixations            | markers: size, color, order                                                                                          |
-| Saccades             | lines and arrows, colored by direction or reading type                                                               |
-| Stimulus             | text, span highlight, stimulus image, font and background                                                            |
-| Word boxes           | each word's interest area: outline and fill, color and opacity                                                       |
-| Heatmap              | where fixations concentrate, by count or duration                                                                    |
-| Raw gaze             | the gaze samples as recorded                                                                                         |
-| Filters & highlights | which fixations and saccades are drawn, and which stand out                                                          |
-| Figure & canvas      | screen framing, axes and grid, title and labels, hover fields, legends                                               |
+| Section                  | What it controls                                                                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Animate**              | replay the fixations in the order they happened, at a speed you choose                                                                   |
+| **Compare**              | draw a second reading over this one, beside it or below it                                                                               |
+| **Design presets**       | restyle the whole figure in one click: **Scanpath**, **Heatmap**, **Illustration**, or **Custom** for your most recent settings          |
+| **My designs**           | save the current settings as a design, apply it again in one click, or export your designs to share them or use them on another computer |
+| **Palette**              | one color scheme for the whole figure: **Default (colorblind-safe)**, **Print / grayscale** or **High contrast**                         |
+| **Fixations**            | the fixation markers: color, shape and size, and the fixation index                                                                      |
+| **Saccades**             | the saccade lines and arrows, in one color, by direction or by saccade type                                                              |
+| **Stimulus**             | the text (or redacted blocks), highlighted words, the stimulus image, the font and the background                                        |
+| **Word boxes**           | each word's box: outline and fill, color and opacity                                                                                     |
+| **Heatmap**              | where fixations concentrate, by fixation count or duration                                                                               |
+| **Raw gaze**             | the gaze samples as recorded                                                                                                             |
+| **Filters & highlights** | which fixations and saccades are drawn, and which stand out                                                                              |
+| **Figure & canvas**      | screen framing, axes and grid, title and labels, hover fields and legends                                                                |
+
+[All controls → Plot controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/#plot-controls) describes every setting in each menu.
 
 \[!\[
 
@@ -43,13 +47,15 @@ The **Plot controls** column holds every setting of the figure. Each layer is on
 
 ## Under the plot
 
-| Tab                    | What it is for                                                                                                                                        |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Annotations**        | Star, tag and write notes on the trial, to find or filter it later.                                                                                   |
-| **Stimulus & context** | The trial's context, such as its title, question and answers, and its highlighted word spans.                                                         |
-| **Comparisons**        | Compare this trial with other trials that match it on a field you choose, such as other readings of the same text, shown side by side.                |
-| **Export**             | Download the figure (PNG, SVG, PDF, HTML) or the video (HTML, GIF, MP4), or a zip bundle of figures and data for many trials.                         |
-| **Share**              | A link that reopens this view (for whoever has the same dataset loaded), the Python or command-line code that redraws the figure, or a settings file. |
+| Tab                    | What it is for                                                                                                                                                                                                   |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Annotations**        | Star, tag and write notes on the trial, to find or filter it later.                                                                                                                                              |
+| **Stimulus & context** | The trial's context, such as its title, question and answers, and its highlighted word spans.                                                                                                                    |
+| **Comparisons**        | Show the other trials that share a field with this one, such as other readings of the same text, in a grid of small figures.                                                                                     |
+| **Export**             | Download the figure on screen (PNG, SVG, PDF or HTML) or its replay (HTML, GIF or MP4), or build a zip bundle of figures and data for many trials.                                                               |
+| **Share**              | **Link** reopens this trial with these settings for anyone who has the same dataset. **Code** gives the Python or CLI code that redraws the figure. **Settings file** saves the plot settings and restores them. |
+
+[All controls → Under the plot](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/#under-the-plot) lists each tab's controls.
 
 Watch the tabs under the figure
 
@@ -59,7 +65,7 @@ Watch the tabs under the figure
 
 ## Render in code
 
-Set up a figure in the app, then open Share → Code for its Python or CLI recipe. For uploaded data, replace the placeholder file paths with your own.
+Set up a figure in the app, then open **Share** → **Code** for the Python or CLI code that redraws it. For a dataset you imported, replace the placeholder file paths with your own.
 
 Python and CLI: render the demo
 
@@ -76,19 +82,19 @@ scanpath-studio render --sample \
   -p l37_1129 -t l37_1129_2_1_1_Ele_r0 -o scanpath.html
 ```
 
-For your own files, use the [data loaders](https://lacclab.github.io/scanpath-studio/guides/loading-data/#load-and-inspect-in-code). Figure settings are listed in the [API options](https://lacclab.github.io/scanpath-studio/figure-options/index.md) and [CLI options](https://lacclab.github.io/scanpath-studio/cli/#common-tasks).
+For your own files, use the [data loaders](https://lacclab.github.io/scanpath-studio/guides/loading-data/#load-and-inspect-in-code). The [figure options table](https://lacclab.github.io/scanpath-studio/api/#figure-options) lists every figure setting with its Python keyword and CLI flag. For more CLI examples, see [Common tasks](https://lacclab.github.io/scanpath-studio/cli/#common-tasks).
 
-The [gallery](https://lacclab.github.io/scanpath-studio/gallery/index.md) gives app, CLI and Python instructions for heatmaps, comparisons, replays and other views. For [batch exports and GIF/MP4](https://lacclab.github.io/scanpath-studio/guides/exporting/index.md), see Export and share.
+The [gallery](https://lacclab.github.io/scanpath-studio/gallery/index.md) shows how to make heatmaps, comparisons, replays and other figures in the app, the CLI and Python. For batch export and GIF or MP4 replays, see [Export and share](https://lacclab.github.io/scanpath-studio/guides/exporting/index.md).
 
 ## Back up your work
 
-Each of these files can be saved and loaded again:
+You can save each of these to a file and load it again:
 
-| What                               | Where                                      |
-| ---------------------------------- | ------------------------------------------ |
-| figure settings                    | **Share → Settings file**                  |
-| favorites, tags and notes          | **Data Management → Annotations → Export** |
-| column mapping and recording setup | **Edit dataset → Download setup file**     |
-| saved figure designs               | **My designs → Export**                    |
+| What                               | Where                                              |
+| ---------------------------------- | -------------------------------------------------- |
+| figure settings                    | **Share** → **Settings file**                      |
+| favorites, tags and notes          | **Data Management** → **Annotations** → **Export** |
+| column mapping and recording setup | **Edit dataset** → **Download setup file**         |
+| saved figure designs               | **My designs** → **Export**                        |
 
-None of them holds your data, so load the same data before restoring one. On your own computer, the app also keeps your datasets and work between sessions.
+None of these files holds your data, so load the same data before you restore one. In the desktop app or a local install, the app also keeps your datasets, annotations and designs between sessions. See **Data Management** → **Saved on this computer**.

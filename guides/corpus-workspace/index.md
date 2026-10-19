@@ -1,32 +1,34 @@
 # Corpus Analysis
 
-Summarize reading measures by text, participant or group. The selected dataset and trial filters apply here too.
+The **Corpus Analysis** view summarizes reading measures by text, participant or group. It uses the selected dataset and the trials your filters keep.
 
 ## Choose a view
 
-| View            | Use it to                                        |
-| --------------- | ------------------------------------------------ |
-| Per text        | Compare word-by-word reading across participants |
-| Per participant | Inspect one participant across trials            |
-| Groups          | Compare conditions or populations                |
+Open a tab, then pick a figure in its **View** menu.
 
-Choose a measure, aggregation and spread. For word profiles, set the minimum number of participants per word.
+| Tab                 | Use it to                                                          |
+| ------------------- | ------------------------------------------------------------------ |
+| **Per text**        | Compare word-by-word reading across participants                   |
+| **Per participant** | Inspect one participant across trials                              |
+| **Groups**          | Describe a group of trials, or compare two, such as two conditions |
+
+Choose the **Measure**, how to **Aggregate** it and, where a view draws a band, its **Spread**. For word profiles, set **Min participants per word**.
 
 ## Supply reading measures
 
-Word-level analyses use the [reading measures in your data](https://lacclab.github.io/scanpath-studio/guides/loading-data/#reading-measures), such as first fixation duration or total fixation duration. Map those columns when importing. Fixation views use the fixation table.
+Word-level views use the [reading measures in your data](https://lacclab.github.io/scanpath-studio/guides/loading-data/#reading-measures), such as first fixation duration or total fixation duration. Map those columns when you import. Views of single fixations, such as **Fixation duration over time**, use the Fixations table.
 
 ## Compare groups
 
-Split on a field or define cohorts with filters. Turn on Compare a second group to see group means and their difference. These comparisons are descriptive.
+Under **Define groups by**, choose **Split a field** to pick a group by the values of one field, or **Independent filter sets** to build it from filters. Turn on **Compare a second group** to define a group B and see the two groups side by side, their means and their difference. These views are descriptive and run no significance tests.
 
 ## Save results
 
-Download a result table as CSV and its analysis recipe as JSON. The recipe records the dataset, filters and analysis choices. Return to Scanpath to inspect individual trials.
+Under each result, **⬇ Download this table (CSV)** saves the table and **⬇ Download the recipe (JSON)** saves how it was made: the dataset, the trial filters, the analysis choices and the counts. The recipe holds no data rows and no figure settings. To inspect single trials, return to the Scanpath view.
 
 ## Plot a summary in code
 
-Use a tidy summary table: a word profile needs `word_id` and `value`, with optional `lo` and `hi` for a band. Rename a source word ID column to `word_id` if needed. Use a result table exported from Corpus Analysis. For a trial-order trend, see [Across the experiment](https://lacclab.github.io/scanpath-studio/gallery/across-experiment/index.md).
+Start from a tidy summary table, such as a **Cohort profile** table downloaded from Corpus Analysis. A word profile needs `word_id` and `value` columns, with optional `lo` and `hi` for a band. The downloaded table names the word ID column as your data does, so rename it to `word_id` if needed. For a trend over trial order, see [Across the experiment](https://lacclab.github.io/scanpath-studio/gallery/across-experiment/index.md).
 
 Python and CLI: word profile
 

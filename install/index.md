@@ -33,7 +33,7 @@
 
 ## Your first figure
 
-Start with the bundled [OneStop sample](https://lacclab.github.io/scanpath-studio/guides/loading-data/#onestop). No files to prepare: choose a look and save an interactive figure.
+Start with the bundled demo, a subset of the [OneStop corpus](https://lacclab.github.io/scanpath-studio/guides/loading-data/#onestop). You don't need to prepare any files. Choose a look, then save an interactive figure.
 
 \[!\[
 
@@ -41,15 +41,15 @@ Start with the bundled [OneStop sample](https://lacclab.github.io/scanpath-studi
 
 - **1 · Open a reading**
 
-  In Scanpath, keep **Bundled demo** selected. Use **Select trial** to choose a reading.
+  In the **Scanpath** view, choose **Bundled demo** in **Select dataset**. Then choose a reading in **Select trial**.
 
 - **2 · Choose a view**
 
-  Click **Heatmap** in Design presets to see where fixation time concentrates. Switch to **Scanpath** to follow the sequence.
+  In **Design presets**, click **Heatmap** to see where fixation time concentrates. Click **Scanpath** to follow the order of fixations.
 
 - **3 · Save your figure**
 
-  Open **Export → Current figure**, choose **HTML**, then download. Open the saved file to explore the figure in your browser.
+  In the **Export** tab under the plot, find **Current figure**. Set **Download format** to **HTML**, then click **⬇ Download HTML**. Open the saved file in your browser to zoom and hover over the figure.
 
 ## Next steps
 

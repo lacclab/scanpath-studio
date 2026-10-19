@@ -4,33 +4,35 @@
 
 ### The fixations don't line up with the text
 
-Words and fixations must use the same pixel coordinates and share trial IDs. If the fixations are shifted, mirrored or scaled against the words, the two tables are in different coordinate frames — a different origin, unit or offset — and no setting here fixes that; convert one of them ([What your data needs → Files and units](https://lacclab.github.io/scanpath-studio/guides/loading-data/#tables)). If the alignment is right but the figure is framed or sized wrongly, the recording screen size is: set the resolution of the monitor used in the experiment under **Data Management → Edit dataset → Recording setup** (**Screen → I know it**). *Estimate from my data* only gives a lower bound.
+Words and fixations must use the same pixel coordinates and share trial IDs. If the fixations are shifted, mirrored or scaled against the words, the two tables use different coordinates: a different origin, unit or offset. No setting in the app fixes that, so convert one of the tables ([What your data needs → Files and units](https://lacclab.github.io/scanpath-studio/guides/loading-data/#tables)).
+
+If the fixations sit on the words but the figure is framed or sized wrongly, set the screen resolution of the monitor used in the experiment. Open **Data Management** → **Edit dataset** → **Recording setup** and choose **Screen** → **I know it**. *Estimate from my data* gives only a lower bound.
 
 ### The text is too big or too small
 
-Text is drawn to scale from the word boxes and the recording screen size. Set the real resolution (see above); for OneStop it is 2560×1440. In Python, pass `canvas_size=(2560, 1440)`. If it is still off, set the line spacing (how far apart the lines are, in font sizes) under **Recording setup → Text size → Fit to word boxes**, or `line_spacing=` in Python.
+The text is drawn to scale from the word boxes and the recording screen size. Set the real resolution first (see above). For OneStop it is 2560×1440, and in Python you pass `canvas_size=(2560, 1440)`. If the text is still off, set the line spacing under **Recording setup** → **Text size** → **Fit to word boxes**, or `line_spacing=` in Python. Line spacing is the distance between lines, in font sizes.
 
 ### A column was detected wrongly
 
-The app guesses columns from their names. Pick the right one under **Data Management → Edit dataset**, or pass `word_schema` / `fix_schema` to load_scanpath_data.
+The app guesses columns from their names. Pick the right one under **Data Management** → **Edit dataset**, or pass `word_schema` / `fix_schema` to load_scanpath_data.
 
 ### Can I load only one table?
 
-Yes. A Words table alone shows the text and any reading measures it carries; a fixations table alone shows gaze positions without text. Most features need both. The same holds trial by trial: when the two tables cover different trials, every trial either one has is listed, and drawn with what it has.
+Yes. A Words table alone shows the text and any reading measures it carries. A Fixations table alone shows the fixations without the text. A Raw gaze table can also be the only table. Most features need both words and fixations. When your tables cover different trials, every trial that any of them has is listed and drawn with the layers it has.
 
 ### Can I open PoTeC or OneStop in the online demo?
 
-No. The online demo has only the bundled demo data, and it doesn't download corpora. In the desktop app or a pip install, each public corpus downloads once, with one click, and stays on your computer.
+No. The online demo has only the bundled demo, and it doesn't download public datasets. In the desktop app or a pip install, each public dataset downloads once, with one click, and stays on your computer.
 
 ### My zip file is refused as too large
 
-The app limits how far a `.zip` may decompress (32 GB per file, 64 GB in total). The error names the setting that raises it, for example `SCANPATH_ZIP_MAX_MEMBER_GB=64 scanpath-studio`.
+The app limits how far a `.zip` may decompress: 32 GB per file and 64 GB in total. The error names the setting that raises the limit, for example `SCANPATH_ZIP_MAX_MEMBER_GB=64 scanpath-studio`.
 
 ## Results
 
 ### Does the app compute reading measures?
 
-No. Corpus Analysis and Export show the measures your interest-area report provides, as your eye-tracking software defines them.
+No. Corpus Analysis and Export show the reading measures in your Words table, as your eye-tracking software defines them ([Reading measures](https://lacclab.github.io/scanpath-studio/guides/loading-data/#reading-measures)).
 
 ### Does Filters & highlights change my data?
 
@@ -40,23 +42,27 @@ No. It changes only what the figure draws. Your tables and measures stay as they
 
 ### Image or video export fails
 
-PDF, GIF and MP4 exports, static images from Python or the CLI, and image bundles need Chrome, Chromium or Edge on the computer running Scanpath Studio. Installing one is enough. With a pip install you can instead run `plotly_get_chrome -y` once. HTML, and the current figure's PNG and SVG, work without a browser.
+These exports need Chrome, Chromium or Edge on the computer that runs Scanpath Studio: PDF, GIF and MP4 files, static images from Python or the CLI, and export bundles with images. Installing one of these browsers is enough. With a pip install you can instead run `plotly_get_chrome -y` once. HTML files, and the current figure's PNG and SVG, work without a browser.
 
 ### Can someone else open my share link?
 
-Yes, but the link does not contain your uploaded data, so they need to load the same dataset first. The bundled demo opens directly, and a public corpus opens if they have it set up.
+Yes, but the link does not contain your data, so they need to load the same dataset first. The bundled demo opens directly. A public dataset opens if they have it set up.
 
 ## Privacy and storage
 
 ### Where does my data go?
 
-When you run it locally or as the desktop app, nowhere: it stays on your computer. There are no accounts and no analytics. Don't upload identifiable data to the online demo. See [Privacy](https://lacclab.github.io/scanpath-studio/privacy/index.md).
+When you run Scanpath Studio locally or as the desktop app, your data stays on your computer. There are no accounts, and `scanpath-studio` and the desktop app send no usage statistics. Don't upload identifiable data to the online demo. See [Privacy](https://lacclab.github.io/scanpath-studio/about/#privacy).
+
+### Can I share a figure without showing the text?
+
+Yes. Turn on **Stimulus** ▾ → **Text** → **Redact**. Each word becomes a rounded block over its letters, so the figure keeps the layout of the text but none of its words. Hovers and saved HTML hide the words too. Also turn off the stimulus image, since it shows the screen as it was. On the command line, use `render --redact-text`, and in Python `redact_text=True`. The data tables and exported tables still hold the words.
 
 ### Will a refresh lose my work?
 
-Not on a local or desktop install: the app saves your datasets and settings on this computer (when it listens only on this computer, as `scanpath-studio` and the desktop app do), and **Data Management → Saved on this computer** shows what it holds. The online demo keeps nothing, and says so after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#back-up-your-work)).
+Not on a local or desktop install. When the app listens only on this computer, as `scanpath-studio` and the desktop app do, it saves your datasets and settings there. **Data Management** → **Saved on this computer** shows what it holds. The online demo keeps nothing and says so after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#back-up-your-work)).
 
-If one saved dataset's files go missing or are damaged, the rest of the session still comes back. The app names the dataset that didn't, keeps its saved copy as it is, and offers **Retry** and **Remove saved copy**. Saved metadata tables that can't be read are kept the same way. If the whole saved copy can't be read, the app opens without it and stops saving over it until you retry or clear it.
+If the files of one saved dataset go missing or are damaged, the rest of the session still comes back. The app names the dataset it could not restore, keeps that saved copy unchanged, and offers **Retry** and **Remove saved copy**. Saved metadata tables that can't be read are kept the same way. If the whole saved copy can't be read, the app opens without it and stops saving over it until you retry or clear it.
 
 ### How do I stop saving, or delete what is saved?
 
@@ -66,13 +72,13 @@ Start the app with `scanpath-studio run --no-persist` to save nothing. To delete
 
 ### Where do I ask a question, report a bug or send feedback?
 
-**Help → Send feedback** in the app lists where each kind goes — a bug report, a feature request, an idea or comment, or a question — and shows the version and system details a bug report needs, ready to copy. Nothing is sent from the app: each route is a GitHub page you submit yourself.
+**Help** → **Send feedback** links each kind of feedback to its page on GitHub: **Report a bug**, **Suggest a feature**, **Share an idea** and **Ask a question**. It also shows the version and system details a bug report needs, ready to copy. The app sends nothing. You submit each one on GitHub yourself.
 
-Ask in [Discussions → Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a). Report a bug as a [GitHub issue](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md), with the version, your operating system and how you run the app (pip, the desktop app or the online demo). **Help → About** shows the version and links both; on the command line, `scanpath-studio --version`.
+Ask questions in [Discussions → Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a). Report a bug as a [GitHub issue](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md), with the version, your operating system and how you run the app (pip, the desktop app or the online demo). **Help** → **About** shows the version and links to both. On the command line, run `scanpath-studio --version`.
 
 ### How do I update Scanpath Studio?
 
-Open **Help → About → Check for updates**. In the desktop app, choose **Update & restart**. For a Python install, run:
+Open **Help** → **About** → **Check for updates**. In the desktop app, choose **Update & restart**. For a Python install, run:
 
 ```
 pip install -U scanpath-studio
@@ -80,10 +86,10 @@ pip install -U scanpath-studio
 
 ### Will my links, settings and scripts work after an update?
 
-Not necessarily. Until version 1.0, any release may change the app, its share links and saved settings, the Python API and the CLI. The [changelog](https://github.com/lacclab/scanpath-studio/blob/main/CHANGELOG.md) lists every change. To reproduce a result exactly, note the version you used and install that one: `pip install scanpath-studio==<version>`.
+Not necessarily. Until version 1.0, any release may change the app, its share links and saved settings, the Python API and the CLI. The [changelog](https://github.com/lacclab/scanpath-studio/blob/main/CHANGELOG.md) lists the changes in each release. To reproduce a result, note the version you used and install that one: `pip install scanpath-studio==<version>`.
 
 ## Citing
 
 ### How do I cite Scanpath Studio?
 
-See [Cite](https://lacclab.github.io/scanpath-studio/cite/index.md) for BibTeX and APA entries, and for the datasets you used.
+See [Cite Scanpath Studio](https://lacclab.github.io/scanpath-studio/about/#cite-scanpath-studio) for BibTeX and APA entries, and [Bundled demo](https://lacclab.github.io/scanpath-studio/about/#bundled-demo) for the bundled demo's source.

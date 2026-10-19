@@ -14,7 +14,7 @@
 
 ## Before you start
 
-Open a dataset in Scanpath. The filter button beside Select trial selects whole trials. Plot controls → Filters & highlights changes which fixations and saccades the figure draws.
+Open a dataset in the **Scanpath** view. The filter () beside **Select trial** selects whole trials. **Filters & highlights** in the Plot controls changes which fixations and saccades the figure draws.
 
 \[!\[
 
@@ -23,5 +23,5 @@ Open a dataset in Scanpath. The filter button beside Select trial selects whole 
 ## Check and export the selection
 
 1. Check the remaining trial and participant counts and inspect a few trials.
-1. Follow [Export every trial](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-every-trial/index.md), choosing the active filtered pool. The bundle's `index.csv` lists its files and trial IDs.
-1. Keep a full decision record with [Data Management → Annotations → Export](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/#5-save-the-review). Bundle annotations cover only the exported trials.
+1. Follow [Export every trial](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-every-trial/index.md) and choose **All filtered trials**. The bundle's `index.csv` lists its files with their participant and trial IDs.
+1. Keep a full decision record with [Data Management → Annotations → Export](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/#5-save-the-review). The annotations in a bundle cover only the exported trials.

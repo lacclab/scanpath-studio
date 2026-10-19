@@ -1,15 +1,15 @@
 # Export and share
 
-Save a figure, export a batch, or reuse a view in the app or in code.
+Save a figure, export many trials at once, or reuse a view in the app or in code.
 
 ## In the app
 
-| Goal                                | Where                       |
-| ----------------------------------- | --------------------------- |
-| Save the figure or replay on screen | Export → Current figure     |
-| Export many trials and their tables | Export → Export bundle      |
-| Share a view or copy its code       | Share → Link or Code        |
-| Reuse the design                    | My designs, or Share → File |
+| Goal                                | Where                                            |
+| ----------------------------------- | ------------------------------------------------ |
+| Save the figure or replay on screen | **Export** → **Current figure**                  |
+| Export many trials and their tables | **Export** → **Export bundle**                   |
+| Share a view or copy its code       | **Share** → **Link** or **Code**                 |
+| Reuse the figure settings           | **My designs**, or **Share** → **Settings file** |
 
 For step-by-step instructions, see the [export tutorials](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/index.md).
 
@@ -17,17 +17,17 @@ For step-by-step instructions, see the [export tutorials](https://lacclab.github
 
 \](../../assets/workflows/share-link_poster.webp)\](../../assets/workflows/share-link.mp4)
 
-A shared link reopens the view for someone with the same dataset loaded.
+A link reopens the trial and its settings for anyone who has the same dataset. [All controls → Under the plot](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/#under-the-plot) says what the recipient needs.
 
 ## Reproduce a figure
 
-Open Share → Code and copy Python or CLI. The snippet carries the figure's settings and your column mapping; replace any placeholder file paths. [Render in code](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#render-in-code) shows a minimal example.
+Open **Share** → **Code** and copy the Python or CLI code. It carries the figure's settings and your column mapping. For a dataset you imported, replace the placeholder file paths with your own. [Render in code](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#render-in-code) shows a minimal example.
 
-For a print-sized PNG, Python's `save_figure` accepts `width_mm` and `dpi`; the CLI uses `--width-mm` and `--dpi`. Use `save_figure_layers` or `render --separable-layers` for editable layers.
+For a PNG at print size, pass `width_mm` and `dpi` to `save_figure`, or `--width-mm` and `--dpi` to `render`. To edit the layers in a vector editor, save each layer to a separate file with `save_figure_layers` or `render --separable-layers`. In the app's export bundle, this is **Layers as separate files**.
 
 ## Batch export
 
-Export → Export bundle uses the chosen trials in the app. For a scripted batch, loop over the trial list:
+In the app, **Export bundle** → **Trials to include** picks the trials: **This trial**, **All filtered trials**, **All trials of one participant**, **All trials of one text** or **All trials, ignoring filters**. For a scripted batch, loop over the trial list:
 
 Python: one HTML figure per trial
 
@@ -45,11 +45,11 @@ for pid, tid in sps.list_trials(words, fixations).itertuples(index=False):
     sps.save_figure(fig, out / f"{pid}_{tid}.html")
 ```
 
-Use the [data loaders](https://lacclab.github.io/scanpath-studio/guides/loading-data/#load-and-inspect-in-code) for your own files. The CLI's `render` writes one trial per invocation.
+Use the [data loaders](https://lacclab.github.io/scanpath-studio/guides/loading-data/#load-and-inspect-in-code) for your own files. The CLI's `render` writes one trial per run.
 
 ## Replay export
 
-With Animate on, Export → Current figure saves HTML, GIF or MP4. The CLI's `render --animate` saves interactive HTML. For a GIF or MP4 in Python:
+With **Animate** on, **Export** → **Current figure** saves the replay as HTML, GIF or MP4. The CLI's `render --animate` saves interactive HTML only. For a GIF or MP4 in Python:
 
 Python: save a GIF or MP4
 

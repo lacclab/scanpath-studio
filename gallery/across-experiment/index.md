@@ -1,10 +1,10 @@
 # Across the experiment
 
-Mean total fixation duration per word across the demo reader’s recorded trials. Each point summarizes one trial; this is the bundled subset of the session.
+Mean total fixation duration per word across one participant’s trials in the bundled demo. Each point is one trial. The bundled demo holds only part of the session.
 
-1. Select the bundled demo and open Corpus Analysis → Per participant.
-1. Choose `l37_1129`, Total fixation duration and Mean aggregation.
-1. Open Per-trial trend. The horizontal axis uses the dataset’s `trial_index`.
+1. Open your data in the **Corpus Analysis** view, on the **Per participant** tab.
+1. Choose a participant, and in **View** choose **Per-trial trend**.
+1. Choose a reading measure your data provides, and **Mean** in **Aggregate**. The horizontal axis is the trial order from the data’s `trial_index` or `TRIAL_INDEX` column. Without one, the app orders the trials by fixation time, or as listed.
 
 [Follow the progression tutorial](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/progression-over-time/index.md)
 
@@ -32,7 +32,7 @@ fig = make_trend_figure(
     x_col="trial_index",
     x_label="Recorded trial order",
     y_label="Mean total fixation duration per word (ms)",
-    title="Across the experiment · Reader A",
+    title="Across the experiment · Participant A",
     canvas_width=1000,
     base_font_size=18,
     font_family="Arial",

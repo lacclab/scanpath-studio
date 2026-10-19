@@ -4146,6 +4146,44 @@ class TestFigureAndCanvasSubGroups:
         assert at.session_state["global_show_labels"] is False
 
 
+def _dialog_protos(at: AppTest) -> list:
+    """The block protos of every dialog the last run drew."""
+    found = []
+
+    def walk(node) -> None:
+        proto = getattr(node, "proto", None)
+        if (
+            getattr(getattr(proto, "DESCRIPTOR", None), "name", None) == "Block"
+            and proto.WhichOneof("type") == "dialog"
+        ):
+            found.append(proto)
+        for child in getattr(node, "children", {}).values():
+            walk(child)
+
+    walk(at._tree)
+    return found
+
+
+def _open_dialog_titles(at: AppTest) -> list[str]:
+    return [proto.dialog.title for proto in _dialog_protos(at)]
+
+
+def _dismiss_dialog(at: AppTest, title: str) -> AppTest:
+    """Close the dialog called ``title`` the way ✕, Esc or a click outside does.
+
+    AppTest has no gesture for it, so this sends what the browser sends: a
+    trigger on the dialog's own widget id, which only a dialog with an
+    ``on_dismiss`` hook has. The run it starts is the app rerun that follows.
+    """
+    (proto,) = [p for p in _dialog_protos(at) if p.dialog.title == title]
+    assert proto.dialog.id, f"{title!r} has no on_dismiss hook, so ✕ / Esc run nothing"
+    states = at._tree.get_widget_states()
+    trigger = states.widgets.add()
+    trigger.id = proto.dialog.id
+    trigger.trigger_value = True
+    return at._run(widget_state=states)
+
+
 @pytest.mark.timeout(120)
 class TestResetSettings:
     """The rail's Reset settings action puts the visualization back."""
@@ -4178,6 +4216,49 @@ class TestResetSettings:
             at.session_state["global_saccade_width"]
             == controls._VIZ_WIDGET_DEFAULTS["global_saccade_width"]
         )
+
+    def test_dismissed_reset_dialog_stays_closed(self):
+        """✕ / Esc / a click outside closes the confirmation for good: the next
+        rerun — any click in the app — must not open it again."""
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=30)
+        at.session_state["global_saccade_width"] = 7.5
+        at.run(timeout=30)
+
+        reset = [b for b in at.button if b.key == "reset_viz_settings_btn"]
+        at = reset[0].click().run(timeout=30)
+        assert _open_dialog_titles(at) == ["Reset visualization?"]
+
+        at = _dismiss_dialog(at, "Reset visualization?")
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert _open_dialog_titles(at) == []
+        at.run(timeout=30)
+        assert _open_dialog_titles(at) == []
+        # Dismissing is not confirming.
+        assert at.session_state["global_saccade_width"] == 7.5
+
+        # …and the button still opens it, once, on the next click.
+        reset = [b for b in at.button if b.key == "reset_viz_settings_btn"]
+        at = reset[0].click().run(timeout=30)
+        assert _open_dialog_titles(at) == ["Reset visualization?"]
+
+    def test_reset_dialog_cancel_keeps_settings_and_closes(self):
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=30)
+        at.session_state["global_saccade_width"] = 7.5
+        at.run(timeout=30)
+
+        reset = [b for b in at.button if b.key == "reset_viz_settings_btn"]
+        at = reset[0].click().run(timeout=30)
+        cancel = [b for b in at.button if b.key == "reset_viz_cancel"]
+        assert cancel, "Reset dialog's Cancel button not rendered"
+        at = cancel[0].click().run(timeout=30)
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert _open_dialog_titles(at) == []
+        at.run(timeout=30)
+        assert _open_dialog_titles(at) == []
+        assert at.session_state["global_saccade_width"] == 7.5
 
     def test_reset_visualization_keeps_trial_filters(self):
         """Scope check: filters are cleared from their own panel, not from here."""

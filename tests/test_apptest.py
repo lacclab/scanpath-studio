@@ -2669,6 +2669,62 @@ class TestSpotlightTour:
         assert at.session_state["tour_step"] == 0
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
+    @pytest.mark.parametrize("view", ["data", "corpus"])
+    def test_started_from_another_view_it_opens_on_scanpath(self, view):
+        """Every step points at the Scanpath view, so starting the tour from
+        the Data page or Corpus Analysis switches there first."""
+        from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
+
+        start = {"data": _VIEW_DATA, "corpus": _VIEW_CORPUS}[view]
+        at = _make_apptest(synthetic=True)
+        at.session_state["tour_seen"] = True  # no first-visit tour
+        pin_view(at, start)
+        at.run(timeout=60)
+        assert at.session_state["main_nav"] == start
+        assert self._sp_buttons(at) == set()
+
+        # Tutorials → Welcome tour → Start arms the tour the same way; the run
+        # starts on the view the last one drew, as a browser's does.
+        _replay_tour(at)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["main_nav"] == _VIEW_SCANPATH
+        assert at.session_state["tour_mode"] == "spotlight"
+        assert "tour_sp_next" in self._sp_buttons(at)
+        assert "guide_unfold_tour" not in {b.key for b in at.button}
+        # The view it opened on draws what the steps point at.
+        assert at.session_state.get("single_trial_id")
+
+    def test_first_visit_on_another_view_opens_on_scanpath(self):
+        from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
+
+        at = _make_apptest(synthetic=True)
+        # Landing on Corpus Analysis: `pin_view` without its "tour seen".
+        at.session_state["main_nav"] = _VIEW_CORPUS
+        at.session_state["_nav_mirrored"] = None
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["tour_mode"] == "spotlight"
+        assert at.session_state["main_nav"] == _VIEW_SCANPATH
+        assert "tour_sp_next" in self._sp_buttons(at)
+
+    def test_leaving_scanpath_mid_tour_folds_it(self):
+        """The card never opens over a view its steps are not about: leaving
+        Scanpath folds it to its tab, at the step it was on."""
+        from scanpath_studio.constants import _VIEW_DATA
+
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=60)
+        at.button(key="tour_sp_next").click()
+        at.run(timeout=60)
+        pin_view(at, _VIEW_DATA)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["main_nav"] == _VIEW_DATA
+        assert at.session_state["tour_mode"] == "spotlight"
+        assert at.session_state["tour_step"] == 1
+        assert self._sp_buttons(at) == set()
+        assert "guide_unfold_tour" in {b.key for b in at.button}
+
 
 class TestSetupWizard:
     """The hybrid setup wizard for the Upload source."""
@@ -3410,7 +3466,7 @@ class TestCorpusAnalysisTab:
         # has data. The subtabs are lazy — only the open one runs — so each
         # section is opened by name through the keyed tab bar.
         at = _make_apptest()
-        at.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(at, "Corpus Analysis")
         at.session_state["corpus_subtab"] = subtab
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -3434,7 +3490,7 @@ class TestCorpusAnalysisTab:
         from scanpath_studio import tabs
 
         at = _make_apptest()
-        at.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(at, "Corpus Analysis")
         at.session_state["corpus_subtab"] = subtab
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -3463,7 +3519,7 @@ class TestCorpusAnalysisTab:
         trial = str(words.loc[words[text_col].astype(str) == last, trial_col].iloc[0])
 
         at = _make_apptest()
-        at.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(at, "Corpus Analysis")
         at.session_state["corpus_subtab"] = "Per text"
         at.session_state["single_trial_id"] = trial
         at.run(timeout=60)
@@ -3475,7 +3531,7 @@ class TestCorpusAnalysisTab:
         """The page computes no reading measure, so boxes + fixations alone (the synthetic trial, a Tobii/SMI
         upload) get the page's "no reading measures" notice, not derived ones."""
         at = _make_apptest(synthetic=True)
-        at.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(at, "Corpus Analysis")
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert any("No reading measures" in i.value for i in at.info)
@@ -3494,14 +3550,14 @@ class TestCorpusAnalysisTab:
             lambda *a, **k: calls.append(1) or real(*a, **k),
         )
         at = _make_apptest()
-        at.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(at, "Corpus Analysis")
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert calls == [], "Per sentence ran while Per text was open"
         # A fresh app per tab: AppTest's router does not follow the app's own
         # `st.switch_page`, so a second run would land back on Scanpath.
         at = _make_apptest()
-        at.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(at, "Corpus Analysis")
         at.session_state["corpus_subtab"] = "Per sentence"
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -3531,7 +3587,7 @@ class TestCorpusAnalysisTab:
     def test_each_analysis_view_renders(self, view_key, view):
         # Drive each non-default analysis view and confirm it renders cleanly.
         at = _make_apptest()
-        at.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(at, "Corpus Analysis")
         # The two-group comparison views live behind the Groups 'Compare a second
         # group' toggle; the single-group views show with it off.
         at.session_state["groups_compare"] = view_key == "cmp_view"
@@ -3575,7 +3631,7 @@ class TestCorpusAnalysisTab:
                 }
             }
             at.session_state["data_source_choice"] = "No clock"
-            at.session_state["main_nav"] = "Corpus Analysis"
+            pin_view(at, "Corpus Analysis")
             at.session_state["corpus_subtab"] = "Per participant"
             at.session_state["prdr_view"] = view
             for key, value in state.items():
@@ -3599,7 +3655,7 @@ class TestCorpusAnalysisTab:
         readers are in both groups (the demo's default Difficulty split) it
         says so and withholds the standardized difference."""
         at = _make_apptest()
-        at.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(at, "Corpus Analysis")
         at.session_state["corpus_subtab"] = "Groups"
         at.session_state["groups_compare"] = True
         at.session_state["cmp_view"] = "Group means & difference"
@@ -3618,7 +3674,7 @@ class TestCorpusAnalysisTab:
         """The Measure picker carries the register's definition, unit and
         what one plotted value is; the error-bar choice says what it shows."""
         at = _make_apptest()
-        at.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(at, "Corpus Analysis")
         at.session_state["ptext_view"] = "Cohort profile"
         at.session_state["ptext3_spread"] = "SEM"
         at.run(timeout=60)
@@ -3636,7 +3692,7 @@ class TestCorpusAnalysisTab:
         # both the single-group
         # (compare off) and two-group (compare on) cases of the Groups tab.
         single = _make_apptest()
-        single.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(single, "Corpus Analysis")
         single.session_state["corpus_subtab"] = "Groups"
         single.session_state["pgrp_mode"] = "Independent filter sets"
         single.run(timeout=60)
@@ -3644,7 +3700,7 @@ class TestCorpusAnalysisTab:
         assert single.error == [], f"st.error: {[e.value for e in single.error]}"
 
         compare = _make_apptest()
-        compare.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(compare, "Corpus Analysis")
         compare.session_state["corpus_subtab"] = "Groups"
         compare.session_state["groups_compare"] = True
         compare.session_state["cmp_mode"] = "Independent filter sets"

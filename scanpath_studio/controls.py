@@ -9539,8 +9539,8 @@ def render_trial_chip_picker(
 
     host.caption(
         "Drag fields between **Shown** and **Available**, and reorder within "
-        "**Shown**. Shown fields appear as chips above the scanpath; set their "
-        "colors below the list."
+        "**Shown**. Shown fields appear in the trial summary above the "
+        "scanpath; set their colors below the list."
     )
     buckets = [
         {
@@ -9580,7 +9580,7 @@ def render_trial_chip_picker(
     _neutral = "#EEF2F7"
     shown_now = st.session_state["trial_chip_fields"]
     if shown_now:
-        host.caption("Chip colors: an optional highlight for each shown field.")
+        host.caption("Field colors: an optional highlight for each shown field.")
         colors = dict(st.session_state.get("trial_chip_colors") or {})
 
         def _reset_to_gray(field: str) -> None:
@@ -9608,7 +9608,7 @@ def render_trial_chip_picker(
                 key_to_label[key],
                 key=widget_key,
                 label_visibility="collapsed",
-                help="Highlight this chip in a color.",
+                help="Highlight this field in a color.",
                 **seed,
             )
             if picked.lower() == _neutral.lower():

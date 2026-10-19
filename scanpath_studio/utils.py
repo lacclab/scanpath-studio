@@ -1616,7 +1616,7 @@ def _select_trial_none_mode(
                 key=slider_key,
                 persist_state="session",
                 on_change=_on_trial_slider,
-                help=f"Scrub through the {n_trials} trials. Each shows its "
+                help=f"Move through the {n_trials} trials. Each shows its "
                 "index/total and id, plus the sort value when the list is "
                 "sorted. To jump to an id, use the dropdown.",
                 label_visibility="collapsed",

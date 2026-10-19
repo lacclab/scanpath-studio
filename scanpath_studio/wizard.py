@@ -1838,8 +1838,8 @@ def _wizard_table_keep_picker(
         host,
         f"Extra fields to keep — {noun}",
         "Columns not used in the mapping above. Keep the ones you want to "
-        "filter trials by, sort by, color by or show as an info chip. Columns "
-        "left out are dropped when the dataset is added.",
+        "filter trials by, sort by, color by or show in the trial summary. "
+        "Columns left out are dropped when the dataset is added.",
     )
     # No bulk-select buttons: Streamlit puts "Select all" inside the dropdown
     # itself (`select_all`, on by default under 1000 options) and draws a ✕ to
@@ -3717,8 +3717,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
             meta_heading,
             "Metadata",
             "Optional tables with one row per participant, trial or text. "
-            "Their columns work like fields in the data, in filters, chips, "
-            "trial sorting, inspection and export.",
+            "Their columns work like fields in the data, in filters, the trial "
+            "summary, trial sorting, inspection and export.",
             emphasis=True,
         )
 

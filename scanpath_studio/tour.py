@@ -29,6 +29,9 @@ Mechanics worth knowing before editing:
   containers around the page sections (app.py / tabs.py / controls.py) plus
   Streamlit's stable ``data-testid`` for the nav (``menu.NAV_SELECTOR``). Keep
   ``_SPOTLIGHT_STEPS`` in sync with them.
+- Every spotlight step points at the Scanpath view, so the tour runs only
+  there: started on another view it switches to Scanpath first, and left for
+  another view it folds to its tab (``_keep_tour_on_scanpath``).
 - ``tour_seen`` is set **before** the tour is shown, not when it's finished.
   For the dialog style, setting it on Done only would make an X-dismissal
   re-open the modal on the very next widget interaction (any full rerun
@@ -60,7 +63,7 @@ import streamlit as st
 
 from scanpath_studio.crash_report import guarded
 from scanpath_studio.html_embed import embed_html_iframe
-from scanpath_studio.menu import NAV_SELECTOR
+from scanpath_studio.menu import NAV_SELECTOR, switch_to_view
 
 from .constants import (
     _VIEW_CORPUS,
@@ -612,7 +615,16 @@ def _tour_dialog() -> None:
 
 # Spotlight steps: (selector, title, body). ``selector`` is what gets the
 # pulsing outline + scroll-into-view; None for the selector-less welcome step.
-# Bodies are markdown, kept short — the card is ~400 px wide.
+# Bodies are markdown, kept short — the card is ~400 px wide. A body names a
+# control the way the screen draws it: an icon-only button as its icon plus the
+# chevron its menu shows (`ICONS["menu_arrow"]`), then a noun ("the **+ ⌄**
+# button beside it"), never the icon standing in for a word.
+#
+# ``"dock"`` moves the card off its bottom-right corner (`_CARD_DOCKS`) on a
+# step whose target, or the popover it opens, sits there: bottom-left while the
+# filter popover, the trial summary and the rail are spotlit, top-right (over
+# the rail) for the plot, whose size legend is in its bottom-right corner, and
+# for the panels under the plot.
 # Walks the whole Scanpath screen in reading order: the plot → the
 # selection/controls above it → the chips → the rail (view modes + controls) →
 # the bottom panel → the nav. Every target is in the page or on the nav bar, so
@@ -631,17 +643,19 @@ _SPOTLIGHT_STEPS = [
     },
     {
         "selector": ".st-key-tour_grp_plot",
+        "dock": "top",
         "title": f"{ICONS['view_scanpath']} The scanpath",
-        "body": "This is the main plot. Each circle is a **fixation**, sized by "
-        "its duration (the key in the corner gives sizes in ms). The lines are "
-        "**saccades** between them.",
+        "body": "This is the main plot. Each circle is a **fixation**. Its size "
+        "shows how long it lasted (the legend in the corner gives the sizes in "
+        "ms). The lines between the circles are **saccades**.",
     },
     {
         "selector": ".st-key-tour_grp_data_source",
         "title": f"{ICONS['datasets']} Your datasets",
-        "body": "Pick the **dataset** you're viewing at the top left. "
+        "body": "Pick the **dataset** you're viewing here; the "
+        f"**{ICONS['add']} {ICONS['menu_arrow']}** button beside it adds your own. "
         f"{ICONS['view_data']} **Data Management** lists them all: click a row "
-        "there to open one, or **+ Add dataset** for your own.",
+        "there to open one.",
     },
     # Picking comes before narrowing: the picker is the control a new reader
     # reaches for first, and narrowing only means something once they have seen
@@ -650,46 +664,53 @@ _SPOTLIGHT_STEPS = [
     {
         "selector": ".st-key-tour_grp_trial_picker",
         "title": f"{ICONS['pick_trial']} Pick a trial",
-        "body": "Step through trials with the selector and ◀ ▶, or scrub the "
-        "slider, which shows the trial's position and id.",
+        "body": "Choose a trial in the list, or go to the previous or next one "
+        "with ◀ ▶. You can also drag the slider: it shows the trial's number "
+        "and id.",
     },
     {
         "selector": ".st-key-tour_grp_narrow_by",
         "popover": FUNNEL_TRIGGER,
-        "title": f"{ICONS['trial_filter']} Narrow the trials",
-        # The icon, not the word: the trigger beside the picker is Streamlit's
-        # Material funnel (`tabs._FILTER_ICON`), and "the funnel" sent readers
-        # hunting for an emoji the app never draws.
-        "body": f"{ICONS['trial_filter']} beside the trial picker, opened here "
-        "for you, holds the filters: the text and participant pickers first "
-        "(*All texts* / *All participants*), then condition and annotation "
-        "filters (favorites, tags).",
+        "dock": "left",
+        "title": f"{ICONS['trial_filter']} Filter the trials",
+        # Drawn as the button is — Streamlit's Material funnel
+        # (`tabs._FILTER_ICON`) and its chevron — since "the funnel" in words
+        # sent readers hunting for an emoji the app never draws.
+        "body": f"The **{ICONS['trial_filter']} {ICONS['menu_arrow']}** "
+        "button by the trial picker, opened here for you, holds the filters: "
+        "text and participant pickers (*All texts* / *All participants*), then "
+        "condition and annotation filters.",
     },
     {
         "selector": ".st-key-tour_grp_chips",
-        "title": f"{ICONS['chips']} Trial at a glance",
-        "body": "These chips show the trial's **identity, conditions, and summary "
-        f"stats**. Use **{ICONS['edit']}** at the end of the trial row to choose "
-        "which fields appear, drag them into order, or hide them.",
+        "dock": "left",
+        "title": f"{ICONS['chips']} Trial summary",
+        "body": "This row shows the trial's **identity, conditions and "
+        f"statistics**. The **{ICONS['edit']} {ICONS['menu_arrow']}** button "
+        "above its right end chooses which fields it shows and in what order, or "
+        "hides it.",
     },
     {
         "selector": ".st-key-tour_grp_view_modes",
+        "dock": "left",
         "title": f"{ICONS['animate']} Animate & compare",
         "body": "**Animate** replays the trial fixation by fixation. "
         "**Compare** adds a second scanpath, overlaid or side by side, from this "
-        "dataset or from another one via **Dataset B**. The ▾ beside each "
-        "toggle opens its settings.",
+        "dataset or from another one via **Dataset B**. The "
+        f"**{ICONS['menu_arrow']}** beside each toggle opens its settings.",
     },
     {
         "selector": ".st-key-tour_grp_viz_controls",
+        "dock": "left",
         "title": f"{ICONS['plot_controls']} Plot controls",
-        "body": "Toggle and style each layer: fixations, saccades, stimulus, word "
-        "boxes, heatmap, raw gaze. **Design presets** switch between Scanpath, "
-        "Heatmap, Illustration and Custom, and "
-        f"**{ICONS['designs']} My designs** saves yours under a name.",
+        "body": "Turn each layer on or off and set its style: fixations, "
+        "saccades, stimulus, word boxes, heatmap, raw gaze. **Design presets** "
+        "switch between Scanpath, Heatmap, Illustration and Custom. "
+        f"**{ICONS['designs']} My designs** saves your own.",
     },
     {
         "selector": ".st-key-tour_grp_subtabs",
+        "dock": "top",
         "title": f"{ICONS['panels']} Per-trial panels",
         "body": f"Below the plot: **{ICONS['annotations']} Annotations**, **{ICONS['stimulus']} Stimulus & context**, "
         f"**{ICONS['comparisons']} Comparisons**, **{ICONS['export']} Export**, and "
@@ -699,9 +720,9 @@ _SPOTLIGHT_STEPS = [
         "selector": NAV_SELECTOR,
         "title": f"{ICONS['nav']} The menu bar",
         "body": f"**{ICONS['view_scanpath']} Scanpath** is this view. "
-        f"**{ICONS['view_corpus']} Corpus Analysis** pools all participants; "
-        f"**{ICONS['view_data']} Data Management** lists your "
-        f"datasets and adds new ones. **{ICONS['help']} Help** opens over your work.",
+        f"**{ICONS['view_corpus']} Corpus Analysis** shows all participants "
+        f"together. **{ICONS['view_data']} Data Management** lists your datasets "
+        f"and adds new ones. **{ICONS['help']} Help** opens in a window.",
     },
 ]
 
@@ -777,10 +798,19 @@ _CARD_CSS = """
 .st-key-wizard_guide_dont_show label p { font-size: 0.85rem !important; }
 """
 
+#: Where a step's ``"dock"`` puts the card instead of the bottom-right corner.
+#: ``left`` keeps the plot's right side, the filter popover and the rail clear;
+#: ``top`` lifts it over the rail, clear of the plot's size legend and the
+#: panels under the plot, below Streamlit's fixed header (3.75rem).
+_CARD_DOCKS = {
+    "left": ".st-key-tour_card { left: 1.25rem; right: auto; }",
+    "top": ".st-key-tour_card { top: 4.75rem; bottom: auto; }",
+}
+
 # Welcome step only: center the card like a modal and dim the app behind it
 # (the `.tour-backdrop` div is rendered only on that step). From step 2 on,
-# the card drops to the bottom-right corner so it never covers the
-# highlighted section.
+# the card sits in a corner (bottom-right unless the step docks it elsewhere,
+# see `_CARD_DOCKS`) so it never covers the highlighted section.
 _WELCOME_CSS = """
 .st-key-tour_card {
     top: 50%;
@@ -832,6 +862,8 @@ def guide_folded(kind: str) -> bool:
 
 def _set_guide_folded(kind: str, folded: bool) -> None:
     st.session_state[_guide_folded_key(kind)] = folded
+    if kind == "tour" and not folded:
+        _send_tour_to_scanpath()
 
 
 def _render_guide_fold_button(kind: str, name: str) -> None:
@@ -1350,6 +1382,16 @@ def render_spotlight_tour() -> None:
     """
     if st.session_state.get("tour_mode") != "spotlight":
         return
+    if (
+        st.session_state.get(_TOUR_TO_SCANPATH_KEY)
+        and not guide_folded("tour")
+        and st.session_state.get("main_nav", _VIEW_SCANPATH) != _VIEW_SCANPATH
+    ):
+        # Opened again from its tab on another view. This is a fragment rerun,
+        # which cannot change the view; the full run it hands over to does
+        # (`_keep_tour_on_scanpath`). A full run has already taken the request
+        # by the time it draws this fragment, so this never fires there.
+        st.rerun(scope="app")
     n = len(_SPOTLIGHT_STEPS)
     step_idx = min(st.session_state.get("tour_step", 0), n - 1)
     step = _SPOTLIGHT_STEPS[step_idx]
@@ -1376,6 +1418,7 @@ def render_spotlight_tour() -> None:
         + _card_colors_css()
         + _GUIDE_MOVE_CSS
         + (_WELCOME_CSS if step_idx == 0 else "")
+        + _CARD_DOCKS.get(step.get("dock", ""), "")
         + (_CARD_OVER_POPOVER_CSS if step.get("popover") else "")
         + highlight
         + "</style>",
@@ -1500,6 +1543,52 @@ def tour_suppressed(query_params) -> bool:
     return any(k in query_params for k in ("source", "participant", "trial", "tab"))
 
 
+#: Set while the spotlight tour waits to be taken to the Scanpath view, the one
+#: view that draws every section its steps point at. Armed by starting the tour
+#: or opening its folded tab anywhere else; served by `_keep_tour_on_scanpath`.
+_TOUR_TO_SCANPATH_KEY = "_tour_to_scanpath"
+
+
+def _send_tour_to_scanpath() -> None:
+    """Ask the next full run to take the tour to the Scanpath view.
+
+    ``main_nav`` holds the view the last run drew (``menu.render_nav`` mirrors
+    it), so a tour started or reopened on Scanpath asks for nothing.
+    """
+    if st.session_state.get("main_nav", _VIEW_SCANPATH) != _VIEW_SCANPATH:
+        st.session_state[_TOUR_TO_SCANPATH_KEY] = True
+
+
+def _keep_tour_on_scanpath(active_view: str) -> None:
+    """Keep the open spotlight tour on the Scanpath view.
+
+    Every step points at a section of that view — the plot, the trial picker,
+    the rail — so the tour is never shown open anywhere else:
+
+    - started (or reopened from its tab) on another view, it switches to
+      Scanpath, where the dataset in the picker is loaded and drawn, before its
+      first card is drawn;
+    - left for another view mid-tour, it folds to its tab, which keeps its step
+      and brings it back to Scanpath when opened.
+
+    One switch per request: the request is dropped before switching, so a page
+    that holds the screen whatever the nav says (the add-dataset wizard) folds
+    the tour on the next run rather than switching forever. Where the nav
+    already sits on Scanpath under such a page, the tour folds at once.
+    """
+    to_scanpath = st.session_state.pop(_TOUR_TO_SCANPATH_KEY, False)
+    if (
+        st.session_state.get("tour_mode") != "spotlight"
+        or guide_folded("tour")
+        or active_view == _VIEW_SCANPATH
+    ):
+        return
+    if to_scanpath and st.session_state.get("main_nav") != _VIEW_SCANPATH:
+        switch_to_view(_VIEW_SCANPATH)  # reruns
+        return
+    _set_guide_folded("tour", True)
+
+
 def _start_tour() -> None:
     """Kick off the configured tour style from step 0."""
     st.session_state["tour_step"] = 0
@@ -1549,16 +1638,27 @@ def _arm_tour() -> None:
         st.session_state["_tour_dialog_requested"] = True
 
 
-def maybe_show_welcome_tour() -> None:
+def maybe_show_welcome_tour(active_view: str | None = None) -> None:
     """Start the welcome tour once per session, unless this is an embed/deep link.
 
     Call from ``main()`` after the URL presets are read (the suppression
-    checks look at ``st.query_params``) but BEFORE the heavy data/plot work,
-    immediately followed by ``render_spotlight_tour()`` — Streamlit streams
-    elements in run order, so anything rendered after the data load appears
-    seconds late. The dialog style opens here and overlays whatever renders
-    after it; the spotlight style just arms ``tour_mode``.
+    checks look at ``st.query_params``) and after the nav has resolved
+    ``active_view``, but BEFORE the heavy data/plot work, immediately followed
+    by ``render_spotlight_tour()`` — Streamlit streams elements in run order,
+    so anything rendered after the data load appears seconds late. The dialog
+    style opens here and overlays whatever renders after it; the spotlight
+    style arms ``tour_mode`` and, off the Scanpath view, switches to it
+    (`_keep_tour_on_scanpath`). ``active_view`` defaults to the view
+    ``main_nav`` holds.
     """
+    _maybe_start_welcome_tour()
+    _keep_tour_on_scanpath(
+        active_view or st.session_state.get("main_nav", _VIEW_SCANPATH)
+    )
+
+
+def _maybe_start_welcome_tour() -> None:
+    """The once-per-session start behind :func:`maybe_show_welcome_tour`."""
     if st.session_state.pop("_tour_dialog_requested", False):
         # Replay request from `_arm_tour`.
         _tour_dialog()

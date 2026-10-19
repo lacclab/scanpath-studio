@@ -197,6 +197,11 @@ def pin_view(at, view: str) -> None:
     """
     at.session_state[NAV_KEY] = view
     at.session_state[NAV_MIRROR_KEY] = None
+    # A first run pinned to a view is about that view, but the first-visit
+    # welcome tour takes a first run to Scanpath, where its steps point. Count
+    # the tour as seen unless the test has already decided.
+    if "tour_seen" not in at.session_state:
+        at.session_state["tour_seen"] = True
     if hasattr(at, "_finished_page_script_hash"):
         at._finished_page_script_hash = ""
         at._page_hash = ""

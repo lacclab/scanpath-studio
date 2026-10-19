@@ -22,8 +22,10 @@ import pandas as pd
 import pytest
 
 from scanpath_studio.plots import (
+    REPLAY_TOOLBAR_PX,
     animation_player_post_script,
     make_scanpath_animation,
+    replay_page,
 )
 
 NODE = shutil.which("node")
@@ -92,6 +94,32 @@ def _run(fig, steps, tmp_path) -> dict:
         "meta": fig.layout.meta,
         "frames": len(fig.frames),
         "steps": steps,
+    }
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(config), encoding="utf-8")
+    done = subprocess.run(
+        [NODE, str(HARNESS), str(path)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    return json.loads(done.stdout)
+
+
+def _run_page(fig, steps, tmp_path, *, slot: bool = False) -> dict:
+    """`_run` on the layout `plots.replay_page` gives the page: the figure's
+    own controls hidden, and the player's toolbar in their place."""
+    page, _script = replay_page(fig)
+    layout = page["layout"]
+    config = {
+        "script": animation_player_post_script(fig),
+        "meta": layout["meta"],
+        "updatemenus": layout["updatemenus"],
+        "sliders": layout["sliders"],
+        "frames": len(fig.frames),
+        "steps": steps,
+        "slot": slot,
     }
     path = tmp_path / "config.json"
     path.write_text(json.dumps(config), encoding="utf-8")
@@ -303,3 +331,90 @@ class TestTransport:
         )
         assert not [at for _, at in log["shown"] if at > 3010 + TICK_MS]
         assert log["listeners"] == 0
+
+
+class TestToolbar:
+    """A page from `plots.replay_page` hides the figure's own controls; the
+    player draws one row above the figure and drives the replay from it."""
+
+    def test_the_toolbar_carries_the_figures_own_labels(self, tmp_path):
+        fig = _replay(autoplay=False)
+        log = _run_page(fig, [["run_until", 100]], tmp_path)
+        bar = log["toolbar"]
+        assert bar is not None
+        # No slot on the page: it goes straight above the plot, as wide.
+        assert not bar["in_slot"] and bar["inserted"] == 1
+        assert bar["width"] == "960px"
+        assert bar["height"] == f"{REPLAY_TOOLBAR_PX}px"
+        assert bar["attributes"]["aria-label"] == "Replay controls"
+        assert bar["buttons"] == [b.label for b in fig.layout.updatemenus[0].buttons]
+        assert bar["font"] == fig.layout.updatemenus[0].font.family
+        slider = fig.layout.sliders[0]
+        assert bar["range"]["max"] == str(len(fig.frames) - 1)
+        assert bar["readout"] == slider.currentvalue.prefix + slider.steps[0].label
+        assert bar["range"]["attributes"]["aria-valuetext"] == bar["readout"]
+        assert not log["shown"], "nothing plays without autoplay"
+
+    def test_an_embedders_slot_takes_the_toolbar(self, tmp_path):
+        log = _run_page(_replay(), [["run_until", 100]], tmp_path, slot=True)
+        assert log["toolbar"]["in_slot"] and log["toolbar"]["inserted"] == 0
+
+    def test_play_keeps_real_time_and_the_readout_follows(self, tmp_path):
+        fig = _replay(autoplay=False)
+        times = _times(fig)
+        log = _run_page(
+            fig, [["toolbar", "play"], ["run_until", times[-1] + 1000]], tmp_path
+        )
+        first = _first_shown(log)
+        assert sorted(first) == list(range(len(times)))
+        assert first[len(times) - 1] == pytest.approx(times[-1], abs=TICK_MS)
+        slider = fig.layout.sliders[0]
+        assert log["toolbar"]["range"]["value"] == str(len(times) - 1)
+        assert log["toolbar"]["readout"] == (
+            slider.currentvalue.prefix + slider.steps[-1].label
+        )
+
+    def test_pause_holds_and_play_resumes(self, tmp_path):
+        fig = _replay()
+        log = _run_page(
+            fig,
+            [
+                ["run_until", 5010],
+                ["toolbar", "pause"],
+                ["run_until", 9010],
+                ["toolbar", "play"],
+                ["run_until", 10010],
+            ],
+            tmp_path,
+        )
+        paused_on = max(int(n) for n, at in log["shown"] if at <= 5010)
+        assert not [at for _, at in log["shown"] if 5010 < at < 9010]
+        resumed = [int(n) for n, at in log["shown"] if at >= 9010]
+        assert resumed[0] == paused_on and resumed[-1] > paused_on
+
+    def test_restart_goes_to_the_start_and_stops(self, tmp_path):
+        log = _run_page(
+            _replay(),
+            [["run_until", 5010], ["toolbar", "restart"], ["run_until", 12010]],
+            tmp_path,
+        )
+        assert [(int(n), at) for n, at in log["shown"] if at >= 5010] == [(0, 5010)]
+        assert log["toolbar"]["range"]["value"] == "0"
+
+    def test_seeking_shows_that_frame_and_stops_the_clock(self, tmp_path):
+        fig = _replay()
+        log = _run_page(
+            fig,
+            [["run_until", 3010], ["seek", 300], ["run_until", 8010]],
+            tmp_path,
+        )
+        assert [(int(n), at) for n, at in log["shown"] if at >= 3010] == [(300, 3010)]
+        slider = fig.layout.sliders[0]
+        assert log["toolbar"]["range"]["value"] == "300"
+        assert log["toolbar"]["readout"] == (
+            slider.currentvalue.prefix + slider.steps[300].label
+        )
+
+    def test_a_figure_drawing_its_own_controls_gets_no_toolbar(self, tmp_path):
+        log = _run(_replay(), [["run_until", 100]], tmp_path)
+        assert log["toolbar"] is None

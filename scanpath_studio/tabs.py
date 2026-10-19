@@ -337,6 +337,7 @@ from scanpath_studio.plots import (
     normalize_legend_layout,
     reading_stimulus_image,
     replay_page,
+    replay_page_box,
     replay_size_key_range,
     set_replay_clock,
     stimulus_image_settings,
@@ -578,6 +579,7 @@ _TRUE_SCALE_TEMPLATE = """
     #skel-__KEY__ { animation: sps-skel-in .01s linear .3s forwards; } }
 </style>
 <div id="wrap-__KEY__" style="position:relative;width:100%;">
+  __TRANSPORT__
   <div id="fit-__KEY__" style="width:100%;overflow:hidden;position:relative;">
     <div id="skel-__KEY__" aria-hidden="true"></div>
     <div id="size-__KEY__" style="width:__W__px;height:__H__px;">
@@ -591,6 +593,10 @@ _TRUE_SCALE_TEMPLATE = """
 (function() {
   var W = __W__, H = __H__, ZMAX = __ZMAX__, ZOOMABLE = __ZOOMABLE__;
   var GROW = __GROW__, FIT = __FIT__, FIT_MIN = __FIT_MIN__;
+  // A replay's toolbar (`plots.REPLAY_TOOLBAR_PX`) sits above the figure, at
+  // its own size: the figure is fitted to what is left under it.
+  var BAR = __BAR__;
+  var transport = document.getElementById("truescale-__KEY__-transport");
   var outer = document.getElementById("fit-__KEY__");
   var size = document.getElementById("size-__KEY__");
   var box = document.getElementById("box-__KEY__");
@@ -609,7 +615,7 @@ _TRUE_SCALE_TEMPLATE = """
     // the one uniform transform, so the aspect ratio holds and boxes, markers,
     // strokes and text keep the same relationship to each other they have at 1x.
     if (fsOn) {
-      var availH = (window.innerHeight || H) - 8;
+      var availH = (window.innerHeight || H) - 8 - BAR;
       return Math.min(avail / W, availH / H);
     }
     return __SCALE_JS__;
@@ -621,9 +627,9 @@ _TRUE_SCALE_TEMPLATE = """
   function growCap() {
     var vh = 0;
     try { vh = window.parent.innerHeight; } catch (e) { vh = 0; }
-    var room = FIT ? fitRoom(vh) : 0;
+    var room = FIT ? fitRoom(vh) - BAR : 0;
     if (room > 0) { return Math.max(room, Math.min(FIT_MIN, H)) / H; }
-    return Math.max(1, ((vh || H) * 0.85) / H);
+    return Math.max(1, ((vh || H) * 0.85 - BAR) / H);
   }
   // The Scanpath view's figure (`fit_window`): the height left between its
   // top and the window's bottom once the subtab bar under it (Annotations …
@@ -656,7 +662,7 @@ _TRUE_SCALE_TEMPLATE = """
     var fr = null;
     try { fr = window.frameElement; } catch (e) { fr = null; }
     if (!fr) { return; }
-    var want = Math.round(H * base) + 12 + "px";
+    var want = Math.round(H * base) + 12 + BAR + "px";
     if (fr.style.height !== want) { fr.style.height = want; }
     // Streamlit sizes the frame's element container from the height it was
     // embedded at; it has to follow, or the frame spills over what is below.
@@ -678,9 +684,15 @@ _TRUE_SCALE_TEMPLATE = """
     // at its left edge, so the scroll reaches all of it.
     var left = Math.max(0, Math.round((outer.clientWidth - W * s) / 2));
     size.style.marginLeft = left + "px";
+    var fitLeft = Math.max(0, Math.round((outer.clientWidth - W * base) / 2));
     var zb = wrap && wrap.querySelector("[data-toolbar]");
-    if (zb) {
-      zb.style.left = Math.max(0, Math.round((outer.clientWidth - W * base) / 2)) + 4 + "px";
+    if (zb && !(transport && transport.contains(zb))) {
+      zb.style.left = fitLeft + 4 + "px";
+    }
+    // The toolbar spans the fitted figure, whatever the zoom.
+    if (transport) {
+      transport.style.marginLeft = fitLeft + "px";
+      transport.style.width = Math.min(outer.clientWidth, Math.round(W * base)) + "px";
     }
     outer.style.height = Math.round(H * base) + "px";
     fitFrame();
@@ -914,6 +926,11 @@ _TRUE_SCALE_TEMPLATE = """
 </script>
 """
 
+#: Where the zoom buttons sit: over the plot's top-left corner, or at the end
+#: of a replay's toolbar row (`_true_scale_html`).
+_ZOOM_TOOLBAR_FLOAT = "position:absolute;top:4px;left:4px;z-index:5;"
+_ZOOM_TOOLBAR_IN_ROW = "order:99;flex:none;margin-left:auto;"
+
 _ZOOM_TOOLBAR = """
   <div id="zoombar-__KEY__" data-toolbar style="position:absolute;top:4px;left:4px;z-index:5;
        display:flex;gap:2px;align-items:center;padding:2px 4px;
@@ -942,6 +959,7 @@ def _true_scale_html(
     max_height: int | None,
     zoomable: bool,
     fit_window: bool = False,
+    toolbar: int = 0,
 ) -> tuple[str, int]:
     """Wrap a fixed-size Plotly div in the fit-to-column (+ zoom) transform.
 
@@ -950,25 +968,45 @@ def _true_scale_html(
 
     ``fit_window`` (an uncapped figure only) sizes it to the window's height
     left under its top, keeping the subtab bar below it on screen (`fitRoom`).
+
+    ``toolbar`` is the height in px of a replay's toolbar
+    (`plots.replay_page_box`): a slot that tall goes above the figure, outside
+    the transform, for the replay player to draw it in — at its own size,
+    neither scaled nor zoomed with the figure.
     """
+    toolbar = max(int(toolbar or 0), 0)
     if max_height is not None:
         scale_js = f"Math.min(1, avail / W, {int(max_height)} / H)"
-        iframe_height = int(max_height) + 12
+        iframe_height = int(max_height) + 12 + toolbar
     else:
         # Fills the column's width — above true size too, while it still fits
         # the window's height (`growCap`); the script sizes the frame to match.
         scale_js = "Math.min(avail / W, growCap())"
-        iframe_height = height + 12
-    toolbar = (
+        iframe_height = height + 12 + toolbar
+    zoom_toolbar = (
         _ZOOM_TOOLBAR.replace("__BTN__", _ZOOM_BUTTON_CSS).replace("__KEY__", key)
         if zoomable
         else ""
     )
+    transport = ""
+    if toolbar:
+        # The zoom buttons end the replay's toolbar row instead of floating
+        # over the plot's top-left corner, where a title or legend sits.
+        # `order` keeps them last whenever the player adds its controls.
+        transport = (
+            f'<div id="{_true_scale_plot_id(key)}-transport" '
+            f'style="height:{toolbar}px;display:flex;align-items:center;">'
+            + zoom_toolbar.replace(_ZOOM_TOOLBAR_FLOAT, _ZOOM_TOOLBAR_IN_ROW)
+            + "</div>"
+        )
+        zoom_toolbar = ""
     # The plot goes in last, so the other substitutions scan the template, not a
     # replay's megabytes of JSON — and cannot rewrite a placeholder-like string
     # inside the figure.
     html = (
-        _TRUE_SCALE_TEMPLATE.replace("__TOOLBAR__", toolbar)
+        _TRUE_SCALE_TEMPLATE.replace("__TOOLBAR__", zoom_toolbar)
+        .replace("__TRANSPORT__", transport)
+        .replace("__BAR__", str(toolbar))
         .replace("__SCALE_JS__", scale_js)
         .replace("__ZOOMABLE__", "true" if zoomable else "false")
         .replace("__GROW__", "true" if max_height is None else "false")
@@ -1051,17 +1089,19 @@ def _render_true_scale_chart(
     and its zoom buttons.
     """
     zoomable = max_height is None
+    width, height, toolbar = replay_page_box(fig)
     _render_true_scale_plot(
         _true_scale_plot_html(
             fig, key=key, download_name=download_name, zoomable=zoomable
         ),
         key=key,
-        width=int(fig.layout.width or 900),
-        height=int(fig.layout.height or 600),
+        width=width,
+        height=height,
         max_height=max_height,
         zoomable=zoomable,
         alt=alt or _figure_alt(fig, "Scanpath figure"),
         fit_window=fit_window,
+        toolbar=toolbar,
     )
 
 
@@ -1085,8 +1125,9 @@ def _true_scale_plot_html(
     (`plots.replay_page`): a 2,001-frame replay's markup is under 1 MB rather
     than 66 MB, and the player sees the same frames.
     """
-    width = int(fig.layout.width or 900)
-    height = int(fig.layout.height or 600)
+    width, height, _toolbar = replay_page_box(
+        fig if figure_dict is None else figure_dict
+    )
     # An animated replay plays on the wall-clock player, never on Plotly's own
     # queue, which rounds every frame up to whole display ticks (Fine at ×1 would
     # run 25 % slow). The player also starts it on load when autoplay is on, and
@@ -1136,8 +1177,12 @@ def _render_true_scale_plot(
     zoomable: bool = True,
     alt: str | None = None,
     fit_window: bool = False,
+    toolbar: int = 0,
 ) -> None:
-    """Embed `_true_scale_plot_html`'s markup in the true-scale iframe."""
+    """Embed `_true_scale_plot_html`'s markup in the true-scale iframe.
+
+    ``width`` / ``height`` are the figure's on the page and ``toolbar`` its
+    replay toolbar's height (`plots.replay_page_box`)."""
     # The installed plotly's own plotly.min.js, served by this app's server —
     # not cdn.plot.ly, so the figure draws offline too.
     html, iframe_height = _true_scale_html(
@@ -1148,6 +1193,7 @@ def _render_true_scale_plot(
         max_height=max_height,
         zoomable=zoomable,
         fit_window=fit_window,
+        toolbar=toolbar,
     )
     # Iframe height = full true height (or the cap); the script trims the
     # visible block to the scaled height. A zoomable figure is a Tab stop; the
@@ -2323,6 +2369,9 @@ class _ReplayView:
     width: int
     height: int
     n_frames: int
+    #: The figure's height on its page and its toolbar's (`plots.replay_page_box`).
+    plot_height: int
+    toolbar: int
     clip_frame_ms: float | None
     signature: str
 
@@ -2334,6 +2383,7 @@ class _ReplayView:
         plot_html = _true_scale_plot_html(
             fig, key=plot_key, download_name=download_name, figure_dict=figure_dict
         )
+        _width, plot_height, toolbar = replay_page_box(figure_dict)
         return cls(
             plot_html_z=zlib.compress(plot_html.encode("utf-8"), 1),
             figure_z=zlib.compress(
@@ -2342,6 +2392,8 @@ class _ReplayView:
             width=int(fig.layout.width or 900),
             height=int(fig.layout.height or 600),
             n_frames=len(fig.frames or ()),
+            plot_height=plot_height,
+            toolbar=toolbar,
             clip_frame_ms=animation_clip_frame_ms(fig),
             signature=signature,
         )
@@ -5427,9 +5479,10 @@ def _build_and_render_animation(
         view.plot_html,
         key=plot_key,
         width=view.width,
-        height=view.height,
+        height=view.plot_height,
         alt=": ".join(filter(None, ("Animated scanpath replay", _plain_title(title)))),
         fit_window=True,
+        toolbar=view.toolbar,
     )
     return view, save_slug, file_stem
 

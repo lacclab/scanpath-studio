@@ -234,7 +234,18 @@ def get_app_css() -> str:
         outline: 2px solid var(--sps-accent);
         outline-offset: -2px;
     }
-    .sps-ds-name { font-weight: 600; }
+    /* A name longer than two lines of its cell ends in an ellipsis, so one
+       long name cannot push the other rows down; the whole name is its
+       `title`. `anywhere` breaks a name with no spaces. */
+    .sps-ds-name {
+        font-weight: 600;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        overflow: hidden;
+        overflow-wrap: anywhere;
+    }
     /* Streamlit pulls each block up by a negative bottom margin and gives a
        paragraph its own, which in one-line cells puts their text at different
        heights. */

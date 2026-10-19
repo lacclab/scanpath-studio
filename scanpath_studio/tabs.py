@@ -158,6 +158,7 @@ from scanpath_studio.constants import (
     derived_analysis_tables_enabled,
     drift_correction_enabled,
     icon_html,
+    md_literal,
     plural,
     preprocessing_enabled,
     sentence_analysis_enabled,
@@ -2594,7 +2595,7 @@ def _resolve_compare_source(
             title=f"Loading {_dataset_label(chosen)} for scanpath B",
             task_key=task_key,
             cancel=loading.Cancel(
-                f"Compare within {_dataset_label(current_dataset_name())}",
+                f"Compare within {md_literal(_dataset_label(current_dataset_name()))}",
                 _cancel_compare_source,
                 args=(task_key,),
             ),
@@ -2608,7 +2609,8 @@ def _resolve_compare_source(
     if source is None:
         return (
             None,
-            f"{ICONS['warning']} Couldn't load **{_dataset_label(chosen)}** for scanpath B.",
+            f"{ICONS['warning']} Couldn't load **{md_literal(_dataset_label(chosen))}** "
+            "for scanpath B.",
         )
     # The run that *switches* dataset ignores the stored result: it was computed
     # against the corpus just left, and applying one corpus' reader ids to
@@ -2697,7 +2699,7 @@ def _render_compare_filters(host, source: SecondaryDataset) -> None:
     )
     box = pop.container(key="cmp_narrow_by")
     box.caption(
-        f"Filter the trials of **{_dataset_label(source.name)}**. "
+        f"Filter the trials of **{md_literal(_dataset_label(source.name))}**. "
         "These apply to scanpath B only."
     )
     render_narrow_by(
@@ -2949,7 +2951,8 @@ def _render_compare_selector(
             pass
         elif source is not None:
             st.info(
-                f"No trials in **{_dataset_label(source.name)}** match B's filters."
+                f"No trials in **{md_literal(_dataset_label(source.name))}** match "
+                "B's filters."
             )
         else:
             st.info("No trials match scanpath B's filters.")
@@ -3641,7 +3644,7 @@ def _render_comprehension_questions(trial_words: pd.DataFrame) -> None:
     if skipped:
         st.warning(
             f"{plural(skipped, 'comprehension question record')} in this trial's "
-            f"{_md_escape(_field_label('comprehension_questions'))} could not be read "
+            f"{md_literal(_field_label('comprehension_questions'))} could not be read "
             "and " + ("is" if skipped == 1 else "are") + " not shown.",
             icon=ICONS["warning"],
         )
@@ -9675,11 +9678,6 @@ def _n_unique_readers(combos: pd.DataFrame | None) -> int:
     return int(combos["participant_id"].astype(str).nunique())
 
 
-def _md_escape(text: str) -> str:
-    """Field values as literal text inside a markdown line."""
-    return re.sub(r"([\\`*_\[\]<>#|~$])", r"\\\1", str(text))
-
-
 def data_scope_text(
     combos: pd.DataFrame,
     combos_all: pd.DataFrame,
@@ -9702,7 +9700,7 @@ def data_scope_text(
     if not has_active_trial_filters():
         return f"{counts} · whole dataset"
     described = " · ".join(
-        _md_escape(format_filter_item(i))
+        md_literal(format_filter_item(i))
         for i in active_filter_items(words_all, fixations_all)
     )
     return f"{counts} · filtered" + (f": {described}" if described else "")
@@ -9748,7 +9746,7 @@ def render_analysis_pool_bar(
         pool["readers_in_dataset"],
     )
     items = active_filter_items(words_all, fixations_all) if active else []
-    described = " · ".join(_md_escape(format_filter_item(i)) for i in items)
+    described = " · ".join(md_literal(format_filter_item(i)) for i in items)
     text = f"**{counts}**"
     if described:
         text += f" · {described}"
@@ -15675,7 +15673,9 @@ def _render_remap_editor(
     # user here, so say so — otherwise the page has silently changed under them
     # and the mapping form is several screens down.
     if st.session_state.pop(FOCUS_MAPPING_KEY, None) == name:
-        st.info(f"Editing **{name}**. Its mapping and saved tables are below.")
+        st.info(
+            f"Editing **{md_literal(name)}**. Its mapping and saved tables are below."
+        )
     st.caption(
         "Change which of this dataset's columns fills each field the app reads. "
         "Only columns kept when the dataset was added are available."

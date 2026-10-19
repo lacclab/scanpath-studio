@@ -81,7 +81,9 @@ EyeLink's `IA_*` columns are detected.
    **Text size** if you know them.
 4. Optionally, in the desktop app or a local install, attach the stimulus
    images from a folder.
-5. Click :material/check: **Add dataset**.
+5. Click :material/check: **Add dataset**, then :material/route: **Open in
+   Scanpath** to see its first trial. Later, **Open in Scanpath** beside
+   **Add dataset** on the Data page does the same for the selected dataset.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../assets/workflows/add-your-data_poster.webp" data-autoplay

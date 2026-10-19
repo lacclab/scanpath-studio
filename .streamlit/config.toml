@@ -33,6 +33,10 @@ maxUploadSize = 5000
 # change's wait. The CLI and the desktop app listen on this computer only, where
 # the bytes cost nothing, so they do not pass it.
 enableWebsocketCompression = true
+# No first-run terminal prompt for an email address (Streamlit's newsletter),
+# which would hold `streamlit run` until it is answered. The CLI passes the same
+# value as a flag.
+showEmailPrompt = false
 
 [client]
 # No Deploy button. "viewer" drops Streamlit's developer-only toolbar

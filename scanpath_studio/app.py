@@ -99,6 +99,7 @@ from scanpath_studio.constants import (
     DATASET_COUNTS_STORE_KEY,
     DATASET_DESCRIPTIONS_KEY,
     DATASET_EDITOR_OPEN_KEY,
+    DATASET_NAME_MAX_CHARS,
     DATASET_SETUP_OVERRIDES_KEY,
     DATASET_STIMULUS_IMAGES_KEY,
     DEFAULT_BACKGROUND_COLOR,
@@ -134,6 +135,7 @@ from scanpath_studio.constants import (
     WIZARD_STAY_KEY,
     WORD_LABEL_COLOR,
     icon_html,
+    md_literal,
     plural,
     preprocessing_enabled,
     spoken,
@@ -340,6 +342,7 @@ from scanpath_studio.url_state import (
     _apply_url_trial_selection,
     _build_share_query,  # noqa: F401  re-exported for tests
     _go_data,
+    _go_scanpath,
     _render_share_body,
     _settle_picker_selection,
     apply_pending_preprocessing,
@@ -1191,7 +1194,7 @@ def render_cache_recovery_notice(host, app_url: str, *, key: str) -> bool:
     )
     for index, (name, reason) in enumerate(sorted(failed.items())):
         row = box.container(horizontal=True, vertical_alignment="center")
-        row.markdown(f"**{name}**: {reason}")
+        row.markdown(f"**{md_literal(name)}**: {reason}")
         row.button(
             "Retry",
             icon=ICONS["refresh"],
@@ -1433,26 +1436,12 @@ def maybe_show_about() -> None:
 @guarded()
 def _about_dialog() -> None:
     """The About modal: version, authors, links, citation, AI-assistance note."""
-    from scanpath_studio import __release__, __version__
+    from scanpath_studio import __version__
+    from scanpath_studio.citation import software_bibtex
 
     # Triple-click the heading.
     render_easter_egg()
 
-    bibtex = (
-        "@software{Shubi_Scanpath_Studio_2026,\n"
-        "author = {Shubi, Omer and Gruteke Klein, Keren and Grossman, Maya and "
-        "Lion, Ella and "
-        'Jakobi, Deborah N. and Reich, David R. and J{\\"a}ger, Lena and '
-        "Berzak, Yevgeni},\n"
-        f"doi = {{{CITATION['doi']}}},\n"
-        "license = {MIT},\n"
-        "month = jun,\n"
-        "title = {{Scanpath Studio}},\n"
-        f"url = {{{CITATION['url']}}},\n"
-        f"version = {{{__release__}}},\n"
-        "year = {2026}\n"
-        "}"
-    )
     st.markdown(
         f"**Scanpath Studio** v{__version__} — interactive visualization of eye "
         "movements in reading."
@@ -1484,7 +1473,7 @@ Developed by [Omer Shubi](https://omershubi.github.io/),
         f"**{ICONS['docs']} Citing Scanpath Studio.** A paper is in preparation."
     )
     with st.expander("Show BibTeX", expanded=False):
-        st.code(bibtex, language="bibtex", wrap_lines=True)
+        st.code(software_bibtex(), language="bibtex", wrap_lines=True)
         st.markdown(
             """
 If you use the bundled demo data, also cite
@@ -3931,6 +3920,7 @@ def _render_dataset_load_failure(name: str, problems: list) -> None:
     the mapping, or back to the demo.
     """
     rejected = [p for p in problems if p.startswith(MAPPING_FAILURE_LEAD)]
+    name = md_literal(name)
     with st.container(border=True, key="dataset_load_failure_panel"):
         if rejected:
             for problem in rejected:
@@ -5293,7 +5283,7 @@ def _delete_confirmation_dialog(
             else " and column mapping"
         )
         st.warning(
-            f"Remove **{_dataset_display_name(token)}**? Its tables{taken} are "
+            f"Remove **{md_literal(_dataset_display_name(token))}**? Its tables{taken} are "
             "deleted from the app and from what is saved on this computer. This "
             "can't be undone."
         )
@@ -5304,7 +5294,8 @@ def _delete_confirmation_dialog(
             )
     else:
         st.caption(
-            f"Remove **{_dataset_display_name(token)}** from the dataset list for "
+            f"Remove **{md_literal(_dataset_display_name(token))}** from the dataset "
+            "list for "
             "this session? Its data files are not deleted."
         )
     remaining = [entry for entry in available if entry != token]
@@ -5367,7 +5358,8 @@ def _render_delete_confirmation(host, tokens: list, uploaded: set[str]) -> None:
 
 def _unique_dataset_alias(requested: str, token: str, tokens: list[str]) -> str:
     """A non-empty display name that does not duplicate another table row."""
-    base = requested.strip() or _dataset_display_name(token)
+    base = requested.strip()[:DATASET_NAME_MAX_CHARS].rstrip()
+    base = base or _dataset_display_name(token)
     used = {
         _dataset_display_name(other).casefold() for other in tokens if other != token
     }
@@ -5786,8 +5778,9 @@ def render_dataset_inspection_head(token: str) -> None:
     ✏️ **Edit** is not here: it is on the dataset's row of 📂 Available
     datasets, beside Remove (`_render_dataset_table_row`).
     """
-    # The name alone: "the `Dataset 1` dataset" would say it twice.
-    label = _dataset_display_name(token).replace("*", r"\*")
+    # The name alone: "the `Dataset 1` dataset" would say it twice. A name
+    # stored before the name fields had a limit is shortened for the heading.
+    label = md_literal(dataset_table.short_name(_dataset_display_name(token)))
     st.subheader(f"{ICONS['search']} What's in **{label}**")
     _render_dataset_overview(token, registry=public_dataset_registry())
 
@@ -5852,6 +5845,7 @@ def render_name_field(host, token: str) -> None:
         "Name",
         key=EDITOR_NAME_FIELD_KEY,
         required=True,
+        max_chars=DATASET_NAME_MAX_CHARS,
         # An upload stages its name on change; a built-in's is read only by
         # Save changes / Cancel, so it needs no rerun.
         on_change=_stage_upload_name if uploaded else "ignore",
@@ -5883,8 +5877,7 @@ def dataset_added_message(
             readers |= set(frame["participant_id"].dropna().astype(str))
     readers.discard("")  # a stimulus-level word table's placeholder
     trials = count_trials(words, fixations)
-    shown = name.replace("*", r"\*")
-    head = f"**{shown}** added"
+    head = f"**{md_literal(name)}** added"
     if not trials:
         return f"{head}."
     return f"{head}: {plural(trials, 'trial')}, {plural(len(readers), 'participant')}."
@@ -5940,6 +5933,45 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         )
 
 
+@st.dialog(f"{ICONS['success']} Dataset added")
+@guarded()
+def _dataset_added_dialog(message: str) -> None:
+    """✅ Add dataset's next step: open the new dataset, or add another.
+
+    Raised once by ``main`` on the run after ✅ Add dataset, once the new
+    dataset's frames are loaded, so ``message`` carries its counts. Closing it
+    keeps the user on 🗂️ Data Management, where **Open in Scanpath** under the
+    list of datasets does the same later. Buttons are handled by their return
+    value, never ``on_click`` — a dialog body is a fragment (see
+    ``_leave_dataset_editor_dialog``).
+    """
+    st.markdown(message)
+    open_col, again_col = st.columns(2, gap="small")
+    if open_col.button(
+        f"{ICONS['view_scanpath']} Open in Scanpath",
+        key="dataset_added_open",
+        type="primary",
+        width="stretch",
+        help="Show the new dataset's first trial in the Scanpath view.",
+    ):
+        _go_scanpath()
+        st.rerun(scope="app")
+    if again_col.button(
+        f"{ICONS['add']} Add another",
+        key="dataset_added_again",
+        width="stretch",
+        help="Open Import files again for the next dataset.",
+    ):
+        from scanpath_studio.wizard import _enter_add_data_wizard
+
+        _enter_add_data_wizard()
+        st.rerun(scope="app")
+    st.caption(
+        f"Close this to stay on {ICONS['view_data']} Data Management. "
+        "**Open in Scanpath**, under the list of datasets, opens it later."
+    )
+
+
 #: Whether the editor's ✕ Cancel confirmation is open. A pending
 #: flag rather than a button return value, the house pattern: a callback may not
 #: open a dialog, and a dialog opened from a return value is lost on the next
@@ -5957,18 +5989,18 @@ _EDITOR_LEAVE_EDIT_KEY = "_dataset_editor_leave_edit"
 #: opens under the table, so the page is brought down to it once.
 _EDITOR_SCROLL_KEY = "_dataset_editor_scroll"
 
-#: Bring the editor's top under the app's header — in its own scroller, never
-#: by `scrollIntoView` (which moves the document; see `tour.py`). Waits while
-#: Streamlit is still laying the editor out, then keeps the editor's top in
-#: place for a second, because the page above it is still settling and a
-#: single scroll lands wherever the layout happened to be at that moment.
-_SCROLL_TO_EDITOR_SCRIPT = """<script>
+#: Bring a keyed section's top under the app's header — in its own scroller,
+#: never by `scrollIntoView` (which moves the document; see `tour.py`). Waits
+#: while Streamlit is still laying the section out, then keeps its top in place
+#: for a second, because the page above it is still settling and a single
+#: scroll lands wherever the layout happened to be at that moment.
+_SCROLL_TO_SECTION_TEMPLATE = """<script>
 (function () {
   const doc = window.parent.document;
   const win = doc.defaultView;
   let tries = 0, aligned = 0;
   (function attempt() {
-    const el = doc.querySelector(".st-key-data_dataset_editor");
+    const el = doc.querySelector(".st-key-__SECTION_KEY__");
     const r = el && el.getBoundingClientRect();
     if (!r || r.height === 0) {
       if (++tries < 20) setTimeout(attempt, 150);
@@ -5987,6 +6019,15 @@ _SCROLL_TO_EDITOR_SCRIPT = """<script>
   })();
 })();
 </script>"""
+
+
+def _scroll_to_section_script(key: str) -> str:
+    """The script that brings the container keyed ``key`` to the top."""
+    return _SCROLL_TO_SECTION_TEMPLATE.replace("__SECTION_KEY__", key)
+
+
+#: The ✏️ Edit dataset screen, brought down to once when it opens.
+_SCROLL_TO_EDITOR_SCRIPT = _scroll_to_section_script("data_dataset_editor")
 
 
 #: ✏️ Edit dataset's record of the metadata tables as the edit found them.
@@ -6486,7 +6527,7 @@ def _unreachable_dataset_dialog(token: str) -> None:
     a dialog body is a fragment.
     """
     registry = public_dataset_registry()
-    name = _dataset_display_name(token, registry)
+    name = md_literal(_dataset_display_name(token, registry))
     if (registry.get(token) or {}).get("downloadable"):
         st.markdown(
             f"**{name}** downloads the first time you open it, and this server "
@@ -6735,6 +6776,11 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
     datasets you added only.
     """
     slug = _dataset_row_slug(row.token)
+    # The name is the user's own text: drawn literally, never as markdown, and
+    # a long one shortened in the help text (the cell clamps it with CSS and
+    # carries the whole name as its tooltip).
+    named = md_literal(row.name)
+    short = md_literal(dataset_table.short_name(row.name))
     line = grid.container(
         # The open row's key carries `current`, which is what the tint keys on.
         key=f"dsrow_current_{slug}" if row.active else f"dsrow_{slug}",
@@ -6744,7 +6790,7 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         wrap=False,
     )
     line.button(
-        f"Open {row.name}",
+        f"Open {named}",
         key=f"dataset_open_{slug}",
         type="tertiary",
         on_click=_open_dataset_row,
@@ -6763,7 +6809,7 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         wrap=True,
     )
     name.markdown(
-        f'<span class="sps-ds-name">{html.escape(row.name)}</span>',
+        f'<span class="sps-ds-name" title="{html.escape(row.name)}">{named}</span>',
         unsafe_allow_html=True,
         width="content",
     )
@@ -6813,7 +6859,7 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
     # Every dataset can be edited — its name, description, setup and
     # metadata; the hand-drawn sample on its authoring canvas.
     actions.button(
-        f"Edit {row.name}",
+        f"Edit {named}",
         icon=ICONS["edit"],
         key=f"dataset_row_edit_{slug}",
         type="tertiary",
@@ -6821,7 +6867,7 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         args=(row.token,),
         help="Open the editor to change the text, drag fixations, or edit their timing."
         if row.token == MANUAL_SAMPLE_CHOICE
-        else f"Edit {row.name}: its name, description, column mapping, "
+        else f"Edit {short}: its name, description, column mapping, "
         "recording setup, location and metadata tables.",
     )
     # Only a dataset you added can be removed. For the demo, a public corpus
@@ -6835,13 +6881,13 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         )
         return
     actions.button(
-        f"Remove {row.name}",
+        f"Remove {named}",
         icon=ICONS["delete"],
         key=f"dataset_row_remove_{slug}",
         type="tertiary",
         on_click=_arm_dataset_row,
         args=(PENDING_DELETE_KEY, row.token),
-        help=f"Delete {row.name}, its tables and annotations, after a "
+        help=f"Delete {short}, its tables and annotations, after a "
         "confirmation. Your original files are not touched.",
     )
 
@@ -8257,6 +8303,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         else "My saved scanpath",
         key=name_key,
         required=True,
+        max_chars=DATASET_NAME_MAX_CHARS,
         # Read only by the Save dataset callback.
         on_change="ignore",
     )
@@ -8519,7 +8566,7 @@ def _dataset_cancel(token: str, task_key: tuple) -> loading.Cancel | None:
             return None
         back = DEMO_CHOICE
     return loading.Cancel(
-        f"Back to {_dataset_display_name(back)}",
+        f"Back to {md_literal(_dataset_display_name(back))}",
         _cancel_dataset_load,
         args=(task_key, token, _dataset_display_name(token), back),
     )
@@ -8545,7 +8592,7 @@ def _render_cancelled_load_notice(host) -> None:
         key="sps_cancelled_notice", horizontal=True, vertical_alignment="center"
     )
     # As wide as its words, so Try again sits beside them, not across the page.
-    row.caption(f"Stopped loading **{note['name']}**.", width="content")
+    row.caption(f"Stopped loading **{md_literal(note['name'])}**.", width="content")
     row.button(
         "Try again",
         key="sps_try_again",
@@ -8831,7 +8878,13 @@ def _run_app() -> None:
     )
     with restoring:
         restored = restore_local_state(
-            st.session_state, app_url, protect_data_source=url_source is not None
+            st.session_state,
+            app_url,
+            protect_data_source=url_source is not None,
+            # A link opens on the view it was made for; only a bare visit
+            # resumes the view this machine was on last. The app never writes
+            # query parameters itself, so any here came with the link.
+            protect_view=bool(st.query_params),
         )
     # Streamlit matches a rerun's elements to the last run's by position,
     # so a notice that shows on one run only (the unavailable-link warning below)
@@ -9178,6 +9231,10 @@ def _run_app() -> None:
     # `_finish_page`, after this run's `save_local_state`.
     download_folder_slot = overview_page.container(key="data_download_folder")
     saved_here_slot = overview_page.container(key="data_saved_here")
+    # The one-run script that brings the page back to its top after ✅ Add
+    # dataset. A slot of its own, last on the page and held on every run, so
+    # the script coming and going moves nothing above it.
+    page_scroll_slot = overview_page.empty()
     # Keyed → the stable `.st-key-…` selectors the "Load and verify a dataset"
     # tutorial spotlights, alongside its siblings below.
     column_mapping_slot = editor_page.container(key="tutorial_column_mapping")
@@ -9278,9 +9335,10 @@ def _run_app() -> None:
     dataset_table_slot = setup_source_slot.container(key="tutorial_available_datasets")
     # The two ways to make a dataset are one **+ Add
     # dataset** menu (the Scanpath picker's + with its name spelled out), under
-    # the list it adds to. Filled once `data_choice` is known.
+    # the list it adds to, beside **Open in Scanpath** for the dataset the list
+    # marks Current. Filled once `data_choice` is known.
     add_dataset_slot = (
-        setup_source_slot.container(key="data_page_add")
+        setup_source_slot.container(key="data_page_add", horizontal=True)
         if data_view and not wizard_owns_page
         else None
     )
@@ -9328,6 +9386,16 @@ def _run_app() -> None:
                 help="Add your Fixations and Words (interest areas) tables.",
                 width="stretch",
             )
+        # The page's way back to the plot, for the dataset just added or
+        # picked from the list: the view switch is a request, since this is
+        # an `on_click` callback (see `url_state._go_scanpath`).
+        add_dataset_slot.button(
+            "Open in Scanpath",
+            icon=ICONS["view_scanpath"],
+            key="data_open_in_scanpath",
+            on_click=_go_scanpath,
+            help=f"Show **{_dataset_display_name(_dataset_owner)}** in the Scanpath view.",
+        )
     # Part 1's headline on every run, like the other parts (the editor
     # is built hidden); its two fields only while it is open, since they are
     # seeded from whichever dataset is open and must not outlive it.
@@ -9400,13 +9468,15 @@ def _run_app() -> None:
         builtin_saved = st.session_state.pop(BUILTIN_MAPPING_SAVED_KEY, None)
         if builtin_saved is not None:
             dataset_table_slot.success(
-                f"**{_dataset_display_name(str(builtin_saved))}** updated. "
+                f"**{md_literal(_dataset_display_name(str(builtin_saved)))}** "
+                "updated. "
                 "Your changes are saved.",
                 icon=ICONS["success"],
             )
         if saved:
             dataset_table_slot.success(
-                f"**{_dataset_display_name(str(saved))}** updated. The mapping, "
+                f"**{md_literal(_dataset_display_name(str(saved)))}** updated. "
+                "The mapping, "
                 "recording setup and any table you added are saved.",
                 icon=ICONS["success"],
             )
@@ -9814,15 +9884,11 @@ def _run_app() -> None:
     # just computed above, on the frames those buttons produced.
     asked_by = st.session_state.pop(TRIAL_IDENTITY_CHECK_KEY, None)
     added = st.session_state.pop(DATASET_ADDED_KEY, None)
-    if added:
-        # Say what ✅ Add dataset brought in.
-        st.toast(
-            dataset_added_message(str(added), words_all, fixations_all),
-            icon=ICONS["success"],
-        )
+    identity_modal = False
     if asked_by and identity_warning:
         try:
             _trial_identity_alert_dialog(str(asked_by), identity_warning)
+            identity_modal = True
         except StreamlitAPIException:
             # Streamlit allows one dialog per script run, and ❓ Help's three
             # (FAQ / About / Tutorials) and the welcome tour are served above
@@ -9832,6 +9898,30 @@ def _run_app() -> None:
             # it back rather than lose the verdict; the next run has no modal
             # ahead of it.
             st.session_state[TRIAL_IDENTITY_CHECK_KEY] = asked_by
+    if added:
+        # Say what ✅ Add dataset brought in, and offer the next step: a
+        # dialog with Open in Scanpath / Add another. The Trial ID verdict
+        # takes the run's one dialog when it has something to say, and any
+        # other dialog already open wins too; the counts then go to a toast,
+        # and **Open in Scanpath** under the list is the way on.
+        message = dataset_added_message(str(added), words_all, fixations_all)
+        offered = False
+        if not identity_modal:
+            try:
+                _dataset_added_dialog(message)
+                offered = True
+            except StreamlitAPIException:
+                pass
+        if not offered:
+            st.toast(message, icon=ICONS["success"])
+        # The wizard leaves the page scrolled to wherever its footer was —
+        # the bottom of the overview. Bring the list of datasets, the new one
+        # now Current in it, back to the top.
+        if data_view:
+            with page_scroll_slot:
+                embed_html_iframe(
+                    _scroll_to_section_script(DATA_OVERVIEW_KEY), height=0
+                )
 
     # Trial-level filtering / grouping: narrow by participant, by condition
     # (Hunting/Gathering, difficulty, first/repeated reading, correctness), and by
@@ -10149,8 +10239,13 @@ def _run_app() -> None:
             scope_note=dataset_table_scope_note(
                 filtered=trials_filtered,
                 stand_in_for=(
-                    _dataset_display_name(
-                        str(st.session_state.get("data_source_choice") or data_choice)
+                    md_literal(
+                        _dataset_display_name(
+                            str(
+                                st.session_state.get("data_source_choice")
+                                or data_choice
+                            )
+                        )
                     )
                     if st.session_state.get(_PLACEHOLDER_SHOWN_KEY)
                     else None

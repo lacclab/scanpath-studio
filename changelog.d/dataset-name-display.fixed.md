@@ -1,0 +1,1 @@
+A dataset name now shows exactly as typed, with no Markdown, colour, maths or icon formatting, and is limited to 80 characters; a longer name saved earlier still loads and is shortened with an ellipsis in the dataset table, with the full name on hover.

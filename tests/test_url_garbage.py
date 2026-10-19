@@ -89,3 +89,128 @@ def test_a_valid_colour_still_lands():
     assert not at.exception
     assert at.session_state["global_order_font_color"] == "#123456"
     assert at.session_state["global_raw_gaze_color"] == "#ABCDEF"
+
+
+def test_a_non_finite_or_garbage_link_opens_the_app_with_notices():
+    """``1e309`` overflows to infinity; it and the rest are reported, never drawn.
+
+    Before, ``marker_size_range=1,1e309`` raised ``OverflowError`` out of the
+    reader and replaced the whole page with the crash note on every reload.
+    """
+    title = "x" * 20_000
+    at = _boot(
+        {
+            "source": "demo",
+            "marker_size_range": "1,1e309",
+            "marker_duration_range": "1,1e309",
+            "fixation_opacity": "NaN",
+            "saccade_width": "inf",
+            "canvas_width": "1e309",
+            "show_heatmap": "maybe",
+            "redact_text": "-1",
+            "show_fixations": "maybe",
+            "title_pattern": title,
+        }
+    )
+
+    assert not at.exception, [e.message for e in at.exception]
+    warned = [w.value for w in at.warning]
+    for shown in (
+        "marker_size_range=1,1e309",
+        "marker_duration_range=1,1e309",
+        "fixation_opacity=NaN",
+        "saccade_width=inf",
+        "canvas_width=1e309",
+        "show_heatmap=maybe",
+        "redact_text=-1",
+        "show_fixations=maybe",
+    ):
+        assert any(f"Ignored the link's invalid {shown}." in w for w in warned), (
+            shown,
+            warned,
+        )
+    # The notice echoes the start of an overlong value, not all of it.
+    (long_notice,) = [w for w in warned if "title_pattern=" in w]
+    assert "(20,000 characters)" in long_notice
+    assert len(long_notice) < 200
+    # None of them reached session state; the controls kept their defaults.
+    assert at.session_state["global_title_pattern"] != title
+    assert at.session_state["global_marker_size_range"] != (1, float("inf"))
+    assert at.session_state["global_show_heatmap"] is False
+    assert at.session_state["global_redact_text"] is False
+    # The scanpath still drew.
+    assert at.session_state["global_show_fix"] is True
+
+
+def test_an_out_of_range_number_is_clamped_with_a_notice():
+    at = _boot({"source": "demo", "marker_size_range": "-5,10"})
+
+    assert not at.exception, [e.message for e in at.exception]
+    assert at.session_state["global_marker_size_range"] == (4, 10)
+    assert [w.value for w in at.warning] == [
+        "The link's marker_size_range=-5,10 is outside the control's range; used 4,10."
+    ]
+
+
+class TestTheParsers:
+    @pytest.mark.parametrize(
+        "raw", ["1", "true", "TRUE", "Yes", "on", " On ", "0", "false", "No", "OFF"]
+    )
+    def test_a_real_on_off_spelling_reads(self, raw):
+        from scanpath_studio.url_state import _coerce_bool
+
+        assert _coerce_bool(raw) is (raw.strip().lower() in {"1", "true", "yes", "on"})
+
+    @pytest.mark.parametrize("raw", ["maybe", "-1", "2", "", "y", "enabled"])
+    def test_anything_else_raises(self, raw):
+        from scanpath_studio.url_state import _coerce_bool
+
+        with pytest.raises(ValueError):
+            _coerce_bool(raw)
+
+    def test_share_writes_only_spellings_the_reader_accepts(self):
+        from scanpath_studio.url_state import _coerce_bool
+
+        assert _coerce_bool("1") is True
+        assert _coerce_bool("0") is False
+
+    @pytest.mark.parametrize("raw", ["nan", "NaN", "inf", "-inf", "1e309", "x"])
+    def test_numbers_must_be_finite(self, raw):
+        from scanpath_studio.url_state import (
+            _parse_finite_float,
+            _parse_float_range,
+            _parse_int,
+            _parse_int_range,
+        )
+
+        for parse in (_parse_finite_float, _parse_int):
+            with pytest.raises(ValueError):
+                parse(raw)
+        for parse in (_parse_int_range, _parse_float_range):
+            with pytest.raises(ValueError):
+                parse(f"1,{raw}")
+
+    def test_whole_numbers_and_pairs_still_read(self):
+        from scanpath_studio.url_state import (
+            _parse_float_range,
+            _parse_int,
+            _parse_int_range,
+        )
+
+        assert _parse_int("12") == 12
+        assert _parse_int("12.0") == 12
+        with pytest.raises(ValueError):
+            _parse_int("12.5")
+        assert _parse_int_range("20,5") == (5, 20)
+        assert _parse_float_range("0.5,-1") == (-1.0, 0.5)
+        with pytest.raises(ValueError):
+            _parse_int_range("1,2,3")
+
+    def test_figure_text_is_capped(self):
+        from scanpath_studio.url_state import _MAX_LINK_TEXT_CHARS, _parse_figure_text
+
+        fits = "a" * _MAX_LINK_TEXT_CHARS
+        assert _parse_figure_text(fits) == fits
+        assert _parse_figure_text("<b>{trial_id}</b>") == "{trial_id}"
+        with pytest.raises(ValueError):
+            _parse_figure_text(fits + "a")

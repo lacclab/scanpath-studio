@@ -74,6 +74,7 @@ from .constants import (
     SUBTAB_EXPORT,
     SUBTAB_SHARE,
     drift_correction_enabled,
+    md_literal,
     preprocessing_enabled,
     similarity_enabled,
     spoken,
@@ -1559,7 +1560,7 @@ def _welcome_body(body: str) -> str:
     if not name:
         return body
     lead, _, rest = body.partition("**Next**")
-    return f"{lead}**{name}** is open; **Next**{rest}" if rest else body
+    return f"{lead}**{md_literal(name)}** is open; **Next**{rest}" if rest else body
 
 
 def _arm_tour() -> None:
@@ -2400,7 +2401,8 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": f"{ICONS['confirm']} Save it",
         "body": (
-            f"**{ICONS['confirm']} Add dataset** saves the dataset and opens it. "
+            f"**{ICONS['confirm']} Add dataset** saves the dataset, then offers "
+            f"**{ICONS['view_scanpath']} Open in Scanpath** or **Add another**. "
             f"**{ICONS['download']} Download setup file** saves this mapping and "
             "recording setup as a file. Next time, *Start from* can reuse the "
             "file or this dataset."

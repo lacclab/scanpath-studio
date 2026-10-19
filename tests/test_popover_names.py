@@ -158,7 +158,9 @@ def test_no_button_label_uses_emphasis_but_spoken():
 
 
 def test_spoken_escapes_markdown():
-    assert spoken("Rename design *draft* v1.2") == (r"*Rename design \*draft\* v1\.2*")
+    assert (
+        spoken("Rename design *draft* v1.2") == "*Rename design &#42;draft&#42; v1.2*"
+    )
     assert spoken("Next trial") == "*Next trial*"
 
 

@@ -56,6 +56,7 @@ scanpath_studio/
 │  ├─ html_embed.py      same-origin HTML iframes; plotly.js served from the app's own server
 │  ├─ debug_log.py       in-app log + state inspector (❓ Help → About → Debug)
 │  ├─ crash_report.py    the "report this bug" note around every run
+│  ├─ wizard_watch.py    the wizard's browser guards: the lost-connection notice and the leave prompt
 │  └─ easter_egg.py, color_picker_commit.py, save_dialog.py, truncation_tooltip.py
 │                        browser-only helpers installed into the parent document
 ├─ Data

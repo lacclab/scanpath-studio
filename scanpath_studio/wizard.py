@@ -1009,6 +1009,9 @@ _DERIVE_TABLE_PREFIX = {
 #: message reads it from here.
 WORDS_TABLE_LABEL = "Words (interest areas)"
 
+#: Under the upload step's intro on the hosted copy only.
+HOSTED_CONNECTION_NOTE = "The hosted demo needs a steady connection for larger files."
+
 #: The one-line caption above each upload row: what goes there, in
 #: EyeLink's terms.
 ROW_CAPTIONS = {
@@ -3593,6 +3596,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "datasets than this hosted copy. Or install it with pip:\n\n"
                 "```bash\npip install scanpath-studio\nscanpath-studio\n```"
             )
+            # A dropped connection can hand the page a new, empty session
+            # mid-upload (see `wizard_watch`).
+            intro.caption(f"{ICONS['info']} {HOSTED_CONNECTION_NOTE}", width="content")
 
     # The size/type line `st.file_uploader` prints under its own dropzone
     # ("5GB per file • CSV, TSV, …") doesn't fit this narrow column —

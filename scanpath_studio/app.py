@@ -70,6 +70,7 @@ from scanpath_studio import (
     loading,
     progress,
     wizard_shell,
+    wizard_watch,
 )
 from scanpath_studio import metadata as metadata_mod
 from scanpath_studio import updates as update_check
@@ -9014,6 +9015,9 @@ def _run_app() -> None:
     # every run. The toasts need no slot: `st.toast` draws in Streamlit's event
     # container, outside the page.
     page_notices = st.container()
+    # First in the notices, and on every run: the browser side of the
+    # add-dataset wizard's guards (`wizard_watch`) must hear each run's state.
+    wizard_watch.render(page_notices)
     if restored:
         # Say it once, where the user is looking. Silently repopulating a
         # session reads as "the app kept my data somewhere" without saying where;
@@ -9172,6 +9176,10 @@ def _run_app() -> None:
         else:
             st.session_state.pop(WIZARD_LEAVE_KEY, None)
         active_view = _VIEW_DATA
+    # A reconnect that landed on a new session lost the wizard's uploads.
+    wizard_watch.render_lost_notice(
+        page_notices, on_data_view=active_view == _VIEW_DATA
+    )
 
     menu = render_top_menu(active_view=active_view)
     _render_about_panel(menu.title)

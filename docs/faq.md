@@ -92,7 +92,8 @@ have it set up.
 When you run Scanpath Studio locally or as the desktop app, your data stays on
 your computer. There are no accounts, and `scanpath-studio` and the desktop app
 send no usage statistics. Don't upload identifiable data to the online demo.
-See [Privacy](about.md#privacy).
+See [Your data](about.md#your-data) for what a local install saves, where,
+and how to clear it.
 
 ### Can I share a figure without showing the text?
 
@@ -124,7 +125,8 @@ it until you retry or clear it.
 Start the app with `scanpath-studio run --no-persist` to save nothing. To
 delete what is saved and start over, use **Clear what is saved…** under
 **Saved on this computer**, or close the app and run
-`scanpath-studio cache --clear`. See [Recovery cache](cli.md#cache).
+`scanpath-studio cache --clear`. See [Your data](about.md#your-data) and
+[Recovery cache](cli.md#cache).
 
 ## Help and versions
 

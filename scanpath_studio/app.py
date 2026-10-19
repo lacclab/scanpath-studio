@@ -1255,10 +1255,13 @@ def _render_saved_here_section(app_url: str, host) -> None:
             )
         return
 
+    # "Nothing leaves" holds only where browser and server are one machine; a
+    # network server opted in with SCANPATH_STUDIO_PERSIST=1 got the files
+    # over the network.
     host.caption(
         "Your added datasets, annotations, designs, and your view, trial and "
-        "plot settings are saved as you work and restored next time. Nothing is "
-        "uploaded."
+        "plot settings are saved as you work and restored next time."
+        + (" Nothing leaves this computer." if server_bound_to_loopback() else "")
     )
     if restored_from_cache(st.session_state):
         host.success("Recovered when the app opened.", icon=ICONS["recovery"])
@@ -1428,10 +1431,41 @@ def maybe_show_about() -> None:
         _about_dialog()
 
 
+def _about_privacy_line(*, local: bool, saving: bool) -> str:
+    """About's line on where the user's data goes, for this run alone.
+
+    ``local`` is the server's own bind address (``server_bound_to_loopback``)
+    and ``saving`` whether it keeps a recovery copy (``persistence_enabled``) —
+    the tests the FAQ's *Where does my data go?* answers by, which this line
+    points to. A server other machines reach is usually the online demo, but
+    can be anyone's deployment, so the hosted sentence names the demo's host
+    as an example rather than as a fact about this server.
+    """
+    if local:
+        where = "It stays on this computer."
+        if saving:
+            where += " Your work is saved here until you clear it."
+    elif saving:
+        where = (
+            "Files you upload are processed on the server this app runs on, "
+            "and a recovery copy is kept there."
+        )
+    else:
+        where = (
+            "Files you upload are processed on the server this app runs on "
+            "(Streamlit Community Cloud, for the online demo) and not kept."
+        )
+    return (
+        f"**{ICONS['private']} Your data.** {where} More in {ICONS['help']} "
+        f"Help → {ICONS['faq']} FAQ → *Where does my data go?*"
+    )
+
+
 @st.dialog(f"{ICONS['about']} About Scanpath Studio", width="large")
 @guarded()
 def _about_dialog() -> None:
-    """The About modal: version, authors, links, citation, AI-assistance note."""
+    """The About modal: version, authors, links, where your data goes,
+    citation, AI-assistance note."""
     from scanpath_studio import __release__, __version__
 
     # Triple-click the heading.
@@ -1472,6 +1506,12 @@ Developed by [Omer Shubi](https://omershubi.github.io/),
 {ICONS["code"]} [Code]({CITATION["url"]}) ↗ ·
 {ICONS["doi"]} [DOI](https://doi.org/{CITATION["doi"]}) ↗
 """
+    )
+    st.markdown(
+        _about_privacy_line(
+            local=server_bound_to_loopback(),
+            saving=persistence_enabled(str(getattr(st.context, "url", "") or "")),
+        )
     )
     # The BibTeX block is tall enough to push everything above it out of view,
     # so it opens on demand — but it stays a named section of its own (a bold

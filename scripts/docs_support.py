@@ -3,9 +3,9 @@
 The pages call these from ``exec="true"`` fences (markdown-exec), and
 ``scripts/mkdocs_hooks.py`` puts this folder on ``sys.path`` for them. Each
 function returns the Markdown or HTML for one block, read from the thing it
-describes — ``CITATION.cff``, ``CHANGELOG.md``, the ``render`` parser, the figure
-option registry, a built figure — so none of it can drift from the code the way
-a hand-maintained copy does.
+describes — the package's citation, ``CHANGELOG.md``, the ``render`` parser, the
+figure option registry, a built figure — so none of it can drift from the code
+the way a hand-maintained copy does.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ import html
 import inspect
 import json
 import re
-import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -27,98 +26,28 @@ BLOB_URL = f"{REPO_URL}/blob/main/"
 # Cite
 # ---------------------------------------------------------------------------
 
-#: Combining mark → the BibTeX accent command that spells it, so the entry
-#: compiles under classic BibTeX as well as biber.
-_BIBTEX_ACCENTS = {
-    "\u0300": "`",  # grave
-    "\u0301": "'",  # acute
-    "\u0302": "^",  # circumflex
-    "\u0303": "~",  # tilde
-    "\u0308": '"',  # diaeresis
-    "\u030a": "r",  # ring
-    "\u030c": "v",  # caron
-    "\u0327": "c",  # cedilla
-}
-
-
-def _bibtex_text(text: str) -> str:
-    """``Jäger`` → ``J{\\"a}ger``: every accented letter as an escaped group."""
-    out = []
-    for char in unicodedata.normalize("NFD", text):
-        accent = _BIBTEX_ACCENTS.get(char)
-        if accent and out:
-            base = out.pop()
-            sep = " " if accent.isalpha() else ""
-            out.append(f"{{\\{accent}{sep}{base}}}")
-        else:
-            out.append(char)
-    return unicodedata.normalize("NFC", "".join(out))
-
-
-def _initials(given: str) -> str:
-    """``Deborah N.`` → ``D. N.``; ``Jean-Paul`` → ``J.-P.`` (APA 7)."""
-    parts = []
-    for name in given.split():
-        if name.endswith(".") and len(name) <= 3:
-            parts.append(name)
-        else:
-            parts.append("-".join(f"{piece[0]}." for piece in name.split("-")))
-    return " ".join(parts)
-
-
-def _cff() -> dict:
-    # PyYAML comes with the docs extra (MkDocs needs it), not the package or its
-    # test extra, so it is imported only where the citation is built.
-    import yaml
-
-    return yaml.safe_load((ROOT / "CITATION.cff").read_text(encoding="utf-8"))
-
 
 def software_citation() -> str:
-    """The software citation, as BibTeX and APA tabs, from ``CITATION.cff``.
+    """The software citation, as BibTeX and APA tabs.
 
-    The same file feeds GitHub's *Cite this repository* button and the Zenodo
-    record, so the page cannot disagree with either.
+    Built by ``scanpath_studio.citation``, the same code ❓ Help → About shows,
+    so the site and the app print one entry; ``tests/test_citation.py`` keeps
+    its metadata equal to ``CITATION.cff``, which feeds GitHub's *Cite this
+    repository* button and the Zenodo record.
     """
-    cff = _cff()
-    year = str(cff["date-released"])[:4]
-    doi = cff["doi"]
-    authors = cff["authors"]
-    # One author per line, so the entry fits a code block without scrolling.
-    bib_authors = " and\n             ".join(
-        f"{_bibtex_text(a['family-names'])}, {_bibtex_text(a['given-names'])}"
-        for a in authors
-    )
-    bibtex = "\n".join(
-        [
-            f"@software{{Shubi_Scanpath_Studio_{year},",
-            f"  author  = {{{bib_authors}}},",
-            f"  title   = {{{{{cff['title']}}}}},",
-            f"  year    = {{{year}}},",
-            f"  version = {{{cff['version']}}},",
-            f"  doi     = {{{doi}}},",
-            f"  url     = {{https://doi.org/{doi}}},",
-            f"  license = {{{cff['license']}}},",
-            "}",
-        ]
-    )
-    names = [f"{a['family-names']}, {_initials(a['given-names'])}" for a in authors]
-    listed = ", ".join(names[:-1]) + f", & {names[-1]}" if len(names) > 1 else names[0]
-    apa = (
-        f"{listed} ({year}). *{cff['title']}* (Version {cff['version']}) "
-        f"[Computer software]. https://doi.org/{doi}"
-    )
+    from scanpath_studio.citation import software_apa, software_bibtex
+
     return "\n".join(
         [
             '=== "BibTeX"',
             "",
             "    ```bibtex",
-            *(f"    {line}" for line in bibtex.splitlines()),
+            *(f"    {line}" for line in software_bibtex().splitlines()),
             "    ```",
             "",
             '=== "APA"',
             "",
-            f"    {apa}",
+            f"    {software_apa()}",
             "",
         ]
     )

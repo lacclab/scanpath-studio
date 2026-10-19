@@ -15095,6 +15095,13 @@ def _render_aggregate_toggle(name: str, *, adding: bool) -> None:
     )
 
 
+#: Why ✏️ Edit dataset's *Word box* format is fixed for a stored Words table.
+STORED_BOX_FORMAT_REASON = (
+    "Word boxes are stored as position + size. Edges were converted when the "
+    "dataset was added."
+)
+
+
 def box_edges_note(stored: dict) -> str | None:
     """What ✏️ Edit dataset says under *Word box* when the dataset was added
     with each box's edges (EyeLink's ``IA_LEFT`` … ``IA_BOTTOM``).
@@ -15197,6 +15204,12 @@ def _render_remap_fields(
             # auto-detect — say so. A table being added *is* auto-detected.
             detected_label=detected_labels.get(table_key, "currently mapped"),
             option_labels=stored_labels.get(table_key),
+            # A stored Words table holds x/y/width/height only, so its box
+            # cannot be mapped as edges; a table being added still can.
+            box_format_lock=STORED_BOX_FORMAT_REASON
+            if table_key == "words"
+            and detected_labels.get(table_key) == "currently mapped"
+            else None,
         )
 
     # A stored table's columns are canonical; offer them by the

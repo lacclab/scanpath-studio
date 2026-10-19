@@ -349,7 +349,7 @@ class TestThePageDrawsTheToolbarAboveTheFigure:
         # A legend moved above the plot grows the figure past the controls'
         # band, so the page, which takes the band back, still has room for it.
         words, fixations = _demo()
-        pid_b, tid_b = "l7_1090", "l7_1090_2_2_2_Adv_r0"
+        pid_b, tid_b = "l7_1090", "l7_1090_2_2_2_Adv"
         kwargs = dict(trial_b=(pid_b, tid_b), fix_index_range=(1, 20))
         plain = api.animate_scanpath(words, fixations, *LONGEST, **kwargs)
         above = api.animate_scanpath(

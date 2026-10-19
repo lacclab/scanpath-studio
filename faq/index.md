@@ -52,7 +52,7 @@ Yes, but the link does not contain your data, so they need to load the same data
 
 ### Where does my data go?
 
-When you run Scanpath Studio locally or as the desktop app, your data stays on your computer. There are no accounts, and `scanpath-studio` and the desktop app send no usage statistics. Don't upload identifiable data to the online demo. See [Privacy](https://lacclab.github.io/scanpath-studio/about/#privacy).
+When you run Scanpath Studio locally or as the desktop app, your data stays on your computer. There are no accounts, and `scanpath-studio` and the desktop app send no usage statistics. The online demo runs on Streamlit Community Cloud, whose page around the app has its own analytics ([privacy policy](https://streamlit.io/privacy-policy)). See [Your data](https://lacclab.github.io/scanpath-studio/about/#your-data) for what a local install saves, where, and how to clear it.
 
 ### Can I share a figure without showing the text?
 
@@ -66,7 +66,7 @@ If the files of one saved dataset go missing or are damaged, the rest of the ses
 
 ### How do I stop saving, or delete what is saved?
 
-Start the app with `scanpath-studio run --no-persist` to save nothing. To delete what is saved and start over, use **Clear what is saved…** under **Saved on this computer**, or close the app and run `scanpath-studio cache --clear`. See [Recovery cache](https://lacclab.github.io/scanpath-studio/cli/#cache).
+Start the app with `scanpath-studio run --no-persist` to save nothing. To delete what is saved and start over, use **Clear what is saved…** under **Saved on this computer**, or close the app and run `scanpath-studio cache --clear`. See [Your data](https://lacclab.github.io/scanpath-studio/about/#your-data) and [Recovery cache](https://lacclab.github.io/scanpath-studio/cli/#cache).
 
 ## Help and versions
 

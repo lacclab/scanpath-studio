@@ -12,8 +12,8 @@ Two complete readings of a shorter text, labeled Participant A and Participant B
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_2_4_Ele_r0 \
-  --compare-with l7_1090:l7_1090_2_2_4_Ele_r0 --compare-legend --label-a "Participant A" --label-b "Participant B" \
+  -p l37_1129 -t l37_1129_2_2_4_Ele \
+  --compare-with l7_1090:l7_1090_2_2_4_Ele --compare-legend --label-a "Participant A" --label-b "Participant B" \
   --legend compare=top-center-outside,side-by-side,24 --no-duration-size-legend \
   --crop-to-data --crop-margin 50 \
   --highlight-column '' \
@@ -24,13 +24,12 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_2_4_Ele_r0"
+pid, tid = "l37_1129", "l37_1129_2_2_4_Ele"
 fig = sps.compare_scanpaths(
     words,
     fixations,
     (pid, tid),
-    ("l7_1090", "l7_1090_2_2_4_Ele_r0"),
-    highlight_column=None,
+    ("l7_1090", "l7_1090_2_2_4_Ele"),
     labels=("Participant A", "Participant B"),
     fit_to_monitor=False,
     crop_margin=50,

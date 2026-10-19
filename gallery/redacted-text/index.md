@@ -9,7 +9,7 @@ Show where the text was without showing what it said. Each word is drawn as a ro
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  -p l37_1129 -t l37_1129_2_1_1_Ele \
   --redact-text --highlight-column '' \
   -o redacted-text.html
 ```
@@ -18,10 +18,8 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
-fig = sps.plot_scanpath(
-    words, fixations, pid, tid, highlight_column=None, redact_text=True
-)
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
+fig = sps.plot_scanpath(words, fixations, pid, tid, redact_text=True)
 
 sps.save_figure(fig, "redacted-text.html")
 ```

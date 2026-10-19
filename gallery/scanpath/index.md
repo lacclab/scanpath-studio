@@ -10,7 +10,7 @@ Fixations and saccades over the text.
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  -p l37_1129 -t l37_1129_2_1_1_Ele \
   --highlight-column '' \
   -o scanpath.html
 ```
@@ -19,8 +19,8 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
-fig = sps.plot_scanpath(words, fixations, pid, tid, highlight_column=None)
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
+fig = sps.plot_scanpath(words, fixations, pid, tid)
 
 sps.save_figure(fig, "scanpath.html")
 ```

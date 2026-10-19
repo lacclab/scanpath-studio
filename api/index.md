@@ -76,10 +76,10 @@ print(words[columns].head(3))
 ```
 
 ```
-  participant_id        unique_trial_id
-0       l37_1129  l37_1129_2_1_1_Ele_r0
-1       l37_1129  l37_1129_2_1_2_Ele_r0
-2       l37_1129  l37_1129_2_1_3_Adv_r0
+  participant_id     unique_trial_id
+0       l37_1129  l37_1129_2_1_1_Ele
+1       l37_1129  l37_1129_2_1_2_Ele
+2       l37_1129  l37_1129_2_1_3_Adv
    IA_ID  IA_LABEL  IA_FIRST_FIXATION_DURATION  IA_DWELL_TIME
 0      0    Robert                        32.0            387
 1      1  Myslajek                       170.0            785
@@ -976,23 +976,23 @@ Examples:
 
 ### Stimulus
 
-| Option and `render` flag                              | Default         | Description                                                                                                                                                                                                                         |
-| ----------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `show_word_labels` `--no-text`                        | `True`          | Hide the stimulus text.                                                                                                                                                                                                             |
-| `redact_text` `--redact-text`                         | `False`         | Draw a rounded block in the text color in place of each word's letters, and leave the words out of the hovers. The figure keeps the text's layout but not its words (the app's Text → Redact).                                      |
-| `line_spacing` `--line-spacing`                       | `3.0`           | Line spacing, in font sizes: the text's font size is the distance between lines ÷ N.                                                                                                                                                |
-| `scale_text_to_boxes` `--no-scale-text-to-boxes`      | `True`          | Draw the text at `--font-size` instead of fitting it to the word boxes (the app's Fit to word boxes).                                                                                                                               |
-| `text_color` `--text-color`                           | `'#000000'`     | Stimulus text color.                                                                                                                                                                                                                |
-| `background_color` `--background-color`               | `'#ffffff'`     | Plot background color.                                                                                                                                                                                                              |
-| `highlight_column` `--highlight-column`               | `'is_in_aspan'` | Boolean Words table column that marks the words to highlight. Pass '' to highlight nothing. `--critical-span-style` sets how they are drawn.                                                                                        |
-| `highlight_text_color` `--highlight-text-color`       | `'#D55E00'`     | Color of the `--highlight-column` words under `--critical-span-style` mark-text.                                                                                                                                                    |
-| `critical_span_style` `--critical-span-style`         | `'Mark text'`   | How the `--highlight-column` words are marked: mark-text recolors them, mark-border outlines their boxes, none draws neither. One of `'Mark text'`, `'Mark border'`, `'None'`. *Plot and compare only.*                             |
-| `span_border_color` `--span-border-color`             | `'#000000'`     | Box color under `--critical-span-style` mark-border. *Plot and compare only.*                                                                                                                                                       |
-| `show_stimulus_image` `--show-stimulus-image`         | `False`         | Draw each trial's stimulus image under the scanpath, from the image_path column of its rows, placed at image_x / image_y. `--image-root` fills that column, and `--sample` ships its images. `--stimulus-image` takes precedence.   |
-| `background_image` `--stimulus-image`                 | `None`          | Draw an image (PNG or JPG) under the scanpath as the stimulus. It is sized to the PNG's pixel size, else to the canvas. Use `--stimulus-image-size` and `--stimulus-image-origin` to place a cropped image in fixation coordinates. |
-| `background_image_size` `--stimulus-image-size`       | `None`          | Stimulus image size in px, e.g. 1310x991. Use with `--stimulus-image`.                                                                                                                                                              |
-| `background_image_origin` `--stimulus-image-origin`   | `None`          | Top-left corner of the stimulus image in screen px, e.g. 305,44. Use with `--stimulus-image` to line a centered crop up with the fixations.                                                                                         |
-| `background_image_opacity` `--stimulus-image-opacity` | `1.0`           | Stimulus image opacity, 0.1–1.0. Lower it so the fixations, saccades and word boxes stand out on a busy image.                                                                                                                      |
+| Option and `render` flag                              | Default       | Description                                                                                                                                                                                                                         |
+| ----------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `show_word_labels` `--no-text`                        | `True`        | Hide the stimulus text.                                                                                                                                                                                                             |
+| `redact_text` `--redact-text`                         | `False`       | Draw a rounded block in the text color in place of each word's letters, and leave the words out of the hovers. The figure keeps the text's layout but not its words (the app's Text → Redact).                                      |
+| `line_spacing` `--line-spacing`                       | `3.0`         | Line spacing, in font sizes: the text's font size is the distance between lines ÷ N.                                                                                                                                                |
+| `scale_text_to_boxes` `--no-scale-text-to-boxes`      | `True`        | Draw the text at `--font-size` instead of fitting it to the word boxes (the app's Fit to word boxes).                                                                                                                               |
+| `text_color` `--text-color`                           | `'#000000'`   | Stimulus text color.                                                                                                                                                                                                                |
+| `background_color` `--background-color`               | `'#ffffff'`   | Plot background color.                                                                                                                                                                                                              |
+| `highlight_column` `--highlight-column`               | `None`        | Boolean Words table column that marks the words to highlight (e.g. is_in_aspan, OneStop's answer span; default: none). `--critical-span-style` sets how they are drawn.                                                             |
+| `highlight_text_color` `--highlight-text-color`       | `'#D55E00'`   | Color of the `--highlight-column` words under `--critical-span-style` mark-text.                                                                                                                                                    |
+| `critical_span_style` `--critical-span-style`         | `'Mark text'` | How the `--highlight-column` words are marked: mark-text recolors them, mark-border outlines their boxes, none draws neither. One of `'Mark text'`, `'Mark border'`, `'None'`. *Plot and compare only.*                             |
+| `span_border_color` `--span-border-color`             | `'#000000'`   | Box color under `--critical-span-style` mark-border. *Plot and compare only.*                                                                                                                                                       |
+| `show_stimulus_image` `--show-stimulus-image`         | `False`       | Draw each trial's stimulus image under the scanpath, from the image_path column of its rows, placed at image_x / image_y. `--image-root` fills that column, and `--sample` ships its images. `--stimulus-image` takes precedence.   |
+| `background_image` `--stimulus-image`                 | `None`        | Draw an image (PNG or JPG) under the scanpath as the stimulus. It is sized to the PNG's pixel size, else to the canvas. Use `--stimulus-image-size` and `--stimulus-image-origin` to place a cropped image in fixation coordinates. |
+| `background_image_size` `--stimulus-image-size`       | `None`        | Stimulus image size in px, e.g. 1310x991. Use with `--stimulus-image`.                                                                                                                                                              |
+| `background_image_origin` `--stimulus-image-origin`   | `None`        | Top-left corner of the stimulus image in screen px, e.g. 305,44. Use with `--stimulus-image` to line a centered crop up with the fixations.                                                                                         |
+| `background_image_opacity` `--stimulus-image-opacity` | `1.0`         | Stimulus image opacity, 0.1–1.0. Lower it so the fixations, saccades and word boxes stand out on a busy image.                                                                                                                      |
 
 ### Word boxes
 
@@ -1115,7 +1115,7 @@ The app's **Share** tab → **Code** shows the Python or CLI code that rebuilds 
 print(
     sps.figure_code(
         participant="l7_1090",
-        trial="l7_1090_2_1_1_Ele_r0",
+        trial="l7_1090_2_1_1_Ele",
         show_heatmap=True,
         color_by="duration_ms",
     )
@@ -1131,7 +1131,7 @@ fig = sps.plot_scanpath(
     words,
     fixations,
     participant='l7_1090',
-    trial='l7_1090_2_1_1_Ele_r0',
+    trial='l7_1090_2_1_1_Ele',
     canvas_size=(2560, 1440),
     color_by='duration_ms',
     show_heatmap=True,
@@ -1226,7 +1226,7 @@ Examples:
 print(
     sps.figure_code(
         participant="l7_1090",
-        trial="l7_1090_2_1_1_Ele_r0",
+        trial="l7_1090_2_1_1_Ele",
         show_heatmap=True,
         flavor="cli",
     )

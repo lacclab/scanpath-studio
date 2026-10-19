@@ -10,7 +10,7 @@ Where fixation time concentrates.
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  -p l37_1129 -t l37_1129_2_1_1_Ele \
   --heatmap --heatmap-style smoothed --no-fixations --no-saccades \
   --highlight-column '' \
   -o heatmap.html
@@ -20,7 +20,7 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
 fig = sps.plot_scanpath(
     words,
     fixations,
@@ -28,7 +28,6 @@ fig = sps.plot_scanpath(
     tid,
     show_heatmap=True,
     heatmap_style="Smoothed",
-    highlight_column=None,
     show_fixations=False,
     show_saccades=False,
 )

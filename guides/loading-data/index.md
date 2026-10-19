@@ -52,7 +52,7 @@ Corpus Analysis uses the per-word reading measures in your Words table, such as 
 1. Upload your tables and check the column mapping.
 1. Under **Recording setup**, enter the **Screen**, **Monitor width** and **Text size** if you know them.
 1. Optionally, in the desktop app or a local install, attach the stimulus images from a folder.
-1. Click **Add dataset**.
+1. Click **Add dataset**, then **Open in Scanpath** to see its first trial. Later, **Open in Scanpath** beside **Add dataset** on the Data page does the same for the selected dataset.
 
 \[!\[
 
@@ -80,8 +80,8 @@ For raw gaze, metadata and explicit column mappings, see the [loaders](https://l
 
 ## Manage datasets
 
-Click a dataset in the dataset list to open it. Below the list, **What's in *‹dataset›*** shows its tables, annotations and **Data checks**.
+Click a dataset in the dataset list to open it. Below the list, **What's in *‹dataset›*** shows its tables, annotations and **Data checks**. When a check flags more than half of a table, such as every duration read as 0 ms, the Scanpath view says so above the plot.
 
 Use **Edit dataset** to change its name, column mapping, recording setup or metadata, then click **Save changes**. **Download setup file** saves the mapping and recording setup, so you can apply them to similar data.
 
-The editor offers only the columns kept when the dataset was added. To use a column you left out, add the files again and keep it under **Extra fields to keep**.
+The editor offers only the columns kept when the dataset was added. To use a column that isn't listed, remove the dataset and add it again from its files, mapping the column or keeping it under **Extra fields to keep**.

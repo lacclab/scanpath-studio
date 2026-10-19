@@ -10,7 +10,7 @@ Gaze samples under translucent fixations. The bundled demo's gaze samples are sy
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_2_2_Adv_r0 \
+  -p l37_1129 -t l37_1129_2_2_2_Adv \
   --sample-raw-gaze --fixation-opacity 0.35 --no-saccades \
   --highlight-column '' \
   -o raw-gaze.html
@@ -20,15 +20,14 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
 raw_gaze = sps.load_sample_raw_gaze()
 fig = sps.plot_scanpath(
     words,
     fixations,
     "l37_1129",
-    "l37_1129_2_2_2_Adv_r0",
+    "l37_1129_2_2_2_Adv",
     raw_gaze=raw_gaze,
-    highlight_column=None,
     fixation_opacity=0.35,
     show_saccades=False,
 )

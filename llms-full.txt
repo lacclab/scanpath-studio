@@ -555,7 +555,7 @@ import scanpath_studio as sps
 from scanpath_studio.animation_export import export_animation
 
 words, fixations = sps.load_sample_data()
-replay = sps.animate_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
+replay = sps.animate_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele")
 Path("replay.mp4").write_bytes(export_animation(replay, fmt="mp4"))
 ```
 
@@ -617,7 +617,7 @@ Corpus Analysis uses the per-word reading measures in your Words table, such as 
 1. Upload your tables and check the column mapping.
 1. Under **Recording setup**, enter the **Screen**, **Monitor width** and **Text size** if you know them.
 1. Optionally, in the desktop app or a local install, attach the stimulus images from a folder.
-1. Click **Add dataset**.
+1. Click **Add dataset**, then **Open in Scanpath** to see its first trial. Later, **Open in Scanpath** beside **Add dataset** on the Data page does the same for the selected dataset.
 
 \[!\[
 
@@ -645,11 +645,11 @@ For raw gaze, metadata and explicit column mappings, see the [loaders](https://l
 
 ## Manage datasets
 
-Click a dataset in the dataset list to open it. Below the list, **What's in *‹dataset›*** shows its tables, annotations and **Data checks**.
+Click a dataset in the dataset list to open it. Below the list, **What's in *‹dataset›*** shows its tables, annotations and **Data checks**. When a check flags more than half of a table, such as every duration read as 0 ms, the Scanpath view says so above the plot.
 
 Use **Edit dataset** to change its name, column mapping, recording setup or metadata, then click **Save changes**. **Download setup file** saves the mapping and recording setup, so you can apply them to similar data.
 
-The editor offers only the columns kept when the dataset was added. To use a column you left out, add the files again and keep it under **Extra fields to keep**.
+The editor offers only the columns kept when the dataset was added. To use a column that isn't listed, remove the dataset and add it again from its files, mapping the column or keeping it under **Extra fields to keep**.
 
 # Scanpath visualization
 
@@ -726,13 +726,13 @@ Python and CLI: render the demo
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-fig = sps.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
+fig = sps.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele")
 sps.save_figure(fig, "scanpath.html")
 ```
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 -o scanpath.html
+  -p l37_1129 -t l37_1129_2_1_1_Ele -o scanpath.html
 ```
 
 For your own files, use the [data loaders](https://lacclab.github.io/scanpath-studio/guides/loading-data/#load-and-inspect-in-code). The [figure options table](https://lacclab.github.io/scanpath-studio/api/#figure-options) lists every figure setting with its Python keyword and CLI flag. For more CLI examples, see [Common tasks](https://lacclab.github.io/scanpath-studio/cli/#common-tasks).
@@ -769,28 +769,28 @@ For the corresponding Python keywords and CLI flags, use the [figure options tab
 
 The bar above the plot: pick a dataset and a trial, step through the trials, and narrow, sort or label the list.
 
-| Control                                           | What it does                                                                                                                                                                                                                                                                                                       |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Select dataset**                                | The dataset the view shows.                                                                                                                                                                                                                                                                                        |
-| → **Draw a scanpath**                             | Write a text and place its fixations by hand, as a new dataset.                                                                                                                                                                                                                                                    |
-| → **Import files**                                | Upload your own Fixations and Words tables as a new dataset.                                                                                                                                                                                                                                                       |
-| **Select trial**                                  | The trial to show. Click it and type to narrow the list.                                                                                                                                                                                                                                                           |
-| Slider                                            | Scrub through the trials in the list.                                                                                                                                                                                                                                                                              |
-| **◀ ▶**                                           | The previous or next trial.                                                                                                                                                                                                                                                                                        |
-| **⇅** → **Sort trials by**                        | Reorder the trial list by a statistic (such as reading time), a participant, text or condition field, or a column of a metadata table you attached.                                                                                                                                                                |
-| **⇅** → **Descending**                            | Reverse that order.                                                                                                                                                                                                                                                                                                |
-| → **Text** / **Participant**                      | Keep only these texts or participants. Empty keeps all.                                                                                                                                                                                                                                                            |
-| → *a field of your data*                          | Keep only trials with these values, or, for a number, in this range.                                                                                                                                                                                                                                               |
-| → **By participant** / **By trial** / **By text** | The same, for the columns of an attached metadata table.                                                                                                                                                                                                                                                           |
-| → **Favorites only**                              | Keep only starred trials.                                                                                                                                                                                                                                                                                          |
-| → **With any of these tags**                      | Keep only trials with any of these tags.                                                                                                                                                                                                                                                                           |
-| → **Excluding tags**                              | Hide trials with any of these tags, such as *To exclude*.                                                                                                                                                                                                                                                          |
-| → **✕ Clear all filters**                         | Reset every filter in the panel.                                                                                                                                                                                                                                                                                   |
-| → **Show chips above the plot**                   | Show or hide the row of facts about the trial above the plot.                                                                                                                                                                                                                                                      |
-| → field lists                                     | Drag fields between *Shown* and *Available* to choose the chips, and drag within *Shown* to reorder them. *Available* holds every field with one value per trial: participant, text and condition columns, the columns of any metadata table you attached, and statistics such as reading time and fixation count. |
-| → chip colors                                     | Give a chip a highlight color. Its **✕** puts it back to the default gray.                                                                                                                                                                                                                                         |
-| → **Refresh fields**                              | Check again which fields have one value per trial.                                                                                                                                                                                                                                                                 |
-| **Screen** and its **◀ ▶**                        | On a trial recorded over several screens: the screen to show.                                                                                                                                                                                                                                                      |
+| Control                                           | What it does                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Select dataset**                                | The dataset the view shows.                                                                                                                                                                                                                                                                                                         |
+| → **Draw a scanpath**                             | Write a text and place its fixations by hand, as a new dataset.                                                                                                                                                                                                                                                                     |
+| → **Import files**                                | Upload your own Fixations and Words tables as a new dataset.                                                                                                                                                                                                                                                                        |
+| **Select trial**                                  | The trial to show. Click it and type to narrow the list.                                                                                                                                                                                                                                                                            |
+| Slider                                            | Move through the trials in the list.                                                                                                                                                                                                                                                                                                |
+| **◀ ▶**                                           | The previous or next trial.                                                                                                                                                                                                                                                                                                         |
+| **⇅** → **Sort trials by**                        | Reorder the trial list by a statistic (such as reading time), a participant, text or condition field, or a column of a metadata table you attached.                                                                                                                                                                                 |
+| **⇅** → **Descending**                            | Reverse that order.                                                                                                                                                                                                                                                                                                                 |
+| → **Text** / **Participant**                      | Keep only these texts or participants. Empty keeps all.                                                                                                                                                                                                                                                                             |
+| → *a field of your data*                          | Keep only trials with these values, or, for a number, in this range.                                                                                                                                                                                                                                                                |
+| → **By participant** / **By trial** / **By text** | The same, for the columns of an attached metadata table.                                                                                                                                                                                                                                                                            |
+| → **Favorites only**                              | Keep only starred trials.                                                                                                                                                                                                                                                                                                           |
+| → **With any of these tags**                      | Keep only trials with any of these tags.                                                                                                                                                                                                                                                                                            |
+| → **Excluding tags**                              | Hide trials with any of these tags, such as *To exclude*.                                                                                                                                                                                                                                                                           |
+| → **✕ Clear all filters**                         | Reset every filter in the panel.                                                                                                                                                                                                                                                                                                    |
+| → **Show the trial summary above the plot**       | Show or hide the row of facts about the trial above the plot.                                                                                                                                                                                                                                                                       |
+| → field lists                                     | Drag fields between *Shown* and *Available* to choose the trial summary's fields, and drag within *Shown* to reorder them. *Available* holds every field with one value per trial: participant, text and condition columns, the columns of any metadata table you attached, and statistics such as reading time and fixation count. |
+| → **Field colors**                                | Give a field a highlight color. Its **✕** puts it back to the default gray.                                                                                                                                                                                                                                                         |
+| → **Refresh fields**                              | Check again which fields have one value per trial.                                                                                                                                                                                                                                                                                  |
+| **Screen** and its **◀ ▶**                        | On a trial recorded over several screens: the screen to show.                                                                                                                                                                                                                                                                       |
 
 ## Plot controls
 
@@ -1074,7 +1074,7 @@ Yes, but the link does not contain your data, so they need to load the same data
 
 ### Where does my data go?
 
-When you run Scanpath Studio locally or as the desktop app, your data stays on your computer. There are no accounts, and `scanpath-studio` and the desktop app send no usage statistics. Don't upload identifiable data to the online demo. See [Privacy](https://lacclab.github.io/scanpath-studio/about/#privacy).
+When you run Scanpath Studio locally or as the desktop app, your data stays on your computer. There are no accounts, and `scanpath-studio` and the desktop app send no usage statistics. The online demo runs on Streamlit Community Cloud, whose page around the app has its own analytics ([privacy policy](https://streamlit.io/privacy-policy)). See [Your data](https://lacclab.github.io/scanpath-studio/about/#your-data) for what a local install saves, where, and how to clear it.
 
 ### Can I share a figure without showing the text?
 
@@ -1088,7 +1088,7 @@ If the files of one saved dataset go missing or are damaged, the rest of the ses
 
 ### How do I stop saving, or delete what is saved?
 
-Start the app with `scanpath-studio run --no-persist` to save nothing. To delete what is saved and start over, use **Clear what is saved…** under **Saved on this computer**, or close the app and run `scanpath-studio cache --clear`. See [Recovery cache](https://lacclab.github.io/scanpath-studio/cli/#cache).
+Start the app with `scanpath-studio run --no-persist` to save nothing. To delete what is saved and start over, use **Clear what is saved…** under **Saved on this computer**, or close the app and run `scanpath-studio cache --clear`. See [Your data](https://lacclab.github.io/scanpath-studio/about/#your-data) and [Recovery cache](https://lacclab.github.io/scanpath-studio/cli/#cache).
 
 ## Help and versions
 
@@ -1195,10 +1195,10 @@ print(words[columns].head(3))
 ```
 
 ```
-  participant_id        unique_trial_id
-0       l37_1129  l37_1129_2_1_1_Ele_r0
-1       l37_1129  l37_1129_2_1_2_Ele_r0
-2       l37_1129  l37_1129_2_1_3_Adv_r0
+  participant_id     unique_trial_id
+0       l37_1129  l37_1129_2_1_1_Ele
+1       l37_1129  l37_1129_2_1_2_Ele
+2       l37_1129  l37_1129_2_1_3_Adv
    IA_ID  IA_LABEL  IA_FIRST_FIXATION_DURATION  IA_DWELL_TIME
 0      0    Robert                        32.0            387
 1      1  Myslajek                       170.0            785
@@ -2095,23 +2095,23 @@ Examples:
 
 ### Stimulus
 
-| Option and `render` flag                              | Default         | Description                                                                                                                                                                                                                         |
-| ----------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `show_word_labels` `--no-text`                        | `True`          | Hide the stimulus text.                                                                                                                                                                                                             |
-| `redact_text` `--redact-text`                         | `False`         | Draw a rounded block in the text color in place of each word's letters, and leave the words out of the hovers. The figure keeps the text's layout but not its words (the app's Text → Redact).                                      |
-| `line_spacing` `--line-spacing`                       | `3.0`           | Line spacing, in font sizes: the text's font size is the distance between lines ÷ N.                                                                                                                                                |
-| `scale_text_to_boxes` `--no-scale-text-to-boxes`      | `True`          | Draw the text at `--font-size` instead of fitting it to the word boxes (the app's Fit to word boxes).                                                                                                                               |
-| `text_color` `--text-color`                           | `'#000000'`     | Stimulus text color.                                                                                                                                                                                                                |
-| `background_color` `--background-color`               | `'#ffffff'`     | Plot background color.                                                                                                                                                                                                              |
-| `highlight_column` `--highlight-column`               | `'is_in_aspan'` | Boolean Words table column that marks the words to highlight. Pass '' to highlight nothing. `--critical-span-style` sets how they are drawn.                                                                                        |
-| `highlight_text_color` `--highlight-text-color`       | `'#D55E00'`     | Color of the `--highlight-column` words under `--critical-span-style` mark-text.                                                                                                                                                    |
-| `critical_span_style` `--critical-span-style`         | `'Mark text'`   | How the `--highlight-column` words are marked: mark-text recolors them, mark-border outlines their boxes, none draws neither. One of `'Mark text'`, `'Mark border'`, `'None'`. *Plot and compare only.*                             |
-| `span_border_color` `--span-border-color`             | `'#000000'`     | Box color under `--critical-span-style` mark-border. *Plot and compare only.*                                                                                                                                                       |
-| `show_stimulus_image` `--show-stimulus-image`         | `False`         | Draw each trial's stimulus image under the scanpath, from the image_path column of its rows, placed at image_x / image_y. `--image-root` fills that column, and `--sample` ships its images. `--stimulus-image` takes precedence.   |
-| `background_image` `--stimulus-image`                 | `None`          | Draw an image (PNG or JPG) under the scanpath as the stimulus. It is sized to the PNG's pixel size, else to the canvas. Use `--stimulus-image-size` and `--stimulus-image-origin` to place a cropped image in fixation coordinates. |
-| `background_image_size` `--stimulus-image-size`       | `None`          | Stimulus image size in px, e.g. 1310x991. Use with `--stimulus-image`.                                                                                                                                                              |
-| `background_image_origin` `--stimulus-image-origin`   | `None`          | Top-left corner of the stimulus image in screen px, e.g. 305,44. Use with `--stimulus-image` to line a centered crop up with the fixations.                                                                                         |
-| `background_image_opacity` `--stimulus-image-opacity` | `1.0`           | Stimulus image opacity, 0.1–1.0. Lower it so the fixations, saccades and word boxes stand out on a busy image.                                                                                                                      |
+| Option and `render` flag                              | Default       | Description                                                                                                                                                                                                                         |
+| ----------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `show_word_labels` `--no-text`                        | `True`        | Hide the stimulus text.                                                                                                                                                                                                             |
+| `redact_text` `--redact-text`                         | `False`       | Draw a rounded block in the text color in place of each word's letters, and leave the words out of the hovers. The figure keeps the text's layout but not its words (the app's Text → Redact).                                      |
+| `line_spacing` `--line-spacing`                       | `3.0`         | Line spacing, in font sizes: the text's font size is the distance between lines ÷ N.                                                                                                                                                |
+| `scale_text_to_boxes` `--no-scale-text-to-boxes`      | `True`        | Draw the text at `--font-size` instead of fitting it to the word boxes (the app's Fit to word boxes).                                                                                                                               |
+| `text_color` `--text-color`                           | `'#000000'`   | Stimulus text color.                                                                                                                                                                                                                |
+| `background_color` `--background-color`               | `'#ffffff'`   | Plot background color.                                                                                                                                                                                                              |
+| `highlight_column` `--highlight-column`               | `None`        | Boolean Words table column that marks the words to highlight (e.g. is_in_aspan, OneStop's answer span; default: none). `--critical-span-style` sets how they are drawn.                                                             |
+| `highlight_text_color` `--highlight-text-color`       | `'#D55E00'`   | Color of the `--highlight-column` words under `--critical-span-style` mark-text.                                                                                                                                                    |
+| `critical_span_style` `--critical-span-style`         | `'Mark text'` | How the `--highlight-column` words are marked: mark-text recolors them, mark-border outlines their boxes, none draws neither. One of `'Mark text'`, `'Mark border'`, `'None'`. *Plot and compare only.*                             |
+| `span_border_color` `--span-border-color`             | `'#000000'`   | Box color under `--critical-span-style` mark-border. *Plot and compare only.*                                                                                                                                                       |
+| `show_stimulus_image` `--show-stimulus-image`         | `False`       | Draw each trial's stimulus image under the scanpath, from the image_path column of its rows, placed at image_x / image_y. `--image-root` fills that column, and `--sample` ships its images. `--stimulus-image` takes precedence.   |
+| `background_image` `--stimulus-image`                 | `None`        | Draw an image (PNG or JPG) under the scanpath as the stimulus. It is sized to the PNG's pixel size, else to the canvas. Use `--stimulus-image-size` and `--stimulus-image-origin` to place a cropped image in fixation coordinates. |
+| `background_image_size` `--stimulus-image-size`       | `None`        | Stimulus image size in px, e.g. 1310x991. Use with `--stimulus-image`.                                                                                                                                                              |
+| `background_image_origin` `--stimulus-image-origin`   | `None`        | Top-left corner of the stimulus image in screen px, e.g. 305,44. Use with `--stimulus-image` to line a centered crop up with the fixations.                                                                                         |
+| `background_image_opacity` `--stimulus-image-opacity` | `1.0`         | Stimulus image opacity, 0.1–1.0. Lower it so the fixations, saccades and word boxes stand out on a busy image.                                                                                                                      |
 
 ### Word boxes
 
@@ -2234,7 +2234,7 @@ The app's **Share** tab → **Code** shows the Python or CLI code that rebuilds 
 print(
     sps.figure_code(
         participant="l7_1090",
-        trial="l7_1090_2_1_1_Ele_r0",
+        trial="l7_1090_2_1_1_Ele",
         show_heatmap=True,
         color_by="duration_ms",
     )
@@ -2250,7 +2250,7 @@ fig = sps.plot_scanpath(
     words,
     fixations,
     participant='l7_1090',
-    trial='l7_1090_2_1_1_Ele_r0',
+    trial='l7_1090_2_1_1_Ele',
     canvas_size=(2560, 1440),
     color_by='duration_ms',
     show_heatmap=True,
@@ -2345,7 +2345,7 @@ Examples:
 print(
     sps.figure_code(
         participant="l7_1090",
-        trial="l7_1090_2_1_1_Ele_r0",
+        trial="l7_1090_2_1_1_Ele",
         show_heatmap=True,
         flavor="cli",
     )
@@ -2593,22 +2593,22 @@ The Python API loads the same datasets with load_potec and load_onestop.
 
 ```
 # Two participants on the same paragraph, overlaid
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 -o compare.html
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele -o compare.html
 
 # The same overlay, drawing only B's word boxes and text
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 --compare-stimulus b \
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele --compare-stimulus b \
   -o compare_b.html
 
 # Side by side: each panel draws its trial's stimulus
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 \
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele \
   --compare-layout side-by-side -o compare.svg
 
 # A style for each scanpath
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele_r0 \
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
+  --compare-with l7_1090:l7_1090_2_1_1_Ele \
   --style-a fix_color=#D55E00,opacity=0.5 --style-b saccade_style=dash \
   -o compare_styled.html
 
@@ -2670,7 +2670,7 @@ The `--animate` replay draws one set of word boxes and no raw gaze, so it ignore
 `--raw-gaze PATH…` reads a Raw gaze table, with its columns auto-detected like `--fixations`, and draws the plotted trial's samples under the fixations. With `--compare-with` it covers both scanpaths, each in its scanpath's color. `--compare-raw-gaze PATH…` gives B's samples when B comes from another dataset. `--animate` ignores raw gaze with a warning.
 
 ```
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_2_2_Adv_r0 \
+scanpath-studio render --sample -p l37_1129 -t l37_1129_2_2_2_Adv \
   --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
 ```
 
@@ -2805,7 +2805,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | Option                     | Value                              | Default | Description                                                                                                                                                                                                                         |
 | -------------------------- | ---------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--no-text` `--no-labels`  | switch                             | —       | Hide the stimulus text.                                                                                                                                                                                                             |
-| `--highlight-column`       | `COLUMN`                           | —       | Boolean Words table column that marks the words to highlight (default: is_in_aspan, OneStop's answer span). Pass '' to highlight nothing. `--critical-span-style` sets how they are drawn.                                          |
+| `--highlight-column`       | `COLUMN`                           | —       | Boolean Words table column that marks the words to highlight (e.g. is_in_aspan, OneStop's answer span; default: none). `--critical-span-style` sets how they are drawn.                                                             |
 | `--critical-span-style`    | `mark-text`, `mark-border`, `none` | —       | How the `--highlight-column` words are marked: mark-text recolors them, mark-border outlines their boxes, none draws neither (default: mark-text).                                                                                  |
 | `--stimulus-image`         | `PATH`                             | —       | Draw an image (PNG or JPG) under the scanpath as the stimulus. It is sized to the PNG's pixel size, else to the canvas. Use `--stimulus-image-size` and `--stimulus-image-origin` to place a cropped image in fixation coordinates. |
 | `--stimulus-image-size`    | `WxH`                              | —       | Stimulus image size in px, e.g. 1310x991 (default: the PNG's pixel size, else the canvas). Use with `--stimulus-image`.                                                                                                             |
@@ -2993,8 +2993,8 @@ scanpath-studio corpus --input profile.csv --kind profile --output profile.svg
 `check` runs the **Data Management** page's **Data checks** on your tables without opening the app. It looks for:
 
 - fixations lasting 0 ms or less, or with an infinite duration or onset;
-- fixations and raw gaze samples with no finite position;
-- word boxes with no area or no finite position;
+- fixations and raw gaze samples with no finite position, or one more than a million pixels off the screen;
+- word boxes with no area, or no finite position or size within a million pixels;
 - screen sizes that are not finite and positive.
 
 Each finding gives the rows and trials affected, a few example rows, and what the app does with them. `check` changes nothing and exits 0 whatever it finds. `--json` prints the table check_data_health returns.
@@ -3121,8 +3121,8 @@ Two complete readings of a shorter text, labeled Participant A and Participant B
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_2_4_Ele_r0 \
-  --compare-with l7_1090:l7_1090_2_2_4_Ele_r0 --compare-legend --label-a "Participant A" --label-b "Participant B" \
+  -p l37_1129 -t l37_1129_2_2_4_Ele \
+  --compare-with l7_1090:l7_1090_2_2_4_Ele --compare-legend --label-a "Participant A" --label-b "Participant B" \
   --legend compare=top-center-outside,side-by-side,24 --no-duration-size-legend \
   --crop-to-data --crop-margin 50 \
   --highlight-column '' \
@@ -3133,13 +3133,12 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_2_4_Ele_r0"
+pid, tid = "l37_1129", "l37_1129_2_2_4_Ele"
 fig = sps.compare_scanpaths(
     words,
     fixations,
     (pid, tid),
-    ("l7_1090", "l7_1090_2_2_4_Ele_r0"),
-    highlight_column=None,
+    ("l7_1090", "l7_1090_2_2_4_Ele"),
     labels=("Participant A", "Participant B"),
     fit_to_monitor=False,
     crop_margin=50,
@@ -3206,7 +3205,6 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
-    highlight_column=None,
     canvas_size=(450, 300),
     fixation_symbol="heart",
     fixation_color="#d12d72",
@@ -3240,7 +3238,7 @@ Where fixation time concentrates.
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  -p l37_1129 -t l37_1129_2_1_1_Ele \
   --heatmap --heatmap-style smoothed --no-fixations --no-saccades \
   --highlight-column '' \
   -o heatmap.html
@@ -3250,7 +3248,7 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
 fig = sps.plot_scanpath(
     words,
     fixations,
@@ -3258,7 +3256,6 @@ fig = sps.plot_scanpath(
     tid,
     show_heatmap=True,
     heatmap_style="Smoothed",
-    highlight_column=None,
     show_fixations=False,
     show_saccades=False,
 )
@@ -3280,7 +3277,7 @@ Highlight a selected text span alongside its fixations.
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  -p l37_1129 -t l37_1129_2_1_1_Ele \
   --highlight-column is_in_aspan --critical-span-style mark-text \
   --no-saccades -o highlighted-text.html
 ```
@@ -3289,7 +3286,7 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
 fig = sps.plot_scanpath(
     words,
     fixations,
@@ -3347,7 +3344,6 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
-    highlight_column=None,
     canvas_size=(450, 340),
     fixation_snap_to_line=True,
     saccade_render_mode="Arc",
@@ -3373,7 +3369,7 @@ Gaze samples under translucent fixations. The bundled demo's gaze samples are sy
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_2_2_Adv_r0 \
+  -p l37_1129 -t l37_1129_2_2_2_Adv \
   --sample-raw-gaze --fixation-opacity 0.35 --no-saccades \
   --highlight-column '' \
   -o raw-gaze.html
@@ -3383,15 +3379,14 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
 raw_gaze = sps.load_sample_raw_gaze()
 fig = sps.plot_scanpath(
     words,
     fixations,
     "l37_1129",
-    "l37_1129_2_2_2_Adv_r0",
+    "l37_1129_2_2_2_Adv",
     raw_gaze=raw_gaze,
-    highlight_column=None,
     fixation_opacity=0.35,
     show_saccades=False,
 )
@@ -3412,7 +3407,7 @@ Show where the text was without showing what it said. Each word is drawn as a ro
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  -p l37_1129 -t l37_1129_2_1_1_Ele \
   --redact-text --highlight-column '' \
   -o redacted-text.html
 ```
@@ -3421,10 +3416,8 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
-fig = sps.plot_scanpath(
-    words, fixations, pid, tid, highlight_column=None, redact_text=True
-)
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
+fig = sps.plot_scanpath(words, fixations, pid, tid, redact_text=True)
 
 sps.save_figure(fig, "redacted-text.html")
 ```
@@ -3444,7 +3437,7 @@ Replay a reading in fixation order. Press **▶ Play** above the text to start t
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  -p l37_1129 -t l37_1129_2_1_1_Ele \
   --animate --fix-index-range 1:40 --playback-speed 2 \
   --highlight-column '' \
   -o replay.html
@@ -3454,14 +3447,13 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
 fig = sps.animate_scanpath(
     words,
     fixations,
     pid,
     tid,
     fix_index_range=(1, 40),
-    highlight_column=None,
     playback_speed=2.0,
 )
 
@@ -3484,7 +3476,7 @@ ForwardSkipRefixationReturn sweepRegressionOff the text
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  -p l37_1129 -t l37_1129_2_1_1_Ele \
   --saccade-color-by-type --no-saccade-type-legend \
   --highlight-column '' \
   -o saccade-types.html
@@ -3494,13 +3486,12 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
 fig = sps.plot_scanpath(
     words,
     fixations,
     pid,
     tid,
-    highlight_column=None,
     saccade_color_mode="By type",
     saccade_type_legend=False,
 )
@@ -3522,7 +3513,7 @@ Fixations and saccades over the text.
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  -p l37_1129 -t l37_1129_2_1_1_Ele \
   --highlight-column '' \
   -o scanpath.html
 ```
@@ -3531,8 +3522,8 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
-fig = sps.plot_scanpath(words, fixations, pid, tid, highlight_column=None)
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
+fig = sps.plot_scanpath(words, fixations, pid, tid)
 
 sps.save_figure(fig, "scanpath.html")
 ```
@@ -3551,7 +3542,7 @@ Fixations colored by their nearest text line.
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  -p l37_1129 -t l37_1129_2_1_1_Ele \
   --color-by-line \
   --highlight-column '' \
   -o text-lines.html
@@ -3561,10 +3552,8 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
-fig = sps.plot_scanpath(
-    words, fixations, pid, tid, color_by_line=True, highlight_column=None
-)
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
+fig = sps.plot_scanpath(words, fixations, pid, tid, color_by_line=True)
 
 sps.save_figure(fig, "text-lines.html")
 ```
@@ -3585,7 +3574,7 @@ A figure ready for a slide or a paper. It has a title above the plot, a caption 
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  -p l37_1129 -t l37_1129_2_1_1_Ele \
   --saccade-color-by-type \
   --title "One participant, one article" --title-size 34 \
   --caption "Marker size: fixation duration. Line color: saccade type." --caption-size 20 \
@@ -3599,13 +3588,12 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
 fig = sps.plot_scanpath(
     words,
     fixations,
     pid,
     tid,
-    highlight_column=None,
     saccade_color_mode="By type",
     title="One participant, one article",
     title_font_size=34,
@@ -3636,7 +3624,7 @@ Fixation time within each word box.
 
 ```
 scanpath-studio render --sample \
-  -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+  -p l37_1129 -t l37_1129_2_1_1_Ele \
   --heatmap --heatmap-style word-boxes --no-fixations --no-saccades \
   --highlight-column '' \
   -o word-boxes.html
@@ -3646,13 +3634,12 @@ scanpath-studio render --sample \
 import scanpath_studio as sps
 
 words, fixations = sps.load_sample_data()
-pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
+pid, tid = "l37_1129", "l37_1129_2_1_1_Ele"
 fig = sps.plot_scanpath(
     words,
     fixations,
     pid,
     tid,
-    highlight_column=None,
     show_heatmap=True,
     heatmap_style="Word boxes",
     show_fixations=False,
@@ -3667,7 +3654,7 @@ sps.save_figure(fig, "word-boxes.html")
 
 # About Scanpath Studio
 
-**Scanpath Studio v0.41.0** — interactive visualization of eye movements in reading.
+**Scanpath Studio v0.42.0** — interactive visualization of eye movements in reading.
 
 Developed by [Omer Shubi](https://omershubi.github.io/), [Keren Gruteke Klein](https://kerengruteke.github.io/), [Maya Grossman](https://www.linkedin.com/in/maya-grossman-32b547292/), [Ella Lion](https://ella-lion.github.io/), [Deborah N. Jakobi](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/jakobi.html), [David R. Reich](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/reich.html), [Lena Jäger](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/group-leader/jaeger.html), and [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/), at the Technion and the University of Zurich.
 
@@ -3689,14 +3676,14 @@ Show BibTeX and APA
              Berzak, Yevgeni},
   title   = {{Scanpath Studio}},
   year    = {2026},
-  version = {0.41.0},
+  version = {0.42.0},
   doi     = {10.5281/zenodo.22933884},
   url     = {https://doi.org/10.5281/zenodo.22933884},
   license = {MIT},
 }
 ```
 
-Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.41.0) [Computer software]. https://doi.org/10.5281/zenodo.22933884
+Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.42.0) [Computer software]. https://doi.org/10.5281/zenodo.22933884
 
 ## Bundled demo
 
@@ -3704,7 +3691,19 @@ The bundled demo is a subset of **OneStop Eye Movements**. If you use it, also c
 
 ## Privacy
 
-With the desktop app or a local install, your recordings stay on your computer and are processed locally. The online demo processes the files you upload on its hosted server.
+With the desktop app or a local install, your recordings stay on your computer and are processed locally. The online demo processes the files you upload on its hosted server. **Help** → **About** says which of the two you are using.
+
+### Your data
+
+A local install (`scanpath-studio`) and the desktop app save your work on your computer, so a refresh or a restart picks up where you left off.
+
+- **What is saved:** the datasets you added, with their column mappings, your annotations, your saved designs, attached metadata tables, and your view, trial and plot settings. The bundled demo and public datasets are not copied, since they reload from their source.
+- **Where:** `~/.cache/scanpath-studio/session-v1` in your home folder (`C:\Users\<you>\.cache\scanpath-studio\session-v1` on Windows), or the folder `SCANPATH_STUDIO_STATE_DIR` names. **Data Management** → **Saved on this computer** shows the folder and what it holds, and so does `scanpath-studio cache`.
+- **How long:** until you clear it. Removing a dataset from the app removes its saved copy.
+- **To clear it:** **Clear what is saved…** under **Saved on this computer**, or close the app and run `scanpath-studio cache --clear`.
+- **To turn it off:** start the app with `scanpath-studio --no-persist`, or set `SCANPATH_STUDIO_PERSIST=0`.
+
+The online demo saves nothing. A file you upload there is processed on Streamlit Community Cloud and not kept, so closing or refreshing the tab loses it. The app itself has no analytics, but Community Cloud's page around the app does; see its [privacy policy](https://streamlit.io/privacy-policy). Export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#back-up-your-work)).
 
 ## Questions and feedback
 

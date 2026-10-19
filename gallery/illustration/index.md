@@ -40,7 +40,6 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
-    highlight_column=None,
     canvas_size=(450, 340),
     fixation_snap_to_line=True,
     saccade_render_mode="Arc",

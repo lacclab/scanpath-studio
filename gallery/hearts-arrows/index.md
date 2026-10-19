@@ -45,7 +45,6 @@ fig = sps.plot_scanpath(
     fixations,
     pid,
     tid,
-    highlight_column=None,
     canvas_size=(450, 300),
     fixation_symbol="heart",
     fixation_color="#d12d72",

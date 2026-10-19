@@ -33,6 +33,7 @@ from .constants import (
     DEMO_CHOICE,
     FONT_FAMILY,
     ICONS,
+    SETUP_OVERRIDE_FOR_KEY,
     TRIAL_IDENTITY_CHECK_KEY,
     WIZARD_LEAVE_KEY,
     plural,
@@ -339,26 +340,6 @@ def text_setup_values(snapshot: SetupSnapshot) -> dict:
     }
 
 
-def _apply_setup_to_figure(setup: dict | None) -> None:
-    """A newly added dataset's recording setup, onto the figure's settings.
-
-    The add screen writes only the answers the user chose while it is open
-    (`_wizard_setup_step`), so the ones it chose itself — the estimate, the
-    text fitted to its boxes — arrive here, with the dataset they belong to.
-    """
-    if not isinstance(setup, dict):
-        return
-    snapshot = SetupSnapshot.from_dict(setup, fallback=SetupSnapshot())
-    st.session_state["global_canvas_width"] = snapshot.canvas_width
-    st.session_state["global_canvas_height"] = snapshot.canvas_height
-    if snapshot.geometry_provenance not in (None, Provenance.SKIPPED):
-        st.session_state["global_monitor_width_mm"] = snapshot.monitor_width_mm
-        st.session_state["global_viewing_distance_mm"] = snapshot.viewing_distance_mm
-    if snapshot.text_provenance is not None:
-        st.session_state.update(text_setup_values(snapshot))
-    st.session_state["global_font_family"] = snapshot.font_family
-
-
 def _finalize_wizard_dataset() -> None:
     """Store the wizard's normalized frames as a named dataset and switch to it.
 
@@ -408,7 +389,11 @@ def _finalize_wizard_dataset() -> None:
         )
     store = st.session_state.setdefault("_datasets", {})
     store[ds_name] = payload
-    _apply_setup_to_figure(payload.get("setup"))
+    # Its recording setup is applied when it opens, on the next run, as every
+    # added dataset's is (`app.seed_canvas_state`), and leaving it puts back
+    # what the figure held before. What that is excludes the answers this
+    # screen published while it was open: those are this dataset's.
+    app.restore_setup_before_wizard()
     # The tables just attached are this dataset's, not a session-wide slot —
     # hand them over before the switch, so the next run has nothing to swap
     # (and so the dataset this wizard was opened over keeps its own).
@@ -537,6 +522,10 @@ def rename_dataset(old: str, new: str) -> str | None:
         st.session_state["_prev_source"] = name
     if st.session_state.get(COMPARE_SOURCE_STATE_KEY) == old:
         st.session_state[COMPARE_SOURCE_STATE_KEY] = name
+    # The figure holds its setup under its name: renamed, it is still the
+    # same visit, so a value tuned on the rail is not reset.
+    if st.session_state.get(SETUP_OVERRIDE_FOR_KEY) == old:
+        st.session_state[SETUP_OVERRIDE_FOR_KEY] = name
     # And its description.
     descriptions = dict(st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {})
     if old in descriptions:
@@ -640,6 +629,8 @@ def _enter_add_data_wizard() -> None:
     st.session_state["_prev_source"] = st.session_state.get(
         "data_source_choice", DEMO_CHOICE
     )
+    if not st.session_state.get("_show_upload_wizard"):
+        app.remember_setup_before_wizard()
     st.session_state["_show_upload_wizard"] = True
     st.session_state["setup_complete"] = False
     # A new dataset starts with no metadata tables — not the ones of the
@@ -3095,10 +3086,11 @@ def _wizard_setup_step(
     # estimate or a default pre-filled into *I know it* would read as known.
     #
     # A line the screen answered itself writes nothing to the figure's
-    # settings: those keys are shared, and opening ➕ Add dataset and leaving
-    # it must not hand the dataset you came from this one's estimated canvas
-    # and text sizing. The new dataset gets its whole setup when it is added
-    # (`_apply_setup_to_figure`).
+    # settings: those keys are shared. Leaving the screen, by adding the
+    # dataset or by cancelling, puts back what they held when it opened
+    # (`app.restore_setup_before_wizard`), so the dataset you came from never
+    # keeps this one's answers; the new dataset gets its whole recorded setup
+    # each time it is opened (`app.upload_setup_values`).
     auto = st.session_state.get(_SETUP_AUTO_KEY) or {}
 
     def _chosen(group: str) -> bool:

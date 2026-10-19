@@ -322,7 +322,10 @@ def test_numbers_are_clamped_to_their_widgets():
         cmp_a_saccade_width="99",
         cmp_b_marker_size_range="1,99",
     )
-    assert [w.value for w in at.warning] == []
+    # Each one says it was clamped, and none is reported as unreadable.
+    warned = [w.value for w in at.warning]
+    assert len(warned) == 10, warned
+    assert all("outside the control's range" in w for w in warned), warned
     seeded = at.session_state["_seeded"]
     assert seeded["global_canvas_width"] == 100
     assert seeded["global_canvas_height"] == 10000

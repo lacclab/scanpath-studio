@@ -147,18 +147,62 @@ from .utils import (
 _SELECTION_PREFIXES = ("single",)
 
 
+#: The spellings a link's on/off param is read as, case-insensitively. Share
+#: writes ``1`` / ``0``; the rest are the obvious hand-typed synonyms. Anything
+#: else raises, so ``?show_heatmap=maybe`` is reported, not read as on.
+_LINK_TRUE = frozenset({"1", "true", "yes", "on"})
+_LINK_FALSE = frozenset({"0", "false", "no", "off"})
+
+#: The longest figure text (title, caption, Illustration label, legend label) a
+#: link may carry, and the longest value any other param may. Far beyond
+#: anything a figure shows; a longer value is a mangled or hostile link.
+_MAX_LINK_TEXT_CHARS = 500
+_MAX_LINK_VALUE_CHARS = 2000
+
+#: How much of a rejected value the reader's notice echoes back.
+_NOTICE_VALUE_CHARS = 80
+
+
 def _coerce_bool(v) -> bool:
-    return str(v).lower() not in {"0", "false", "no"}
+    text = str(v).strip().lower()
+    if text in _LINK_TRUE:
+        return True
+    if text in _LINK_FALSE:
+        return False
+    raise ValueError(f"not an on/off value: {v!r}")
+
+
+def _parse_finite_float(v) -> float:
+    """A number, raising on ``nan``, ``inf`` and anything that overflows to it
+    (``1e309``) — no widget or figure can hold one."""
+    number = float(str(v).strip())
+    if not math.isfinite(number):
+        raise ValueError(f"not a finite number: {v!r}")
+    return number
+
+
+def _parse_int(v) -> int:
+    """A whole number; ``12.0`` reads as 12, ``12.5`` and non-finite values raise."""
+    number = _parse_finite_float(v)
+    if not number.is_integer():
+        raise ValueError(f"not a whole number: {v!r}")
+    return int(number)
+
+
+def _parse_pair(v, parse) -> tuple:
+    parts = str(v).split(",")
+    if len(parts) != 2:
+        raise ValueError(f"not a lo,hi pair: {v!r}")
+    a, b = (parse(x) for x in parts)
+    return (min(a, b), max(a, b))
 
 
 def _parse_int_range(v) -> tuple:
-    a, b = (int(float(x)) for x in str(v).split(",")[:2])
-    return (min(a, b), max(a, b))
+    return _parse_pair(v, lambda x: int(_parse_finite_float(x)))
 
 
 def _parse_float_range(v) -> tuple:
-    a, b = (float(x) for x in str(v).split(",")[:2])
-    return (min(a, b), max(a, b))
+    return _parse_pair(v, _parse_finite_float)
 
 
 def _parse_field_list(v) -> list[str]:
@@ -260,6 +304,18 @@ def _strip_markup(v) -> str:
         if stripped == text:
             return text
         text = stripped
+
+
+def _parse_figure_text(v) -> str:
+    """Figure text from a link: at most `_MAX_LINK_TEXT_CHARS`, markup stripped.
+
+    A longer value raises, so a 20,000-character title becomes the reader's
+    "Ignored the link's invalid …" notice instead of text drawn across the plot.
+    """
+    text = str(v)
+    if len(text) > _MAX_LINK_TEXT_CHARS:
+        raise ValueError(f"longer than {_MAX_LINK_TEXT_CHARS} characters")
+    return _strip_markup(text)
 
 
 _COMPARE_ESCAPE = re.compile(r"\\([\\:])")
@@ -752,8 +808,8 @@ _URL_PRESETS = {
     # Strings / choices / colors.
     **{k: (s, str) for k, s in _SHARE_VALUE_PARAMS.items()},
     # Numbers + ranges.
-    **{k: (s, int) for k, s in _SHARE_INT_PARAMS.items()},
-    **{k: (s, float) for k, s in _SHARE_FLOAT_PARAMS.items()},
+    **{k: (s, _parse_int) for k, s in _SHARE_INT_PARAMS.items()},
+    **{k: (s, _parse_finite_float) for k, s in _SHARE_FLOAT_PARAMS.items()},
     **{k: (s, _parse_int_range) for k, s in _SHARE_INT_RANGE_PARAMS.items()},
     **{k: (s, _parse_float_range) for k, s in _SHARE_FLOAT_RANGE_PARAMS.items()},
     # Validated choice (must come after the generic `str` sweep above, which
@@ -775,9 +831,9 @@ _URL_PRESETS = {
     # And for every colour, which Plotly rejects outright.
     **{k: (_SHARE_VALUE_PARAMS[k], _parse_hex_color) for k in _SHARE_COLOR_PARAMS},
     # Figure text from a link is text, never markup.
-    "title_pattern": ("global_title_pattern", _strip_markup),
-    "caption_pattern": ("global_caption_pattern", _strip_markup),
-    "illustration_text": ("global_illustration_text", _strip_markup),
+    "title_pattern": ("global_title_pattern", _parse_figure_text),
+    "caption_pattern": ("global_caption_pattern", _parse_figure_text),
+    "illustration_text": ("global_illustration_text", _parse_figure_text),
     "heatmap_style": ("global_heatmap_style", _parse_heatmap_style),
     # The print width's unit — a closed vocabulary, like the rest.
     "export_width_unit": ("export_figure_width_unit", _parse_print_unit),
@@ -819,7 +875,7 @@ _URL_PRESETS = {
         for param, state_key in _cmp_style_params("saccade_style").items()
     },
     **{
-        param: (state_key, _strip_markup)
+        param: (state_key, _parse_figure_text)
         for param, state_key in _cmp_style_params("label_pattern").items()
     },
 }
@@ -925,6 +981,19 @@ _SOURCE_SNAPPED_KEYS = frozenset(
         *SETUP_OVERRIDE_SESSION_KEYS,
     }
 )
+
+
+def _shown_link_value(raw) -> str:
+    """A link value as the reader's notice echoes it, cut to a readable length."""
+    text = str(raw)
+    if len(text) > _NOTICE_VALUE_CHARS:
+        return f"{text[:_NOTICE_VALUE_CHARS]}… ({len(text):,} characters)"
+    return text
+
+
+def _warn_invalid_link_param(param: str, raw) -> None:
+    """The reader's notice for a link param that was ignored."""
+    st.warning(f"Ignored the link's invalid {param}={_shown_link_value(raw)}.")
 
 
 def _clamp_url_value(state_key: str, value):
@@ -1093,7 +1162,7 @@ def _apply_url_legends(qp) -> None:
         try:
             spec = parse_legend_spec(qp[param])
         except ValueError:
-            st.warning(f"Ignored the link's invalid {param}={qp[param]}.")
+            _warn_invalid_link_param(param, qp[param])
             continue
         if spec.get("size") is not None:
             spec["size"] = _legend_size(spec["size"])
@@ -1200,7 +1269,7 @@ def _apply_url_preset() -> str | None:
                 try:
                     st.session_state.setdefault(f"{prefix}_slider", int(qp["trial"]))
                 except (ValueError, TypeError):
-                    st.warning(f"Ignored the link's invalid trial={qp['trial']}.")
+                    _warn_invalid_link_param("trial", qp["trial"])
 
     _apply_url_palette(qp)
     _apply_url_legends(qp)
@@ -1217,13 +1286,27 @@ def _apply_url_preset() -> str | None:
             continue
         raw = qp[url_key]
         try:
+            if len(str(raw)) > _MAX_LINK_VALUE_CHARS:
+                raise ValueError(f"longer than {_MAX_LINK_VALUE_CHARS} characters")
             value = coerce(raw)
-        except (ValueError, TypeError):
-            st.warning(f"Ignored the link's invalid {url_key}={raw}.")
+        except (ValueError, TypeError, OverflowError):
+            _warn_invalid_link_param(url_key, raw)
             continue
         # Clamp bounded widgets so a hand-crafted out-of-range link can't crash
-        # the slider / number_input on render.
-        value = _clamp_url_value(state_key, value)
+        # the slider / number_input on render, and say so: the figure is not
+        # the one the link describes.
+        clamped = _clamp_url_value(state_key, value)
+        if clamped != value:
+            shown = (
+                ",".join(str(v) for v in clamped)
+                if isinstance(clamped, (tuple, list))
+                else str(clamped)
+            )
+            st.warning(
+                f"The link's {url_key}={_shown_link_value(raw)} is outside the "
+                f"control's range; used {shown}."
+            )
+        value = clamped
         if state_key in _SOURCE_SNAPPED_KEYS and state_key not in st.session_state:
             snapped_from_link.add(state_key)
         st.session_state.setdefault(state_key, value)
@@ -1275,15 +1358,15 @@ def _apply_url_preset() -> str | None:
             "{bar}_colorbar_orientation",
             _parse_colorbar_orientation,
         ),
-        "colorbar_tickangle": ("{bar}_colorbar_tickangle", int),
-        "colorbar_tickfont_size": ("{bar}_colorbar_tickfont_size", int),
+        "colorbar_tickangle": ("{bar}_colorbar_tickangle", _parse_int),
+        "colorbar_tickfont_size": ("{bar}_colorbar_tickfont_size", _parse_int),
     }.items():
         if legacy not in qp:
             continue
         try:
             value = coerce(qp[legacy])
-        except (ValueError, TypeError):
-            st.warning(f"Ignored the link's invalid {legacy}={qp[legacy]}.")
+        except (ValueError, TypeError, OverflowError):
+            _warn_invalid_link_param(legacy, qp[legacy])
             continue
         for bar in ("fixation", "heatmap"):
             state_key = "global_" + suffix.format(bar=bar)
@@ -1294,9 +1377,8 @@ def _apply_url_preset() -> str | None:
         try:
             both = _coerce_bool(qp[PARAM_SHOW_TITLE_CAPTION])
         except (ValueError, TypeError):
-            st.warning(
-                f"Ignored the link's invalid {PARAM_SHOW_TITLE_CAPTION}="
-                f"{qp[PARAM_SHOW_TITLE_CAPTION]}."
+            _warn_invalid_link_param(
+                PARAM_SHOW_TITLE_CAPTION, qp[PARAM_SHOW_TITLE_CAPTION]
             )
         else:
             st.session_state.setdefault("global_show_title", both)

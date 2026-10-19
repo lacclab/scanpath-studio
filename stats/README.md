@@ -1,26 +1,20 @@
 # Usage stats
 
-## 2026-10-12
+## 2026-10-19
 
-- PyPI: last_day 20 / last 7 days 673 / last 30 days 737. Without mirrors (UTC days up to yesterday): last 7 days 673 vs previous 7 days 332 (+341).
-- PyPI top OS (30d): Linux 102, Darwin 60, Windows 1. Top Python (30d): 3.11 90, 3.12 59, 3.14 12. Latest version 0.38.0, uploaded 2026-10-10 (2 days ago).
-- Desktop bundles (v0.38.0): ScanpathStudio-linux-x86_64.tar.gz 0 (+0), ScanpathStudio-macos-arm64.dmg 1 (+1), ScanpathStudio-windows-x86_64-setup.exe 0 (+0), ScanpathStudio-windows-x86_64.zip 0 (+0). All-time across releases: 55 (+20).
-- Repo: 8 (+0) stars / 0 (+0) forks / 0 (+0) watchers / 32 (+4) open issues.
-- Traffic, last 14 days: 264 views (28 uniques), 6150 clones (835 uniques).
-- Top referrers: lacclab.github.io (12), Google (5), github.com (3). Top paths: /lacclab/scanpath-studio (39), /lacclab/scanpath-studio/issues (21), /lacclab/scanpath-studio/pulls (12).
-- Flags: new PyPI version 0.38.0; new release v0.35.0, v0.36.0, v0.37.0, v0.37.1, v0.38.0
+- PyPI: last_day 61 / last 7 days 806 / last 30 days 737. Without mirrors (UTC days up to yesterday): last 7 days 806 vs previous 7 days 673 (+133).
+- PyPI top OS (30d): Linux 157, Darwin 96. Top Python (30d): 3.11 137, 3.12 93, 3.14 19. Latest version 0.41.0, uploaded 2026-10-19 (0 days ago).
+- Desktop bundles (v0.41.0): ScanpathStudio-linux-x86_64.tar.gz 0 (+0), ScanpathStudio-macos-arm64.dmg 0 (+0), ScanpathStudio-windows-x86_64-setup.exe 0 (+0), ScanpathStudio-windows-x86_64.zip 0 (+0). All-time across releases: 68 (+13).
+- Repo: 8 (+0) stars / 0 (+0) forks / 0 (+0) watchers / 31 (-1) open issues.
+- Traffic, last 14 days: 210 views (31 uniques), 5500 clones (778 uniques).
+- Top referrers: lacclab.github.io (16), Google (5), github.com (5). Top paths: /lacclab/scanpath-studio (48), /lacclab/scanpath-studio/issues (14), /lacclab/scanpath-studio/pull/370 (8).
+- Flags: new PyPI version 0.41.0; new release v0.38.1, v0.38.2, v0.38.3, v0.38.4, v0.39.0, v0.39.1, v0.40.0, v0.41.0
+- (Compared with snapshot 2026-10-12.)
 
 ## Last 30 days
 
 | date | PyPI downloads | views | uniques | clones | unique clones |
 |---|---|---|---|---|---|
-| 2026-09-12 | 1 |  |  |  |  |
-| 2026-09-13 | 2 |  |  |  |  |
-| 2026-09-14 | 12 |  |  |  |  |
-| 2026-09-15 | 1 |  |  |  |  |
-| 2026-09-16 | 1 |  |  |  |  |
-| 2026-09-17 |  |  |  |  |  |
-| 2026-09-18 | 3 |  |  |  |  |
 | 2026-09-19 |  |  |  |  |  |
 | 2026-09-20 |  |  |  |  |  |
 | 2026-09-21 | 5 |  |  |  |  |
@@ -44,3 +38,10 @@
 | 2026-10-09 | 11 | 4 | 1 | 296 | 67 |
 | 2026-10-10 | 169 | 7 | 1 | 161 | 56 |
 | 2026-10-11 | 20 | 2 | 2 | 137 | 29 |
+| 2026-10-12 | 19 | 2 | 2 | 64 | 21 |
+| 2026-10-13 | 95 | 15 | 4 | 513 | 119 |
+| 2026-10-14 | 51 | 5 | 4 | 187 | 43 |
+| 2026-10-15 | 108 | 3 | 2 | 710 | 86 |
+| 2026-10-16 | 177 | 18 | 6 | 588 | 121 |
+| 2026-10-17 | 295 | 19 | 3 | 403 | 95 |
+| 2026-10-18 | 61 |  |  |  |  |

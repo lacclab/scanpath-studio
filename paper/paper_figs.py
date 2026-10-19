@@ -34,7 +34,7 @@ def _figures_dir() -> Path:
 FIGS = _figures_dir()
 CANVAS = (1280, 320)  # OneStop demo paragraph text-area extent (wide, few lines)
 
-SCAN_TRIAL = ("l7_1090", "l7_1090_2_2_4_Ele_r0")  # 35 fixations, short + clean
+SCAN_TRIAL = ("l7_1090", "l7_1090_2_2_4_Ele")  # 35 fixations, short + clean
 CMP_TEXT = "2_1_1_Ele"  # read by two demo participants
 
 

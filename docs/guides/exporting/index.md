@@ -81,7 +81,7 @@ only. For a GIF or MP4 in Python:
     from scanpath_studio.animation_export import export_animation
 
     words, fixations = sps.load_sample_data()
-    replay = sps.animate_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
+    replay = sps.animate_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele")
     Path("replay.mp4").write_bytes(export_animation(replay, fmt="mp4"))
     ```
 

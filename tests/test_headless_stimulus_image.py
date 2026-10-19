@@ -26,8 +26,8 @@ from scanpath_studio.plots import _image_to_data_uri, _png_pixel_size
 from tests.conftest import APP_SCRIPT
 
 #: Two demo readings of different texts — so of different pages.
-TRIAL = ("l37_1129", "l37_1129_2_2_1_Adv_r0")
-OTHER = ("l37_1129", "l37_1129_2_2_2_Adv_r0")
+TRIAL = ("l37_1129", "l37_1129_2_2_1_Adv")
+OTHER = ("l37_1129", "l37_1129_2_2_2_Adv")
 #: Where the demo's pages sat on OneStop's screen.
 DEMO_ORIGIN = (368.0, 186.0)
 

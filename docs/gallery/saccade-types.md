@@ -28,7 +28,7 @@ print(gallery_figure("saccade-types"))
 
     ```bash
     scanpath-studio render --sample \
-      -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+      -p l37_1129 -t l37_1129_2_1_1_Ele \
       --saccade-color-by-type --no-saccade-type-legend \
       --highlight-column '' \
       -o saccade-types.html

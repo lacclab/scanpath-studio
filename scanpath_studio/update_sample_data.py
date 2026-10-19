@@ -234,12 +234,11 @@ def add_unique_ids(df: pd.DataFrame) -> pd.DataFrame:
         + "_"
         + df["difficulty_level"].astype(str)
     )
+    # The demo keeps first readings only (`filter_demo`), so a reader reads each
+    # paragraph once and reader + paragraph is the whole trial identity — the
+    # same id `datasets._compose_onestop_ids` gives that trial in the corpus.
     df["unique_trial_id"] = (
-        df["participant_id"].astype(str)
-        + "_"
-        + df["unique_paragraph_id"]
-        + "_r"
-        + df["repeated_reading_trial"].astype(int).astype(str)
+        df["participant_id"].astype(str) + "_" + df["unique_paragraph_id"]
     )
     return df
 

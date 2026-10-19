@@ -37,8 +37,8 @@ _PNG_1x1 = bytes.fromhex(
 
 #: The one demo trial the bundled raw gaze covers, and a second reading of a
 #: different reader to compare it with.
-TRIAL = ("l37_1129", "l37_1129_2_2_2_Adv_r0")
-OTHER = ("l7_1090", "l7_1090_2_2_2_Adv_r0")
+TRIAL = ("l37_1129", "l37_1129_2_2_2_Adv")
+OTHER = ("l7_1090", "l7_1090_2_2_2_Adv")
 
 #: Every figure option at a value that is *not* its default. The guard below
 #: asserts this covers `api.figure_options(kind)` for every kind, so adding an

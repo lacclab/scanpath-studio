@@ -380,8 +380,8 @@ class TestCoAnimationDrawsOneSecondReading:
     rather than guess.
     """
 
-    _A = ("l37_1129", "l37_1129_2_1_1_Ele_r0")
-    _B = ("l37_1129", "l37_1129_2_1_2_Ele_r0")
+    _A = ("l37_1129", "l37_1129_2_1_1_Ele")
+    _B = ("l37_1129", "l37_1129_2_1_2_Ele")
 
     @staticmethod
     def _trace_b(fig):

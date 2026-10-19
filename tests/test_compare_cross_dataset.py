@@ -857,8 +857,8 @@ def _synthetic_vs_demo():
     at.session_state[COMPARE_SOURCE_STATE_KEY] = "Bundled demo"
     at.session_state["trial_chip_fields"] = ["@gaze_sample_count"]
     at.run()
-    at.session_state["single_compare_trial"] = "l37_1129_2_2_2_Adv_r0"
-    at.session_state["single_compare_pos"] = "l37_1129_2_2_2_Adv_r0"
+    at.session_state["single_compare_trial"] = "l37_1129_2_2_2_Adv"
+    at.session_state["single_compare_pos"] = "l37_1129_2_2_2_Adv"
     at.run()
     assert not at.exception, at.exception
     texts = [

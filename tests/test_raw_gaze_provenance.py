@@ -20,8 +20,8 @@ from tests.conftest import APP_SCRIPT
 
 #: The one demo trial the bundled (synthesized) samples cover, and one they don't.
 PARTICIPANT = "l37_1129"
-WITH_SAMPLES = "l37_1129_2_2_2_Adv_r0"
-WITHOUT_SAMPLES = "l37_1129_2_2_1_Adv_r0"
+WITH_SAMPLES = "l37_1129_2_2_2_Adv"
+WITHOUT_SAMPLES = "l37_1129_2_2_1_Adv"
 
 
 class TestTheCatalogueFlag:

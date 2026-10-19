@@ -11,8 +11,8 @@ from scanpath_studio.constants import compare_palette_color
 from scanpath_studio.tabs import _raw_gaze_missing_note
 
 PID = "l37_1129"
-A = (PID, "l37_1129_2_2_2_Adv_r0")  # the trial the demo's samples belong to
-B = (PID, "l37_1129_2_1_1_Ele_r0")
+A = (PID, "l37_1129_2_2_2_Adv")  # the trial the demo's samples belong to
+B = (PID, "l37_1129_2_1_1_Ele")
 
 
 @pytest.fixture(scope="module")

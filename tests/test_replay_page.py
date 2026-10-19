@@ -45,7 +45,7 @@ needs_node = pytest.mark.skipif(
 )
 
 # The demo's longest reading (311 fixations, 81.6 s): 360 frames at the default grid.
-LONGEST = ("l37_1129", "l37_1129_2_2_2_Adv_r0")
+LONGEST = ("l37_1129", "l37_1129_2_2_2_Adv")
 
 
 @functools.cache

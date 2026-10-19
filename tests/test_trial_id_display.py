@@ -35,8 +35,8 @@ class TestTrialIdParts:
         assert trial_id_display(parts) == "l37_1129 · 2_2_1_Adv · r1"
 
     def test_a_first_reading_is_not_shown(self):
-        """The demo holds first readings only; `r0` on every trial would say
-        nothing."""
+        """A dataset of first readings would show `r0` on every trial, which
+        says nothing."""
         parts = trial_id_parts(
             "l37_1129_2_2_1_Adv_r0", participant_id="l37_1129", text_id="2_2_1_Adv"
         )

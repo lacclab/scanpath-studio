@@ -79,7 +79,7 @@ def test_the_documented_figure_code_call_builds_its_figure(monkeypatch):
     import scanpath_studio as sps
 
     code = sps.figure_code(
-        participant="l7_1090", trial="l7_1090_2_1_1_Ele_r0", show_heatmap=False
+        participant="l7_1090", trial="l7_1090_2_1_1_Ele", show_heatmap=False
     )
     monkeypatch.setattr(api, "save_figure", lambda fig, path, **kwargs: path)
     namespace: dict = {}
@@ -92,8 +92,8 @@ def test_the_documented_examples_name_real_demo_ids():
     combos = api.list_trials(*api.load_sample_data(names="canonical"))
     pairs = set(combos.itertuples(index=False, name=None))
     for pair in (
-        ("l37_1129", "l37_1129_2_1_1_Ele_r0"),
-        ("l7_1090", "l7_1090_2_1_1_Ele_r0"),
+        ("l37_1129", "l37_1129_2_1_1_Ele"),
+        ("l7_1090", "l7_1090_2_1_1_Ele"),
     ):
         assert pair in pairs
     for page in ("api.md", "guides/scanpath-visualization/index.md"):

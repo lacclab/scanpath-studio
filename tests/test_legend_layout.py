@@ -733,8 +733,8 @@ def test_a_compare_legend_that_wraps_grows_its_band_instead_of_covering_the_text
     import scanpath_studio as sps
 
     words, fixations = sps.load_sample_data()
-    a = ("l37_1129", "l37_1129_2_2_1_Adv_r0")
-    b = ("l7_1090", "l7_1090_2_2_1_Adv_r0")
+    a = ("l37_1129", "l37_1129_2_2_1_Adv")
+    b = ("l7_1090", "l7_1090_2_2_1_Adv")
     short = sps.compare_scanpaths(words, fixations, a, b, labels=("A", "B"))
     long = sps.compare_scanpaths(
         words,

@@ -1,6 +1,5 @@
 """Pytest configuration and fixtures for scanpath visualization tests."""
 
-import re
 from pathlib import Path
 
 import pandas as pd
@@ -218,19 +217,14 @@ def picked_trial_id(value) -> str | None:
 def picker_trial_id(option: str) -> str:
     """The trial id behind a trial-picker option, as ``AppTest`` shows it.
 
-    The picker displays an id part by part and leaves out a first reading's
-    ``r0``, and ``AppTest`` exposes only the displayed text — so rejoin the
-    parts with ``_`` and put back the ``r0`` a split id does not show. An id
-    that did not split is shown as it is.
+    The picker displays an id part by part, and ``AppTest`` exposes only the
+    displayed text — so rejoin the parts with ``_``. An id that did not split
+    is shown as it is. The demo's ids carry no reading part, so nothing the
+    display leaves out needs putting back.
     """
     # The annotation badges (★) follow the trial id; strip them first.
     shown = str(option).removesuffix(" ★").strip()
-    parts = shown.split(" · ")
-    if len(parts) == 1:
-        return shown
-    if not re.fullmatch(r"r\d+", parts[-1]):
-        parts.append("r0")
-    return "_".join(parts)
+    return "_".join(shown.split(" · "))
 
 
 def arm_debug_dialog(at) -> None:

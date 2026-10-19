@@ -996,8 +996,8 @@ def test_python_dash_m_reaches_the_cli(tmp_path):
 # renamed sample would break these loudly rather than silently comparing a
 # trial against itself.
 _SAMPLE_PARTICIPANT = "l37_1129"
-_SAMPLE_TRIAL_A = "l37_1129_2_1_1_Ele_r0"
-_SAMPLE_TRIAL_B = "l37_1129_2_1_3_Adv_r0"
+_SAMPLE_TRIAL_A = "l37_1129_2_1_1_Ele"
+_SAMPLE_TRIAL_B = "l37_1129_2_1_3_Adv"
 
 
 def test_render_compare_with_writes_a_figure(tmp_path):

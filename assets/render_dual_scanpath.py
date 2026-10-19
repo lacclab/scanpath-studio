@@ -32,8 +32,8 @@ from scanpath_studio.plots import (
 )
 
 # Two readers of the same bundled-demo paragraph, ~150 fixations each.
-A = ("l37_1129", "l37_1129_2_1_1_Ele_r0")
-B = ("l7_1090", "l7_1090_2_1_1_Ele_r0")
+A = ("l37_1129", "l37_1129_2_1_1_Ele")
+B = ("l7_1090", "l7_1090_2_1_1_Ele")
 LABEL_A = "Reader A · l37_1129"
 LABEL_B = "Reader B · l7_1090"
 STILL_OUT = "assets/demo_dual_scanpath.png"

@@ -319,12 +319,17 @@ def test_deep_link_seeds_frozen_state_keys():
         query[param] = validated.get(
             param, "Blues" if "colorscale" in param else "Default"
         )
+    # Each number inside its control's range: one outside it is clamped with
+    # a notice, which would fail the empty-warnings check below.
+    from scanpath_studio.url_state import _URL_PRESETS, _clamp_url_value
+
     for param in sk.SHARE_INT_PARAMS:
-        query[param] = "50"
+        query[param] = str(_clamp_url_value(_URL_PRESETS[param][0], 50))
     for param in sk.SHARE_FLOAT_PARAMS:
-        query[param] = "1.0"
+        query[param] = str(_clamp_url_value(_URL_PRESETS[param][0], 1.0))
     for param in (*sk.SHARE_INT_RANGE_PARAMS, *sk.SHARE_FLOAT_RANGE_PARAMS):
-        query[param] = "5,10"
+        lo, hi = _clamp_url_value(_URL_PRESETS[param][0], (5, 10))
+        query[param] = f"{lo},{max(hi, lo + 1)}"
 
     at = AppTest.from_function(_deep_link_app)
     for param, value in query.items():

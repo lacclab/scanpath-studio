@@ -9214,7 +9214,9 @@ def _run_app() -> None:
     # the container the first run after one closes would remove an element
     # above the view and shift it. See AGENTS.md → Gotchas.
     with st.container():
-        maybe_show_welcome_tour()
+        # The spotlight tour is about the Scanpath view; this is also where it
+        # switches there when it starts on another view.
+        maybe_show_welcome_tour(active_view)
         render_spotlight_tour()
         # Task-oriented tutorials share the spotlight mechanism but keep
         # their own progress and do not inherit the welcome tour's opt-out.

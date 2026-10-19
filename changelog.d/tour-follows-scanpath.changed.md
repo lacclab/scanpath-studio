@@ -1,0 +1,1 @@
+The welcome tour and the Scanpath view use plain, literal wording, and the row of trial fields above the plot is now called the trial summary (Trial summary above the plot) everywhere, instead of chips.

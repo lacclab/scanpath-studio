@@ -1060,6 +1060,9 @@ ICONS: dict[str, str] = {
     "pick_trial": ":material/my_location:",
     "chips": ":material/label:",
     "panels": ":material/tab:",
+    # The chevron Streamlit draws on every popover button, for prose that names
+    # an icon-only button the way it looks (the welcome tour).
+    "menu_arrow": ":material/expand_more:",
     "views": ":material/dashboard:",
     "nav": ":material/explore:",
     "preview": ":material/visibility:",

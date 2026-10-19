@@ -3189,7 +3189,7 @@ def _render_compare_selector(
                 format_func=lambda v: (
                     f"{idx_of.get(v, 0) + 1}/{n} · {label_to_id.get(v, v)}"
                 ),
-                help=f"Scrub through the {n} trials scanpath B can show.",
+                help=f"Move through the {n} trials scanpath B can show.",
             )
         # Mirror of the main picker — linked, a button dies only when
         # *both* lists have run out.
@@ -6084,22 +6084,21 @@ def _render_chip_menu(host, words: pd.DataFrame, fixations: pd.DataFrame) -> Non
     # Named for screen readers; `styles.py` clips the name, so the
     # pencil is still all that is drawn.
     with host.popover(
-        "Chips above the plot",
+        "Trial summary above the plot",
         icon=ICONS["edit"],
-        help="Show or hide the chips above the plot, and choose and reorder "
-        "their fields.",
+        help="Show or hide the trial summary above the plot, and choose and "
+        "reorder its fields.",
         width="content",
         wrap=True,
         key="iconpop_chip_fields",
     ):
         st.toggle(
-            "Show chips above the plot",
+            "Show the trial summary above the plot",
             key=SINGLE_SHOW_CHIPS,
             # Rendered on the Scanpath view only, and seeded by a link
             # (`?show_chips=`), so it must survive a trip to another view.
             persist_state="session",
-            help="Hide them to give the plot more room. The fields you picked are "
-            "kept.",
+            help="Hide it to give the plot more room. The fields you picked are kept.",
         )
         render_trial_chip_picker(words, fixations, host=st.container())
 
@@ -13521,8 +13520,8 @@ def _restored_metadata_note(host, attached, *, grain: str, on_detach) -> None:
         "✕ Detach",
         key=f"{grain}_metadata_detach_restored",
         on_click=on_detach,
-        help="Remove this table. Its fields leave the filters, the chips and "
-        "trial sorting.",
+        help="Remove this table. Its fields leave the filters, the trial summary "
+        "and trial sorting.",
     )
 
 
@@ -13643,9 +13642,9 @@ def _participant_metadata_body(
     # rather than Streamlit's own label + native (~1s) help tooltip.
     _pm_help = (
         "One row per participant, with a participant-id column. Its columns "
-        "work like fields in the data, in filters, chips, trial sorting, "
-        "inspection and export. CSV, TSV, Parquet or Excel; several files are "
-        "stacked into one table."
+        "work like fields in the data, in filters, the trial summary, "
+        "trial sorting, inspection and export. CSV, TSV, Parquet or Excel; "
+        "several files are stacked into one table."
     )
     # With `upload_host` (the wizard's row format), the title + uploader go
     # into that thin left column — mirroring `upload_box`'s `short_label`,
@@ -13861,8 +13860,8 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
     # Same dotted-underline title format as the mapping fields.
     _tm_help = (
         "One row per trial, with a trial-id column. Its columns work like "
-        "fields in the data, in filters, chips, trial sorting, inspection "
-        "and export. CSV, TSV, Parquet or Excel; several files are "
+        "fields in the data, in filters, the trial summary, trial sorting, "
+        "inspection and export. CSV, TSV, Parquet or Excel; several files are "
         "stacked into one table."
     )
     # See the matching branch in `_participant_metadata_body`.
@@ -14078,8 +14077,8 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
 
     _txm_help = (
         "One row per text, with a text-id column. Its columns work like "
-        "fields in the data, in filters, chips, trial sorting, inspection "
-        "and export. CSV, TSV, Parquet or Excel; several files are "
+        "fields in the data, in filters, the trial summary, trial sorting, "
+        "inspection and export. CSV, TSV, Parquet or Excel; several files are "
         "stacked into one table."
     )
     # See the matching branch in `_participant_metadata_body`.
@@ -14357,7 +14356,8 @@ def _metadata_keep_picker(host, raw, id_columns, *, prefix: str, noun: str) -> l
         host,
         f"Extra fields to keep — {noun} · {n_selected} selected",
         "Columns besides the id. Keep the ones you want to filter, sort or "
-        "color trials by, or show as a chip. Columns left out are not added.",
+        "color trials by, or show in the trial summary. Columns left out are not "
+        "added.",
     )
     # No bulk-select buttons, as on the wizard's twin of this row: the
     # multiselect's select-all lives in its dropdown and its ✕ clears, so a

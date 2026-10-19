@@ -15,7 +15,7 @@ import inspect
 
 import pytest
 
-from tests.conftest import APP_SCRIPT
+from tests.conftest import APP_SCRIPT, pin_view
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
@@ -117,7 +117,7 @@ class TestThePageItDraws:
         from scanpath_studio.constants import _VIEW_DATA
 
         at = AppTest.from_file(APP_SCRIPT, default_timeout=600)
-        at.session_state["main_nav"] = _VIEW_DATA
+        pin_view(at, _VIEW_DATA)
         at.run()
         assert not at.exception, at.exception
         assert [e.value for e in at.error] == []

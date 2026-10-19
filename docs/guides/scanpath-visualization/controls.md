@@ -28,7 +28,7 @@ For the corresponding Python keywords and CLI flags, use the
 
 <a class="sps-ctl sps-ctl--wide" href="../../../assets/screenshots/controls/trial-row.webp" title="Open full size"><img src="../../../assets/screenshots/controls/trial-row.webp" alt="The trial control bar" loading="lazy"></a>
 
-<a class="sps-ctl sps-ctl--menu" data-label="Show chips menu" href="../../../assets/screenshots/controls/chips.webp" title="Open full size"><img src="../../../assets/screenshots/controls/chips.webp" alt="The chips menu, opened from the pencil button" loading="lazy"></a>
+<a class="sps-ctl sps-ctl--menu" data-label="Trial summary menu" href="../../../assets/screenshots/controls/chips.webp" title="Open full size"><img src="../../../assets/screenshots/controls/chips.webp" alt="The trial summary menu, opened from the pencil button" loading="lazy"></a>
 
 The bar above the plot: pick a dataset and a trial, step through the trials,
 and narrow, sort or label the list.
@@ -39,7 +39,7 @@ and narrow, sort or label the list.
 | :material/add: → :material/draw: **Draw a scanpath** | Write a text and place its fixations by hand, as a new dataset. |
 | :material/add: → :material/upload: **Import files** | Upload your own Fixations and Words tables as a new dataset. |
 | **Select trial** | The trial to show. Click it and type to narrow the list. |
-| Slider | Scrub through the trials in the list. |
+| Slider | Move through the trials in the list. |
 | **◀ ▶** | The previous or next trial. |
 | **⇅** → **Sort trials by** | Reorder the trial list by a statistic (such as reading time), a participant, text or condition field, or a column of a metadata table you attached. |
 | **⇅** → **Descending** | Reverse that order. |
@@ -50,9 +50,9 @@ and narrow, sort or label the list.
 | :material/filter_alt: → **With any of these tags** | Keep only trials with any of these tags. |
 | :material/filter_alt: → **Excluding tags** | Hide trials with any of these tags, such as *To exclude*. |
 | :material/filter_alt: → **✕ Clear all filters** | Reset every filter in the panel. |
-| :material/edit: → **Show chips above the plot** | Show or hide the row of facts about the trial above the plot. |
-| :material/edit: → field lists | Drag fields between *Shown* and *Available* to choose the chips, and drag within *Shown* to reorder them. *Available* holds every field with one value per trial: participant, text and condition columns, the columns of any metadata table you attached, and statistics such as reading time and fixation count. |
-| :material/edit: → chip colors | Give a chip a highlight color. Its **✕** puts it back to the default gray. |
+| :material/edit: → **Show the trial summary above the plot** | Show or hide the row of facts about the trial above the plot. |
+| :material/edit: → field lists | Drag fields between *Shown* and *Available* to choose the trial summary's fields, and drag within *Shown* to reorder them. *Available* holds every field with one value per trial: participant, text and condition columns, the columns of any metadata table you attached, and statistics such as reading time and fixation count. |
+| :material/edit: → **Field colors** | Give a field a highlight color. Its **✕** puts it back to the default gray. |
 | :material/edit: → :material/refresh: **Refresh fields** | Check again which fields have one value per trial. |
 | **Screen** and its **◀ ▶** | On a trial recorded over several screens: the screen to show. |
 

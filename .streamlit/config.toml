@@ -27,6 +27,12 @@ runOnSave = true
 # — the CLI passes it explicitly, because this file is only read when the app is
 # launched from this directory.
 maxUploadSize = 5000
+# Compress what the server sends the browser. Every rerun resends the page's
+# elements — about 0.4 MB on the Scanpath view, a figure included — and that
+# deflates to about a third, which on a slow connection is most of a trial
+# change's wait. The CLI and the desktop app listen on this computer only, where
+# the bytes cost nothing, so they do not pass it.
+enableWebsocketCompression = true
 
 [client]
 # No Deploy button. "viewer" drops Streamlit's developer-only toolbar

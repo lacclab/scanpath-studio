@@ -732,6 +732,12 @@ _TRUE_SCALE_TEMPLATE = """
     var gd = document.getElementById("truescale-__KEY__");
     if (!gd || !gd._fullLayout) { setTimeout(dropSkeleton, 60); return; }
     sk.parentNode.removeChild(sk);
+    // Tell the Streamlit page this figure has drawn: a trial change's card
+    // waits for it (`loading.PLOT_DRAWN_EVENT`).
+    try {
+      window.parent.dispatchEvent(new window.parent.CustomEvent(
+        "__DRAWN_EVENT__", { detail: window.frameElement }));
+    } catch (e) {}
   })();
 
   if (!ZOOMABLE) { return; }
@@ -974,6 +980,7 @@ def _true_scale_html(
         .replace("__W__", str(int(width)))
         .replace("__H__", str(int(height)))
         .replace("__KEY__", key)
+        .replace("__DRAWN_EVENT__", loading.PLOT_DRAWN_EVENT)
         .replace("__PLOT__", plot_html)
     )
     return html, iframe_height

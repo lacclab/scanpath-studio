@@ -6458,7 +6458,14 @@ def _rail_subsection(host, label: str, *, note: str = "", first: bool = False):
 _RESET_VIZ_PENDING_KEY = "_reset_viz_pending"
 
 
-@st.dialog("Reset visualization?")
+def _close_reset_viz_dialog() -> None:
+    """Disarm the confirmation. Also its ``on_dismiss`` hook, so ✕, Esc and a
+    click outside close it for good, as *Cancel* does, rather than leaving the
+    flag armed to reopen the dialog on the next rerun."""
+    st.session_state.pop(_RESET_VIZ_PENDING_KEY, None)
+
+
+@st.dialog("Reset visualization?", on_dismiss=_close_reset_viz_dialog)
 @guarded()
 def _reset_viz_confirmation_dialog() -> None:
     """The modal body. Opened by ``render_viz_reset``.
@@ -6483,10 +6490,10 @@ def _reset_viz_confirmation_dialog() -> None:
         width="stretch",
     ):
         reset_viz_settings()
-        st.session_state.pop(_RESET_VIZ_PENDING_KEY, None)
+        _close_reset_viz_dialog()
         st.rerun(scope="app")
     if no.button("Cancel", key="reset_viz_cancel", width="stretch"):
-        st.session_state.pop(_RESET_VIZ_PENDING_KEY, None)
+        _close_reset_viz_dialog()
         st.rerun(scope="app")
 
 

@@ -6,15 +6,15 @@ description: "Find eye-tracking trials with particular fixation patterns — sho
 
 Locate trials containing particular fixation patterns.
 
-1. Open Plot controls → Filters & highlights → Fixations.
-2. Set the relevant category to Highlight:
+1. Open :material/filter_list: **Filters & highlights** ▾ → **Fixations**.
+2. Set the **Mode** of the category you need to **Highlight**:
 
-    - Short or Long, with a duration threshold in milliseconds
-    - Outside the text, for fixations outside every word box
-    - Near a blink, if your data includes a blink column
+    - **Short** or **Long**, with a duration threshold in **ms**
+    - **Outside the text**, for fixations in no word box
+    - **Near a blink**, if your data has a blink column
 
-3. Step through the trials. In Annotations, tag those that meet your analysis
-   criteria, for example `include`.
-4. Open the filter button beside Select trial. Under By trial annotation,
-   choose `include` in With any of these tags.
+3. Step through the trials. In :material/edit_note: **Annotations**, tag those
+   that meet your analysis criteria, for example `include`.
+4. Open the filter (:material/filter_alt:) beside **Select trial**. Under
+   **By trial annotation**, add `include` to **With any of these tags**.
 5. [Check and export the selection](index.md#every-task-ends-the-same-way).

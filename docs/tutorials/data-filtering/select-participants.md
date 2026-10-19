@@ -1,15 +1,18 @@
 ---
-description: "Select eye-tracking participants by metadata such as native language, age or group, by attaching a participants table to the dataset."
+description: "Select eye-tracking participants by metadata such as native language, age or group, by attaching a participant metadata table to the dataset."
 ---
 
 # Select participants by a field
 
-Select readers using metadata such as native language, age or group.
+Select participants using metadata such as native language, age or group.
 
-1. Attach a table with one row per participant and a participant ID column:
-   use Metadata → Participants when adding a dataset, or Data Management →
-   Edit dataset → Data tables & column mapping afterwards.
-2. Open the filter button beside Select trial, then By participant.
+1. Attach a participant metadata table, with one row per participant and a
+   participant ID column. When you add a dataset, use **Metadata** →
+   **Participants**. For a loaded dataset, use :material/database: **Data
+   Management** → :material/edit: **Edit dataset** → **Data tables & column
+   mapping**.
+2. Open the filter (:material/filter_alt:) beside **Select trial** and find
+   **By participant**.
 3. Choose a field and the values or range to keep.
 4. Check the remaining participant IDs and
    [export the selection](index.md#every-task-ends-the-same-way).

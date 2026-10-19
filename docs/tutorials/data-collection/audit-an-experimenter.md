@@ -6,13 +6,17 @@ description: "Review the eye-tracking recordings one experimenter collected: fil
 
 Review recordings collected by one experimenter.
 
-1. Keep an experimenter field when importing the data, or attach it in a
-   participants table if each participant has one experimenter.
-2. Open the filter button beside Select trial and choose the experimenter.
-   Participants-table fields appear under By participant.
+1. Keep the experimenter column when you import the data, under **Extra fields
+   to keep**. If each participant had one experimenter, you can instead attach
+   it in a participant metadata table.
+2. Open the filter (:material/filter_alt:) beside **Select trial** and choose
+   the experimenter. Columns of a participant metadata table are under
+   **By participant**.
 3. [Inspect and replay their trials](check-a-session.md#2-inspect-a-trial).
-4. Tag trials `review` in Annotations and note recurring observations.
+4. In :material/edit_note: **Annotations**, tag trials `review` and note
+   recurring problems.
 5. [Export the review](check-a-session.md#5-save-the-review).
 
-To compare experimenters, turn on Compare, filter each scanpath's trial list
-by a different experimenter, and select readings of the same text.
+To compare experimenters, turn on :material/compare: **Compare**. Use the
+filter on each scanpath's row to pick a different experimenter, and choose
+readings of the same text.

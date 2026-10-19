@@ -8,7 +8,7 @@ hide:
 
 # Raw gaze
 
-Samples under translucent fixations. The demo samples are synthetic.
+Gaze samples under translucent fixations. The bundled demo's gaze samples are synthetic.
 
 ```python exec="true" html="true"
 from gallery_examples import gallery_figure
@@ -18,9 +18,9 @@ print(gallery_figure("raw-gaze"))
 
 === "In the app"
 
-    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_2_2_Adv_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
-    2. Turn on Raw gaze and turn off Saccades.
-    3. In Fixations ▾ → Marker → Opacity, choose 0.35 so the samples show through.
+    1. Load a Raw gaze table with your Fixations and Words tables. Open the dataset in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    2. Turn on :material/grain: **Raw gaze** and turn off :material/arrow_outward: **Saccades**.
+    3. In :material/blur_on: **Fixations** ▾ → **Marker** → **Opacity**, set 0.35 so the samples show through.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
 

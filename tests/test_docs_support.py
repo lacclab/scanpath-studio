@@ -90,7 +90,7 @@ def test_the_render_reference_is_split_by_topic():
     page = docs_support.cli_reference("render", heading="###")
     headings = re.findall(r"^### (.+)$", page, flags=re.MULTILINE)
     assert headings[:2] == ["Trial and output", "Input"]
-    assert {"Fixations", "Heatmap", "Comparison", "Size and export"} <= set(headings)
+    assert {"Fixations", "Heatmap", "Compare", "Size and export"} <= set(headings)
     assert len(headings) == len(set(headings))
 
 

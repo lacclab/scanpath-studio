@@ -10,7 +10,7 @@ It **references** the dataset by name and never embeds it: no table rows, and
 no annotation notes (a *Favorites only* or tag filter is recorded as the filter
 it is, not as the annotations behind it). Filters and figure settings are kept
 apart on purpose — this file holds the filters and no styling; the figure
-settings file (🔗 Share → File) holds styling and no filters — so the recipe
+settings file (🔗 Share → Settings file) holds styling and no filters — so the recipe
 says so in ``excludes`` rather than leaving a reader to guess.
 
 It describes the current analysis only. There is no runner and no workspace
@@ -36,7 +36,7 @@ RECIPE_VERSION = 1
 EXCLUDES = {
     "figure_settings": (
         "Palette, canvas and fonts are in the settings file (Scanpath → "
-        "Share → File). That file has no trial filters."
+        "Share → Settings file). That file has no trial filters."
     ),
     "data": (
         "The recipe has no table rows or annotation notes. It names the "

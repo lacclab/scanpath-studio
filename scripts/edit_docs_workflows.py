@@ -64,7 +64,8 @@ def main() -> None:
                     # for the montage.
                     "drawbox=x=600:y=0:w=680:h=50:color=white:t=fill,"
                     f"drawtext=font='{FONT}':text='{caption}':"
-                    "fontsize=17:fontcolor=0x1c65a3:x=w-tw-18:y=10"
+                    "fontsize=17:fontcolor=0xd55e00:x=w-tw-28:y=16:"
+                    "box=1:boxcolor=0x111827:boxborderw=10"
                 )
                 run(
                     *inputs,

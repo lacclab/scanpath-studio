@@ -8,9 +8,9 @@ hide:
 
 # Title, caption & legend
 
-A figure ready for a slide or a paper: a title above the plot, a caption
-below it, the saccade-type legend down the right side and the fixation-size
-key under the plot.
+A figure ready for a slide or a paper. It has a title above the plot, a caption
+below it, the **Saccade types** legend down the right side and the
+**Fixation sizes** legend below the plot.
 
 ```python exec="true" html="true"
 from gallery_examples import gallery_figure
@@ -20,11 +20,11 @@ print(gallery_figure("title-caption-legend"))
 
 === "In the app"
 
-    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
-    2. Open Saccades ▾ → Line → Color and choose By type.
-    3. In Figure & canvas ▾ → Title & labels, turn on Title and type `One reader, one article`, size 34. Turn on Caption and type `Marker size: fixation duration. Line color: saccade type.`, size 20.
-    4. Under Legends, place Saccade types at Right, outside, and Fixation sizes at Bottom right, outside, both with text size 18.
-    5. Choose Crop to data with a 60 px margin.
+    1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    2. In :material/arrow_outward: **Saccades** ▾ → **Line** → **Color**, choose **By type**.
+    3. In :material/aspect_ratio: **Figure & canvas** ▾ → **Title & labels**, tick **Title** and **Caption**. Enter a title for your reading and a caption that explains the markers and colors. Set each one's **Size**, here 34 px and 20 px.
+    4. Under **Legends**, set **Saccade types** to **Right, outside** and **Fixation sizes** to **Bottom right, outside**, both with text size 18.
+    5. Under **Screen & framing**, tick **Frame** → **Crop to data**. Untick **Margin** → **Auto** and enter 60 px.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
 
@@ -34,7 +34,7 @@ print(gallery_figure("title-caption-legend"))
     scanpath-studio render --sample \
       -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
       --saccade-color-by-type \
-      --title "One reader, one article" --title-size 34 \
+      --title "One participant, one article" --title-size 34 \
       --caption "Marker size: fixation duration. Line color: saccade type." --caption-size 20 \
       --legend saccades=right-outside,,18 --legend size-key=bottom-right-outside,,18 \
       --crop-to-data --crop-margin 60 \

@@ -17,7 +17,7 @@ hide:
 
 <p class="sps-home-headline">See how people read.</p>
 
-A free, open-source tool for visualizing eye movements in reading.
+A free, open-source app for exploring eye movements in reading.
 Bring your own data, or start with the bundled demo.
 
 <div class="sps-buttons" markdown>
@@ -50,7 +50,7 @@ Bring your own data, or start with the bundled demo.
       <source src="assets/workflows/add-your-data.mp4" type="video/mp4">
     </video>
 
-    **Import your own recordings.** Load words, fixations and raw gaze. Add metadata for participants, trials and texts.
+    **Import your own recordings.** Load your Fixations, Words or Raw gaze tables, and add participant, trial and text metadata.
 
     [Add your data :material-arrow-right:](guides/loading-data/index.md#add-your-own-data){ .md-button }
 
@@ -74,7 +74,7 @@ Bring your own data, or start with the bundled demo.
       <source src="assets/workflows/home-customize.mp4" type="video/mp4">
     </video>
 
-    **Make the view your own.** Try a design preset, choose a palette, and adjust the layers and their properties.
+    **Make the view your own.** Start from a design preset, pick a palette, then adjust each layer in Plot controls.
 
     [Explore plot controls :material-arrow-right:](guides/scanpath-visualization/controls.md){ .md-button }
 
@@ -86,7 +86,7 @@ Bring your own data, or start with the bundled demo.
       <source src="assets/workflows/home-filter-annotate.mp4" type="video/mp4">
     </video>
 
-    **Find the trials you need.** Filter by participant or condition. Star, tag and add notes to readings worth a second look.
+    **Find the trials you need.** Filter by participant or condition. Star, tag and add notes to the readings you want to revisit.
 
     [Select trials for analysis :material-arrow-right:](tutorials/data-filtering/index.md){ .md-button }
 
@@ -98,7 +98,7 @@ Bring your own data, or start with the bundled demo.
       <source src="assets/workflows/home-compare.mp4" type="video/mp4">
     </video>
 
-    **Put readings side by side.** Compare readers or datasets on the same text. Overlay scanpaths when their screen coordinates match.
+    **Put readings side by side.** Compare two participants, two conditions or two datasets. Overlay the scanpaths when both were recorded on the same screen size.
 
     [Compare two recordings :material-arrow-right:](guides/scanpath-visualization/controls.md#compare){ .md-button }
 
@@ -110,7 +110,7 @@ Bring your own data, or start with the bundled demo.
       <source src="assets/workflows/corpus-analysis.mp4" type="video/mp4">
     </video>
 
-    **Go beyond a single trial.** Summarize your reading measures by text, reader or group, and plot them against word features.
+    **Go beyond a single trial.** Summarize the reading measures in your data by text, participant or group, and plot them against word features.
 
     [Analyze a text :material-arrow-right:](tutorials/corpus-analysis/analyze-one-text.md){ .md-button }
 
@@ -122,7 +122,7 @@ Bring your own data, or start with the bundled demo.
       <source src="assets/workflows/home-export-share.mp4" type="video/mp4">
     </video>
 
-    **Take the figure with you.** Save figures, replays or a batch of trials. Share a view, or copy its Python or CLI code.
+    **Take the figure with you.** Save figures, replays or a batch of trials. Share a view as a link, or copy its Python or CLI code.
 
     [Export your first figure :material-arrow-right:](tutorials/exporting-figures/export-one-figure.md){ .md-button }
 
@@ -132,14 +132,14 @@ More examples in the [plot gallery](gallery.md).
 
 <div class="sps-home-links" markdown>
 
-[Python & CLI](guides/scanpath-visualization/index.md#render-in-code) · [FAQ](faq.md) · [Cite Scanpath Studio](cite.md) · [Feedback](https://github.com/lacclab/scanpath-studio/issues)
+[Python & CLI](guides/scanpath-visualization/index.md#render-in-code) · [FAQ](faq.md) · [Cite Scanpath Studio](about.md#cite-scanpath-studio) · [Feedback](https://github.com/lacclab/scanpath-studio/issues)
 
 </div>
 
 <div class="sps-development-note" markdown>
 
 Scanpath Studio was developed with AI assistance. As with any research
-software, cross-check its results before relying on them in published work.
+software, cross-check its results before you rely on them in published work.
 Found a bug, or have a feature request?
 [Open an issue](https://github.com/lacclab/scanpath-studio/issues).
 

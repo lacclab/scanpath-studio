@@ -1,15 +1,16 @@
 ---
-title: "Hearts & arrows"
+title: "Fully customizable"
 description: "Customize a scanpath with heart-shaped fixations, curved saccades and direction arrows, with app, CLI and Python instructions."
 hide:
   - navigation
   - toc
 ---
 
-# Hearts & arrows
+# Fully customizable
 
 Make a figure for a talk or teaching: pink hearts for fixations, purple arrows
-for the eye’s movements. This short, hand-drawn example is an illustration.
+for the eye’s movements. This hand-drawn illustration follows
+The → cat → sat → on → the → mat, with one fixation per word.
 
 ```python exec="true" html="true"
 from gallery_examples import gallery_figure
@@ -19,12 +20,12 @@ print(gallery_figure("hearts-arrows"))
 
 === "In the app"
 
-    1. Download the <a href="words.csv" download>words</a> and <a href="fixations.csv" download>fixations</a>. Choose + → Import files and add both tables. In Recording setup, choose Screen → I know it and enter 450 × 300. Add the dataset, then select the only trial and Reset visualization.
-    2. In **Fixations → Marker**, choose **Heart**, set the color to `#d12d72`, size range to **18–30**, and opacity to **0.85**. Under **Snap**, choose **To line**. Turn off **Fixation index**.
-    3. In **Saccades**, set **Shape** to **Arc**. Under **Line**, use `#4f46a5` and width **2.5**. Turn on **Direction arrows** with size **12**.
-    4. In **Figure & canvas**, hide the duration size key and set the Illustration label to “Illustration · hand-drawn”. Keep text highlighting off.
+    1. Load your Words and Fixations tables, or the example <a href="words.csv" download>words</a> and <a href="fixations.csv" download>fixations</a>. For the example, set **Recording setup** → **Screen** to **I know it**, 450 × 300 px. Open the dataset in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    2. In :material/blur_on: **Fixations** ▾ → **Marker**, set **Shape** to **♥ Heart**. Keep **Color** at **One color** and set its box to `#d12d72`. Set **Size** to **18–30** and **Opacity** to **0.85**. Tick **Snap** → **To line**, and leave **Fixation index** → **Show** unticked.
+    3. In :material/arrow_outward: **Saccades** ▾, set **Shape** to **Arc**. Under **Line**, keep **Color** at **One color** with `#4f46a5`, and set **Width** to **2.5**. Tick **Direction arrows** and set **Arrow size** to **12**.
+    4. In :material/aspect_ratio: **Figure & canvas** ▾ → **Legends**, untick **Show** for **Fixation sizes**. Under **Title & labels** → **Illustration**, enter “Illustration · hand-drawn” in **Text**. Leave :material/article: **Stimulus** ▾ → **Highlight words** unticked.
 
-    Save the look under **My designs** to apply it to your own data.
+    Save the look under :material/palette: **My designs** to apply it to your own data.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
 

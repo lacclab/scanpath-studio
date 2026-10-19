@@ -9,24 +9,27 @@ Inspect a recording and save the trials that need attention.
 ## 1. Open the session { #1-load-the-session }
 
 [Import your tables](../../guides/loading-data/index.md#add-your-own-data), or
-select a loaded dataset. Check its Recording setup against the screen used in
-the experiment.
+select a loaded dataset. Check that its **Recording setup** matches the screen
+used in the experiment.
 
 ## 2. Inspect a trial
 
-Select a participant and trial in Scanpath. Turn on Word boxes and inspect:
+In the :material/route: **Scanpath** view, pick a trial in **Select trial**.
+Turn on :material/crop_square: **Word boxes** and check:
 
-- whether the boxes match the stimulus screenshot, if available;
-- how fixations sit relative to the words;
+- whether the boxes match the stimulus image, if you have one;
+- where the fixations sit relative to the words;
 - unexpected gaps, shifts or off-screen positions.
 
 For a consistent offset, check [coordinate units and screen setup](../../faq.md#the-fixations-dont-line-up-with-the-text).
 
 ## 3. Replay the recording { #3-replay-the-recording }
 
-Turn on Animate to inspect fixation order and timing. To mark short or long
-fixations, or fixations outside the text, use Plot controls → Filters & highlights → Fixations
-and choose Highlight. Gaps and unusual scanpaths alone do not establish their cause.
+Turn on :material/movie: **Animate** to follow the fixation order and timing.
+To mark short or long fixations, or fixations outside the text, open
+:material/filter_list: **Filters & highlights** ▾ → **Fixations** and set
+**Short**, **Long** or **Outside the text** to **Highlight**. A gap or an
+unusual scanpath does not tell you its cause.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../../assets/workflows/replay_poster.webp" data-autoplay
@@ -36,13 +39,14 @@ and choose Highlight. Gaps and unusual scanpaths alone do not establish their ca
 
 ## 4. Record the review
 
-In Annotations, tag a trial `review` and note what you observed. Use the trial
-picker's arrows to continue through the session.
+In :material/edit_note: **Annotations**, tag the trial `review` and write what
+you observed in **Notes**. Use ◀ ▶ beside **Select trial** to move through the
+session.
 
 ## 5. Save the review { #5-save-the-review }
 
-Export stars, tags and notes from Data Management → Annotations → Export.
-The record includes participant and trial IDs. Use Open on an annotation row
-to return to that trial.
+Export favorites, tags and notes from :material/database: **Data Management**
+→ **Annotations** → **Export**. The file includes participant and trial IDs.
+**Open** on an annotation row returns to that trial.
 
 For exclusion decisions, follow [Exclude unsuitable trials](../data-filtering/exclude-unsuitable-trials.md).

@@ -1,6 +1,6 @@
 ---
 title: "Word-box heatmap"
-description: "An eye-tracking heatmap of where fixation time concentrates on the text, with the app controls and the Python and CLI code that make it."
+description: "An eye-tracking heatmap of the fixation time in each word box, with the app controls and the Python and CLI code that make it."
 hide:
   - navigation
   - toc
@@ -8,7 +8,7 @@ hide:
 
 # Word-box heatmap
 
-Fixation time within each word’s bounding box.
+Fixation time within each word box.
 
 ```python exec="true" html="true"
 from gallery_examples import gallery_figure
@@ -18,9 +18,9 @@ print(gallery_figure("word-boxes"))
 
 === "In the app"
 
-    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
-    2. Turn on Heatmap. In Heatmap ▾, choose Word boxes and weight by fixation duration.
-    3. Turn off Fixations and Saccades; keep Stimulus on.
+    1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    2. Turn on :material/local_fire_department: **Heatmap**. In **Heatmap** ▾ → **Style**, choose **Word boxes**. Keep **Color** → **By** at **Duration (ms)**.
+    3. Turn off :material/blur_on: **Fixations** and :material/arrow_outward: **Saccades**, and keep :material/article: **Stimulus** on.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
 

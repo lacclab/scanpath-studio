@@ -495,7 +495,7 @@ def load_potec(
 
     A participant is a PoTeC reader id, as a string. A trial is one reader's reading of
     one text, ``<reader>_<text>`` (``"0_b0"``), and its ``text_id`` is the text:
-    ``b0``–``b5`` are biology, ``p0``–``p5`` physics. The full corpus is 75 readers × 12
+    ``b0``–``b5`` are biology, ``p0``–``p5`` physics. The full corpus is 75 participants × 12
     texts = 900 trials.
 
     PoTeC's monitor was 1680×1050 (DELL P2210, 60 Hz). Pass that as ``canvas_size`` to

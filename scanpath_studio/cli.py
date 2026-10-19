@@ -191,23 +191,23 @@ def _add_schema_flags(group) -> None:
         group.add_argument(
             flag,
             metavar="JSON",
-            help=f"Column mapping for the {table} table, replacing auto-detection: "
-            "a JSON object (or a path to a .json file holding one) from each "
-            'field to a column name, e.g. \'{"trial": "TRIAL_INDEX", '
-            '"word_id": "IA_ID", ...}\' — the same dict '
+            help=f"Column mapping for the {table} table, replacing auto-detection. "
+            "A JSON object from each field to a column name, or the path of a "
+            'JSON file holding one, e.g. \'{"trial": "TRIAL_INDEX", '
+            '"word_id": "IA_ID", ...}\'. It is the dict '
             "api.load_scanpath_data takes. Needed only when a column isn't "
-            "recognized; the error then prints a mapping to start from.",
+            "recognized, and the error then prints a mapping to start from.",
         )
     group.add_argument(
         "--keep-columns",
         nargs="+",
         metavar="COLUMN",
         default=None,
-        help="Further columns of your own to carry through loading under their "
-        "own names (e.g. a pupil size), from whichever table has them — "
-        "otherwise loading keeps only the mapped and recognized fields. "
-        "A kept fixation column can then be --color-by, an axis or a hover "
-        "field. The keep_columns= of api.load_scanpath_data.",
+        help="More columns to keep through loading, under the names they have "
+        "in your files (e.g. a pupil size), from whichever table has them. "
+        "Without it, loading keeps only the mapped and recognized fields. A "
+        "kept fixation column can be used by --color-by, an axis or a hover. "
+        "Same as keep_columns= in api.load_scanpath_data.",
     )
 
 
@@ -471,16 +471,18 @@ def _render_parser() -> argparse.ArgumentParser:
     parser = _ShortErrorParser(
         prog="scanpath-studio render",
         description=(
-            "Render one trial's scanpath to a file without launching the app. "
-            "HTML output is interactive and needs no browser; PNG/SVG/PDF need "
-            "Chrome, Chromium or Edge (or run `plotly_get_chrome -y` once)."
+            "Write one trial's scanpath to a file without opening the app. "
+            "HTML output needs nothing else. PNG, SVG and PDF need Chrome, "
+            "Chromium or Edge, or run `plotly_get_chrome -y` once."
         ),
     )
-    src = parser.add_argument_group("input (bundled demo, or words and/or fixations)")
+    src = parser.add_argument_group(
+        "input (the bundled demo, a public dataset, or your own tables)"
+    )
     src.add_argument(
         "--sample",
         action="store_true",
-        help="Use the bundled OneStop demo: 2 participants, 12 trials each "
+        help="Use the bundled demo, from OneStop: 2 participants, 12 trials each "
         "(--list-trials shows them).",
     )
     src.add_argument(
@@ -492,57 +494,58 @@ def _render_parser() -> argparse.ArgumentParser:
         "--words",
         metavar="PATH",
         nargs="+",
-        help="Words table(s) (csv/tsv/txt/tab/parquet/feather/xlsx/xls, or a .zip of them); columns are "
-        "auto-detected from EyeLink, Gazepoint, Tobii, SMI, Pupil Labs and "
-        "snake_case names. Multiple paths or a quoted glob pattern concatenate "
-        "multi-file datasets.",
+        help="The Words table: CSV, TSV, TXT, TAB, Parquet, Feather, XLSX or XLS, "
+        "or a .zip of them. Columns are auto-detected from EyeLink, Gazepoint, "
+        "Tobii, SMI, Pupil Labs and snake_case names. Several paths, or a "
+        "quoted glob, are stacked into one table.",
     )
     src.add_argument(
         "--fixations",
         metavar="PATH",
         nargs="+",
-        help="Fixations table(s) (csv/tsv/txt/tab/parquet/feather/xlsx/xls, or a .zip of them), auto-detected like "
-        "--words. Multiple paths or a quoted glob pattern concatenate "
-        "multi-file datasets (e.g. one file per participant).",
+        help="The Fixations table, in the formats --words reads and "
+        "auto-detected the same way. Several paths, or a quoted glob, are "
+        "stacked into one table (e.g. one file per participant).",
     )
     src.add_argument(
         "--image-root",
         metavar="DIR",
-        help="Local stimulus-image folder. Files are matched per row using "
-        "--image-pattern and fill its image_path; add --show-stimulus-image to "
-        "draw them. Works with every input, --sample and the corpora included.",
+        help="A folder of stimulus images. Each row's image is found with "
+        "--image-pattern and stored in its image_path column. Add "
+        "--show-stimulus-image to draw them. Works with every input, including "
+        "--sample and the public datasets.",
     )
     src.add_argument(
         "--image-pattern",
         default=DEFAULT_STIMULUS_IMAGE_PATTERN,
         metavar="PATTERN",
-        help="Relative filename pattern with row placeholders, for example "
-        "'{text_id}.png' or '{participant_id}/{trial_id}.png'.",
+        help="File name pattern inside --image-root, with column placeholders, "
+        "e.g. '{text_id}.png' or '{participant_id}/{trial_id}.png'.",
     )
     src.add_argument(
         "--trial-parts-manifest",
         metavar="PATH",
-        help="JSON manifest that assigns arbitrary source rows to ordered screens "
-        "inside each logical trial. Use with --words/--fixations when the source "
-        "tables have no explicit screen columns.",
+        help="A JSON manifest that assigns source rows to the screens of each "
+        "trial, in order. Use it with --words / --fixations when the tables "
+        "have no screen column.",
     )
     _add_schema_flags(src)
     src.add_argument(
         "--potec",
         metavar="DIR",
         help="Load the PoTeC corpus (DiLi-Lab/PoTeC) from DIR, downloading "
-        "the needed files (~45 MB) on first use. Participants are the corpus's "
-        "75 ids (sparse within 0–105; --list-trials shows them); a trial is "
-        "one participant reading one text, <participant>_<text> (0_b0), "
-        "with texts b0–b5 and p0–p5.",
+        "the files it needs (~45 MB) on first use. It has 75 participants, "
+        "with IDs between 0 and 105 (--list-trials shows them). A trial is one "
+        "participant reading one text, named <participant>_<text> (e.g. 0_b0). "
+        "The texts are b0–b5 and p0–p5.",
     )
     src.add_argument(
         "--onestop",
         metavar="DIR",
-        help="Load the OneStop corpus from DIR. For the public variant the "
-        "chosen regime + parts' reports are downloaded from OSF on first use "
-        "(tens–hundreds MB each); the lacclab variant reads a local export. "
-        "Tune with --onestop-regime / --onestop-part / --onestop-variant.",
+        help="Load the OneStop corpus from DIR. The public variant downloads the "
+        "reports for the chosen regime and parts from OSF on first use, tens "
+        "to hundreds of MB each. The lacclab variant reads a local export. "
+        "Choose with --onestop-regime, --onestop-part and --onestop-variant.",
     )
     src.add_argument(
         "--onestop-regime",
@@ -569,26 +572,26 @@ def _render_parser() -> argparse.ArgumentParser:
             "QA",
             "Feedback",
         ],
-        help="OneStop trial part(s) for --onestop; repeatable (default: "
-        "Paragraph). Loading several makes each part its own trial.",
+        help="OneStop trial part for --onestop. Repeatable (default: "
+        "Paragraph). With several, each part is a separate trial.",
     )
     src.add_argument(
         "--onestop-variant",
         metavar="VARIANT",
         choices=["public", "lacclab"],
         default="public",
-        help="OneStop source variant for --onestop: 'public' (OSF download) or "
-        "'lacclab' (a local lab-processed export; no download).",
+        help="OneStop source for --onestop: public, downloaded from OSF, or "
+        "lacclab, a local lab-processed export with no download.",
     )
 
     src.add_argument(
         "--participant-metadata",
         metavar="FILE",
         nargs="+",
-        help="Participant-level metadata table: one row per participant, an "
-        "id column plus anything known about them. Several files (or a glob) "
-        "are stacked into one table. The join is validated and "
-        "reported against the loaded participants, and the fields are added to "
+        help="A participant metadata table: one row per participant, with a "
+        "participant ID column and any other fields. Several files, or a glob, "
+        "are stacked into one table. Its rows are checked against the loaded "
+        "participants and reported, and its fields are added to the "
         "--list-trials output.",
     )
 
@@ -596,78 +599,79 @@ def _render_parser() -> argparse.ArgumentParser:
         "--trial-metadata",
         metavar="FILE",
         nargs="+",
-        help="Trial-level metadata table: one row per trial, a "
-        "trial-id column plus anything known about it. Several files (or a "
-        "glob) are stacked into one table. Validated and reported "
-        "the same way, and its fields are added to --list-trials output.",
+        help="A trial metadata table: one row per trial, with a trial ID "
+        "column and any other fields. Several files, or a glob, are stacked "
+        "into one table. It is checked and reported the same way, and its "
+        "fields are added to the --list-trials output.",
     )
     src.add_argument(
         "--trial-metadata-participant-column",
         "--trial-metadata-reader-column",
         dest="trial_metadata_reader_column",
         metavar="COLUMN",
-        help="Key the --trial-metadata table by participant AND trial, using "
-        "this column as the participant id. Without it the table is keyed by "
-        "trial id alone: a row describes a text, and every trial of it "
-        "inherits that row. Never inferred: nothing in the file says which "
-        "of the two a corpus means.",
+        help="Key the --trial-metadata table by participant and trial, with "
+        "this column as the participant ID. Without it, the table is keyed by "
+        "trial ID alone, and each row applies to every participant's reading "
+        "of that trial. This is never guessed from the file.",
     )
     src.add_argument(
         "--text-metadata",
         metavar="FILE",
         nargs="+",
-        help="Text-level metadata table: one row per text, a text-id column "
-        "plus anything known about it. Several files (or a glob) are stacked "
-        "into one table. Validated and reported the same way, "
-        "and its fields are added to --list-trials output. Never keyed by "
-        "participant: a text is a stimulus, not something one participant owns.",
+        help="A text metadata table: one row per text, with a text ID column "
+        "and any other fields. Several files, or a glob, are stacked into one "
+        "table. It is checked and reported the same way, and its fields are "
+        "added to the --list-trials output. It is keyed by text alone, never "
+        "by participant.",
     )
 
     parser.add_argument(
-        "-p", "--participant", help="Participant id (default: first available)."
+        "-p", "--participant", help="Participant ID (default: the first)."
     )
     parser.add_argument(
-        "-t", "--trial", help="Trial id (default: first for the participant)."
+        "-t", "--trial", help="Trial ID (default: the participant's first)."
     )
     parser.add_argument(
         "--screen",
-        help="Screen/part id inside a multipart trial (default: first screen).",
+        help="Screen ID within a multipart trial (default: the first screen).",
     )
     parser.add_argument(
         "--list-trials",
         action="store_true",
-        help="Print every trial (participant, trial and text id) and exit; "
-        "pass the trial id to -t.",
+        help="Print every trial with its participant, trial and text IDs, then "
+        "exit. Pass a trial ID to -t.",
     )
     parser.add_argument(
         "--list-parts",
         action="store_true",
-        help="Print ordered multipart screens, optionally narrowed by -p/-t, and exit.",
+        help="Print the screens of each multipart trial in order, then exit. "
+        "-p and -t narrow the list.",
     )
     parser.add_argument(
         "--all-screens",
         action="store_true",
-        help="Render every screen of the selected parent trial. Screen ids are "
-        "inserted before the output extension.",
+        help="Render every screen of the selected trial, one file each. The "
+        "screen ID goes before the output's extension.",
     )
     parser.add_argument(
         "--screens",
         metavar="ID[,ID...]",
-        help="Like --all-screens, but only these screens of the parent trial "
-        "(comma-separated screen ids, e.g. Title,Paragraph); see --list-parts.",
+        help="Like --all-screens, for only these screens: comma-separated "
+        "screen IDs, e.g. Title,Paragraph. See --list-parts.",
     )
     parser.add_argument(
         "--screen-transition",
         choices=["instant", "recorded"],
         default="instant",
-        help="For --all-screens --animate, record zero or observed inter-screen "
-        "delay in each output's metadata (default: instant).",
+        help="With --all-screens --animate: record no delay between screens "
+        "(instant) or the recorded one (recorded) in each file's metadata "
+        "(default: instant).",
     )
     parser.add_argument(
         "-o",
         "--output",
         metavar="PATH",
-        help="Output file; format from extension (.html/.png/.svg/.pdf).",
+        help="Output file. Its extension sets the format: .html, .png, .svg or .pdf.",
     )
     parser.add_argument(
         "--animate",
@@ -676,9 +680,8 @@ def _render_parser() -> argparse.ArgumentParser:
     )
 
     viz = parser.add_argument_group(
-        "visualization (draws the app's Scanpath design: fixations, saccades "
-        "and the text; add --word-boxes, --heatmap or --fixation-index, or "
-        "hide a layer with its --no-* flag)"
+        "visualization (the app's Scanpath design; add --word-boxes, --heatmap "
+        "or --fixation-index, or hide a layer with its --no-* flag)"
     )
     # Every layer switch defaults to None — "not given" — so only a
     # flag on the line overrides the API's default (the app's Scanpath design).
@@ -703,21 +706,21 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="show_word_labels",
         action="store_false",
         default=None,
-        help="Hide the reading text.",
+        help="Hide the stimulus text.",
     )
     viz.add_argument(
         "--no-fixations",
         dest="show_fixations",
         action="store_false",
         default=None,
-        help="Hide fixation markers.",
+        help="Hide the fixations.",
     )
     viz.add_argument(
         "--fixation-index",
         dest="show_order",
         action="store_true",
         default=None,
-        help="Number the fixations in reading order.",
+        help="Number the fixations in order (the app's Fixation index).",
     )
     viz.add_argument(
         "--no-fixation-index",
@@ -730,13 +733,13 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--word-hover-fields",
         metavar="FIELDS",
-        help="Comma-separated word columns shown on hover (e.g. "
+        help="Comma-separated Words table columns shown on hover (e.g. "
         "text,word_id,gpt2_surprisal).",
     )
     viz.add_argument(
         "--fixation-hover-fields",
         metavar="FIELDS",
-        help="Comma-separated fixation columns shown on hover (e.g. "
+        help="Comma-separated Fixations table columns shown on hover (e.g. "
         "order_in_trial,duration_ms,eye).",
     )
     viz.add_argument(
@@ -744,7 +747,7 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="show_saccades",
         action="store_false",
         default=None,
-        help="Hide saccade lines.",
+        help="Hide the saccades.",
     )
     viz.add_argument(
         "--heatmap",
@@ -765,12 +768,13 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="show_saccade_arrows",
         action="store_true",
         default=None,
-        help="Draw saccade direction arrowheads.",
+        help="Draw an arrowhead on each saccade (the app's Direction arrows).",
     )
     viz.add_argument(
         "--saccade-color",
         metavar="COLOR",
-        help=f"Saccade line/arrow color, hex or CSS name (default: {SACCADE_COLOR}).",
+        help=f"Saccade line and arrow color, as hex or a CSS name (default: "
+        f"{SACCADE_COLOR}).",
     )
     viz.add_argument(
         "--saccade-style",
@@ -789,8 +793,8 @@ def _render_parser() -> argparse.ArgumentParser:
         "--saccade-opacity",
         type=float,
         metavar="O",
-        help="Opacity of the saccade lines and direction arrows, 0.1–1.0 "
-        "(default: 1). A comparison's two scanpaths share it.",
+        help="Opacity of the saccade lines and arrows, 0.1–1.0 (default: 1). "
+        "In a comparison, both scanpaths share it.",
     )
     viz.add_argument(
         "--saccade-arrow-size",
@@ -802,68 +806,65 @@ def _render_parser() -> argparse.ArgumentParser:
         "--saccade-color-by-type",
         dest="saccade_color_by_type",
         action="store_true",
-        help="Color each saccade by its reading type (forward / skip / "
-        "refixation / return sweep / regression) instead of one uniform color.",
+        help="Color each saccade by its type: forward, skip, refixation, return "
+        "sweep or regression (the app's By type).",
     )
     viz.add_argument(
         "--saccade-color-by-direction",
         dest="saccade_color_by_direction",
         action="store_true",
-        help="Color saccades forward vs. regression only — the two-way split "
-        "between one uniform color and the full --saccade-color-by-type "
-        "breakdown.",
+        help="Color each saccade as forward or regression (the app's Forward / "
+        "regression).",
     )
     viz.add_argument(
         "--saccade-type-color",
         dest="saccade_type_colors",
         metavar="CLASS=COLOR",
         action="append",
-        help="Override a reading-type color, e.g. --saccade-type-color "
-        "regression=#000000 (repeatable; classes: forward, skip, refixation, "
-        "return_sweep, regression). Implies --saccade-color-by-type, unless "
-        "--saccade-color-by-direction is given — then it recolors that two-way "
-        "split (its forward and regression colors).",
+        help="Set one saccade type's color, e.g. --saccade-type-color "
+        "regression=#000000. Repeatable. Types: forward, skip, refixation, "
+        "return_sweep, regression. Implies --saccade-color-by-type. With "
+        "--saccade-color-by-direction, it sets the forward and regression "
+        "colors instead.",
     )
     viz.add_argument(
         "--no-highlight-legend",
         dest="show_highlight_legend",
         action="store_false",
-        help="Hide the note naming the highlighted words (the words stay "
-        "marked). Shows by default; --legend highlight=SPEC places it.",
+        help="Hide the Text highlight legend, which names the highlighted "
+        "words. The words stay marked. --legend highlight=SPEC places it.",
     )
     viz.add_argument(
         "--no-color-legend",
         dest="show_color_legend",
         action="store_false",
-        help="Hide the fixation-colour legend: the categories of a categorical "
-        "--color-by and the highlighted fixations' entries (the markers still "
-        "draw). Shows by default.",
+        help="Hide the Fixation colors legend, which lists the categories of a "
+        "categorical --color-by and the highlighted fixations. The markers "
+        "still draw.",
     )
     viz.add_argument(
         "--no-saccade-type-legend",
         dest="saccade_type_legend",
         action="store_false",
-        help="With --saccade-color-by-type: hide the saccade-type color key on "
-        "the figure (the colored lines still draw). Legend shows by default.",
+        help="With --saccade-color-by-type: hide the Saccade types legend. The "
+        "colored lines still draw.",
     )
     viz.add_argument(
         "--fix-index-range",
         dest="fix_index_range",
         metavar="START:END",
-        help="Draw only fixations START through END of the trial "
-        "(1-based, both inclusive), e.g. --fix-index-range 1:40. Honored by "
-        "--animate too, which then replays only that window, and by "
-        "--compare-with, which windows both scanpaths (unless "
-        "--compare-fix-index-range gives B its own).",
+        help="Draw only fixations START to END, counting from 1, both "
+        "included, e.g. --fix-index-range 1:40. --animate then replays only "
+        "that range. With --compare-with it applies to both scanpaths, unless "
+        "--compare-fix-index-range sets B's.",
     )
     viz.add_argument(
         "--highlight-column",
         dest="highlight_column",
         metavar="COLUMN",
-        help="Boolean words column marking the text to highlight — the "
-        "critical span (default: is_in_aspan, OneStop's answer span). Pass "
-        "--highlight-column '' to highlight nothing. How it is drawn is "
-        "--critical-span-style.",
+        help="Boolean Words table column that marks the words to highlight "
+        "(default: is_in_aspan, OneStop's answer span). Pass '' to highlight "
+        "nothing. --critical-span-style sets how they are drawn.",
     )
     viz.add_argument(
         "--critical-span-style",
@@ -878,52 +879,53 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="fixation_flags",
         action="append",
         metavar="SPEC",
-        help="The app's Filters & highlights for fixations, repeatable. SPEC is "
-        "CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB] with "
-        "CATEGORY one of short, long, oob (outside every word box), blink and "
-        "MODE one of off, highlight, hide — e.g. --fixation-flag "
-        "short=hide,threshold_ms=80. hide drops those fixations from the "
-        "drawing only; measures and exports are untouched. threshold_ms applies "
-        "to short/long only.",
+        help="Highlight or hide one kind of fixation, like the app's Filters & "
+        "highlights. Repeatable. SPEC is "
+        "CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB]. CATEGORY is "
+        "short, long, oob (outside every word box) or blink. MODE is off, "
+        "highlight or hide. threshold_ms applies to short and long only. hide "
+        "removes the fixations from the figure only; measures and exports keep "
+        "them. E.g. --fixation-flag short=hide,threshold_ms=80.",
     )
     viz.add_argument(
         "--legend",
         dest="legend_layout",
         action="append",
         metavar="SPEC",
-        help="Place one legend, repeatable. SPEC is KIND=POSITION[,ARRANGEMENT]"
-        "[,SIZE] with KIND one of compare, saccades, colors (the fixation "
-        "colour categories), size-key, highlight (the highlighted-words note); "
-        "POSITION auto or SPOT-outside / "
-        "SPOT-inside with SPOT one of top-left, top-center, top-right, left, "
-        "right, bottom-left, bottom-center, bottom-right (outside grows the "
-        "figure; left and right run down the side); ARRANGEMENT stacked or "
-        "side-by-side; SIZE the text size in px — e.g. --legend "
-        "saccades=right-outside,stacked,14. Whether a legend is drawn at all is "
-        "still its own switch.",
+        help="Place one legend. Repeatable. SPEC is "
+        "KIND=POSITION[,ARRANGEMENT][,SIZE]. KIND is compare (Compare (A/B)), "
+        "saccades (Saccade types), colors (Fixation colors), size-key "
+        "(Fixation sizes) or highlight (Text highlight). POSITION is auto, or "
+        "SPOT-outside or SPOT-inside, with SPOT one of top-left, top-center, "
+        "top-right, left, right, bottom-left, bottom-center, bottom-right. "
+        "Outside grows the figure, and left and right run down the side. "
+        "ARRANGEMENT is stacked or side-by-side, and SIZE the text size in px. "
+        "E.g. --legend saccades=right-outside,stacked,14. Each legend's switch "
+        "still decides whether it is drawn.",
     )
     viz.add_argument(
         "--saccade-classes",
         dest="saccade_classes",
         metavar="CLASSES",
-        help="Draw only these reading classes, comma-separated, e.g. "
-        "--saccade-classes regression,return_sweep (classes: forward, skip, "
-        "refixation, return_sweep, regression, other). Hidden classes lose "
-        "their line and their direction arrow. Default: all.",
+        help="Draw only these saccade types, comma-separated, e.g. "
+        "--saccade-classes regression,return_sweep. Types: forward, skip, "
+        "refixation, return_sweep, regression, other (off the text). A hidden "
+        "type loses its line and its arrow. Default: all.",
     )
     viz.add_argument(
         "--saccade-arcs",
         dest="saccade_arcs",
         action="store_true",
-        help="Draw saccades as upward arcs (the linear-reading diagram) instead "
-        "of straight connectors.",
+        help="Draw saccades as upward arcs instead of straight lines (the "
+        "app's Shape: Arc).",
     )
     viz.add_argument(
         "--snap-fixations",
         dest="snap_fixations",
         action="store_true",
-        help="Move each fixation up or down onto its text line (its word's, else "
-        "the nearest); it keeps its x. --snap-position says where on the line.",
+        help="Move each fixation up or down onto its text line: its word's "
+        "line, else the nearest. Its x stays. --snap-position sets where on "
+        "the line.",
     )
     viz.add_argument(
         "--snap-position",
@@ -937,15 +939,17 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--illustration",
         action="store_true",
-        help="Apply the clean schematic preset: snapped fixations, arced "
-        "saccades, uniform colors, and no analytical overlays.",
+        help="Apply the app's Illustration design: fixations snapped to their "
+        "lines, arced saccades, one color for each, and no word boxes, "
+        "heatmap, fixation index or arrows. A flag you give still wins.",
     )
     viz.add_argument(
         "--illustration-label",
         choices=["auto", "show", "hide"],
         default="auto",
-        help="Auto-label transformed/schematic figures, force the label, or "
-        "explicitly hide it (default: auto).",
+        help="The Illustration label: auto adds it when the figure changes what "
+        "the data shows (e.g. snapped fixations or arced saccades), show "
+        "always adds it, and hide leaves it out (default: auto).",
     )
     viz.add_argument(
         "--illustration-text",
@@ -989,24 +993,24 @@ def _render_parser() -> argparse.ArgumentParser:
         "--palette",
         type=_palette_name,
         metavar="{default,print,high-contrast}",
-        help="Color palette for the marks (the app's Palette): default "
-        "(colorblind-safe, Okabe–Ito), print (grayscale, survives a B&W print) "
-        "or high-contrast. The app's own names work too. Individual "
-        "--*-color flags override it.",
+        help="Color palette (the app's Palette): default (colorblind-safe, "
+        "Okabe–Ito), print (grayscale, for black-and-white printing) or "
+        "high-contrast. The app's palette names work too. Each --*-color flag "
+        "overrides it.",
     )
     viz.add_argument(
         "--color-by",
         metavar="FIELD",
-        help=f"Fixation column to color by, e.g. duration_ms, or 'line' to "
-        f"color each fixation by its text line (same as --color-by-line). "
-        f"Default: '{UNIFORM_COLOR_FIELD}', one flat color, since marker size "
-        f"already shows duration.",
+        help=f"Fixations table column to color the fixations by, e.g. "
+        f"duration_ms, or 'line' for each fixation's text line (same as "
+        f"--color-by-line). Default: '{UNIFORM_COLOR_FIELD}', one color, since "
+        f"marker size already shows duration.",
     )
     viz.add_argument(
         "--fixation-color",
         metavar="COLOR",
-        help=f"Flat fixation marker color used when --color-by is "
-        f"{UNIFORM_COLOR_FIELD} (default: {DEFAULT_FIXATION_COLOR}).",
+        help=f"Fixation color when --color-by is '{UNIFORM_COLOR_FIELD}' "
+        f"(default: {DEFAULT_FIXATION_COLOR}).",
     )
     viz.add_argument(
         "--fixation-symbol",
@@ -1017,20 +1021,22 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--heatmap-metric",
         metavar="COLUMN",
-        help="Heatmap weighting: the fixation duration column — under your "
-        "file's name or as duration_ms (the default) — or counts.",
+        help="What the heatmap colors by (the app's Color → By): the fixation "
+        "duration column, under your file's name or as duration_ms, or counts "
+        "for the fixation count. Default: duration_ms.",
     )
     viz.add_argument(
         "--heatmap-style",
         choices=["word-boxes", "smoothed"],
-        help="Heatmap geometry (default: word-boxes).",
+        help="Heatmap style: word-boxes tints each word box, smoothed blurs "
+        "the fixations (default: word-boxes).",
     )
     viz.add_argument(
         "--heatmap-sigma",
         type=float,
         metavar="PX",
-        help="Gaussian σ in px for --heatmap-style smoothed (default: 2%% of "
-        "the data's larger span, at least 8 px).",
+        help="Blur of --heatmap-style smoothed, as a Gaussian σ in px "
+        "(default: 2%% of the data's larger span, at least 8 px).",
     )
     viz.add_argument(
         "--heatmap-colorscale",
@@ -1041,15 +1047,15 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--heatmap-norm",
         choices=["linear", "log"],
-        help="Heatmap color scaling: linear (default) or log — log compresses "
-        "heavy-tailed dwell times so a few hot words don't wash out the rest.",
+        help="Heatmap color scaling: linear (default) or log. Log keeps a few "
+        "words with long dwell times from washing out the rest.",
     )
     viz.add_argument(
         "--heatmap-opacity",
         type=float,
         metavar="O",
-        help="Heatmap opacity, 0.05–1.0 (default: each style's own — word boxes "
-        "0.5, or 0.35 with no word boxes; smoothed 0.45).",
+        help="Heatmap opacity, 0.05–1.0 (default: 0.5 for word-boxes, or 0.35 "
+        "for a trial with no word boxes; 0.45 for smoothed).",
     )
     viz.add_argument(
         "--fixation-colorscale",
@@ -1063,51 +1069,53 @@ def _render_parser() -> argparse.ArgumentParser:
         nargs=2,
         type=int,
         metavar=("MIN", "MAX"),
-        help="Min/max fixation marker size in px, e.g. 4 12 (default: 8 24). "
-        "Smaller ranges suit small thumbnails.",
+        help="Smallest and largest fixation marker size in px, e.g. 4 12 "
+        "(default: 8 24). A smaller range suits thumbnails.",
     )
     viz.add_argument(
         "--marker-size-scale",
         choices=("sqrt", "linear", "log", "relative"),
-        help="How duration sets marker size (default: sqrt). sqrt / linear / log "
-        "map --marker-duration-range onto --marker-size-range the same way for "
-        "every figure, so one duration is one size across trials, comparisons "
-        "and replays; sqrt makes marker area grow with duration. relative "
-        "stretches each figure from its own shortest to longest fixation.",
+        help="How duration sets marker size (default: sqrt). sqrt, linear and "
+        "log map --marker-duration-range onto --marker-size-range, so a "
+        "duration gets the same size in every trial, comparison and replay. "
+        "With sqrt, marker area grows with duration. relative stretches each "
+        "figure from its shortest to its longest fixation.",
     )
     viz.add_argument(
         "--marker-duration-range",
         nargs=2,
         type=float,
         metavar=("LO", "HI"),
-        help="Durations in ms given the smallest and largest marker on a fixed "
-        "scale (default: 50 600). Shorter and longer fixations clamp to them.",
+        help="The durations in ms that get the smallest and largest marker "
+        "(default: 50 600). Shorter and longer fixations are clamped to them. "
+        "Not used by --marker-size-scale relative.",
     )
     viz.add_argument(
         "--no-duration-size-legend",
         dest="duration_size_legend",
         action="store_false",
-        help="Hide the duration-size key (reference circles labelled in ms) "
-        "drawn on a fixed --marker-size-scale.",
+        help="Hide the Fixation sizes legend, reference circles labeled in ms. "
+        "It is drawn when --marker-size-scale is sqrt, linear or log.",
     )
     viz.add_argument(
         "--canvas",
         metavar="WxH",
-        help="Monitor size in px, e.g. 2560x1440 (default: the source's screen — "
-        "2560x1440 for --sample/--onestop, 1680x1050 for --potec — else "
-        "estimated from the data).",
+        help="Screen size in px, e.g. 2560x1440 (default: 2560x1440 for "
+        "--sample and --onestop, 1680x1050 for --potec, 1200x800 for "
+        "--authoring, otherwise estimated from the data).",
     )
     viz.add_argument(
         "--coordinate-grid",
         action="store_true",
-        help="Overlay a monitor-pixel X/Y grid on the scanpath.",
+        help="Draw a grid in screen pixels over the scanpath (the app's Axes & "
+        "grid → Grid).",
     )
     viz.add_argument(
         "--coordinate-grid-spacing",
         type=float,
         metavar="PX",
-        help="Pin the major coordinate-grid interval in pixels. Implies "
-        "--coordinate-grid; omit for automatic 1/2/5×10ⁿ spacing.",
+        help="The grid's major spacing in px. Implies --coordinate-grid. Leave "
+        "it out for an automatic spacing of 1, 2 or 5 × 10ⁿ px.",
     )
     viz.add_argument(
         "--coordinate-grid-font-size",
@@ -1121,40 +1129,40 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--stimulus-image",
         metavar="PATH",
-        help="Draw an image (PNG/JPG) as the stimulus background under the "
-        "scanpath. By default it's stretched to the image's own pixel "
-        "size (PNG) or the canvas; set --stimulus-image-size / -origin to place "
-        "a crop precisely in fixation coordinates.",
+        help="Draw an image (PNG or JPG) under the scanpath as the stimulus. It "
+        "is sized to the PNG's pixel size, else to the canvas. Use "
+        "--stimulus-image-size and --stimulus-image-origin to place a cropped "
+        "image in fixation coordinates.",
     )
     viz.add_argument(
         "--stimulus-image-size",
         metavar="WxH",
-        help="Stimulus-image size in px, e.g. 1310x991 (default: the PNG's own "
+        help="Stimulus image size in px, e.g. 1310x991 (default: the PNG's "
         "pixel size, else the canvas). Use with --stimulus-image.",
     )
     viz.add_argument(
         "--stimulus-image-origin",
         metavar="X,Y",
-        help="Top-left of the stimulus image in monitor px, e.g. 305,44 (default: "
-        "0,0). Use with --stimulus-image to align a centered crop to the "
-        "fixation coordinates.",
+        help="Top-left corner of the stimulus image in screen px, e.g. 305,44 "
+        "(default: 0,0). Use with --stimulus-image to line a centered crop up "
+        "with the fixations.",
     )
     viz.add_argument(
         "--stimulus-image-opacity",
         type=float,
         metavar="O",
-        help="Stimulus-image opacity 0.1–1.0 (default: 1.0 = opaque). Lower it to "
-        "dim a busy image so the fixations / saccades / word boxes read over it.",
+        help="Stimulus image opacity, 0.1–1.0 (default: 1.0 = opaque). Lower it "
+        "so the fixations, saccades and word boxes stand out on a busy image.",
     )
     # The trial's own page, which `--image-root` (or a dataset that
     # ships its pages, like --sample) put on its rows as `image_path`.
     viz.add_argument(
         "--show-stimulus-image",
         action="store_true",
-        help="Draw each trial's own stimulus page under the scanpath: the "
-        "image_path its rows carry (from --image-root, or a dataset that ships "
-        "its pages, like --sample), placed at its image_x / image_y. "
-        "--stimulus-image PATH wins.",
+        help="Draw each trial's stimulus image under the scanpath, from the "
+        "image_path column of its rows, placed at image_x / image_y. "
+        "--image-root fills that column, and --sample ships its images. "
+        "--stimulus-image takes precedence.",
     )
     # A flag for every remaining figure option, so the command the Share subtab
     # prints (`code_snippet._CLI_EMITTERS`) draws the figure rather than naming
@@ -1172,8 +1180,8 @@ def _render_parser() -> argparse.ArgumentParser:
         "--fixation-outline-width",
         type=float,
         metavar="PX",
-        help="Outline round each filled fixation marker, 0–5 px; 0 draws none "
-        "(default: 0.5).",
+        help="Outline width around each filled fixation marker, 0–5 px; 0 draws "
+        "none (default: 0.5).",
     )
     viz.add_argument(
         "--fixation-outline-color",
@@ -1188,47 +1196,47 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--color-by-line",
         action="store_true",
-        help="Color each fixation by the text line it lands on (lines inferred "
-        "from the word boxes); overrides --color-by. Same as --color-by line.",
+        help="Color each fixation by the text line it lands on, with the lines "
+        "found from the word boxes. Overrides --color-by. Same as --color-by "
+        "line.",
     )
     viz.add_argument(
         "--fixation-color-range",
         nargs=2,
         type=float,
         metavar=("LO", "HI"),
-        help="Pin the --color-by color scale to LO..HI instead of the trial's "
-        "own range, so several figures share one scale.",
+        help="Fix the --color-by color scale to LO..HI instead of the trial's "
+        "range, so several figures share one scale.",
     )
     viz.add_argument(
         "--heatmap-range",
         nargs=2,
         type=float,
         metavar=("LO", "HI"),
-        help="Pin the heatmap's color scale to LO..HI instead of the trial's "
-        "own range.",
+        help="Fix the heatmap's color scale to LO..HI instead of the trial's range.",
     )
     viz.add_argument(
         "--order-font-size",
         type=int,
         metavar="PX",
-        help="Fixation index label size (default: 10).",
+        help="Size of the fixation index numbers (default: 10).",
     )
     viz.add_argument(
         "--order-font-color",
         metavar="COLOR",
-        help="Fixation index label color (default: #111111).",
+        help="Color of the fixation index numbers (default: #111111).",
     )
     viz.add_argument(
         "--text-color",
         metavar="COLOR",
-        help="Reading-text color (default: #000000).",
+        help="Stimulus text color (default: #000000).",
     )
     viz.add_argument(
         "--redact-text",
         action="store_true",
-        help="Draw a rounded block over each word's letters instead of the "
-        "word, in the text color, and hide the word in the hovers: the figure "
-        "keeps the text's layout, not its words.",
+        help="Draw a rounded block in the text color in place of each word's "
+        "letters, and leave the words out of the hovers. The figure keeps the "
+        "text's layout but not its words (the app's Text → Redact).",
     )
     viz.add_argument(
         "--highlight-text-color",
@@ -1250,27 +1258,26 @@ def _render_parser() -> argparse.ArgumentParser:
         "--no-plot-frame",
         dest="show_plot_frame",
         action="store_false",
-        help="Leave out the border round the plot area.",
+        help="Leave out the border around the plot area.",
     )
     viz.add_argument(
         "--plot-frame-color",
         metavar="COLOR",
-        help="Color of the border round the plot area (default: #000000).",
+        help="Color of the border around the plot area (default: #000000).",
     )
     viz.add_argument(
         "--line-spacing",
         type=float,
         metavar="N",
-        help="How far apart the lines are, in font sizes: the reading text is "
-        "the distance between lines ÷ N (default: 3, a blank line above and "
-        "below).",
+        help="Line spacing, in font sizes: the text's font size is the distance "
+        "between lines ÷ N (default: 3, a blank line above and below).",
     )
     viz.add_argument(
         "--no-scale-text-to-boxes",
         dest="scale_text_to_boxes",
         action="store_false",
-        help="Draw the reading text at --font-size instead of sizing it from the "
-        "word boxes.",
+        help="Draw the text at --font-size instead of fitting it to the word "
+        "boxes (the app's Fit to word boxes).",
     )
     viz.add_argument(
         "--word-hover-measure",
@@ -1281,8 +1288,9 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--word-heatmap-col",
         metavar="COLUMN",
-        help="For a words-only dataset (no fixations): tint each word box by this "
-        "numeric words column — e.g. gpt2_surprisal — instead of its dwell time.",
+        help="With --heatmap, for a dataset with no fixations: tint each word box "
+        "by this numeric Words table column, e.g. gpt2_surprisal, instead of "
+        "its total fixation duration.",
     )
     viz.add_argument(
         "--word-heatmap-title",
@@ -1292,20 +1300,20 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--x-field",
         metavar="FIELD",
-        help="Fixation column on the x axis (default: x). A non-spatial one "
-        "draws a chart of the fixations instead of the scanpath.",
+        help="Fixations table column on the x axis (default: x). A non-spatial "
+        "one draws a chart of the fixations instead of the scanpath.",
     )
     viz.add_argument(
         "--y-field",
         metavar="FIELD",
-        help="Fixation column on the y axis (default: y).",
+        help="Fixations table column on the y axis (default: y).",
     )
     viz.add_argument(
         "--crop-to-data",
         "--no-full-monitor",
         dest="fit_to_monitor",
         action="store_false",
-        help="Frame the axes on the data instead of the whole --canvas monitor "
+        help="Frame the plot on the data instead of the whole --canvas screen "
         "(the app's Crop to data).",
     )
     viz.add_argument(
@@ -1415,13 +1423,13 @@ def _render_parser() -> argparse.ArgumentParser:
         "--raw-gaze",
         metavar="PATH",
         nargs="+",
-        help="Raw (sample-level) gaze table(s) to draw under the fixations, "
-        "columns auto-detected like --fixations (same formats; several "
-        "paths or a quoted glob concatenate). Static figures and --compare-with "
-        "comparisons, where each scanpath's samples take its color "
-        "(not --animate). On its own "
-        "(no other input) it is the dataset: its trials are listed and drawn "
-        "as recorded — no fixations are detected from the samples.",
+        help="The Raw gaze table to draw under the fixations, in the formats "
+        "--fixations reads and auto-detected the same way. Several paths, or a "
+        "quoted glob, are stacked into one table. Drawn on static figures and "
+        "--compare-with comparisons, where each scanpath's samples take its "
+        "color, but not with --animate. As the only input it is the dataset: "
+        "its trials are listed and drawn as recorded, and no fixations are "
+        "detected from the samples.",
     )
     viz.add_argument(
         "--no-raw-gaze",
@@ -1429,28 +1437,28 @@ def _render_parser() -> argparse.ArgumentParser:
         action="store_const",
         const=False,
         default=None,
-        help="Load the --raw-gaze table but hide its layer — the app's 🔵 Raw "
-        "gaze switch turned off. With raw gaze as the only input the figure then "
-        "draws no gaze.",
+        help="Load the --raw-gaze table but hide its layer, like turning off "
+        "the app's Raw gaze switch. With raw gaze as the only input, the figure "
+        "then shows no gaze.",
     )
     viz.add_argument(
         "--sample-raw-gaze",
         action="store_true",
-        help="With --sample: draw the bundled demo's raw gaze (synthesized, for "
-        "one trial — the one the app overlays it on).",
+        help="With --sample: draw the bundled demo's raw gaze. It is "
+        "synthesized, and covers one trial only.",
     )
     viz.add_argument(
         "--raw-gaze-schema",
         metavar="JSON",
-        help="Column mapping for the --raw-gaze table, replacing auto-detection "
-        "(same shape as --fix-schema); needed only when a column isn't "
-        "recognized.",
+        help="Column mapping for the --raw-gaze table, replacing "
+        "auto-detection, in the form --fix-schema takes. Needed only when a "
+        "column isn't recognized.",
     )
     viz.add_argument(
         "--word-box-color",
         metavar="COLOR",
-        help="Word-box outline color (default: #6c757d). A comparison outlines "
-        "each scanpath's boxes in its own color instead.",
+        help="Word-box outline color (default: #6c757d). In a comparison, each "
+        "scanpath's boxes are outlined in its color instead.",
     )
     viz.add_argument(
         "--word-box-line-opacity",
@@ -1475,40 +1483,40 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--raw-gaze-color",
         metavar="COLOR",
-        help="Raw-gaze sample color (default: #888888). A comparison draws "
-        "each scanpath's samples in its own color instead.",
+        help="Raw gaze sample color (default: #888888). In a comparison, each "
+        "scanpath's samples are drawn in its color instead.",
     )
     viz.add_argument(
         "--raw-gaze-marker-size",
         type=float,
         metavar="PX",
-        help="Raw-gaze sample size, 1–12 (default: 4).",
+        help="Raw gaze sample size, 1–12 px (default: 4).",
     )
     viz.add_argument(
         "--raw-gaze-opacity",
         type=float,
         metavar="O",
-        help="Raw-gaze sample opacity, 0.1–1.0 (default: 0.6).",
+        help="Raw gaze sample opacity, 0.1–1.0 (default: 0.6).",
     )
     viz.add_argument(
         "--width",
         type=int,
         metavar="PX",
-        help="Image width in px for PNG/SVG/PDF (default: the figure's own "
+        help="Image width in px for PNG, SVG and PDF (default: the figure's "
         "size). Use with --height for fixed-size thumbnails.",
     )
     viz.add_argument(
         "--height",
         type=int,
         metavar="PX",
-        help="Image height in px for PNG/SVG/PDF (default: the figure's own size).",
+        help="Image height in px for PNG, SVG and PDF (default: the figure's size).",
     )
     viz.add_argument(
         "--scale",
         type=float,
         default=2.0,
         metavar="X",
-        help="Raster pixel-density multiplier (PNG/SVG/PDF; default: 2.0).",
+        help="Pixel-density multiplier for PNG, SVG and PDF (default: 2.0).",
     )
     # The app's Export → Current figure Width + DPI.
     print_width = viz.add_mutually_exclusive_group()
@@ -1547,14 +1555,14 @@ def _render_parser() -> argparse.ArgumentParser:
         "--title",
         default=None,
         metavar="TEXT",
-        help="Title band stamped on the figure; off by default. The "
-        "figure grows to make room rather than shrinking the plot.",
+        help="A title on the figure. The figure grows to fit it, so the plot "
+        "keeps its size.",
     )
     viz.add_argument(
         "--caption",
         default=None,
         metavar="TEXT",
-        help="Caption band stamped on the figure; off by default.",
+        help="A caption on the figure.",
     )
     viz.add_argument(
         "--title-size",
@@ -1578,11 +1586,10 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--separable-layers",
         action="store_true",
-        help="Also write the figure split into one file per layer (word boxes / "
-        "fixations / saccades / heatmap / labels / stimulus image) in a "
-        "`<output>_layers/` folder, so each can be restyled in Illustrator / "
-        "Inkscape. Static image output only (.svg/.pdf/.png); the layers register "
-        "when stacked.",
+        help="Also write one file per layer (word boxes, fixations, saccades, "
+        "heatmap, labels, stimulus image) to a `<output>_layers/` folder, to "
+        "restyle each in Illustrator or Inkscape. The layers line up when "
+        "stacked. Static image output only: .svg, .pdf or .png.",
     )
     viz.add_argument(
         "--playback-speed",
@@ -1595,25 +1602,24 @@ def _render_parser() -> argparse.ArgumentParser:
         "--no-autoplay",
         dest="autoplay",
         action="store_false",
-        help="With --animate: start the replay paused (press ▶ Play to run it). "
-        "By default the saved HTML autoplays on load at the playback speed.",
+        help="With --animate: start the replay paused. By default the HTML "
+        "file starts playing when it opens.",
     )
     viz.add_argument(
         "--anim-grid-step-ms",
         type=float,
         default=None,
         metavar="MS",
-        help="With --animate: emit a frame every MS of reading time (default: "
-        "100). Smaller is smoother and larger to export.",
+        help="With --animate: one frame per MS of reading time (default: 100). "
+        "A smaller step is smoother and makes a larger file.",
     )
     viz.add_argument(
         "--anim-max-frames",
         type=int,
         default=None,
         metavar="N",
-        help="With --animate: at most N frames, the first included (default: "
-        "360). A trial too long for that many at --anim-grid-step-ms gets a "
-        "wider step instead.",
+        help="With --animate: at most N frames (default: 360). A trial too "
+        "long for that many at --anim-grid-step-ms gets a wider step.",
     )
     # The same reproduction snippet the app's 🔗 Share subtab shows,
     # for the invocation you just typed. Chiefly a *translation*: "I have this
@@ -1623,15 +1629,15 @@ def _render_parser() -> argparse.ArgumentParser:
         choices=["python", "cli", "both"],
         default=None,
         metavar="FLAVOR",
-        help="Print the API / CLI code that reproduces this figure to stdout "
-        "(python | cli | both), then render as usual. Only the options "
-        "that differ from the defaults are written.",
+        help="Print the Python or CLI code that reproduces this figure "
+        "(python, cli or both), then render as usual. The code sets only the "
+        "options that differ from the defaults.",
     )
     viz.add_argument(
         "--print-code-explicit",
         action="store_true",
-        help="With --print-code: write every figure option at its current "
-        "value instead of only the non-defaults.",
+        help="With --print-code: write every figure option, including the "
+        "ones at their defaults.",
     )
 
     # Compare mode's CLI surface. B comes either from the dataset
@@ -1641,38 +1647,37 @@ def _render_parser() -> argparse.ArgumentParser:
     # roughly double this parser for a narrow case, and `api.compare_scanpaths`
     # takes B's frames directly, so a Python caller has no such limit.
     cmp_group = parser.add_argument_group(
-        "comparison: draw a second scanpath beside or over the first"
+        "comparison (draw a second scanpath beside or over the first)"
     )
     cmp_group.add_argument(
         "--compare-with",
         metavar="PARTICIPANT:TRIAL",
-        help="Compare against a second scanpath, named as participant:trial. "
-        "Taken from the loaded dataset unless --compare-words/--compare-fixations "
-        "name a second one.",
+        help="The second scanpath, B, as PARTICIPANT:TRIAL. It comes from the "
+        "loaded dataset unless --compare-words / --compare-fixations load a "
+        "second one.",
     )
     cmp_group.add_argument(
         "--compare-screen",
         metavar="SCREEN_ID",
-        help="Screen of the second scanpath's multipart trial (default: its first "
-        "screen), looked up in its own trial. --screen picks the first "
-        "scanpath's. Each scanpath is drawn from one screen.",
+        help="B's screen in a multipart trial, looked up in B's trial "
+        "(default: its first screen). --screen picks A's. Each scanpath is "
+        "drawn from one screen.",
     )
     cmp_group.add_argument(
         "--compare-layout",
         choices=["overlay", "side-by-side", "stacked"],
         default="overlay",
-        help="How the two scanpaths are arranged (default: overlay). Across two "
-        "datasets, overlay needs both canvases to be the same size — two "
-        "different canvases are refused rather than silently split, so pass "
-        "side-by-side or stacked for them. Matching canvases that a dataset "
-        "never recorded still overlay, with a warning.",
+        help="How A and B are arranged (default: overlay). Across two datasets, "
+        "overlay needs canvases of the same size. Different canvases are "
+        "refused, so use side-by-side or stacked for them. Matching canvases "
+        "that a dataset did not record still overlay, with a warning.",
     )
     cmp_group.add_argument(
         "--compare-stimulus",
         choices=["both", "a", "b"],
         default="both",
         help="On an overlay, whose word boxes and text to draw (default: both). "
-        "Two datasets' word boxes coincide only when the text is identical.",
+        "Two datasets' word boxes line up only when the text is the same.",
     )
     # Named `-a` / `-b` after the `style_a` / `style_b` pair rather
     # than `--label`, which would read as a sibling of `--no-labels` (the word
@@ -1680,34 +1685,31 @@ def _render_parser() -> argparse.ArgumentParser:
     cmp_group.add_argument(
         "--label-a",
         metavar="TEXT",
-        help="Name for the FIRST scanpath in the legend and hover, instead of "
-        "the default. Applies to the comparison figure and the --animate "
-        "co-animation. Requires --label-b.",
+        help="Name of scanpath A in the legend and hovers. Used by the "
+        "comparison and by --animate. Needs --label-b.",
     )
     cmp_group.add_argument(
         "--label-b",
         metavar="TEXT",
-        help="Name for the SECOND scanpath in the legend and hover, instead "
-        "of the default. Requires --label-a.",
+        help="Name of scanpath B in the legend and hovers. Needs --label-a.",
     )
     cmp_group.add_argument(
         "--compare-legend",
         dest="show_legend",
         action=argparse.BooleanOptionalAction,
         default=None,
-        help="Draw the legend naming the two scanpaths (the app's A/B legend; "
-        "on by default, as in the app). Applies to the --animate co-animation "
-        "too.",
+        help="Draw the Compare (A/B) legend, which names the two scanpaths. On "
+        "by default; --no-compare-legend hides it. Also applies to --animate.",
     )
     # Named after `compare_scanpaths`'s `style_a` / `style_b`, like the
     # `--label-a` / `--label-b` pair above.
-    for side, which in (("a", "FIRST"), ("b", "SECOND")):
+    for side, which in (("a", "A"), ("b", "B")):
         cmp_group.add_argument(
             f"--style-{side}",
             dest=f"style_{side}",
             action="append",
             metavar="SPEC",
-            help=f"Styling for the {which} scanpath, repeatable: KEY=VALUE[,...]. "
+            help=f"Style for scanpath {which}, repeatable: KEY=VALUE[,...]. "
             "Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box "
             "outline; default fix_color), box_fill_color (default "
             "--word-box-fill-color), raw_gaze_color (default fix_color). Also "
@@ -1728,78 +1730,78 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="compare_fixation_flags",
         action="append",
         metavar="SPEC",
-        help="Filters & highlights for the SECOND scanpath only, repeatable; "
-        "same SPEC as --fixation-flag, e.g. --compare-fixation-flag "
+        help="Filters & highlights for scanpath B only. Repeatable. Same SPEC "
+        "as --fixation-flag, e.g. --compare-fixation-flag "
         "short=hide,threshold_ms=80. Replaces --fixation-flag for B.",
     )
     cmp_group.add_argument(
         "--compare-saccade-classes",
         dest="compare_saccade_classes",
         metavar="CLASSES",
-        help="The reading classes the SECOND scanpath draws, comma-separated "
-        "(same names as --saccade-classes). Replaces --saccade-classes for B. "
-        "Not with --animate, which draws every class.",
+        help="The saccade types scanpath B draws, comma-separated, named as in "
+        "--saccade-classes. Replaces --saccade-classes for B. Not with "
+        "--animate, which draws every type.",
     )
     cmp_group.add_argument(
         "--compare-fix-index-range",
         dest="compare_fix_index_range",
         metavar="START:END",
-        help="Draw only fixations START through END of the SECOND scanpath "
-        "(1-based, inclusive). Replaces --fix-index-range for B.",
+        help="Draw only fixations START to END of scanpath B, counting from 1, "
+        "both included. Replaces --fix-index-range for B.",
     )
     cmp_group.add_argument(
         "--stimulus-image-b",
         metavar="PATH",
-        help="The SECOND scanpath's stimulus image, for a side-by-side or stacked "
-        "comparison across two datasets (each panel draws its own page). Sized "
-        "and placed like --stimulus-image.",
+        help="Scanpath B's stimulus image, for a side-by-side or stacked "
+        "comparison across two datasets, where each panel draws its image. "
+        "Sized and placed like --stimulus-image.",
     )
     cmp_group.add_argument(
         "--stimulus-image-size-b",
         metavar="WxH",
-        help="Size of --stimulus-image-b in px (default: the PNG's own size, "
+        help="Size of --stimulus-image-b in px (default: the PNG's pixel size, "
         "else --compare-canvas, else --canvas).",
     )
     cmp_group.add_argument(
         "--stimulus-image-origin-b",
         metavar="X,Y",
-        help="Top-left of --stimulus-image-b in the second screen's px (default: 0,0).",
+        help="Top-left corner of --stimulus-image-b in B's screen px (default: 0,0).",
     )
     cmp_group.add_argument(
         "--compare-words",
         metavar="PATH",
         nargs="+",
-        help="Words table(s) for the SECOND dataset. Same formats and "
+        help="The Words table for a second dataset, B's. Same formats and "
         "globbing as --words.",
     )
     cmp_group.add_argument(
         "--compare-fixations",
         metavar="PATH",
         nargs="+",
-        help="Fixations table(s) for the SECOND dataset. Same formats and "
+        help="The Fixations table for a second dataset, B's. Same formats and "
         "globbing as --fixations.",
     )
     cmp_group.add_argument(
         "--compare-raw-gaze",
         metavar="PATH",
         nargs="+",
-        help="Raw gaze table(s) for the SECOND dataset, drawn under B's scanpath. "
-        "Same formats as --raw-gaze; with no second dataset, "
+        help="The Raw gaze table for the second dataset, drawn under B's "
+        "scanpath. Same formats as --raw-gaze. With no second dataset, "
         "--raw-gaze already covers both scanpaths.",
     )
     cmp_group.add_argument(
         "--compare-dataset-name",
         metavar="NAME",
         default="Dataset B",
-        help="Label for the second dataset, used in the trace names (default: "
+        help="Name of the second dataset, used in the trace names (default: "
         "'Dataset B').",
     )
     cmp_group.add_argument(
         "--compare-canvas",
         metavar="WxH",
-        help="Second dataset's monitor size in px, e.g. 1680x1050. Read off its "
-        "data when omitted. An overlay, or an --animate co-animation, compares "
-        "this against --canvas.",
+        help="The second dataset's screen size in px, e.g. 1680x1050. Estimated "
+        "from its data when left out. An overlay, or --animate with both "
+        "scanpaths, checks it against --canvas.",
     )
     # There is no --monitor-mm / --viewing-distance (or --compare-* twin): the
     # cross-dataset overlay gate compares pixels and rescales nothing, so no
@@ -3798,9 +3800,9 @@ def _corpus_parser() -> argparse.ArgumentParser:
         "--input",
         required=True,
         metavar="PATH",
-        help="The CSV. profile reads word_id plus the value column (and "
-        "optional lo / hi), distribution the value column, difference word_id "
-        "and diff.",
+        help="The CSV. profile reads word_id and the value column, plus "
+        "optional lo and hi; distribution reads the value column; difference "
+        "reads word_id and diff.",
     )
     parser.add_argument(
         "--kind",
@@ -3818,7 +3820,7 @@ def _corpus_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--measure-label",
         default="Value",
-        help="Axis / legend label for the value (default: Value).",
+        help="Axis and legend label for the value (default: Value).",
     )
     parser.add_argument(
         "--series-col",
@@ -3874,10 +3876,11 @@ def _cache_parser() -> argparse.ArgumentParser:
     """The `cache` parser (see `_analyze_parser`)."""
     parser = _ShortErrorParser(
         prog="scanpath-studio cache",
-        description="Show what a local run has stored on this computer "
-        "(uploaded datasets, mappings, view settings, saved designs, "
-        "metadata tables, annotations), where it lives, and delete it. The hosted app stores "
-        "nothing. Set SCANPATH_STUDIO_STATE_DIR to keep it somewhere else.",
+        description="Show what a local run has saved on this computer "
+        "(uploaded datasets, column mappings, view settings, saved designs, "
+        "metadata tables and annotations) and where, or delete it. A hosted "
+        "app saves nothing by default. Set SCANPATH_STUDIO_STATE_DIR to keep "
+        "it in another folder.",
     )
     parser.add_argument(
         "--path", action="store_true", help="Print the cache folder and exit."
@@ -3985,7 +3988,7 @@ def _version_parser() -> argparse.ArgumentParser:
         prog="scanpath-studio version",
         description="Show which build of Scanpath Studio this is and how it was "
         "installed. With --check, also ask GitHub whether a newer release is out "
-        "and how to update — the only time this command uses the network.",
+        "and how to update. Only --check uses the network.",
     )
     parser.add_argument(
         "--check",
@@ -3997,7 +4000,7 @@ def _version_parser() -> argparse.ArgumentParser:
         type=float,
         default=5.0,
         metavar="SECONDS",
-        help="How long to wait for GitHub (default 5).",
+        help="How long to wait for GitHub, in seconds (default: 5).",
     )
     return parser
 
@@ -4037,18 +4040,18 @@ def _check_parser() -> argparse.ArgumentParser:
     """The `check` parser (see `_analyze_parser`)."""
     parser = _ShortErrorParser(
         prog="scanpath-studio check",
-        description="Run the Data Management page's Data checks on your tables without "
-        "launching the app: fixations lasting 0 ms or less or with an infinite "
-        "duration or onset, fixations and raw-gaze samples with no finite "
-        "position, word boxes with no area or no finite position, and per-screen "
-        "screen sizes that are not finite and positive. Reports what it finds "
-        "and changes nothing; the exit status is 0 whatever it finds (an "
-        "unreadable table is an error).",
+        description="Run the Data Management page's Data checks on your tables "
+        "without opening the app. It looks for fixations lasting 0 ms or less "
+        "or with an infinite duration or onset, fixations and raw gaze samples "
+        "with no finite position, word boxes with no area or no finite "
+        "position, and screen sizes that are not finite and positive. It "
+        "reports what it finds and changes nothing. The exit status is 0 "
+        "whatever it finds; a table that cannot be read is an error.",
     )
     parser.add_argument(
         "--sample",
         action="store_true",
-        help="Check the bundled OneStop demo instead of your own tables.",
+        help="Check the bundled demo instead of your own tables.",
     )
     parser.add_argument(
         "--words", nargs="+", metavar="PATH", help="Words table(s), as for render."
@@ -4063,13 +4066,13 @@ def _check_parser() -> argparse.ArgumentParser:
         "--raw-gaze",
         nargs="+",
         metavar="PATH",
-        help="Raw (sample-level) gaze table(s), as for render.",
+        help="The Raw gaze table, as for render.",
     )
     parser.add_argument(
         "--raw-gaze-schema",
         metavar="JSON",
-        help="Column mapping for the --raw-gaze table, replacing auto-detection "
-        "(same shape as --fix-schema).",
+        help="Column mapping for the --raw-gaze table, replacing "
+        "auto-detection, in the form --fix-schema takes.",
     )
     parser.add_argument(
         "--trial-parts-manifest",
@@ -4202,7 +4205,7 @@ usage:
                                    the Data Management page's Download folder is blank
   scanpath-studio render …         render one trial to .html/.png/.svg/.pdf
                                    (see `scanpath-studio render --help`)
-  scanpath-studio corpus …         render a styled corpus-analysis figure
+  scanpath-studio corpus …         render a corpus figure from a tidy CSV
   scanpath-studio check …          run the Data checks on your tables
   scanpath-studio cache …          show / clear the on-device recovery cache
   scanpath-studio version [--check]
@@ -4211,10 +4214,10 @@ usage:
                                    release is out
   scanpath-studio --version        print the version
 
-Unrecognized flags are forwarded to `streamlit run` (e.g.
-`scanpath-studio --server.port 8502`); an unknown command word is an error.
-The app listens on this computer only; `--server.address 0.0.0.0` serves it
-on your network (it has no login) with local folder access off, unless
+Other flags are passed to `streamlit run` (e.g.
+`scanpath-studio --server.port 8502`). An unknown command word is an error.
+The app listens on this computer only. `--server.address 0.0.0.0` serves it
+on your network, with no login, and turns local folder access off unless
 SCANPATH_LOCAL_FS=1."""
 
 

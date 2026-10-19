@@ -35,4 +35,5 @@ reference, see the [feature guides](../guides/index.md).
 
 </div>
 
-In the app, open Help → Tutorials for guided tours of the controls.
+In the app, open :material/help: **Help** → :material/explore: **Tutorials**
+for guided tours of the controls.

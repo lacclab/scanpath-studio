@@ -8,7 +8,7 @@ description: "Analyze an eye-tracking reading corpus: compare participants on on
 
 - :material-text-box-search-outline:{ .lg .middle } **[Analyze one text](analyze-one-text.md)**
 
-    Compare word-by-word measures across readers.
+    Compare word-by-word measures across participants.
 
 - :material-chart-box:{ .lg .middle } **[Compare groups or conditions](compare-groups.md)**
 
@@ -24,14 +24,15 @@ description: "Analyze an eye-tracking reading corpus: compare participants on on
 
 Open a dataset and set the trial filters for your question. Word-level views
 need [reading measures in the Words table](../../guides/loading-data/index.md#reading-measures);
-the bundled demo includes them. For comparisons across readers, the same text
-must have the same text ID.
+the bundled demo includes them. To compare participants on one text, their
+trials of that text must share one text ID.
 
 ## Keep the result
 
-Download this table (CSV) saves the values. Download the recipe (JSON) saves
-the dataset name, filters, analysis choices and counts. Keep the source data
-separately so the result can be reproduced.
+**⬇ Download this table (CSV)** saves the values. **⬇ Download the recipe
+(JSON)** saves the dataset name, the trial filters, the analysis choices and the
+counts. The recipe names the dataset but holds none of its data, so keep the
+source data to reproduce the result.
 
 To draw a summary with Python or the CLI, see
 [Plot a summary in code](../../guides/corpus-workspace/index.md#plot-a-summary-in-code).

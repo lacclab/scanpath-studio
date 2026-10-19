@@ -8,7 +8,8 @@ hide:
 
 # Reading schematic
 
-A hand-drawn two-line text, with fixations snapped to its lines and arced saccades.
+A hand-drawn two-line text, with one fixation per word in reading order:
+The → cat → sat → on → the → mat. Fixations sit on the lines and saccades are arcs.
 
 ```python exec="true" html="true"
 from gallery_examples import gallery_figure
@@ -18,10 +19,10 @@ print(gallery_figure("illustration"))
 
 === "In the app"
 
-    1. Download the <a href="words.csv" download>words</a> and <a href="fixations.csv" download>fixations</a>, then choose + → Import files in the app.
-    2. Add the two tables as a dataset, with Recording setup → Screen → I know it set to 450 × 340. Select its only trial and Reset visualization.
-    3. In Fixations → Snap, choose To line and show the reading order. In Saccades → Shape, choose Arc.
-    4. In Figure & canvas, hide the duration size key and set the Illustration label text to “Illustration · hand-drawn”.
+    1. Load your Words and Fixations tables, or the example <a href="words.csv" download>words</a> and <a href="fixations.csv" download>fixations</a>. For the example, set **Recording setup** → **Screen** to **I know it**, 450 × 340 px.
+    2. Open the dataset in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    3. In :material/blur_on: **Fixations** ▾, tick **Snap** → **To line** and **Fixation index** → **Show**. In :material/arrow_outward: **Saccades** ▾ → **Shape**, choose **Arc**.
+    4. In :material/aspect_ratio: **Figure & canvas** ▾ → **Legends**, untick **Show** for **Fixation sizes**. Under **Title & labels** → **Illustration**, enter “Illustration · hand-drawn” in **Text**.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
 

@@ -8,7 +8,9 @@ hide:
 
 # Replay
 
-The first forty fixations, replayed at twice the recorded speed.
+Replay a reading in fixation order. Press **▶ Play** above the text to start
+this example, **⏸ Pause** to stop, or drag the time slider to inspect a moment.
+The example shows the first forty fixations at twice the recorded speed.
 
 ```python exec="true" html="true"
 from gallery_examples import gallery_figure
@@ -18,9 +20,10 @@ print(gallery_figure("replay"))
 
 === "In the app"
 
-    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
-    2. Turn on Animate. In Filters & highlights ▾ → Fixations → Index range, choose 1–40.
-    3. Set speed to ×2 in Animate ▾ and press Play; save a replay from Export → Current figure.
+    1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    2. Turn on :material/movie: **Animate**. To replay part of the reading, set :material/filter_list: **Filters & highlights** ▾ → **Fixations** → **Index range**, here 1 to 40.
+    3. In **Animate** ▾ → **Replay** → **Speed**, choose **×2**, then press **▶ Play** above the plot. Use **⏸ Pause** or the time slider to inspect the reading.
+    4. Save the replay from :material/file_export: **Export** → **Current figure**.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
 

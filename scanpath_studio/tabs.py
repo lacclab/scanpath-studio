@@ -1636,7 +1636,7 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
             on_click="ignore",
             # A saved file has no app server to load plotly.js from, so it embeds
             # it or loads it from the CDN — the *Self-contained HTML* choice just
-            # above (see docs/privacy.md).
+            # above.
             help="An HTML file you can open in any browser, with the Play button "
             "and slider. Tick *Self-contained HTML* above to open it offline.",
         )

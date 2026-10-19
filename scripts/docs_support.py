@@ -285,10 +285,11 @@ def cli_reference(command: str, *, heading: str = "") -> str:
 # Figure options
 # ---------------------------------------------------------------------------
 
-#: The Figure options page's sections, in the order of the app's plot rail —
-#: the same grouping the ``render`` flags are listed under. Every figure option
-#: belongs to exactly one: `_option_topics` refuses an option none of them
-#: names, so a new option fails the docs build until it has a place.
+#: The figure-option sections, named and ordered like the sections of the
+#: app's Plot controls; the ``render`` flags are listed under the same
+#: headings. Every figure option belongs to exactly one: `_option_topics`
+#: refuses an option none of them names, so a new option fails the docs build
+#: until it has a place.
 OPTION_TOPICS: dict[str, tuple[str, ...]] = {
     "Fixations": (
         "show_fixations",
@@ -305,10 +306,15 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "marker_size_scale",
         "marker_size_range",
         "marker_duration_range",
+        "show_fixation_colorbar",
+        "fixation_colorbar_orientation",
+        "fixation_colorbar_length",
+        "fixation_colorbar_thickness",
+        "fixation_colorbar_tickangle",
+        "fixation_colorbar_tickfont_size",
         "show_order",
         "order_font_size",
         "order_font_color",
-        "fixation_flags",
         "fixation_snap_to_line",
         "fixation_snap_position",
     ),
@@ -323,14 +329,14 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "saccade_render_mode",
         "saccade_color_mode",
         "saccade_class_colors",
-        "saccade_classes",
     ),
-    "Text and stimulus": (
+    "Stimulus": (
         "show_word_labels",
-        "text_color",
         "redact_text",
         "line_spacing",
         "scale_text_to_boxes",
+        "text_color",
+        "background_color",
         "highlight_column",
         "highlight_text_color",
         "critical_span_style",
@@ -359,25 +365,6 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "heatmap_sigma_px",
         "word_heatmap_col",
         "word_heatmap_title",
-    ),
-    "Raw gaze": (
-        "show_raw_gaze",
-        "raw_gaze_color",
-        "raw_gaze_marker_size",
-        "raw_gaze_opacity",
-    ),
-    "Legends and color bars": (
-        "legend_layout",
-        "show_color_legend",
-        "show_highlight_legend",
-        "saccade_type_legend",
-        "duration_size_legend",
-        "show_fixation_colorbar",
-        "fixation_colorbar_orientation",
-        "fixation_colorbar_length",
-        "fixation_colorbar_thickness",
-        "fixation_colorbar_tickangle",
-        "fixation_colorbar_tickfont_size",
         "show_heatmap_colorbar",
         "heatmap_colorbar_orientation",
         "heatmap_colorbar_length",
@@ -385,10 +372,16 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "heatmap_colorbar_tickangle",
         "heatmap_colorbar_tickfont_size",
     ),
-    "Figure and canvas": (
+    "Raw gaze": (
+        "show_raw_gaze",
+        "raw_gaze_color",
+        "raw_gaze_marker_size",
+        "raw_gaze_opacity",
+    ),
+    "Filters & highlights": ("fixation_flags", "saccade_classes"),
+    "Figure & canvas": (
         "fit_to_monitor",
         "crop_margin",
-        "background_color",
         "show_plot_frame",
         "plot_frame_color",
         "show_coordinate_grid",
@@ -397,10 +390,23 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "x_field",
         "y_field",
     ),
-    "Title and caption": ("title_font_size", "caption_font_size", "caption_color"),
+    "Title & labels": (
+        "illustration_text",
+        "illustration_reasons",
+        "title_font_size",
+        "caption_font_size",
+        "caption_color",
+    ),
     "Hover": ("word_hover_fields", "word_hover_measure", "fixation_hover_fields"),
-    "Illustration": ("illustration_text", "illustration_reasons"),
-    "Comparison": (
+    "Legends": (
+        "legend_layout",
+        "show_color_legend",
+        "show_highlight_legend",
+        "saccade_type_legend",
+        "duration_size_legend",
+    ),
+    "Animate": ("anim_grid_step_ms", "anim_max_frames"),
+    "Compare": (
         "label_a",
         "label_b",
         "style_a",
@@ -414,18 +420,17 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "background_image_size_b",
         "background_image_origin_b",
     ),
-    "Replay": ("anim_grid_step_ms", "anim_max_frames"),
     "Drift correction": ("show_connectors", "connector_y"),
 }
 
 #: The options no ``render`` flag sets, so no flag help can describe them.
 _OPTION_NOTES = {
     "illustration_reasons": (
-        "Why the figure is labelled an illustration. The builder works it out "
-        "from `illustration_label`; pass it only to word the label yourself."
+        "Why the figure is labeled an illustration. The builder works it out "
+        "from `illustration_label`. Pass it only to word the label yourself."
     ),
-    "words_b": "Scanpath B's word table, for a replay of two scanpaths.",
-    "fixations_b": "Scanpath B's fixation table, for a replay of two scanpaths.",
+    "words_b": "Scanpath B's Words table, for a replay of two scanpaths.",
+    "fixations_b": "Scanpath B's Fixations table, for a replay of two scanpaths.",
     "show_connectors": (
         "Draw a line from each fixation's recorded height to its corrected "
         "one. Set by `plot_scanpath(drift_connectors=True)`."
@@ -439,23 +444,24 @@ _OPTION_NOTES = {
 #: are listed under. The rest are placed through the option they set.
 _FLAG_TOPICS = {
     "--palette": "Fixations",
-    "--fix-index-range": "Fixations",
-    "--illustration": "Illustration",
-    "--illustration-label": "Illustration",
-    "--canvas": "Figure and canvas",
-    "--crop-to-data": "Figure and canvas",
-    "--font-size": "Text and stimulus",
-    "--font-family": "Text and stimulus",
+    "--fix-index-range": "Filters & highlights",
+    "--illustration": "Title & labels",
+    "--illustration-label": "Title & labels",
+    "--canvas": "Figure & canvas",
+    "--crop-to-data": "Figure & canvas",
+    "--font-size": "Stimulus",
+    "--font-family": "Stimulus",
     "--sample-raw-gaze": "Raw gaze",
     "--raw-gaze-schema": "Raw gaze",
-    "--colorbars": "Legends and color bars",
-    "--colorbar-orientation": "Legends and color bars",
-    "--colorbar-tickangle": "Legends and color bars",
-    "--colorbar-tickfont-size": "Legends and color bars",
-    "--title": "Title and caption",
-    "--caption": "Title and caption",
-    "--playback-speed": "Replay",
-    "--no-autoplay": "Replay",
+    # Hidden from --help: each sets both color bars.
+    "--colorbars": "Fixations",
+    "--colorbar-orientation": "Fixations",
+    "--colorbar-tickangle": "Fixations",
+    "--colorbar-tickfont-size": "Fixations",
+    "--title": "Title & labels",
+    "--caption": "Title & labels",
+    "--playback-speed": "Animate",
+    "--no-autoplay": "Animate",
     "--width": "Size and export",
     "--height": "Size and export",
     "--scale": "Size and export",
@@ -476,7 +482,7 @@ _FLAG_TOPICS = {
 _RENDER_GROUP_TOPICS = {
     "options": "Trial and output",
     "input": "Input",
-    "comparison": "Comparison",
+    "comparison": "Compare",
 }
 
 
@@ -527,14 +533,14 @@ def _render_flag_topics(parser) -> dict[str, list]:
         *OPTION_TOPICS,
         "Size and export",
     ]
-    # Comparison flags stay together after everything they style.
-    order.remove("Comparison")
-    order.append("Comparison")
+    # Compare's flags stay together after everything they style.
+    order.remove("Compare")
+    order.append("Compare")
     topics: dict[str, list] = {topic: [] for topic in order}
     for group in parser._action_groups:
         group_topic = _RENDER_GROUP_TOPICS.get(group.title.split()[0].rstrip(":"))
         for action in _visible_actions(group):
-            if group_topic is not None and group_topic != "Comparison":
+            if group_topic is not None and group_topic != "Compare":
                 topic = group_topic
             else:
                 topic = next(
@@ -593,12 +599,12 @@ def _describing_flag(flags: list[str], default):
     return flags[0] if flags else None
 
 
-def figure_options_reference() -> str:
+def figure_options_reference(*, heading: str = "##") -> str:
     """Every figure keyword, by section: its default, its ``render`` flag, what
     it does, the values it takes, and the builders that accept it.
 
     Built from `api.figure_options` (the defaults the builders render with), the
-    CLI emitter table the Share subtab's *Reproduce this figure* block uses, and
+    CLI emitter table the Share tab's Code uses, and
     the ``render`` parser, whose help strings describe each option. A flag that
     parser does not have fails the docs build rather than being printed.
     """
@@ -619,7 +625,7 @@ def figure_options_reference() -> str:
             # Set by an experimental feature: the published site leaves it out.
             continue
         out += [
-            f"## {topic}",
+            f"{heading} {topic}",
             "",
             '<div class="sps-reference-table sps-option-table" markdown>',
             "",

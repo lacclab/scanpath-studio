@@ -1,13 +1,13 @@
 # Contributing a dataset
 
-How to get a public corpus shipped with Scanpath Studio, so every user finds it
-in the dataset picker. Two ship today, OneStop and PoTeC; this page is the
-contract for adding another.
+This page explains how to ship a public corpus with Scanpath Studio, so that
+every user finds it in the dataset picker. Two corpora ship with the app,
+OneStop and PoTeC. This page lists what a new one needs.
 
 !!! tip "You probably don't need this page"
-    To load a corpus **you already have**, no code is needed at all — see
-    [Data management](guides/loading-data/index.md). This page is only for making a
-    corpus appear as a built-in source for everyone.
+    To load a corpus **you already have**, you need no code. See
+    [Data Management](guides/loading-data/index.md). This page is only for making a
+    corpus appear as a built-in dataset for everyone.
 
 ## Do you need an adapter?
 
@@ -15,59 +15,57 @@ If your corpus is two tables with recognizable column names, **no**. The generic
 loader already takes a list or glob of files and auto-detects EyeLink, Gazepoint,
 Tobii, SMI, Pupil Labs and snake_case columns.
 
-Adapters exist for what the generic path *can't* guess. That's what the two
-existing ones are for:
+An adapter handles what the generic loader can't guess. The two existing
+adapters solve these problems:
 
 | Corpus | The problem it solves |
 | --- | --- |
 | **OneStop** | Picking the right regime × part files out of the OSF release, and keeping the parts of one trial from colliding. The columns themselves are already fine. |
-| **PoTeC** | 900 per-trial files to concatenate; word AOIs with no participant column; and fixations with **no coordinates at all** — x/y has to be reconstructed from which character was fixated. |
+| **PoTeC** | 900 per-trial files to concatenate, word boxes with no participant column, and fixations with **no coordinates**. Their x/y is reconstructed from the character each fixation landed on. |
 
-If none of that sounds like your corpus, open an
-[issue](https://github.com/lacclab/scanpath-studio/issues) describing its shape
-before writing code — the answer is often "the generic loader already handles
-this".
+If your corpus has none of these problems, open an
+[issue](https://github.com/lacclab/scanpath-studio/issues) that describes its
+shape before you write code. The generic loader often handles it already.
 
 ## Where the data lives
 
-Nothing corpus-scale goes into the installed package. So in practice a new corpus is
-either **downloaded on demand** into a folder the user picks (PoTeC, OneStop) or
-**read from a directory the user already has**. Both look identical from the
-user's side — one picker entry, one `load_*` function.
+No corpus-sized data goes into the installed package. A new corpus is either
+**downloaded on demand** into a folder the user picks (PoTeC, OneStop) or
+**read from a folder the user already has**. Both look the same to the user:
+one picker entry and one `load_*` function.
 
 ## What an adapter provides
 
 All of this goes in
 [`datasets.py`](https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/datasets.py),
-which is pandas plus the standard library and imports **no Streamlit** — it has to
-work from a plain script.
+which imports **no Streamlit**, because it has to work from a plain script.
 
-**1. A raw-frames function** — the required entry point.
+**1. A raw-frames function.** This is the required entry point.
 
 ```python
 def <corpus>_raw_frames(root, *, download=False, ...) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Raw (pre-normalization) (words, fixations) frames."""
 ```
 
-It returns the two tables **before** normalization, in the corpus' own column
-names. That's deliberate: the app runs them through the same auto-detect →
-normalize pipeline as an upload, so the **Column mapping** panels on
-🗂️ **Data Management → ✏️ Edit dataset** still appear and stay editable. Read the whole
-corpus (the global trial filters do the narrowing), and never write anything —
-that's the downloader's job.
+It returns the two tables **before** normalization, under the corpus' column
+names. The app runs them through the same auto-detect and normalize pipeline as
+an upload, so the column mapping under **Data Management** → **Edit dataset** →
+**Data tables & column mapping** still appears and stays editable. Read the
+whole corpus, since the trial filters do the narrowing. Never write anything:
+writing is the downloader's job.
 
-When something's missing, raise `FileNotFoundError` with a message that says what
-to do. The app prints it verbatim on the 🗂️ Data Management page, so your message *is* the
-error UI.
+When something is missing, raise `FileNotFoundError` with a message that says
+what to do. The app shows the message as written on the **Data Management**
+page, so it is the error the user sees.
 
-**2. A normalized loader** — `load_<corpus>(root, ...)`, which calls
+**2. A normalized loader**, `load_<corpus>(root, ...)`, which calls
 [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data] with your raw
 frames. Pass explicit schema dicts when the corpus' column names are stable;
 omit them to let auto-detection run.
 
 ??? note "Schema dicts, and why auto-detection still has to work"
-    PoTeC's are the model — note `participant=None`, which is what marks the
-    word table as one shared layout rather than one row per reader:
+    PoTeC's are the model. `participant=None` marks the Words table as one
+    layout shared by every participant, with no participant column:
 
     ```python
     POTEC_WORD_SCHEMA = dict(
@@ -84,10 +82,10 @@ omit them to let auto-detection run.
     )
     ```
 
-    By default your dicts bind the **headless** loader only: the app takes the
-    raw frames and runs auto-detection, exactly as for an upload. So detection
-    has to land on the same answer, or your users open the corpus and have to
-    fix the mapping by hand. Check it:
+    By default your dicts bind only the **headless** loader. The app takes the
+    raw frames and runs auto-detection, as for an upload. Detection has to find
+    the same mapping, or your users open the corpus and have to fix the mapping
+    by hand. Check it:
 
     ```python
     words, fixations = datasets.potec_raw_frames("data/PoTeC", texts=["b0"])
@@ -96,48 +94,51 @@ omit them to let auto-detection run.
     ```
 
     If a column can't be guessed, add its name to the right `*_CANDIDATES` list
-    in `data.py` rather than renaming it in your loader — that fixes it for
-    every corpus using the same convention.
+    in `data.py` instead of renaming it in your loader. That fixes it for every
+    corpus that uses the same convention.
 
-    When the right answer can't be read off the column names at all, give the
-    app's registry entry `declared_schemas=(word_schema, fix_schema)`, and the
-    app maps through your dicts instead. PoTeC does this: a trial is one
-    reader's reading of a text, so its fixations' Trial ID is
-    `["reader_id", "text_id"]`, where detection would pick the text alone.
+    When the column names can't give the right mapping, give the app's registry
+    entry `declared_schemas=(word_schema, fix_schema)`, and the app maps through
+    your dicts instead. PoTeC does this. A trial is one participant's reading of
+    a text, so its fixations' Trial ID is `["reader_id", "text_id"]`, where
+    detection would pick the text alone.
 
-**3. Register any extra column you add.** Normalization builds a *fresh* frame and
-silently drops anything it doesn't recognize. A corpus-specific extra — reader
-metadata, a stimulus image path, a genre facet — needs a row in
-`data.WORD_OPTIONAL_FIELDS` / `FIX_OPTIONAL_FIELDS`:
+**3. Register any extra column you add.** Normalization builds a new frame and
+drops, without a warning, any column it doesn't recognize. A corpus-specific
+column, such as participant metadata, a stimulus image path or a genre, needs a
+row in `data.WORD_OPTIONAL_FIELDS` / `FIX_OPTIONAL_FIELDS`:
 
 ```python
-(("stimulus_font_px", "stimulus_font_px", "numeric", "meta"),)
-(("comprehension_questions", "comprehension_questions", "passthrough", "meta"),)
+WORD_OPTIONAL_FIELDS = [
+    # ... the existing rows ...
+    ("stimulus_font_px", "stimulus_font_px", "numeric", "meta"),
+    ("comprehension_questions", "comprehension_questions", "passthrough", "meta"),
+]
 ```
 
-Skip this and your enrichment work vanishes between the loader and the first
-plot, with no error.
+Without the row, the column is gone by the first plot, with no error.
 
-**4. A presence check** — `<corpus>_present(root)`, path stats only, no file
-reads, so the app can show found/missing before any expensive load. Be **strict**:
-a lenient check passes a partial tree and then crashes mid-load, whereas a strict
-one lets the app offer the Download button that fixes it.
+**4. A presence check**, `<corpus>_present(root)`. It only checks that paths
+exist and reads no files, so the app can show found or missing before any slow
+load. Make it **strict**. A lenient check passes a partial tree that then fails
+during the load. A strict one lets the app offer the Download button that fixes
+it.
 
-**5. A downloader**, if the data is publicly fetchable — `download_<corpus>(root)`.
-Skip anything already present, fetch to `<name>.part` and rename into place (an
-interrupted fetch must never look complete to the presence check), print the URL,
-and fetch from the corpus' **own** host. Scanpath Studio never mirrors anyone's
-data.
+**5. A downloader**, `download_<corpus>(root)`, if the data can be downloaded
+publicly. Skip files already present. Download to `<name>.part` and rename it
+into place, so an interrupted download never passes the presence check. Print
+the URL, and download from the corpus' **own** host. Scanpath Studio does not
+mirror anyone's data.
 
-**6. The presentation monitor** as a constant — `POTEC_MONITOR = (1680, 1050)`.
-It's what makes the plot true-to-scale.
+**6. The presentation monitor** as a constant, such as
+`POTEC_MONITOR = (1680, 1050)`. It makes the plot true to scale.
 
 ## Wiring it into the app
 
 Two additions to `app.py`: a loader `_load_<corpus>_source(...)` that renders the
 corpus' controls and returns raw frames, and one entry in
-`PUBLIC_DATASET_REGISTRY` — the literal home of the corpora that are fixed at
-import time:
+`PUBLIC_DATASET_REGISTRY`, the dict that holds the corpora fixed at import
+time:
 
 ```python
 "PoTeC — Potsdam Textbook Corpus": dict(
@@ -145,7 +146,7 @@ import time:
     files_present=_potec_files_present,  # the dataset table's Status
     downloadable=True,             # missing files read "Needs download"
     declared_schemas=(POTEC_WORD_SCHEMA, POTEC_FIX_SCHEMA),
-    monitor=(1680, 1050),          # DELL P2210 — the canvas snaps to this
+    monitor=(1680, 1050),          # DELL P2210: the recording screen
     short="PoTeC",                 # what the picker shows
     language="German",
     size="75 participants · 12 texts",
@@ -173,109 +174,110 @@ import time:
 whether the app can fetch what is missing (*Needs download*) or the user has to
 supply it (*Needs setup*).
 
-**`published_counts` is a claim about the corpus, not about a load**, which is
-why `published_counts_source` sits beside it: say which published document each
-figure came from, and say so when you measured one yourself instead. The table
-shows them until the dataset is opened, then shows what actually loaded and
-flags any field where the load exceeds the published figure. `reading_note` is
-the one provenance sentence shown with the dataset on the Data Management page:
-use it for whatever changes how a figure is read, such as positions that are
-reconstructed or samples that are synthesized.
+**`published_counts` describes the corpus as published.** In
+`published_counts_source`, say which published document each count came from,
+and say so when you measured one yourself. The dataset list shows these counts
+until the dataset is opened. Then it shows what loaded and flags any count
+where the load exceeds the published one. `reading_note` is the one sentence
+about the data's origin shown with the dataset on the **Data Management** page.
+Use it for anything that changes how a figure is read, such as reconstructed
+positions or synthesized samples.
 
-Each entry is **one top-level source in the picker**, tagged 🌐 and searchable
-beside the demo and the uploads — there is no category to nest under and no
-sub-picker inside an entry. A corpus that ships in several variants gets several
-entries, told apart by the property that actually differs.
+Each entry is **one dataset in the picker**, listed with Kind *Public* beside
+the bundled demo and the user's own datasets. Entries don't nest, and an entry
+has no picker of its own. A corpus that ships in several variants gets one
+entry per variant, named by what differs between them, as OneStop's reading
+regimes are.
 
-**Read the registry through `public_dataset_registry()`, never the dict.** That
-function is what every consumer calls: it returns the static entries above
-*plus* any entry composed at runtime. The dict answers for the fixed corpora
-only, so a consumer reading it directly silently ignores the rest — the reason
-to touch `PUBLIC_DATASET_REGISTRY` by name is to *add* an entry to it, as above.
+**Read the registry through `public_dataset_registry()`, not the dict.** The
+function returns the static entries above *and* any entry built at runtime.
+The dict holds only the fixed corpora, so code that reads it directly misses
+the rest. Name `PUBLIC_DATASET_REGISTRY` only to *add* an entry to it, as
+above.
 
 Use the shared helpers in the loader so every corpus looks the same:
-`_dataset_dir_input` (the directory box, folder-picker button, and *Expected
-files* tree — write yours as a `_<CORPUS>_STRUCTURE_MD` constant) and
-`_dataset_access_status` (found-vs-missing plus the ⬇ Download button). Wrap the
-actual read in a module-level `@st.cache_data` function keyed on plain strings,
-and when the data isn't there, `return load_sample_data()` — the app has to stay
+`_dataset_dir_input` (the folder box, the folder-picker button, and the
+*Expected files* tree, which you write as a `_<CORPUS>_STRUCTURE_MD` constant) and
+`_dataset_access_status` (found or missing, and the ⬇ Download button). Wrap
+the read in a module-level `@st.cache_data` function keyed on plain strings.
+When the data isn't there, `return load_sample_data()`, so the app stays
 usable. Put the default directory in `constants.py` as `<CORPUS>_DEFAULT_DIR`.
 
 ## The other three surfaces
 
-A dataset is a user-facing feature, so the project's *expose it everywhere* rule
-applies — the picker entry is one surface out of four:
+A dataset is a user-facing feature, so the project's rule to expose a feature
+on every surface applies. The picker entry is one of four:
 
-- **Headless API** — `load_<corpus>` plus a lazy re-export in `__init__.py`
+- **Headless API**: `load_<corpus>` plus a lazy re-export in `__init__.py`
   (`__all__` and `_DATASET_EXPORTS`), and a `:::` autodoc block in
   [`docs/api.md`](api.md).
-- **CLI** — a `--<corpus> DIR` flag in `render`'s input group, added to the
-  exactly-one-input check so it can't be combined with `--sample`.
-- **Deep link / Share** — you get this for free: `?source=corpus&corpus=<slug>`
-  names any entry `public_dataset_registry()` returns, slugged from the entry's
-  `short`. Check that your `short` slugifies to something no other
-  entry claims — a slug two entries would answer to is dropped from both rather
-  than resolved to a guess, and then neither is shareable. Register the source in
-  `_SHAREABLE_SOURCES` only if it needs its **own** token, and add any per-corpus
-  options (OneStop's variant / regime / parts) to `_apply_url_preset` /
-  `_build_share_query`.
+- **CLI**: a `--<corpus> DIR` flag in `render`'s input group, added to the
+  check that allows one input only, so it can't be combined with `--sample`.
+- **Deep link / Share**: this comes with the registry entry.
+  `?source=corpus&corpus=<slug>` names any entry `public_dataset_registry()`
+  returns, by a slug made from the entry's `short`. Check that your `short`
+  gives a slug no other entry has. A slug that two entries share is dropped
+  from both, so neither can be shared by link. Register the source in
+  `_SHAREABLE_SOURCES` only if it needs its **own** token, and add any
+  per-corpus options (OneStop's variant / regime / parts) to
+  `_apply_url_preset` / `_build_share_query`.
 
-Then describe the corpus, and the modelling decisions your adapter makes, in
-the Data management guide beside
+Then describe the corpus, and the modeling decisions your adapter makes, in
+the Data Management guide beside
 [OneStop](guides/loading-data/index.md#onestop).
 
 ## Licensing
 
 The corpus must be publicly available under a license that permits what the
-adapter does: reading it, and — for a downloader — fetching it from its own host
-on the user's behalf.
+adapter does: reading it and, for a downloader, downloading it from its own
+host for the user.
 
 - **No corpus data is vendored into this repository.** The one exception is the
   bundled demo, a subset of OneStop under OneStop's own license, cited in the
   README and written into every bundle exported from it, so the attribution
   travels with the data.
-- **Downloads point at the corpus' own host**, reusing the file IDs those projects
-  publish.
+- **Downloads point at the corpus' own host**, using the file IDs those
+  projects publish.
 - **Ported code is separate.** If your adapter ports logic from the corpus'
-  tooling, add a `NOTICE` entry and check the license is compatible with MIT — a
-  GPL dependency isn't acceptable.
+  tooling, add a `NOTICE` entry and check that the license is compatible with
+  MIT. A GPL dependency isn't acceptable.
 
 ## Tests
 
 Cover the loader against a tiny corpus-shaped tree built in `tmp_path` (see the
 `potec_root` fixture in `tests/test_dataset_support.py`),
-asserting the normalized output exactly — IDs, word text, reconstructed
-coordinates, durations — plus the failure paths: an unknown text ID raises
+and assert the normalized output: IDs, word text, reconstructed coordinates
+and durations. Also test the failure paths: an unknown text ID raises
 `ValueError`, a missing file raises a `FileNotFoundError` whose message tells the
 user what to do, and `<corpus>_present` returns `False` on a partial tree.
 
-`tests/test_apptest.py` already loops over the whole registry and checks each
-loader boots the app cleanly, so your entry is picked up automatically — **but add
-your `<CORPUS>_DEFAULT_DIR` to the tuple of constants it monkeypatches to an empty
-`tmp_path`**. Without that the test reads your real data directory, so it passes
-or fails depending on what the dev machine happens to have downloaded.
+`tests/test_apptest.py` loops over the whole registry and checks that each
+loader boots the app cleanly, so it picks up your entry. **Add your
+`<CORPUS>_DEFAULT_DIR` to the tuple of constants it monkeypatches to an empty
+`tmp_path`.** Without that, the test reads your real data directory, and its
+result depends on what the machine has downloaded.
 
-If your adapter merges side data (reader metadata, comprehension questions,
-images), add one test per surface, including the "file absent → column simply
-isn't there" case.
+If your adapter merges side data (participant metadata, comprehension
+questions, images), add one test per surface, including the case where the
+file is absent and the column is missing.
 
-Two hard rules: **tests never hit the network** (monkeypatch the downloader or
-build the tree directly), and **expectations are hand-computed**, not snapshots of
-whatever the code emitted.
+Two rules hold for every test. **Tests never use the network**: monkeypatch
+the downloader or build the tree directly. **Expected values are computed by
+hand**, not copied from what the code printed.
 
 ## Reading PoTeC as a worked example
 
 PoTeC is the smallest complete adapter. In `datasets.py`, read it in this order:
-`download_potec` (fetch) → `potec_present` (check) → `_potec_words` (recovers
-`text_id` from the filename and `line` by mapping word positions through the
-character AOIs) → `_potec_fixations` (concatenates the per-trial files and
-synthesizes x/y from character-box centers — the step that gives PoTeC landing
-positions at all) → `potec_raw_frames` → `load_potec`. Then `_load_potec_source`
+`download_potec` (download) → `potec_present` (check) → `_potec_words` (reads
+`text_id` from the file name, and `line` by mapping word positions through the
+character boxes) → `_potec_fixations` (concatenates the per-trial files and
+places x/y at the character-box centers, which gives PoTeC its landing
+positions) → `potec_raw_frames` → `load_potec`. Then `_load_potec_source`
 in `app.py`, and the test tree in `tests/test_dataset_support.py`.
 
 ## Submitting it
 
-One pull request with all of it: the adapter, any optional-field rows in
+Send one pull request with all of it: the adapter, any optional-field rows in
 `data.py`, the loader and registry entry, the default directory, the CLI
 flag, the API re-export, the tests, and the docs section. In the PR
 description state the corpus' **license**, a **citation**, its **public URL**, and

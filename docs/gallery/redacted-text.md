@@ -8,7 +8,7 @@ hide:
 
 # Redacted text
 
-Show where the text was without showing what it said: each word is drawn as a
+Show where the text was without showing what it said. Each word is drawn as a
 rounded block over its letters, and the hovers hide the words too.
 
 ```python exec="true" html="true"
@@ -19,8 +19,8 @@ print(gallery_figure("redacted-text"))
 
 === "In the app"
 
-    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
-    2. In Stimulus ▾ → Text, turn on Redact. The blocks take the text color.
+    1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    2. In :material/article: **Stimulus** ▾ → **Text**, tick **Redact**. The blocks take the text color.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
 

@@ -8,8 +8,9 @@ hide:
 
 # Across the experiment
 
-Mean total fixation duration per word across the demo reader’s recorded trials.
-Each point summarizes one trial; this is the bundled subset of the session.
+Mean total fixation duration per word across one participant’s trials in the
+bundled demo. Each point is one trial. The bundled demo holds only part of the
+session.
 
 ```python exec="true" html="true"
 from gallery_examples import gallery_figure
@@ -19,9 +20,9 @@ print(gallery_figure("across-experiment"))
 
 === "In the app"
 
-    1. Select the bundled demo and open Corpus Analysis → Per participant.
-    2. Choose `l37_1129`, Total fixation duration and Mean aggregation.
-    3. Open Per-trial trend. The horizontal axis uses the dataset’s `trial_index`.
+    1. Open your data in the :material/bar_chart: **Corpus Analysis** view, on the **Per participant** tab.
+    2. Choose a participant, and in **View** choose **Per-trial trend**.
+    3. Choose a reading measure your data provides, and **Mean** in **Aggregate**. The horizontal axis is the trial order from the data’s `trial_index` or `TRIAL_INDEX` column. Without one, the app orders the trials by fixation time, or as listed.
 
     [Follow the progression tutorial](../tutorials/corpus-analysis/progression-over-time.md)
 

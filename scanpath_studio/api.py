@@ -2342,9 +2342,8 @@ def _check_column_options(
 ) -> None:
     """Raise when an option the caller *named* points at no column.
 
-    Only explicit values are checked: ``highlight_column`` defaults to OneStop's
-    ``is_in_aspan``, which most corpora do not have and which the builder then
-    rightly skips. An empty table is not checked — there is nothing to color."""
+    Only explicit values are checked. An empty table is not checked — there is
+    nothing to color."""
     frames = {"words": words, "fixations": fixations}
     for name, (kind, flag, synthetic, advice) in _COLUMN_OPTIONS.items():
         value = overrides.get(name)

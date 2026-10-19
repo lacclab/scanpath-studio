@@ -863,8 +863,8 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="highlight_column",
         metavar="COLUMN",
         help="Boolean Words table column that marks the words to highlight "
-        "(default: is_in_aspan, OneStop's answer span). Pass '' to highlight "
-        "nothing. --critical-span-style sets how they are drawn.",
+        "(e.g. is_in_aspan, OneStop's answer span; default: none). "
+        "--critical-span-style sets how they are drawn.",
     )
     viz.add_argument(
         "--critical-span-style",

@@ -177,7 +177,7 @@ class FigureSettings:
     raw_gaze_marker_size: float = 4.0
     raw_gaze_opacity: float = 0.6
     critical_span_style: str = "Mark text"
-    highlight_column: str | None = "is_in_aspan"
+    highlight_column: str | None = None
     saccade_color: str = SACCADE_COLOR
     saccade_style: str = "solid"
     saccade_width: float = DEFAULT_SACCADE_WIDTH

@@ -120,7 +120,7 @@ NON_DEFAULT = {
     "saccade_classes": ["forward", "regression"],
     "saccade_render_mode": "Arc",
     "critical_span_style": "Mark border",
-    "highlight_column": None,
+    "highlight_column": "is_in_aspan",
     "text_color": "#333333",
     "highlight_text_color": "#444444",
     "span_border_color": "#555555",

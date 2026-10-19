@@ -42,12 +42,12 @@ def test_a_hand_tuned_figure_has_no_option_that_does_nothing():
         "fixation_colorscale",
     ):
         assert inert not in code.python, inert
-    assert "highlight_column=None" in code.python
+    assert "highlight_column" not in code.python
     assert "--palette" not in code.cli
 
 
 def test_no_marking_is_written_as_none():
-    code = _code(critical_span_style="None")
+    code = _code(critical_span_style="None", highlight_column="is_in_aspan")
     assert "critical_span_style=None," in code.python
     assert "'None'" not in code.python
     assert "--critical-span-style none" in code.cli

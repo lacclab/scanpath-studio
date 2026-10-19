@@ -26,7 +26,7 @@ class Example:
 def _scanpath() -> dict:
     words, fixations = sps.load_sample_data()
     pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
-    fig = sps.plot_scanpath(words, fixations, pid, tid, highlight_column=None)
+    fig = sps.plot_scanpath(words, fixations, pid, tid)
     return locals()
 
 
@@ -40,7 +40,6 @@ def _heatmap() -> dict:
         tid,
         show_heatmap=True,
         heatmap_style="Smoothed",
-        highlight_column=None,
         show_fixations=False,
         show_saccades=False,
     )
@@ -50,9 +49,7 @@ def _heatmap() -> dict:
 def _text_lines() -> dict:
     words, fixations = sps.load_sample_data()
     pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
-    fig = sps.plot_scanpath(
-        words, fixations, pid, tid, color_by_line=True, highlight_column=None
-    )
+    fig = sps.plot_scanpath(words, fixations, pid, tid, color_by_line=True)
     return locals()
 
 
@@ -64,7 +61,6 @@ def _saccade_types() -> dict:
         fixations,
         pid,
         tid,
-        highlight_column=None,
         saccade_color_mode="By type",
         saccade_type_legend=False,
     )
@@ -90,7 +86,6 @@ def _illustration() -> dict:
         fixations,
         pid,
         tid,
-        highlight_column=None,
         canvas_size=(450, 340),
         fixation_snap_to_line=True,
         saccade_render_mode="Arc",
@@ -120,7 +115,6 @@ def _hearts_arrows() -> dict:
         fixations,
         pid,
         tid,
-        highlight_column=None,
         canvas_size=(450, 300),
         fixation_symbol="heart",
         fixation_color="#d12d72",
@@ -147,7 +141,6 @@ def _comparison() -> dict:
         fixations,
         (pid, tid),
         ("l7_1090", "l7_1090_2_2_4_Ele_r0"),
-        highlight_column=None,
         labels=("Participant A", "Participant B"),
         fit_to_monitor=False,
         crop_margin=50,
@@ -174,7 +167,6 @@ def _raw_gaze() -> dict:
         "l37_1129",
         "l37_1129_2_2_2_Adv_r0",
         raw_gaze=raw_gaze,
-        highlight_column=None,
         fixation_opacity=0.35,
         show_saccades=False,
     )
@@ -190,7 +182,6 @@ def _replay() -> dict:
         pid,
         tid,
         fix_index_range=(1, 40),
-        highlight_column=None,
         playback_speed=2.0,
     )
     return locals()
@@ -204,7 +195,6 @@ def _word_boxes() -> dict:
         fixations,
         pid,
         tid,
-        highlight_column=None,
         show_heatmap=True,
         heatmap_style="Word boxes",
         show_fixations=False,
@@ -231,9 +221,7 @@ def _highlighted_text() -> dict:
 def _redacted_text() -> dict:
     words, fixations = sps.load_sample_data()
     pid, tid = "l37_1129", "l37_1129_2_1_1_Ele_r0"
-    fig = sps.plot_scanpath(
-        words, fixations, pid, tid, highlight_column=None, redact_text=True
-    )
+    fig = sps.plot_scanpath(words, fixations, pid, tid, redact_text=True)
     return locals()
 
 
@@ -245,7 +233,6 @@ def _title_caption_legend() -> dict:
         fixations,
         pid,
         tid,
-        highlight_column=None,
         saccade_color_mode="By type",
         title="One participant, one article",
         title_font_size=34,

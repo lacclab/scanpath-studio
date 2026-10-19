@@ -137,7 +137,7 @@ to get the same figure. `figure_code` writes the same code without the app, and
 print(
     sps.figure_code(
         participant="l7_1090",
-        trial="l7_1090_2_1_1_Ele_r0",
+        trial="l7_1090_2_1_1_Ele",
         show_heatmap=True,
         color_by="duration_ms",
     )

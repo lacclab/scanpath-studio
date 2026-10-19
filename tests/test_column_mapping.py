@@ -107,14 +107,35 @@ class TestTrialMappingMultiselect:
 
 class TestFixationFieldSpecs:
     """The Fixations panel's required markers must match validate_fix_schema:
-    Participant/Trial/Duration are required; X/Y are conditional on a Word ID
-    (AOI-sequence data), so they must not be hard-required."""
+    Trial/Duration are required; Participant ID is optional (one anonymous
+    reader without it), and X/Y are conditional on a Word ID (AOI-sequence
+    data), so none of those may be hard-required."""
 
     def test_required_flags_match_validator(self):
         from scanpath_studio.controls import FIX_FIELD_SPECS
+        from scanpath_studio.data import validate_fix_schema
 
         required = {s["key"] for s in FIX_FIELD_SPECS if s.get("required")}
-        assert required == {"participant", "trial", "duration"}
+        assert required == {"trial", "duration"}
+        assert (
+            validate_fix_schema({"trial": "t", "duration": "d", "word_id": "w"}) == []
+        )
+
+    def test_participant_id_is_optional_on_every_table(self):
+        """`*` means "validation blocks without it", and no validator needs a
+        Participant ID — so the add screen and ✏️ Edit dataset (which draws
+        these specs) both show it without a star."""
+        from scanpath_studio.controls import (
+            FIX_FIELD_SPECS,
+            RAW_GAZE_FIELD_SPECS,
+            WORD_FIELD_SPECS,
+        )
+        from scanpath_studio.data import validate_raw_gaze_schema
+
+        for specs in (FIX_FIELD_SPECS, WORD_FIELD_SPECS, RAW_GAZE_FIELD_SPECS):
+            participant = next(s for s in specs if s["key"] == "participant")
+            assert not participant.get("required")
+        assert validate_raw_gaze_schema({"trial": "t", "x": "x", "y": "y"}) == []
 
     def test_aoi_only_fixations_pass_validation(self):
         # A Word ID with no X/Y is valid (AOI-sequence fixations).

@@ -56,6 +56,7 @@ scanpath_studio/
 │  ├─ html_embed.py      same-origin HTML iframes; plotly.js served from the app's own server
 │  ├─ debug_log.py       in-app log + state inspector (❓ Help → About → Debug)
 │  ├─ crash_report.py    the "report this bug" note around every run
+│  ├─ wizard_watch.py    the wizard's browser guards: the lost-connection notice and the leave prompt
 │  └─ easter_egg.py, color_picker_commit.py, save_dialog.py, truncation_tooltip.py
 │                        browser-only helpers installed into the parent document
 ├─ Data
@@ -476,9 +477,14 @@ on one the Share → Code snippet cannot reproduce.
   `plots.animation_player_post_script(fig)`. Pages carry the frames packed
   (`plots.replay_page`: frame 0 whole, then per-frame deltas); the figure itself
   keeps its frames. Both are pinned by tests that run the JS under node.
-- **Animation transport controls must not shrink the plot**: they sit above it
-  in a top band the figure grows by (`plots._CONTROLS_MARGIN_PX`), so the
-  equal-aspect plot keeps the static figure's box size.
+- **Animation transport controls must not shrink the plot**: the figure keeps
+  Plotly's own controls in a top band it grows by (`plots._CONTROLS_MARGIN_PX`,
+  for `fig.show()`; the GIF/MP4 export strips it). Every HTML page
+  (`plots.replay_page`) hides them, takes the band back — its figure is the
+  static one's size (`plots.replay_page_box`) — and the player draws a
+  `REPLAY_TOOLBAR_PX` row above the figure instead (in the true-scale embed,
+  in a slot outside the scaled box). A legend above the plot grows the figure
+  past the band, never into it.
 - **Layout shapes go on a figure in one assignment** (`fig.layout.shapes =
   …`): Plotly re-validates every existing shape on each `add_shape`.
   `tests/test_smoke.py` counts the constructions.

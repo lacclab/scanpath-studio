@@ -18,7 +18,7 @@ import pandas as pd
 import pytest
 
 from scanpath_studio import api, constants, controls, tabs, tour
-from tests.conftest import APP_SCRIPT, SUBTAB_KEY
+from tests.conftest import APP_SCRIPT, SUBTAB_KEY, pin_view
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
@@ -388,7 +388,7 @@ class TestPerSentenceGate:
             tabs, "_render_per_sentence_tab", lambda *a, **k: calls.append(1)
         )
         at = AppTest.from_file(APP_SCRIPT, default_timeout=60)
-        at.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(at, "Corpus Analysis")
         at.session_state["corpus_subtab"] = "Per sentence"
         at.run()
         assert not at.exception, at.exception
@@ -461,7 +461,7 @@ class TestComputedMeasuresGate:
     )
     def test_corpus_analysis_drops_the_computed_views(self, subtab, view_key):
         at = AppTest.from_file(APP_SCRIPT)
-        at.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(at, "Corpus Analysis")
         at.session_state["corpus_subtab"] = subtab
         at.run(timeout=60)
         assert not at.exception, at.exception
@@ -471,7 +471,7 @@ class TestComputedMeasuresGate:
 
     def test_a_session_on_a_hidden_view_falls_back(self):
         at = AppTest.from_file(APP_SCRIPT)
-        at.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(at, "Corpus Analysis")
         at.session_state["corpus_subtab"] = "Per participant"
         at.session_state["prdr_view"] = "Reading summary"
         at.run(timeout=60)
@@ -480,7 +480,7 @@ class TestComputedMeasuresGate:
 
     def test_fixation_duration_over_time_opens_on_a_fixation_measure(self):
         at = AppTest.from_file(APP_SCRIPT)
-        at.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(at, "Corpus Analysis")
         at.session_state["corpus_subtab"] = "Per participant"
         at.session_state["prdr_view"] = "Fixation duration over time"
         at.run(timeout=60)

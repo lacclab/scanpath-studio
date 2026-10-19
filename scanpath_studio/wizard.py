@@ -34,6 +34,7 @@ from .constants import (
     DEMO_CHOICE,
     FONT_FAMILY,
     ICONS,
+    SETUP_OVERRIDE_FOR_KEY,
     TRIAL_IDENTITY_CHECK_KEY,
     WIZARD_LEAVE_KEY,
     plural,
@@ -112,7 +113,7 @@ from .experimental_setup import (
 )
 from .fields import switch, tooltip
 from .menu import view_label
-from .persistence import is_loopback_url, rename_cached_dataset
+from .persistence import is_loopback_url, persistence_enabled, rename_cached_dataset
 from .session_keys import COMPARE_SOURCE_STATE_KEY
 from .styles import mapping_menu_css
 from .tabs import _collect_column_mapping
@@ -342,26 +343,6 @@ def text_setup_values(snapshot: SetupSnapshot) -> dict:
     }
 
 
-def _apply_setup_to_figure(setup: dict | None) -> None:
-    """A newly added dataset's recording setup, onto the figure's settings.
-
-    The add screen writes only the answers the user chose while it is open
-    (`_wizard_setup_step`), so the ones it chose itself — the estimate, the
-    text fitted to its boxes — arrive here, with the dataset they belong to.
-    """
-    if not isinstance(setup, dict):
-        return
-    snapshot = SetupSnapshot.from_dict(setup, fallback=SetupSnapshot())
-    st.session_state["global_canvas_width"] = snapshot.canvas_width
-    st.session_state["global_canvas_height"] = snapshot.canvas_height
-    if snapshot.geometry_provenance not in (None, Provenance.SKIPPED):
-        st.session_state["global_monitor_width_mm"] = snapshot.monitor_width_mm
-        st.session_state["global_viewing_distance_mm"] = snapshot.viewing_distance_mm
-    if snapshot.text_provenance is not None:
-        st.session_state.update(text_setup_values(snapshot))
-    st.session_state["global_font_family"] = snapshot.font_family
-
-
 def _finalize_wizard_dataset() -> None:
     """Store the wizard's normalized frames as a named dataset and switch to it.
 
@@ -411,7 +392,11 @@ def _finalize_wizard_dataset() -> None:
         )
     store = st.session_state.setdefault("_datasets", {})
     store[ds_name] = payload
-    _apply_setup_to_figure(payload.get("setup"))
+    # Its recording setup is applied when it opens, on the next run, as every
+    # added dataset's is (`app.seed_canvas_state`), and leaving it puts back
+    # what the figure held before. What that is excludes the answers this
+    # screen published while it was open: those are this dataset's.
+    app.restore_setup_before_wizard()
     # The tables just attached are this dataset's, not a session-wide slot —
     # hand them over before the switch, so the next run has nothing to swap
     # (and so the dataset this wizard was opened over keeps its own).
@@ -540,6 +525,10 @@ def rename_dataset(old: str, new: str) -> str | None:
         st.session_state["_prev_source"] = name
     if st.session_state.get(COMPARE_SOURCE_STATE_KEY) == old:
         st.session_state[COMPARE_SOURCE_STATE_KEY] = name
+    # The figure holds its setup under its name: renamed, it is still the
+    # same visit, so a value tuned on the rail is not reset.
+    if st.session_state.get(SETUP_OVERRIDE_FOR_KEY) == old:
+        st.session_state[SETUP_OVERRIDE_FOR_KEY] = name
     # And its description.
     descriptions = dict(st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {})
     if old in descriptions:
@@ -643,6 +632,8 @@ def _enter_add_data_wizard() -> None:
     st.session_state["_prev_source"] = st.session_state.get(
         "data_source_choice", DEMO_CHOICE
     )
+    if not st.session_state.get("_show_upload_wizard"):
+        app.remember_setup_before_wizard()
     st.session_state["_show_upload_wizard"] = True
     st.session_state["setup_complete"] = False
     # A new dataset starts with no metadata tables — not the ones of the
@@ -826,8 +817,14 @@ def _readers_do_not_line_up(words: pd.DataFrame, fixations: pd.DataFrame) -> boo
 def _c_normalization_issues(
     _raw, _schema, fingerprint: tuple, key: tuple, table: str
 ) -> list:
+    # The fingerprint shares each column's reading with the mapping form's
+    # field notes (`data.column_parse`).
     return normalization_issues(
-        _raw, _schema, table=table, fixations=table == "Fixations"
+        _raw,
+        _schema,
+        table=table,
+        fixations=table == "Fixations",
+        fingerprint=fingerprint,
     )
 
 
@@ -1011,6 +1008,9 @@ _DERIVE_TABLE_PREFIX = {
 #: The word table's one name on the add and edit screens; every label and
 #: message reads it from here.
 WORDS_TABLE_LABEL = "Words (interest areas)"
+
+#: Under the upload step's intro on the hosted copy only.
+HOSTED_CONNECTION_NOTE = "The hosted demo needs a steady connection for larger files."
 
 #: The one-line caption above each upload row: what goes there, in
 #: EyeLink's terms.
@@ -1841,8 +1841,8 @@ def _wizard_table_keep_picker(
         host,
         f"Extra fields to keep — {noun}",
         "Columns not used in the mapping above. Keep the ones you want to "
-        "filter trials by, sort by, color by or show as an info chip. Columns "
-        "left out are dropped when the dataset is added.",
+        "filter trials by, sort by, color by or show in the trial summary. "
+        "Columns left out are dropped when the dataset is added.",
     )
     # No bulk-select buttons: Streamlit puts "Select all" inside the dropdown
     # itself (`select_all`, on by default under 1000 options) and draws a ✕ to
@@ -1866,16 +1866,16 @@ def _wizard_table_keep_picker(
     return chosen, meta_fields
 
 
-#: Part 2 opens on **Start from**: from scratch, from a dataset already added
+#: Part 2 opens on **Start from**: an empty form, a dataset already added
 #: (its mapping, kept fields, column derivation and recording setup, copied —
 #: no file needed), or from a setup file saved with ⬇️ Download setup file.
 _START_FROM_KEY = "wizard_start_from"
-_START_SCRATCH = "Scratch"
+_START_SCRATCH = "An empty form"
 _START_DATASET = "A dataset you added"
 _START_FILE = "A setup file"
 _COPY_FROM_KEY = "wizard_copy_from"
 #: What the screen held before a setup was applied: ``{key: (present, value)}``,
-#: which Undo — or going back to *Scratch* — puts back.
+#: which Undo — or going back to *An empty form* — puts back.
 _RESTORE_UNDO_KEY = "_wizard_restore_undo"
 #: A finished upload's own wizard choices that its stored entry keeps nowhere
 #: else — the column derivation and the kept fields — so *A dataset you added*
@@ -2116,14 +2116,14 @@ def _undo_setup_restore() -> None:
 
 def _undo_and_start_from_scratch() -> None:
     """The applied line's Undo: the setup goes, and *Start from* goes back to
-    Scratch with it."""
+    *An empty form* with it."""
     _undo_setup_restore()
     st.session_state[_START_FROM_KEY] = _START_SCRATCH
 
 
 def _start_from_changed() -> None:
-    """Choosing *Scratch* after a setup was applied undoes it — that is what
-    starting from scratch means."""
+    """Choosing *An empty form* after a setup was applied undoes it — that is
+    what starting from an empty form means."""
     if st.session_state.get(_START_FROM_KEY) == _START_SCRATCH:
         _undo_setup_restore()
 
@@ -2179,7 +2179,8 @@ def _wizard_restore_config(host) -> None:
 
 
 def _render_start_from(host) -> None:
-    """Part 2's first line: start from scratch, or from a setup that exists."""
+    """Part 2's first line: start from an empty form, or from a setup that
+    exists."""
     uploads = list(st.session_state.get("_datasets") or {})
     options = [_START_SCRATCH, *([_START_DATASET] if uploads else []), _START_FILE]
     if st.session_state.get(_START_FROM_KEY) not in options:
@@ -2532,7 +2533,7 @@ _SETUP_CHOICE_LABELS = {
     _GEOM_SKIP: "Off",
     # 📄 Stimulus → Text's checkbox says the same.
     _TEXT_BOXES: "Fit to word boxes",
-    _TEXT_FONT: "I know the size",
+    _TEXT_FONT: "I know it",
     _TEXT_DEFAULT: "Default 16 px",
     _FONT_KNOW: "I know it",
     _FONT_UNKNOWN: "Not sure",
@@ -3077,7 +3078,7 @@ def _wizard_setup_step(
             + ("is" if len(guessed) == 1 else "are")
             + " an estimate or a default. If you know the real "
             + ("value" if len(guessed) == 1 else "values")
-            + ", choose *I know it*. Every figure is drawn to this setup."
+            + ", choose *I know it*. Every figure is drawn with these values."
             + (
                 " You can also add the dataset now and change them later."
                 if initial is None
@@ -3098,10 +3099,11 @@ def _wizard_setup_step(
     # estimate or a default pre-filled into *I know it* would read as known.
     #
     # A line the screen answered itself writes nothing to the figure's
-    # settings: those keys are shared, and opening ➕ Add dataset and leaving
-    # it must not hand the dataset you came from this one's estimated canvas
-    # and text sizing. The new dataset gets its whole setup when it is added
-    # (`_apply_setup_to_figure`).
+    # settings: those keys are shared. Leaving the screen, by adding the
+    # dataset or by cancelling, puts back what they held when it opened
+    # (`app.restore_setup_before_wizard`), so the dataset you came from never
+    # keeps this one's answers; the new dataset gets its whole recorded setup
+    # each time it is opened (`app.upload_setup_values`).
     auto = st.session_state.get(_SETUP_AUTO_KEY) or {}
 
     def _chosen(group: str) -> bool:
@@ -3316,16 +3318,18 @@ def _wizard_name_header(host, active: bool) -> None:
         return
     st.session_state.setdefault("wizard_dataset_name", _default_dataset_name())
     box = host.container(key="wiz_name_box")
+    name_help = "Shown in the dataset list so you can switch back to it."
+    # Titled *Name* like ✏️ Edit dataset's field and the setup guide's card,
+    # in the same dotted-underline form as *Description* below it.
+    inline_field_label(box, "Name", name_help)
     box.text_input(
-        "Dataset name",
+        "Name",
         key="wizard_dataset_name",
-        help="Shown in the dataset list so you can switch back to it.",
+        help=name_help,
         placeholder="Name this dataset",
         max_chars=DATASET_NAME_MAX_CHARS,
         # Streamlit 1.65: a cleared name is not committed — the last one stays.
         required=True,
-        # The numbered part heading above already says this — the widget's
-        # own label would repeat it.
         label_visibility="collapsed",
     )
     # Optional, and edited later on ✏️ Edit dataset.
@@ -3577,13 +3581,24 @@ def _render_data_setup(active: bool) -> _UploadResult:
         )
         app_url = str(getattr(st.context, "url", "") or "")
         if not is_loopback_url(app_url):
+            # Said from this server's own state, as the About line and the FAQ
+            # do: a self-hosted server may keep a recovery copy, and only the
+            # online demo is Community Cloud.
+            kept = (
+                "a recovery copy is kept there" if persistence_enabled() else "not kept"
+            )
             intro.markdown(
-                f"{ICONS['tip']} **Working with your own data?** Use the "
+                f"{ICONS['tip']} Uploads are processed on the server this app "
+                "runs on (Streamlit Community Cloud, for the online demo) and "
+                f"{kept}. **Working with your own data?** Use the "
                 f"[desktop app]({CITATION['desktop_url']}) ↗ (Windows, macOS, "
                 "Linux). It keeps your data on your computer and handles larger "
                 "datasets than this hosted copy. Or install it with pip:\n\n"
                 "```bash\npip install scanpath-studio\nscanpath-studio\n```"
             )
+            # A dropped connection can hand the page a new, empty session
+            # mid-upload (see `wizard_watch`).
+            intro.caption(f"{ICONS['info']} {HOSTED_CONNECTION_NOTE}", width="content")
 
     # The size/type line `st.file_uploader` prints under its own dropzone
     # ("5GB per file • CSV, TSV, …") doesn't fit this narrow column —
@@ -3721,8 +3736,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
             meta_heading,
             "Metadata",
             "Optional tables with one row per participant, trial or text. "
-            "Their columns work like fields in the data, in filters, chips, "
-            "trial sorting, inspection and export.",
+            "Their columns work like fields in the data, in filters, the trial "
+            "summary, trial sorting, inspection and export.",
             emphasis=True,
         )
 
@@ -4618,6 +4633,24 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 wizard_schemas.get(table),
                 names=ColumnNames.from_payload(names),
             )
+        # Files attached, and none gave a row — each says why beside its own
+        # upload. "Upload a table to get started" would contradict a page that
+        # already holds some, so the button's reason says what is really
+        # wrong, and is said above it too: a disabled button's hover is easy
+        # never to find.
+        rowless = nothing_uploaded and any(
+            st.session_state.get(f"{prefix}_upload")
+            for prefix in _WIZARD_MAPPING_PREFIXES
+        )
+        rowless_reason = (
+            "None of the uploaded tables has any rows to add. The message beside "
+            "each upload says why."
+        )
+        if active and rowless:
+            s6.warning(
+                f"{ICONS['warning']} **{ICONS['confirm']} Add dataset** is off: "
+                + rowless_reason
+            )
         # The two things you can do with a finished setup share one row — save
         # it for next time, or add it — the same on all three endings.
         _wizard_footer(
@@ -4625,8 +4658,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
             disabled=blocked,
             on_click=_finalize_wizard_dataset,
             help_text=(
-                f"Upload a Fixations, {WORDS_TABLE_LABEL} or Raw gaze table above "
-                "to get started."
+                rowless_reason
+                if rowless
+                else f"Upload a Fixations, {WORDS_TABLE_LABEL} or Raw gaze table "
+                "above to get started."
                 if nothing_uploaded
                 else "Answer Recording setup first: " + ", ".join(setup_blockers)
                 if setup_blockers

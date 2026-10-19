@@ -42,7 +42,7 @@ def _text_words() -> pd.DataFrame:
 
 
 def _reader_fixations() -> pd.DataFrame:
-    """Fixations whose trial id embeds the reader (`l37_…_r0`)."""
+    """Fixations whose trial id embeds the reader (`l37_1129_1_1_Ele`)."""
     rows = []
     for reader in ("l37", "l42"):
         for text in ("1_1_Ele", "1_2_Adv"):
@@ -50,7 +50,7 @@ def _reader_fixations() -> pd.DataFrame:
                 rows.append(
                     {
                         "participant_id": reader,
-                        "unique_trial_id": f"{reader}_1129_{text}_r0",
+                        "unique_trial_id": f"{reader}_1129_{text}",
                         "unique_paragraph_id": text,
                         "CURRENT_FIX_X": x,
                         "CURRENT_FIX_Y": 75.0,
@@ -67,8 +67,8 @@ class TestReaderEmbeddedTrialIds:
         )
         assert len(set(zip(fixations["participant_id"], fixations["trial_id"]))) == 4
         for reader in ("l37", "l42"):
-            ele = extract_trial(words, reader, f"{reader}_1129_1_1_Ele_r0")
-            adv = extract_trial(words, reader, f"{reader}_1129_1_2_Adv_r0")
+            ele = extract_trial(words, reader, f"{reader}_1129_1_1_Ele")
+            adv = extract_trial(words, reader, f"{reader}_1129_1_2_Adv")
             assert ele["text"].tolist() == ["Hello", "world"]
             assert adv["text"].tolist() == ["Bye"]
         # The boxes carry the reading's own ids, the Words table's text id.

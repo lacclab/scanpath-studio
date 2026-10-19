@@ -30,8 +30,8 @@ print(gallery_figure("comparison"))
 
     ```bash
     scanpath-studio render --sample \
-      -p l37_1129 -t l37_1129_2_2_4_Ele_r0 \
-      --compare-with l7_1090:l7_1090_2_2_4_Ele_r0 --compare-legend --label-a "Participant A" --label-b "Participant B" \
+      -p l37_1129 -t l37_1129_2_2_4_Ele \
+      --compare-with l7_1090:l7_1090_2_2_4_Ele --compare-legend --label-a "Participant A" --label-b "Participant B" \
       --legend compare=top-center-outside,side-by-side,24 --no-duration-size-legend \
       --crop-to-data --crop-margin 50 \
       --highlight-column '' \

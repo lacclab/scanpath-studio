@@ -274,21 +274,17 @@ def estimate_plot_size(
     """``(width, iframe height)`` a first figure on this canvas will take.
 
     The builders' own fit (`plots._fit_display_size`) for a figure framed on the
-    full canvas, plus the axes' margins and, for a replay, the transport
-    controls under it. Only a first render uses it; later ones reuse the size
-    the last figure under the same plot key actually had (:func:`plot_size`).
+    full canvas, plus the axes' margins and, for a replay, the toolbar above
+    it. Only a first render uses it; later ones reuse the size the last figure
+    under the same plot key actually had (:func:`plot_size`).
     """
-    from scanpath_studio.plots import (
-        _CONTROLS_MARGIN_PX,
-        _CONTROLS_SAFETY_PX,
-        _fit_display_size,
-    )
+    from scanpath_studio.plots import REPLAY_TOOLBAR_PX, _fit_display_size
 
     cw, ch = max(int(canvas_width), 1), max(int(canvas_height), 1)
     width, height = _fit_display_size(cw, ch, [0, cw], [ch, 0], True)
     height += 60
     if animation:
-        height += _CONTROLS_MARGIN_PX + _CONTROLS_SAFETY_PX
+        height += REPLAY_TOOLBAR_PX
     return int(width), int(height) + 12
 
 

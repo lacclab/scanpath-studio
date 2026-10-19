@@ -6,15 +6,20 @@
 //
 // config = {script, meta, frames, steps}: `script` is the post_script with its
 // `{plot_id}` placeholder still in, `meta` is the figure's `layout.meta`, `frames`
-// its frame count, and `steps` a list of [op, arg] run in order:
+// its frame count, and `steps` a list of [op, arg] run in order. A page's
+// layout (`plots.replay_page`) also passes `updatemenus` and `sliders`, and
+// `slot: true` gives the page a `gd-transport` element for the toolbar.
 //   ["run_until", ms]   advance the clock, firing display ticks and timers
 //   ["click", name]     press the play / pause / restart button
 //   ["slider", k]       drag the time slider to frame k
 //   ["hide"] ["show"]   the tab goes to the background / comes back
 //   ["detach"]          the plot leaves the page (the docs' instant navigation)
-// Prints {shown, relayouts, native, listeners} as JSON: every frame put on
-// screen with the time it happened, every Plotly.relayout, every button whose
-// own Plotly command ran, and how many visibilitychange listeners remain.
+//   ["toolbar", name]   press the player's own toolbar button
+//   ["seek", k]         grab the toolbar's time slider and drag it to frame k
+// Prints {shown, relayouts, native, listeners, toolbar} as JSON: every frame
+// put on screen with the time it happened, every Plotly.relayout, every button
+// whose own Plotly command ran, how many visibilitychange listeners remain, and
+// the toolbar the player drew (null without one).
 "use strict";
 
 const fs = require("fs");
@@ -30,11 +35,53 @@ const listeners = {};
 const visibilityListeners = [];
 const log = { shown: [], relayouts: [], native: [] };
 
+// Just enough of an element for the toolbar the player builds.
+class FakeElement {
+  constructor(tag) {
+    this.tagName = tag;
+    this.style = {};
+    this.attributes = {};
+    this.children = [];
+    this.listeners = {};
+    this.textContent = "";
+    this.value = "";
+  }
+  setAttribute(key, value) {
+    this.attributes[key] = String(value);
+  }
+  appendChild(child) {
+    this.children.push(child);
+    return child;
+  }
+  addEventListener(event, fn) {
+    (this.listeners[event] = this.listeners[event] || []).push(fn);
+  }
+  dispatch(event) {
+    (this.listeners[event] || []).forEach((fn) => fn({ type: event }));
+  }
+}
+const slot = config.slot ? new FakeElement("div") : null;
+const inserted = [];
+
 // Named like the figure's own buttons (`plots._animation_play_buttons`).
-const buttons = ["play", "pause", "restart"].map((name) => ({ name, execute: true }));
+const menus = config.updatemenus || [
+  { buttons: ["play", "pause", "restart"].map((name) => ({ name })) },
+];
+const buttons = menus[0].buttons.map((b) => ({ ...b, execute: true }));
 const gd = {
+  id: "gd",
+  style: { width: "960px" },
+  parentNode: {
+    insertBefore(element) {
+      inserted.push(element);
+    },
+  },
   isConnected: true,
-  layout: { meta: config.meta, updatemenus: [{ buttons }] },
+  layout: {
+    meta: config.meta,
+    updatemenus: [{ ...menus[0], buttons }],
+    sliders: config.sliders || [],
+  },
   _transitionData: {
     _frames: Array.from({ length: config.frames }, (_, k) => ({ name: String(k) })),
   },
@@ -60,7 +107,8 @@ global.setTimeout = (cb, ms) => {
 };
 global.document = {
   hidden: false,
-  getElementById: (id) => (id === "gd" ? gd : null),
+  getElementById: (id) => (id === "gd" ? gd : id === "gd-transport" ? slot : null),
+  createElement: (tag) => new FakeElement(tag),
   addEventListener: (event, fn) => {
     if (event === "visibilitychange") visibilityListeners.push(fn);
   },
@@ -129,6 +177,22 @@ function slider(k) {
   Plotly.animate(gd, [String(k)]); // the slider step's own command
 }
 
+function toolbarEl() {
+  return slot || inserted[0];
+}
+
+function toolbarButton(name) {
+  const button = toolbarEl().children.find((c) => c.attributes["data-name"] === name);
+  button.dispatch("click");
+}
+
+function seek(k) {
+  const range = toolbarEl().children.find((c) => c.type === "range");
+  range.dispatch("pointerdown");
+  range.value = String(k);
+  range.dispatch("input");
+}
+
 function setHidden(hidden) {
   document.hidden = hidden;
   visibilityListeners.slice().forEach((fn) => fn());
@@ -145,9 +209,27 @@ function setHidden(hidden) {
     else if (op === "hide") setHidden(true);
     else if (op === "show") setHidden(false);
     else if (op === "detach") gd.isConnected = false;
+    else if (op === "toolbar") toolbarButton(arg);
+    else if (op === "seek") seek(arg);
     else throw new Error(`unknown step ${op}`);
     await flush();
   }
   log.listeners = visibilityListeners.length;
+  const bar = toolbarEl();
+  log.toolbar = bar
+    ? {
+        in_slot: bar === slot,
+        inserted: inserted.length,
+        attributes: bar.attributes,
+        height: bar.style.height,
+        width: bar.style.width,
+        font: bar.style.fontFamily,
+        buttons: bar.children.filter((c) => c.tagName === "button").map((c) => c.textContent),
+        range: (({ min, max, value, attributes }) => ({ min, max, value, attributes }))(
+          bar.children.find((c) => c.type === "range"),
+        ),
+        readout: bar.children[bar.children.length - 1].textContent,
+      }
+    : null;
   process.stdout.write(JSON.stringify(log));
 })();

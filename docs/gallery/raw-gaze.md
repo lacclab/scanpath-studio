@@ -28,7 +28,7 @@ print(gallery_figure("raw-gaze"))
 
     ```bash
     scanpath-studio render --sample \
-      -p l37_1129 -t l37_1129_2_2_2_Adv_r0 \
+      -p l37_1129 -t l37_1129_2_2_2_Adv \
       --sample-raw-gaze --fixation-opacity 0.35 --no-saccades \
       --highlight-column '' \
       -o raw-gaze.html

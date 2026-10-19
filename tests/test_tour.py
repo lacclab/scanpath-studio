@@ -296,6 +296,167 @@ class TestWelcomeTourOptOutSync:
         assert at.session_state["_tour_dismissed"] is True
 
 
+def _tour_off_scanpath_app():
+    """The welcome tour on a view other than Scanpath, with the nav's switch
+    recorded rather than performed (``menu.switch_to_view`` needs the router)."""
+    from unittest import mock
+
+    import streamlit as st
+
+    from scanpath_studio import tour
+    from scanpath_studio.constants import _VIEW_DATA
+
+    st.session_state.setdefault("main_nav", _VIEW_DATA)
+    st.session_state["tour_seen"] = True
+
+    def _switch(view):
+        st.session_state.setdefault("switched_to", []).append(view)
+        st.session_state["main_nav"] = view
+
+    with mock.patch.object(tour, "switch_to_view", _switch):
+        tour.maybe_show_welcome_tour(st.session_state["main_nav"])
+    tour.render_spotlight_tour()
+
+
+class TestTourLivesOnScanpath:
+    """Every welcome-tour step points at the Scanpath view, so the card is
+    never left open on another view."""
+
+    def test_opening_its_tab_elsewhere_goes_back_to_scanpath(self):
+        from scanpath_studio.constants import _VIEW_SCANPATH
+
+        at = AppTest.from_function(_tour_off_scanpath_app)
+        at.session_state["tour_mode"] = "spotlight"
+        at.session_state["tour_step"] = 3
+        at.session_state["_guide_folded_tour"] = True
+        at.run()
+        assert not at.exception, at.exception
+        assert "switched_to" not in at.session_state
+        at.button(key="guide_unfold_tour").click().run()
+        assert not at.exception, at.exception
+        assert at.session_state["switched_to"] == [_VIEW_SCANPATH]
+        assert at.session_state["tour_step"] == 3
+        assert any(b.key == "tour_sp_next" for b in at.button)
+
+    def test_left_open_on_another_view_it_folds(self):
+        at = AppTest.from_function(_tour_off_scanpath_app)
+        at.session_state["tour_mode"] = "spotlight"
+        at.session_state["tour_step"] = 2
+        at.run()
+        assert not at.exception, at.exception
+        assert "switched_to" not in at.session_state
+        assert {b.key for b in at.button if b.key} == {
+            "guide_unfold_tour",
+            "guide_close_tour",
+        }
+
+    def test_left_on_its_last_step_it_ends(self):
+        """The last step points at the nav, so following it ends the tour
+        (as Done does) rather than leaving a tab that reads as still running."""
+        from scanpath_studio.tour import _SPOTLIGHT_STEPS
+
+        at = AppTest.from_function(_tour_off_scanpath_app)
+        at.session_state["tour_mode"] = "spotlight"
+        at.session_state["tour_step"] = len(_SPOTLIGHT_STEPS) - 1
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["tour_mode"] is None
+        assert "switched_to" not in at.session_state
+        assert not [b for b in at.button if b.key]
+
+    def test_the_tab_closes_the_tour(self):
+        at = AppTest.from_function(_tour_off_scanpath_app)
+        at.session_state["tour_mode"] = "spotlight"
+        at.session_state["tour_step"] = 3
+        at.run()
+        at.button(key="guide_close_tour").click().run()
+        assert not at.exception, at.exception
+        assert at.session_state["tour_mode"] is None
+        assert "switched_to" not in at.session_state
+        assert not [b for b in at.button if b.key]
+
+    def test_started_on_scanpath_it_asks_for_no_switch(self):
+        from scanpath_studio.constants import _VIEW_SCANPATH
+
+        at = AppTest.from_function(_tour_off_scanpath_app)
+        at.session_state["main_nav"] = _VIEW_SCANPATH
+        at.session_state["tour_seen"] = True
+        at.run()
+        from unittest.mock import patch
+
+        from scanpath_studio import tour
+
+        with patch.object(tour.st, "session_state", at.session_state):
+            tour._arm_tour()
+        at.run()
+        assert not at.exception, at.exception
+        assert "switched_to" not in at.session_state
+        assert "_tour_to_scanpath" not in at.session_state
+        assert any(b.key == "tour_sp_next" for b in at.button)
+
+
+class TestTourCardPlacement:
+    """The card moves out of the way of what a step shows."""
+
+    def test_the_filter_summary_and_rail_steps_dock_left(self):
+        from scanpath_studio.tour import _SPOTLIGHT_STEPS
+
+        docks = [step.get("dock") for step in _SPOTLIGHT_STEPS]
+        assert docks[4:8] == ["left"] * 4
+        assert docks[1] == docks[8] == "top"
+        assert {docks[0], *docks[2:4], *docks[9:]} == {None}
+
+    def test_every_dock_has_its_css(self):
+        from scanpath_studio.tour import _CARD_DOCKS, _SPOTLIGHT_STEPS
+
+        assert {s["dock"] for s in _SPOTLIGHT_STEPS if "dock" in s} <= set(_CARD_DOCKS)
+
+    def test_a_docked_step_draws_its_dock(self):
+        from scanpath_studio.tour import _CARD_DOCKS
+
+        at = AppTest.from_function(_welcome_tour_app).run()
+        for step, dock in ((4, "left"), (8, "top")):
+            at.session_state["tour_step"] = step
+            at.run()
+            assert any(_CARD_DOCKS[dock] in m.value for m in at.markdown)
+        at.session_state["tour_step"] = 2
+        at.run()
+        styles = " ".join(m.value for m in at.markdown)
+        assert not any(css in styles for css in _CARD_DOCKS.values())
+
+
+def test_tour_names_controls_as_the_screen_draws_them():
+    """An icon-only button is named by its icon and chevron plus "button",
+    never by an icon standing in for a word or a label it does not show."""
+    from scanpath_studio.constants import ICONS
+    from scanpath_studio.tour import _SPOTLIGHT_STEPS
+
+    bodies = {step["selector"]: step["body"] for step in _SPOTLIGHT_STEPS}
+    chevron = ICONS["menu_arrow"]
+    for icon, selector in (
+        ("add", ".st-key-tour_grp_data_source"),
+        ("trial_filter", ".st-key-tour_grp_narrow_by"),
+        ("edit", ".st-key-tour_grp_chips"),
+    ):
+        assert f"**{ICONS[icon]} {chevron}** button" in bodies[selector]
+    assert f"**{chevron}** beside each toggle" in bodies[".st-key-tour_grp_view_modes"]
+    for body in bodies.values():
+        assert not body.startswith(":material/")
+        assert "▾" not in body
+        assert "+ Add dataset" not in body
+
+
+def test_tour_text_is_plain_and_literal():
+    """Plain words for readers whose first language is not English: no idioms,
+    and the trial's field row is called what the app calls it."""
+    from scanpath_studio.tour import _SPOTLIGHT_STEPS
+
+    text = " ".join(step["title"] + " " + step["body"] for step in _SPOTLIGHT_STEPS)
+    for phrase in ("chip", "scrub", "pools", "at a glance", "opens over"):
+        assert phrase not in text.lower(), phrase
+    assert any(s["title"].endswith("Trial summary") for s in _SPOTLIGHT_STEPS)
+
+
 def test_welcome_tour_text_is_concise():
     """Every welcome/spotlight/wizard step body stays short (UI/UX: no walls of
     text). Guards against the steps growing into multi-paragraph blurbs."""
@@ -636,6 +797,46 @@ class TestFaq:
         local = answer()
         assert local.startswith("Nowhere")
         assert "recovery copy" in local and "server" not in local
+
+    def test_about_says_where_data_goes_for_this_run(self):
+        """About's privacy line is the short form of this answer, decided by
+        the same tests, and points to it."""
+        from scanpath_studio.app import _about_privacy_line
+
+        local = _about_privacy_line(local=True, saving=True)
+        assert "It stays on this computer." in local and "saved here" in local
+        assert "server" not in local
+        assert "saved" not in _about_privacy_line(local=True, saving=False)
+
+        hosted = _about_privacy_line(local=False, saving=False)
+        assert "stays on this computer" not in hosted
+        assert "Streamlit Community Cloud" in hosted and "not kept" in hosted
+        opted_in = _about_privacy_line(local=False, saving=True)
+        assert "recovery copy is kept there" in opted_in
+        assert "not kept" not in opted_in and "Community Cloud" not in opted_in
+
+        for line in (local, hosted, opted_in):
+            assert "*Where does my data go?*" in line
+            assert len(line) <= 300, "one or two lines in About"
+
+    def test_about_shows_the_line_for_a_hosted_run(self, monkeypatch):
+        from streamlit.testing.v1 import AppTest
+
+        from scanpath_studio import app, persistence
+
+        monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "0")
+        monkeypatch.setattr(app, "server_bound_to_loopback", lambda: False)
+
+        def about():
+            from scanpath_studio import app
+
+            app._about_dialog()
+
+        at = AppTest.from_function(about).run()
+        assert not at.exception, at.exception
+        body = " ".join(str(md.value) for md in at.markdown)
+        assert "Your data." in body and "not kept" in body
+        assert "stays on this computer" not in body
 
     def test_no_entry_is_for_someone_editing_the_code(self):
         """The FAQ has no "I edited the code and nothing changed?": it is
@@ -1269,7 +1470,9 @@ class TestEveryGuideCardFolds:
         assert not at.exception, at.exception
         at.button(key=f"guide_fold_{kind}").click().run()
         assert not at.exception, at.exception
-        assert self._keys(at) == {f"guide_unfold_{kind}"}
+        # Only the welcome tour's tab has a ✕ of its own.
+        closer = {"guide_close_tour"} if kind == "tour" else set()
+        assert self._keys(at) == {f"guide_unfold_{kind}"} | closer
         assert any(tab in m.value for m in at.markdown)
         assert not at.progress
         at.button(key=f"guide_unfold_{kind}").click().run()

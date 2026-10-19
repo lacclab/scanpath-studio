@@ -145,23 +145,21 @@ class TestCancelledMappingDoesNotReturn:
         assert list(trial.value) == ["item", "block"]
         assert not at.session_state["_remap_dirty"]
 
-    def test_a_cancelled_measure_clear_and_box_format_come_back(self):
+    def test_a_cancelled_measure_clear_comes_back(self):
+        # The stored box's format is fixed (`TestAStoredWordBoxCannotBeMappedAsEdges`),
+        # so the measure is the Words edit to cancel here.
         at = AppTest.from_function(_editor_app, kwargs={"kind": "words"}).run()
         assert not at.exception
         measure = at.selectbox(key="remap_Probe_words_measure_tfd")
         assert measure.value == "total_fixation_duration_ms"
         measure.set_value(None).run()
-        box = at.radio(key="remap_Probe_words_box_format")
-        original_format = box.value
-        other = next(option for option in box.options if option != original_format)
-        box.set_value(other).run()
         assert at.session_state["_remap_dirty"]
         _close_and_reopen(at)
         assert (
             at.selectbox(key="remap_Probe_words_measure_tfd").value
             == "total_fixation_duration_ms"
         )
-        assert at.radio(key="remap_Probe_words_box_format").value == original_format
+        assert at.radio(key="remap_Probe_words_box_format").value == "Origin + size"
         assert not at.session_state["_remap_dirty"]
 
     def test_touch_marks_from_a_cancelled_edit_are_dropped(self):
@@ -650,3 +648,69 @@ class TestNameDescriptionAndMetadataWaitForSave:
         app._discard_editor_staging()
         assert app._description_field_key("Probe") not in state
         assert DATASET_DESCRIPTIONS_KEY not in state
+
+
+def _editor_with_added_words_app() -> None:
+    """The editor on a fixations-only dataset, with a Words table (given as
+    edges) attached through its own uploader."""
+    import io
+
+    from streamlit.delta_generator import DeltaGenerator
+
+    content = (
+        b"reader,item,block,wid,txt,L,R,T,B\n"
+        b"p1,t1,b1,1,Hi,0,40,0,20\n"
+        b"p1,t1,b1,2,there,50,90,0,20\n"
+    )
+
+    class Upload(io.BytesIO):
+        name = "words.csv"
+        file_id = "probe-words"
+        size = len(content)
+
+    original = DeltaGenerator.file_uploader
+    DeltaGenerator.file_uploader = lambda self, label, *a, **k: (
+        [Upload(content)] if str(label).startswith("Word table") else None
+    )
+    try:
+        from tests.test_dataset_editor_commit import _editor_app
+
+        _editor_app("fixations")
+    finally:
+        DeltaGenerator.file_uploader = original
+
+
+class TestAStoredWordBoxCannotBeMappedAsEdges:
+    """A stored Words table holds x/y/width/height only — its edges were
+    turned into a width and a height when the dataset was added — so ✏️ Edit
+    dataset shows *Edges* greyed out with the reason, and keeps the box on
+    *Origin + size*."""
+
+    def test_the_format_radio_is_disabled_on_origin_and_size(self):
+        from scanpath_studio.tabs import STORED_BOX_FORMAT_REASON
+
+        at = AppTest.from_function(_editor_app, args=("words",)).run()
+        assert not at.exception
+        (radio,) = [r for r in at.radio if r.key == "remap_Probe_words_box_format"]
+        assert radio.disabled
+        assert radio.value == "Origin + size"
+        assert any(STORED_BOX_FORMAT_REASON in c.value for c in at.caption)
+        words = at.session_state["pending_probe"]["words"]
+        assert words["width"] == "width" and words["left"] is None
+
+    def test_edges_in_its_state_still_map_origin_and_size(self):
+        at = AppTest.from_function(_editor_app, args=("words",)).run()
+        at.session_state["remap_Probe_words_box_format"] = "Edges"
+        at.run()
+        assert not at.exception
+        words = at.session_state["pending_probe"]["words"]
+        assert words["x"] == "x" and words["width"] == "width"
+        assert all(words.get(k) is None for k in ("left", "right", "top", "bottom"))
+
+    def test_a_words_table_being_added_can_still_be_edges(self):
+        at = AppTest.from_function(_editor_with_added_words_app).run()
+        assert not at.exception
+        radios = [r for r in at.radio if r.key == "remap_Probe_words_add_box_format"]
+        assert radios, [r.key for r in at.radio]
+        assert not radios[0].disabled
+        assert radios[0].value == "Edges"

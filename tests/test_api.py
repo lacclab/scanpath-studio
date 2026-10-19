@@ -1007,7 +1007,7 @@ def test_save_figure_layers_one_file_per_layer(sample, tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # An option naming a column that isn't there raises
 # ---------------------------------------------------------------------------
-_DEMO_TRIAL = ("l37_1129", "l37_1129_2_1_1_Ele_r0")
+_DEMO_TRIAL = ("l37_1129", "l37_1129_2_1_1_Ele")
 
 
 @pytest.mark.parametrize("builder", ["plot_scanpath", "animate_scanpath"])
@@ -1033,7 +1033,7 @@ def test_a_comparison_checks_the_column_across_both_readings():
             words,
             fixations,
             _DEMO_TRIAL,
-            ("l7_1090", "l7_1090_2_1_1_Ele_r0"),
+            ("l7_1090", "l7_1090_2_1_1_Ele"),
             color_by="nosuch",
         )
 
@@ -1098,7 +1098,7 @@ def test_a_failed_layer_export_leaves_no_empty_folder(tmp_path, monkeypatch):
     """With no Chrome, Kaleido fails on the first layer — and the folder the
     call had just created must not stay behind, empty."""
     words, fixations = api.load_sample_data(names="canonical")
-    fig = api.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
+    fig = api.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele")
 
     def no_chrome(*_args, **_kwargs):
         raise RuntimeError("Static .png export failed: no Chrome")

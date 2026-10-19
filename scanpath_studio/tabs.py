@@ -137,6 +137,7 @@ from scanpath_studio.constants import (
     SELECTOR_ROW_GRID,
     SELECTOR_ROW_TRIO,
     SELECTOR_SCREEN_TRACK,
+    SETUP_OVERRIDE_FOR_KEY,
     SUBTAB_ANNOTATIONS,
     SUBTAB_COMPARISONS,
     SUBTAB_EXPORT,
@@ -220,12 +221,14 @@ from scanpath_studio.data import (
     drop_internal_columns,
     empty_fixations_frame,
     empty_words_frame,
+    explain_read_error,
     filter_to_keys,
     frame_cache,
     frame_fingerprint,
     harmonize_frames_reporting,
     has_explicit_trial_index,
     hashable_key,
+    header_only_error,
     identity_text_plan,
     normalize_fixations,
     normalize_raw_gaze,
@@ -334,6 +337,7 @@ from scanpath_studio.plots import (
     normalize_legend_layout,
     reading_stimulus_image,
     replay_page,
+    replay_page_box,
     replay_size_key_range,
     set_replay_clock,
     stimulus_image_settings,
@@ -575,6 +579,7 @@ _TRUE_SCALE_TEMPLATE = """
     #skel-__KEY__ { animation: sps-skel-in .01s linear .3s forwards; } }
 </style>
 <div id="wrap-__KEY__" style="position:relative;width:100%;">
+  __TRANSPORT__
   <div id="fit-__KEY__" style="width:100%;overflow:hidden;position:relative;">
     <div id="skel-__KEY__" aria-hidden="true"></div>
     <div id="size-__KEY__" style="width:__W__px;height:__H__px;">
@@ -588,6 +593,10 @@ _TRUE_SCALE_TEMPLATE = """
 (function() {
   var W = __W__, H = __H__, ZMAX = __ZMAX__, ZOOMABLE = __ZOOMABLE__;
   var GROW = __GROW__, FIT = __FIT__, FIT_MIN = __FIT_MIN__;
+  // A replay's toolbar (`plots.REPLAY_TOOLBAR_PX`) sits above the figure, at
+  // its own size: the figure is fitted to what is left under it.
+  var BAR = __BAR__;
+  var transport = document.getElementById("truescale-__KEY__-transport");
   var outer = document.getElementById("fit-__KEY__");
   var size = document.getElementById("size-__KEY__");
   var box = document.getElementById("box-__KEY__");
@@ -606,7 +615,7 @@ _TRUE_SCALE_TEMPLATE = """
     // the one uniform transform, so the aspect ratio holds and boxes, markers,
     // strokes and text keep the same relationship to each other they have at 1x.
     if (fsOn) {
-      var availH = (window.innerHeight || H) - 8;
+      var availH = (window.innerHeight || H) - 8 - BAR;
       return Math.min(avail / W, availH / H);
     }
     return __SCALE_JS__;
@@ -618,9 +627,9 @@ _TRUE_SCALE_TEMPLATE = """
   function growCap() {
     var vh = 0;
     try { vh = window.parent.innerHeight; } catch (e) { vh = 0; }
-    var room = FIT ? fitRoom(vh) : 0;
+    var room = FIT ? fitRoom(vh) - BAR : 0;
     if (room > 0) { return Math.max(room, Math.min(FIT_MIN, H)) / H; }
-    return Math.max(1, ((vh || H) * 0.85) / H);
+    return Math.max(1, ((vh || H) * 0.85 - BAR) / H);
   }
   // The Scanpath view's figure (`fit_window`): the height left between its
   // top and the window's bottom once the subtab bar under it (Annotations …
@@ -653,7 +662,7 @@ _TRUE_SCALE_TEMPLATE = """
     var fr = null;
     try { fr = window.frameElement; } catch (e) { fr = null; }
     if (!fr) { return; }
-    var want = Math.round(H * base) + 12 + "px";
+    var want = Math.round(H * base) + 12 + BAR + "px";
     if (fr.style.height !== want) { fr.style.height = want; }
     // Streamlit sizes the frame's element container from the height it was
     // embedded at; it has to follow, or the frame spills over what is below.
@@ -675,9 +684,15 @@ _TRUE_SCALE_TEMPLATE = """
     // at its left edge, so the scroll reaches all of it.
     var left = Math.max(0, Math.round((outer.clientWidth - W * s) / 2));
     size.style.marginLeft = left + "px";
+    var fitLeft = Math.max(0, Math.round((outer.clientWidth - W * base) / 2));
     var zb = wrap && wrap.querySelector("[data-toolbar]");
-    if (zb) {
-      zb.style.left = Math.max(0, Math.round((outer.clientWidth - W * base) / 2)) + 4 + "px";
+    if (zb && !(transport && transport.contains(zb))) {
+      zb.style.left = fitLeft + 4 + "px";
+    }
+    // The toolbar spans the fitted figure, whatever the zoom.
+    if (transport) {
+      transport.style.marginLeft = fitLeft + "px";
+      transport.style.width = Math.min(outer.clientWidth, Math.round(W * base)) + "px";
     }
     outer.style.height = Math.round(H * base) + "px";
     fitFrame();
@@ -917,6 +932,11 @@ _TRUE_SCALE_TEMPLATE = """
 </script>
 """
 
+#: Where the zoom buttons sit: over the plot's top-left corner, or at the end
+#: of a replay's toolbar row (`_true_scale_html`).
+_ZOOM_TOOLBAR_FLOAT = "position:absolute;top:4px;left:4px;z-index:5;"
+_ZOOM_TOOLBAR_IN_ROW = "order:99;flex:none;margin-left:auto;"
+
 _ZOOM_TOOLBAR = """
   <div id="zoombar-__KEY__" data-toolbar style="position:absolute;top:4px;left:4px;z-index:5;
        display:flex;gap:2px;align-items:center;padding:2px 4px;
@@ -945,6 +965,7 @@ def _true_scale_html(
     max_height: int | None,
     zoomable: bool,
     fit_window: bool = False,
+    toolbar: int = 0,
 ) -> tuple[str, int]:
     """Wrap a fixed-size Plotly div in the fit-to-column (+ zoom) transform.
 
@@ -953,25 +974,45 @@ def _true_scale_html(
 
     ``fit_window`` (an uncapped figure only) sizes it to the window's height
     left under its top, keeping the subtab bar below it on screen (`fitRoom`).
+
+    ``toolbar`` is the height in px of a replay's toolbar
+    (`plots.replay_page_box`): a slot that tall goes above the figure, outside
+    the transform, for the replay player to draw it in — at its own size,
+    neither scaled nor zoomed with the figure.
     """
+    toolbar = max(int(toolbar or 0), 0)
     if max_height is not None:
         scale_js = f"Math.min(1, avail / W, {int(max_height)} / H)"
-        iframe_height = int(max_height) + 12
+        iframe_height = int(max_height) + 12 + toolbar
     else:
         # Fills the column's width — above true size too, while it still fits
         # the window's height (`growCap`); the script sizes the frame to match.
         scale_js = "Math.min(avail / W, growCap())"
-        iframe_height = height + 12
-    toolbar = (
+        iframe_height = height + 12 + toolbar
+    zoom_toolbar = (
         _ZOOM_TOOLBAR.replace("__BTN__", _ZOOM_BUTTON_CSS).replace("__KEY__", key)
         if zoomable
         else ""
     )
+    transport = ""
+    if toolbar:
+        # The zoom buttons end the replay's toolbar row instead of floating
+        # over the plot's top-left corner, where a title or legend sits.
+        # `order` keeps them last whenever the player adds its controls.
+        transport = (
+            f'<div id="{_true_scale_plot_id(key)}-transport" '
+            f'style="height:{toolbar}px;display:flex;align-items:center;">'
+            + zoom_toolbar.replace(_ZOOM_TOOLBAR_FLOAT, _ZOOM_TOOLBAR_IN_ROW)
+            + "</div>"
+        )
+        zoom_toolbar = ""
     # The plot goes in last, so the other substitutions scan the template, not a
     # replay's megabytes of JSON — and cannot rewrite a placeholder-like string
     # inside the figure.
     html = (
-        _TRUE_SCALE_TEMPLATE.replace("__TOOLBAR__", toolbar)
+        _TRUE_SCALE_TEMPLATE.replace("__TOOLBAR__", zoom_toolbar)
+        .replace("__TRANSPORT__", transport)
+        .replace("__BAR__", str(toolbar))
         .replace("__SCALE_JS__", scale_js)
         .replace("__ZOOMABLE__", "true" if zoomable else "false")
         .replace("__GROW__", "true" if max_height is None else "false")
@@ -1055,17 +1096,19 @@ def _render_true_scale_chart(
     and its zoom buttons.
     """
     zoomable = max_height is None
+    width, height, toolbar = replay_page_box(fig)
     _render_true_scale_plot(
         _true_scale_plot_html(
             fig, key=key, download_name=download_name, zoomable=zoomable
         ),
         key=key,
-        width=int(fig.layout.width or 900),
-        height=int(fig.layout.height or 600),
+        width=width,
+        height=height,
         max_height=max_height,
         zoomable=zoomable,
         alt=alt or _figure_alt(fig, "Scanpath figure"),
         fit_window=fit_window,
+        toolbar=toolbar,
     )
 
 
@@ -1089,8 +1132,9 @@ def _true_scale_plot_html(
     (`plots.replay_page`): a 2,001-frame replay's markup is under 1 MB rather
     than 66 MB, and the player sees the same frames.
     """
-    width = int(fig.layout.width or 900)
-    height = int(fig.layout.height or 600)
+    width, height, _toolbar = replay_page_box(
+        fig if figure_dict is None else figure_dict
+    )
     # An animated replay plays on the wall-clock player, never on Plotly's own
     # queue, which rounds every frame up to whole display ticks (Fine at ×1 would
     # run 25 % slow). The player also starts it on load when autoplay is on, and
@@ -1140,8 +1184,12 @@ def _render_true_scale_plot(
     zoomable: bool = True,
     alt: str | None = None,
     fit_window: bool = False,
+    toolbar: int = 0,
 ) -> None:
-    """Embed `_true_scale_plot_html`'s markup in the true-scale iframe."""
+    """Embed `_true_scale_plot_html`'s markup in the true-scale iframe.
+
+    ``width`` / ``height`` are the figure's on the page and ``toolbar`` its
+    replay toolbar's height (`plots.replay_page_box`)."""
     # The installed plotly's own plotly.min.js, served by this app's server —
     # not cdn.plot.ly, so the figure draws offline too.
     html, iframe_height = _true_scale_html(
@@ -1152,6 +1200,7 @@ def _render_true_scale_plot(
         max_height=max_height,
         zoomable=zoomable,
         fit_window=fit_window,
+        toolbar=toolbar,
     )
     # Iframe height = full true height (or the cap); the script trims the
     # visible block to the scaled height. A zoomable figure is a Tab stop; the
@@ -2327,6 +2376,9 @@ class _ReplayView:
     width: int
     height: int
     n_frames: int
+    #: The figure's height on its page and its toolbar's (`plots.replay_page_box`).
+    plot_height: int
+    toolbar: int
     clip_frame_ms: float | None
     signature: str
 
@@ -2338,6 +2390,7 @@ class _ReplayView:
         plot_html = _true_scale_plot_html(
             fig, key=plot_key, download_name=download_name, figure_dict=figure_dict
         )
+        _width, plot_height, toolbar = replay_page_box(figure_dict)
         return cls(
             plot_html_z=zlib.compress(plot_html.encode("utf-8"), 1),
             figure_z=zlib.compress(
@@ -2346,6 +2399,8 @@ class _ReplayView:
             width=int(fig.layout.width or 900),
             height=int(fig.layout.height or 600),
             n_frames=len(fig.frames or ()),
+            plot_height=plot_height,
+            toolbar=toolbar,
             clip_frame_ms=animation_clip_frame_ms(fig),
             signature=signature,
         )
@@ -3193,7 +3248,7 @@ def _render_compare_selector(
                 format_func=lambda v: (
                     f"{idx_of.get(v, 0) + 1}/{n} · {label_to_id.get(v, v)}"
                 ),
-                help=f"Scrub through the {n} trials scanpath B can show.",
+                help=f"Move through the {n} trials scanpath B can show.",
             )
         # Mirror of the main picker — linked, a button dies only when
         # *both* lists have run out.
@@ -5431,9 +5486,10 @@ def _build_and_render_animation(
         view.plot_html,
         key=plot_key,
         width=view.width,
-        height=view.height,
+        height=view.plot_height,
         alt=": ".join(filter(None, ("Animated scanpath replay", _plain_title(title)))),
         fit_window=True,
+        toolbar=view.toolbar,
     )
     return view, save_slug, file_stem
 
@@ -6088,22 +6144,21 @@ def _render_chip_menu(host, words: pd.DataFrame, fixations: pd.DataFrame) -> Non
     # Named for screen readers; `styles.py` clips the name, so the
     # pencil is still all that is drawn.
     with host.popover(
-        "Chips above the plot",
+        "Trial summary above the plot",
         icon=ICONS["edit"],
-        help="Show or hide the chips above the plot, and choose and reorder "
-        "their fields.",
+        help="Show or hide the trial summary above the plot, and choose and "
+        "reorder its fields.",
         width="content",
         wrap=True,
         key="iconpop_chip_fields",
     ):
         st.toggle(
-            "Show chips above the plot",
+            "Show the trial summary above the plot",
             key=SINGLE_SHOW_CHIPS,
             # Rendered on the Scanpath view only, and seeded by a link
             # (`?show_chips=`), so it must survive a trip to another view.
             persist_state="session",
-            help="Hide them to give the plot more room. The fields you picked are "
-            "kept.",
+            help="Hide it to give the plot more room. The fields you picked are kept.",
         )
         render_trial_chip_picker(words, fixations, host=st.container())
 
@@ -6256,6 +6311,10 @@ def render_single_trial_tab(
         # Keep the panels immediately below the plot even when the controls
         # extend farther down the right side.
         subtabs_slot = st.container(key="tour_grp_subtabs")
+
+    # A dataset that fails its data checks badly (most fixations at 0 ms, most
+    # positions missing) still draws a plausible figure; say so above it.
+    render_data_health_notice(plot_notes_slot, words_all, fixations_all, raw_gaze_all)
 
     if not (selected_participant and selected_trial):
         return
@@ -13521,19 +13580,25 @@ def _restored_metadata_note(host, attached, *, grain: str, on_detach) -> None:
         "✕ Detach",
         key=f"{grain}_metadata_detach_restored",
         on_click=on_detach,
-        help="Remove this table. Its fields leave the filters, the chips and "
-        "trial sorting.",
+        help="Remove this table. Its fields leave the filters, the trial summary "
+        "and trial sorting.",
     )
 
 
 class _MetadataReadError(Exception):
-    """One of a metadata table's files could not be read; names which."""
+    """One of a metadata table's files could not be read; names which, in the
+    words every upload box uses (`app.say_read_error`)."""
 
     def __init__(self, name: str, cause: Exception) -> None:
-        super().__init__(
-            f"Could not read {name}. Check that it is a CSV, TSV, Parquet or "
-            f"Excel table with one header row. ({cause})"
-        )
+        self.name = name
+        self.cause = cause
+        super().__init__(explain_read_error(name, cause).sentence())
+
+    def say(self) -> None:
+        """The message, where the metadata table's uploader is."""
+        from scanpath_studio.app import say_read_error
+
+        say_read_error(st, self.name, self.cause)
 
 
 def _metadata_upload_signature(uploads) -> tuple:
@@ -13565,9 +13630,14 @@ def _read_metadata_uploads(uploads) -> pd.DataFrame:
     frames = []
     for upload in uploads:
         try:
-            frames.append(read_table(upload))
+            frame = read_table(upload)
         except Exception as exc:  # unreadable file — the caller names it
             raise _MetadataReadError(upload.name, exc) from exc
+        if frame.empty and len(frame.columns):
+            # Attached, it would join nothing and say nothing.
+            error = header_only_error(upload.name)
+            raise _MetadataReadError(upload.name, error) from error
+        frames.append(frame)
     if len(frames) == 1:
         return frames[0]
     return pd.concat(frames, ignore_index=True, sort=False)
@@ -13632,9 +13702,9 @@ def _participant_metadata_body(
     # rather than Streamlit's own label + native (~1s) help tooltip.
     _pm_help = (
         "One row per participant, with a participant-id column. Its columns "
-        "work like fields in the data, in filters, chips, trial sorting, "
-        "inspection and export. CSV, TSV, Parquet or Excel; several files are "
-        "stacked into one table."
+        "work like fields in the data, in filters, the trial summary, "
+        "trial sorting, inspection and export. CSV, TSV, Parquet or Excel; "
+        "several files are stacked into one table."
     )
     # With `upload_host` (the wizard's row format), the title + uploader go
     # into that thin left column — mirroring `upload_box`'s `short_label`,
@@ -13698,7 +13768,7 @@ def _participant_metadata_body(
             try:
                 st.session_state[md.RAW_SESSION_KEY] = _read_metadata_uploads(uploads)
             except _MetadataReadError as exc:  # say which file, keep the page
-                st.error(str(exc))
+                exc.say()
                 return
             st.session_state[md.FILE_SESSION_KEY] = signature
             st.session_state[_PM_NAME_KEY] = _metadata_upload_name(uploads)
@@ -13850,8 +13920,8 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
     # Same dotted-underline title format as the mapping fields.
     _tm_help = (
         "One row per trial, with a trial-id column. Its columns work like "
-        "fields in the data, in filters, chips, trial sorting, inspection "
-        "and export. CSV, TSV, Parquet or Excel; several files are "
+        "fields in the data, in filters, the trial summary, trial sorting, "
+        "inspection and export. CSV, TSV, Parquet or Excel; several files are "
         "stacked into one table."
     )
     # See the matching branch in `_participant_metadata_body`.
@@ -13895,7 +13965,7 @@ def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) ->
                     uploads
                 )
             except _MetadataReadError as exc:  # say which file, keep the page
-                st.error(str(exc))
+                exc.say()
                 return
             st.session_state[md.TRIAL_FILE_SESSION_KEY] = signature
             st.session_state[_TM_NAME_KEY] = _metadata_upload_name(uploads)
@@ -14067,8 +14137,8 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
 
     _txm_help = (
         "One row per text, with a text-id column. Its columns work like "
-        "fields in the data, in filters, chips, trial sorting, inspection "
-        "and export. CSV, TSV, Parquet or Excel; several files are "
+        "fields in the data, in filters, the trial summary, trial sorting, "
+        "inspection and export. CSV, TSV, Parquet or Excel; several files are "
         "stacked into one table."
     )
     # See the matching branch in `_participant_metadata_body`.
@@ -14112,7 +14182,7 @@ def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> N
                     uploads
                 )
             except _MetadataReadError as exc:  # say which file, keep the page
-                st.error(str(exc))
+                exc.say()
                 return
             st.session_state[md.TEXT_FILE_SESSION_KEY] = signature
             st.session_state[_TXM_NAME_KEY] = _metadata_upload_name(uploads)
@@ -14346,7 +14416,8 @@ def _metadata_keep_picker(host, raw, id_columns, *, prefix: str, noun: str) -> l
         host,
         f"Extra fields to keep — {noun} · {n_selected} selected",
         "Columns besides the id. Keep the ones you want to filter, sort or "
-        "color trials by, or show as a chip. Columns left out are not added.",
+        "color trials by, or show in the trial summary. Columns left out are not "
+        "added.",
     )
     # No bulk-select buttons, as on the wizard's twin of this row: the
     # multiselect's select-all lives in its dropdown and its ✕ clears, so a
@@ -14754,28 +14825,18 @@ def _apply_remap() -> None:
     new_entry["composite_trial_columns"] = comp if len(comp) > 1 else []
     setup_payload = st.session_state.get("_remap_pending_setup")
     if isinstance(setup_payload, dict):
-        from scanpath_studio.experimental_setup import SetupSnapshot
-
         new_entry["setup"] = dict(setup_payload)
-        setup = SetupSnapshot.from_dict(setup_payload, fallback=SetupSnapshot())
-        # Apply the saved dataset facts to the live figure immediately. These
-        # are the same wire keys the add flow publishes on finalize.
-        st.session_state.update(
-            {
-                "global_canvas_width": setup.canvas_width,
-                "global_canvas_height": setup.canvas_height,
-                "global_monitor_width_mm": setup.monitor_width_mm,
-                "global_viewing_distance_mm": setup.viewing_distance_mm,
-                "global_base_font_size": setup.base_font_size,
-                # The setup's size is in px; a point size left on
-                # would replace it.
-                "global_use_stimulus_font_pt": False,
-                "global_font_family": setup.font_family,
-                "global_line_spacing": setup.line_spacing,
-                "global_scale_text_to_boxes": setup.scale_text_to_boxes,
-            }
-        )
     st.session_state["_datasets"][name] = new_entry
+    if isinstance(setup_payload, dict):
+        from scanpath_studio.app import _apply_dataset_values, upload_setup_values
+
+        # The saved setup shows at once when the figure holds this dataset's;
+        # another dataset's figure is left alone, and this one's applies when
+        # it is next opened (`app.seed_canvas_state`).
+        if st.session_state.get(SETUP_OVERRIDE_FOR_KEY) == name and (
+            values := upload_setup_values(name)
+        ):
+            _apply_dataset_values(name, values)
     # The description and the metadata tables are part of the
     # same save; committed under the old name, which the rename below carries.
     from scanpath_studio.app import commit_editor_staging
@@ -15087,6 +15148,39 @@ def _render_aggregate_toggle(name: str, *, adding: bool) -> None:
     )
 
 
+#: Why ✏️ Edit dataset's *Word box* format is fixed for a stored Words table.
+STORED_BOX_FORMAT_REASON = (
+    "Word boxes are stored as position + size. Edges were converted when the "
+    "dataset was added."
+)
+
+
+def box_edges_note(stored: dict) -> str | None:
+    """What ✏️ Edit dataset says under *Word box* when the dataset was added
+    with each box's edges (EyeLink's ``IA_LEFT`` … ``IA_BOTTOM``).
+
+    The editor maps the *stored* frame, which holds every box as its top-left
+    corner and size — the edges were turned into a width and a height when the
+    dataset was added, and are not columns of it any more. So the box shows as
+    *Origin + size* here whatever the add screen showed; this says which
+    edges it came from, so the two screens do not seem to disagree. ``None``
+    when the box was read as x/y/width/height to begin with.
+    """
+    names = ColumnNames.from_payload((stored.get("column_names") or {}).get("words"))
+    restated, _unresolved = source_schema(
+        {"x": "x", "y": "y", "width": "width", "height": "height"}, names
+    )
+    edges = [(restated or {}).get(side) for side in ("left", "right", "top", "bottom")]
+    if not all(isinstance(edge, str) for edge in edges):
+        return None
+    left, right, top, bottom = edges
+    return (
+        f"Added from each box's edges ({left}, {right}, {top}, {bottom}). It is "
+        "stored, and edited here, as its top-left corner and size: Box width is "
+        f"{right} − {left}, Box height {bottom} − {top}."
+    )
+
+
 def _render_remap_fields(
     name: str, stored: dict, problems: dict, composite: list, added: dict | None = None
 ) -> dict:
@@ -15163,6 +15257,12 @@ def _render_remap_fields(
             # auto-detect — say so. A table being added *is* auto-detected.
             detected_label=detected_labels.get(table_key, "currently mapped"),
             option_labels=stored_labels.get(table_key),
+            # A stored Words table holds x/y/width/height only, so its box
+            # cannot be mapped as edges; a table being added still can.
+            box_format_lock=STORED_BOX_FORMAT_REASON
+            if table_key == "words"
+            and detected_labels.get(table_key) == "currently mapped"
+            else None,
         )
 
     # A stored table's columns are canonical; offer them by the
@@ -15205,6 +15305,10 @@ def _render_remap_fields(
             pending[table].update(_cell(cell, table, field))
             seen.add((table, field))
         if extra == "aggregate" and "words" in frames:
+            if "words" not in (added or {}):
+                note = box_edges_note(stored)
+                if note:
+                    st.caption(f"{ICONS['info']} {note}")
             _render_aggregate_toggle(name, adding="words" in (added or {}))
 
     # Anything the rows above do not name — a field added to the specs since, or
@@ -15678,7 +15782,9 @@ def _render_remap_editor(
         )
     st.caption(
         "Change which of this dataset's columns fills each field the app reads. "
-        "Only columns kept when the dataset was added are available."
+        "Only columns kept when the dataset was added are available. To use a "
+        "column that isn't listed, remove this dataset and add it again from its "
+        "files."
     )
     # The same wide option lists the add-dataset screen gets — this is
     # the same mapping, in the same shape.
@@ -16812,7 +16918,7 @@ def render_dataset_capabilities(
         st.caption("  \n".join(lines))
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=8)
 def _c_data_health(_words, _fixations, _raw_gaze, key) -> list:
     """`data_health.check_data_health`, once per dataset (keyed on fingerprints)."""
     from .data_health import check_data_health
@@ -16822,6 +16928,76 @@ def _c_data_health(_words, _fixations, _raw_gaze, key) -> list:
 
 #: How a health finding names the rows of each table.
 _HEALTH_ROW_NOUN = {"fixations": "fixation", "words": "word", "raw_gaze": "raw-gaze"}
+
+#: A data check is worth a notice on the Scanpath view when it flags more
+#: than this share of its table's rows. A few 0 ms fixations or a missing
+#: position are ordinary in a recording, and stay on the Data page; most of a
+#: table flagged is a column mapped to the wrong field or a broken export.
+SERIOUS_HEALTH_SHARE = 0.5
+
+
+def _dataset_health_findings(words, fixations, raw_gaze) -> list:
+    """`_c_data_health` under the key the Data page's *Data checks* uses, so
+    the Scanpath view and the Data page share one run."""
+    return _c_data_health(
+        words,
+        fixations,
+        raw_gaze,
+        (
+            frame_fingerprint(words),
+            frame_fingerprint(fixations),
+            frame_fingerprint(raw_gaze),
+        ),
+    )
+
+
+def serious_health_lines(findings) -> list[str]:
+    """One line per *warning* finding that flags most of its table's rows
+    (`SERIOUS_HEALTH_SHARE`)."""
+    lines = []
+    for finding in findings:
+        if finding.severity != "warning" or not finding.total_rows:
+            continue
+        if finding.rows <= SERIOUS_HEALTH_SHARE * finding.total_rows:
+            continue
+        noun = _HEALTH_ROW_NOUN.get(finding.table, finding.table)
+        lines.append(
+            f"**{finding.title}**: {finding.rows:,} of {finding.total_rows:,} "
+            f"{noun} rows."
+        )
+    return lines
+
+
+def render_data_health_notice(host, words, fixations, raw_gaze) -> None:
+    """A notice on the Scanpath view when the dataset fails a data check badly.
+
+    The figure is drawn either way, and looks plausible: a duration mapped to
+    a column of words draws every fixation at the smallest size. So when a
+    check flags most of a table (`serious_health_lines`), say so above the
+    plot and point to 🗂️ Data Management → *Data checks*, where the rows are
+    listed. ``host`` is a slot drawn on every run.
+    """
+    findings = _dataset_health_findings(words, fixations, raw_gaze)
+    lines = serious_health_lines(findings)
+    if not lines:
+        return
+    from scanpath_studio.url_state import _go_data
+
+    box = host.container(key="data_health_notice")
+    box.warning(
+        "This dataset fails the data checks, so the figure may be wrong.  \n"
+        + "  \n".join(lines)
+        + "  \nSee **Data Management → Data checks** for the rows. If a field "
+        "is mapped to the wrong column, change it under **Edit dataset**, or "
+        "remove the dataset and add its files again.",
+        icon=ICONS["warning"],
+    )
+    box.button(
+        "Open Data checks",
+        icon=ICONS["view_data"],
+        key="data_health_notice_open",
+        on_click=_go_data,
+    )
 
 
 def render_data_health(
@@ -16843,16 +17019,7 @@ def render_data_health(
     """
     from .column_names import active
 
-    findings = _c_data_health(
-        words,
-        fixations,
-        raw_gaze,
-        (
-            frame_fingerprint(words),
-            frame_fingerprint(fixations),
-            frame_fingerprint(raw_gaze),
-        ),
-    )
+    findings = _dataset_health_findings(words, fixations, raw_gaze)
     with st.container(key="dataset_health"):
         st.caption(
             "**Data checks**"

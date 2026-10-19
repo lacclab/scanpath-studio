@@ -333,7 +333,11 @@ class TestFilesTheReadersUsedToRefuse:
 
         at = AppTest.from_function(script).run(timeout=60)
         assert not at.exception
-        assert any("Couldn't read **empty.csv**" in e.value for e in at.error)
+        (message,) = [e.value for e in at.error]
+        assert message.startswith("**empty.csv** is empty and has no header row.")
+        # One sentence after another, never the doubled period of a reader's
+        # message with ". Check …" glued on.
+        assert ".." not in message
 
 
 class TestTheDelimiterIsReadOffTheHeader:

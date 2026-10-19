@@ -35,7 +35,7 @@ def test_comparison_contains_every_fixation_for_both_readers():
     ):
         expected = fixations[
             (fixations.participant_id == participant)
-            & (fixations.trial_id == f"{participant}_2_2_4_Ele_r0")
+            & (fixations.trial_id == f"{participant}_2_2_4_Ele")
         ]
         trace = next(t for t in figure.data if t.name == label and t.mode == "markers")
         assert len(trace.x) == len(expected)

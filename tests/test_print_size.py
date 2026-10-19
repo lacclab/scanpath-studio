@@ -49,9 +49,7 @@ def test_the_app_png_and_the_code_write_the_same_pixel_width(monkeypatch):
 
 
 def test_save_figure_refuses_a_dpi_without_a_width(tmp_path):
-    fig = sps.plot_scanpath(
-        *sps.load_sample_data(), "l37_1129", "l37_1129_2_1_1_Ele_r0"
-    )
+    fig = sps.plot_scanpath(*sps.load_sample_data(), "l37_1129", "l37_1129_2_1_1_Ele")
     with pytest.raises(ValueError, match="width_mm or width_in"):
         api.save_figure(fig, tmp_path / "a.png", dpi=600)
     with pytest.raises(ValueError, match="size a PNG"):
@@ -64,9 +62,7 @@ def test_save_figure_refuses_a_dpi_without_a_width(tmp_path):
 def test_save_figure_writes_the_print_size(tmp_path):
     from PIL import Image
 
-    fig = sps.plot_scanpath(
-        *sps.load_sample_data(), "l37_1129", "l37_1129_2_1_1_Ele_r0"
-    )
+    fig = sps.plot_scanpath(*sps.load_sample_data(), "l37_1129", "l37_1129_2_1_1_Ele")
     path = api.save_figure(fig, tmp_path / "a.png", width_mm=180, dpi=600)
     with Image.open(path) as image:
         assert image.size[0] == 4252

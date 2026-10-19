@@ -28,7 +28,7 @@ print(gallery_figure("heatmap"))
 
     ```bash
     scanpath-studio render --sample \
-      -p l37_1129 -t l37_1129_2_1_1_Ele_r0 \
+      -p l37_1129 -t l37_1129_2_1_1_Ele \
       --heatmap --heatmap-style smoothed --no-fixations --no-saccades \
       --highlight-column '' \
       -o heatmap.html

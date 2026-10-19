@@ -32,10 +32,14 @@ from plotly.io.json import to_json_plotly
 
 from scanpath_studio import api, tabs
 from scanpath_studio.plots import (
+    _CONTROLS_MARGIN_PX,
+    _CONTROLS_SAFETY_PX,
+    REPLAY_TOOLBAR_PX,
     _packed_frames_script,
     animation_player_post_script,
     pack_replay_frames,
     replay_page,
+    replay_page_box,
 )
 
 NODE = shutil.which("node")
@@ -45,7 +49,7 @@ needs_node = pytest.mark.skipif(
 )
 
 # The demo's longest reading (311 fixations, 81.6 s): 360 frames at the default grid.
-LONGEST = ("l37_1129", "l37_1129_2_2_2_Adv_r0")
+LONGEST = ("l37_1129", "l37_1129_2_2_2_Adv")
 
 
 @functools.cache
@@ -294,4 +298,128 @@ class TestEverySurfaceCarriesThePackedFrames:
         )
         assert uuid.sub("id", tabs._animation_html(fig.to_dict())) == uuid.sub(
             "id", download
+        )
+
+
+class TestThePageDrawsTheToolbarAboveTheFigure:
+    """The figure keeps Plotly's own transport controls in a band above the
+    plot, for `fig.show()`. A page hides them, takes the band back — so the
+    replay's plot is the static figure's size — and the player draws its
+    compact toolbar above the figure instead."""
+
+    def test_the_page_is_the_static_figures_size(self):
+        words, fixations = _demo()
+        static = api.plot_scanpath(words, fixations, *LONGEST)
+        fig = _replay("longest")
+        page, _script = replay_page(fig)
+        layout = page["layout"]
+        assert (layout["width"], layout["height"]) == (
+            static.layout.width,
+            static.layout.height,
+        )
+        assert layout["margin"]["t"] == (static.layout.margin.t or 0)
+        assert [m["visible"] for m in layout["updatemenus"]] == [False]
+        assert [s["visible"] for s in layout["sliders"]] == [False]
+        assert layout["meta"]["scanpath_toolbar"] == REPLAY_TOOLBAR_PX
+        assert replay_page_box(fig) == (
+            static.layout.width,
+            static.layout.height,
+            REPLAY_TOOLBAR_PX,
+        )
+        assert replay_page_box(fig.to_dict()) == replay_page_box(fig)
+        # The figure itself keeps its controls and its band, for fig.show().
+        assert fig.layout.height == static.layout.height + (
+            _CONTROLS_MARGIN_PX + _CONTROLS_SAFETY_PX
+        )
+        assert fig.layout.updatemenus[0].visible is not False
+        assert "scanpath_toolbar" not in fig.layout.meta
+
+    def test_a_title_stays_above_the_plot(self):
+        words, fixations = _demo()
+        fig = api.animate_scanpath(words, fixations, *LONGEST, title="A title")
+        page, _script = replay_page(fig)
+        layout = page["layout"]
+        assert layout["title"]["text"] == "A title"
+        assert layout["margin"]["t"] == fig.layout.margin.t - _CONTROLS_MARGIN_PX > 0
+        assert layout["height"] == fig.layout.height - (
+            _CONTROLS_MARGIN_PX + _CONTROLS_SAFETY_PX
+        )
+
+    def test_a_legend_above_the_plot_keeps_its_own_room(self):
+        # A legend moved above the plot grows the figure past the controls'
+        # band, so the page, which takes the band back, still has room for it.
+        words, fixations = _demo()
+        pid_b, tid_b = "l7_1090", "l7_1090_2_2_2_Adv_r0"
+        kwargs = dict(trial_b=(pid_b, tid_b), fix_index_range=(1, 20))
+        plain = api.animate_scanpath(words, fixations, *LONGEST, **kwargs)
+        above = api.animate_scanpath(
+            words,
+            fixations,
+            *LONGEST,
+            legend_layout={
+                "compare": {
+                    "position": "top-center-outside",
+                    "arrangement": "stacked",
+                    "size": 40,
+                }
+            },
+            **kwargs,
+        )
+        grown = above.layout.margin.t - plain.layout.margin.t
+        assert grown > 0
+        page, _script = replay_page(above)
+        assert page["layout"]["margin"]["t"] == pytest.approx(grown)
+
+    def test_toolbar_false_keeps_the_figures_own_controls(self):
+        fig = _replay("longest")
+        page, _script = replay_page(fig, toolbar=False)
+        layout = page["layout"]
+        assert layout["height"] == fig.layout.height
+        assert "visible" not in layout["updatemenus"][0]
+        assert "scanpath_toolbar" not in layout["meta"]
+
+    def test_the_app_embed_leaves_a_slot_above_the_figure(self):
+        fig = _replay("longest")
+        width, height, toolbar = replay_page_box(fig)
+        html, iframe_height = tabs._true_scale_html(
+            "<div></div>",
+            key="k",
+            width=width,
+            height=height,
+            max_height=None,
+            zoomable=True,
+            fit_window=True,
+            toolbar=toolbar,
+        )
+        slot = html.index('<div id="truescale-k-transport" style="height:32px;')
+        fit = html.index('id="fit-k"')
+        # The zoom buttons end the toolbar row, not float over the plot's
+        # top-left, where the title or the legend is.
+        zoom = html.index('id="zoombar-k"')
+        assert slot < zoom < fit
+        assert "order:99;" in html[zoom : html.index(">", zoom)]
+        assert "position:absolute" not in html[zoom : html.index(">", zoom)]
+        assert "var BAR = 32;" in html
+        assert iframe_height == height + 12 + REPLAY_TOOLBAR_PX
+        static_html, static_height = tabs._true_scale_html(
+            "<div></div>",
+            key="k",
+            width=width,
+            height=height,
+            max_height=None,
+            zoomable=True,
+        )
+        assert '<div id="truescale-k-transport"' not in static_html
+        assert "var BAR = 0;" in static_html
+        zoom = static_html.index('id="zoombar-k"')
+        assert "position:absolute" in static_html[zoom : static_html.index(">", zoom)]
+        assert static_height == height + 12
+
+    def test_a_first_replay_reserves_the_toolbar_not_the_band(self):
+        from scanpath_studio import loading
+
+        width, height = loading.estimate_plot_size(2560, 1440)
+        assert loading.estimate_plot_size(2560, 1440, animation=True) == (
+            width,
+            height + REPLAY_TOOLBAR_PX,
         )

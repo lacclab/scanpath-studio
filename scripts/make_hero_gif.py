@@ -24,7 +24,7 @@ import scanpath_studio as sps
 from scanpath_studio.animation_export import export_animation
 
 PARTICIPANT = "l7_1090"
-PARAGRAPH = "l7_1090_2_2_4_Ele_r0"
+PARAGRAPH = "l7_1090_2_2_4_Ele"
 PLAYBACK_SPEED = 3.0  # the Animated Scanpath tab's default
 
 

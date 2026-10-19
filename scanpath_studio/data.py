@@ -27,6 +27,7 @@ from . import progress
 from .constants import (
     DEFAULT_FIGURE_SIZE,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
+    DRAWABLE_PX_LIMIT,
     PACKAGE_NAME,
     SAMPLE_INDEX,
     UPLOAD_FILE_TYPES,
@@ -2240,6 +2241,10 @@ def _can_reread(buf) -> bool:
         return False
 
 
+#: How much of a text table is looked at for the NUL bytes no text has.
+_BINARY_SNIFF_BYTES = 8192
+
+
 def _read_delimited(buf, sep: str, plan: ReadPlan | None, **extra) -> pd.DataFrame:
     """``read_csv`` with the encoding fallback a non-UTF-8 export needs.
 
@@ -2249,17 +2254,33 @@ def _read_delimited(buf, sep: str, plan: ReadPlan | None, **extra) -> pd.DataFra
     member) re-raises, and :func:`_read_zipped_table` retries it from memory.
     A byte-order mark settles the encoding outright (a UTF-16 Data Viewer
     export).
+
+    A file that holds NUL bytes and no byte-order mark is not text (an image
+    renamed ``.csv``) and is refused as such, rather than tokenized into a
+    parser error.
+
+    A planned read (``plan.columns``) of a table held in memory (an upload)
+    leaves out the rows with more fields than its header, and says so in the
+    frame's `READ_NOTES_ATTR` — see :func:`_overflow_lines` for why `usecols`
+    alone would keep them.
     """
-    bom = _bom_encoding(_peek(buf, 4)) if _can_reread(buf) else None
+    rereadable = _can_reread(buf)
+    head = _peek(buf, _BINARY_SNIFF_BYTES) if rereadable else b""
+    bom = _bom_encoding(head)
+    if not bom and b"\x00" in head:
+        raise _not_text_error(str(getattr(buf, "name", buf)), head)
+    kwargs = {**_read_kwargs(plan), **extra}
+    skipped: list[int] = []
+    if plan is not None and plan.columns and "nrows" not in extra and rereadable:
+        header = _header(buf, sep)
+        _rewind(buf)
+        skipped = _overflow_lines(buf, sep, len(header))
+        if skipped:
+            kwargs["skiprows"] = skipped
     for encoding in (bom,) if bom else _TEXT_ENCODINGS:
         try:
-            return pd.read_csv(
-                buf,
-                sep=sep,
-                low_memory=False,
-                encoding=encoding,
-                **_read_kwargs(plan),
-                **extra,
+            frame = pd.read_csv(
+                buf, sep=sep, low_memory=False, encoding=encoding, **kwargs
             )
         except UnicodeDecodeError:
             if bom or encoding == _TEXT_ENCODINGS[-1] or not _can_reread(buf):
@@ -2270,7 +2291,68 @@ def _read_delimited(buf, sep: str, plan: ReadPlan | None, **extra) -> pd.DataFra
                 getattr(buf, "name", buf),
                 encoding,
             )
+            continue
+        if skipped:
+            frame.attrs[READ_NOTES_ATTR] = [_skipped_rows_note(skipped)]
+        return frame
     raise AssertionError("unreachable: latin-1 decodes every byte")
+
+
+def _overflow_lines(buf, sep: str, n_fields: int) -> list[int]:
+    """The 0-based line numbers of an in-memory table's rows that hold more
+    fields than its header's ``n_fields``.
+
+    A planned read hands ``read_csv`` a ``usecols``, and with one the parser
+    keeps such a row, cut to the planned columns, without a word — though the
+    extra field shifted every value after it into the wrong column (a trial
+    ID that is really an X). Asking the parser instead costs a second parse of
+    the whole file, so the delimiters are counted here: the whole buffer's
+    first, which settles a clean table at once, and line by line only when
+    that total is off (a long row, or a short or blank one beside it). Empty
+    trailing fields are not extra fields.
+
+    Only a buffer already in memory (an upload) is counted, and only text
+    whose delimiters can be counted as bytes: a file with quoted values
+    (whose delimiters may be data) or a UTF-16/32 export reads as before.
+    """
+    getvalue = getattr(buf, "getvalue", None)
+    if not callable(getvalue) or len(sep) != 1 or n_fields < 1:
+        return []
+    data = getvalue()
+    if not isinstance(data, bytes) or b'"' in data:
+        return []
+    if _bom_encoding(data[:4]) not in (None, "utf-8-sig"):
+        return []
+    delimiter = sep.encode()
+    end = len(data)
+    while end and data[end - 1] in b"\r\n \t" + delimiter:
+        end -= 1
+    n_lines = data.count(b"\n", 0, end) + 1
+    if data.count(delimiter, 0, end) == n_lines * (n_fields - 1):
+        return []
+    trailing = b"\r \t" + delimiter
+    long_lines: list[int] = []
+    start = data.find(b"\n", 0, end) + 1
+    line = 1
+    while 0 < start < end:
+        stop = data.find(b"\n", start, end)
+        stop = end if stop == -1 else stop
+        if data[start:stop].rstrip(trailing).count(delimiter) > n_fields - 1:
+            long_lines.append(line)
+        start = stop + 1
+        line += 1
+    return long_lines
+
+
+def _skipped_rows_note(lines: list[int]) -> str:
+    """What a read says about the rows `_overflow_lines` found (0-based)."""
+    shown = ", ".join(str(n + 1) for n in lines[:5]) + (" …" if len(lines) > 5 else "")
+    one = len(lines) == 1
+    return (
+        f"Skipped {len(lines)} row{'' if one else 's'} with more fields than the "
+        f"header (line{'' if one else 's'} {shown}). A delimiter inside a value "
+        "that isn't quoted does this."
+    )
 
 
 #: EyeLink writes a value it could not measure as a bare period. Declared
@@ -2467,44 +2549,256 @@ _UNPARSED_WORD_CONSEQUENCE = dict.fromkeys(
     "those word boxes have no position",
 )
 
+#: Each numeric mapping field, by table and schema key: its name on the mapping
+#: form, and what the column mapped to it should hold. A warning about a column
+#: names the field it fills and the column to choose instead, since a field
+#: mapped to the wrong column is the usual reason most of its values aren't
+#: numbers.
+NUMERIC_FIELD_TEXT: dict[tuple[str, str], tuple[str, str]] = {
+    ("fixations", "duration"): ("Duration (ms)", "fixation durations"),
+    ("fixations", "timestamp"): ("Timestamp (ms)", "fixation start times"),
+    ("fixations", "x"): ("X coordinate", "horizontal gaze positions in pixels"),
+    ("fixations", "y"): ("Y coordinate", "vertical gaze positions in pixels"),
+    ("fixations", "word_id"): ("Word ID", "the number of the word fixated"),
+    ("fixations", "fixation_id"): ("Fixation ID", "fixation numbers"),
+    ("fixations", "canvas_width"): ("Screen canvas width", "screen widths in pixels"),
+    ("fixations", "canvas_height"): (
+        "Screen canvas height",
+        "screen heights in pixels",
+    ),
+    ("words", "x"): ("Box x (top-left)", "each word box's left edge in pixels"),
+    ("words", "y"): ("Box y (top-left)", "each word box's top edge in pixels"),
+    ("words", "width"): ("Box width", "each word box's width in pixels"),
+    ("words", "height"): ("Box height", "each word box's height in pixels"),
+    ("words", "left"): ("Box left", "each word box's left edge in pixels"),
+    ("words", "right"): ("Box right", "each word box's right edge in pixels"),
+    ("words", "top"): ("Box top", "each word box's top edge in pixels"),
+    ("words", "bottom"): ("Box bottom", "each word box's bottom edge in pixels"),
+    ("words", "line"): ("Line index", "each word's line number"),
+    ("words", "word_id"): ("Word ID", "each word's number"),
+    ("words", "canvas_width"): ("Screen canvas width", "screen widths in pixels"),
+    ("words", "canvas_height"): ("Screen canvas height", "screen heights in pixels"),
+}
 
-def numeric_parse_issues(
-    raw: pd.DataFrame, schema: dict, *, table: str, fixations: bool = True
-) -> list[str]:
-    """Plain-language warnings for mapped numeric columns that did not parse.
+#: More than this share of a column's values unreadable reads as the wrong
+#: column rather than a few bad cells, and the warning says to choose another.
+WRONG_COLUMN_SHARE = 0.5
 
-    One line per column, naming the table, the column, how many of its cells
-    were unreadable, a few examples, and what the load did with those rows —
-    because the load carries on either way, and a column read as all-NaN would
-    otherwise produce a plausible-looking figure with nothing said. A
-    decimal-comma column that :func:`_to_number` converts is not an issue; one
-    whose commas could equally be thousands separators is, with that named.
+
+@dataclass(frozen=True)
+class UnparsedColumn:
+    """How many of one mapped column's cells are not numbers, and which.
+
+    ``rows`` counts every row, so ``unreadable + empty`` is the number of rows
+    the load reads as missing — the count *Data checks* reports for them
+    (a duration read as 0 ms, a position with none).
     """
-    issues: list[str] = []
-    seen: set = set()
+
+    unreadable: int
+    empty: int
+    rows: int
+    examples: tuple[str, ...]
+    #: Every unreadable cell has the shape of a thousands-grouped number.
+    thousands: bool
+
+    @property
+    def wrong_column(self) -> bool:
+        """Most of the filled cells are unreadable: the field is mapped to the
+        wrong column."""
+        filled = self.rows - self.empty
+        return filled > 0 and self.unreadable > WRONG_COLUMN_SHARE * filled
+
+
+@dataclass(frozen=True)
+class ColumnParse:
+    """One mapped numeric column read once, for every check that needs it.
+
+    ``parsed`` is :func:`_to_number`'s reading. For a column that is not
+    numeric already, ``failed`` is the stripped text of the cells it could not
+    read that hold something (index-aligned with the column) and ``empty`` the
+    mask of cells that hold nothing: NaN, blank or EyeLink's ``.``.
+    """
+
+    parsed: pd.Series
+    failed: pd.Series | None = None
+    empty: pd.Series | None = None
+
+    def summary(self, keep: pd.Series | None = None) -> UnparsedColumn | None:
+        """The :class:`UnparsedColumn` over the rows ``keep`` selects (all
+        rows when ``None``); ``None`` when every filled cell reads."""
+        if self.failed is None or self.failed.empty:
+            return None
+        failed, empty = self.failed, self.empty
+        if keep is not None:
+            failed = failed[keep.loc[failed.index].to_numpy()]
+            empty = empty[keep]
+            if failed.empty:
+                return None
+        return UnparsedColumn(
+            unreadable=len(failed),
+            empty=int(empty.sum()),
+            rows=len(empty),
+            examples=tuple(str(v) for v in failed.drop_duplicates().head(3)),
+            thousands=bool(failed.str.fullmatch(_THOUSANDS_GROUPED).all()),
+        )
+
+
+def _read_column(values: pd.Series) -> ColumnParse:
+    parsed = _to_number(values)
+    if pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values):
+        return ColumnParse(parsed)
+    # Only the cells that did not parse are looked at as text: a blank cell or
+    # `.` is among them (neither reads as a number), and is empty, not garbage.
+    unread = parsed.isna() & values.notna()
+    text = values[unread].astype(str).str.strip()
+    blank = (text == "") | (text == MISSING_MARKER)
+    empty = values.isna()
+    if blank.any():
+        empty = empty.copy()
+        empty.loc[blank[blank].index] = True
+    return ColumnParse(parsed, failed=text[~blank], empty=empty)
+
+
+#: `frame_cache` slot for :func:`column_parse` — a few mapped columns of the
+#: one table being mapped.
+_COLUMN_PARSE_SLOT = "numeric_column_parse"
+
+
+def column_parse(
+    raw: pd.DataFrame, column: str, *, fingerprint: tuple | None = None
+) -> ColumnParse:
+    """``raw[column]`` read as numbers (:class:`ColumnParse`).
+
+    With ``fingerprint`` (``frame_fingerprint(raw)``) the reading is kept in
+    `frame_cache`, so the mapping form's field note and the warnings above
+    ✅ Add dataset read a column of a million rows once between them.
+    """
+    if fingerprint is None:
+        return _read_column(raw[column])
+    return frame_cache(
+        _COLUMN_PARSE_SLOT,
+        (fingerprint, column),
+        lambda: _read_column(raw[column]),
+        keep=16,
+    )
+
+
+def unparsed_column(values: pd.Series) -> UnparsedColumn | None:
+    """The cells of a mapped numeric column :func:`_to_number` cannot read.
+
+    ``None`` when every filled cell reads as a number — a numeric or boolean
+    column always does. Blank cells and EyeLink's ``.`` are *empty*, not
+    unreadable."""
+    return _read_column(values).summary()
+
+
+def _field_text(key: str, *, fixations: bool) -> tuple[str, str]:
+    """``(field name, what its column should hold)`` for a numeric field."""
+    table = "fixations" if fixations else "words"
+    return NUMERIC_FIELD_TEXT.get((table, key), (key, ""))
+
+
+def _choose_instead(holds: str) -> str:
+    return (
+        f"Choose the column that holds {holds}"
+        if holds
+        else "Choose the column that holds this field's values"
+    )
+
+
+def wrong_column_note(
+    raw: pd.DataFrame,
+    column: str,
+    key: str,
+    *,
+    fixations: bool = True,
+    fingerprint: tuple | None = None,
+) -> str:
+    """The mapping form's note under a numeric field mapped to the wrong column.
+
+    ``""`` unless most of the column's filled cells are not numbers
+    (:attr:`UnparsedColumn.wrong_column`) — a few bad cells are the warning
+    above ✅ Add dataset alone. ``fingerprint`` shares the column's reading
+    with that warning (:func:`column_parse`).
+    """
+    if column not in raw.columns:
+        return ""
+    found = column_parse(raw, column, fingerprint=fingerprint).summary()
+    if found is None or not found.wrong_column or found.thousands:
+        return ""
+    _name, holds = _field_text(key, fixations=fixations)
+    examples = ", ".join(f"'{v}'" for v in found.examples)
+    return (
+        f"{found.unreadable:,} of {found.rows:,} values aren't numbers "
+        f"(e.g. {examples}). {_choose_instead(holds)}."
+    )
+
+
+def _mapped_numeric_columns(raw: pd.DataFrame, schema: dict) -> list[tuple[str, str]]:
+    """``(key, column)`` for each numeric field mapped to a column of ``raw``,
+    the first field for a column mapped twice."""
+    pairs, seen = [], set()
     for key, column in schema.items():
         if key not in NUMERIC_SCHEMA_FIELDS or not isinstance(column, str):
             continue
         if column in seen or column not in raw.columns:
             continue
         seen.add(column)
-        values = raw[column]
-        if pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values):
+        pairs.append((key, column))
+    return pairs
+
+
+def _parses_for(
+    raw: pd.DataFrame, schema: dict, parses: dict | None, fingerprint=None
+) -> dict:
+    """``{column: ColumnParse}`` for every mapped numeric column, reusing
+    ``parses`` when the caller has them."""
+    if parses is not None:
+        return parses
+    return {
+        column: column_parse(raw, column, fingerprint=fingerprint)
+        for _key, column in _mapped_numeric_columns(raw, schema)
+    }
+
+
+def numeric_parse_issues(
+    raw: pd.DataFrame,
+    schema: dict,
+    *,
+    table: str,
+    fixations: bool = True,
+    parses: dict | None = None,
+    keep: pd.Series | None = None,
+) -> list[str]:
+    """Plain-language warnings for mapped numeric columns that did not parse.
+
+    One line per column, naming the field, the column it is mapped to, how
+    many of its rows were unreadable or empty, a few examples, what the load
+    did with those rows, and what to do — because the load carries on either
+    way, and a column read as all-NaN would otherwise produce a
+    plausible-looking figure with nothing said. A decimal-comma column that
+    :func:`_to_number` converts is not an issue; one whose commas could
+    equally be thousands separators is, with that named.
+
+    ``parses`` (:func:`_parses_for`) and ``keep`` — the rows the load keeps —
+    come from :func:`normalization_issues`.
+    """
+    parses = _parses_for(raw, schema, parses)
+    issues: list[str] = []
+    for key, column in _mapped_numeric_columns(raw, schema):
+        found = parses[column].summary(keep)
+        if found is None:
             continue
-        failed = _unparsed_cells(values, _to_number(values))
-        if failed.empty:
-            continue
-        examples = ", ".join(f"'{v}'" for v in failed.drop_duplicates().head(3))
+        name, holds = _field_text(key, fixations=fixations)
+        examples = ", ".join(f"'{v}'" for v in found.examples)
+        verb = "isn't a number" if found.unreadable == 1 else "aren't numbers"
         line = (
-            f"{table}: {len(failed):,} of {len(_filled_cells(values)):,} values in "
-            f"`{column}` aren't numbers (e.g. {examples})"
+            f"{table}: **{name}** is mapped to `{column}`, but {found.unreadable:,} "
+            f"of its {found.rows:,} values {verb} (e.g. {examples})"
         )
-        if failed.str.fullmatch(_THOUSANDS_GROUPED).all():
-            line += (
-                ". The comma could be a decimal comma or a thousands separator, so "
-                "they were not converted. Re-export the table with a '.' decimal "
-                "point and no thousands separator"
-            )
+        if found.empty:
+            line += f" and {found.empty:,} " + ("is" if found.empty == 1 else "are")
+            line += " empty"
         consequences = (
             _UNPARSED_CONSEQUENCE if fixations else _UNPARSED_WORD_CONSEQUENCE
         )
@@ -2515,7 +2809,126 @@ def numeric_parse_issues(
                 "with no X and Y mapped, those fixations have no position and are "
                 "left off the plot"
             )
-        issues.append(f"{line}; {consequence}.")
+        line += f"; {consequence}."
+        if found.thousands:
+            line += (
+                " The comma could be a decimal comma or a thousands separator, so "
+                "they were not converted. Re-export the table with a '.' decimal "
+                "point and no thousands separator."
+            )
+        elif found.wrong_column:
+            line += f" {_choose_instead(holds)}."
+        else:
+            line += " If this is the right column, correct those cells in the file."
+        issues.append(line)
+    return issues
+
+
+#: A fixation longer than this is not a fixation: a wrong column or unit.
+_LONGEST_FIXATION_MS = 3_600_000.0
+
+
+def _example_numbers(values: pd.Series) -> str:
+    return ", ".join(f"{v:g}" for v in values.drop_duplicates().head(3))
+
+
+def _counted(parts: list[tuple[int, str]]) -> str:
+    """``"1 value is negative and 2 are infinite"`` from ``(count, said)``."""
+    said = []
+    for index, (count, what) in enumerate(parts):
+        verb = "is" if count == 1 else "are"
+        noun = ("value " if count == 1 else "values ") if index == 0 else ""
+        said.append(f"{count:,} {noun}{verb} {what}")
+    if len(said) == 1:
+        return said[0]
+    return ", ".join(said[:-1]) + " and " + said[-1]
+
+
+def value_range_issues(
+    raw: pd.DataFrame,
+    schema: dict,
+    *,
+    table: str,
+    fixations: bool = True,
+    parses: dict | None = None,
+    keep: pd.Series | None = None,
+) -> list[str]:
+    """Warnings for mapped values that read as numbers but cannot be right.
+
+    A duration that is negative, infinite or longer than an hour; a fixation
+    position or word-box coordinate that is infinite or too far off any
+    screen to draw (:data:`DRAWABLE_PX_LIMIT`); and, for a fixation position, a
+    missing value, when :func:`numeric_parse_issues` has not already counted
+    it. The load keeps them all; *Data checks* lists the rows. ``parses`` and
+    ``keep`` are :func:`numeric_parse_issues`' own.
+    """
+    parses = _parses_for(raw, schema, parses)
+    if fixations:
+        keys = ("duration", "x", "y")
+    else:
+        keys = ("x", "y", "width", "height", "left", "right", "top", "bottom")
+    issues: list[str] = []
+    for key in keys:
+        column = schema.get(key)
+        if not isinstance(column, str) or column not in parses:
+            continue
+        read = parses[column]
+        parsed = read.parsed.astype(float)
+        if keep is not None:
+            parsed = parsed[keep]
+        name, _holds = _field_text(key, fixations=fixations)
+        parts: list[tuple[int, str]] = []
+        shown: list[pd.Series] = []
+        infinite = np.isinf(parsed)
+        if key == "duration":
+            ms = _as_ms(parsed, column)
+            negative = ms < 0
+            too_long = (ms > _LONGEST_FIXATION_MS) & ~infinite
+            for mask, what in (
+                (negative, "negative"),
+                (infinite & ~negative, "infinite"),
+                (too_long, "longer than an hour"),
+            ):
+                if mask.any():
+                    parts.append((int(mask.sum()), what))
+                    shown.append(parsed[mask])
+            consequence = (
+                "They are kept as they are, and they distort reading-time sums "
+                "and marker sizes. Check the column and its unit."
+            )
+        else:
+            far = (parsed.abs() > DRAWABLE_PX_LIMIT) & ~infinite
+            for mask, what in (
+                (infinite, "infinite"),
+                (far, "too far off the screen to draw"),
+            ):
+                if mask.any():
+                    parts.append((int(mask.sum()), what))
+                    shown.append(parsed[mask])
+            # Empty cells beside unreadable ones are counted in
+            # `numeric_parse_issues`' line for this column already.
+            missing = 0
+            if fixations and read.summary(keep) is None:
+                empty = read.empty if read.empty is not None else parsed.isna()
+                missing = int((empty[keep] if keep is not None else empty).sum())
+            if missing:
+                parts.append((missing, "empty"))
+            if fixations:
+                consequence = (
+                    "Those fixations are left off the plot; an empty one is placed "
+                    "at its word's center if it has a word id."
+                    if missing
+                    else "Those fixations are left off the plot."
+                )
+            else:
+                consequence = "Those word boxes are left off the plot."
+        if not parts:
+            continue
+        examples = pd.concat(shown) if shown else pd.Series(dtype=float)
+        line = f"{table}: **{name}** (`{column}`): {_counted(parts)}"
+        if not examples.empty:
+            line += f" (e.g. {_example_numbers(examples)})"
+        issues.append(f"{line}. {consequence}")
     return issues
 
 
@@ -2651,19 +3064,24 @@ def identity_issues(
 _FRACTION_BAND = (-0.5, 1.5)
 
 
-def screen_fraction_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list:
+def screen_fraction_issues(
+    raw: pd.DataFrame, schema: dict, *, table: str, parses: dict | None = None
+) -> list:
     """A warning when the mapped X/Y are screen fractions rather than pixels.
 
     Not converted: the load knows no screen size to scale by, and a
     guessed one would put every fixation in the wrong place while looking
     plausible — the one outcome worse than a figure that is obviously wrong.
+    ``parses`` are :func:`normalization_issues`' readings of the columns.
     """
     x, y = schema.get("x"), schema.get("y")
     if not (isinstance(x, str) and isinstance(y, str)):
         return []
     if x not in raw.columns or y not in raw.columns:
         return []
-    xs, ys = _to_number(raw[x]), _to_number(raw[y])
+    parses = parses or {}
+    xs = parses[x].parsed if x in parses else _to_number(raw[x])
+    ys = parses[y].parsed if y in parses else _to_number(raw[y])
     both = xs.notna() & ys.notna()
     if not both.any():
         return []
@@ -2685,17 +3103,39 @@ def screen_fraction_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> li
 
 
 def normalization_issues(
-    raw: pd.DataFrame, schema: dict, *, table: str, fixations: bool = False
+    raw: pd.DataFrame,
+    schema: dict,
+    *,
+    table: str,
+    fixations: bool = False,
+    fingerprint: tuple | None = None,
 ) -> list[str]:
     """Everything the load will do to ``raw`` under ``schema`` that the user
     should hear about: rows left out for want of an id, mapped numeric columns
-    that did not parse, and — for ``fixations``, whose X/Y are gaze positions
-    rather than box origins — positions that are screen fractions rather than
-    pixels."""
-    issues = identity_issues(raw, schema, table=table)
-    issues += numeric_parse_issues(raw, schema, table=table, fixations=fixations)
+    that did not parse or hold values that cannot be right, and — for
+    ``fixations``, whose X/Y are gaze positions rather than box origins —
+    positions that are screen fractions rather than pixels.
+
+    Each mapped numeric column is read once for all of these
+    (:func:`column_parse`; kept between reruns when ``fingerprint`` is
+    ``frame_fingerprint(raw)``).
+    """
+    blank, unkeyed = _rows_missing_identity(raw, schema)
+    issues = identity_issues(raw, schema, table=table, unkeyed=unkeyed)
+    # The value checks count the rows the load keeps, so their counts are the
+    # ones *Data checks* reports on the loaded table. A mask, not a copy of
+    # the table.
+    dropped = blank | unkeyed
+    keep = ~dropped if dropped.any() else None
+    parses = _parses_for(raw, schema, None, fingerprint)
+    issues += numeric_parse_issues(
+        raw, schema, table=table, fixations=fixations, parses=parses, keep=keep
+    )
+    issues += value_range_issues(
+        raw, schema, table=table, fixations=fixations, parses=parses, keep=keep
+    )
     if fixations:
-        issues += screen_fraction_issues(raw, schema, table=table)
+        issues += screen_fraction_issues(raw, schema, table=table, parses=parses)
     return issues
 
 
@@ -2709,7 +3149,8 @@ def _warn_normalization_issues(
     ✅ Add dataset.
     """
     for issue in normalization_issues(raw, schema, table=table, fixations=fixations):
-        warnings.warn(issue.replace("`", "'"), UserWarning, stacklevel=3)
+        plain = issue.replace("**", "").replace("`", "'")
+        warnings.warn(plain, UserWarning, stacklevel=3)
 
 
 @dataclass(frozen=True)
@@ -3014,13 +3455,158 @@ def _header(buf, sep: str) -> list[str]:
     return list(_read_delimited(buf, sep, None, nrows=0).columns)
 
 
-def _empty_file_error(name: str) -> ValueError:
+class TableReadError(ValueError):
+    """A table file the readers refuse, said in the user's terms.
+
+    ``reason`` completes a sentence that starts with the file's name ("is
+    empty and has no header row"), ``advice`` is what to do about it, and
+    ``detail`` is the reader's own message — kept for whoever wants it, never
+    the message itself, since a parser's wording ("Error tokenizing data. C
+    error: …") says nothing to the person whose file it is.
+    """
+
+    def __init__(self, name: str, reason: str, advice: str = "", detail: str = ""):
+        self.name = Path(str(name)).name
+        self.reason = reason
+        self.advice = advice
+        self.detail = detail
+        super().__init__(" ".join(p for p in (f"'{self.name}' {reason}.", advice) if p))
+
+    def sentence(self, name: str | None = None) -> str:
+        """The message with ``name`` (default: the file's own) in front, as
+        the app shows it: ``**name** is empty …. Check ….``"""
+        shown = name if name is not None else self.name
+        return " ".join(p for p in (f"{shown} {self.reason}.", self.advice) if p)
+
+
+def _empty_file_error(name: str) -> TableReadError:
     """The error an empty upload raises, in place of pandas' "No columns to
     parse from file"."""
-    return ValueError(
-        f"'{Path(name).name}' is empty and has no header row. Check that the "
-        "export finished writing, then upload it again."
+    return TableReadError(
+        name,
+        "is empty and has no header row",
+        "Check that the export finished writing, then upload it again.",
     )
+
+
+def header_only_error(name: str) -> TableReadError:
+    """A table that names its columns and holds no rows: readable, and
+    nothing to add."""
+    return TableReadError(name, "has a header but no rows", "Upload a file with data.")
+
+
+#: The C parser's message for a row with more fields than the header.
+_EXTRA_FIELDS = re.compile(r"Expected (\d+) fields in line (\d+), saw (\d+)")
+#: What a few common non-table files open with, to say what was uploaded.
+_FILE_SIGNATURES = (
+    (b"\x89PNG", "a PNG image"),
+    (b"\xff\xd8\xff", "a JPEG image"),
+    (b"GIF8", "a GIF image"),
+    (b"%PDF", "a PDF"),
+    (b"PK\x03\x04", "a zip archive"),
+    (b"\x1f\x8b", "a gzip archive"),
+    (b"PAR1", "a Parquet file"),
+    (b"ARROW1", "a Feather file"),
+)
+_TABLE_FORMATS = "CSV, TSV, Excel, Parquet or Feather"
+
+
+def _not_text_error(name: str, head: bytes) -> TableReadError:
+    """A text-named file that holds binary data — an image or an archive
+    renamed, or the wrong file picked."""
+    what = next(
+        (label for magic, label in _FILE_SIGNATURES if head.startswith(magic)), ""
+    )
+    return TableReadError(
+        name,
+        "doesn't look like a text table (CSV/TSV)"
+        + (f": it looks like {what}" if what else ": it holds binary data"),
+        f"Upload the table itself ({_TABLE_FORMATS}).",
+    )
+
+
+def explain_read_error(name: str, exc: BaseException) -> TableReadError:
+    """``exc``, raised reading the table file ``name``, as a
+    :class:`TableReadError` — itself when it already is one.
+
+    The readers' own messages are written for programmers and end in a period
+    of their own; this says which file and what is wrong with it, and keeps
+    their wording as :attr:`TableReadError.detail`.
+    """
+    if isinstance(exc, TableReadError):
+        return exc
+    if isinstance(exc, pd.errors.EmptyDataError):
+        return _empty_file_error(name)
+    detail = str(exc).strip()
+    lower = str(name).lower()
+    if isinstance(exc, pd.errors.ParserError):
+        match = _EXTRA_FIELDS.search(detail)
+        if match:
+            expected, line, saw = match.groups()
+            return TableReadError(
+                name,
+                f"has a row with more fields than its header: line {line} has "
+                f"{saw}, the header {expected}",
+                "A delimiter inside a value that isn't quoted does this. Fix "
+                "that row, then upload the file again.",
+                detail,
+            )
+        return TableReadError(
+            name,
+            "doesn't look like a text table (CSV/TSV)",
+            f"Check it is a table with one header row ({_TABLE_FORMATS}).",
+            detail,
+        )
+    if isinstance(exc, UnicodeDecodeError):
+        return TableReadError(
+            name,
+            "doesn't look like a text table (CSV/TSV)",
+            f"Check it is a table with one header row ({_TABLE_FORMATS}).",
+            detail,
+        )
+    if isinstance(exc, zipfile.BadZipFile):
+        return TableReadError(
+            name,
+            "isn't a zip archive that can be opened",
+            "Re-create the zip, then upload it again.",
+            detail,
+        )
+    for suffixes, kind in (
+        ((".parquet",), "a Parquet file"),
+        ((".feather",), "a Feather file"),
+        ((".xlsx", ".xls"), "an Excel workbook"),
+    ):
+        if lower.endswith(suffixes):
+            return TableReadError(
+                name,
+                f"isn't {kind} that can be read",
+                "Check it was saved in that format and finished writing, then "
+                "upload it again.",
+                detail,
+            )
+    if type(exc) is ValueError and detail:
+        # The package's own refusals (an empty zip, a zip over its size
+        # limits) are already written for the user.
+        return TableReadError(name, f"couldn't be read: {detail.rstrip('.')}")
+    return TableReadError(
+        name,
+        "couldn't be read",
+        f"Check it is a table with one header row ({_TABLE_FORMATS}).",
+        detail or type(exc).__name__,
+    )
+
+
+#: The `DataFrame.attrs` entry a read puts what it had to skip in — rows with
+#: more fields than the header — for the upload box to say. Taken off by the
+#: reader of the notes (`pop_read_notes`), like `SOURCE_TOKEN_ATTR`.
+READ_NOTES_ATTR = "_sps_read_notes"
+
+
+def pop_read_notes(frame: pd.DataFrame) -> list[str]:
+    """The notes a read left on ``frame`` (see `READ_NOTES_ATTR`), removed."""
+    if not isinstance(frame, pd.DataFrame):
+        return []
+    return list(frame.attrs.pop(READ_NOTES_ATTR, None) or ())
 
 
 #: How far into a zip member the header line is looked for.
@@ -3189,6 +3775,7 @@ def _tag_and_concat(
     source_column: str | None,
     *,
     always_tag: bool = False,
+    names: list[str] | None = None,
 ) -> pd.DataFrame:
     """Concatenate frames into one, tagging each with its source label in
     ``source_column`` (unless that frame already carries the column, or
@@ -3206,7 +3793,17 @@ def _tag_and_concat(
                 df[source_column] = label
     if len(frames) == 1:
         return frames[0]
-    return pd.concat(frames, ignore_index=True, sort=False)
+    # Each part's read notes, named by the file they are about (``names``,
+    # where ``labels`` are the shortened source labels).
+    notes = [
+        f"{Path(str(name)).name}: {note}"
+        for df, name in zip(frames, names or labels)
+        for note in pop_read_notes(df)
+    ]
+    out = pd.concat(frames, ignore_index=True, sort=False)
+    if notes:
+        out.attrs[READ_NOTES_ATTR] = notes
+    return out
 
 
 # Bound zip decompression. Reading every member with no ceiling lets a small
@@ -3655,7 +4252,9 @@ def _read_zipped_table(
                         )
             remaining -= stream.consumed
             labels.append(member)
-    return _tag_and_concat(frames, source_labels(labels), SOURCE_FILE_COLUMN)
+    return _tag_and_concat(
+        frames, source_labels(labels), SOURCE_FILE_COLUMN, names=labels
+    )
 
 
 # Guard the memory-constrained hosted demo against a too-large upload.
@@ -3756,15 +4355,20 @@ def read_tables(
         # participant is the common upload shape, and an export can gain or
         # lose a column between them — a shared plan would name a column some
         # file hasn't got, which `usecols` raises on.
-        plan = (
-            plan_for(read_table_columns(item, kind=kind))
-            if plan_for is not None
-            else None
-        )
-        frames.append(read_table(item, plan=plan, kind=kind))
-        labels.append(getattr(item, "name", str(item)))
+        label = getattr(item, "name", str(item))
+        try:
+            plan = (
+                plan_for(read_table_columns(item, kind=kind))
+                if plan_for is not None
+                else None
+            )
+            frames.append(read_table(item, plan=plan, kind=kind))
+        except (ValueError, zipfile.BadZipFile) as exc:
+            # Name the one file of several that failed.
+            raise explain_read_error(label, exc) from exc
+        labels.append(label)
     return _tag_and_concat(
-        frames, source_labels(labels), source_column, always_tag=True
+        frames, source_labels(labels), source_column, always_tag=True, names=labels
     )
 
 

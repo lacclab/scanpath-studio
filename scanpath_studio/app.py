@@ -70,6 +70,7 @@ from scanpath_studio import (
     loading,
     progress,
     wizard_shell,
+    wizard_watch,
 )
 from scanpath_studio import metadata as metadata_mod
 from scanpath_studio import updates as update_check
@@ -126,6 +127,7 @@ from scanpath_studio.constants import (
     RAW_GAZE_SNAP_RESTORE_KEY,
     SETUP_OVERRIDE_FOR_KEY,
     SETUP_OVERRIDE_RESTORE_KEY,
+    SETUP_OVERRIDE_SESSION_KEYS,
     SYNTHETIC_CHOICE,
     TRIAL_IDENTITY_CHECK_KEY,
     TRIAL_IDENTITY_FULL_KEY,
@@ -182,6 +184,7 @@ from scanpath_studio.data import (
     diagnose_trial_identity,
     empty_fixations_frame,
     empty_words_frame,
+    explain_read_error,
     filter_data,
     filter_frame_to_keys,
     filter_to_keys,
@@ -190,6 +193,7 @@ from scanpath_studio.data import (
     frame_fingerprint,
     harmonize_frames_reporting,
     hashable_key,
+    header_only_error,
     infer_raw_gaze_schema,
     load_onestop_server_bundle,
     load_sample_data,
@@ -201,6 +205,7 @@ from scanpath_studio.data import (
     onestop_data_dir,
     onestop_full_bundle_exists,
     plan_table_read,
+    pop_read_notes,
     preprocess_fixation_stage,
     propose_fix_schema,
     propose_raw_gaze_schema,
@@ -1259,10 +1264,13 @@ def _render_saved_here_section(app_url: str, host) -> None:
             )
         return
 
+    # "Nothing leaves" holds only where browser and server are one machine; a
+    # network server opted in with SCANPATH_STUDIO_PERSIST=1 got the files
+    # over the network.
     host.caption(
         "Your added datasets, annotations, designs, and your view, trial and "
-        "plot settings are saved as you work and restored next time. Nothing is "
-        "uploaded."
+        "plot settings are saved as you work and restored next time."
+        + (" Nothing leaves this computer." if server_bound_to_loopback() else "")
     )
     if restored_from_cache(st.session_state):
         host.success("Recovered when the app opened.", icon=ICONS["recovery"])
@@ -1432,10 +1440,41 @@ def maybe_show_about() -> None:
         _about_dialog()
 
 
+def _about_privacy_line(*, local: bool, saving: bool) -> str:
+    """About's line on where the user's data goes, for this run alone.
+
+    ``local`` is the server's own bind address (``server_bound_to_loopback``)
+    and ``saving`` whether it keeps a recovery copy (``persistence_enabled``) —
+    the tests the FAQ's *Where does my data go?* answers by, which this line
+    points to. A server other machines reach is usually the online demo, but
+    can be anyone's deployment, so the hosted sentence names the demo's host
+    as an example rather than as a fact about this server.
+    """
+    if local:
+        where = "It stays on this computer."
+        if saving:
+            where += " Your work is saved here until you clear it."
+    elif saving:
+        where = (
+            "Files you upload are processed on the server this app runs on, "
+            "and a recovery copy is kept there."
+        )
+    else:
+        where = (
+            "Files you upload are processed on the server this app runs on "
+            "(Streamlit Community Cloud, for the online demo) and not kept."
+        )
+    return (
+        f"**{ICONS['private']} Your data.** {where} More in {ICONS['help']} "
+        f"Help → {ICONS['faq']} FAQ → *Where does my data go?*"
+    )
+
+
 @st.dialog(f"{ICONS['about']} About Scanpath Studio", width="large")
 @guarded()
 def _about_dialog() -> None:
-    """The About modal: version, authors, links, citation, AI-assistance note."""
+    """The About modal: version, authors, links, where your data goes,
+    citation, AI-assistance note."""
     from scanpath_studio import __version__
     from scanpath_studio.citation import software_bibtex
 
@@ -1462,6 +1501,12 @@ Developed by [Omer Shubi](https://omershubi.github.io/),
 {ICONS["code"]} [Code]({CITATION["url"]}) ↗ ·
 {ICONS["doi"]} [DOI](https://doi.org/{CITATION["doi"]}) ↗
 """
+    )
+    st.markdown(
+        _about_privacy_line(
+            local=server_bound_to_loopback(),
+            saving=persistence_enabled(str(getattr(st.context, "url", "") or "")),
+        )
     )
     # The BibTeX block is tall enough to push everything above it out of view,
     # so it opens on demand — but it stays a named section of its own (a bold
@@ -3638,6 +3683,7 @@ def load_bundled_demo() -> None:
     st.session_state["setup_complete"] = True
     st.session_state.pop(WIZARD_LEAVE_KEY, None)
     st.session_state.pop(WIZARD_STAY_KEY, None)
+    restore_setup_before_wizard()
     reset_column_mapping()
 
 
@@ -4307,14 +4353,40 @@ def _read_uploaded_frame(
         st.session_state.pop(f"{state_prefix}_header", None)
         files = uploaded if multi else [uploaded]
         names = ", ".join(str(getattr(f, "name", "the file")) for f in files)
-        messages.error(
-            f"Couldn't read **{names}**: {exc}. Check it is a table file with one "
-            "header row, or remove it with the ✕ on its chip."
-        )
+        say_read_error(messages, names, exc)
         return pd.DataFrame()
     # This upload's own fingerprint ID, before the wizard derives anything from it.
     adopt_source(frame)
+    files = uploaded if multi else [uploaded]
+    named = str(getattr(files[0], "name", "the file")) if len(files) == 1 else ""
+    for note in pop_read_notes(frame):
+        messages.warning(f"**{named}**: {note}" if named else note)
+    if frame.empty and len(frame.columns):
+        # Readable, so no error; but with no rows the table counts as not
+        # uploaded, and the footer's reason for a disabled ✅ Add dataset
+        # points back here.
+        names = ", ".join(str(getattr(f, "name", "the file")) for f in files)
+        messages.warning(
+            header_only_error(names).sentence(f"**{names}**")
+            + " To remove the file, click the ✕ next to its name."
+        )
     return frame
+
+
+def say_read_error(host, name: str, exc: BaseException) -> None:
+    """A table file the readers refused, said in ``host``: what is wrong in
+    plain words, then the reader's own message folded away beneath it.
+
+    One wording for every upload box — the wizard's tables, the Data page's raw
+    gaze and the metadata tables."""
+    error = explain_read_error(name, exc)
+    shown = name if error.name == Path(str(name)).name else error.name
+    host.error(
+        error.sentence(f"**{shown}**")
+        + " To remove the file, click the ✕ next to its name."
+    )
+    if error.detail:
+        host.expander("Technical detail").code(error.detail, language=None)
 
 
 def _read_upload(uploaded, state_prefix: str, *, multi: bool, kind) -> pd.DataFrame:
@@ -4449,7 +4521,7 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
                     lambda: read_table(uploaded_raw_gaze),
                 )
             except Exception as exc:  # unreadable file — say so, keep the page
-                cfg.error(f"Couldn't read **{uploaded_raw_gaze.name}**: {exc}")
+                say_read_error(cfg, uploaded_raw_gaze.name, exc)
                 return pd.DataFrame()
             proposed = propose_raw_gaze_schema(raw_gaze_df)
             initial_problems = validate_raw_gaze_schema(proposed)
@@ -4854,6 +4926,7 @@ def leave_add_data_wizard() -> None:
     )
     st.session_state["_show_upload_wizard"] = False
     st.session_state["setup_complete"] = True
+    restore_setup_before_wizard()
 
 
 def stay_in_wizard() -> None:
@@ -7191,16 +7264,68 @@ def _apply_dataset_values(
     st.session_state[SETUP_OVERRIDE_FOR_KEY] = token
 
 
-def upload_font_family(name: str | None) -> str | None:
-    """The typeface an added dataset was set up with (the add and edit
-    screens' *Font* question), or ``None`` when ``name`` is no added dataset.
-    One set up before that question, or answered *I don't know*, has the
-    default font."""
+def upload_setup_values(name: str | None) -> dict | None:
+    """The ``global_*`` values an added dataset's recording setup puts on the
+    figure, or ``None`` when ``name`` is no added dataset.
+
+    Only what its setup records: the screen, the physical size (unless it was
+    skipped) and the text sizing each when stored. The typeface always — one
+    set up before the add screen's *Font* question, or answered *I don't know*,
+    has the default font.
+    """
     stored = (st.session_state.get("_datasets") or {}).get(name) if name else None
     if not isinstance(stored, dict):
         return None
     setup = stored.get("setup") if isinstance(stored.get("setup"), dict) else {}
-    return str(SetupSnapshot.from_dict(setup, fallback=SetupSnapshot()).font_family)
+    snapshot = SetupSnapshot.from_dict(setup, fallback=SetupSnapshot())
+    keys = {"global_font_family"}
+    if {"canvas_width", "canvas_height"} <= setup.keys():
+        keys |= {"global_canvas_width", "global_canvas_height"}
+    if {"monitor_width_mm", "viewing_distance_mm"} <= setup.keys() and (
+        snapshot.geometry_provenance is not Provenance.SKIPPED
+    ):
+        keys |= {
+            "global_monitor_width_mm",
+            "global_viewing_distance_mm",
+            "global_display_dpi",
+        }
+    if {"base_font_size", "line_spacing", "scale_text_to_boxes"} & setup.keys():
+        keys |= {
+            "global_base_font_size",
+            "global_use_stimulus_font_pt",
+            "global_line_spacing",
+            "global_scale_text_to_boxes",
+        }
+    return {
+        key: value
+        for key, value in setup_override_session_values(snapshot).items()
+        if key in keys
+    }
+
+
+#: What the figure's setup keys held when ➕ Add dataset was opened. The add
+#: screen publishes the answers the user chooses onto those shared keys as they
+#: are given; leaving it — adding the dataset or cancelling — puts these back,
+#: so the answers stay with the new dataset and never reach the one it was
+#: opened over.
+WIZARD_SETUP_BEFORE_KEY = "_wizard_setup_before"
+
+
+def remember_setup_before_wizard() -> None:
+    """Note the figure's setup keys as ➕ Add dataset opens."""
+    st.session_state[WIZARD_SETUP_BEFORE_KEY] = {
+        key: st.session_state.get(key) for key in SETUP_OVERRIDE_SESSION_KEYS
+    }
+
+
+def restore_setup_before_wizard() -> None:
+    """Put back the setup keys the add screen found (`remember_setup_before_wizard`)."""
+    before = st.session_state.pop(WIZARD_SETUP_BEFORE_KEY, None)
+    for key, value in (before or {}).items():
+        if value is None:
+            st.session_state.pop(key, None)
+        else:
+            st.session_state[key] = value
 
 
 def save_dataset_setup_override(token: str, payload: dict | None) -> None:
@@ -7534,17 +7659,16 @@ def seed_canvas_state(
         and (override := dataset_setup_override(override_token)) is not None
     ):
         _apply_setup_override(override_token, override, frozenset(from_link))
-    # An added dataset's font is its own in the same way: entering it draws the
-    # text in the font it was set up with, and leaving it puts back the font the
-    # figure had — or every dataset opened after it would inherit it.
+    # An added dataset's recording setup is its own in the same way: entering
+    # it draws it on the screen, and with the text, it was set up with, and
+    # leaving it puts back what the figure had — or every dataset opened after
+    # it, the demo included, would inherit that screen and text sizing.
     elif (
         override_token
         and st.session_state.get(SETUP_OVERRIDE_FOR_KEY) != override_token
-        and (font := upload_font_family(override_token)) is not None
+        and (values := upload_setup_values(override_token)) is not None
     ):
-        _apply_dataset_values(
-            override_token, {"global_font_family": font}, frozenset(from_link)
-        )
+        _apply_dataset_values(override_token, values, frozenset(from_link))
 
     # The remaining widget defaults, seeded here rather than beside their
     # widgets so a caller can resolve the settings without rendering the panel.
@@ -8645,7 +8769,7 @@ def _render_backup_reminder(host, active_view: str) -> None:
         f"annotations from {ICONS['view_data']} **Data Management → Annotations** and each "
         "dataset's mapping from "
         f"{ICONS['edit']} **Edit dataset → Download setup file**. "
-        f"[What to back up ↗]({BACKUP_GUIDE_URL})"
+        f"[How to keep copies of your work ↗]({BACKUP_GUIDE_URL})"
     )
     row = box.container(horizontal=True, gap="small")
     if active_view != _VIEW_DATA:
@@ -8892,6 +9016,9 @@ def _run_app() -> None:
     # every run. The toasts need no slot: `st.toast` draws in Streamlit's event
     # container, outside the page.
     page_notices = st.container()
+    # First in the notices, and on every run: the browser side of the
+    # add-dataset wizard's guards (`wizard_watch`) must hear each run's state.
+    wizard_watch.render(page_notices)
     if restored:
         # Say it once, where the user is looking. Silently repopulating a
         # session reads as "the app kept my data somewhere" without saying where;
@@ -9050,6 +9177,10 @@ def _run_app() -> None:
         else:
             st.session_state.pop(WIZARD_LEAVE_KEY, None)
         active_view = _VIEW_DATA
+    # A reconnect that landed on a new session lost the wizard's uploads.
+    wizard_watch.render_lost_notice(
+        page_notices, on_data_view=active_view == _VIEW_DATA
+    )
 
     menu = render_top_menu(active_view=active_view)
     _render_about_panel(menu.title)
@@ -9084,7 +9215,9 @@ def _run_app() -> None:
     # the container the first run after one closes would remove an element
     # above the view and shift it. See AGENTS.md → Gotchas.
     with st.container():
-        maybe_show_welcome_tour()
+        # The spotlight tour is about the Scanpath view; this is also where it
+        # switches there when it starts on another view.
+        maybe_show_welcome_tour(active_view)
         render_spotlight_tour()
         # Task-oriented tutorials share the spotlight mechanism but keep
         # their own progress and do not inherit the welcome tour's opt-out.

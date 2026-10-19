@@ -132,11 +132,11 @@ def test_a_label_names_the_text_and_reader_not_the_whole_trial_id():
 
     used: set[str] = set()
     assert (
-        friendly_trial_label("l37_1129", "l37_1129_2_2_1_Adv_r0", "2_2_1_Adv", used)
+        friendly_trial_label("l37_1129", "l37_1129_2_2_1_Adv", "2_2_1_Adv", used)
         == "2_2_1_Adv · l37_1129"
     )
     assert (
-        friendly_trial_label("l7_1090", "l7_1090_2_2_1_Adv_r0", "2_2_1_Adv", used)
+        friendly_trial_label("l7_1090", "l7_1090_2_2_1_Adv", "2_2_1_Adv", used)
         == "2_2_1_Adv · l7_1090"
     )
     used = set()

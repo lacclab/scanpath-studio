@@ -372,6 +372,12 @@ BACKGROUND_PRESETS = {
     "Black": "#000000",
 }
 
+#: Pixel positions and sizes beyond this magnitude are on no screen, and the
+#: browser cannot draw them (an SVG transform of ``-1e+300`` is rejected): the
+#: figure treats them as it treats an infinite value, as missing, and the import
+#: warning and *Data checks* name them.
+DRAWABLE_PX_LIMIT = 1_000_000.0
+
 #: Crop to data's automatic margin: 5% of the data's extent on each axis, at
 #: least this many screen px (`plots._compute_axis_ranges`).
 CANVAS_PAD_MIN_PX = 20.0
@@ -647,6 +653,10 @@ def upload_identity(uploaded) -> tuple[str | None, str]:
     return getattr(uploaded, "file_id", None), digest
 
 
+#: The privacy policy of Streamlit Community Cloud, which hosts the online demo
+#: and runs its own analytics in the page around the app.
+STREAMLIT_PRIVACY_URL = "https://streamlit.io/privacy-policy"
+
 #: The software's authors as ``(given names, family names)``, in citation order.
 #: The package ships without ``CITATION.cff``, so the app's citation is built
 #: from these; ``tests/test_citation.py`` keeps them equal to the file's
@@ -797,9 +807,10 @@ DEFAULT_STIMULUS_IMAGE_PATTERN = "{text_id}.png"
 #: setup on its own ``_datasets`` entry instead. A recovery-cache session key,
 #: like the descriptions, for the same reason.
 DATASET_SETUP_OVERRIDES_KEY = "_dataset_setup_overrides"
-#: Which dataset's override the ``global_*`` setup keys hold now, and what they
-#: held before it was applied — put back when that dataset is left or its
-#: override is reset (the same stash-and-restore shape as the font snap). Both
+#: Which dataset's own setup the ``global_*`` setup keys hold now — a saved
+#: override, or an added dataset's recorded setup — and what they held before
+#: it was applied: put back when that dataset is left or its override is reset
+#: (the same stash-and-restore shape as the font snap). Both
 #: persisted, so a relaunch onto the dataset does not stash the override as its
 #: own "before".
 SETUP_OVERRIDE_FOR_KEY = "_setup_override_for"
@@ -1049,6 +1060,9 @@ ICONS: dict[str, str] = {
     "pick_trial": ":material/my_location:",
     "chips": ":material/label:",
     "panels": ":material/tab:",
+    # The chevron Streamlit draws on every popover button, for prose that names
+    # an icon-only button the way it looks (the welcome tour).
+    "menu_arrow": ":material/expand_more:",
     "views": ":material/dashboard:",
     "nav": ":material/explore:",
     "preview": ":material/visibility:",

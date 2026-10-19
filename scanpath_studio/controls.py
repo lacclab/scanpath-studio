@@ -102,6 +102,7 @@ from .constants import (
 from .crash_report import guarded
 from .data import (
     INTERNAL_COLUMNS,
+    NUMERIC_SCHEMA_FIELDS,
     READING_MEASURE_FIELDS,
     READING_MEASURE_KEYS,
     carries_mapped_text,
@@ -109,6 +110,7 @@ from .data import (
     frame_fingerprint,
     mapping_value_preview,
     user_columns,
+    wrong_column_note,
 )
 from .export import (
     DEFAULT_CAPTION_PATTERN,
@@ -2612,8 +2614,9 @@ FIX_FIELD_SPECS: list[dict] = [
     {
         "key": "participant",
         "label": "Participant ID",
-        "required": True,
-        "help": "Which participant produced this fixation.",
+        "required": False,
+        "help": "Which participant produced this fixation. Leave empty for a "
+        "single participant.",
     },
     {
         "key": "trial",
@@ -2713,8 +2716,9 @@ RAW_GAZE_FIELD_SPECS: list[dict] = [
     {
         "key": "participant",
         "label": "Participant ID",
-        "required": True,
-        "help": "Which participant produced this gaze sample.",
+        "required": False,
+        "help": "Which participant produced this gaze sample. Leave empty for a "
+        "single participant.",
     },
     {
         "key": "trial",
@@ -2849,6 +2853,8 @@ ADD_ATTEMPTED_KEY = "_wizard_add_attempted"
 _FIELD_TINT = {
     "auto": "rgba(234, 179, 8, 0.16)",
     "missing": "rgba(239, 68, 68, 0.20)",
+    # A numeric field mapped to a column that is mostly not numbers.
+    "invalid": "rgba(239, 68, 68, 0.20)",
 }
 
 
@@ -3058,6 +3064,7 @@ def column_mapping_ui(
     stack_labels: bool | None = None,
     dataset: object = None,
     option_labels: dict | None = None,
+    box_format_lock: str | None = None,
 ) -> dict[str, str | None]:
     """Render a column-mapping expander letting users override the inferred mapping.
 
@@ -3088,6 +3095,12 @@ def column_mapping_ui(
     ``dataset`` names the data this mapping is for, so picks made for one
     dataset never carry into another with the same headers — see
     :func:`forget_mapping_for_other_table`.
+
+    ``box_format_lock`` is the reason the word box can only be *Origin + size*
+    here — ✏️ Edit dataset's stored Words table, whose edges were turned into
+    a width and a height when it was added. The format radio is then drawn
+    disabled with the reason beneath it, and the box maps as origin + size
+    whatever it holds; its stored value is never rewritten.
     """
     forget_mapping_for_other_table(df, state_key_prefix, field_specs, dataset=dataset)
     # Offer the file's full header, not `df.columns`: the planned read narrows
@@ -3123,6 +3136,8 @@ def column_mapping_ui(
     if any(spec.get("kind") == "box" and spec.get("required") for spec in field_specs):
         required_keys.update(_ALL_BOX_KEYS)
     add_attempted = bool(st.session_state.get(ADD_ATTEMPTED_KEY))
+    # Only the Words table has a word box; its x / y are a box's corner.
+    words_table = any(spec.get("kind") == "box" for spec in field_specs)
     stacked = columns_per_row > 1 if stack_labels is None else stack_labels
     #: state -> the keyed cells in that state, filled as rows render and emitted
     #: as ONE <style> block at the end. Per-row style tags would be one extra
@@ -3278,6 +3293,15 @@ def column_mapping_ui(
         if option_labels and default and hover:
             # "currently mapped `duration_ms`" names the user's column.
             hover = hover.replace(f"`{default}`", f"`{_option_label(default)}`")
+        # A numeric field mapped to a column of words is the one mapping
+        # mistake that still loads: say so at the field, in red, as well as
+        # above ✅ Add dataset.
+        wrong_column = wrong_column_caption(
+            df, field_key, chosen, fixations=not words_table
+        )
+        if wrong_column:
+            state = "invalid"
+            field_col.caption(f"{ICONS['warning']} {wrong_column}")
         if state:
             tint_cells.setdefault(state, []).append(cell_key)
         # The ✨ is a **button** while the row is amber, and pressing it
@@ -3413,6 +3437,8 @@ def column_mapping_ui(
                     f'<div class="sps-box-title">{title}</div>',
                     unsafe_allow_html=True,
                 )
+            # `st.radio` cannot disable one option, so a locked format
+            # disables the whole radio and says why under it.
             chosen = head.radio(
                 "Coordinate format",
                 options=list(_BOX_SUBFIELDS),
@@ -3420,7 +3446,12 @@ def column_mapping_ui(
                 horizontal=True,
                 label_visibility="collapsed",
                 persist_state="session",
+                disabled=box_format_lock is not None,
+                help=box_format_lock,
             )
+            if box_format_lock is not None:
+                head.caption(box_format_lock)
+                return BOX_FORMAT_ORIGIN
             return chosen
 
         def _render_multi(spec: dict, default, label: str) -> list[str]:
@@ -3536,6 +3567,28 @@ def multi_field_flag(
         state_key=state_key,
     )
     return state
+
+
+def wrong_column_caption(df, field_key: str, column, *, fixations: bool) -> str:
+    """The note drawn under a numeric field whose column is mostly not numbers.
+
+    The same count and advice as the warning above ✅ Add dataset
+    (`data.numeric_parse_issues`), at the field to change, from the same
+    reading of the column (`data.column_parse`, kept per frame and column).
+    ``""`` for a field that is not numeric, an unmapped one, or a column that
+    reads as numbers.
+    """
+    if field_key not in NUMERIC_SCHEMA_FIELDS or not isinstance(column, str):
+        return ""
+    if column not in df.columns or pd.api.types.is_numeric_dtype(df[column]):
+        return ""
+    return wrong_column_note(
+        df,
+        column,
+        field_key,
+        fixations=fixations,
+        fingerprint=frame_fingerprint(df),
+    )
 
 
 def value_preview_tip(df, field_key: str, column) -> str:
@@ -9546,8 +9599,8 @@ def render_trial_chip_picker(
 
     host.caption(
         "Drag fields between **Shown** and **Available**, and reorder within "
-        "**Shown**. Shown fields appear as chips above the scanpath; set their "
-        "colors below the list."
+        "**Shown**. Shown fields appear in the trial summary above the "
+        "scanpath; set their colors below the list."
     )
     buckets = [
         {
@@ -9587,7 +9640,7 @@ def render_trial_chip_picker(
     _neutral = "#EEF2F7"
     shown_now = st.session_state["trial_chip_fields"]
     if shown_now:
-        host.caption("Chip colors: an optional highlight for each shown field.")
+        host.caption("Field colors: an optional highlight for each shown field.")
         colors = dict(st.session_state.get("trial_chip_colors") or {})
 
         def _reset_to_gray(field: str) -> None:
@@ -9615,7 +9668,7 @@ def render_trial_chip_picker(
                 key_to_label[key],
                 key=widget_key,
                 label_visibility="collapsed",
-                help="Highlight this chip in a color.",
+                help="Highlight this field in a color.",
                 **seed,
             )
             if picked.lower() == _neutral.lower():

@@ -3,10 +3,10 @@
 The load already reports cells that are not numbers at all
 (`data.numeric_parse_issues`) and trial ids that merge several readings
 (`data.diagnose_trial_identity`). A value can pass both and still be unusable:
-a fixation lasting −40 ms, a gaze position at infinity, a word box with no
-width. Nothing here changes or drops a row — each check counts the rows, names
-the columns they came from, shows a few, and says what the app does with them,
-so the researcher can decide.
+a fixation lasting −40 ms, a gaze position at infinity or a million pixels
+off the screen, a word box with no width. Nothing here changes or drops a row —
+each check counts the rows, names the columns they came from, shows a few, and
+says what the app does with them, so the researcher can decide.
 
 Pure (no Streamlit): the 🗂️ Data page draws :func:`check_data_health` through a
 cached wrapper, and `api.check_data_health` returns the same findings as a table.
@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from .constants import DRAWABLE_PX_LIMIT
 from .multipart import SCREEN_ID
 
 #: How many offending rows a finding quotes.
@@ -98,10 +99,22 @@ def _canvas_masks(frame: pd.DataFrame) -> dict[str, pd.Series]:
     }
 
 
+def _too_far(*values: pd.Series) -> pd.Series:
+    """Finite, but beyond `DRAWABLE_PX_LIMIT`: on no screen, and not drawable."""
+    out = pd.Series(False, index=values[0].index)
+    for v in values:
+        out |= (v.abs() > DRAWABLE_PX_LIMIT) & ~np.isinf(v)
+    return out
+
+
 def _position_masks(frame: pd.DataFrame) -> dict[str, pd.Series]:
     xs, ys = _number(frame, "x"), _number(frame, "y")
     infinite = np.isinf(xs) | np.isinf(ys)
-    return {"infinite": infinite, "missing": (xs.isna() | ys.isna()) & ~infinite}
+    return {
+        "infinite": infinite,
+        "too far off the screen": _too_far(xs, ys) & ~infinite,
+        "missing": (xs.isna() | ys.isna()) & ~infinite,
+    }
 
 
 def _box_masks(frame: pd.DataFrame) -> dict[str, pd.Series]:
@@ -112,6 +125,7 @@ def _box_masks(frame: pd.DataFrame) -> dict[str, pd.Series]:
         "height ≤ 0": height <= 0,
         "infinite size": np.isinf(width) | np.isinf(height),
         "infinite position": np.isinf(xs) | np.isinf(ys),
+        "too far off the screen": _too_far(xs, ys, width, height),
     }
 
 
@@ -157,7 +171,8 @@ CHECKS: tuple[_Check, ...] = (
         _position_masks,
         "They stay in every table and export. The plot leaves out their markers "
         "and the saccades to and from them. A position is missing when neither "
-        "the data nor the fixated word's box gives one.",
+        "the data nor the fixated word's box gives one, and too far off the "
+        "screen when it is beyond a million pixels.",
     ),
     _Check(
         "raw_gaze_position",
@@ -177,7 +192,8 @@ CHECKS: tuple[_Check, ...] = (
         "They stay in every table and export. A box with no area contains no "
         "fixation, so a fixation reaches that word only through a word id in the "
         "data. The box draws as a line or not at all. A box with an infinite "
-        "size or position is left out of the figure.",
+        "size or position, or one beyond a million pixels, is left out of the "
+        "figure.",
     ),
     _Check(
         "word_canvas",

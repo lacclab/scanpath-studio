@@ -3559,7 +3559,7 @@ def compare_scanpaths(
         if isinstance(pair, str) or len(tuple(pair)) != 2:
             raise ValueError(
                 f"{side} must be a (participant, trial) pair, e.g. "
-                f"('l37_1129', 'l37_1129_2_1_1_Ele_r0'); got {pair!r}. "
+                f"('l37_1129', 'l37_1129_2_1_1_Ele'); got {pair!r}. "
                 "list_trials(words, fixations) lists the pairs."
             )
     # Ids written before composite ids escaped a `_` inside a part still name
@@ -4022,7 +4022,7 @@ def figure_code(
         print(
             sps.figure_code(
                 participant="l7_1090",
-                trial="l7_1090_2_1_1_Ele_r0",
+                trial="l7_1090_2_1_1_Ele",
                 show_heatmap=True,
                 flavor="cli",
             )

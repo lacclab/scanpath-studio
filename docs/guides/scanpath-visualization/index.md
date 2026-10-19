@@ -102,7 +102,7 @@ file paths with your own.
         import scanpath_studio as sps
 
         words, fixations = sps.load_sample_data()
-        fig = sps.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele_r0")
+        fig = sps.plot_scanpath(words, fixations, "l37_1129", "l37_1129_2_1_1_Ele")
         sps.save_figure(fig, "scanpath.html")
         ```
 
@@ -110,7 +110,7 @@ file paths with your own.
 
         ```bash
         scanpath-studio render --sample \
-          -p l37_1129 -t l37_1129_2_1_1_Ele_r0 -o scanpath.html
+          -p l37_1129 -t l37_1129_2_1_1_Ele -o scanpath.html
         ```
 
     For your own files, use the [data loaders](../loading-data/index.md#load-and-inspect-in-code).

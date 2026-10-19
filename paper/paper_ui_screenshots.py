@@ -333,7 +333,7 @@ SUBTABS = {
 DEMO_TRIAL = {
     "source": "demo",
     "participant": "l37_1129",
-    "trial_id": "l37_1129_2_1_1_Ele_r0",
+    "trial_id": "l37_1129_2_1_1_Ele",
 }
 
 #: Words 92–105 of that trial — “Our clients want to know how well their stores

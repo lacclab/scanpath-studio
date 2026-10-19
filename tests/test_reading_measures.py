@@ -18,6 +18,7 @@ from scanpath_studio.data import (
     normalize_words,
     propose_word_schema,
 )
+from tests.conftest import pin_view
 
 
 def _ia() -> pd.DataFrame:
@@ -123,7 +124,7 @@ class TestThePages:
         from tests.test_apptest import _make_apptest
 
         at = _make_apptest(synthetic=True)
-        at.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(at, "Corpus Analysis")
         at.run(timeout=60)
         assert not at.exception, at.exception
         assert any("No reading measures" in i.value for i in at.info)
@@ -136,7 +137,7 @@ class TestThePages:
         from tests.test_apptest import _make_apptest
 
         at = _make_apptest()
-        at.session_state["main_nav"] = "Corpus Analysis"
+        pin_view(at, "Corpus Analysis")
         at.run(timeout=90)
         assert not at.exception, at.exception
         picker = next(s for s in at.selectbox if s.key == "ptext_measure")

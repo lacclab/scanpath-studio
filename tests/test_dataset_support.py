@@ -768,7 +768,7 @@ _FAKE_ONESTOP_IDS = {
     "repeated_reading_trial": 0,
 }
 _FAKE_ONESTOP_PARAGRAPH = "2_3_1_Adv"
-_FAKE_ONESTOP_TRIAL = "p1_2_3_1_Adv_r0"
+_FAKE_ONESTOP_TRIAL = "p1_2_3_1_Adv"
 
 
 def _fake_onestop_part_frames(part, label_a, label_b, shape="public"):
@@ -1176,7 +1176,8 @@ def test_onestop_public_composes_a_unique_paragraph_id(onestop_offline, tmp_path
 
 
 def test_onestop_public_composes_a_unique_trial_id(onestop_offline, tmp_path):
-    """…and a trial id under it: the reader, the paragraph, and which reading."""
+    """…and a trial id under it: the reader and the paragraph. A regime is one
+    reading, so the reading flag adds nothing to it."""
     words, fixations = datasets_module.onestop_raw_frames(
         tmp_path, regime="ordinary", download=True
     )
@@ -1202,6 +1203,35 @@ def test_onestop_composed_ids_match_the_bundled_demo(onestop_offline, tmp_path):
     assert set(words["unique_trial_id"]) == set(demo["unique_trial_id"])
 
 
+@pytest.mark.parametrize("table", ["fixations", "ia", "raw_gaze"])
+@pytest.mark.parametrize("suffix", ["csv", "parquet"])
+def test_bundled_demo_trial_ids_are_reader_and_paragraph(table, suffix):
+    """The demo holds first readings only, so each trial id is the reader and
+    the paragraph, with no reading suffix, in every bundled table and format."""
+    from scanpath_studio import update_sample_data
+
+    path = update_sample_data.DEFAULT_OUTPUT_DIR / f"{table}.{suffix}"
+    frame = pd.read_csv(path) if suffix == "csv" else pd.read_parquet(path)
+    ids = frame["unique_trial_id"].astype(str)
+    assert not ids.str.contains(r"_r\d+$").any()
+    if "unique_paragraph_id" in frame.columns:
+        expected = (
+            frame["participant_id"].astype(str)
+            + "_"
+            + frame["unique_paragraph_id"].astype(str)
+        )
+        assert (ids == expected).all()
+
+
+def test_demo_builder_composes_reader_and_paragraph():
+    from scanpath_studio import update_sample_data
+
+    demo = update_sample_data.add_unique_ids(
+        _onestop_public_words().assign(repeated_reading_trial=[False, False])
+    )
+    assert set(demo["unique_trial_id"]) == {_FAKE_ONESTOP_TRIAL}
+
+
 def test_onestop_paragraph_three_of_two_articles_is_two_texts(tmp_path):
     """The bug itself: paragraph 3 of article 1 and paragraph 3 of article 27
     are different texts, and normalization must see them that way."""
@@ -1217,9 +1247,25 @@ def test_onestop_paragraph_three_of_two_articles_is_two_texts(tmp_path):
     assert fixations["text_id"].nunique() == 2
 
 
+def test_onestop_repeated_regime_ids_carry_no_reading_suffix(tmp_path):
+    """The repeated regime holds second readings only — one per reader and
+    paragraph — so its trial ids are reader + paragraph, as in the other
+    regimes."""
+    _onestop_public_report(
+        tmp_path,
+        _onestop_public_words(repeated_reading_trial=[True, True]),
+        _onestop_public_fixations(repeated_reading_trial=[True, True]),
+        regime="repeated",
+    )
+    words, fixations = datasets_module.onestop_raw_frames(tmp_path, regime="repeated")
+    assert set(words["unique_trial_id"]) == {_FAKE_ONESTOP_TRIAL}
+    assert set(fixations["unique_trial_id"]) == {_FAKE_ONESTOP_TRIAL}
+
+
 def test_onestop_repeated_reading_is_its_own_trial(tmp_path):
-    """Both readings of a repeated-reading trial are the same text, read twice —
-    two trials, told apart by the flag rather than by their order on disk."""
+    """A report that mixes both readings of a paragraph — the same text, read
+    twice — gives two trials, told apart by the flag rather than by their order
+    on disk."""
     _onestop_public_report(
         tmp_path,
         _onestop_public_words(repeated_reading_trial=[0, 1], IA_ID=[1, 1]),
@@ -1246,7 +1292,7 @@ def test_onestop_keeps_the_lab_exports_own_paragraph_id(tmp_path):
         tmp_path, regime="ordinary", parts=["Paragraph"], variant="lacclab"
     )
     assert set(words["unique_paragraph_id"]) == {"3_2_Adv_1"}
-    assert set(words["unique_trial_id"]) == {"p1_3_2_Adv_1_r0"}
+    assert set(words["unique_trial_id"]) == {"p1_3_2_Adv_1"}
 
 
 def test_onestop_without_the_composing_columns_is_left_alone(tmp_path):

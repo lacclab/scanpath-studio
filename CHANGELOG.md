@@ -8,6 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/);
 `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.42.0] - 2026-10-19
+
+### Added
+- After Add dataset, a dialog offers Open in Scanpath or Add another, and the Data page has an Open in Scanpath button beside Add dataset for the selected dataset. ([#490](https://github.com/lacclab/scanpath-studio/issues/490))
+- Help → About now says where your data goes on the run you are using, the docs' About page has a Your data section (what is saved, where, for how long, how to clear it or turn it off), and the recovery cache no longer stores an empty raw-gaze file for a dataset without raw gaze. ([#498](https://github.com/lacclab/scanpath-studio/issues/498))
+- Stepping to another trial (◀ ▶, the trial dropdown or slider) shows a Loading trial card over the plot until the new figure draws, and `streamlit run` from the repository (as the hosted demo is) compresses what it sends, about a third as much data for each change. ([#505](https://github.com/lacclab/scanpath-studio/issues/505))
+
+### Changed
+- Highlight words now starts off, so the demo no longer colors its answer span until you tick it; plot_scanpath, animate_scanpath, compare_scanpaths and scanpath-studio render highlight nothing unless given a highlight column. ([#488](https://github.com/lacclab/scanpath-studio/issues/488))
+- The import wizard, its setup guide and Edit dataset now use the same words for the same things (Name, I know it, Extra fields to keep, an optional Participant ID, Skip guide), in plainer English; Edit dataset shows a stored word box's Edges option greyed out with the reason. ([#499](https://github.com/lacclab/scanpath-studio/issues/499))
+- The welcome tour and the Scanpath view use plain, literal wording, and the row of trial fields above the plot is now called the trial summary (Trial summary above the plot) everywhere, instead of chips. ([#501](https://github.com/lacclab/scanpath-studio/issues/501))
+- Trial ids in the bundled demo and in the OneStop datasets drop the reading suffix: the demo trial l37_1129_2_1_1_Ele_r0 is now l37_1129_2_1_1_Ele, since each OneStop regime holds one reading of each paragraph per reader. ([#503](https://github.com/lacclab/scanpath-studio/issues/503))
+- The replay's Play, Pause and Restart buttons, time slider and readout now sit in one compact row above the figure, its title and its legend, so turning on Animate (alone or with Compare) no longer shrinks the plot; this applies in the app and in saved HTML replays. ([#504](https://github.com/lacclab/scanpath-studio/issues/504))
+- The docs and README screenshots, workflow videos and app demo show the current app: trial ids without the reading suffix, the replay toolbar above the figure, and the trial summary. ([#508](https://github.com/lacclab/scanpath-studio/issues/508))
+
+### Fixed
+- Compare's A/B legend names each reading by its text and participant (2_2_1_Adv · l37_1129), instead of repeating the whole trial id, so it fits on one row above the text. ([#488](https://github.com/lacclab/scanpath-studio/issues/488))
+- A typed page address or a Share link now opens where it says on a local install; only a bare visit resumes the view you were last on. ([#491](https://github.com/lacclab/scanpath-studio/issues/491))
+- The BibTeX in ❓ Help → About now matches the docs' citation: it drops the stale month, links the DOI, and lists one author per line. ([#492](https://github.com/lacclab/scanpath-studio/issues/492))
+- The first `scanpath-studio` launch on a new computer no longer stops at Streamlit's terminal prompt for an email address, and no longer prints its usage-statistics notice. ([#493](https://github.com/lacclab/scanpath-studio/issues/493))
+- A share link with a number that overflows to infinity (such as marker_size_range=1,1e309) no longer replaces the page with a crash note; non-finite numbers, on/off values other than 1/0, true/false, yes/no or on/off, and figure text over 500 characters are now ignored with a notice, and a number outside its control's range is clamped with a notice instead of silently. ([#494](https://github.com/lacclab/scanpath-studio/issues/494))
+- Closing the "Reset visualization?" dialog with ✕, Esc or a click outside now closes it for good, instead of it reopening on the next click. ([#495](https://github.com/lacclab/scanpath-studio/issues/495))
+- A dataset name now shows exactly as typed, with no Markdown, colour, maths or icon formatting, and is limited to 80 characters; a longer name saved earlier still loads and is shortened with an ellipsis in the dataset table, with the full name on hover. ([#496](https://github.com/lacclab/scanpath-studio/issues/496))
+- When a dropped connection loses the dataset being added, the Data page now says so and asks for the file again; the hosted demo's upload step notes it needs a steady connection, and reloading or closing the page while the add-dataset screen holds a file or a typed name now asks before leaving. ([#497](https://github.com/lacclab/scanpath-studio/issues/497))
+- The import wizard now says plainly why an uploaded file can't be used (empty, header only, not a text table, not a Parquet file), skips and reports rows with more fields than the header instead of reading them shifted, and says why Add dataset is off. ([#499](https://github.com/lacclab/scanpath-studio/issues/499))
+- Adding a dataset no longer redraws the Bundled demo or any other dataset on the new dataset's screen size and text settings: each dataset opens with its own recording setup. ([#500](https://github.com/lacclab/scanpath-studio/issues/500))
+- The welcome tour always runs on the Scanpath view: started from Data Management or Corpus Analysis it switches there first, and leaving Scanpath mid-tour folds it to its tab. Its card moves to the left edge while the filters, trial summary and plot controls are shown, and to the top for the panels under the plot, and its text names icon-only buttons as they appear on screen. ([#501](https://github.com/lacclab/scanpath-studio/issues/501))
+- A field mapped to a column that isn't numbers is now named in the add-dataset warning and marked at the field with the column to choose instead; negative, infinite and hour-long durations and positions too far off the screen to draw are warned about at import and no longer break the plot; the Scanpath view says when most of a table fails the Data checks; and Edit dataset says how to use a column it doesn't list. ([#502](https://github.com/lacclab/scanpath-studio/issues/502))
+- The welcome tour no longer shows its text and buttons unstyled at the top of the page while the app is still loading on a slow connection. ([#505](https://github.com/lacclab/scanpath-studio/issues/505))
+
 ## [0.41.0] - 2026-10-19
 
 ### Added

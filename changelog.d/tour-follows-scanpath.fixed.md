@@ -1,1 +1,0 @@
-The welcome tour always runs on the Scanpath view: started from Data Management or Corpus Analysis it switches there first, and leaving Scanpath mid-tour folds it to its tab. Its card moves to the left edge while the filters, chips and plot controls are shown, and to the top for the panels under the plot, and its text names icon-only buttons as they appear on screen.

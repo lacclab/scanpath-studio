@@ -1,1 +1,0 @@
-Trial ids in the bundled demo and in the OneStop datasets drop the reading suffix: the demo trial l37_1129_2_1_1_Ele_r0 is now l37_1129_2_1_1_Ele, since each OneStop regime holds one reading of each paragraph per reader.

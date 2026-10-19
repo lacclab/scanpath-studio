@@ -1,1 +1,0 @@
-The replay's Play, Pause and Restart buttons, time slider and readout now sit in one compact row above the figure, its title and its legend, so turning on Animate (alone or with Compare) no longer shrinks the plot; this applies in the app and in saved HTML replays.

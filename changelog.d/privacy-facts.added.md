@@ -1,1 +1,0 @@
-Help → About now says where your data goes on the run you are using, the docs' About page has a Your data section (what is saved, where, for how long, how to clear it or turn it off), and the recovery cache no longer stores an empty raw-gaze file for a dataset without raw gaze.

@@ -122,3 +122,23 @@ def test_friendly_labels_stay_unique():
         friendly_trial_label("p", "t", None, used),
     ]
     assert len(set(labels)) == 3
+
+
+def test_a_label_names_the_text_and_reader_not_the_whole_trial_id():
+    """The demo's trial ids hold the reader and the text, so repeating them in
+    the legend only makes it long; what is left over (a repeat reading's tag)
+    is written only when it tells two readings apart."""
+    from scanpath_studio.utils import friendly_trial_label
+
+    used: set[str] = set()
+    assert (
+        friendly_trial_label("l37_1129", "l37_1129_2_2_1_Adv_r0", "2_2_1_Adv", used)
+        == "2_2_1_Adv · l37_1129"
+    )
+    assert (
+        friendly_trial_label("l7_1090", "l7_1090_2_2_1_Adv_r0", "2_2_1_Adv", used)
+        == "2_2_1_Adv · l7_1090"
+    )
+    used = set()
+    assert friendly_trial_label("p1", "p1_T3_r1", "T3", used) == "T3 · p1"
+    assert friendly_trial_label("p1", "p1_T3_r2", "T3", used) == "T3 (r2) · p1"

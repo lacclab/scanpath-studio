@@ -1,1 +1,0 @@
-A share link with a number that overflows to infinity (such as marker_size_range=1,1e309) no longer replaces the page with a crash note; non-finite numbers, on/off values other than 1/0, true/false, yes/no or on/off, and figure text over 500 characters are now ignored with a notice, and a number outside its control's range is clamped with a notice instead of silently.

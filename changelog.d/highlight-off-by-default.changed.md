@@ -1,1 +1,0 @@
-Highlight words now starts off, so the demo no longer colors its answer span until you tick it; plot_scanpath, animate_scanpath, compare_scanpaths and scanpath-studio render highlight nothing unless given a highlight column.

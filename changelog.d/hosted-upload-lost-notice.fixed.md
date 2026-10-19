@@ -1,1 +1,0 @@
-When a dropped connection loses the dataset being added, the Data page now says so and asks for the file again; the hosted demo's upload step notes it needs a steady connection, and reloading or closing the page while the add-dataset screen holds a file or a typed name now asks before leaving.

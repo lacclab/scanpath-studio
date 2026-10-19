@@ -18,9 +18,9 @@ print(gallery_figure("highlighted-text"))
 
 === "In the app"
 
-    1. Select the bundled demo, participant `l37_1129`, trial `l37_1129_2_1_1_Ele_r0`. Reset visualization.
-    2. In Stimulus → Highlight words, turn on Show and choose `is_in_aspan` as the word column.
-    3. Turn off Saccades. The orange words mark the trial’s answer span.
+    1. Load a word table with a true/false column marking the words you want to highlight, along with your fixations. Select a participant and trial in Scanpath.
+    2. In Stimulus → Highlight words, turn on Show and choose that word column.
+    3. Choose a highlight color. Turn off Saccades if you want to show just the highlighted text and fixations.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
 

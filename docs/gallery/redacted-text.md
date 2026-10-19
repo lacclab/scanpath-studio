@@ -19,7 +19,7 @@ print(gallery_figure("redacted-text"))
 
 === "In the app"
 
-    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
+    1. Load your data and select a participant and trial in Scanpath.
     2. In Stimulus ▾ → Text, turn on Redact. The blocks take the text color.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)

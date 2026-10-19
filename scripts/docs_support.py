@@ -593,7 +593,7 @@ def _describing_flag(flags: list[str], default):
     return flags[0] if flags else None
 
 
-def figure_options_reference() -> str:
+def figure_options_reference(*, heading: str = "##") -> str:
     """Every figure keyword, by section: its default, its ``render`` flag, what
     it does, the values it takes, and the builders that accept it.
 
@@ -619,7 +619,7 @@ def figure_options_reference() -> str:
             # Set by an experimental feature: the published site leaves it out.
             continue
         out += [
-            f"## {topic}",
+            f"{heading} {topic}",
             "",
             '<div class="sps-reference-table sps-option-table" markdown>',
             "",

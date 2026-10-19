@@ -72,11 +72,18 @@ def _saccade_types() -> dict:
 
 
 def _illustration() -> dict:
-    from scanpath_studio.measures import fixation_in_text_mask
-    from scanpath_studio.synthetic import load_synthetic_data
+    from scanpath_studio.synthetic import make_synthetic_words
 
-    words, fixations = load_synthetic_data()
-    fixations = fixations[fixation_in_text_mask(fixations, words)].copy()
+    words = make_synthetic_words()
+    fixations = words[["participant_id", "trial_id", "text_id", "word_id"]].copy()
+    fixations["x"] = words["x"] + words["width"] / 2
+    fixations["y"] = words["y"] + words["height"] / 2
+    fixations["duration_ms"] = [100, 150, 120, 200, 90, 110]
+    fixations["timestamp_ms"] = (
+        fixations["duration_ms"].cumsum() - fixations["duration_ms"]
+    )
+    fixations["order_in_trial"] = range(1, len(fixations) + 1)
+    fixations["pass_index"] = 1
     pid, tid = "synthetic", "synthetic_2line_demo"
     fig = sps.plot_scanpath(
         words,
@@ -95,11 +102,18 @@ def _illustration() -> dict:
 
 
 def _hearts_arrows() -> dict:
-    from scanpath_studio.measures import fixation_in_text_mask
-    from scanpath_studio.synthetic import load_synthetic_data
+    from scanpath_studio.synthetic import make_synthetic_words
 
-    words, fixations = load_synthetic_data()
-    fixations = fixations[fixation_in_text_mask(fixations, words)].copy()
+    words = make_synthetic_words()
+    fixations = words[["participant_id", "trial_id", "text_id", "word_id"]].copy()
+    fixations["x"] = words["x"] + words["width"] / 2
+    fixations["y"] = words["y"] + words["height"] / 2
+    fixations["duration_ms"] = [100, 150, 120, 200, 90, 110]
+    fixations["timestamp_ms"] = (
+        fixations["duration_ms"].cumsum() - fixations["duration_ms"]
+    )
+    fixations["order_in_trial"] = range(1, len(fixations) + 1)
+    fixations["pass_index"] = 1
     pid, tid = "synthetic", "synthetic_2line_demo"
     fig = sps.plot_scanpath(
         words,
@@ -272,12 +286,6 @@ def _across_experiment() -> dict:
 
 
 EXAMPLES = (
-    Example(
-        "hearts-arrows",
-        "Hearts & arrows",
-        "Heart-shaped fixations and curved arrows: make the design your own.",
-        _hearts_arrows,
-    ),
     Example("scanpath", "Scanpath", "Fixations and saccades over the text.", _scanpath),
     Example("heatmap", "Gaze heatmap", "Where fixation time concentrates.", _heatmap),
     Example(
@@ -297,12 +305,6 @@ EXAMPLES = (
         "Saccade types",
         "Forward movements, skips, refixations, return sweeps and regressions.",
         _saccade_types,
-    ),
-    Example(
-        "illustration",
-        "Reading schematic",
-        "A hand-drawn, two-line reading with snapped fixations and arced saccades.",
-        _illustration,
     ),
     Example(
         "comparison",
@@ -345,6 +347,18 @@ EXAMPLES = (
         "Across the experiment",
         "Mean reading time per word across one reader’s recorded trials.",
         _across_experiment,
+    ),
+    Example(
+        "illustration",
+        "Reading schematic",
+        "A hand-drawn, two-line reading with snapped fixations and arced saccades.",
+        _illustration,
+    ),
+    Example(
+        "hearts-arrows",
+        "Fully customizable",
+        "Heart-shaped fixations and curved arrows: make the design your own.",
+        _hearts_arrows,
     ),
 )
 BY_SLUG = {example.slug: example for example in EXAMPLES}

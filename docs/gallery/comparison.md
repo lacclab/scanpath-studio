@@ -18,9 +18,9 @@ print(gallery_figure("comparison"))
 
 === "In the app"
 
-    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_2_4_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
-    2. Turn on Compare. In Trial B, select participant `l7_1090`, trial `l7_1090_2_2_4_Ele_r0`.
-    3. In Compare ▾, choose Overlay and set Label A / Label B to Reader A / Reader B. Leave both fixation ranges unrestricted.
+    1. Load your data and select a participant and trial in Scanpath.
+    2. Turn on Compare. In Trial B, choose another participant's reading of the same text.
+    3. In Compare ▾, choose Overlay and enter labels that identify the two readings. Leave both fixation ranges unrestricted to compare the complete readings.
     4. In Figure & canvas, choose Crop to data with a 50 px margin. Under Legends, place the comparison legend above the plot and hide the duration size key.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)

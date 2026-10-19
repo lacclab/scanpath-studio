@@ -1,15 +1,16 @@
 ---
-title: "Hearts & arrows"
+title: "Fully customizable"
 description: "Customize a scanpath with heart-shaped fixations, curved saccades and direction arrows, with app, CLI and Python instructions."
 hide:
   - navigation
   - toc
 ---
 
-# Hearts & arrows
+# Fully customizable
 
 Make a figure for a talk or teaching: pink hearts for fixations, purple arrows
-for the eye’s movements. This short, hand-drawn example is an illustration.
+for the eye’s movements. This hand-drawn illustration follows
+The → cat → sat → on → the → mat, with one fixation per word.
 
 ```python exec="true" html="true"
 from gallery_examples import gallery_figure
@@ -19,7 +20,7 @@ print(gallery_figure("hearts-arrows"))
 
 === "In the app"
 
-    1. Download the <a href="words.csv" download>words</a> and <a href="fixations.csv" download>fixations</a>. Choose + → Import files and add both tables. In Recording setup, choose Screen → I know it and enter 450 × 300. Add the dataset, then select the only trial and Reset visualization.
+    1. Load your word and fixation tables and select a participant and trial in Scanpath. You can also try the example <a href="words.csv" download>words</a> and <a href="fixations.csv" download>fixations</a> with a 450 × 300 canvas.
     2. In **Fixations → Marker**, choose **Heart**, set the color to `#d12d72`, size range to **18–30**, and opacity to **0.85**. Under **Snap**, choose **To line**. Turn off **Fixation index**.
     3. In **Saccades**, set **Shape** to **Arc**. Under **Line**, use `#4f46a5` and width **2.5**. Turn on **Direction arrows** with size **12**.
     4. In **Figure & canvas**, hide the duration size key and set the Illustration label to “Illustration · hand-drawn”. Keep text highlighting off.

@@ -2,7 +2,7 @@
 
 Asked only when someone clicks *Check for updates* (Help → About), runs
 ``scanpath-studio version --check`` or calls ``api.check_for_updates`` — never
-on its own (docs/privacy.md → *Network activity*). One source serves every
+on its own. One source serves every
 install: GitHub's latest release, which leaves out drafts and pre-releases and
 lists each desktop archive with its sha256. :func:`check_for_updates` never
 raises; a check that could not be made says why in ``UpdateCheck.message``.

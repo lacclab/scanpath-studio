@@ -1461,7 +1461,7 @@ def _about_dialog() -> None:
         f"""
 Developed by [Omer Shubi](https://omershubi.github.io/),
 [Keren Gruteke Klein](https://kerengruteke.github.io/),
-[Maya Grossman](https://www.linkedin.com/in/maya-harram-32b547292/),
+[Maya Grossman](https://www.linkedin.com/in/maya-grossman-32b547292/),
 [Ella Lion](https://ella-lion.github.io/),
 [Deborah N. Jakobi]({_DILI}/lab-members/jakobi.html),
 [David R. Reich]({_DILI}/lab-members/reich.html),

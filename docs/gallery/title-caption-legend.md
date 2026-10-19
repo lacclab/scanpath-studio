@@ -20,9 +20,9 @@ print(gallery_figure("title-caption-legend"))
 
 === "In the app"
 
-    1. Select the bundled demo in Scanpath, then participant `l37_1129` and trial `l37_1129_2_1_1_Ele_r0`. Start with Reset visualization, turn off Stimulus → Highlight words → Show.
+    1. Load your data and select a participant and trial in Scanpath.
     2. Open Saccades ▾ → Line → Color and choose By type.
-    3. In Figure & canvas ▾ → Title & labels, turn on Title and type `One reader, one article`, size 34. Turn on Caption and type `Marker size: fixation duration. Line color: saccade type.`, size 20.
+    3. In Figure & canvas ▾ → Title & labels, turn on Title and Caption. Enter a title for your reading and a caption explaining what the markers and colors represent; choose a text size for each.
     4. Under Legends, place Saccade types at Right, outside, and Fixation sizes at Bottom right, outside, both with text size 18.
     5. Choose Crop to data with a 60 px margin.
 

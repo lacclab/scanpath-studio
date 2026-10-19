@@ -132,7 +132,7 @@ More examples in the [plot gallery](gallery.md).
 
 <div class="sps-home-links" markdown>
 
-[Python & CLI](guides/scanpath-visualization/index.md#render-in-code) · [FAQ](faq.md) · [Cite Scanpath Studio](cite.md) · [Feedback](https://github.com/lacclab/scanpath-studio/issues)
+[Python & CLI](guides/scanpath-visualization/index.md#render-in-code) · [FAQ](faq.md) · [Cite Scanpath Studio](about.md#cite-scanpath-studio) · [Feedback](https://github.com/lacclab/scanpath-studio/issues)
 
 </div>
 

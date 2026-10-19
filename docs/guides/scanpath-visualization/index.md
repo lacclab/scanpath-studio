@@ -101,7 +101,7 @@ recipe. For uploaded data, replace the placeholder file paths with your own.
         ```
 
     For your own files, use the [data loaders](../loading-data/index.md#load-and-inspect-in-code).
-    Figure settings are listed in the [API options](../../figure-options.md)
+    Figure settings are listed in the [API options](../../api.md#figure-options)
     and [CLI options](../../cli.md#common-tasks).
 
 The [gallery](../../gallery.md) gives app, CLI and Python instructions for

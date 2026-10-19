@@ -157,13 +157,11 @@ nav:
       - FAQ: faq.md
   - Plot gallery:
       - gallery.md
-      - Hearts & arrows: gallery/hearts-arrows.md
       - Scanpath: gallery/scanpath.md
       - Gaze heatmap: gallery/heatmap.md
       - Word-box heatmap: gallery/word-boxes.md
       - Fixations by line: gallery/text-lines.md
       - Saccade types: gallery/saccade-types.md
-      - Reading schematic: gallery/illustration.md
       - Two readers: gallery/comparison.md
       - Raw gaze: gallery/raw-gaze.md
       - Replay: gallery/replay.md
@@ -171,14 +169,12 @@ nav:
       - Redacted text: gallery/redacted-text.md
       - Title, caption & legend: gallery/title-caption-legend.md
       - Across the experiment: gallery/across-experiment.md
+      - Reading schematic: gallery/illustration.md
+      - Fully customizable: gallery/hearts-arrows.md
   - Reference:
       - Python API: api.md
-      - Figure options: figure-options.md
       - CLI reference: cli.md
-  - About:
-      - about.md
-      - Cite: cite.md
-      - Privacy: privacy.md
+  - About: about.md
 
 # Fail the strict build on a link to a heading that does not exist, not only on
 # one to a missing page.
@@ -289,14 +285,11 @@ plugins:
           - guides/**/*.md
           - faq.md
         Reference:
-          - api.md: The Python API reference
-          - figure-options.md: Every figure option, its default and its CLI flag
+          - api.md: Python API and figure options, defaults and CLI flags
           - cli.md: The CLI reference, every flag included
           - gallery/*.md
         About:
           - about.md
-          - cite.md
-          - privacy.md
 
 markdown_extensions:
   - abbr

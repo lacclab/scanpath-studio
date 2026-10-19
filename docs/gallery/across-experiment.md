@@ -19,8 +19,8 @@ print(gallery_figure("across-experiment"))
 
 === "In the app"
 
-    1. Select the bundled demo and open Corpus Analysis → Per participant.
-    2. Choose `l37_1129`, Total fixation duration and Mean aggregation.
+    1. Load your data and open Corpus Analysis → Per participant.
+    2. Choose a participant, a reading measure your data provides, and an aggregation such as Mean.
     3. Open Per-trial trend. The horizontal axis uses the dataset’s `trial_index`.
 
     [Follow the progression tutorial](../tutorials/corpus-analysis/progression-over-time.md)

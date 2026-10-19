@@ -54,7 +54,7 @@ on with `SCANPATH_LOCAL_FS=1`
 picks the format: `.html` is interactive and needs nothing else, while `.png`,
 `.svg` and `.pdf` need Chrome, Chromium or Edge (or run `plotly_get_chrome -y`
 once; see the [FAQ](faq.md#export-fails)). The figure is the app's Scanpath
-design unless a flag changes it, and every [figure option](figure-options.md)
+design unless a flag changes it, and every [figure option](api.md#figure-options)
 has a flag.
 
 ```bash
@@ -267,7 +267,7 @@ required field, not only the one that failed. It is the same dict
 
 Every `render` flag, generated from the parser the command uses, so the
 defaults and help are the ones `--help` prints. The figure flags are grouped
-like the [figure options](figure-options.md) they set.
+like the [figure options](api.md#figure-options) they set.
 
 ```python exec="true" idprefix="flags-"
 from docs_support import cli_reference

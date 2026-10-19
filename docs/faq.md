@@ -83,7 +83,7 @@ if they have it set up.
 
 When you run it locally or as the desktop app, nowhere: it stays on your
 computer. There are no accounts and no analytics. Don't upload identifiable
-data to the online demo. See [Privacy](privacy.md).
+data to the online demo. See [Privacy](about.md#privacy).
 
 ### Can I share a figure without showing the text?
 
@@ -155,4 +155,5 @@ note the version you used and install that one:
 
 ### How do I cite Scanpath Studio?
 
-See [Cite](cite.md) for BibTeX and APA entries, and for the datasets you used.
+See [Cite Scanpath Studio](about.md#cite-scanpath-studio) for BibTeX and APA
+entries, and [Bundled demo](about.md#bundled-demo) for the sample corpus.

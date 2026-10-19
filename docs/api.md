@@ -1,5 +1,5 @@
 ---
-description: "Python API reference for Scanpath Studio: load eye-tracking data, list trials, plot scanpaths, heatmaps and replays, and save figures from a script or notebook."
+description: "Python API and figure options: load eye-tracking data, plot and save figures, with defaults and matching CLI flags."
 ---
 
 # Python API
@@ -19,7 +19,7 @@ sps.save_figure(fig, "scanpath.html")
 ```
 
 Every function on this page is importable from `scanpath_studio`. The figure
-builders also take any of the [figure options](figure-options.md) as a keyword.
+builders also take the [figure options](#figure-options) as keywords.
 
 ## At a glance
 
@@ -104,12 +104,25 @@ print(words[columns].head(3))
 
 ## Figure options
 
-`plot_scanpath`, `animate_scanpath` and `compare_scanpaths` take the
-[figure options](figure-options.md) as keywords: every layer, color, size and
-legend setting, with the default it renders with and the `render` flag that
-sets it. `figure_options()` returns the same defaults in code.
+Set layers, colors, sizes and legends with keyword arguments to `plot_scanpath`,
+`animate_scanpath` or `compare_scanpaths`. The tables below list each option's
+default and matching CLI `render` flag, grouped like the app's plot rail.
+Descriptions name any builders an option is limited to.
+
+For options with a fixed set of values, case, spaces, `-` and `_` are ignored;
+other values raise a `ValueError`. A `--no-…` flag turns off an option that is
+on by default.
+
+`figure_options()` returns the defaults in code; `figure_options(choices=True)`
+also lists the accepted values.
 
 ::: scanpath_studio.api.figure_options
+
+```python exec="true" idprefix=""
+from docs_support import figure_options_reference
+
+print(figure_options_reference(heading="###"))
+```
 
 ## Reproduce a figure in code
 

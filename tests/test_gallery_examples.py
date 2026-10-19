@@ -51,6 +51,21 @@ def test_replay_thumbnail_has_frames_and_uses_the_real_player():
     assert replay["layout"]["meta"]["scanpath_autoplay"] is True
     assert replay["layout"]["meta"]["sps_preview_loop"] is True
 
+    # Rendering a thumbnail must leave the detail page interactive.
+    detail = json.loads(
+        html.unescape(
+            re.search(r'data-figure="([^"]+)"', gallery.gallery_figure("replay")).group(
+                1
+            )
+        )
+    )
+    assert detail["player"]
+    buttons = detail["layout"]["updatemenus"][0]["buttons"]
+    assert {button["name"] for button in buttons} >= {"play", "pause"}
+    assert detail["layout"]["sliders"]
+    assert not detail["config"].get("staticPlot")
+    assert not detail["layout"]["meta"].get("sps_preview_loop")
+
 
 def test_experiment_points_match_the_recorded_trial_means():
     example = gallery._build("across-experiment")
@@ -75,6 +90,17 @@ def test_schematic_is_two_lines_and_its_saccades_fit_the_canvas():
     assert x.max() <= max(figure.layout.xaxis.range)
     assert y.min() >= min(figure.layout.yaxis.range)
     assert y.max() <= max(figure.layout.yaxis.range)
+
+
+def test_customizable_example_visits_each_word_once_in_reading_order():
+    example = gallery._build("hearts-arrows")
+    words, fixations = example["words"], example["fixations"]
+    sequence = words.set_index("word_id").loc[fixations.word_id, "text"].tolist()
+    assert sequence == ["The", "cat", "sat", "on", "the", "mat"]
+    np.testing.assert_array_equal(fixations.x, words.x + words.width / 2)
+    np.testing.assert_array_equal(fixations.y, words.y + words.height / 2)
+    schematic = gallery._build("illustration")["fixations"]
+    assert schematic.equals(fixations)
 
 
 def test_redacted_example_draws_blocks_and_no_words():

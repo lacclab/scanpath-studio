@@ -58,6 +58,7 @@ Mechanics worth knowing before editing:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import streamlit as st
 
@@ -82,6 +83,9 @@ from .constants import (
     similarity_enabled,
     spoken,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from streamlit.delta_generator import DeltaGenerator
 
 # Name of the first-party cookie holding the "don't show the welcome tour
 # again" opt-out ("1" = opted out). One year, path=/, SameSite=Lax — no personal
@@ -742,6 +746,17 @@ _CARD_CSS = """
     border-radius: 0.75rem;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     padding: 1rem 1.25rem 0.6rem;
+    /* `_guide_card` draws the card 1px tall, so nothing of it shows until this
+       stylesheet applies; these rules give it its own height back. */
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+/* The card's slot in the page: the 1px Streamlit gives a fixed-height
+   container, gone once the card itself is fixed out of the flow. */
+[data-testid="stLayoutWrapper"]:has(> .st-key-tour_card) {
+    height: auto !important;
+    flex-basis: auto !important;
 }
 /* The card title is an <h2> for a valid page heading outline (see the title
    render in render_spotlight_tour), sized like an <h4> so the card stays
@@ -866,6 +881,20 @@ def _set_guide_folded(kind: str, folded: bool) -> None:
     st.session_state[_guide_folded_key(kind)] = folded
     if kind == "tour" and not folded:
         _send_tour_to_scanpath()
+
+
+def _guide_card() -> DeltaGenerator:
+    """The guide card's container, drawn 1px tall until `_CARD_CSS` applies.
+
+    The card's stylesheet is raw HTML in a markdown block, which the browser
+    draws only once Streamlit has fetched its HTML renderer, a separate script
+    loaded on first use (seconds on a slow connection). The card's title, body
+    and buttons need no such script and would otherwise show first, inline at
+    the top of the page as if they were its heading. A fixed-height container
+    clips its content without any stylesheet of ours, and `_CARD_CSS` releases
+    the height in the same paint that pins the card.
+    """
+    return st.container(key="tour_card", height=1, border=False)
 
 
 def _render_guide_fold_button(kind: str, name: str) -> None:
@@ -1458,7 +1487,7 @@ def render_spotlight_tour() -> None:
     if step_idx == 0:
         st.markdown('<div class="tour-backdrop"></div>', unsafe_allow_html=True)
 
-    with st.container(key="tour_card"):
+    with _guide_card():
         # Close (✕) in the top-right corner — exits the tour like "Exit"/"Done"
         # (CSS pins it; the dismiss listener wires it for instant close too).
         st.button(
@@ -2082,7 +2111,7 @@ def render_use_case_tutorial() -> None:
         + "</style>",
         unsafe_allow_html=True,
     )
-    with st.container(key="tour_card"):
+    with _guide_card():
         if selector in _GROUP_SELECTORS:
             # Inside the card, like every tour iframe (see render_spotlight_tour).
             embed_html_iframe(_group_ring_script(selector), height=0)
@@ -2655,7 +2684,7 @@ def render_spotlight_wizard_guide() -> None:
     if selector:
         embed_html_iframe(_scroll_into_view_script(selector), height=0)
 
-    with st.container(key="tour_card"):
+    with _guide_card():
         # <h2> for a valid heading outline; sized down via `.st-key-tour_card h2`.
         st.markdown(f"## {step['title']}")
         _render_guide_fold_button("wizard", "setup guide")

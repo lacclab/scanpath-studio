@@ -28,6 +28,7 @@ from __future__ import annotations
 import contextlib
 import contextvars
 import html
+import json
 import logging
 import re
 import threading
@@ -907,6 +908,233 @@ def run_scope() -> Iterator[None]:
             if run_page is not None and not run_page._released and not _KEEP_ON_STOP:
                 _clear_off_thread(run_page._slot)
         _RUN.reset(token)
+
+
+#: The Scanpath view's plot area, where a trial change's card shows
+#: (`tabs.render_single_trial_tab`'s stage: the card's slot, then the figure).
+PLOT_STAGE_SELECTOR = ".st-key-tour_grp_plot"
+#: What a figure's page dispatches on the Streamlit page once it has drawn
+#: (`tabs._TRUE_SCALE_TEMPLATE`); a trial change's card waits for it.
+PLOT_DRAWN_EVENT = "sps-plot-drawn"
+#: The card a trial change shows, and the buttons and pickers that make one: ◀ ▶
+#: for A and for B, the two trial dropdowns, and A's slider.
+TRIAL_LOADING_TITLE = "Loading trial"
+TRIAL_STEP_KEYS = (
+    "single_prev_trial",
+    "single_next_trial",
+    "single_compare_prev",
+    "single_compare_next",
+)
+TRIAL_PICKER_KEYS = ("single_trial_id", "single_compare_trial")
+TRIAL_SLIDER_KEYS = ("single_trial_pos",)
+
+# The browser half of a trial change's card. A trial change is a whole rerun the
+# browser waits out with the old figure on screen: the server's run, then the
+# page's every update over the connection, then the new figure's draw. A card
+# drawn by the script (`card`) can only cover the first, so this one is drawn by
+# the page at the click and taken down by the new figure's first draw. Like
+# every card it shows nothing for `DELAY_S`, so a quick step never flickers.
+#
+# It runs in the Streamlit page's own realm (a `<script>` added to its head,
+# once per page load), so it outlives the frame that installs it. It never
+# writes into the elements React draws: the card is a node of its own at the
+# end of `.stApp` (for the theme's colours and fonts), fixed over the figure's
+# box and moved with it each frame while it shows. A change Streamlit reruns for
+# is said by its status widget; a click that starts no rerun — the picker's
+# current option, a slider let go where it was — takes the card down unseen,
+# and so does a run that ends without a new figure in the stage.
+_TRIAL_LOADING_SCRIPT = """<script>
+(function () {
+  var CFG = __CFG__;
+  function install(cfg) {
+    var node = null, started = 0, sawRun = false, idleSince = 0;
+    var timer = 0, frame = 0, pickerWasOpen = false, slid = null;
+    function stage() { return document.querySelector(cfg.stage); }
+    function running() {
+      return !!document.querySelector('[data-testid="stStatusWidget"]');
+    }
+    function inside(el, keys) {
+      for (var i = 0; i < keys.length; i++) {
+        if (el.closest(".st-key-" + keys[i])) { return true; }
+      }
+      return false;
+    }
+    function pickerOpen() {
+      for (var i = 0; i < cfg.pickers.length; i++) {
+        if (document.querySelector(
+          ".st-key-" + cfg.pickers[i] + ' [aria-expanded="true"]'
+        )) { return true; }
+      }
+      return false;
+    }
+    function elapsed(s) {
+      if (s < 10) { return s.toFixed(1) + " s"; }
+      if (s < 60) { return Math.round(s) + " s"; }
+      var m = Math.floor(Math.round(s) / 60), r = Math.round(s) % 60;
+      return r ? m + " min " + r + " s" : m + " min";
+    }
+    function stop() {
+      if (timer) { clearInterval(timer); timer = 0; }
+      if (frame) { cancelAnimationFrame(frame); frame = 0; }
+      if (node) { node.remove(); node = null; }
+    }
+    function place() {
+      frame = 0;
+      if (!node) { return; }
+      var s = stage();
+      if (!s || !node.isConnected) { stop(); return; }
+      var box = (s.children[1] || s).getBoundingClientRect();
+      var top = Math.max(box.top, 0);
+      var bottom = Math.min(box.bottom, window.innerHeight);
+      // A script card in the stage says it better; a hidden stage needs none.
+      if (s.querySelector(".sps-reveal") || box.width <= 0 || bottom <= top) {
+        node.style.display = "none";
+      } else {
+        node.style.display = "";
+        node.style.left = box.left + "px";
+        node.style.top = top + "px";
+        node.style.width = box.width + "px";
+        node.style.height = bottom - top + "px";
+      }
+      frame = requestAnimationFrame(place);
+    }
+    function tick() {
+      if (!node) { return; }
+      var now = performance.now(), waited = now - started;
+      var time = node.querySelector(".sps-card-time");
+      if (time) { time.textContent = elapsed(waited / 1000); }
+      if (running()) {
+        sawRun = true;
+        idleSince = 0;
+      } else if (sawRun) {
+        idleSince = idleSince || now;
+        if (now - idleSince >= cfg.settleMs) { stop(); }
+      } else if (waited >= cfg.noRunMs) {
+        stop();
+      }
+      if (waited >= cfg.maxMs) { stop(); }
+    }
+    function start() {
+      if (!stage()) { return; }
+      stop();
+      started = performance.now();
+      sawRun = false;
+      idleSince = 0;
+      node = document.createElement("div");
+      node.className = "sps-trial-loading";
+      node.style.animationDelay = cfg.delayMs + "ms";
+      node.innerHTML = cfg.card;
+      (document.querySelector(".stApp") || document.body).appendChild(node);
+      place();
+      timer = setInterval(tick, 250);
+    }
+    function sliderValue() {
+      var thumb = document.querySelector(cfg.sliderThumb);
+      return thumb ? thumb.value : null;
+    }
+    function settleSlider() {
+      if (slid === null) { return; }
+      var before = slid;
+      slid = null;
+      setTimeout(function () {
+        if (sliderValue() !== before) { start(); }
+      }, 0);
+    }
+    document.addEventListener("pointerdown", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) { return; }
+      pickerWasOpen = pickerOpen();
+      slid = t.closest(cfg.sliderSel) ? sliderValue() : null;
+    }, true);
+    document.addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) { return; }
+      var button = t.closest("button");
+      if (button && !button.disabled && inside(button, cfg.steps)) {
+        start();
+        return;
+      }
+      var option = t.closest('[role="option"]');
+      if (option && pickerWasOpen
+          && option.getAttribute("aria-selected") !== "true") {
+        start();
+      }
+    }, true);
+    document.addEventListener("pointerup", settleSlider, true);
+    document.addEventListener("keydown", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) { return; }
+      if (e.key === "Enter" && inside(t, cfg.pickers)
+          && t.getAttribute("aria-expanded") === "true") {
+        start();
+      } else if (t.closest(cfg.sliderSel)) {
+        slid = sliderValue();
+      }
+    }, true);
+    document.addEventListener("keyup", settleSlider, true);
+    window.addEventListener(cfg.drawnEvent, function (e) {
+      var s = stage();
+      if (node && s && e.detail && s.contains(e.detail)) { stop(); }
+    });
+  }
+  try {
+    var host = window.parent;
+    if (host.__spsTrialLoadingInstalled) { return; }
+    var script = host.document.createElement("script");
+    script.textContent = "(" + install.toString() + ")("
+      + JSON.stringify(CFG) + ");";
+    host.document.head.appendChild(script);
+    host.__spsTrialLoadingInstalled = true;
+  } catch (e) {
+    /* Not same-origin: the trial changes without a card, as before. */
+  }
+})();
+</script>"""
+
+
+def trial_loading_card_html() -> str:
+    """A trial change's card: the head and sliding bar of every other card."""
+    snap = Snapshot(
+        title=f"{TRIAL_LOADING_TITLE}…",
+        steps=(),
+        step_seconds=(),
+        current=-1,
+        done=None,
+        total=None,
+        unit="",
+        detail=None,
+        elapsed=0.0,
+        finished=False,
+    )
+    return f'<div class="sps-trial-card">{head_html(snap)}{bar_html(snap)}</div>'
+
+
+def trial_loading_script() -> str:
+    """The zero-height frame's script that installs a trial change's card on
+    the Streamlit page (see `_TRIAL_LOADING_SCRIPT`)."""
+    cfg = {
+        "card": trial_loading_card_html(),
+        "stage": PLOT_STAGE_SELECTOR,
+        "steps": list(TRIAL_STEP_KEYS),
+        "pickers": list(TRIAL_PICKER_KEYS),
+        "sliderSel": ", ".join(f".st-key-{key}" for key in TRIAL_SLIDER_KEYS),
+        "sliderThumb": ", ".join(
+            f'.st-key-{key} input[type="range"]' for key in TRIAL_SLIDER_KEYS
+        ),
+        "drawnEvent": PLOT_DRAWN_EVENT,
+        "delayMs": round(DELAY_S * 1000),
+        # A rerun shows Streamlit's status widget within a round trip — about
+        # 1 s on a slow mobile connection; a click with none by now started none.
+        "noRunMs": 3000,
+        # The figure draws just before its run ends; past this, it isn't coming.
+        "settleMs": 800,
+        "maxMs": 300_000,
+    }
+    # A `</script>` in a JSON string would end the frame's script early;
+    # escaping every `</` rules it out.
+    return _TRIAL_LOADING_SCRIPT.replace(
+        "__CFG__", json.dumps(cfg).replace("</", "<\\/")
+    )
 
 
 def covered() -> bool:

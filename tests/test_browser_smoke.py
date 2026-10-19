@@ -14,6 +14,7 @@ job (``ci.yml`` → *Browser smoke test*).
 from __future__ import annotations
 
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -160,6 +161,46 @@ def test_a_rail_popover_opens(page):
     body.first.wait_for(state="visible", timeout=15_000)
     assert "Size" in body.first.inner_text()
     page.keyboard.press("Escape")
+
+
+def test_a_trial_change_covers_the_figure_until_the_next_one_draws(page):
+    """▶ puts the page's own card over the figure at the click — before the
+    rerun has even reached the server — and the new figure's draw takes it down."""
+    old = _plot_frame(page, "single")
+    old.evaluate("window.__previousTrial = true")
+    page.locator(".st-key-single_next_trial button").first.click()
+    assert page.locator(".sps-trial-loading").count() == 1
+    _settle(page)
+    page.locator(".sps-trial-loading").wait_for(state="detached", timeout=30_000)
+    frame = _plot_frame(page, "single")
+    assert not frame.evaluate("!!window.__previousTrial")
+    assert frame.locator("#truescale-single .main-svg").count() >= 1
+
+
+def test_the_tour_card_shows_nothing_until_its_stylesheet_applies(page):
+    """Streamlit draws a markdown block's raw HTML — the card's stylesheet —
+    only once it has fetched its HTML renderer, a script of its own. Without
+    it, the card must stay clipped to its 1px slot, not show its text and
+    buttons inline at the top of the page."""
+    blocked = []
+
+    def block(route):
+        blocked.append(route.request.url)
+        route.abort()
+
+    context = page.context.browser.new_context(viewport={"width": 1440, "height": 900})
+    other = context.new_page()
+    try:
+        other.route(re.compile(r"/rehype-raw[^/]*\.js"), block)
+        other.goto(page.url)
+        _settle(other)
+        if not blocked:
+            pytest.skip("this Streamlit fetches no separate rehype-raw script")
+        card = other.locator(".st-key-tour_card")
+        card.wait_for(state="attached", timeout=30_000)
+        assert card.bounding_box()["height"] <= 1
+    finally:
+        context.close()
 
 
 def test_no_script_error_reached_the_page(page):

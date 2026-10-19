@@ -554,14 +554,42 @@ def get_app_css() -> str:
     .st-key-tour_grp_plot { display: grid !important; grid-template-columns: minmax(0, 1fr); }
     .st-key-tour_grp_plot > :nth-child(-n + 2) { grid-area: 1 / 1; }
     .st-key-tour_grp_plot > :first-child { z-index: 3; }
+    /* A trial change's card (loading.trial_loading_script): drawn by the page
+       at the click, fixed over the figure on screen, fading in only after
+       loading.DELAY_S (its animation delay is set where it is drawn), and gone
+       on the new figure's first draw. The same size box and card as the
+       script's own, which it gives way to when one shows. */
+    .sps-trial-loading {
+        position: fixed; z-index: 4; pointer-events: none;
+        display: grid; place-items: center;
+        opacity: 0;
+        animation: sps-trial-in 0.15s ease forwards;
+    }
+    .sps-trial-loading::before {
+        content: ""; position: absolute; inset: 0; border-radius: 8px;
+        background:
+            linear-gradient(rgba(128, 128, 128, 0.10), rgba(128, 128, 128, 0.10)),
+            color-mix(in srgb, var(--sps-page-bg) 60%, transparent);
+        animation: sps-sk-pulse 1.6s ease-in-out infinite;
+    }
+    .sps-trial-card {
+        position: relative; width: min(24rem, calc(100% - 2rem)); box-sizing: border-box;
+        padding: 0.8rem 1rem 0.9rem;
+        border: 1px solid var(--sps-border); border-radius: 12px;
+        background: var(--sps-page-bg);
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+    }
+    .sps-trial-card .sps-card-head { margin-bottom: 0.7rem; }
+    @keyframes sps-trial-in { to { opacity: 1; } }
     /* A card already says what the app is waiting on. */
     .stApp:has(.sps-reveal) div[data-testid="stSpinner"] { display: none !important; }
     @keyframes sps-spin { to { transform: rotate(360deg); } }
     @keyframes sps-sk-pulse { 50% { opacity: 0.55; } }
     @keyframes sps-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(290%); } }
     @media (prefers-reduced-motion: reduce) {
-        .sps-ring, .sps-sk, .sps-bar-indeterminate > span,
+        .sps-ring, .sps-sk, .sps-bar-indeterminate > span, .sps-trial-loading::before,
         [class*="st-key-sps_card_"]:has(.sps-reveal) .sps-size-box { animation: none !important; }
+        .sps-trial-loading { animation-duration: 0.01s; }
         .sps-bar > span { transition: none !important; }
     }
 

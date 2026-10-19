@@ -725,6 +725,7 @@ def configure_page() -> None:
     embed_html_iframe(_IFRAME_CLICK_CLOSES_POPOVER_SCRIPT, height=0)
     embed_html_iframe(_A11Y_NAMES_SCRIPT, height=0)
     embed_html_iframe(_FIELD_TIP_PLACEMENT_SCRIPT, height=0)
+    embed_html_iframe(loading.trial_loading_script(), height=0)
 
 
 #: The app's wordmark, shown in Streamlit's own header. Inside the

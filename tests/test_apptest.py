@@ -301,6 +301,16 @@ class TestAppLaunches:
         assert {"single_prev_trial", "single_next_trial"} <= btn_keys, (
             "trial ◀ ▶ step buttons missing"
         )
+        # The keys a trial change's loading card listens on (the page's own
+        # script, `loading.trial_loading_script`).
+        from scanpath_studio import loading
+
+        assert {"single_prev_trial", "single_next_trial"} <= set(
+            loading.TRIAL_STEP_KEYS
+        )
+        assert "single_trial_id" in loading.TRIAL_PICKER_KEYS
+        assert "single_trial_id" in [s.key for s in at.selectbox]
+        assert loading.TRIAL_SLIDER_KEYS == ("single_trial_pos",)
 
     def test_new_viz_toggles_build_without_error(self):
         # Flip several plot options (color-by-line — the "line" option in the

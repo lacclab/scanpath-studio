@@ -340,6 +340,7 @@ from scanpath_studio.url_state import (
     _apply_url_trial_selection,
     _build_share_query,  # noqa: F401  re-exported for tests
     _go_data,
+    _go_scanpath,
     _render_share_body,
     _settle_picker_selection,
     apply_pending_preprocessing,
@@ -5925,6 +5926,45 @@ def _trial_identity_alert_dialog(asked_by: str, warning: str) -> None:
         )
 
 
+@st.dialog(f"{ICONS['success']} Dataset added")
+@guarded()
+def _dataset_added_dialog(message: str) -> None:
+    """✅ Add dataset's next step: open the new dataset, or add another.
+
+    Raised once by ``main`` on the run after ✅ Add dataset, once the new
+    dataset's frames are loaded, so ``message`` carries its counts. Closing it
+    keeps the user on 🗂️ Data Management, where **Open in Scanpath** under the
+    list of datasets does the same later. Buttons are handled by their return
+    value, never ``on_click`` — a dialog body is a fragment (see
+    ``_leave_dataset_editor_dialog``).
+    """
+    st.markdown(message)
+    open_col, again_col = st.columns(2, gap="small")
+    if open_col.button(
+        f"{ICONS['view_scanpath']} Open in Scanpath",
+        key="dataset_added_open",
+        type="primary",
+        width="stretch",
+        help="Show the new dataset's first trial in the Scanpath view.",
+    ):
+        _go_scanpath()
+        st.rerun(scope="app")
+    if again_col.button(
+        f"{ICONS['add']} Add another",
+        key="dataset_added_again",
+        width="stretch",
+        help="Open Import files again for the next dataset.",
+    ):
+        from scanpath_studio.wizard import _enter_add_data_wizard
+
+        _enter_add_data_wizard()
+        st.rerun(scope="app")
+    st.caption(
+        f"Close this to stay on {ICONS['view_data']} Data Management. "
+        "**Open in Scanpath**, under the list of datasets, opens it later."
+    )
+
+
 #: Whether the editor's ✕ Cancel confirmation is open. A pending
 #: flag rather than a button return value, the house pattern: a callback may not
 #: open a dialog, and a dialog opened from a return value is lost on the next
@@ -5942,18 +5982,18 @@ _EDITOR_LEAVE_EDIT_KEY = "_dataset_editor_leave_edit"
 #: opens under the table, so the page is brought down to it once.
 _EDITOR_SCROLL_KEY = "_dataset_editor_scroll"
 
-#: Bring the editor's top under the app's header — in its own scroller, never
-#: by `scrollIntoView` (which moves the document; see `tour.py`). Waits while
-#: Streamlit is still laying the editor out, then keeps the editor's top in
-#: place for a second, because the page above it is still settling and a
-#: single scroll lands wherever the layout happened to be at that moment.
-_SCROLL_TO_EDITOR_SCRIPT = """<script>
+#: Bring a keyed section's top under the app's header — in its own scroller,
+#: never by `scrollIntoView` (which moves the document; see `tour.py`). Waits
+#: while Streamlit is still laying the section out, then keeps its top in place
+#: for a second, because the page above it is still settling and a single
+#: scroll lands wherever the layout happened to be at that moment.
+_SCROLL_TO_SECTION_TEMPLATE = """<script>
 (function () {
   const doc = window.parent.document;
   const win = doc.defaultView;
   let tries = 0, aligned = 0;
   (function attempt() {
-    const el = doc.querySelector(".st-key-data_dataset_editor");
+    const el = doc.querySelector(".st-key-__SECTION_KEY__");
     const r = el && el.getBoundingClientRect();
     if (!r || r.height === 0) {
       if (++tries < 20) setTimeout(attempt, 150);
@@ -5972,6 +6012,15 @@ _SCROLL_TO_EDITOR_SCRIPT = """<script>
   })();
 })();
 </script>"""
+
+
+def _scroll_to_section_script(key: str) -> str:
+    """The script that brings the container keyed ``key`` to the top."""
+    return _SCROLL_TO_SECTION_TEMPLATE.replace("__SECTION_KEY__", key)
+
+
+#: The ✏️ Edit dataset screen, brought down to once when it opens.
+_SCROLL_TO_EDITOR_SCRIPT = _scroll_to_section_script("data_dataset_editor")
 
 
 #: ✏️ Edit dataset's record of the metadata tables as the edit found them.
@@ -9169,6 +9218,10 @@ def _run_app() -> None:
     # `_finish_page`, after this run's `save_local_state`.
     download_folder_slot = overview_page.container(key="data_download_folder")
     saved_here_slot = overview_page.container(key="data_saved_here")
+    # The one-run script that brings the page back to its top after ✅ Add
+    # dataset. A slot of its own, last on the page and held on every run, so
+    # the script coming and going moves nothing above it.
+    page_scroll_slot = overview_page.empty()
     # Keyed → the stable `.st-key-…` selectors the "Load and verify a dataset"
     # tutorial spotlights, alongside its siblings below.
     column_mapping_slot = editor_page.container(key="tutorial_column_mapping")
@@ -9269,9 +9322,10 @@ def _run_app() -> None:
     dataset_table_slot = setup_source_slot.container(key="tutorial_available_datasets")
     # The two ways to make a dataset are one **+ Add
     # dataset** menu (the Scanpath picker's + with its name spelled out), under
-    # the list it adds to. Filled once `data_choice` is known.
+    # the list it adds to, beside **Open in Scanpath** for the dataset the list
+    # marks Current. Filled once `data_choice` is known.
     add_dataset_slot = (
-        setup_source_slot.container(key="data_page_add")
+        setup_source_slot.container(key="data_page_add", horizontal=True)
         if data_view and not wizard_owns_page
         else None
     )
@@ -9319,6 +9373,16 @@ def _run_app() -> None:
                 help="Add your Fixations and Words (interest areas) tables.",
                 width="stretch",
             )
+        # The page's way back to the plot, for the dataset just added or
+        # picked from the list: the view switch is a request, since this is
+        # an `on_click` callback (see `url_state._go_scanpath`).
+        add_dataset_slot.button(
+            "Open in Scanpath",
+            icon=ICONS["view_scanpath"],
+            key="data_open_in_scanpath",
+            on_click=_go_scanpath,
+            help=f"Show **{_dataset_display_name(_dataset_owner)}** in the Scanpath view.",
+        )
     # Part 1's headline on every run, like the other parts (the editor
     # is built hidden); its two fields only while it is open, since they are
     # seeded from whichever dataset is open and must not outlive it.
@@ -9805,15 +9869,11 @@ def _run_app() -> None:
     # just computed above, on the frames those buttons produced.
     asked_by = st.session_state.pop(TRIAL_IDENTITY_CHECK_KEY, None)
     added = st.session_state.pop(DATASET_ADDED_KEY, None)
-    if added:
-        # Say what ✅ Add dataset brought in.
-        st.toast(
-            dataset_added_message(str(added), words_all, fixations_all),
-            icon=ICONS["success"],
-        )
+    identity_modal = False
     if asked_by and identity_warning:
         try:
             _trial_identity_alert_dialog(str(asked_by), identity_warning)
+            identity_modal = True
         except StreamlitAPIException:
             # Streamlit allows one dialog per script run, and ❓ Help's three
             # (FAQ / About / Tutorials) and the welcome tour are served above
@@ -9823,6 +9883,30 @@ def _run_app() -> None:
             # it back rather than lose the verdict; the next run has no modal
             # ahead of it.
             st.session_state[TRIAL_IDENTITY_CHECK_KEY] = asked_by
+    if added:
+        # Say what ✅ Add dataset brought in, and offer the next step: a
+        # dialog with Open in Scanpath / Add another. The Trial ID verdict
+        # takes the run's one dialog when it has something to say, and any
+        # other dialog already open wins too; the counts then go to a toast,
+        # and **Open in Scanpath** under the list is the way on.
+        message = dataset_added_message(str(added), words_all, fixations_all)
+        offered = False
+        if not identity_modal:
+            try:
+                _dataset_added_dialog(message)
+                offered = True
+            except StreamlitAPIException:
+                pass
+        if not offered:
+            st.toast(message, icon=ICONS["success"])
+        # The wizard leaves the page scrolled to wherever its footer was —
+        # the bottom of the overview. Bring the list of datasets, the new one
+        # now Current in it, back to the top.
+        if data_view:
+            with page_scroll_slot:
+                embed_html_iframe(
+                    _scroll_to_section_script(DATA_OVERVIEW_KEY), height=0
+                )
 
     # Trial-level filtering / grouping: narrow by participant, by condition
     # (Hunting/Gathering, difficulty, first/repeated reading, correctness), and by

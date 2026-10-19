@@ -437,6 +437,16 @@ def launch_app(extra_args: list[str]) -> None:
         if any(str(arg).startswith("--browser.gatherUsageStats") for arg in extra_args)
         else ["--browser.gatherUsageStats=false"]
     )
+    # On a machine with no `~/.streamlit/credentials.toml`, `streamlit run`
+    # stops at a terminal prompt asking for an email address for Streamlit's
+    # newsletter before it serves anything. `server.showEmailPrompt=false` skips
+    # it, and keeps the browser tab Streamlit opens; `server.headless=true`
+    # would skip it as well but also stop that tab. Same override rule.
+    email_prompt_args = (
+        []
+        if any(str(arg).startswith("--server.showEmailPrompt") for arg in extra_args)
+        else ["--server.showEmailPrompt=false"]
+    )
     # Streamlit's toolbar resolves to "developer" on localhost, which
     # puts a Deploy button (to Streamlit Community Cloud) in the header. The
     # "viewer" toolbar drops it and the other developer-only items but keeps
@@ -457,6 +467,7 @@ def launch_app(extra_args: list[str]) -> None:
             str(app_path),
             *theme_args,
             *stats_args,
+            *email_prompt_args,
             *toolbar_args,
             *_max_upload_cli_flags(extra_args),
             *_bind_cli_flags(extra_args),

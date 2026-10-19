@@ -2061,6 +2061,97 @@ def test_the_toolbar_mode_is_set_on_every_launch_path():
     assert '"--client.toolbarMode=viewer"' in launcher
 
 
+# ---------------------------------------------------------------------------
+# No usage statistics and no first-run email prompt
+# ---------------------------------------------------------------------------
+def test_a_launch_turns_off_usage_stats_and_the_email_prompt(monkeypatch, tmp_path):
+    argv = _launch_argv(monkeypatch, tmp_path, [])
+    assert "--browser.gatherUsageStats=false" in argv
+    assert "--server.showEmailPrompt=false" in argv
+    # Headless would also stop Streamlit opening the app in the browser.
+    assert not any(arg.startswith("--server.headless") for arg in argv)
+
+
+@pytest.mark.parametrize(
+    ("extra", "injected"),
+    [
+        (["--browser.gatherUsageStats=true"], "--browser.gatherUsageStats=false"),
+        (["--browser.gatherUsageStats", "true"], "--browser.gatherUsageStats=false"),
+        (["--server.showEmailPrompt=true"], "--server.showEmailPrompt=false"),
+        (["--server.showEmailPrompt", "true"], "--server.showEmailPrompt=false"),
+    ],
+)
+def test_a_stats_or_email_flag_the_user_passes_wins(
+    monkeypatch, tmp_path, extra, injected
+):
+    argv = _launch_argv(monkeypatch, tmp_path, extra)
+    assert injected not in argv
+    assert argv[-len(extra) :] == extra
+
+
+def test_the_privacy_flags_are_set_on_every_launch_path():
+    import tomllib
+    from pathlib import Path
+
+    from streamlit import config as st_config
+
+    st_config.get_config_options()
+    for option in ("browser.gatherUsageStats", "server.showEmailPrompt"):
+        assert option in st_config._config_options_template
+    root = Path(__file__).resolve().parents[1]
+    config = tomllib.loads((root / ".streamlit" / "config.toml").read_text("utf-8"))
+    assert config["browser"]["gatherUsageStats"] is False
+    assert config["server"]["showEmailPrompt"] is False
+    launcher = (root / "desktop" / "launcher.py").read_text("utf-8")
+    assert '"--browser.gatherUsageStats=false"' in launcher
+    # The desktop launcher goes through `launch_app`, which adds the rest.
+    assert "launch_app(" in launcher
+
+
+def test_a_first_launch_neither_prompts_nor_announces_usage_stats(tmp_path):
+    """Streamlit's real CLI, on a machine it has never run on, with stdin
+    closed: it must get as far as starting the server without asking for an
+    email address or printing its usage-statistics notice."""
+    import os
+    import subprocess
+    import sys
+    import textwrap
+
+    home = tmp_path / "home"
+    home.mkdir()
+    script = textwrap.dedent(
+        """
+        import streamlit.web.bootstrap as bootstrap
+
+        bootstrap.run = lambda *args, **kwargs: print("SERVER STARTS")
+        from scanpath_studio.cli import launch_app
+
+        launch_app([])
+        """
+    )
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("STREAMLIT_")
+    }
+    env.update(HOME=str(home), USERPROFILE=str(home), PYTHONUNBUFFERED="1")
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=tmp_path,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    output = result.stdout + result.stderr
+    assert "SERVER STARTS" in result.stdout, output
+    assert "email" not in output.lower()
+    assert "usage statistics" not in output.lower()
+    assert not (home / ".streamlit" / "credentials.toml").exists()
+
+
 def _health_tables(tmp_path):
     """A words + fixations pair with one 0 ms and one -40 ms fixation."""
     import pandas as pd

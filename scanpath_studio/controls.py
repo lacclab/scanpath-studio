@@ -3553,23 +3553,26 @@ def multi_field_flag(
     return state
 
 
-@st.cache_data(show_spinner=False, max_entries=64)
-def _c_wrong_column_note(_df, fingerprint, field_key: str, column: str, fixations):
-    return wrong_column_note(_df[column], field_key, fixations=fixations)
-
-
 def wrong_column_caption(df, field_key: str, column, *, fixations: bool) -> str:
     """The note drawn under a numeric field whose column is mostly not numbers.
 
     The same count and advice as the warning above ✅ Add dataset
-    (`data.numeric_parse_issues`), at the field to change. ``""`` for a field
-    that is not numeric, an unmapped one, or a column that reads as numbers.
+    (`data.numeric_parse_issues`), at the field to change, from the same
+    reading of the column (`data.column_parse`, kept per frame and column).
+    ``""`` for a field that is not numeric, an unmapped one, or a column that
+    reads as numbers.
     """
     if field_key not in NUMERIC_SCHEMA_FIELDS or not isinstance(column, str):
         return ""
     if column not in df.columns or pd.api.types.is_numeric_dtype(df[column]):
         return ""
-    return _c_wrong_column_note(df, frame_fingerprint(df), field_key, column, fixations)
+    return wrong_column_note(
+        df,
+        column,
+        field_key,
+        fixations=fixations,
+        fingerprint=frame_fingerprint(df),
+    )
 
 
 def value_preview_tip(df, field_key: str, column) -> str:

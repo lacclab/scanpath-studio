@@ -6249,12 +6249,7 @@ def render_single_trial_tab(
 
     # A dataset that fails its data checks badly (most fixations at 0 ms, most
     # positions missing) still draws a plausible figure; say so above it.
-    render_data_health_notice(
-        plot_notes_slot,
-        words_all if words_all is not None else words_filtered,
-        fixations_all if fixations_all is not None else fixations_filtered,
-        raw_gaze_all if raw_gaze_all is not None else raw_gaze,
-    )
+    render_data_health_notice(plot_notes_slot, words_all, fixations_all, raw_gaze_all)
 
     if not (selected_participant and selected_trial):
         return
@@ -16816,7 +16811,7 @@ def render_dataset_capabilities(
         st.caption("  \n".join(lines))
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=8)
 def _c_data_health(_words, _fixations, _raw_gaze, key) -> list:
     """`data_health.check_data_health`, once per dataset (keyed on fingerprints)."""
     from .data_health import check_data_health

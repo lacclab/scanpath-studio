@@ -2528,24 +2528,87 @@ class UnparsedColumn:
         return filled > 0 and self.unreadable > WRONG_COLUMN_SHARE * filled
 
 
+@dataclass(frozen=True)
+class ColumnParse:
+    """One mapped numeric column read once, for every check that needs it.
+
+    ``parsed`` is :func:`_to_number`'s reading. For a column that is not
+    numeric already, ``failed`` is the stripped text of the cells it could not
+    read that hold something (index-aligned with the column) and ``empty`` the
+    mask of cells that hold nothing: NaN, blank or EyeLink's ``.``.
+    """
+
+    parsed: pd.Series
+    failed: pd.Series | None = None
+    empty: pd.Series | None = None
+
+    def summary(self, keep: pd.Series | None = None) -> UnparsedColumn | None:
+        """The :class:`UnparsedColumn` over the rows ``keep`` selects (all
+        rows when ``None``); ``None`` when every filled cell reads."""
+        if self.failed is None or self.failed.empty:
+            return None
+        failed, empty = self.failed, self.empty
+        if keep is not None:
+            failed = failed[keep.loc[failed.index].to_numpy()]
+            empty = empty[keep]
+            if failed.empty:
+                return None
+        return UnparsedColumn(
+            unreadable=len(failed),
+            empty=int(empty.sum()),
+            rows=len(empty),
+            examples=tuple(str(v) for v in failed.drop_duplicates().head(3)),
+            thousands=bool(failed.str.fullmatch(_THOUSANDS_GROUPED).all()),
+        )
+
+
+def _read_column(values: pd.Series) -> ColumnParse:
+    parsed = _to_number(values)
+    if pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values):
+        return ColumnParse(parsed)
+    # Only the cells that did not parse are looked at as text: a blank cell or
+    # `.` is among them (neither reads as a number), and is empty, not garbage.
+    unread = parsed.isna() & values.notna()
+    text = values[unread].astype(str).str.strip()
+    blank = (text == "") | (text == MISSING_MARKER)
+    empty = values.isna()
+    if blank.any():
+        empty = empty.copy()
+        empty.loc[blank[blank].index] = True
+    return ColumnParse(parsed, failed=text[~blank], empty=empty)
+
+
+#: `frame_cache` slot for :func:`column_parse` — a few mapped columns of the
+#: one table being mapped.
+_COLUMN_PARSE_SLOT = "numeric_column_parse"
+
+
+def column_parse(
+    raw: pd.DataFrame, column: str, *, fingerprint: tuple | None = None
+) -> ColumnParse:
+    """``raw[column]`` read as numbers (:class:`ColumnParse`).
+
+    With ``fingerprint`` (``frame_fingerprint(raw)``) the reading is kept in
+    `frame_cache`, so the mapping form's field note and the warnings above
+    ✅ Add dataset read a column of a million rows once between them.
+    """
+    if fingerprint is None:
+        return _read_column(raw[column])
+    return frame_cache(
+        _COLUMN_PARSE_SLOT,
+        (fingerprint, column),
+        lambda: _read_column(raw[column]),
+        keep=16,
+    )
+
+
 def unparsed_column(values: pd.Series) -> UnparsedColumn | None:
     """The cells of a mapped numeric column :func:`_to_number` cannot read.
 
     ``None`` when every filled cell reads as a number — a numeric or boolean
     column always does. Blank cells and EyeLink's ``.`` are *empty*, not
     unreadable."""
-    if pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values):
-        return None
-    failed = _unparsed_cells(values, _to_number(values))
-    if failed.empty:
-        return None
-    return UnparsedColumn(
-        unreadable=len(failed),
-        empty=len(values) - len(_filled_cells(values)),
-        rows=len(values),
-        examples=tuple(str(v) for v in failed.drop_duplicates().head(3)),
-        thousands=bool(failed.str.fullmatch(_THOUSANDS_GROUPED).all()),
-    )
+    return _read_column(values).summary()
 
 
 def _field_text(key: str, *, fixations: bool) -> tuple[str, str]:
@@ -2562,14 +2625,24 @@ def _choose_instead(holds: str) -> str:
     )
 
 
-def wrong_column_note(values: pd.Series, key: str, *, fixations: bool = True) -> str:
+def wrong_column_note(
+    raw: pd.DataFrame,
+    column: str,
+    key: str,
+    *,
+    fixations: bool = True,
+    fingerprint: tuple | None = None,
+) -> str:
     """The mapping form's note under a numeric field mapped to the wrong column.
 
     ``""`` unless most of the column's filled cells are not numbers
     (:attr:`UnparsedColumn.wrong_column`) — a few bad cells are the warning
-    above ✅ Add dataset alone.
+    above ✅ Add dataset alone. ``fingerprint`` shares the column's reading
+    with that warning (:func:`column_parse`).
     """
-    found = unparsed_column(values)
+    if column not in raw.columns:
+        return ""
+    found = column_parse(raw, column, fingerprint=fingerprint).summary()
     if found is None or not found.wrong_column or found.thousands:
         return ""
     _name, holds = _field_text(key, fixations=fixations)
@@ -2580,8 +2653,41 @@ def wrong_column_note(values: pd.Series, key: str, *, fixations: bool = True) ->
     )
 
 
+def _mapped_numeric_columns(raw: pd.DataFrame, schema: dict) -> list[tuple[str, str]]:
+    """``(key, column)`` for each numeric field mapped to a column of ``raw``,
+    the first field for a column mapped twice."""
+    pairs, seen = [], set()
+    for key, column in schema.items():
+        if key not in NUMERIC_SCHEMA_FIELDS or not isinstance(column, str):
+            continue
+        if column in seen or column not in raw.columns:
+            continue
+        seen.add(column)
+        pairs.append((key, column))
+    return pairs
+
+
+def _parses_for(
+    raw: pd.DataFrame, schema: dict, parses: dict | None, fingerprint=None
+) -> dict:
+    """``{column: ColumnParse}`` for every mapped numeric column, reusing
+    ``parses`` when the caller has them."""
+    if parses is not None:
+        return parses
+    return {
+        column: column_parse(raw, column, fingerprint=fingerprint)
+        for _key, column in _mapped_numeric_columns(raw, schema)
+    }
+
+
 def numeric_parse_issues(
-    raw: pd.DataFrame, schema: dict, *, table: str, fixations: bool = True
+    raw: pd.DataFrame,
+    schema: dict,
+    *,
+    table: str,
+    fixations: bool = True,
+    parses: dict | None = None,
+    keep: pd.Series | None = None,
 ) -> list[str]:
     """Plain-language warnings for mapped numeric columns that did not parse.
 
@@ -2592,16 +2698,14 @@ def numeric_parse_issues(
     plausible-looking figure with nothing said. A decimal-comma column that
     :func:`_to_number` converts is not an issue; one whose commas could
     equally be thousands separators is, with that named.
+
+    ``parses`` (:func:`_parses_for`) and ``keep`` — the rows the load keeps —
+    come from :func:`normalization_issues`.
     """
+    parses = _parses_for(raw, schema, parses)
     issues: list[str] = []
-    seen: set = set()
-    for key, column in schema.items():
-        if key not in NUMERIC_SCHEMA_FIELDS or not isinstance(column, str):
-            continue
-        if column in seen or column not in raw.columns:
-            continue
-        seen.add(column)
-        found = unparsed_column(raw[column])
+    for key, column in _mapped_numeric_columns(raw, schema):
+        found = parses[column].summary(keep)
         if found is None:
             continue
         name, holds = _field_text(key, fixations=fixations)
@@ -2660,7 +2764,13 @@ def _counted(parts: list[tuple[int, str]]) -> str:
 
 
 def value_range_issues(
-    raw: pd.DataFrame, schema: dict, *, table: str, fixations: bool = True
+    raw: pd.DataFrame,
+    schema: dict,
+    *,
+    table: str,
+    fixations: bool = True,
+    parses: dict | None = None,
+    keep: pd.Series | None = None,
 ) -> list[str]:
     """Warnings for mapped values that read as numbers but cannot be right.
 
@@ -2668,21 +2778,23 @@ def value_range_issues(
     position or word-box coordinate that is infinite or too far off any
     screen to draw (:data:`DRAWABLE_PX_LIMIT`); and, for a fixation position, a
     missing value, when :func:`numeric_parse_issues` has not already counted
-    it. The load keeps them all; *Data checks* lists the rows.
+    it. The load keeps them all; *Data checks* lists the rows. ``parses`` and
+    ``keep`` are :func:`numeric_parse_issues`' own.
     """
+    parses = _parses_for(raw, schema, parses)
     if fixations:
-        coordinates = ("x", "y")
+        keys = ("duration", "x", "y")
     else:
-        coordinates = ("x", "y", "width", "height", "left", "right", "top", "bottom")
+        keys = ("x", "y", "width", "height", "left", "right", "top", "bottom")
     issues: list[str] = []
-    for key in ("duration", *coordinates):
+    for key in keys:
         column = schema.get(key)
-        if not isinstance(column, str) or column not in raw.columns:
+        if not isinstance(column, str) or column not in parses:
             continue
-        if key == "duration" and not fixations:
-            continue
-        values = raw[column]
-        parsed = _to_number(values).astype(float)
+        read = parses[column]
+        parsed = read.parsed.astype(float)
+        if keep is not None:
+            parsed = parsed[keep]
         name, _holds = _field_text(key, fixations=fixations)
         parts: list[tuple[int, str]] = []
         shown: list[pd.Series] = []
@@ -2714,9 +2826,10 @@ def value_range_issues(
                     shown.append(parsed[mask])
             # Empty cells beside unreadable ones are counted in
             # `numeric_parse_issues`' line for this column already.
-            missing = int(values.isna().sum()) if fixations else 0
-            if unparsed_column(values) is not None:
-                missing = 0
+            missing = 0
+            if fixations and read.summary(keep) is None:
+                empty = read.empty if read.empty is not None else parsed.isna()
+                missing = int((empty[keep] if keep is not None else empty).sum())
             if missing:
                 parts.append((missing, "empty"))
             if fixations:
@@ -2870,19 +2983,24 @@ def identity_issues(
 _FRACTION_BAND = (-0.5, 1.5)
 
 
-def screen_fraction_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> list:
+def screen_fraction_issues(
+    raw: pd.DataFrame, schema: dict, *, table: str, parses: dict | None = None
+) -> list:
     """A warning when the mapped X/Y are screen fractions rather than pixels.
 
     Not converted: the load knows no screen size to scale by, and a
     guessed one would put every fixation in the wrong place while looking
     plausible — the one outcome worse than a figure that is obviously wrong.
+    ``parses`` are :func:`normalization_issues`' readings of the columns.
     """
     x, y = schema.get("x"), schema.get("y")
     if not (isinstance(x, str) and isinstance(y, str)):
         return []
     if x not in raw.columns or y not in raw.columns:
         return []
-    xs, ys = _to_number(raw[x]), _to_number(raw[y])
+    parses = parses or {}
+    xs = parses[x].parsed if x in parses else _to_number(raw[x])
+    ys = parses[y].parsed if y in parses else _to_number(raw[y])
     both = xs.notna() & ys.notna()
     if not both.any():
         return []
@@ -2904,23 +3022,39 @@ def screen_fraction_issues(raw: pd.DataFrame, schema: dict, *, table: str) -> li
 
 
 def normalization_issues(
-    raw: pd.DataFrame, schema: dict, *, table: str, fixations: bool = False
+    raw: pd.DataFrame,
+    schema: dict,
+    *,
+    table: str,
+    fixations: bool = False,
+    fingerprint: tuple | None = None,
 ) -> list[str]:
     """Everything the load will do to ``raw`` under ``schema`` that the user
     should hear about: rows left out for want of an id, mapped numeric columns
-    that did not parse or hold values that cannot be right, and — for ``fixations``, whose X/Y are gaze positions
-    rather than box origins — positions that are screen fractions rather than
-    pixels."""
+    that did not parse or hold values that cannot be right, and — for
+    ``fixations``, whose X/Y are gaze positions rather than box origins —
+    positions that are screen fractions rather than pixels.
+
+    Each mapped numeric column is read once for all of these
+    (:func:`column_parse`; kept between reruns when ``fingerprint`` is
+    ``frame_fingerprint(raw)``).
+    """
     blank, unkeyed = _rows_missing_identity(raw, schema)
     issues = identity_issues(raw, schema, table=table, unkeyed=unkeyed)
     # The value checks count the rows the load keeps, so their counts are the
-    # ones *Data checks* reports on the loaded table.
+    # ones *Data checks* reports on the loaded table. A mask, not a copy of
+    # the table.
     dropped = blank | unkeyed
-    kept = raw.loc[~dropped] if dropped.any() else raw
-    issues += numeric_parse_issues(kept, schema, table=table, fixations=fixations)
-    issues += value_range_issues(kept, schema, table=table, fixations=fixations)
+    keep = ~dropped if dropped.any() else None
+    parses = _parses_for(raw, schema, None, fingerprint)
+    issues += numeric_parse_issues(
+        raw, schema, table=table, fixations=fixations, parses=parses, keep=keep
+    )
+    issues += value_range_issues(
+        raw, schema, table=table, fixations=fixations, parses=parses, keep=keep
+    )
     if fixations:
-        issues += screen_fraction_issues(raw, schema, table=table)
+        issues += screen_fraction_issues(raw, schema, table=table, parses=parses)
     return issues
 
 

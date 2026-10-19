@@ -824,14 +824,59 @@ class TestUnreadableNumbers:
         )
 
     def test_the_mapping_form_note_only_for_a_wrong_column(self):
-        words = pd.Series(["Robert", "stops", "1998", "."])
-        assert data_module.wrong_column_note(words, "duration") == (
+        frame = pd.DataFrame(
+            {
+                "words": ["Robert", "stops", "1998", "."],
+                "mostly": ["200", "180", "2OO", "190"],
+                "numbers": [1.0, 2.0, 3.0, 4.0],
+            }
+        )
+        assert data_module.wrong_column_note(frame, "words", "duration") == (
             "2 of 4 values aren't numbers (e.g. 'Robert', 'stops'). Choose the "
             "column that holds fixation durations."
         )
-        mostly = pd.Series(["200", "180", "2OO"])
-        assert data_module.wrong_column_note(mostly, "duration") == ""
-        assert data_module.wrong_column_note(pd.Series([1.0, 2.0]), "duration") == ""
+        assert data_module.wrong_column_note(frame, "mostly", "duration") == ""
+        assert data_module.wrong_column_note(frame, "numbers", "duration") == ""
+
+    def test_a_column_is_read_once_for_the_note_and_the_warnings(self, monkeypatch):
+        """The field note and the warnings above Add share one reading of a
+        column per frame (`column_parse`, kept in `frame_cache`)."""
+        raw = self._fixations(["10", "20", "30"], ["Robert", "stops", "wolf"])
+        schema = {**self.SCHEMA}
+        reads = []
+        real = data_module._read_column
+        monkeypatch.setattr(
+            data_module, "_read_column", lambda v: reads.append(v.name) or real(v)
+        )
+        store: dict = {}
+        monkeypatch.setattr(
+            data_module,
+            "frame_cache",
+            lambda slot, key, build, keep=1: (
+                store.setdefault(key, build()) if key not in store else store[key]
+            ),
+        )
+        fingerprint = data_module.frame_fingerprint(raw)
+        note = data_module.wrong_column_note(
+            raw, "CURRENT_FIX_DURATION", "duration", fingerprint=fingerprint
+        )
+        assert note.startswith("3 of 3 values aren't numbers")
+        issues = data_module.normalization_issues(
+            raw, schema, table="Fixations", fixations=True, fingerprint=fingerprint
+        )
+        assert any("Duration (ms)" in line for line in issues)
+        assert reads.count("CURRENT_FIX_DURATION") == 1
+        assert reads.count("CURRENT_FIX_X") == 1
+
+    def test_rows_without_an_id_are_not_counted(self):
+        raw = self._fixations(["10", "20", "30"], ["Robert", "stops", "200"])
+        raw.loc[2, "TRIAL_INDEX"] = None
+        raw.loc[1, "CURRENT_FIX_DURATION"] = "200"
+        issues = data_module.normalization_issues(
+            raw, self.SCHEMA, table="Fixations", fixations=True
+        )
+        (line,) = [i for i in issues if "Duration (ms)" in i]
+        assert "1 of its 2 values isn't a number (e.g. 'Robert')" in line
 
     def test_the_field_names_match_the_mapping_form(self):
         from scanpath_studio.controls import (

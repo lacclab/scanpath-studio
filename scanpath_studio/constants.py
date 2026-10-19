@@ -372,6 +372,12 @@ BACKGROUND_PRESETS = {
     "Black": "#000000",
 }
 
+#: Pixel positions and sizes beyond this magnitude are on no screen, and the
+#: browser cannot draw them (an SVG transform of ``-1e+300`` is rejected): the
+#: figure treats them as it treats an infinite value, as missing, and the import
+#: warning and *Data checks* name them.
+DRAWABLE_PX_LIMIT = 1_000_000.0
+
 #: Crop to data's automatic margin: 5% of the data's extent on each axis, at
 #: least this many screen px (`plots._compute_axis_ranges`).
 CANVAS_PAD_MIN_PX = 20.0

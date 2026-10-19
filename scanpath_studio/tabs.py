@@ -6247,6 +6247,15 @@ def render_single_trial_tab(
         # extend farther down the right side.
         subtabs_slot = st.container(key="tour_grp_subtabs")
 
+    # A dataset that fails its data checks badly (most fixations at 0 ms, most
+    # positions missing) still draws a plausible figure; say so above it.
+    render_data_health_notice(
+        plot_notes_slot,
+        words_all if words_all is not None else words_filtered,
+        fixations_all if fixations_all is not None else fixations_filtered,
+        raw_gaze_all if raw_gaze_all is not None else raw_gaze,
+    )
+
     if not (selected_participant and selected_trial):
         return
 
@@ -15671,7 +15680,9 @@ def _render_remap_editor(
         st.info(f"Editing **{name}**. Its mapping and saved tables are below.")
     st.caption(
         "Change which of this dataset's columns fills each field the app reads. "
-        "Only columns kept when the dataset was added are available."
+        "Only columns kept when the dataset was added are available. To use a "
+        "column that isn't listed, remove this dataset and add it again from its "
+        "files."
     )
     # The same wide option lists the add-dataset screen gets — this is
     # the same mapping, in the same shape.
@@ -16816,6 +16827,76 @@ def _c_data_health(_words, _fixations, _raw_gaze, key) -> list:
 #: How a health finding names the rows of each table.
 _HEALTH_ROW_NOUN = {"fixations": "fixation", "words": "word", "raw_gaze": "raw-gaze"}
 
+#: A data check is worth a notice on the Scanpath view when it flags more
+#: than this share of its table's rows. A few 0 ms fixations or a missing
+#: position are ordinary in a recording, and stay on the Data page; most of a
+#: table flagged is a column mapped to the wrong field or a broken export.
+SERIOUS_HEALTH_SHARE = 0.5
+
+
+def _dataset_health_findings(words, fixations, raw_gaze) -> list:
+    """`_c_data_health` under the key the Data page's *Data checks* uses, so
+    the Scanpath view and the Data page share one run."""
+    return _c_data_health(
+        words,
+        fixations,
+        raw_gaze,
+        (
+            frame_fingerprint(words),
+            frame_fingerprint(fixations),
+            frame_fingerprint(raw_gaze),
+        ),
+    )
+
+
+def serious_health_lines(findings) -> list[str]:
+    """One line per *warning* finding that flags most of its table's rows
+    (`SERIOUS_HEALTH_SHARE`)."""
+    lines = []
+    for finding in findings:
+        if finding.severity != "warning" or not finding.total_rows:
+            continue
+        if finding.rows <= SERIOUS_HEALTH_SHARE * finding.total_rows:
+            continue
+        noun = _HEALTH_ROW_NOUN.get(finding.table, finding.table)
+        lines.append(
+            f"**{finding.title}**: {finding.rows:,} of {finding.total_rows:,} "
+            f"{noun} rows."
+        )
+    return lines
+
+
+def render_data_health_notice(host, words, fixations, raw_gaze) -> None:
+    """A notice on the Scanpath view when the dataset fails a data check badly.
+
+    The figure is drawn either way, and looks plausible: a duration mapped to
+    a column of words draws every fixation at the smallest size. So when a
+    check flags most of a table (`serious_health_lines`), say so above the
+    plot and point to 🗂️ Data Management → *Data checks*, where the rows are
+    listed. ``host`` is a slot drawn on every run.
+    """
+    findings = _dataset_health_findings(words, fixations, raw_gaze)
+    lines = serious_health_lines(findings)
+    if not lines:
+        return
+    from scanpath_studio.url_state import _go_data
+
+    box = host.container(key="data_health_notice")
+    box.warning(
+        "This dataset fails the data checks, so the figure may be wrong.  \n"
+        + "  \n".join(lines)
+        + "  \nSee **Data Management → Data checks** for the rows. If a field "
+        "is mapped to the wrong column, change it under **Edit dataset**, or "
+        "remove the dataset and add its files again.",
+        icon=ICONS["warning"],
+    )
+    box.button(
+        "Open Data checks",
+        icon=ICONS["view_data"],
+        key="data_health_notice_open",
+        on_click=_go_data,
+    )
+
 
 def render_data_health(
     words: pd.DataFrame | None,
@@ -16836,16 +16917,7 @@ def render_data_health(
     """
     from .column_names import active
 
-    findings = _c_data_health(
-        words,
-        fixations,
-        raw_gaze,
-        (
-            frame_fingerprint(words),
-            frame_fingerprint(fixations),
-            frame_fingerprint(raw_gaze),
-        ),
-    )
+    findings = _dataset_health_findings(words, fixations, raw_gaze)
     with st.container(key="dataset_health"):
         st.caption(
             "**Data checks**"

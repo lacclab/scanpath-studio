@@ -7,7 +7,11 @@ import pandas as pd
 import plotly.graph_objects as go
 import pytest
 
-from scanpath_studio.constants import SACCADE_CLASS_COLORS, SACCADE_CLASS_LABELS
+from scanpath_studio.constants import (
+    DRAWABLE_PX_LIMIT,
+    SACCADE_CLASS_COLORS,
+    SACCADE_CLASS_LABELS,
+)
 from scanpath_studio.plots import (
     _ANIM_MAX_FRAMES,
     _arch_points,
@@ -2916,6 +2920,19 @@ class TestNonFiniteValues:
         ]
         assert drawn == []
         assert fixations.loc[1, column] == float("inf")  # the caller's copy
+
+    @pytest.mark.parametrize("value", [-1e300, 2e6])
+    def test_a_position_too_far_to_draw_is_left_out_like_infinity(self, value):
+        """The browser rejects an SVG transform of ``-1e+300``, so a position
+        beyond `DRAWABLE_PX_LIMIT` is drawn as missing too."""
+        words, fixations = self._frames()
+        clean = make_scanpath_figure(words, fixations, **self._SETTINGS)
+        fixations.loc[1, "y"] = value
+        fig = make_scanpath_figure(words, fixations, **self._SETTINGS)
+        assert fig.layout.yaxis.range == clean.layout.yaxis.range
+        for trace in fig.data:
+            ys = pd.to_numeric(pd.Series(trace.y, dtype=object), errors="coerce")
+            assert not (ys.abs() > DRAWABLE_PX_LIMIT).any(), trace.name
 
     def test_every_path_draws_around_infinite_values(self):
         words, fixations = self._frames()

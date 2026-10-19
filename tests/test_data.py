@@ -784,9 +784,102 @@ class TestUnreadableNumbers:
         raw = self._fixations(["10", "20", "30"], ["200", "2OO", "n/a?"])
         issues = data_module.numeric_parse_issues(raw, self.SCHEMA, table="Fixations")
         assert issues == [
-            "Fixations: 2 of 3 values in `CURRENT_FIX_DURATION` aren't numbers "
-            "(e.g. '2OO', 'n/a?'); those fixations are read as 0 ms long."
+            "Fixations: **Duration (ms)** is mapped to `CURRENT_FIX_DURATION`, but "
+            "2 of its 3 values aren't numbers (e.g. '2OO', 'n/a?'); those "
+            "fixations are read as 0 ms long. Choose the column that holds "
+            "fixation durations."
         ]
+
+    def test_a_field_mapped_to_a_column_of_words_names_the_field(self):
+        """Counted over every row, so unreadable + empty is what *Data checks*
+        reports as 0 ms after the load."""
+        raw = self._fixations(["10", "20", "30", "40"], ["200", "200", "200", "200"])
+        raw["CURRENT_FIX_INTEREST_AREA_LABEL"] = ["Robert", "stops", ".", "1998"]
+        schema = {**self.SCHEMA, "duration": "CURRENT_FIX_INTEREST_AREA_LABEL"}
+        (issue,) = data_module.numeric_parse_issues(raw, schema, table="Fixations")
+        assert issue == (
+            "Fixations: **Duration (ms)** is mapped to "
+            "`CURRENT_FIX_INTEREST_AREA_LABEL`, but 2 of its 4 values aren't "
+            "numbers (e.g. 'Robert', 'stops') and 1 is empty; those fixations "
+            "are read as 0 ms long. Choose the column that holds fixation "
+            "durations."
+        )
+        with pytest.warns(UserWarning, match="Choose the column"):
+            fixations = normalize_fixations(raw, schema)
+        from scanpath_studio.data_health import check_data_health
+
+        (found,) = [
+            f
+            for f in check_data_health(None, fixations)
+            if f.check == "fixation_duration"
+        ]
+        assert (found.rows, found.total_rows) == (2 + 1, 4)
+
+    def test_a_few_bad_cells_say_to_correct_them(self):
+        raw = self._fixations(["10", "20", "30"], ["200", "180", "2OO"])
+        (issue,) = data_module.numeric_parse_issues(raw, self.SCHEMA, table="F")
+        assert "1 of its 3 values isn't a number" in issue
+        assert issue.endswith(
+            "If this is the right column, correct those cells in the file."
+        )
+
+    def test_the_mapping_form_note_only_for_a_wrong_column(self):
+        words = pd.Series(["Robert", "stops", "1998", "."])
+        assert data_module.wrong_column_note(words, "duration") == (
+            "2 of 4 values aren't numbers (e.g. 'Robert', 'stops'). Choose the "
+            "column that holds fixation durations."
+        )
+        mostly = pd.Series(["200", "180", "2OO"])
+        assert data_module.wrong_column_note(mostly, "duration") == ""
+        assert data_module.wrong_column_note(pd.Series([1.0, 2.0]), "duration") == ""
+
+    def test_the_field_names_match_the_mapping_form(self):
+        from scanpath_studio.controls import (
+            _BOX_SUBFIELDS,
+            FIX_FIELD_SPECS,
+            WORD_FIELD_SPECS,
+        )
+
+        labels = {
+            "fixations": {s["key"]: s["label"] for s in FIX_FIELD_SPECS},
+            "words": {
+                **{s["key"]: s["label"] for s in WORD_FIELD_SPECS},
+                **{
+                    k: label
+                    for fields in _BOX_SUBFIELDS.values()
+                    for k, label in fields
+                },
+            },
+        }
+        for (table, key), (name, _holds) in data_module.NUMERIC_FIELD_TEXT.items():
+            assert labels[table][key] == name, (table, key)
+
+    def test_values_that_cannot_be_right_are_said_at_import(self):
+        raw = self._fixations(
+            [np.nan, "1e309", "-1", "100", "100"],
+            ["200", "-50", "0", "200", "99999999999999999999"],
+        )
+        raw["CURRENT_FIX_Y"] = ["100", "100", "-1e300", "100", "100"]
+        raw["CURRENT_FIX_INTEREST_AREA_ID"] = "1"
+        issues = data_module.value_range_issues(raw, self.SCHEMA, table="Fixations")
+        assert issues == [
+            "Fixations: **Duration (ms)** (`CURRENT_FIX_DURATION`): 1 value is "
+            "negative and 1 is longer than an hour (e.g. -50, 1e+20). They are "
+            "kept as they are, and they distort reading-time sums and marker "
+            "sizes. Check the column and its unit.",
+            "Fixations: **X coordinate** (`CURRENT_FIX_X`): 1 value is infinite "
+            "and 1 is empty (e.g. inf). Those fixations are left off the plot; "
+            "an empty one is placed at its word's center if it has a word id.",
+            "Fixations: **Y coordinate** (`CURRENT_FIX_Y`): 1 value is too far "
+            "off the screen to draw (e.g. -1e+300). Those fixations are left off "
+            "the plot.",
+        ]
+        with pytest.warns(UserWarning, match="longer than an hour"):
+            normalize_fixations(raw, self.SCHEMA)
+
+    def test_sound_values_raise_no_range_warning(self):
+        raw = self._fixations(["10", "20", "30"], ["200", "180", "0"])
+        assert data_module.value_range_issues(raw, self.SCHEMA, table="F") == []
 
     def test_the_eyelink_missing_marker_is_not_an_issue(self):
         """`.` is EyeLink's "no value" — the word-id column above carries one."""
@@ -865,7 +958,10 @@ class TestTextWordIds:
         """Unrefused, both fixations would land on 'Hello' (x 25)."""
         with (
             pytest.raises(data_module.UnplacedFixationsError) as raised,
-            pytest.warns(UserWarning, match="Words table: 2 of 2 values in 'id'"),
+            pytest.warns(
+                UserWarning,
+                match="Words table: Word ID is mapped to 'id', but 2 of its 2",
+            ),
         ):
             self._load(self._words(), self._fixations())
         message = str(raised.value)

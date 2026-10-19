@@ -27,6 +27,7 @@ from . import progress
 from .constants import (
     DEFAULT_FIGURE_SIZE,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
+    DRAWABLE_PX_LIMIT,
     PACKAGE_NAME,
     SAMPLE_INDEX,
     UPLOAD_FILE_TYPES,
@@ -2467,18 +2468,130 @@ _UNPARSED_WORD_CONSEQUENCE = dict.fromkeys(
     "those word boxes have no position",
 )
 
+#: Each numeric mapping field, by table and schema key: its name on the mapping
+#: form, and what the column mapped to it should hold. A warning about a column
+#: names the field it fills and the column to choose instead, since a field
+#: mapped to the wrong column is the usual reason most of its values aren't
+#: numbers.
+NUMERIC_FIELD_TEXT: dict[tuple[str, str], tuple[str, str]] = {
+    ("fixations", "duration"): ("Duration (ms)", "fixation durations"),
+    ("fixations", "timestamp"): ("Timestamp (ms)", "fixation start times"),
+    ("fixations", "x"): ("X coordinate", "horizontal gaze positions in pixels"),
+    ("fixations", "y"): ("Y coordinate", "vertical gaze positions in pixels"),
+    ("fixations", "word_id"): ("Word ID", "the number of the word fixated"),
+    ("fixations", "fixation_id"): ("Fixation ID", "fixation numbers"),
+    ("fixations", "canvas_width"): ("Screen canvas width", "screen widths in pixels"),
+    ("fixations", "canvas_height"): (
+        "Screen canvas height",
+        "screen heights in pixels",
+    ),
+    ("words", "x"): ("Box x (top-left)", "each word box's left edge in pixels"),
+    ("words", "y"): ("Box y (top-left)", "each word box's top edge in pixels"),
+    ("words", "width"): ("Box width", "each word box's width in pixels"),
+    ("words", "height"): ("Box height", "each word box's height in pixels"),
+    ("words", "left"): ("Box left", "each word box's left edge in pixels"),
+    ("words", "right"): ("Box right", "each word box's right edge in pixels"),
+    ("words", "top"): ("Box top", "each word box's top edge in pixels"),
+    ("words", "bottom"): ("Box bottom", "each word box's bottom edge in pixels"),
+    ("words", "line"): ("Line index", "each word's line number"),
+    ("words", "word_id"): ("Word ID", "each word's number"),
+    ("words", "canvas_width"): ("Screen canvas width", "screen widths in pixels"),
+    ("words", "canvas_height"): ("Screen canvas height", "screen heights in pixels"),
+}
+
+#: More than this share of a column's values unreadable reads as the wrong
+#: column rather than a few bad cells, and the warning says to choose another.
+WRONG_COLUMN_SHARE = 0.5
+
+
+@dataclass(frozen=True)
+class UnparsedColumn:
+    """How many of one mapped column's cells are not numbers, and which.
+
+    ``rows`` counts every row, so ``unreadable + empty`` is the number of rows
+    the load reads as missing — the count *Data checks* reports for them
+    (a duration read as 0 ms, a position with none).
+    """
+
+    unreadable: int
+    empty: int
+    rows: int
+    examples: tuple[str, ...]
+    #: Every unreadable cell has the shape of a thousands-grouped number.
+    thousands: bool
+
+    @property
+    def wrong_column(self) -> bool:
+        """Most of the filled cells are unreadable: the field is mapped to the
+        wrong column."""
+        filled = self.rows - self.empty
+        return filled > 0 and self.unreadable > WRONG_COLUMN_SHARE * filled
+
+
+def unparsed_column(values: pd.Series) -> UnparsedColumn | None:
+    """The cells of a mapped numeric column :func:`_to_number` cannot read.
+
+    ``None`` when every filled cell reads as a number — a numeric or boolean
+    column always does. Blank cells and EyeLink's ``.`` are *empty*, not
+    unreadable."""
+    if pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values):
+        return None
+    failed = _unparsed_cells(values, _to_number(values))
+    if failed.empty:
+        return None
+    return UnparsedColumn(
+        unreadable=len(failed),
+        empty=len(values) - len(_filled_cells(values)),
+        rows=len(values),
+        examples=tuple(str(v) for v in failed.drop_duplicates().head(3)),
+        thousands=bool(failed.str.fullmatch(_THOUSANDS_GROUPED).all()),
+    )
+
+
+def _field_text(key: str, *, fixations: bool) -> tuple[str, str]:
+    """``(field name, what its column should hold)`` for a numeric field."""
+    table = "fixations" if fixations else "words"
+    return NUMERIC_FIELD_TEXT.get((table, key), (key, ""))
+
+
+def _choose_instead(holds: str) -> str:
+    return (
+        f"Choose the column that holds {holds}"
+        if holds
+        else "Choose the column that holds this field's values"
+    )
+
+
+def wrong_column_note(values: pd.Series, key: str, *, fixations: bool = True) -> str:
+    """The mapping form's note under a numeric field mapped to the wrong column.
+
+    ``""`` unless most of the column's filled cells are not numbers
+    (:attr:`UnparsedColumn.wrong_column`) — a few bad cells are the warning
+    above ✅ Add dataset alone.
+    """
+    found = unparsed_column(values)
+    if found is None or not found.wrong_column or found.thousands:
+        return ""
+    _name, holds = _field_text(key, fixations=fixations)
+    examples = ", ".join(f"'{v}'" for v in found.examples)
+    return (
+        f"{found.unreadable:,} of {found.rows:,} values aren't numbers "
+        f"(e.g. {examples}). {_choose_instead(holds)}."
+    )
+
 
 def numeric_parse_issues(
     raw: pd.DataFrame, schema: dict, *, table: str, fixations: bool = True
 ) -> list[str]:
     """Plain-language warnings for mapped numeric columns that did not parse.
 
-    One line per column, naming the table, the column, how many of its cells
-    were unreadable, a few examples, and what the load did with those rows —
-    because the load carries on either way, and a column read as all-NaN would
-    otherwise produce a plausible-looking figure with nothing said. A
-    decimal-comma column that :func:`_to_number` converts is not an issue; one
-    whose commas could equally be thousands separators is, with that named.
+    One line per column, naming the field, the column it is mapped to, how
+    many of its rows were unreadable or empty, a few examples, what the load
+    did with those rows, and what to do — because the load carries on either
+    way, and a column read as all-NaN would otherwise produce a
+    plausible-looking figure with nothing said. A decimal-comma column that
+    :func:`_to_number` converts is not an issue; one whose commas could
+    equally be thousands separators is, with that named.
     """
     issues: list[str] = []
     seen: set = set()
@@ -2488,23 +2601,19 @@ def numeric_parse_issues(
         if column in seen or column not in raw.columns:
             continue
         seen.add(column)
-        values = raw[column]
-        if pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values):
+        found = unparsed_column(raw[column])
+        if found is None:
             continue
-        failed = _unparsed_cells(values, _to_number(values))
-        if failed.empty:
-            continue
-        examples = ", ".join(f"'{v}'" for v in failed.drop_duplicates().head(3))
+        name, holds = _field_text(key, fixations=fixations)
+        examples = ", ".join(f"'{v}'" for v in found.examples)
+        verb = "isn't a number" if found.unreadable == 1 else "aren't numbers"
         line = (
-            f"{table}: {len(failed):,} of {len(_filled_cells(values)):,} values in "
-            f"`{column}` aren't numbers (e.g. {examples})"
+            f"{table}: **{name}** is mapped to `{column}`, but {found.unreadable:,} "
+            f"of its {found.rows:,} values {verb} (e.g. {examples})"
         )
-        if failed.str.fullmatch(_THOUSANDS_GROUPED).all():
-            line += (
-                ". The comma could be a decimal comma or a thousands separator, so "
-                "they were not converted. Re-export the table with a '.' decimal "
-                "point and no thousands separator"
-            )
+        if found.empty:
+            line += f" and {found.empty:,} " + ("is" if found.empty == 1 else "are")
+            line += " empty"
         consequences = (
             _UNPARSED_CONSEQUENCE if fixations else _UNPARSED_WORD_CONSEQUENCE
         )
@@ -2515,7 +2624,117 @@ def numeric_parse_issues(
                 "with no X and Y mapped, those fixations have no position and are "
                 "left off the plot"
             )
-        issues.append(f"{line}; {consequence}.")
+        line += f"; {consequence}."
+        if found.thousands:
+            line += (
+                " The comma could be a decimal comma or a thousands separator, so "
+                "they were not converted. Re-export the table with a '.' decimal "
+                "point and no thousands separator."
+            )
+        elif found.wrong_column:
+            line += f" {_choose_instead(holds)}."
+        else:
+            line += " If this is the right column, correct those cells in the file."
+        issues.append(line)
+    return issues
+
+
+#: A fixation longer than this is not a fixation: a wrong column or unit.
+_LONGEST_FIXATION_MS = 3_600_000.0
+
+
+def _example_numbers(values: pd.Series) -> str:
+    return ", ".join(f"{v:g}" for v in values.drop_duplicates().head(3))
+
+
+def _counted(parts: list[tuple[int, str]]) -> str:
+    """``"1 value is negative and 2 are infinite"`` from ``(count, said)``."""
+    said = []
+    for index, (count, what) in enumerate(parts):
+        verb = "is" if count == 1 else "are"
+        noun = ("value " if count == 1 else "values ") if index == 0 else ""
+        said.append(f"{count:,} {noun}{verb} {what}")
+    if len(said) == 1:
+        return said[0]
+    return ", ".join(said[:-1]) + " and " + said[-1]
+
+
+def value_range_issues(
+    raw: pd.DataFrame, schema: dict, *, table: str, fixations: bool = True
+) -> list[str]:
+    """Warnings for mapped values that read as numbers but cannot be right.
+
+    A duration that is negative, infinite or longer than an hour; a fixation
+    position or word-box coordinate that is infinite or too far off any
+    screen to draw (:data:`DRAWABLE_PX_LIMIT`); and, for a fixation position, a
+    missing value, when :func:`numeric_parse_issues` has not already counted
+    it. The load keeps them all; *Data checks* lists the rows.
+    """
+    if fixations:
+        coordinates = ("x", "y")
+    else:
+        coordinates = ("x", "y", "width", "height", "left", "right", "top", "bottom")
+    issues: list[str] = []
+    for key in ("duration", *coordinates):
+        column = schema.get(key)
+        if not isinstance(column, str) or column not in raw.columns:
+            continue
+        if key == "duration" and not fixations:
+            continue
+        values = raw[column]
+        parsed = _to_number(values).astype(float)
+        name, _holds = _field_text(key, fixations=fixations)
+        parts: list[tuple[int, str]] = []
+        shown: list[pd.Series] = []
+        infinite = np.isinf(parsed)
+        if key == "duration":
+            ms = _as_ms(parsed, column)
+            negative = ms < 0
+            too_long = (ms > _LONGEST_FIXATION_MS) & ~infinite
+            for mask, what in (
+                (negative, "negative"),
+                (infinite & ~negative, "infinite"),
+                (too_long, "longer than an hour"),
+            ):
+                if mask.any():
+                    parts.append((int(mask.sum()), what))
+                    shown.append(parsed[mask])
+            consequence = (
+                "They are kept as they are, and they distort reading-time sums "
+                "and marker sizes. Check the column and its unit."
+            )
+        else:
+            far = (parsed.abs() > DRAWABLE_PX_LIMIT) & ~infinite
+            for mask, what in (
+                (infinite, "infinite"),
+                (far, "too far off the screen to draw"),
+            ):
+                if mask.any():
+                    parts.append((int(mask.sum()), what))
+                    shown.append(parsed[mask])
+            # Empty cells beside unreadable ones are counted in
+            # `numeric_parse_issues`' line for this column already.
+            missing = int(values.isna().sum()) if fixations else 0
+            if unparsed_column(values) is not None:
+                missing = 0
+            if missing:
+                parts.append((missing, "empty"))
+            if fixations:
+                consequence = (
+                    "Those fixations are left off the plot; an empty one is placed "
+                    "at its word's center if it has a word id."
+                    if missing
+                    else "Those fixations are left off the plot."
+                )
+            else:
+                consequence = "Those word boxes are left off the plot."
+        if not parts:
+            continue
+        examples = pd.concat(shown) if shown else pd.Series(dtype=float)
+        line = f"{table}: **{name}** (`{column}`): {_counted(parts)}"
+        if not examples.empty:
+            line += f" (e.g. {_example_numbers(examples)})"
+        issues.append(f"{line}. {consequence}")
     return issues
 
 
@@ -2689,11 +2908,17 @@ def normalization_issues(
 ) -> list[str]:
     """Everything the load will do to ``raw`` under ``schema`` that the user
     should hear about: rows left out for want of an id, mapped numeric columns
-    that did not parse, and — for ``fixations``, whose X/Y are gaze positions
+    that did not parse or hold values that cannot be right, and — for ``fixations``, whose X/Y are gaze positions
     rather than box origins — positions that are screen fractions rather than
     pixels."""
-    issues = identity_issues(raw, schema, table=table)
-    issues += numeric_parse_issues(raw, schema, table=table, fixations=fixations)
+    blank, unkeyed = _rows_missing_identity(raw, schema)
+    issues = identity_issues(raw, schema, table=table, unkeyed=unkeyed)
+    # The value checks count the rows the load keeps, so their counts are the
+    # ones *Data checks* reports on the loaded table.
+    dropped = blank | unkeyed
+    kept = raw.loc[~dropped] if dropped.any() else raw
+    issues += numeric_parse_issues(kept, schema, table=table, fixations=fixations)
+    issues += value_range_issues(kept, schema, table=table, fixations=fixations)
     if fixations:
         issues += screen_fraction_issues(raw, schema, table=table)
     return issues
@@ -2709,7 +2934,8 @@ def _warn_normalization_issues(
     ✅ Add dataset.
     """
     for issue in normalization_issues(raw, schema, table=table, fixations=fixations):
-        warnings.warn(issue.replace("`", "'"), UserWarning, stacklevel=3)
+        plain = issue.replace("**", "").replace("`", "'")
+        warnings.warn(plain, UserWarning, stacklevel=3)
 
 
 @dataclass(frozen=True)

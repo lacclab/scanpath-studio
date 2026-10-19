@@ -49,6 +49,7 @@ from .constants import (
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
     DEFAULT_TITLE_FONT_SIZE,
+    DRAWABLE_PX_LIMIT,
     FIX_MARKER_OUTLINE,
     FIXATION_GLYPH_SIZE_SCALE,
     FIXATION_GLYPH_SYMBOLS,
@@ -510,6 +511,9 @@ def _make_hollow(marker: dict) -> dict:
 _PLOTTED_NUMBERS = ("x", "y", "width", "height", "duration_ms", "timestamp_ms")
 #: A word whose box has an infinite edge has no box to draw.
 _WORD_BOX_COLUMNS = ("x", "y", "width", "height")
+#: The plotted numbers in screen pixels, where a value beyond
+#: `DRAWABLE_PX_LIMIT` is as unplaceable as an infinite one.
+_PIXEL_NUMBERS = frozenset(_WORD_BOX_COLUMNS)
 
 
 def _finite_for_plotting(
@@ -523,8 +527,10 @@ def _finite_for_plotting(
     Data checks reports such rows and keeps them in every table; the figure
     cannot place, size or time them, so it draws them as it draws a missing
     value — no marker and no saccade to or from them, the smallest marker for a
-    duration, a replay timed by durations. A row infinite in a ``drop_on``
-    column is left out (a word box). Copies only when there is one."""
+    duration, a replay timed by durations. A pixel position or size beyond
+    `DRAWABLE_PX_LIMIT` is read the same way: the browser rejects the SVG it
+    would make. A row infinite in a ``drop_on`` column is left out (a word
+    box). Copies only when there is one."""
     if frame is None or frame.empty:
         return frame
     numbers = {
@@ -532,7 +538,10 @@ def _finite_for_plotting(
         for c in dict.fromkeys((*_PLOTTED_NUMBERS, *extra))
         if c in frame.columns
     }
-    infinite = {c: np.isinf(v) for c, v in numbers.items()}
+    infinite = {
+        c: (v.abs() > DRAWABLE_PX_LIMIT) if c in _PIXEL_NUMBERS else np.isinf(v)
+        for c, v in numbers.items()
+    }
     infinite = {c: m for c, m in infinite.items() if m.any()}
     if not infinite:
         return frame

@@ -296,8 +296,10 @@ print(cli_reference("corpus"))
 on your tables without opening the app. It looks for:
 
 - fixations lasting 0 ms or less, or with an infinite duration or onset;
-- fixations and raw gaze samples with no finite position;
-- word boxes with no area or no finite position;
+- fixations and raw gaze samples with no finite position, or one more than a
+  million pixels off the screen;
+- word boxes with no area, or no finite position or size within a million
+  pixels;
 - screen sizes that are not finite and positive.
 
 Each finding gives the rows and trials affected, a few example rows, and what

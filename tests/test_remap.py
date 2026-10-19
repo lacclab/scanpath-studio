@@ -1089,6 +1089,20 @@ class TestEditorSetupExport:
         assert again["x"].tolist() == [333.0, 444.0]
         assert again["duration_ms"].tolist() == [200.0, 250.0]
 
+    def test_the_editor_says_how_to_reach_a_column_it_does_not_offer(self):
+        """The editor offers only the columns kept at import, so it names the
+        way to the others: add the dataset again from its files."""
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_function(_setup_file_editor_app, default_timeout=30).run()
+        assert not at.exception
+        said = " ".join(c.value for c in at.caption)
+        assert "Only columns kept when the dataset was added are available." in said
+        assert (
+            "To use a column that isn't listed, remove this dataset and add it "
+            "again from its files." in said
+        )
+
     def test_the_footer_offers_both_halves_of_the_add_screens_pair(self):
         """Source-level: AppTest reports no download_button, and what must not
         silently regress is that the editor's last row is the *pair*."""

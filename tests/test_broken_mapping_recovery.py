@@ -16,6 +16,7 @@ import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from scanpath_studio.constants import ICONS
 from tests.conftest import (
     APP_SCRIPT,
     open_data_view,
@@ -301,3 +302,82 @@ def test_a_fixations_only_dataset_is_not_warned_about(monkeypatch):
 
     assert not at.exception
     assert not any("No fixation has word boxes" in w.value for w in at.warning)
+
+
+def test_a_duration_mapped_to_words_is_named_at_the_field_and_above_add(
+    monkeypatch,
+):
+    """A numeric field mapped to a column of words loads — every duration
+    reads as 0 ms — so the warning names the field and the column to choose,
+    and the field itself turns red with the same advice under it. The add is
+    not blocked: the user may mean it."""
+    from scanpath_studio import app
+
+    fixations = _WIZARD_FIXATIONS.assign(duration_ms=["The", "cat", "sat"])
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: {"col_map_fix": fixations}.get(kw["state_prefix"], pd.DataFrame()),
+    )
+    at = _upload_apptest(wizard_active=True)
+
+    assert not at.exception
+    said = [w.value for w in at.warning if "aren't numbers" in w.value]
+    assert said, "a duration mapped to words loaded without a word"
+    assert said[0].startswith(
+        "Fixations: **Duration (ms)** is mapped to "
+        "`duration_ms`, but 3 of its 3 values aren't numbers"
+    )
+    assert said[0].endswith("Choose the column that holds fixation durations.")
+    at_field = [
+        c.value for c in at.caption if "3 of 3 values aren't numbers" in c.value
+    ]
+    assert [v.removeprefix(ICONS["warning"]).strip() for v in at_field] == [
+        "3 of 3 values aren't numbers (e.g. 'The', 'cat', "
+        "'sat'). Choose the column that holds fixation durations."
+    ]
+    tint = " ".join(m.value for m in at.markdown if "<style>" in str(m.value))
+    assert ".st-key-col_map_fix_duration_cell" in tint
+    assert not any(
+        "aren't numbers" in p for p in at.session_state["_wizard_problems_last"]
+    )
+
+
+def test_out_of_range_values_are_said_above_add(monkeypatch):
+    from scanpath_studio import app
+
+    fixations = _WIZARD_FIXATIONS.assign(
+        duration_ms=[-50.0, 1e20, 200.0], y=[24.0, -1e300, float("inf")]
+    )
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: {"col_map_fix": fixations}.get(kw["state_prefix"], pd.DataFrame()),
+    )
+    at = _upload_apptest(wizard_active=True)
+
+    assert not at.exception
+    said = " ".join(w.value for w in at.warning)
+    assert "1 value is negative and 1 is longer than an hour" in said
+    assert "1 value is infinite and 1 is too far off the screen to draw" in said
+
+
+def test_the_scanpath_view_says_when_the_data_checks_fail_badly():
+    """Duration mapped to the word labels: every fixation reads as 0 ms and
+    the figure still draws. The Scanpath view says so and links the checks."""
+    at = _boot()
+    assert not any("fails the data checks" in w.value for w in at.warning)
+
+    at.selectbox(key="col_map_fix_duration").select(
+        "CURRENT_FIX_INTEREST_AREA_LABEL"
+    ).run(timeout=180)
+
+    assert not at.exception
+    (notice,) = [w.value for w in at.warning if "fails the data checks" in w.value]
+    assert "**Fixations lasting 0 ms or less**: 3,199 of 3,209 fixation rows." in (
+        notice
+    )
+    (open_checks,) = [b for b in at.button if b.key == "data_health_notice_open"]
+    open_checks.click().run(timeout=180)
+    assert not at.exception
+    assert any("Data checks" in c.value for c in at.caption)

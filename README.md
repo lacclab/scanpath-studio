@@ -6,7 +6,7 @@ A free, open-source app for exploring eye movements in reading. Check data quali
 
 **[Try it online](https://scanpath-studio.streamlit.app)** · **[Download the app](https://lacclab.github.io/scanpath-studio/install/)** · **[Browse the gallery](https://lacclab.github.io/scanpath-studio/gallery/)**
 
-![Scanpath Studio: stepping through trials, replaying a reading, comparing two participants and analyzing a corpus](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/app_demo.gif)
+![Scanpath Studio on the Scanpath page: a replay, the Heatmap preset, a figure built layer by layer, saccade filters, redacted text, two participants side by side, Export and Share](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/app_demo.gif)
 
 [![PyPI](https://img.shields.io/pypi/v/scanpath-studio.svg)](https://pypi.org/project/scanpath-studio/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/lacclab/scanpath-studio/blob/main/LICENSE)

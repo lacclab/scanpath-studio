@@ -1,0 +1,1 @@
+The README animation and the docs home-page video are a new captioned tour of the Scanpath page: a replay, the Heatmap preset, a figure built layer by layer, saccade filters, redacted text, two participants side by side, Export and Share.

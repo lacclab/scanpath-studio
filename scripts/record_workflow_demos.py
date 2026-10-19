@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Record one short GIF per workflow in the running app, with the clicks counted.
 
-``record_app_demo.py`` records the README's tour of the whole app. This records
+``record_app_demo.py`` records the README's opening animation. This records
 the workflows one at a time — exporting a figure, adding your own data, styling
 the plot, filtering trials, comparing readers — each as its own clip, for the
 README's *See it in action* and the docs Gallery's *The app at work*. A bar in
@@ -25,7 +25,7 @@ does — and the app saves, as a local install does, into a scratch folder empti
 before each workflow (without it, an upload brings up the hosted demo's
 "nothing is saved here" reminder).
 
-The recording is real time, sped up by the same ``GIF_SPEEDUP`` as the app demo.
+The recording is real time, sped up by ``record_app_demo.GIF_SPEEDUP``.
 A wait for the app's own work — building a zip of 24 trials, rendering a replay —
 is fast-forwarded, and the bar says so while it is (``⏩ ×4``).
 """

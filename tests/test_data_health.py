@@ -74,6 +74,12 @@ class TestChecks:
         assert found.breakdown == {"infinite": 2, "missing": 1}
         assert found.columns == ("x", "y")
 
+    def test_positions_too_far_off_the_screen_to_draw(self):
+        fixations = _fixations().assign(x=[10.0, 2e6, 30.0, 40.0, 50.0])
+        fixations["y"] = [5.0, 5.0, -1e300, 5.0, 5.0]
+        found = _by_check(check_data_health(None, fixations))["fixation_position"]
+        assert found.breakdown == {"too far off the screen": 2}
+
     def test_word_boxes_with_no_area(self):
         found = _by_check(check_data_health(_words(), None))["word_box_size"]
         assert (found.rows, found.trials) == (2, 1)

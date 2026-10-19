@@ -817,8 +817,14 @@ def _readers_do_not_line_up(words: pd.DataFrame, fixations: pd.DataFrame) -> boo
 def _c_normalization_issues(
     _raw, _schema, fingerprint: tuple, key: tuple, table: str
 ) -> list:
+    # The fingerprint shares each column's reading with the mapping form's
+    # field notes (`data.column_parse`).
     return normalization_issues(
-        _raw, _schema, table=table, fixations=table == "Fixations"
+        _raw,
+        _schema,
+        table=table,
+        fixations=table == "Fixations",
+        fingerprint=fingerprint,
     )
 
 

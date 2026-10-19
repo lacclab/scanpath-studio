@@ -1896,7 +1896,7 @@ def _marked_text_column(viz_settings: dict) -> str | None:
     would silently turn into text marking there."""
     if viz_settings.get("critical_span_style", "Mark text") != "Mark text":
         return None
-    return viz_settings.get("highlight_column", "is_in_aspan")
+    return viz_settings.get("highlight_column")
 
 
 def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) -> dict:
@@ -1959,7 +1959,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         fixation_colorscale=viz_settings["fixation_colorscale"],
         heatmap_colorscale=viz_settings["heatmap_colorscale"],
         critical_span_style=viz_settings.get("critical_span_style", "Mark text"),
-        highlight_column=viz_settings.get("highlight_column", "is_in_aspan"),
+        highlight_column=viz_settings.get("highlight_column"),
         saccade_color=viz_settings.get("saccade_color", SACCADE_COLOR),
         saccade_style=SACCADE_DASH_OPTIONS.get(
             viz_settings.get("saccade_style", "Solid"), "solid"

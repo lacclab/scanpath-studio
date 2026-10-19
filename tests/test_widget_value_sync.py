@@ -391,11 +391,8 @@ def test_a_highlight_draws_a_key_naming_it():
 
     words, fixations = sps.load_sample_data(names="canonical")
     trial = (fixations["participant_id"].iloc[0], fixations["trial_id"].iloc[0])
-    keys = [
-        a.text
-        for a in sps.plot_scanpath(words, fixations, *trial).layout.annotations
-        if a.name == "highlight_key"
-    ]
+    marked = sps.plot_scanpath(words, fixations, *trial, highlight_column="is_in_aspan")
+    keys = [a.text for a in marked.layout.annotations if a.name == "highlight_key"]
     assert len(keys) == 1 and "Highlighted: is_in_aspan (answer span)" in keys[0]
-    plain = sps.plot_scanpath(words, fixations, *trial, highlight_column=None)
+    plain = sps.plot_scanpath(words, fixations, *trial)
     assert not [a for a in plain.layout.annotations if a.name == "highlight_key"]

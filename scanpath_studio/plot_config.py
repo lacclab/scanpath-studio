@@ -350,7 +350,7 @@ def build_plot_config(
             "critical_span_style": figure_settings.get(
                 "critical_span_style", "Mark text"
             ),
-            "highlight_column": figure_settings.get("highlight_column", "is_in_aspan"),
+            "highlight_column": figure_settings.get("highlight_column"),
             # Fixation classification: short/long/outside-the-text highlight or
             # discard, saved verbatim so it restores 1:1.
             "fixation_flags": figure_settings.get("fixation_flags"),

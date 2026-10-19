@@ -155,7 +155,9 @@ OVERLAY_JS = f"""
       {{duration: 650, easing: 'ease-out'}},
     ).onfinish = () => r.remove();
   }};
-  window.demoHud = (n, caption, fast, where) => {{
+  // `label` replaces the click count in the badge: the docs' montages name
+  // their scenes with it, where a count would describe one source clip.
+  window.demoHud = (n, caption, fast, where, label) => {{
     const h = node('demo-hud',
       'position:fixed;right:22px;z-index:2147483647;pointer-events:none;' +
       'display:flex;align-items:center;gap:12px;max-width:800px;' +
@@ -170,8 +172,11 @@ OVERLAY_JS = f"""
     const badge = document.createElement('span');
     badge.style.cssText = 'background:{ACCENT};border-radius:999px;' +
       'padding:4px 14px;white-space:nowrap;font-weight:700;display:inline-block;';
-    badge.innerHTML = MOUSE;
-    badge.append(`${{n}} click${{n === 1 ? '' : 's'}}`);
+    if (label) badge.append(label);
+    else {{
+      badge.innerHTML = MOUSE;
+      badge.append(`${{n}} click${{n === 1 ? '' : 's'}}`);
+    }}
     h.append(badge);
     h.append(text('span',
       'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;', caption));

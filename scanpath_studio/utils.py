@@ -1847,26 +1847,35 @@ def friendly_trial_label(
     text_str = text_str.strip()
     trial_contains_text = text_str and text_str.lower() in trial_str.lower()
 
+    qualified = None
     if text_str:
         base = f"{text_str} · {participant_id}"
         if not trial_contains_text:
             base = f"{base} (trial {trial_str})" if trial_str else base
-        elif trial_str != text_str:
-            # Surface any trial_id suffix beyond the text id (e.g. a
-            # repeat-reading "_r2" tag added during normalization). Without
-            # this the primary and compare titles look identical when a
-            # participant re-read the same text.
-            extra = trial_str
-            if extra.lower().startswith(text_str.lower()):
-                extra = extra[len(text_str) :].lstrip("_- ")
+        else:
+            # What the trial id says beyond its text and reader (a repeat
+            # reading's "_r2", say) is written only when two readings would
+            # otherwise share a label: the participant re-read the same text.
+            extra = _trial_id_remainder(trial_str, text_str, participant_id)
             if extra:
-                base = f"{text_str} ({extra}) · {participant_id}"
+                qualified = f"{text_str} ({extra}) · {participant_id}"
     else:
         base = f"{trial_str} · {participant_id}" if trial_str else participant_id
 
-    return _allocate_label(
-        f"{prefix}{base}", f"{prefix}{base} [{trial_str or 'trial'}]", existing_labels
-    )
+    if qualified is None:
+        qualified = f"{base} [{trial_str or 'trial'}]"
+    return _allocate_label(f"{prefix}{base}", f"{prefix}{qualified}", existing_labels)
+
+
+def _trial_id_remainder(trial_id: str, text_id: str, participant_id: str) -> str:
+    """``trial_id`` with its text id and leading participant id taken out —
+    ``"r0"`` from ``"l37_1129_2_2_1_Adv_r0"`` — or ``""`` when nothing is left."""
+    at = trial_id.lower().find(text_id.lower())
+    rest = trial_id[:at] + "_" + trial_id[at + len(text_id) :] if at >= 0 else trial_id
+    participant = str(participant_id)
+    if participant and rest.lower().startswith(participant.lower()):
+        rest = rest[len(participant) :]
+    return re.sub(r"[_\-\s]{2,}", "_", rest).strip("_- ")
 
 
 def build_comparison_options(

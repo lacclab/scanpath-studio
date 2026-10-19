@@ -315,8 +315,9 @@ def test_the_heatmap_preset_turns_the_highlight_off(monkeypatch):
     controls._apply_view_preset("heatmap")
     assert store["global_critical_span_style"] == "None"
     assert controls._active_quick_view() == "heatmap"
+    # The Scanpath design leaves it at the app's default, which is off too.
     controls._apply_view_preset("scanpath")
-    assert store["global_critical_span_style"] == "Mark text"
+    assert store["global_critical_span_style"] == "None"
 
 
 @pytest.mark.timeout(180)

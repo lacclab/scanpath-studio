@@ -729,7 +729,13 @@ def test_headless_defaults_match_the_app_for_every_non_layer_option(
         name: constants.SACCADE_CLASS_COLORS[name]
         for name in app_settings["saccade_class_colors"]
     }  # ≡ saccade_class_colors=None (plots merges over SACCADE_CLASS_COLORS)
-    equivalent = {"fixation_flags", "saccade_class_colors"}
+    # The app's Highlight words switch starts off ("None"); the API leaves the
+    # style at "Mark text" and highlights nothing by naming no column. With no
+    # column on either side the style marks nothing.
+    assert app_settings["critical_span_style"] == "None"
+    assert effective(app_settings, "highlight_column") is None
+    assert effective(headless, "highlight_column") is None
+    equivalent = {"fixation_flags", "saccade_class_colors", "critical_span_style"}
 
     differing = {
         key

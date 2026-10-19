@@ -233,11 +233,17 @@ def test_the_critical_span_pair_reaches_the_cli():
     assert not code.cli_unsupported
 
 
-def test_highlighting_nothing_is_an_empty_highlight_column_not_a_missing_flag():
-    """`highlight_column=None` means "mark nothing", and the CLI default is
-    OneStop's `is_in_aspan` — so omitting the flag would restore the span."""
+def test_a_highlight_column_is_written_and_highlighting_nothing_is_the_default():
+    """Nothing is highlighted by default, so `highlight_column=None` writes no
+    flag, while a named column reaches both the CLI and the Python call."""
     code = cs.reproduction_code(DEMO, _state(figure={"highlight_column": None}))
-    assert "--highlight-column ''" in code.cli
+    assert "--highlight-column" not in code.cli
+    assert "highlight_column" not in code.python
+    code = cs.reproduction_code(
+        DEMO, _state(figure={"highlight_column": "is_in_aspan"})
+    )
+    assert "--highlight-column is_in_aspan" in code.cli
+    assert "highlight_column='is_in_aspan'" in code.python
 
 
 def test_the_fixation_flags_reach_the_cli_one_category_per_flag():

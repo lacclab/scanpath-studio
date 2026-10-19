@@ -1079,7 +1079,7 @@ def _comma_list(flag: str) -> Any:
 def _highlight_column(value):
     """``--highlight-column``. ``None`` is the real request "highlight nothing",
     which the flag spells as an empty string — not the absence of the flag,
-    which would leave the default (`is_in_aspan`) in place."""
+    which would leave the default in place."""
     return ["--highlight-column", "" if value is None else str(value)]
 
 

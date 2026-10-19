@@ -872,7 +872,7 @@ _VIZ_WIDGET_DEFAULTS = {
     # Restorable by the settings file too, so seed here (no inline
     # value=/index=) to avoid Streamlit's "default value but also set via
     # Session State API" warning when a restore pre-sets them.
-    "global_critical_span_style": "Mark text",
+    "global_critical_span_style": "None",
     "global_span_border_color": "#000000",
     # Fixation classification (viz-only). SHORT / LONG / OUTSIDE-THE-TEXT / BLINK
     # each get a mode (Off | Highlight | Hide); Highlight overlays a marker in
@@ -5600,9 +5600,10 @@ def _seed_viz_state(
     highlight_options = highlight_column_options(words)
     _drop_stale("global_highlight_column", highlight_options)
     # A column the app seeded is re-derived for each dataset; only the user's own
-    # pick survives a switch. Only the bundled demo is seeded (its
-    # answer span); any other dataset opens with nothing highlighted, rather
-    # than with whichever yes/no column came first (IA_SKIP on EyeLink data).
+    # pick survives a switch. Only the bundled demo is seeded (its answer span),
+    # so ticking **Highlight words** there marks it at once; the switch itself
+    # starts off on every dataset. Any other dataset gets no column, rather than
+    # whichever yes/no column came first (IA_SKIP on EyeLink data).
     ss = st.session_state
     seeded = (
         "is_in_aspan"
@@ -5719,7 +5720,7 @@ def _legends_drawn(
         and bool(ss.get("global_show_stimulus", True))
         and (
             (
-                ss.get("global_critical_span_style", "Mark text") == "Mark text"
+                ss.get("global_critical_span_style", "None") == "Mark text"
                 and bool(ss.get("global_show_labels", True))
             )
             or (
@@ -5961,7 +5962,7 @@ def _collect_viz_settings(
     # **Mark text** recolours the word labels, so it needs Text; **Mark border**
     # is its own outline layer (independent of Text and Word boxes, as in the
     # builder), so it needs only the 📄 Stimulus master switch.
-    critical_span_style = ss.get("global_critical_span_style", "Mark text")
+    critical_span_style = ss.get("global_critical_span_style", "None")
     span_drawable = (
         show_labels if critical_span_style == "Mark text" else show_stimulus
     ) and critical_span_style in ("Mark text", "Mark border")
@@ -7651,7 +7652,7 @@ def render_plot_controls(
         # which is what deep links / Share / restore carry — the on/off and the
         # mode widgets are derived from it each run, and their callbacks write
         # it back on interaction.
-        canonical = st.session_state.get("global_critical_span_style", "Mark text")
+        canonical = st.session_state.get("global_critical_span_style", "None")
 
         def _on_span_toggle():
             st.session_state["global_critical_span_style"] = (

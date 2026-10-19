@@ -2725,6 +2725,23 @@ class TestSpotlightTour:
         assert self._sp_buttons(at) == set()
         assert "guide_unfold_tour" in {b.key for b in at.button}
 
+    def test_leaving_scanpath_on_the_last_step_ends_it(self):
+        from scanpath_studio.constants import _VIEW_DATA
+        from scanpath_studio.tour import _SPOTLIGHT_STEPS
+
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=60)
+        at.session_state["tour_step"] = len(_SPOTLIGHT_STEPS) - 1
+        at.run(timeout=60)
+        assert "tour_sp_done" in self._sp_buttons(at)
+        pin_view(at, _VIEW_DATA)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["main_nav"] == _VIEW_DATA
+        assert at.session_state["tour_mode"] is None
+        keys = {b.key for b in at.button if b.key}
+        assert not keys & {"guide_unfold_tour", "guide_close_tour", "tour_sp_done"}
+
 
 class TestSetupWizard:
     """The hybrid setup wizard for the Upload source."""

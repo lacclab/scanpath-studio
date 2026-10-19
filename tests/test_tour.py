@@ -345,7 +345,35 @@ class TestTourLivesOnScanpath:
         at.run()
         assert not at.exception, at.exception
         assert "switched_to" not in at.session_state
-        assert {b.key for b in at.button if b.key} == {"guide_unfold_tour"}
+        assert {b.key for b in at.button if b.key} == {
+            "guide_unfold_tour",
+            "guide_close_tour",
+        }
+
+    def test_left_on_its_last_step_it_ends(self):
+        """The last step points at the nav, so following it ends the tour
+        (as Done does) rather than leaving a tab that reads as still running."""
+        from scanpath_studio.tour import _SPOTLIGHT_STEPS
+
+        at = AppTest.from_function(_tour_off_scanpath_app)
+        at.session_state["tour_mode"] = "spotlight"
+        at.session_state["tour_step"] = len(_SPOTLIGHT_STEPS) - 1
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["tour_mode"] is None
+        assert "switched_to" not in at.session_state
+        assert not [b for b in at.button if b.key]
+
+    def test_the_tab_closes_the_tour(self):
+        at = AppTest.from_function(_tour_off_scanpath_app)
+        at.session_state["tour_mode"] = "spotlight"
+        at.session_state["tour_step"] = 3
+        at.run()
+        at.button(key="guide_close_tour").click().run()
+        assert not at.exception, at.exception
+        assert at.session_state["tour_mode"] is None
+        assert "switched_to" not in at.session_state
+        assert not [b for b in at.button if b.key]
 
     def test_started_on_scanpath_it_asks_for_no_switch(self):
         from scanpath_studio.constants import _VIEW_SCANPATH
@@ -1402,7 +1430,9 @@ class TestEveryGuideCardFolds:
         assert not at.exception, at.exception
         at.button(key=f"guide_fold_{kind}").click().run()
         assert not at.exception, at.exception
-        assert self._keys(at) == {f"guide_unfold_{kind}"}
+        # Only the welcome tour's tab has a ✕ of its own.
+        closer = {"guide_close_tour"} if kind == "tour" else set()
+        assert self._keys(at) == {f"guide_unfold_{kind}"} | closer
         assert any(tab in m.value for m in at.markdown)
         assert not at.progress
         at.button(key=f"guide_unfold_{kind}").click().run()

@@ -877,8 +877,14 @@ def _render_guide_fold_button(kind: str, name: str) -> None:
     )
 
 
-def _render_guide_pill(kind: str, label: str, progress: str, name: str) -> None:
-    """The folded card: a tab naming the guide and where it is, with Open."""
+def _render_guide_pill(
+    kind: str, label: str, progress: str, name: str, *, on_close=None
+) -> None:
+    """The folded card: a tab naming the guide and where it is, with Open.
+
+    ``on_close`` adds a ✕ that ends the guide from the tab, so a folded guide
+    can be dismissed without opening it again first.
+    """
     with st.container(
         key=f"guide_pill_{kind}",
         horizontal=True,
@@ -893,6 +899,13 @@ def _render_guide_pill(kind: str, label: str, progress: str, name: str) -> None:
             args=(kind, False),
             help=f"Open the {name} again.",
         )
+        if on_close is not None:
+            st.button(
+                f"✕ {spoken(f'Close the {name}')}",
+                key=f"guide_close_{kind}",
+                on_click=on_close,
+                help=f"Close the {name}",
+            )
         embed_html_iframe(_guide_drag_script(kind), height=0)
 
 
@@ -941,6 +954,20 @@ _GUIDE_MOVE_CSS = """
 }
 [class*="st-key-guide_pill_"] p { margin: 0; font-size: 0.88rem; white-space: nowrap; }
 [class*="st-key-guide_pill_"] button { min-height: 1.8rem; padding: 0 0.6rem; }
+/* The tab's ✕ (the welcome tour's): a glyph beside Open, like the card's ✕. */
+[class*="st-key-guide_close_"] button {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 0.35rem !important;
+    opacity: 0.6;
+}
+[class*="st-key-guide_close_"] button:hover { opacity: 1; }
+[class*="st-key-guide_close_"] button:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--sps-accent);
+    outline-offset: 1px;
+}
 /* The drag script's carrier: out of the tab's row, still loaded. */
 [class*="st-key-guide_pill_"] [data-testid="stElementContainer"]:has(iframe) {
     position: absolute;
@@ -1408,7 +1435,9 @@ def render_spotlight_tour() -> None:
             "<style>" + _card_colors_css() + _GUIDE_MOVE_CSS + "</style>",
             unsafe_allow_html=True,
         )
-        _render_guide_pill("tour", "Welcome tour", progress_text, "tour")
+        _render_guide_pill(
+            "tour", "Welcome tour", progress_text, "tour", on_close=_exit_spotlight
+        )
         return
 
     highlight = _highlight_css(step["selector"], accent)
@@ -1569,7 +1598,9 @@ def _keep_tour_on_scanpath(active_view: str) -> None:
       Scanpath, where the dataset in the picker is loaded and drawn, before its
       first card is drawn;
     - left for another view mid-tour, it folds to its tab, which keeps its step
-      and brings it back to Scanpath when opened.
+      and brings it back to Scanpath when opened;
+    - left on its last step, which points at the nav and so invites the click,
+      it ends, as Done would.
 
     One switch per request: the request is dropped before switching, so a page
     that holds the screen whatever the nav says (the add-dataset wizard) folds
@@ -1585,6 +1616,9 @@ def _keep_tour_on_scanpath(active_view: str) -> None:
         return
     if to_scanpath and st.session_state.get("main_nav") != _VIEW_SCANPATH:
         switch_to_view(_VIEW_SCANPATH)  # reruns
+        return
+    if st.session_state.get("tour_step", 0) >= len(_SPOTLIGHT_STEPS) - 1:
+        _exit_spotlight()
         return
     _set_guide_folded("tour", True)
 

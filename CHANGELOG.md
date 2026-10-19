@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/);
 `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.42.1] - 2026-10-19
+
+### Changed
+- The README and docs home-page demo video show a new captioned tour of the Scanpath page: a replay, the Heatmap preset, a figure built layer by layer, saccade filters, redacted text, two participants side by side, Export and Share. ([#510](https://github.com/lacclab/scanpath-studio/issues/510))
+
 ## [0.42.0] - 2026-10-19
 
 ### Added

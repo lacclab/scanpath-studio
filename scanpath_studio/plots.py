@@ -1924,6 +1924,12 @@ def _grow(fig: go.Figure, side: str, px: float) -> None:
         fig.layout.height = float(fig.layout.height) + px
 
 
+def _free_top_px(fig: go.Figure, margin: Mapping) -> float:
+    """The top margin a legend above the plot may stand in: all of it, less a
+    replay's transport band, which an HTML page takes back (`replay_page`)."""
+    return float(margin["t"]) - _transport_band(fig.layout)[0]
+
+
 def _spot_parts(position: str) -> tuple[str, str, bool]:
     """``"top-center-outside"`` → ``("top", "center", outside=True)``.
 
@@ -2022,7 +2028,7 @@ class _LegendSlots:
                     out["yanchor"] = "bottom"
                     out["dy"] = self.top_start + gap + used
                     need = self.top_start + gap + used + h
-                    _grow(fig, "t", max(0.0, need - margin["t"]))
+                    _grow(fig, "t", max(0.0, need - _free_top_px(fig, margin)))
                 else:
                     out["yanchor"] = "top"
                     out["dy"] = -(gap + used)
@@ -2384,7 +2390,7 @@ def _size_key_anchor(
     if edge == "top" and outside:
         bottom = _SIZE_KEY_LINE_GAP_PX - clear
         _plot_w, _plot_h, margin = _plot_px(fig)
-        _grow(fig, "t", max(0.0, bottom + h - margin["t"]))
+        _grow(fig, "t", max(0.0, bottom + h - _free_top_px(fig, margin)))
         left = {"left": 0.0, "center": -w / 2.0, "right": -w}[along]
         return left, bottom, {"left": 0.0, "center": 0.5, "right": 1.0}[along], 1.0
     gap = 0.0 if not outside else float(_LEGEND_GAP_PX)
@@ -5438,6 +5444,36 @@ _ANIM_MAX_FRAMES = 360
 # animation plot the SAME size as the static one.
 _CONTROLS_MARGIN_PX = 116
 _CONTROLS_SAFETY_PX = 24
+# On an HTML page (`replay_page`) those controls are hidden and their band
+# taken back, and the player draws its own one-row toolbar of this height
+# ABOVE the figure instead — outside it, so the plot keeps the static
+# figure's size, and above the title and any legend over the plot.
+REPLAY_TOOLBAR_PX = 32
+
+
+def _transport_band(layout: Mapping | None) -> tuple[float, float]:
+    """``(top margin, height)`` in px that a replay's own transport controls take.
+
+    ``(0, 0)`` for a layout without them — a static figure, or a replay with
+    no frames. ``layout`` is a figure's layout or its ``to_dict()``'s."""
+    if layout is None:
+        return 0.0, 0.0
+
+    def get(obj, key):
+        if obj is None:
+            return None
+        return obj.get(key) if isinstance(obj, Mapping) else getattr(obj, key, None)
+
+    has_play = any(
+        get(button, "name") == "play"
+        for menu in get(layout, "updatemenus") or ()
+        for button in get(menu, "buttons") or ()
+    )
+    if not has_play:
+        return 0.0, 0.0
+    top = float(get(get(layout, "margin"), "t") or 0)
+    band = min(top, float(_CONTROLS_MARGIN_PX))
+    return band, band + _CONTROLS_SAFETY_PX
 
 
 def _scanpath_anim_specs(
@@ -5683,6 +5719,9 @@ def _recorded_clock(specs) -> bool | None:
 _AUTOPLAY_META_FLAG = "scanpath_autoplay"
 _REPLAY_META_TIMES = "scanpath_frame_times_ms"
 _REPLAY_META_SPEED = "scanpath_playback_speed"
+# Set only on an HTML page's copy of the layout (`replay_page`): the height
+# in px of the toolbar the player draws in place of the figure's own controls.
+_REPLAY_META_TOOLBAR = "scanpath_toolbar"
 
 # `{plot_id}` stays literal: plotly.py substitutes it (a plain `str.replace`, so
 # the braces need no escaping) and runs the script in a `.then()` after `newPlot`.
@@ -5710,7 +5749,11 @@ _REPLAY_PLAYER_JS = """(function () {
     var last = times.length - 1;
     var jump = {mode: 'immediate', frame: {duration: 0, redraw: false},
                 transition: {duration: 0}};
-    var shown = 0, raf = null, t0 = 0, resume = false;
+    // Restart and the time slider draw their frame in full, as the figure's
+    // own Restart button and slider steps do.
+    var leap = {mode: 'immediate', frame: {duration: 0, redraw: true},
+                transition: {duration: 0}};
+    var shown = 0, raf = null, t0 = 0, resume = false, bar = null;
 
     function frameAt(ms) {  // the last frame whose reading time has been reached
       var lo = 0, hi = last;
@@ -5740,12 +5783,20 @@ _REPLAY_PLAYER_JS = """(function () {
       t0 = performance.now() - times[shown] / speed;
       raf = requestAnimationFrame(tick);
     }
+    function seek(k) {  // Restart, and the toolbar's time slider
+      stop();
+      shown = k;
+      Plotly.animate(gd, [String(k)], leap);
+    }
 
     // Whatever put a frame on screen — this clock, the slider, Restart — Play
     // resumes from it.
     gd.on('plotly_animatingframe', function (e) {
       var k = parseInt(e && e.name, 10);
-      if (k >= 0 && k <= last) { shown = k; }
+      if (k >= 0 && k <= last) {
+        shown = k;
+        if (bar) { bar.at(k); }
+      }
     });
     gd.on('plotly_buttonclicked', function (e) {
       if (e && e.button && e.button.name === 'play') { play(); } else { stop(); }
@@ -5765,7 +5816,12 @@ _REPLAY_PLAYER_JS = """(function () {
     }
     document.addEventListener('visibilitychange', onVisibility);
 
-    // Plotly still draws the ▶ Play button; this clock takes over what it does.
+    // A page whose figure has its own controls hidden (`plots.replay_page`)
+    // gets this toolbar above the figure instead, in the embedder's slot
+    // (`{plot_id}-transport`) when it has one.
+    if (meta.scanpath_toolbar > 0) { bar = toolbar(meta.scanpath_toolbar); }
+
+    // Plotly's ▶ Play button, where it is drawn: this clock takes over what it does.
     var edit = {};
     (gd.layout.updatemenus || []).forEach(function (menu, i) {
       (menu.buttons || []).forEach(function (button, j) {
@@ -5777,6 +5833,90 @@ _REPLAY_PLAYER_JS = """(function () {
     Promise.resolve(Plotly.relayout(gd, edit)).then(function () {
       if (meta.scanpath_autoplay) { play(); }
     });
+
+    // One row: ▶ Play, ⏸ Pause, ⟲ Restart, the time slider and its readout.
+    // The labels, the readout's text and the font are the figure's own
+    // controls', so the two never disagree.
+    function toolbar(px) {
+      var menu = (gd.layout.updatemenus || [])[0] || {};
+      var slider = (gd.layout.sliders || [])[0] || {};
+      var steps = slider.steps || [];
+      var prefix = (slider.currentvalue && slider.currentvalue.prefix) || '';
+      var slot = document.getElementById(gd.id + '-transport');
+      if (!slot) {
+        slot = document.createElement('div');
+        slot.style.width = gd.style.width;
+        gd.parentNode.insertBefore(slot, gd);
+      }
+      slot.setAttribute('data-sps-transport', '');
+      slot.setAttribute('role', 'group');
+      slot.setAttribute('aria-label', 'Replay controls');
+      var st = slot.style;
+      st.display = 'flex';
+      st.alignItems = 'center';
+      st.gap = '6px';
+      st.boxSizing = 'border-box';
+      st.height = px + 'px';
+      st.fontFamily = (menu.font && menu.font.family) || 'sans-serif';
+      st.fontSize = '13px';
+      st.color = '#444';
+      function label(name, fallback) {
+        var found = (menu.buttons || []).filter(function (b) { return b.name === name; });
+        return (found[0] && found[0].label) || fallback;
+      }
+      function button(name, fallback, fn) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = label(name, fallback);
+        b.setAttribute('data-name', name);
+        var bs = b.style;
+        bs.height = (px - 8) + 'px';
+        bs.padding = '0 8px';
+        bs.font = 'inherit';
+        bs.color = 'inherit';
+        bs.background = '#fff';
+        bs.border = '1px solid #ccc';
+        bs.borderRadius = '4px';
+        bs.cursor = 'pointer';
+        bs.whiteSpace = 'nowrap';
+        b.addEventListener('click', fn);
+        slot.appendChild(b);
+      }
+      button('play', 'Play', play);
+      button('pause', 'Pause', stop);
+      button('restart', 'Restart', function () { seek(0); });
+      var range = document.createElement('input');
+      range.type = 'range';
+      range.min = '0';
+      range.max = String(last);
+      range.step = '1';
+      range.setAttribute('aria-label', 'Replay time');
+      range.style.flex = '1 1 auto';
+      range.style.minWidth = '80px';
+      range.style.margin = '0 4px';
+      // Grabbing the handle stops the clock; dragging it shows each frame.
+      range.addEventListener('pointerdown', stop);
+      range.addEventListener('input', function () {
+        seek(parseInt(range.value, 10) || 0);
+      });
+      slot.appendChild(range);
+      var readout = document.createElement('span');
+      readout.setAttribute('aria-hidden', 'true');
+      readout.style.whiteSpace = 'nowrap';
+      readout.style.fontVariantNumeric = 'tabular-nums';
+      var widest = prefix + ((steps[last] && steps[last].label) || '');
+      readout.style.minWidth = widest.length + 'ch';
+      readout.style.textAlign = 'right';
+      slot.appendChild(readout);
+      function at(k) {
+        var text = prefix + ((steps[k] && steps[k].label) || '');
+        range.value = String(k);
+        range.setAttribute('aria-valuetext', text);
+        readout.textContent = text;
+      }
+      at(shown);
+      return {at: at};
+    }
   }
 })();"""
 
@@ -5798,6 +5938,12 @@ def animation_player_post_script(fig) -> str | None:
     click still arrives as ``plotly_buttonclicked``); Pause, Restart and the time
     slider keep their own commands, and any of them stops the clock. Autoplay
     starts it on load, from the first frame.
+
+    On a page :func:`replay_page` wrote, the figure's own controls are hidden
+    and the player draws a one-row toolbar (``REPLAY_TOOLBAR_PX`` tall) above
+    the figure instead: ▶ Play, ⏸ Pause, ⟲ Restart, a time slider and the
+    readout, with the figure's own labels. It goes in the element with id
+    ``<plot id>-transport`` when the page has one, else straight above the plot.
 
     It **polls** for Plotly and the figure's frames before starting. Two things
     would make a one-shot kick-off silently never fire, both confirmed against
@@ -5978,7 +6124,7 @@ def pack_replay_frames(frames: Sequence[Mapping]) -> list[dict]:
     return packed
 
 
-def replay_page(fig) -> tuple[dict, str] | None:
+def replay_page(fig, *, toolbar: bool = True) -> tuple[dict, str] | None:
     """A replay as its HTML page carries it: ``(figure dict, post_script)``.
 
     The dict is the figure without its ``frames``, and the script rebuilds them
@@ -5990,8 +6136,14 @@ def replay_page(fig) -> tuple[dict, str] | None:
     ``to_dict()``, which is not modified. ``None`` for a figure with no player (a
     static figure, or a replay with no frames): serialize that one as it is.
 
-    The figure itself keeps its frames: `api.animate_scanpath`, the GIF/MP4
-    export and ``fig.show()`` use them as they are.
+    With ``toolbar`` (the default) the figure's own transport controls are
+    hidden and their band above the plot taken back — the page's figure is
+    :func:`replay_page_box`'s size, the static figure's — and the player draws
+    its compact toolbar above the figure in their place. ``toolbar=False``
+    keeps the figure's own controls, drawn by Plotly.
+
+    The figure itself keeps its frames and its controls: `api.animate_scanpath`,
+    the GIF/MP4 export and ``fig.show()`` use them as they are.
     """
     player = animation_player_post_script(fig)
     if player is None:
@@ -6002,12 +6154,67 @@ def replay_page(fig) -> tuple[dict, str] | None:
     frames = fig_dict.get("frames") or []
     if not frames:
         return None
+    if toolbar:
+        fig_dict = {**fig_dict, "layout": _toolbar_layout(fig_dict.get("layout"))}
     if not all(_packable(frame) for frame in frames):
         # Frames this encoding can't address (a typed-array `traces`) travel as
         # plotly.py writes them, still on the player.
         return fig_dict, player
     page = {key: value for key, value in fig_dict.items() if key != "frames"}
     return page, _packed_frames_script(frames) + "\n" + player
+
+
+def _toolbar_layout(layout: Mapping | None) -> dict:
+    """``layout`` for a page whose player draws the toolbar: the figure's own
+    controls hidden — still there for the player to read their labels — their
+    band taken back, and the toolbar's height on ``meta``. A copy; nested values
+    are shared, and only the ones that change are copied."""
+    layout = dict(layout or {})
+    margin_px, height_px = _transport_band(layout)
+    if not margin_px and not height_px:
+        return layout
+    for key in ("updatemenus", "sliders"):
+        layout[key] = [{**item, "visible": False} for item in layout.get(key) or ()]
+    margin = dict(layout.get("margin") or {})
+    margin["t"] = _px_like(margin.get("t"), float(margin.get("t") or 0) - margin_px)
+    layout["margin"] = margin
+    if layout.get("height"):
+        height = layout["height"]
+        layout["height"] = _px_like(height, float(height) - height_px)
+    layout["meta"] = {
+        **(layout.get("meta") or {}),
+        _REPLAY_META_TOOLBAR: REPLAY_TOOLBAR_PX,
+    }
+    return layout
+
+
+def _px_like(original, value: float):
+    """``value`` as an ``int`` when ``original`` was one and it is whole."""
+    if isinstance(original, int) and float(value).is_integer():
+        return int(value)
+    return value
+
+
+def replay_page_box(fig) -> tuple[int, int, int]:
+    """``(width, height, toolbar)`` in px of ``fig`` on its HTML page.
+
+    For a replay :func:`replay_page` draws with its toolbar, the figure without
+    its own controls' band and the toolbar's height; for anything else, the
+    figure's own size and 0. ``fig`` may be a figure or its ``to_dict()``."""
+    if isinstance(fig, dict):
+        layout = fig.get("layout") or {}
+        frames = fig.get("frames")
+        width, height = layout.get("width"), layout.get("height")
+    else:
+        layout, frames = fig.layout, fig.frames
+        width, height = layout.width, layout.height
+    width, height = int(width or 900), int(height or 600)
+    if not frames or animation_player_post_script(fig) is None:
+        return width, height, 0
+    _margin_px, height_px = _transport_band(layout)
+    if not height_px:
+        return width, height, 0
+    return width, round(height - height_px), REPLAY_TOOLBAR_PX
 
 
 def _packable(frame: Mapping) -> bool:

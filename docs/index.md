@@ -24,6 +24,7 @@ Bring your own data, or start with the bundled demo.
 [:material-play-circle: Try online](https://scanpath-studio.streamlit.app){ .md-button .md-button--primary }
 [:material-download: Download](install.md#install){ .md-button }
 [:material-school: Tutorials](tutorials/index.md){ .md-button }
+[:material-format-quote-open: Cite](about.md#cite-scanpath-studio){ .md-button }
 </div>
 
 </div>

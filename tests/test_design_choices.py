@@ -304,16 +304,26 @@ def test_the_credit_line_grows_the_figure_below_the_caption():
     assert fig.layout.height > plain.layout.height
 
 
-def test_the_api_draws_the_credit_only_when_asked(sample_words_df):
+@pytest.mark.parametrize("builder", ["static", "animation", "overlay", "side_by_side"])
+def test_every_api_builder_draws_the_credit_only_when_asked(builder):
     from scanpath_studio import api
     from scanpath_studio.citation import CREDIT_LINE
 
     data = api.load_sample_data(names="canonical")
-    pid, tid = api.list_trials(data.words, data.fixations).iloc[0]
+    trials = api.list_trials(data.words, data.fixations)
+    a = tuple(trials.iloc[0])
+    b = tuple(trials.iloc[1])
 
     def texts(**kw):
-        fig = api.plot_scanpath(data.words, data.fixations, pid, tid, **kw)
-        return [a.text for a in fig.layout.annotations]
+        if builder == "static":
+            fig = api.plot_scanpath(data.words, data.fixations, *a, **kw)
+        elif builder == "animation":
+            fig = api.animate_scanpath(data.words, data.fixations, *a, **kw)
+        else:
+            fig = api.compare_scanpaths(
+                data.words, data.fixations, a, b, layout=builder, **kw
+            )
+        return [annotation.text for annotation in fig.layout.annotations]
 
     assert CREDIT_LINE not in texts()
     assert CREDIT_LINE in texts(show_credit=True)

@@ -499,7 +499,8 @@ on one the Share → Code snippet cannot reproduce.
   `file_citation.stamp_html`, GIF / MP4 in `animation_export`, `save_figure`
   files through `file_citation.stamp_file`, and the browser-saved PNG / SVG
   from the bytes `tabs._render_save_plot_button` hands its component. A new
-  writer stamps its output too.
+  writer stamps its output too. The one exception is the plot toolbar's camera:
+  Plotly saves that PNG itself, and its config is JSON, so it takes no script.
 - Static image export (PNG/SVG/PDF) and the GIF/MP4 replay go through Kaleido,
   which needs Chrome (`plotly_get_chrome -y` locally; `packages.txt` installs
   `chromium` on Streamlit Cloud). The current figure's PNG/SVG is saved in the

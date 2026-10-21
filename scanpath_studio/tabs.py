@@ -6445,7 +6445,12 @@ def render_single_trial_tab(
         # ordinary window size.
         with st.container(key="plot_controls_header"):
             st.markdown(f"## {ICONS['plot_controls']} Plot controls")
-        with rail.container(key="tour_grp_view_modes"):
+        # Simple mode sets Animate from its View tiles and has no Compare, so
+        # the two mode rows are Advanced-only; they still run in Simple, which
+        # keeps `animate` and `compare_enabled` resolved exactly as here.
+        with ui_mode.advanced_only(rail, "rail_modes").container(
+            key="tour_grp_view_modes"
+        ):
             # The mode and its settings are ONE control, laid out the way a
             # Zoom-style split button is: the toggle switches the mode on and off,
             # the ▾ beside it opens the settings. The horizontal container is what
@@ -6995,11 +7000,17 @@ def render_single_trial_tab(
                 selected_trial,
                 combo_row=primary_combo_row,
             ),
+            # Simple's lit View tile follows the figure actually drawn.
+            animating=bool(animate),
         )
         # The scoped reset closes the rail, below every control it
         # resets, rather than sharing the heading row. It is last in creation
         # order, so it lands at the foot of the rail's own scroll area.
-        with st.container(key="plot_reset_footer"):
+        # Advanced-only: Simple's View tiles are its way back to a preset.
+        with (
+            ui_mode.advanced_only(rail, "rail_reset"),
+            st.container(key="plot_reset_footer"),
+        ):
             render_viz_reset(st)
 
     # Second-trial selector + layout/legend options, rendered above the chips in

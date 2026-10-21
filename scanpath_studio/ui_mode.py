@@ -148,13 +148,22 @@ def mode_css(mode: str) -> str:
     page in both modes and are hidden by CSS, so switching mode never changes
     which elements a rerun draws, and no widget loses its value.
     """
-    if parse_mode(mode) == ADVANCED:
-        rules = f'[class*="st-key-{_SIMPLE_PREFIX}"] {{ display: none !important; }}'
+    advanced = parse_mode(mode) == ADVANCED
+    hidden = f'[class*="st-key-{_SIMPLE_PREFIX if advanced else _ADV_PREFIX}"]'
+    # In the rail, a hidden container's wrapper block would still take the
+    # rail's gap and the margin under each block: hide the wrapper with it. A
+    # rule of its own, so a browser without `:has()` still hides the container.
+    hide = (
+        f"{hidden} {{ display: none !important; }}"
+        ' .st-key-scanpath_rail [data-testid="stLayoutWrapper"]'
+        f":has(> {hidden}) {{ display: none !important; }}"
+    )
+    if advanced:
+        rules = hide
     else:
         cell = '[class*="st-key-railbtn_"] > div'
         sort = f'> [class*="st-key-railbtn_"] > div:only-child > .st-key-{_ADV_PREFIX}{TRIAL_SORT}'
-        rules = (
-            f'[class*="st-key-{_ADV_PREFIX}"] {{ display: none !important; }}'
+        rules = hide + (
             # With the slider gone its column would still hold a gap: drop it.
             # Only the column that holds it directly, never one around the row.
             ' [data-testid="stColumn"]:has(> [data-testid="stVerticalBlock"]'

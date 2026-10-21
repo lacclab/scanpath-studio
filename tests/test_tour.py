@@ -1235,7 +1235,9 @@ class TestSpotlightSelectorsResolve:
         # last hand-tuning" slot — and the user's own named designs are the
         # library beneath it.
         assert 'key="viz_view_custom"' in control_source
-        assert "_render_saved_designs(viz)" in control_source
+        assert '_render_saved_designs(advanced_only(viz, "rail_designs"))' in (
+            control_source
+        )
         # A section is a `[toggle | ▾]` row, not an expander.
         assert "_rail_section(" in control_source
         assert 'viz.expander("↗️ Saccades"' not in control_source
@@ -1315,7 +1317,7 @@ class TestSpotlightSelectorsResolve:
         assert (
             "st.markdown(f\"## {ICONS['plot_controls']} Plot controls\")" in tab_source
         )
-        assert 'with st.container(key="plot_reset_footer"):' in tab_source
+        assert 'st.container(key="plot_reset_footer"),' in tab_source
         assert "render_viz_reset(st)" in tab_source
         # No second column in the heading row, and no reset above the controls.
         assert "rail_heading, rail_reset = st.columns(" not in tab_source

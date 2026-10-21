@@ -246,3 +246,211 @@ def test_more_triggers_are_muted_by_the_stylesheet():
     assert len(rule) == 2
     body = rule[1].split("}", 1)[0]
     assert "opacity: 0.72" in body and "var(--sps-border)" in body
+
+
+def _tile_type(at: AppTest, name: str) -> str:
+    return at.button(key=f"simple_view_{name}").proto.type
+
+
+def test_simple_view_animation_turns_animate_on_with_scanpath_layers():
+    at = _boot()
+    at.button(key="simple_view_heatmap").click().run()
+    assert at.session_state["global_show_heatmap"] is True
+    at.button(key="simple_view_animation").click().run()
+    assert not at.exception
+    assert at.session_state["single_animate"] is True
+    assert at.session_state["global_show_heatmap"] is False
+    assert at.session_state["global_show_fix"] is True
+    assert _tile_type(at, "animation") == "primary"
+    assert _tile_type(at, "scanpath") == "secondary"
+
+
+@pytest.mark.parametrize("name", ["heatmap", "illustration"])
+def test_simple_view_static_tiles_turn_animate_off(name):
+    at = _boot()
+    at.button(key="simple_view_animation").click().run()
+    assert at.session_state["single_animate"] is True
+    at.button(key=f"simple_view_{name}").click().run()
+    assert not at.exception
+    assert at.session_state["single_animate"] is False
+    if name == "heatmap":
+        assert at.session_state["global_show_heatmap"] is True
+    else:
+        assert at.session_state["global_fixation_snap_to_line"] is True
+    assert _tile_type(at, name) == "primary"
+    assert _tile_type(at, "animation") == "secondary"
+
+
+@pytest.mark.parametrize(
+    ("active", "animating", "expected"),
+    [
+        ("scanpath", True, "animation"),
+        ("scanpath", False, "scanpath"),
+        ("heatmap", False, "heatmap"),
+        ("illustration", False, "illustration"),
+        ("heatmap", True, None),
+        ("illustration", True, None),
+        ("custom", False, None),
+        ("custom", True, None),
+        ("design:mine", False, None),
+    ],
+)
+def test_simple_active_view(monkeypatch, active, animating, expected):
+    from scanpath_studio import controls
+
+    monkeypatch.setattr(controls, "_active_quick_view", lambda: active)
+    assert controls.simple_active_view(animating=animating) == expected
+
+
+def test_simple_views_are_the_four_tiles():
+    from scanpath_studio import controls
+
+    assert controls.SIMPLE_VIEWS == ("animation", "scanpath", "heatmap", "illustration")
+
+
+def test_simple_rail_keeps_advanced_widgets_alive():
+    at = _boot()
+    assert at.toggle(key="single_animate") is not None
+    assert at.toggle(key="single_compare_toggle") is not None
+    assert at.toggle(key="global_show_fix") is not None
+    assert at.button(key="reset_viz_settings_btn") is not None
+    assert at.button(key="viz_view_custom") is not None
+    assert at.selectbox(key="global_palette") is not None
+    assert "iconpop_more_rail" in {p.key for p in at.get("popover")}
+    for name in ("animation", "scanpath", "heatmap", "illustration"):
+        assert at.button(key=f"simple_view_{name}") is not None
+
+
+def test_advanced_rail_still_draws_the_simple_tiles_hidden():
+    """Both modes draw the same tree; CSS hides the other mode's containers."""
+    at = _boot(mode="advanced")
+    assert at.button(key="simple_view_scanpath") is not None
+    assert at.button(key="viz_view_scanpath") is not None
+
+
+def test_rail_wrappers_are_keyed_for_the_mode_css():
+    """Every Advanced-only rail part sits in an ``adv_only_*`` container, and the
+    Simple parts in ``simple_only_*`` ones, so `mode_css` hides them."""
+    import inspect
+    import re
+
+    from scanpath_studio import controls, tabs
+
+    rail = inspect.getsource(tabs.render_single_trial_tab)
+    # The two mode rows share one wrapper, so Simple leaves no empty
+    # `tour_grp_view_modes` behind.
+    for name in ("rail_modes", "rail_reset"):
+        assert re.search(rf'advanced_only\(\s*\w+,\s*"{name}"\s*\)', rail), name
+    source = inspect.getsource(controls.render_plot_controls)
+    for name in (
+        "rail_presets",
+        "rail_designs",
+        "rail_fix",
+        "rail_sac",
+        "rail_stim",
+        "rail_boxes",
+        "rail_heatmap",
+        "rail_rawgaze",
+        "rail_filter",
+        "rail_figure",
+    ):
+        assert re.search(rf'advanced_only\(\s*viz,\s*"{name}"\s*\)', source), name
+    assert 'simple_only(viz, "views")' in source
+    assert 'simple_only(viz, "rail_more")' in source
+
+
+def _open_gaze_dataset(words, fixations, gaze) -> AppTest:
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
+    at.query_params["ui"] = "simple"
+    pin_view(at, _VIEW_SCANPATH)
+    at.session_state["_datasets"] = {
+        "Gaze": {
+            "words": words,
+            "fixations": fixations,
+            "raw_gaze": gaze,
+            "filter_fields": [],
+            "composite_trial_columns": [],
+        }
+    }
+    at.session_state["data_source_choice"] = "Gaze"
+    at.run()
+    assert not at.exception, at.exception
+    return at
+
+
+def _assert_animation_keeps_the_static_tile(at: AppTest) -> None:
+    """Animation asks for the replay, which a trial without fixations cannot
+    draw: the static figure stays, and so does its tile."""
+    at.button(key="simple_view_animation").click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["single_animate"] is True
+    assert _tile_type(at, "scanpath") == "primary"
+    assert _tile_type(at, "animation") == "secondary"
+
+
+def test_raw_gaze_only_trial_in_simple_highlights_scanpath():
+    import pandas as pd
+
+    import scanpath_studio as sps
+    from scanpath_studio import api
+
+    words, fixations = api.load_scanpath_data(
+        *sps.load_sample_data(names="canonical"), names="canonical"
+    )
+    gaze = api.load_sample_raw_gaze(names="canonical")
+    extra = gaze.assign(trial_id="samples_only", unique_trial_id="samples_only")
+    at = _open_gaze_dataset(words, fixations, pd.concat([gaze, extra]))
+    picker = at.selectbox(key="single_trial_id")
+    picker.set_value(next(o for o in picker.options if "samples_only" in str(o)))
+    at.run()
+    assert not at.exception, at.exception
+    assert "samples_only" in str(at.session_state["single_trial_id"])
+    # The trial has no fixations: the fixation layer greys for it.
+    assert at.toggle(key="global_show_fix").disabled
+    assert _tile_type(at, "scanpath") == "primary"
+    _assert_animation_keeps_the_static_tile(at)
+
+
+def test_samples_only_dataset_in_simple():
+    from scanpath_studio import api
+    from scanpath_studio.data import empty_fixations_frame, empty_words_frame
+
+    at = _open_gaze_dataset(
+        empty_words_frame(),
+        empty_fixations_frame(),
+        api.load_sample_raw_gaze(names="canonical"),
+    )
+    # Its raw-gaze layer opens on, which no preset has, so no tile is lit
+    # until one is chosen.
+    assert "primary" not in {_tile_type(at, name) for name in ("scanpath", "heatmap")}
+    _assert_animation_keeps_the_static_tile(at)
+    assert at.session_state["global_show_raw_gaze"] is True
+
+
+@pytest.mark.parametrize(
+    ("mode", "hidden"), [("simple", "adv_only_"), ("advanced", "simple_only_")]
+)
+def test_mode_css_drops_the_rail_wrapper_of_a_hidden_part(mode, hidden):
+    """A hidden rail part leaves no gap: its wrapper block goes too, in a rule
+    of its own so a browser without ``:has()`` still hides the part."""
+    css = ui_mode.mode_css(mode)
+    wrapper = (
+        '.st-key-scanpath_rail [data-testid="stLayoutWrapper"]'
+        f':has(> [class*="st-key-{hidden}"]) {{ display: none !important; }}'
+    )
+    assert wrapper in css
+    assert f'<style>[class*="st-key-{hidden}"] {{ display: none !important; }}' in css
+
+
+def test_rail_mode_wrappers_keep_the_rail_spacing():
+    from scanpath_studio.styles import get_app_css
+
+    css = " ".join(get_app_css().split())
+    assert (
+        '.st-key-scanpath_rail [class*="st-key-adv_only_"] > div:last-child, '
+        '.st-key-scanpath_rail [class*="st-key-simple_only_"] > div:last-child '
+        "{ margin-bottom: 0 !important; }"
+    ) in css
+    # The View tiles are drawn like the design presets they stand in for.
+    assert '.st-key-scanpath_rail [class*="st-key-simple_view_"] button {' in css
+    assert ".st-key-scanpath_rail .st-key-tour_grp_simple_views {" in css

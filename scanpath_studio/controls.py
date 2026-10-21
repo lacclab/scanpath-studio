@@ -140,6 +140,7 @@ from .session_keys import (
     rename_legacy_keys,
 )
 from .session_keys import DESIGN_PRESETS as _DESIGN_PRESETS_WIRE_KEY
+from .ui_mode import advanced_only, render_more_popover, simple_only
 
 NONE_OPTION = "(none)"
 
@@ -2254,6 +2255,84 @@ def _active_quick_view() -> str | None:
     an active Illustration as Scanpath even while arc-and-snap geometry is live.
     """
     return _sync_quick_view_state()
+
+
+#: Simple mode's View tiles, in their grid order. Animation is the Scanpath
+#: preset replayed; the other three are the design presets of the same name.
+SIMPLE_VIEWS = ("animation", "scanpath", "heatmap", "illustration")
+_SIMPLE_ANIMATION = "animation"
+#: Each tile's label, `ICONS` key and hover text.
+_SIMPLE_VIEW_TILES = {
+    "animation": (
+        "Animation",
+        "animate",
+        "Replay the reading fixation by fixation, over the Scanpath view.",
+    ),
+    "scanpath": (
+        "Scanpath",
+        "preset_scanpath",
+        "Fixations and saccades over the text.",
+    ),
+    "heatmap": (
+        "Heatmap",
+        "heatmap",
+        "Each word box colored by the total time spent on it (ms), with "
+        "nothing else drawn.",
+    ),
+    "illustration": (
+        "Illustration",
+        "illustration",
+        "A clean schematic: fixations snapped onto their lines, arced "
+        "saccades, one saccade color, opaque markers.",
+    ),
+}
+
+
+def _apply_simple_view(name: str) -> None:
+    """Apply a Simple View tile: its design preset, and Animate on or off.
+
+    Every tile sets Animate as well as the layers, so no Simple view is ever
+    contradicted by the replay's own limits. `single_animate`'s toggle sits in
+    a row, not a popover, so a plain write here holds (no `write_through`).
+    """
+    animation = name == _SIMPLE_ANIMATION
+    _apply_view_preset("scanpath" if animation else name)
+    st.session_state["single_animate"] = animation
+
+
+def simple_active_view(*, animating: bool, active: str | None = None) -> str | None:
+    """The Simple View tile the current settings match, or ``None``.
+
+    ``animating`` is whether the replay is actually drawn (Animate on and the
+    trial has fixations), so a trial without fixations, which draws its static
+    figure, lights its static tile. ``active`` is the design preset in force,
+    looked up with `_active_quick_view` when not given. Custom, a saved design,
+    or Heatmap / Illustration under the replay match no tile.
+    """
+    if active is None:
+        active = _active_quick_view()
+    if animating:
+        return _SIMPLE_ANIMATION if active == "scanpath" else None
+    return active if active in SIMPLE_VIEWS else None
+
+
+def render_simple_views(host, *, animating: bool, active: str | None = None) -> None:
+    """Draw Simple mode's View tiles: a 2×2 grid, the matching tile primary."""
+    current = simple_active_view(animating=animating, active=active)
+    grid = host.container(key="tour_grp_simple_views")
+    for names in (SIMPLE_VIEWS[:2], SIMPLE_VIEWS[2:]):
+        for cell, name in zip(grid.columns(2, gap="small"), names, strict=True):
+            label, icon, help_text = _SIMPLE_VIEW_TILES[name]
+            cell.button(
+                label,
+                key=f"simple_view_{name}",
+                icon=ICONS[icon],
+                type="primary" if current == name else "secondary",
+                width="stretch",
+                help=help_text,
+                on_click=_apply_simple_view,
+                args=(name,),
+            )
 
 
 # Palette setting name → the session key it writes. A palette is applied
@@ -6590,6 +6669,7 @@ def render_plot_controls(
     has_fixations: bool = True,
     has_words: bool = True,
     title_fields=None,
+    animating: bool = False,
 ) -> dict:
     """Render the visualization controls and return the resolved settings dict.
 
@@ -6637,6 +6717,11 @@ def render_plot_controls(
     the selected trial), so the *Available fields* list, the validation and the
     preview are the figure's. Without it they are read off the selected
     trial's fixations alone.
+
+    ``animating`` is whether the replay is drawn (Animate on and the trial has
+    fixations), which picks Simple mode's lit View tile. Simple draws the View
+    tiles, Palette and ＋ More options; every other part sits in an
+    ``advanced_only`` container, so both modes build the same widgets.
     """
     # Seed every widget's default before any widget renders (see `_pin`).
     color_fields, numeric_fields, highlight_options = _seed_viz_state(
@@ -6662,13 +6747,15 @@ def render_plot_controls(
     # switching to a built-in and back does not lose it. Naming settings you
     # want to keep is what "My designs" is for. The remaining preset keys
     # (`reading_order`, `everything`) stay in `_VIEW_PRESETS` for any deep link.
-    viz.markdown(
+    # Simple mode draws its View tiles in their place (below).
+    presets = advanced_only(viz, "rail_presets")
+    presets.markdown(
         '<div class="sps-control-label">Design presets</div>',
         unsafe_allow_html=True,
     )
     # A 2×2 grid keeps the labels readable in the narrow rail.
     _active = _active_quick_view()
-    _qv_grid = viz.container(key="quick_views_grid")
+    _qv_grid = presets.container(key="quick_views_grid")
     _qv_top = _qv_grid.columns(2, gap="small")
     _qv_top[0].button(
         f"{ICONS['preset_scanpath']} Scanpath",
@@ -6710,7 +6797,12 @@ def render_plot_controls(
         on_click=_apply_view_preset,
         args=(_CUSTOM_VIEW,),
     )
-    _render_saved_designs(viz)
+    _render_saved_designs(advanced_only(viz, "rail_designs"))
+    # Simple mode's one choice: which view of this trial. It reuses the preset
+    # lookup above rather than syncing the quick-view state a second time.
+    views = simple_only(viz, "views")
+    views.markdown('<div class="sps-control-label">View</div>', unsafe_allow_html=True)
+    render_simple_views(views, animating=animating, active=_active)
 
     # The Illustration *label* (the publication-disclosure override) lives in
     # the "📐 Figure & canvas" group below, with the other figure-level
@@ -6744,6 +6836,9 @@ def render_plot_controls(
     # Keep the palette controls visually separate from the bordered layer cards.
     # A keyed wrapper gives the spacing a stable, narrowly scoped CSS hook.
     viz.container(key="palette_layers_divider").divider()
+    # Simple mode ends its rail here: a list of what Advanced adds, where the
+    # layer rows would start.
+    render_more_popover(simple_only(viz, "rail_more"), "rail", label="More options")
 
     # Each main layer is an `st.toggle`; the layer's detailed styling lives in a
     # per-layer popover (greyed while the layer is off) — so the rail shows just
@@ -6758,7 +6853,8 @@ def render_plot_controls(
     # affected widget through `_mode_gate` — greyed with a reason, never silently
     # ignored, and never with its stored value rewritten. What is gated below is
     # the genuinely builder-less set (see the setting → render-path table in
-    # AGENTS.md).
+    # AGENTS.md). Read from the session rather than the `animating` argument,
+    # so a caller that does not pass it still gates from the stored toggles.
     comparing = bool(
         st.session_state.get(
             "_resolved_comparing", st.session_state.get("single_compare_toggle")
@@ -6813,7 +6909,7 @@ def render_plot_controls(
         )
     )
     show_fix, fix_grp = _rail_section(
-        viz,
+        advanced_only(viz, "rail_fix"),
         f"{ICONS['fixations']} **Fixations**",
         slug="fix",
         name="Fixation",
@@ -6835,7 +6931,7 @@ def render_plot_controls(
         ),
     )
     show_saccades, sac_grp = _rail_section(
-        viz,
+        advanced_only(viz, "rail_sac"),
         f"{ICONS['saccades']} **Saccades**",
         slug="sac",
         name="Saccade",
@@ -6851,7 +6947,7 @@ def render_plot_controls(
     # returns — turning it back on reveals exactly what was configured before,
     # with nothing to restore.
     show_stimulus, stim_grp = _rail_section(
-        viz,
+        advanced_only(viz, "rail_stim"),
         f"{ICONS['stimulus']} **Stimulus**",
         slug="stim",
         name="Stimulus",
@@ -6862,7 +6958,7 @@ def render_plot_controls(
     # the Stimulus popover has no room for. Its switch is `global_show_words`,
     # and the Stimulus master switch does not gate it.
     show_word_boxes, boxes_grp = _rail_section(
-        viz,
+        advanced_only(viz, "rail_boxes"),
         f"{ICONS['word_boxes']} **Word boxes**",
         slug="boxes",
         name="Word boxes",
@@ -6889,7 +6985,7 @@ def render_plot_controls(
         )
     )
     show_heatmap, heatmap_grp = _rail_section(
-        viz,
+        advanced_only(viz, "rail_heatmap"),
         f"{ICONS['heatmap']} **Heatmap**",
         slug="heatmap",
         name="Heatmap",
@@ -6907,7 +7003,7 @@ def render_plot_controls(
     # has no raw-gaze layer.
     raw_disabled, raw_reason = _mode_gate(animating, comparing, in_animation=False)
     show_raw_gaze, raw_gaze_grp = _rail_section(
-        viz,
+        advanced_only(viz, "rail_rawgaze"),
         f"{ICONS['raw_gaze']} **Raw gaze**",
         slug="rawgaze",
         name="Raw gaze",
@@ -6935,7 +7031,7 @@ def render_plot_controls(
     # the same row shape, so its controls open over the page instead of being
     # cropped by the rail.
     _filter_none, filter_grp = _rail_section(
-        viz,
+        advanced_only(viz, "rail_filter"),
         f"{ICONS['plot_filter']} **Filters & highlights**{_plot_filter_badge()}",
         slug="filter",
         name="Filters & highlights",
@@ -6957,7 +7053,7 @@ def render_plot_controls(
     # renderer writes into its groups directly — see the "Figure & canvas" block
     # below.
     _figure_none, figure_grp = _rail_section(
-        viz,
+        advanced_only(viz, "rail_figure"),
         f"{ICONS['figure']} **Figure & canvas**",
         slug="figure",
         name="Figure & canvas",

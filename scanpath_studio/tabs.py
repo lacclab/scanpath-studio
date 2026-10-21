@@ -144,6 +144,7 @@ from scanpath_studio.constants import (
     SUBTAB_COMPARISONS,
     SUBTAB_EXPORT,
     SUBTAB_LINE_ASSIGNMENT,
+    SUBTAB_MORE,
     SUBTAB_SHARE,
     SUBTAB_STIMULUS,
     SYNTHETIC_CHOICE,
@@ -5530,6 +5531,22 @@ def _dataset_table_names() -> dict[str, ColumnNames]:
     }
 
 
+def subtab_labels_for(simple: bool, *, line_assignment: bool) -> list[str]:
+    """The per-trial subtab bar's labels, in order, for the interface mode.
+
+    Simple keeps what a first-time viewer reaches for (the current figure's
+    export and Share) plus a ＋ More list of what Advanced adds. Advanced adds
+    📐 Line assignment only while ``line_assignment`` (drift correction) is
+    offered. Dataset inspection is on the 🗂️ **Data** page, not this bar.
+    """
+    if simple:
+        return [SUBTAB_EXPORT, SUBTAB_SHARE, SUBTAB_MORE]
+    labels = [SUBTAB_ANNOTATIONS, SUBTAB_STIMULUS, SUBTAB_COMPARISONS]
+    if line_assignment:
+        labels.append(SUBTAB_LINE_ASSIGNMENT)
+    return labels + [SUBTAB_EXPORT, SUBTAB_SHARE]
+
+
 def _render_export_panel(
     displayed_fig,
     *,
@@ -5555,9 +5572,10 @@ def _render_export_panel(
     selected_trial: str,
     plot_key: str = "single",
     replay: _ReplayView | None = None,
+    include_bundle: bool = True,
 ) -> None:
     """Consolidated Export subtab: the currently-viewed figure on top, then a
-    bulk multi-trial export below.
+    bulk multi-trial export below (left out when ``include_bundle`` is false).
 
     "Current figure" exports the live figure (static PNG/SVG/PDF/HTML, or
     the HTML/GIF/MP4 animation when animating) so the on-screen view — including
@@ -5580,6 +5598,8 @@ def _render_export_panel(
         )
         render_cite_button(st, key="single_export")
 
+    if not include_bundle:
+        return
     st.divider()
     st.markdown("## Export bundle")
     if animate or st.session_state.get(SINGLE_COMPARE_TOGGLE):
@@ -7851,16 +7871,20 @@ def render_single_trial_tab(
     # and summary stats (configurable via the ✏️ chip editor).
     # The reserved keyed slot is the welcome-tour spotlight target.
     with subtabs_slot:
-        # 📐 Line assignment is only offered while drift correction is
-        # exposed (the experimental flag). Built as a list rather than a fixed
-        # tuple for that reason — the tab count is a function of the flag.
-        subtab_labels = [SUBTAB_ANNOTATIONS, SUBTAB_STIMULUS, SUBTAB_COMPARISONS]
-        if drift_correction_enabled():
-            subtab_labels.append(SUBTAB_LINE_ASSIGNMENT)
-        # Dataset inspection is on the 🗂️ **Data** page, not this bar —
-        # inspecting a dataset is setting it up, beside the source picker and
-        # the column mapping.
-        subtab_labels += [SUBTAB_EXPORT, SUBTAB_SHARE]
+        simple = ui_mode.is_simple()
+        subtab_labels = subtab_labels_for(
+            simple, line_assignment=drift_correction_enabled()
+        )
+        # The bar's identity includes its labels, so a mode switch makes it a
+        # new widget that would start on its first tab. Writing the selection
+        # back before the bar is created carries it over, and a subtab the mode
+        # lacks (a switch to Simple from Comparisons, a tutorial step naming
+        # one) falls back to the mode's first.
+        if "single_subtab" in st.session_state:
+            held = st.session_state["single_subtab"]
+            st.session_state["single_subtab"] = (
+                held if held in subtab_labels else subtab_labels[0]
+            )
         _subtabs = st.tabs(
             subtab_labels,
             # A plain `st.tabs` executes EVERY tab's body on every run — only the
@@ -7878,30 +7902,34 @@ def render_single_trial_tab(
             on_change="rerun",
         )
         by_label = dict(zip(subtab_labels, _subtabs))
-        tab_annot = by_label[SUBTAB_ANNOTATIONS]
-        tab_stim = by_label[SUBTAB_STIMULUS]
-        tab_compare = by_label[SUBTAB_COMPARISONS]
+        tab_annot = by_label.get(SUBTAB_ANNOTATIONS)
+        tab_stim = by_label.get(SUBTAB_STIMULUS)
+        tab_compare = by_label.get(SUBTAB_COMPARISONS)
         tab_align = by_label.get(SUBTAB_LINE_ASSIGNMENT)
         tab_export = by_label[SUBTAB_EXPORT]
         tab_share = by_label[SUBTAB_SHARE]
-    with tab_annot, st.container(key="tutorial_annotations"):
-        render_trial_annotations(
-            selected_participant,
-            selected_trial,
-            screen_id=selected_screen,
-            bare=True,
-        )
-    with tab_stim:
-        # Gated like the other keyed tabs — a hidden panel does no work,
-        # and a trial whose context it cannot render costs only this tab.
-        if tab_stim.open:
-            _render_paragraph_panel(
-                trial_words, trial_fixations=trial_fixations, bare=True
+        tab_more = by_label.get(SUBTAB_MORE)
+    # Annotations, Stimulus and Comparisons are absent entirely in Simple mode.
+    if tab_annot is not None:
+        with tab_annot, st.container(key="tutorial_annotations"):
+            render_trial_annotations(
+                selected_participant,
+                selected_trial,
+                screen_id=selected_screen,
+                bare=True,
             )
-    with tab_compare:
+    if tab_stim is not None:
+        with tab_stim:
+            # Gated like the other keyed tabs — a hidden panel does no work,
+            # and a trial whose context it cannot render costs only this tab.
+            if tab_stim.open:
+                _render_paragraph_panel(
+                    trial_words, trial_fixations=trial_fixations, bare=True
+                )
+    with tab_compare if tab_compare is not None else contextlib.nullcontext():
         # Only the selected tab's body runs (see the st.tabs call).
         # Nothing to render when closed — a hidden panel is not on screen.
-        if tab_compare.open:
+        if tab_compare is not None and tab_compare.open:
             # The chosen column selects other trials with the same value
             # as the main trial. A text field yields other readings of that text;
             # another field can intentionally cross texts.
@@ -7974,6 +8002,7 @@ def render_single_trial_tab(
                     selected_participant=selected_participant,
                     selected_trial=selected_trial,
                     plot_key=displayed_plot_key,
+                    include_bundle=not simple,
                 )
 
     # The Share subtab. app.main passes the renderer (it owns the
@@ -7987,6 +8016,10 @@ def render_single_trial_tab(
             share_renderer(tab_share.open)
         else:
             st.caption("Sharing is unavailable in this context.")
+
+    # Simple mode's last subtab: what Advanced adds below the plot.
+    if tab_more is not None and tab_more.open:
+        ui_mode.render_more_list(tab_more, "subtabs")
 
 
 #: Set by Stop on a running bundle build, read (and dropped) by the next run

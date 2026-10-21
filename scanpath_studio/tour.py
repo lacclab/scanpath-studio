@@ -62,6 +62,7 @@ from typing import TYPE_CHECKING
 
 import streamlit as st
 
+from scanpath_studio import ui_mode
 from scanpath_studio.crash_report import guarded
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.menu import NAV_SELECTOR, switch_to_view
@@ -1866,7 +1867,7 @@ def _start_use_case(tutorial_id: str, *, restart: bool = False) -> None:
         return
     st.session_state["tutorial_return"] = {
         "main_nav": st.session_state.get("main_nav", _VIEW_SCANPATH),
-        "single_subtab": st.session_state.get("single_subtab", SUBTAB_ANNOTATIONS),
+        "single_subtab": _current_subtab(),
     }
     if restart:
         _tutorial_progress()[tutorial_id] = 0
@@ -1960,10 +1961,13 @@ def _tutorial_surface_is_open(step: TutorialStep) -> bool:
         and st.session_state.get("corpus_subtab", "Per text") != step.corpus_subtab
     ):
         return False
-    return (
-        step.subtab is None
-        or st.session_state.get("single_subtab", SUBTAB_ANNOTATIONS) == step.subtab
-    )
+    return step.subtab is None or _current_subtab() == step.subtab
+
+
+def _current_subtab() -> str:
+    """The selected per-trial subtab, defaulting to the mode's first one."""
+    first = SUBTAB_EXPORT if ui_mode.is_simple() else SUBTAB_ANNOTATIONS
+    return st.session_state.get("single_subtab", first)
 
 
 def _arm_tutorial_library() -> None:

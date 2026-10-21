@@ -4,7 +4,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from scanpath_studio import session_keys as sk
-from scanpath_studio import ui_mode
+from scanpath_studio import tabs, ui_mode
 from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
 from tests.conftest import APP_SCRIPT, pin_view
 
@@ -559,3 +559,83 @@ def test_advanced_palette_pick_still_drops_the_preset_to_custom():
     at.button(key="viz_view_heatmap").click().run()
     assert at.session_state["global_palette"] != HIGH_CONTRAST
     assert at.button(key="viz_view_heatmap").proto.type == "primary"
+
+
+def _subtab_labels(at: AppTest) -> list[str]:
+    """The labels of the per-trial subtab bar (the one holding ``Share``)."""
+    labels = [t.label for t in at.tabs]
+    assert tabs.SUBTAB_SHARE in labels
+    return labels
+
+
+def test_subtab_labels_for_simple():
+    assert tabs.subtab_labels_for(True, line_assignment=False) == [
+        tabs.SUBTAB_EXPORT,
+        tabs.SUBTAB_SHARE,
+        tabs.SUBTAB_MORE,
+    ]
+    # Line assignment is Advanced-only, so the gate changes nothing here.
+    assert tabs.subtab_labels_for(True, line_assignment=True) == [
+        tabs.SUBTAB_EXPORT,
+        tabs.SUBTAB_SHARE,
+        tabs.SUBTAB_MORE,
+    ]
+
+
+def test_subtab_labels_for_advanced():
+    base = [tabs.SUBTAB_ANNOTATIONS, tabs.SUBTAB_STIMULUS, tabs.SUBTAB_COMPARISONS]
+    ends = [tabs.SUBTAB_EXPORT, tabs.SUBTAB_SHARE]
+    assert tabs.subtab_labels_for(False, line_assignment=False) == base + ends
+    assert tabs.subtab_labels_for(False, line_assignment=True) == (
+        base + [tabs.SUBTAB_LINE_ASSIGNMENT] + ends
+    )
+
+
+def test_simple_subtabs_render():
+    at = _boot()
+    assert _subtab_labels(at) == [
+        tabs.SUBTAB_EXPORT,
+        tabs.SUBTAB_SHARE,
+        tabs.SUBTAB_MORE,
+    ]
+    assert at.session_state["single_subtab"] == tabs.SUBTAB_EXPORT
+
+
+def test_switching_to_simple_from_a_hidden_subtab_falls_back():
+    at = _boot(mode="advanced")
+    at.session_state["single_subtab"] = tabs.SUBTAB_COMPARISONS
+    at.run()
+    assert not at.exception
+    at.segmented_control(key=SWITCH).set_value("simple").run()
+    assert not at.exception
+    assert at.session_state["ui_mode"] == "simple"
+    assert at.session_state["single_subtab"] == tabs.SUBTAB_EXPORT
+
+
+def test_simple_export_has_no_bundle():
+    at = _boot()
+    at.run()
+    assert not at.exception
+    headings = [str(m.value) for m in at.markdown]
+    assert any("Current figure" in h for h in headings)
+    assert not any("Export bundle" in h for h in headings)
+    assert not [r for r in at.radio if r.key == "bulk_export_scope"]
+
+
+def test_advanced_export_keeps_the_bundle():
+    at = _boot(mode="advanced")
+    at.session_state["single_subtab"] = tabs.SUBTAB_EXPORT
+    at.run()
+    assert not at.exception
+    assert any("Export bundle" in str(m.value) for m in at.markdown)
+
+
+def test_simple_more_subtab_lists_advanced_and_switches():
+    at = _boot()
+    at.session_state["single_subtab"] = tabs.SUBTAB_MORE
+    at.run()
+    assert not at.exception
+    assert any("Annotations" in str(m.value) for m in at.markdown)
+    at.button(key="more_to_advanced_subtabs").click().run()
+    assert not at.exception
+    assert at.session_state["ui_mode"] == "advanced"

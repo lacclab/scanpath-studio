@@ -1235,6 +1235,7 @@ SUBTAB_COMPARISONS = f"{ICONS['comparisons']} Comparisons"
 SUBTAB_LINE_ASSIGNMENT = f"{ICONS['line_assignment']} Line assignment"
 SUBTAB_EXPORT = f"{ICONS['export']} Export"
 SUBTAB_SHARE = f"{ICONS['share']} Share"
+SUBTAB_MORE = f"{ICONS['add']} More"
 
 
 # --- Legend layout ------------------------------------------------------------

@@ -8697,7 +8697,7 @@ def render_plot_controls(
             persist_state="session",
             help=credit_help,
         )
-        _sub_caption(credit_rest, "Made with Scanpath Studio · DOI", credit_help)
+        _sub_caption(credit_rest, "Made with Scanpath Studio", credit_help)
 
     # The tooltips' fields, for words and for fixations — figure-wide rather
     # than one layer's, so they sit together here instead of closing the

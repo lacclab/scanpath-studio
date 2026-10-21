@@ -19,6 +19,7 @@ from urllib.parse import urlencode
 import pandas as pd
 import streamlit as st
 
+from scanpath_studio.cite_button import render_cite_button
 from scanpath_studio.html_embed import embed_html_iframe
 
 from .authoring import event_records_frame
@@ -4212,6 +4213,7 @@ def _render_code_snippet_body(data_choice: str) -> None:
             f"{cite_comment(python=True)}\n# {INSTALL_COMMAND}\n{code.python}",
             language="python",
         )
+    render_cite_button(st, key="share_code", what="the figure this code draws")
 
 
 #: The Share subtab's three ways to pass a figure on, as the options of

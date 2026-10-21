@@ -308,3 +308,33 @@ def test_corpus_for_names_the_public_corpus(source, corpus):
     from scanpath_studio.citation import corpus_for
 
     assert corpus_for(source) == corpus
+
+
+# --- The Cite button -----------------------------------------------------------
+
+
+def _cite_button_app():
+    import streamlit as st
+
+    from scanpath_studio.cite_button import render_cite_button
+
+    render_cite_button(st, key="t")
+
+
+@pytest.mark.parametrize(
+    ("source", "corpus"), [("Bundled demo", "onestop"), ("Upload tables", None)]
+)
+def test_the_cite_button_offers_every_entry_with_the_corpus(source, corpus):
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_cite_button_app)
+    at.session_state["data_source_choice"] = source
+    at.run()
+    assert not at.exception, at.exception
+    shown = [block.value for block in at.code]
+    assert shown == [
+        cite("credit", corpus),
+        cite("apa", corpus),
+        cite("bibtex", corpus),
+    ]
+    assert ("OneStop" in at.markdown[0].value) == (corpus == "onestop")

@@ -1129,6 +1129,8 @@ ICONS: dict[str, str] = {
     # About dialog.
     "code": ":material/code:",
     "doi": ":material/bookmark:",
+    # The Cite button under every download.
+    "cite": ":material/format_quote:",
     "ai": ":material/smart_toy:",
     "update": ":material/update:",
     "missing_bundle": ":material/inventory_2:",

@@ -86,6 +86,7 @@ from scanpath_studio.annotations import (
     render_dataset_annotations,
     render_trial_annotations,
 )
+from scanpath_studio.cite_button import render_cite_button
 from scanpath_studio.code_snippet import (
     SNIPPET_STATE_KEY,
     UNPUBLISHED_SETTINGS,
@@ -5565,6 +5566,7 @@ def _render_export_panel(
     st.markdown("## Current figure")
     if animate and replay is not None:
         _render_animation_export(replay, file_stem=file_stem or "animation")
+        render_cite_button(st, key="anim_export", what="this replay")
     elif animate or displayed_fig is None:
         st.caption("Select a trial to export its figure.")
     else:
@@ -5576,6 +5578,7 @@ def _render_export_panel(
             key_prefix="single",
             plot_key=plot_key,
         )
+        render_cite_button(st, key="single_export")
 
     st.divider()
     st.markdown("## Export bundle")
@@ -5692,6 +5695,7 @@ def _render_export_panel(
         selected_participant=selected_participant,
         selected_trial=selected_trial,
     )
+    render_cite_button(st, key="bulk_export", what="these figures and tables")
 
 
 _CHIP_NEUTRAL_BG = "#EEF2F7"

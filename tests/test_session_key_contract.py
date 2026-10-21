@@ -217,6 +217,20 @@ def test_design_presets_key_matches_controls_module():
     )
 
 
+def test_ui_mode_spellings_pinned():
+    """The Simple / Advanced mode's link param, session key and cookie name."""
+    assert sk.PARAM_UI == "ui"
+    assert sk.UI_MODE == "ui_mode"
+    assert sk.UI_MODE_COOKIE == "sps_ui_mode"
+
+
+def test_ui_param_is_never_shared():
+    """The mode is the viewer's own choice: a Share link must not carry it."""
+    assert sk.PARAM_UI not in sk.SHARE_QUERY_PARAMS
+    assert sk.PARAM_UI not in sk.URL_PRESET_PARAMS
+    assert sk.PARAM_UI not in sk.URL_SELECTION_PARAMS
+
+
 def test_selection_prefix_pinned():
     """The trial-picker key prefix a link seeds is itself wire format."""
     from scanpath_studio.url_state import _SELECTION_PREFIXES

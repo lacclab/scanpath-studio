@@ -6,6 +6,10 @@ description: "Apply your exclusion criteria to eye-tracking trials: tag rejected
 
 Apply your exclusion criteria and leave rejected trials out of the selection.
 
+These steps use the **Advanced** mode: switch to it in the top bar of the
+:material/route: **Scanpath** view, or add `ui=advanced` to the app's
+address ([Simple and Advanced](../../guides/scanpath-visualization/index.md#simple-and-advanced)).
+
 1. [Review the session](../data-collection/check-a-session.md#2-inspect-a-trial).
    Judge each trial against your study's criteria. A scanpath pattern alone
    does not establish skimming or poor calibration.

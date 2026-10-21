@@ -6,6 +6,10 @@ description: "Select eye-tracking participants by metadata such as native langua
 
 Select participants using metadata such as native language, age or group.
 
+These steps use the **Advanced** mode: switch to it in the top bar of the
+:material/route: **Scanpath** view, or add `ui=advanced` to the app's
+address ([Simple and Advanced](../../guides/scanpath-visualization/index.md#simple-and-advanced)).
+
 1. Attach a participant metadata table, with one row per participant and a
    participant ID column. When you add a dataset, use **Metadata** →
    **Participants**. For a loaded dataset, use :material/database: **Data

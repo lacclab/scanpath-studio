@@ -6,6 +6,10 @@ description: "Batch-export scanpath figures and data tables for every selected e
 
 Build a ZIP of static figures and data tables for a set of trials.
 
+These steps use the **Advanced** mode: switch to it in the top bar of the
+:material/route: **Scanpath** view, or add `ui=advanced` to the app's
+address ([Simple and Advanced](../../guides/scanpath-visualization/index.md#simple-and-advanced)).
+
 1. [Set the figure's design](export-one-figure.md#1-choose-the-view) once.
    Each exported trial uses that design, without animation or a comparison partner.
 2. Open the :material/file_export: **Export** tab. Under **Export bundle** →

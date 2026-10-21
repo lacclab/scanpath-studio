@@ -26,6 +26,9 @@ Open a dataset in the :material/route: **Scanpath** view. The filter
 (:material/filter_alt:) beside **Select trial** selects whole trials.
 :material/filter_list: **Filters & highlights** in the Plot controls changes
 which fixations and saccades the figure draws.
+Both, and the export these tasks end with, are in the **Advanced** mode:
+switch to it in the top bar of the Scanpath view, or add `ui=advanced` to the
+app's address ([Simple and Advanced](../../guides/scanpath-visualization/index.md#simple-and-advanced)).
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../assets/workflows/trial-filtering_poster.webp" data-autoplay

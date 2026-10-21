@@ -17,6 +17,24 @@ Save a figure, export many trials at once, or reuse a view in the app or in code
 
 For step-by-step instructions, see the [export tutorials](../../tutorials/exporting-figures/index.md).
 
+## Cite what you export { #cite }
+
+Every file you export says how to cite Scanpath Studio in its own metadata:
+the PNG's text chunks, the SVG's `<metadata>`, the PDF's document properties,
+the HTML page's `<head>`, and the GIF's and MP4's comment. Nothing is drawn on
+the figure.
+
+- :material/format_quote: **Cite**, under each download and in
+  :material/share: **Share** → **Code**, gives a one-line figure credit, the
+  APA reference and BibTeX, and `.bib` and `.ris` files for Zotero, Mendeley or
+  EndNote. For the bundled demo, OneStop or PoTeC, it cites the corpus too.
+- An export bundle has a `CITATION.bib`, and its `README.md` a *Cite* section.
+- **Figure & canvas** → **Credit** adds a small *Made with Scanpath Studio*
+  line under the plot, for a figure shared without its caption. In code, pass
+  `show_credit=True`, or `--credit` to `render`.
+- In code, [`cite`][scanpath_studio.api.cite] and `scanpath-studio cite` print
+  the citation.
+
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../assets/workflows/share-link_poster.webp" data-autoplay
        aria-label="Copying a link that reopens the same trial and design">

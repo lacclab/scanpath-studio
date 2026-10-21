@@ -166,6 +166,8 @@ GLOBAL_SHOW_TITLE = "global_show_title"
 GLOBAL_SHOW_CAPTION = "global_show_caption"
 GLOBAL_TITLE_PATTERN = "global_title_pattern"
 GLOBAL_CAPTION_PATTERN = "global_caption_pattern"
+# The "Made with Scanpath Studio" credit line under the plot.
+GLOBAL_SHOW_CREDIT = "global_show_credit"
 # Colour-bar styling, the span border colour, the fixation flags (one
 # mode/threshold/symbol/colour group per category; `oob` and `blink` have no
 # threshold — geometry and blink tests, not durations) and Compare's A/B legend.
@@ -200,6 +202,7 @@ DESIGN_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
     {
         "heatmap_opacity_auto": GLOBAL_HEATMAP_OPACITY_AUTO,
         "show_plot_frame": GLOBAL_SHOW_PLOT_FRAME,
+        "show_credit": GLOBAL_SHOW_CREDIT,
         "fixation_colorbar_length_auto": GLOBAL_FIXATION_COLORBAR_LENGTH_AUTO,
         "heatmap_colorbar_length_auto": GLOBAL_HEATMAP_COLORBAR_LENGTH_AUTO,
     }

@@ -198,6 +198,7 @@ def test_the_text_style_reads_settings_or_the_apps_dict():
         "title_font_size": 20,
         "caption_font_size": 13,
         "caption_color": "#123456",
+        "show_credit": False,
     }
 
 
@@ -279,3 +280,39 @@ def test_the_replay_key_ignores_what_no_frame_draws():
     )
     # The arrowheads are drawn by the replay, so they are part of it.
     assert key(saccade_arrow_size=20.0) != key()
+
+
+def test_the_credit_line_grows_the_figure_below_the_caption():
+    import plotly.graph_objects as go
+
+    from scanpath_studio.citation import CREDIT_LINE
+    from scanpath_studio.export import annotate_figure
+
+    fig = go.Figure(layout=dict(height=400, margin=dict(b=20)))
+    annotate_figure(fig, caption="A caption", show_credit=True)
+    caption, credit = fig.layout.annotations
+    assert credit.text == CREDIT_LINE
+    assert credit.xanchor == "right"
+    # Its own band, below the caption's.
+    assert credit.yshift < caption.yshift
+    plain = go.Figure(layout=dict(height=400, margin=dict(b=20)))
+    annotate_figure(plain, caption="A caption")
+    assert fig.layout.height - plain.layout.height == fig.layout.margin.b - (
+        plain.layout.margin.b
+    )
+    assert fig.layout.height > plain.layout.height
+
+
+def test_the_api_draws_the_credit_only_when_asked(sample_words_df):
+    from scanpath_studio import api
+    from scanpath_studio.citation import CREDIT_LINE
+
+    data = api.load_sample_data(names="canonical")
+    pid, tid = api.list_trials(data.words, data.fixations).iloc[0]
+
+    def texts(**kw):
+        fig = api.plot_scanpath(data.words, data.fixations, pid, tid, **kw)
+        return [a.text for a in fig.layout.annotations]
+
+    assert CREDIT_LINE not in texts()
+    assert CREDIT_LINE in texts(show_credit=True)

@@ -5022,7 +5022,7 @@ def _apply_title_caption(
     # `_amend_snippet_title_caption`. Amended even when both are empty, so a
     # branch that renders to nothing clears the pre-published pair.
     _amend_snippet_title_caption(title, caption)
-    if not title and not caption:
+    if not title and not caption and not viz_settings.get("show_credit"):
         return
     annotate_figure(
         fig, title=title, caption=caption, **figure_text_style(viz_settings)
@@ -5479,7 +5479,7 @@ def _build_and_render_animation(
                 anim_inputs["fixations_b"],
             )
         _annotate_preprocessing(fig, preprocessing)
-        if title or caption:
+        if title or caption or viz_settings.get("show_credit"):
             annotate_figure(
                 fig, title=title, caption=caption, **figure_text_style(viz_settings)
             )

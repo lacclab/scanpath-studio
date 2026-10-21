@@ -173,4 +173,6 @@ used and install that one: `pip install scanpath-studio==<version>`.
 
 See [Cite Scanpath Studio](about.md#cite-scanpath-studio) for BibTeX and APA
 entries, and [Bundled demo](about.md#bundled-demo) for the bundled demo's
-source.
+source. In the app, :material/format_quote: **Cite** under each download gives
+the same entries, and every exported file carries the citation in its metadata
+([Cite what you export](guides/exporting/index.md#cite)).

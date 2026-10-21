@@ -1595,6 +1595,13 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Color of the --caption text (default: #555555).",
     )
     viz.add_argument(
+        "--credit",
+        dest="show_credit",
+        action="store_true",
+        help="A small 'Made with Scanpath Studio · doi…' line under the plot. "
+        "The figure grows to fit it.",
+    )
+    viz.add_argument(
         "--separable-layers",
         action="store_true",
         help="Also write one file per layer (word boxes, fixations, saccades, "
@@ -1887,6 +1894,7 @@ _SWITCH_OPTION_FLAGS = {
     "duration_size_legend": False,
     "show_stimulus_image": True,
     "show_plot_frame": False,
+    "show_credit": True,
 }
 
 #: The keys `--style-a` / `--style-b` take, each with its value parser.

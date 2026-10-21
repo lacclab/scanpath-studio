@@ -1416,6 +1416,7 @@ _CLI_EMITTERS: dict[str, Any] = {
     "fixation_outline_width": _valued("--fixation-outline-width"),
     "fixation_outline_color": _valued("--fixation-outline-color"),
     "show_plot_frame": _flag_when("--no-plot-frame", False),
+    "show_credit": _flag_when("--credit", True),
     "plot_frame_color": _valued("--plot-frame-color"),
     "coordinate_grid_font_size": _int_valued("--coordinate-grid-font-size"),
     "title_font_size": _int_valued("--title-size"),

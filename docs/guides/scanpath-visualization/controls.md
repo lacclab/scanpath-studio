@@ -272,6 +272,7 @@ The figure as a whole:
 | **Illustration** → **Text** | Write the *Illustration* label's text. Empty writes "Illustration ·" followed by the reasons. |
 | **Title** → **Show**, text, **Size** | Add a figure title above the plot, and set its font size. `{field}` inserts a value of the trial. |
 | **Caption** → **Show**, text, **Size**, color | Add a figure caption below the plot, and set its font size and color. `{field}` works here too. |
+| **Credit** → **Show** | Add a small *Made with Scanpath Studio* line, with its DOI, under the plot. |
 | **Hover** → **Words** / **Fixations** | Choose the hover fields: what the tooltip shows when the mouse is over a word or a fixation. |
 | **Legends** → **Show** | Show or hide each legend the figure draws: **Compare (A/B)**, **Saccade types**, **Fixation colors**, **Fixation sizes** or **Text highlight**. Each has a row. |
 | **Legends** → **Position** | Choose the legend position: a corner, the middle of an edge, or down a side, outside or inside the plot. |

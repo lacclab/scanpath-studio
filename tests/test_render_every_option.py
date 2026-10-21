@@ -108,6 +108,7 @@ NON_DEFAULT = {
     "title_font_size": 28,
     "caption_font_size": 16,
     "caption_color": "#222222",
+    "show_credit": True,
     "fixation_colorbar_thickness": 20,
     "fixation_colorbar_length": 0.5,
     "heatmap_colorbar_thickness": 24,

@@ -42,7 +42,7 @@ from time import perf_counter
 import pandas as pd
 
 from .aggregation import reader_summary_table, trial_summary_table
-from .citation import CORPORA, cite, corpus_for, software_apa
+from .citation import CORPORA, CREDIT_LINE, cite, corpus_for, software_apa
 from .column_names import (
     ColumnNames,
     across_tables,
@@ -890,6 +890,11 @@ def resolve_export_path(
 _TITLE_BAND_PAD_PX = 26
 _CAPTION_LINE_FACTOR = 22 / 13
 _CAPTION_PAD_PX = 12
+#: The credit line: small, grey, right-aligned in a band of its own at the
+#: very bottom, below any caption.
+_CREDIT_FONT_PX = 10
+_CREDIT_COLOR = "#8a8a8a"
+_CREDIT_BAND_PX = 18
 
 
 def annotate_figure(
@@ -900,6 +905,7 @@ def annotate_figure(
     title_font_size: float = DEFAULT_TITLE_FONT_SIZE,
     caption_font_size: float = DEFAULT_CAPTION_FONT_SIZE,
     caption_color: str = DEFAULT_CAPTION_COLOR,
+    show_credit: bool = False,
 ) -> None:
     """Stamp ``title`` / ``caption`` onto ``fig`` in place, without shrinking it.
 
@@ -907,9 +913,10 @@ def annotate_figure(
     the plotting area — and therefore the true-to-scale text — is byte-identical
     to the untitled figure. Both are drawn as written: ``<b>`` in a title shows
     as ``<b>``, and only a real newline starts a new caption line. The sizes are
-    in px; each band grows with its text.
+    in px; each band grows with its text. ``show_credit`` adds the
+    ``citation.CREDIT_LINE`` in a small band of its own below everything else.
     """
-    if not title and not caption:
+    if not title and not caption and not show_credit:
         return
     margin = fig.layout.margin
     height = fig.layout.height
@@ -952,6 +959,23 @@ def annotate_figure(
             align="left",
             font=dict(size=int(caption_font_size), color=caption_color),
         )
+    if show_credit:
+        original_bottom = fig.layout.margin.b or 0
+        fig.layout.margin.b = original_bottom + _CREDIT_BAND_PX
+        if fig.layout.height:
+            fig.layout.height = fig.layout.height + _CREDIT_BAND_PX
+        fig.add_annotation(
+            text=_plotly_literal(CREDIT_LINE),
+            xref="paper",
+            yref="paper",
+            x=1,
+            y=0,
+            xanchor="right",
+            yanchor="top",
+            yshift=-(original_bottom + 2),
+            showarrow=False,
+            font=dict(size=_CREDIT_FONT_PX, color=_CREDIT_COLOR),
+        )
 
 
 def figure_text_style(settings) -> dict:
@@ -969,6 +993,7 @@ def figure_text_style(settings) -> dict:
         title_font_size=int(get("title_font_size", DEFAULT_TITLE_FONT_SIZE)),
         caption_font_size=int(get("caption_font_size", DEFAULT_CAPTION_FONT_SIZE)),
         caption_color=str(get("caption_color", DEFAULT_CAPTION_COLOR)),
+        show_credit=bool(get("show_credit", False)),
     )
 
 

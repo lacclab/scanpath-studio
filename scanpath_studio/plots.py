@@ -265,6 +265,9 @@ class FigureSettings:
     title_font_size: int = DEFAULT_TITLE_FONT_SIZE
     caption_font_size: int = DEFAULT_CAPTION_FONT_SIZE
     caption_color: str = DEFAULT_CAPTION_COLOR
+    #: A small "Made with Scanpath Studio · doi…" line under the plot, for a
+    #: figure that travels without its caption (`export.annotate_figure`).
+    show_credit: bool = False
     playback_speed: float = 1.0
     label_a: str = "Scanpath A"
     label_b: str = "Scanpath B"
@@ -871,7 +874,12 @@ def _fit_display_size(
 
 #: The title/caption styling: `export.annotate_figure` reads it, never a
 #: builder, so a figure cache keys no rebuild on it.
-TEXT_STYLE_FIELDS = ("title_font_size", "caption_font_size", "caption_color")
+TEXT_STYLE_FIELDS = (
+    "title_font_size",
+    "caption_font_size",
+    "caption_color",
+    "show_credit",
+)
 
 #: The figure's other design settings, outside the colour bars' (which
 #: `COLORBAR_DEFAULTS` carries).
@@ -886,6 +894,7 @@ DESIGN_CHOICE_FIELDS = (
     "title_font_size",
     "caption_font_size",
     "caption_color",
+    "show_credit",
 )
 
 #: The two colour bars' settings (fixations', heatmap's) and their defaults —

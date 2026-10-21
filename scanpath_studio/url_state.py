@@ -469,6 +469,7 @@ _DESIGN_PARAMS = {
     "caption_font_size": ("global_caption_font_size", CAPTION_FONT_SIZE_BOUNDS),
     "caption_color": ("global_caption_color", "color"),
     "show_plot_frame": ("global_show_plot_frame", None),
+    "show_credit": ("global_show_credit", None),
     "plot_frame_color": ("global_plot_frame_color", "color"),
     "saccade_arrow_size": ("global_saccade_arrow_size", SACCADE_ARROW_SIZE_BOUNDS),
     "fixation_outline_width": (

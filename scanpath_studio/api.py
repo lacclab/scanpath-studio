@@ -272,6 +272,7 @@ _CANONICAL_OPTION_NAMES = {
     "title_font_size",
     "caption_font_size",
     "caption_color",
+    "show_credit",
 }
 
 CANONICAL_FIGURE_DEFAULTS: dict = FigureSettings.defaults(

@@ -9,6 +9,7 @@ from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
 from tests.conftest import APP_SCRIPT, pin_view
 
 SWITCH = "ui_mode_switch"
+SYNTHETIC_SOURCE = "Synthetic test trial"
 
 
 @pytest.mark.parametrize(
@@ -132,3 +133,97 @@ def test_ui_param_does_not_write_the_cookie():
 def test_switch_shows_on_every_view(view):
     at = _boot(view)
     assert at.segmented_control(key=SWITCH).value == "simple"
+
+
+def test_deselecting_the_switch_keeps_the_mode():
+    at = _boot()
+    at.segmented_control(key=SWITCH).set_value(None).run()
+    assert not at.exception
+    assert at.session_state["ui_mode"] == "simple"
+    assert "_ui_mode_chosen" not in at.session_state
+
+
+def _has_cookie_embed(at: AppTest) -> bool:
+    return any("sps_ui_mode" in str(el.proto) for el in at.get("iframe"))
+
+
+def test_cookie_iframe_is_drawn_only_after_a_click():
+    at = _boot()
+    assert not _has_cookie_embed(at)
+    at.segmented_control(key=SWITCH).set_value("advanced").run()
+    assert _has_cookie_embed(at)
+
+
+def test_more_lists_cover_the_spec():
+    more = ui_mode.MORE_IN_ADVANCED
+    assert set(more) == {"picker", "rail", "subtabs"}
+
+    def titles(area: str) -> str:
+        return " | ".join(title for title, _ in more[area]).lower()
+
+    for word in ("filter", "sort", "slider", "summary chips"):
+        assert word in titles("picker")
+    for word in (
+        "replay",
+        "compare",
+        "layer style",
+        "filters & highlights",
+        "figure & canvas",
+        "saved designs",
+    ):
+        assert word in titles("rail")
+    assert [t.split(" ", 1)[1] for t, _ in more["subtabs"]] == [
+        "Annotations",
+        "Stimulus & context",
+        "Comparisons",
+        "Export bundle",
+    ]
+    assert all(line.strip() for items in more.values() for _, line in items)
+
+
+def test_more_button_switches_to_advanced():
+    at = _boot()
+    at.button(key="more_to_advanced_picker").click().run()
+    assert not at.exception
+    assert at.session_state["ui_mode"] == "advanced"
+    assert at.session_state["_ui_mode_chosen"] is True
+    assert at.segmented_control(key=SWITCH).value == "advanced"
+
+
+def test_simple_picker_keeps_every_widget_alive():
+    at = _boot()
+    assert at.select_slider(key="single_trial_pos") is not None
+    popovers = {p.key for p in at.get("popover")}
+    assert {"iconpop_sort_trial_single", "iconpop_filter_trials"} <= popovers
+    assert "iconpop_more_picker" in popovers
+
+
+def test_simple_single_trial_dataset_does_not_crash():
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.query_params["ui"] = "simple"
+    at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+    pin_view(at, _VIEW_SCANPATH)
+    at.run()
+    assert not at.exception
+    assert "iconpop_more_picker" in {p.key for p in at.get("popover")}
+
+
+def test_simple_css_collapses_the_slider_column():
+    css = ui_mode.mode_css("simple")
+    assert "stColumn" in css and "st-key-adv_only_trial_slider" in css
+    assert "st-key-adv_only_trial_slider" not in ui_mode.mode_css("advanced")
+
+
+def test_compare_pickers_are_never_hidden_in_simple():
+    from scanpath_studio import utils
+
+    class Host:
+        def container(self, key):
+            return ("container", key)
+
+    host = Host()
+    assert utils._advanced_part(host, "trial_sort", "single_compare") is host
+    assert utils._advanced_part(host, "trial_sort", "single") == (
+        "container",
+        "adv_only_trial_sort",
+    )

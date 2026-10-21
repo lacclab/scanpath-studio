@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping, MutableMapping
 from typing import TYPE_CHECKING
 
+from scanpath_studio.constants import ICONS
 from scanpath_studio.session_keys import PARAM_UI, UI_MODE, UI_MODE_COOKIE
 
 if TYPE_CHECKING:
@@ -22,6 +23,9 @@ CHOSEN_KEY = "_ui_mode_chosen"
 SWITCH_KEY = "ui_mode_switch"
 _ADV_PREFIX = "adv_only_"
 _SIMPLE_PREFIX = "simple_only_"
+#: The `advanced_only` name of the trial picker's slider; Simple also hides the
+#: column that holds it.
+TRIAL_SLIDER = "trial_slider"
 
 SIMPLE = "simple"
 ADVANCED = "advanced"
@@ -29,6 +33,53 @@ MODES = (SIMPLE, ADVANCED)
 _LABELS = {SIMPLE: "Simple", ADVANCED: "Advanced"}
 
 _COOKIE_MAX_AGE = 365 * 24 * 60 * 60
+
+#: What Advanced adds, area by area, as ``(title, one line)`` pairs. Simple names
+#: these where a viewer would look for them (the ＋ More lists) instead of
+#: drawing the controls, so the lines describe features and carry no widget.
+MORE_IN_ADVANCED: dict[str, tuple[tuple[str, str], ...]] = {
+    "picker": (
+        (
+            "🔍 Filter trials",
+            "Narrow the list by text, participant, condition or your annotations.",
+        ),
+        ("⇅ Sort the trial list", "Order trials by a statistic or a property."),
+        (
+            "🎚 Trial slider",
+            "Sweep through the trials quickly, with the count and id on it.",
+        ),
+        (
+            "✏️ Summary chips",
+            "Choose and reorder the chips shown above the plot.",
+        ),
+    ),
+    "rail": (
+        ("🎬 Replay settings", "Speed and frame rate."),
+        ("👥 Compare", "Two readings, overlaid or side by side."),
+        (
+            "🎨 Layer style",
+            "Colour fixations by a measure; sizes, word boxes and raw gaze.",
+        ),
+        (
+            "🎯 Filters & highlights",
+            "A fixation window, short or long fixations, saccade types.",
+        ),
+        ("🖼 Figure & canvas", "The screen, axes, titles and legends."),
+        ("💾 Saved designs", "Keep your own figure designs and reuse them."),
+    ),
+    "subtabs": (
+        (
+            "📝 Annotations",
+            "Mark trials to come back to: a favourite, tags and notes.",
+        ),
+        (
+            "📄 Stimulus & context",
+            "The passage with highlights, and its comprehension questions.",
+        ),
+        ("🔬 Comparisons", "Every other reading of this text, side by side."),
+        ("📤 Export bundle", "Figures and tables for all trials at once."),
+    ),
+}
 
 
 def parse_mode(value: object) -> str | None:
@@ -94,8 +145,19 @@ def mode_css(mode: str) -> str:
     page in both modes and are hidden by CSS, so switching mode never changes
     which elements a rerun draws, and no widget loses its value.
     """
-    hidden = _SIMPLE_PREFIX if parse_mode(mode) == ADVANCED else _ADV_PREFIX
-    return f'<style>[class*="st-key-{hidden}"] {{ display: none !important; }}</style>'
+    if parse_mode(mode) == ADVANCED:
+        rules = f'[class*="st-key-{_SIMPLE_PREFIX}"] {{ display: none !important; }}'
+    else:
+        rules = (
+            f'[class*="st-key-{_ADV_PREFIX}"] {{ display: none !important; }}'
+            # With the slider gone its column would still hold a gap: drop it.
+            # Only the column that holds it directly, never one around the row.
+            ' [data-testid="stColumn"]:has(> [data-testid="stVerticalBlock"]'
+            ' > [data-testid="stLayoutWrapper"]'
+            f" > .st-key-{_ADV_PREFIX}{TRIAL_SLIDER})"
+            " { display: none !important; }"
+        )
+    return f"<style>{rules}</style>"
 
 
 def advanced_only(host: DeltaGenerator, name: str) -> DeltaGenerator:
@@ -108,14 +170,57 @@ def simple_only(host: DeltaGenerator, name: str) -> DeltaGenerator:
     return host.container(key=f"{_SIMPLE_PREFIX}{name}")
 
 
+def _choose_mode(mode: object) -> None:
+    """Make ``mode`` the session's mode as the viewer's own choice.
+
+    Marks it chosen, which is what lets the cookie script remember it. Anything
+    that is not a mode (a deselected switch) changes nothing.
+    """
+    import streamlit as st
+
+    chosen = parse_mode(mode)
+    if chosen is not None:
+        st.session_state[UI_MODE] = chosen
+        st.session_state[CHOSEN_KEY] = True
+
+
 def _on_switch() -> None:
     """Copy the switch into the session's mode; a deselect keeps the old one."""
     import streamlit as st
 
-    chosen = parse_mode(st.session_state.get(SWITCH_KEY))
-    if chosen is not None:
-        st.session_state[UI_MODE] = chosen
-        st.session_state[CHOSEN_KEY] = True
+    _choose_mode(st.session_state.get(SWITCH_KEY))
+
+
+def _switch_to_advanced() -> None:
+    """The ＋ More lists' button: the same choice the header switch makes."""
+    _choose_mode(ADVANCED)
+
+
+def render_more_list(host: DeltaGenerator, area: str) -> None:
+    """Draw ``area``'s list of Advanced-only features, ending in a switch button.
+
+    The list names features only and holds no control, so opening it never
+    changes anything.
+    """
+    for title, line in MORE_IN_ADVANCED[area]:
+        host.markdown(f"**{title}**  \n{line}")
+    host.button(
+        "Switch to Advanced",
+        key=f"more_to_advanced_{area}",
+        on_click=_switch_to_advanced,
+    )
+
+
+def render_more_popover(host: DeltaGenerator, area: str, label: str = "More") -> None:
+    """Draw ``area``'s ＋ More popover, the list of what Advanced adds there."""
+    popover = host.popover(
+        label,
+        icon=ICONS["add"],
+        width="content",
+        help="What Advanced adds here",
+        key=f"iconpop_more_{area}",
+    )
+    render_more_list(popover, area)
 
 
 def render_switch(host: DeltaGenerator) -> None:

@@ -25,7 +25,7 @@ import pandas as pd
 import plotly.io as pio
 import streamlit as st
 
-from scanpath_studio import alignment, loading, progress
+from scanpath_studio import alignment, loading, progress, ui_mode
 from scanpath_studio import metadata as _metadata_mod
 from scanpath_studio.aggregation import (
     MEASURES,
@@ -6276,7 +6276,14 @@ def render_single_trial_tab(
                 data_source_renderer(host)
 
         def _render_filters(host) -> None:
-            """Every way to narrow the pool, behind one funnel."""
+            """Every way to narrow the pool, behind one funnel.
+
+            Simple draws a ＋ More list in their place; the funnel and the chips'
+            menu stay in the page, hidden, so their values are kept."""
+            ui_mode.render_more_popover(
+                ui_mode.simple_only(host, "picker_more"), "picker"
+            )
+            host = ui_mode.advanced_only(host, "trial_filters")
             pop = host.popover(
                 "Filter the trial list",
                 icon=_FILTER_ICON,

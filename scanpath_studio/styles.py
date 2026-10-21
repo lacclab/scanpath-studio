@@ -358,12 +358,13 @@ def get_app_css() -> str:
        `.sps-sr-only` does.
        The other icon-only popovers are named the same way: the + menu (under
        its own key), the table previews, the chip-field editor and the ⇅ sorts,
-       each keyed `iconpop_*`. A plain label, so the popover's dialog, which
+       each keyed `iconpop_*` (but not the ＋ More lists, which show their name).
+       A plain label, so the popover's dialog, which
        takes the label as its `aria-label`, is named the same. */
     .st-key-add_dataset_menu [data-testid="stPopoverButton"]
         [data-testid="stMarkdownContainer"],
-    [class*="st-key-iconpop_"] [data-testid="stPopoverButton"]
-        [data-testid="stMarkdownContainer"],
+    [class*="st-key-iconpop_"]:not([class*="st-key-iconpop_more_"])
+        [data-testid="stPopoverButton"] [data-testid="stMarkdownContainer"],
     [class*="st-key-split_mode_"] [data-testid="stPopoverButton"]
         [data-testid="stMarkdownContainer"] {
         position: absolute !important; width: 1px; height: 1px;

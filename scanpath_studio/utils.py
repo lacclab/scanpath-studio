@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from . import progress
+from . import progress, ui_mode
 from .annotations import current_dataset as annotations_dataset
 from .annotations import get_entry, store_for_prefix
 from .column_names import COMPUTED_SUFFIX, active_all
@@ -1299,6 +1299,22 @@ def row_tail(column, key_prefix: str, reserve_screen_cell):
     return tail.container(key=f"railbtn_{key_prefix}_menus", width="content")
 
 
+#: The key prefix of the main trial picker. Compare's B picker has its own, and
+#: Simple keeps that one whole so a compared pair can still be navigated.
+_MAIN_PICKER_PREFIX = "single"
+
+
+def _advanced_part(host, name: str, key_prefix: str):
+    """``host``, or an Advanced-only container in it for the main picker.
+
+    Simple hides the container with CSS, so what it holds is still drawn and
+    keeps its value. Any other picker (Compare's B) gets ``host`` itself.
+    """
+    if key_prefix != _MAIN_PICKER_PREFIX:
+        return host
+    return ui_mode.advanced_only(host, name)
+
+
 def _select_trial_none_mode(
     combos: pd.DataFrame,
     trial_field: str,
@@ -1511,7 +1527,7 @@ def _select_trial_none_mode(
         # shape, matching the pill-shaped labelled buttons on the rows above
         # and below.
         sort_key, sort_desc, sort_choice = _render_trial_sort_popover(
-            sort_col,
+            _advanced_part(sort_col, "trial_sort", key_prefix),
             combos,
             trial_field,
             key_prefix,
@@ -1610,7 +1626,7 @@ def _select_trial_none_mode(
 
     if n_trials > 1:
         slider_labels = {opt: _slider_label(opt) for opt in trial_options}
-        with slider_col:
+        with _advanced_part(slider_col, ui_mode.TRIAL_SLIDER, key_prefix):
             st.select_slider(
                 "Trial",
                 options=trial_options,

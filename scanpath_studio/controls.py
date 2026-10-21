@@ -2260,6 +2260,10 @@ def _active_quick_view() -> str | None:
 #: Simple mode's View tiles, in their grid order. Animation is the Scanpath
 #: preset replayed; the other three are the design presets of the same name.
 SIMPLE_VIEWS = ("animation", "scanpath", "heatmap", "illustration")
+#: The tile `render_simple_views` lit on this run (``None``: settings that match
+#: none). Written by the rail each run, so a later part of the page can read it
+#: without syncing the design-preset state a second time.
+SIMPLE_VIEW_LIT_KEY = "_simple_view_lit"
 _SIMPLE_ANIMATION = "animation"
 #: Each tile's label, `ICONS` key and hover text.
 _SIMPLE_VIEW_TILES = {
@@ -2414,6 +2418,7 @@ def simple_active_view(*, animating: bool, active: str | None = None) -> str | N
 def render_simple_views(host, *, animating: bool, active: str | None = None) -> None:
     """Draw Simple mode's View tiles: a 2×2 grid, the matching tile primary."""
     current = simple_active_view(animating=animating, active=active)
+    st.session_state[SIMPLE_VIEW_LIT_KEY] = current
     grid = host.container(key="tour_grp_simple_views")
     for names in (SIMPLE_VIEWS[:2], SIMPLE_VIEWS[2:]):
         for cell, name in zip(grid.columns(2, gap="small"), names, strict=True):

@@ -173,6 +173,7 @@ from scanpath_studio.constants import (
 from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
+    SIMPLE_VIEW_LIT_KEY,
     SUMMARY_CHIP_FIELDS,
     TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
@@ -398,6 +399,7 @@ from scanpath_studio.utils import (
     trial_id_layout,
     trial_id_shown,
     trial_options_snapshot_key,
+    trial_sort_is_set,
     trial_sort_keys,
     unqualify_for_export,
 )
@@ -7032,6 +7034,20 @@ def render_single_trial_tab(
             st.container(key="plot_reset_footer"),
         ):
             render_viz_reset(st)
+
+    # Simple hides the controls that Advanced sets, but they keep shaping the
+    # figure; say which are in play. The container is drawn on every Simple
+    # run, empty when nothing is, so the notes below it never change position.
+    if ui_mode.is_simple():
+        ui_mode.render_hidden_settings_note(
+            plot_notes_slot.container(),
+            ui_mode.hidden_settings_reasons(
+                narrowed=len(combos) < len(combos_all),
+                sorted_=trial_sort_is_set("single"),
+                comparing=bool(compare_enabled),
+                custom_view=st.session_state.get(SIMPLE_VIEW_LIT_KEY, "") is None,
+            ),
+        )
 
     # Second-trial selector + layout/legend options, rendered above the chips in
     # the plot column. Filled after the rail so the per-scanpath compare

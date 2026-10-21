@@ -639,3 +639,201 @@ def test_simple_more_subtab_lists_advanced_and_switches():
     at.button(key="more_to_advanced_subtabs").click().run()
     assert not at.exception
     assert at.session_state["ui_mode"] == "advanced"
+
+
+def test_select_share_in_advanced_stays_on_share_in_simple():
+    at = _boot(mode="advanced")
+    at.session_state["single_subtab"] = tabs.SUBTAB_SHARE
+    at.run()
+    assert not at.exception
+    at.segmented_control(key=SWITCH).set_value("simple").run()
+    assert not at.exception
+    assert at.session_state["ui_mode"] == "simple"
+    assert at.session_state["single_subtab"] == tabs.SUBTAB_SHARE
+
+
+def test_more_in_simple_falls_back_to_advanceds_first_subtab():
+    at = _boot()
+    at.session_state["single_subtab"] = tabs.SUBTAB_MORE
+    at.run()
+    assert not at.exception
+    at.button(key="more_to_advanced_subtabs").click().run()
+    assert not at.exception
+    assert at.session_state["ui_mode"] == "advanced"
+    assert at.session_state["single_subtab"] == tabs.SUBTAB_ANNOTATIONS
+
+
+# --- Opening on the replay, and the hidden-settings note ----------------------
+
+
+def test_fresh_simple_session_opens_on_the_replay():
+    at = _boot()
+    assert at.session_state["single_animate"] is True
+    assert _tile_type(at, "animation") == "primary"
+    assert _tile_type(at, "scanpath") == "secondary"
+
+
+def test_advanced_session_keeps_the_static_start():
+    at = _boot(mode="advanced")
+    assert at.session_state["single_animate"] is False
+
+
+@pytest.mark.parametrize(
+    ("query", "restored", "expected_set"),
+    [
+        ({}, False, True),
+        ({"ui": "simple"}, False, True),
+        ({"trial": "3"}, False, False),
+        ({"ui": "simple", "trial": "3"}, False, False),
+        ({}, True, False),
+    ],
+)
+def test_simple_start_skips_links_and_restores(query, restored, expected_set):
+    session = {sk.UI_MODE: "simple"}
+    ui_mode.seed_simple_start(session, query, restored=restored)
+    assert ("single_animate" in session) is expected_set
+    if expected_set:
+        assert session["single_animate"] is True
+
+
+def test_simple_start_keeps_a_value_the_session_already_holds():
+    session = {sk.UI_MODE: "simple", "single_animate": False}
+    ui_mode.seed_simple_start(session, {}, restored=False)
+    assert session["single_animate"] is False
+
+
+def test_simple_start_runs_once_per_session():
+    session = {sk.UI_MODE: "advanced"}
+    ui_mode.seed_simple_start(session, {}, restored=False)
+    assert "single_animate" not in session
+    session[sk.UI_MODE] = "simple"
+    ui_mode.seed_simple_start(session, {}, restored=False)
+    assert "single_animate" not in session
+
+
+def test_switch_to_simple_mid_session_does_not_start_animation():
+    at = _boot(mode="advanced")
+    assert at.session_state["single_animate"] is False
+    at.segmented_control(key=SWITCH).set_value("simple").run()
+    assert not at.exception
+    assert at.session_state["ui_mode"] == "simple"
+    assert at.session_state["single_animate"] is False
+
+
+@pytest.mark.parametrize(
+    ("flags", "phrases"),
+    [
+        ({}, []),
+        ({"narrowed": True}, ["a trial filter"]),
+        ({"sorted_": True}, ["a sort order"]),
+        ({"comparing": True}, ["Compare"]),
+        ({"custom_view": True}, ["plot settings from Advanced"]),
+        (
+            {
+                "custom_view": True,
+                "comparing": True,
+                "sorted_": True,
+                "narrowed": True,
+            },
+            [
+                "a trial filter",
+                "a sort order",
+                "Compare",
+                "plot settings from Advanced",
+            ],
+        ),
+    ],
+)
+def test_hidden_settings_reasons(flags, phrases):
+    kwargs = {
+        "narrowed": False,
+        "sorted_": False,
+        "comparing": False,
+        "custom_view": False,
+    }
+    assert ui_mode.hidden_settings_reasons(**{**kwargs, **flags}) == phrases
+
+
+def _notes(at: AppTest) -> list[str]:
+    return [str(c.value) for c in at.caption if "from Advanced" in str(c.value)]
+
+
+def test_a_plain_simple_session_shows_no_note():
+    at = _boot()
+    assert _notes(at) == []
+    assert not [b for b in at.button if b.key == "hidden_note_to_advanced"]
+
+
+def test_advanced_never_shows_the_note():
+    at = _boot(mode="advanced")
+    at.session_state["filter_participants"] = ["l7_1090"]
+    at.run()
+    at.run()
+    assert not at.exception
+    assert _notes(at) == []
+
+
+def _viz_keys(at: AppTest) -> dict:
+    return {
+        k: at.session_state[k]
+        for k in at.session_state
+        if k.startswith(("global_", "filter_"))
+    }
+
+
+def test_shared_link_with_a_filter_shows_the_note():
+    def boot(mode: str) -> AppTest:
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+        at.query_params["ui"] = mode
+        at.query_params["show_raw_gaze"] = "1"
+        pin_view(at, _VIEW_SCANPATH)
+        at.run()
+        at.session_state["filter_participants"] = ["l7_1090"]
+        # The panel publishes the filter on one run, `app.main` applies it on
+        # the next.
+        at.run()
+        at.run()
+        assert not at.exception
+        return at
+
+    simple = boot("simple")
+    notes = _notes(simple)
+    assert len(notes) == 1
+    assert "a trial filter" in notes[0]
+    assert "plot settings from Advanced" in notes[0]
+    # The note describes; it changes nothing the figure is built from.
+    assert _viz_keys(simple) == _viz_keys(boot("advanced"))
+
+
+def test_simple_sort_order_shows_the_note():
+    at = _boot()
+    at.selectbox(key="single_trial_sort").set_value("Trial ID").run()
+    assert not at.exception
+    assert any("a sort order" in n for n in _notes(at))
+    at.selectbox(key="single_trial_sort").set_value("Data order").run()
+    assert not any("a sort order" in n for n in _notes(at))
+
+
+def test_simple_compare_from_link_keeps_b_picker():
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.query_params["ui"] = "simple"
+    at.query_params["compare"] = "l37_1129:l37_1129_2_2_1_Adv"
+    pin_view(at, _VIEW_SCANPATH)
+    at.run()
+    assert not at.exception
+    assert at.session_state["single_compare_toggle"] is True
+    assert "single_compare_trial" in at.session_state
+    notes = _notes(at)
+    assert len(notes) == 1 and "Compare" in notes[0]
+
+
+def test_hidden_note_button_switches_to_advanced():
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+    at.query_params["ui"] = "simple"
+    at.query_params["show_raw_gaze"] = "1"
+    pin_view(at, _VIEW_SCANPATH)
+    at.run()
+    at.button(key="hidden_note_to_advanced").click().run()
+    assert not at.exception
+    assert at.session_state["ui_mode"] == "advanced"
+    assert at.session_state["_ui_mode_chosen"] is True

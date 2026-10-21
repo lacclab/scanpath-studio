@@ -1105,6 +1105,29 @@ def trial_id_help(part_names: tuple[str, ...]) -> str:
     return sentence
 
 
+def trial_sort_default_key(key_prefix: str) -> str:
+    """Session key holding the sort option the picker offers first (its default)."""
+    return f"_{key_prefix}_trial_sort_default"
+
+
+def trial_sort_is_set(key_prefix: str) -> bool:
+    """Whether the trial list is in an order other than the picker's default.
+
+    Reads what the ⇅ popover last stored: true for any other key and for Data
+    order reversed, false before the popover has run. Descending has no effect
+    on Trial ID order, which the popover returns unsorted.
+    """
+    default = st.session_state.get(trial_sort_default_key(key_prefix))
+    if default is None:
+        return False
+    choice = st.session_state.get(f"{key_prefix}_trial_sort", default)
+    if choice != default:
+        return True
+    return choice != TRIAL_SORT_DEFAULT and bool(
+        st.session_state.get(f"{key_prefix}_trial_sort_desc")
+    )
+
+
 def _render_trial_sort_popover(
     host,
     combos: pd.DataFrame,
@@ -1142,6 +1165,7 @@ def _render_trial_sort_popover(
     state_key = f"{key_prefix}_trial_sort"
     if st.session_state.get(state_key) not in options:
         st.session_state[state_key] = options[0]
+    st.session_state[trial_sort_default_key(key_prefix)] = options[0]
     # Named for screen readers; `styles.py` draws ⇅ alone.
     with host.popover(
         "Sort the trial list",

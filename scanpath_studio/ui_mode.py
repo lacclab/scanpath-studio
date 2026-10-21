@@ -12,7 +12,12 @@ from collections.abc import Mapping, MutableMapping
 from typing import TYPE_CHECKING
 
 from scanpath_studio.constants import ICONS
-from scanpath_studio.session_keys import PARAM_UI, UI_MODE, UI_MODE_COOKIE
+from scanpath_studio.session_keys import (
+    PARAM_UI,
+    SINGLE_ANIMATE,
+    UI_MODE,
+    UI_MODE_COOKIE,
+)
 
 if TYPE_CHECKING:
     from streamlit.delta_generator import DeltaGenerator
@@ -21,6 +26,9 @@ if TYPE_CHECKING:
 #: is the choice written to the cookie (a ``?ui=`` link alone never is).
 CHOSEN_KEY = "_ui_mode_chosen"
 SWITCH_KEY = "ui_mode_switch"
+#: Set on a session's first run, whichever mode it opened in, so the Simple
+#: start is never applied to a session that switched to Simple later.
+START_DONE_KEY = "_ui_simple_start_done"
 _ADV_PREFIX = "adv_only_"
 _SIMPLE_PREFIX = "simple_only_"
 #: The `advanced_only` name of the trial picker's slider; Simple also hides the
@@ -108,6 +116,28 @@ def seed_mode(session: MutableMapping, query_params: Mapping, cookies: Mapping) 
         query_params.get(PARAM_UI), cookies.get(UI_MODE_COOKIE)
     )
     return session[UI_MODE]
+
+
+def seed_simple_start(
+    session: MutableMapping, query_params: Mapping, *, restored: bool
+) -> None:
+    """Open a fresh Simple session on the playing replay.
+
+    The replay is a starting value, not a lock: it applies only when the session
+    starts in Simple with no deep link and nothing restored, so a link, a saved
+    configuration or a recovered session keeps what it carries, and Advanced
+    keeps its static start. It runs once, on the first run, so switching to
+    Simple mid-session never turns the replay on.
+    """
+    if session.get(START_DONE_KEY):
+        return
+    session[START_DONE_KEY] = True
+    if (
+        session.get(UI_MODE) == SIMPLE
+        and not has_link_params(query_params)
+        and not restored
+    ):
+        session.setdefault(SINGLE_ANIMATE, True)
 
 
 def current_mode() -> str:
@@ -240,6 +270,60 @@ def render_more_popover(host: DeltaGenerator, area: str, label: str = "More") ->
         key=f"iconpop_more_{area}",
     )
     render_more_list(popover, area)
+
+
+#: What each hidden setting in play is called in the note, in the order it is
+#: listed.
+_HIDDEN_PHRASES = (
+    ("narrowed", "a trial filter"),
+    ("sorted_", "a sort order"),
+    ("comparing", "Compare"),
+    ("custom_view", "plot settings from Advanced"),
+)
+
+
+def hidden_settings_reasons(
+    *, narrowed: bool, sorted_: bool, comparing: bool, custom_view: bool
+) -> list[str]:
+    """The Advanced-only settings shaping what Simple shows, as short phrases.
+
+    ``narrowed``: a trial filter shortens the pool. ``sorted_``: the trial list
+    is not in its default order. ``comparing``: Compare is on. ``custom_view``:
+    the plot settings match none of Simple's View tiles.
+    """
+    flags = {
+        "narrowed": narrowed,
+        "sorted_": sorted_,
+        "comparing": comparing,
+        "custom_view": custom_view,
+    }
+    return [phrase for name, phrase in _HIDDEN_PHRASES if flags[name]]
+
+
+def render_hidden_settings_note(host: DeltaGenerator, reasons: list[str]) -> None:
+    """Say, in one line, which Advanced settings are shaping Simple's view.
+
+    Draws nothing for no ``reasons``; otherwise a caption naming them and a
+    button that switches to Advanced, where they can be changed.
+    """
+    if not reasons:
+        return
+    row = host.container(
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+        key="hidden_settings_note",
+    )
+    row.caption(
+        f"{ICONS['info']} Settings from Advanced are shaping this view: "
+        f"{', '.join(reasons)}."
+    )
+    row.button(
+        "Switch to Advanced",
+        key="hidden_note_to_advanced",
+        type="tertiary",
+        on_click=_switch_to_advanced,
+    )
 
 
 def render_switch(host: DeltaGenerator) -> None:

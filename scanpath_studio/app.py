@@ -296,6 +296,7 @@ from scanpath_studio.persistence import (
     retry_failed_metadata,
     save_local_state,
     server_bound_to_loopback,
+    session_was_restored,
 )
 from scanpath_studio.save_dialog import render_save_dialog
 from scanpath_studio.session_keys import (
@@ -9025,6 +9026,13 @@ def _run_app() -> None:
             # `?ui=`, which names the interface mode and no view.
             protect_view=ui_mode.has_link_params(st.query_params),
         )
+    # Before any view renders, so a fresh Simple session opens on the replay:
+    # `tabs` seeds `single_animate` later with a `setdefault`, which this wins.
+    ui_mode.seed_simple_start(
+        st.session_state,
+        st.query_params,
+        restored=session_was_restored(st.session_state),
+    )
     # Streamlit matches a rerun's elements to the last run's by position,
     # so a notice that shows on one run only (the unavailable-link warning below)
     # must not move the page under it — it writes into this container, drawn on

@@ -1527,7 +1527,7 @@ def _select_trial_none_mode(
         # shape, matching the pill-shaped labelled buttons on the rows above
         # and below.
         sort_key, sort_desc, sort_choice = _render_trial_sort_popover(
-            _advanced_part(sort_col, "trial_sort", key_prefix),
+            _advanced_part(sort_col, ui_mode.TRIAL_SORT, key_prefix),
             combos,
             trial_field,
             key_prefix,

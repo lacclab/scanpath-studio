@@ -1158,6 +1158,25 @@ def get_app_css() -> str:
         width: auto !important;
     }
     [class*="st-key-railbtn_"] > div + div { margin-left: 3px !important; }
+    /* A ＋ More trigger is quiet: a faint outline and dimmed text until it is
+       pointed at. It is the one popover that draws its name (the others clip
+       it), and it sits in a `railbtn_*` cluster in Simple only, where it is the
+       cluster's sole visible cell, so the neighbour margin above is dropped. */
+    [class*="st-key-iconpop_more_"] [data-testid="stPopoverButton"] {
+        background: transparent !important;
+        border-color: var(--sps-border) !important;
+        opacity: 0.72;
+    }
+    [class*="st-key-iconpop_more_"] [data-testid="stPopoverButton"]:hover,
+    [class*="st-key-iconpop_more_"] [data-testid="stPopoverButton"]
+        [aria-expanded="true"],
+    [class*="st-key-iconpop_more_"] [data-testid="stPopoverButton"]:focus-visible {
+        background: var(--sps-hover-soft) !important;
+        opacity: 1;
+    }
+    [class*="st-key-railbtn_"] > div:has(> .st-key-simple_only_picker_more) {
+        margin-left: 0 !important;
+    }
     /* The floors under the `SELECTOR_ROW_GRID` tracks
        (`SELECTOR_ROW_FLOORS_REM`). A row of this grid is a column row whose
        last column holds a `railbtn_*` cluster directly (◀ ▶ ⇅ 🔎 on the trial

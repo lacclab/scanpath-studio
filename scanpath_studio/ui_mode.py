@@ -26,6 +26,9 @@ _SIMPLE_PREFIX = "simple_only_"
 #: The `advanced_only` name of the trial picker's slider; Simple also hides the
 #: column that holds it.
 TRIAL_SLIDER = "trial_slider"
+#: The `advanced_only` name of the trial picker's sort popover, whose
+#: ``railbtn_*`` cluster cell Simple drops when nothing else is in it.
+TRIAL_SORT = "trial_sort"
 
 SIMPLE = "simple"
 ADVANCED = "advanced"
@@ -148,6 +151,8 @@ def mode_css(mode: str) -> str:
     if parse_mode(mode) == ADVANCED:
         rules = f'[class*="st-key-{_SIMPLE_PREFIX}"] {{ display: none !important; }}'
     else:
+        cell = '[class*="st-key-railbtn_"] > div'
+        sort = f'> [class*="st-key-railbtn_"] > div:only-child > .st-key-{_ADV_PREFIX}{TRIAL_SORT}'
         rules = (
             f'[class*="st-key-{_ADV_PREFIX}"] {{ display: none !important; }}'
             # With the slider gone its column would still hold a gap: drop it.
@@ -156,6 +161,11 @@ def mode_css(mode: str) -> str:
             ' > [data-testid="stLayoutWrapper"]'
             f" > .st-key-{_ADV_PREFIX}{TRIAL_SLIDER})"
             " { display: none !important; }"
+            # A ``railbtn_*`` cell holding only the hidden sort popover would
+            # still take the cluster's 3px neighbour margin: drop the cell, and
+            # the margin it gives the cell after it when it comes first.
+            f" {cell}:has({sort}) {{ display: none !important; }}"
+            f" {cell}:first-child:has({sort}) + div {{ margin-left: 0 !important; }}"
         )
     return f"<style>{rules}</style>"
 

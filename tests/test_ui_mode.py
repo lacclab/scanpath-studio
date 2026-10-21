@@ -227,3 +227,22 @@ def test_compare_pickers_are_never_hidden_in_simple():
         "container",
         "adv_only_trial_sort",
     )
+
+
+def test_simple_css_drops_the_cell_of_the_hidden_sort():
+    css = ui_mode.mode_css("simple")
+    assert "st-key-adv_only_trial_sort" in css
+    assert ":first-child:has(" in css and "margin-left: 0 !important" in css
+    assert "st-key-adv_only_trial_sort" not in ui_mode.mode_css("advanced")
+
+
+def test_more_triggers_are_muted_by_the_stylesheet():
+    from scanpath_studio.styles import get_app_css
+
+    css = " ".join(get_app_css().split())
+    rule = css.split(
+        '[class*="st-key-iconpop_more_"] [data-testid="stPopoverButton"] {'
+    )
+    assert len(rule) == 2
+    body = rule[1].split("}", 1)[0]
+    assert "opacity: 0.72" in body and "var(--sps-border)" in body

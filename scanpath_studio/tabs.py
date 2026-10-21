@@ -6278,13 +6278,11 @@ def render_single_trial_tab(
         def _render_filters(host) -> None:
             """Every way to narrow the pool, behind one funnel.
 
-            Simple draws a ＋ More list in their place; the funnel and the chips'
-            menu stay in the page, hidden, so their values are kept."""
-            ui_mode.render_more_popover(
-                ui_mode.simple_only(host, "picker_more"), "picker"
-            )
-            host = ui_mode.advanced_only(host, "trial_filters")
-            pop = host.popover(
+            The funnel and the chips' menu are each their own Advanced-only
+            container, so each stays a direct child of the ``railbtn_*``
+            cluster and lays out as it always has. In Simple they stay in the
+            page, hidden, with their values, and a ＋ More list takes the cell."""
+            pop = ui_mode.advanced_only(host, "trial_filters").popover(
                 "Filter the trial list",
                 icon=_FILTER_ICON,
                 width="content",
@@ -6297,7 +6295,12 @@ def render_single_trial_tab(
             # table below has the plot's whole width, and hiding it
             # leaves no row behind. Drawn here, before the table reads
             # `trial_chip_fields`, so an edit applies the same run.
-            _render_chip_menu(host, words_all, fixations_all)
+            _render_chip_menu(
+                ui_mode.advanced_only(host, "chip_fields"), words_all, fixations_all
+            )
+            ui_mode.render_more_popover(
+                ui_mode.simple_only(host, "picker_more"), "picker"
+            )
 
         # A dataset with screens gets the screen navigator at the trial row's
         # right end; the cell is reserved now and filled once the trial (and so

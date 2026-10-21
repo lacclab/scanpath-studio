@@ -102,6 +102,8 @@ class TopMenu:
     #: The page heading's slot — the left half of the row the menu shares.
     #: ``app._render_about_panel`` fills it; see :func:`render_top_menu`.
     title: DeltaGenerator | None = None
+    #: The right of the title row, where the Essentials | Full switch sits.
+    aside: DeltaGenerator | None = None
 
 
 def view_label(view: str) -> str:
@@ -262,13 +264,14 @@ def render_top_menu(*, active_view: str | None = None) -> TopMenu:
             view do not resolve it twice.
 
     Returns:
-        ``title`` — ``app._render_about_panel`` fills it — plus the main-area
-        ``notices`` strip.
+        ``title`` — ``app._render_about_panel`` fills it — and ``aside`` (the
+        mode switch's slot), plus the main-area ``notices`` strip.
     """
     if active_view is None:
         render_nav()
-    title_col, _ = st.columns([4, 1], vertical_alignment="bottom")
+    title_col, aside_col = st.columns([4, 1], vertical_alignment="bottom")
     return TopMenu(
         notices=st.container(key=NOTICES_KEY),
         title=title_col,
+        aside=aside_col,
     )

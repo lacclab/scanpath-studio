@@ -870,7 +870,11 @@ def share_link(d: Demo) -> None:
     )
     d.step("a colleague opens it")
     d.pause(1.0)
-    page.goto(url, wait_until="domcontentloaded")
+    # A shared link does not carry the interface mode.
+    page.goto(
+        f"{url}{'&' if '?' in url else '?'}ui=full",
+        wait_until="domcontentloaded",
+    )
     d.settle(quiet=1.5)
     page.add_style_tag(content=HIDE_CSS + LOCAL_PATHS_CSS)
     # A new page: draw the bar and the pointer on it again.
@@ -896,7 +900,7 @@ def record_one(browser, url: str, flow: Workflow, frames: Path) -> Path:
     )
     context.add_init_script(OVERLAY_JS)
     page = context.new_page()
-    page.goto(url, wait_until="domcontentloaded")
+    page.goto(f"{url}/?ui=full", wait_until="domcontentloaded")
     demo = Demo(page, flow.goal)
     demo.settle(quiet=3.0)
     page.add_style_tag(content=HIDE_CSS + LOCAL_PATHS_CSS)

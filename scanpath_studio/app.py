@@ -69,6 +69,7 @@ from scanpath_studio import (
     desktop_update,
     loading,
     progress,
+    ui_mode,
     wizard_shell,
     wizard_watch,
 )
@@ -295,6 +296,7 @@ from scanpath_studio.persistence import (
     retry_failed_metadata,
     save_local_state,
     server_bound_to_loopback,
+    session_was_restored,
 )
 from scanpath_studio.save_dialog import render_save_dialog
 from scanpath_studio.session_keys import (
@@ -704,6 +706,14 @@ _A11Y_NAMES_SCRIPT = """
 """
 
 
+def _cookies() -> dict:
+    """The browser's cookies, or none where there is no request (AppTest, bare mode)."""
+    try:
+        return dict(st.context.cookies)
+    except Exception:
+        return {}
+
+
 def configure_page() -> None:
     """Streamlit page config + custom CSS.
 
@@ -721,6 +731,10 @@ def configure_page() -> None:
         layout="wide",
     )
     st.markdown(get_app_css(), unsafe_allow_html=True)
+    # Seeded here, not later in the run: the stylesheet below hides one mode's
+    # containers, so it needs the mode on the very first run.
+    ui_mode.seed_mode(st.session_state, st.query_params, _cookies())
+    st.html(ui_mode.mode_css(ui_mode.current_mode()))
     embed_html_iframe(_FORCE_LTR_LOCALE_SCRIPT, height=0)
     embed_html_iframe(_TOOLTIP_OWNER_SCRIPT, height=0)
     embed_html_iframe(_IFRAME_CLICK_CLOSES_POPOVER_SCRIPT, height=0)
@@ -1336,8 +1350,16 @@ CLEAR_SAVED_REQUEST_KEY = "_clear_saved_requested"
 #: of the fresh start says what happened.
 STARTED_OVER_KEY = "_started_over"
 #: What survives starting over: having seen or dismissed the welcome tour is not
-#: "your work", and the tour reopening over a fresh start would be noise.
-_KEPT_ON_START_OVER = ("_tour_dismissed", "tour_seen")
+#: "your work", and the tour reopening over a fresh start would be noise. Nor is
+#: the Essentials | Full choice, which the browser's cookie already holds; the
+#: session keeps it because the cookie Streamlit hands the app is the one read
+#: when the page connected, from before the choice.
+_KEPT_ON_START_OVER = (
+    "_tour_dismissed",
+    "tour_seen",
+    ui_mode.CHOSEN_KEY,
+    ui_mode.COOKIE_MODE_KEY,
+)
 
 
 def _clear_and_start_over() -> None:
@@ -9008,9 +9030,17 @@ def _run_app() -> None:
             protect_data_source=url_source is not None,
             # A link opens on the view it was made for; only a bare visit
             # resumes the view this machine was on last. The app never writes
-            # query parameters itself, so any here came with the link.
-            protect_view=bool(st.query_params),
+            # query parameters itself, so any here came with the link — except
+            # `?ui=`, which names the interface mode and no view.
+            protect_view=ui_mode.has_link_params(st.query_params),
         )
+    # Before any view renders, so a fresh Essentials session opens on the replay:
+    # `tabs` seeds `single_animate` later with a `setdefault`, which this wins.
+    ui_mode.seed_simple_start(
+        st.session_state,
+        st.query_params,
+        restored=session_was_restored(st.session_state),
+    )
     # Streamlit matches a rerun's elements to the last run's by position,
     # so a notice that shows on one run only (the unavailable-link warning below)
     # must not move the page under it — it writes into this container, drawn on
@@ -9185,6 +9215,7 @@ def _run_app() -> None:
 
     menu = render_top_menu(active_view=active_view)
     _render_about_panel(menu.title)
+    ui_mode.render_switch(menu.aside, visible=active_view == _VIEW_SCANPATH)
     _render_cancelled_load_notice(menu.notices)
     _render_backup_reminder(menu.notices, active_view)
 

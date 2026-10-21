@@ -6,6 +6,11 @@ description: "Export a publication-ready scanpath, gaze heatmap or comparison fi
 
 Save a scanpath, heatmap or comparison at the size you need.
 
+**Design presets**, **Compare** and **My designs** are in the **Full**
+mode: switch to it in the top bar of the :material/route: **Scanpath** view,
+or add `ui=full` to the app's address
+([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)). In Essentials, the view tiles choose the figure.
+
 ## 1. Choose the view { #1-choose-the-view }
 
 Pick a trial in the :material/route: **Scanpath** view. Choose one of the

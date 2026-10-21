@@ -1,0 +1,511 @@
+"""The Essentials / Full interface mode: which one is in force, and how it persists.
+
+The mode is resolved once per session, in this order: a ``?ui=`` link
+parameter, the browser cookie from the last visit, then Essentials. It is the
+viewer's own preference, so Share never writes it into a link. The functions
+that decide take plain mappings, so they need no Streamlit runtime.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, MutableMapping
+from typing import TYPE_CHECKING
+
+from scanpath_studio.constants import ICONS
+from scanpath_studio.session_keys import (
+    PARAM_UI,
+    SINGLE_ANIMATE,
+    UI_MODE,
+    UI_MODE_COOKIE,
+)
+
+if TYPE_CHECKING:
+    from streamlit.delta_generator import DeltaGenerator
+
+#: The session flag that is set once the viewer has used the switch: only then
+#: is the choice written to the cookie (a ``?ui=`` link alone never is).
+CHOSEN_KEY = "_ui_mode_chosen"
+SWITCH_KEY = "ui_mode_switch"
+#: The mode the viewer last picked with the switch or a ＋ More button, which is
+#: what the cookie remembers. A mode the app moves the session to by itself (a
+#: tutorial that needs Full) never reaches it.
+COOKIE_MODE_KEY = "_ui_mode_cookie"
+#: Set on a session's first run, whichever mode it opened in, so the Essentials
+#: start is never applied to a session that switched to Essentials later.
+START_DONE_KEY = "_ui_simple_start_done"
+_ADV_PREFIX = "adv_only_"
+_SIMPLE_PREFIX = "simple_only_"
+#: The `advanced_only` name of the trial picker's slider; Essentials also hides the
+#: column that holds it.
+TRIAL_SLIDER = "trial_slider"
+#: The `advanced_only` name of the trial picker's sort popover, whose
+#: ``railbtn_*`` cluster cell Essentials drops when nothing else is in it.
+TRIAL_SORT = "trial_sort"
+#: The `advanced_only` name of the trial summary table above the plot; the
+#: wrapper that holds it is dropped whole in Essentials.
+TRIAL_CHIPS = "chips"
+#: The key of the container the Essentials | Full switch is drawn in.
+SWITCH_BOX_KEY = "tour_grp_ui_mode"
+#: The key of the container, inside the switch's, that holds the script that
+#: writes the cookie.
+COOKIE_BOX_KEY = "ui_mode_cookie"
+
+SIMPLE = "essentials"
+ADVANCED = "full"
+MODES = (SIMPLE, ADVANCED)
+_LABELS = {SIMPLE: "Essentials", ADVANCED: "Full"}
+
+_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
+
+#: What Full adds, area by area, as ``(title, one line)`` pairs. Essentials names
+#: these where a viewer would look for them (the ＋ More lists) instead of
+#: drawing the controls, so the lines describe features and carry no widget.
+MORE_IN_ADVANCED: dict[str, tuple[tuple[str, str], ...]] = {
+    "picker": (
+        (
+            "🔍 Filter trials",
+            "Narrow the list by text, participant, condition or your annotations.",
+        ),
+        ("⇅ Sort the trial list", "Order trials by a statistic or a property."),
+        (
+            "🎚 Trial slider",
+            "Sweep through the trials quickly, with the count and id on it.",
+        ),
+        (
+            "📋 Trial summary table",
+            "Who read what, in which condition, with the trial's statistics "
+            "in a table above the plot; choose and reorder its fields.",
+        ),
+    ),
+    "rail": (
+        ("🎬 Replay settings", "Speed and frame rate."),
+        ("👥 Compare", "Two readings, overlaid or side by side."),
+        (
+            "🎨 Layer style",
+            "Colour fixations by a measure; sizes, word boxes and raw gaze.",
+        ),
+        (
+            "🎯 Filters & highlights",
+            "A fixation window, short or long fixations, saccade types.",
+        ),
+        ("🖼 Figure & canvas", "The screen, axes, titles and legends."),
+        ("💾 Saved designs", "Keep your own figure designs and reuse them."),
+    ),
+    "subtabs": (
+        (
+            "📝 Annotations",
+            "Mark trials to come back to: a favourite, tags and notes.",
+        ),
+        (
+            "📄 Stimulus & context",
+            "The passage with highlights, and its comprehension questions.",
+        ),
+        ("🔬 Comparisons", "Every other reading of this text, side by side."),
+        ("📤 Export bundle", "Figures and tables for all trials at once."),
+    ),
+}
+
+
+def parse_mode(value: object) -> str | None:
+    """The mode ``value`` names, or ``None`` when it is not a string naming one."""
+    if not isinstance(value, str):
+        return None
+    mode = value.strip().lower()
+    return mode if mode in MODES else None
+
+
+def resolve_mode(param: object, cookie: object) -> str:
+    """The link's mode, else the cookie's, else Essentials; junk values are skipped."""
+    return parse_mode(param) or parse_mode(cookie) or SIMPLE
+
+
+def seed_mode(session: MutableMapping, query_params: Mapping, cookies: Mapping) -> str:
+    """Fix the session's mode on its first run and return it.
+
+    A mode already in the session wins: the header switch writes it, and a
+    link's ``?ui=`` must not undo a choice made after the page opened. Past
+    the link, the choice this session last wrote to the cookie
+    (``COOKIE_MODE_KEY``, which survives starting over) beats ``cookies``,
+    which is read once, when the page connects, and so misses that write.
+    """
+    remembered = parse_mode(session.get(COOKIE_MODE_KEY)) or cookies.get(UI_MODE_COOKIE)
+    session[UI_MODE] = parse_mode(session.get(UI_MODE)) or resolve_mode(
+        query_params.get(PARAM_UI), remembered
+    )
+    return session[UI_MODE]
+
+
+def seed_simple_start(
+    session: MutableMapping, query_params: Mapping, *, restored: bool
+) -> None:
+    """Open a fresh Essentials session on the playing replay.
+
+    The replay is a starting value, not a lock: it applies only when the session
+    starts in Essentials with no deep link and nothing restored, so a link, a saved
+    configuration or a recovered session keeps what it carries, and Full
+    keeps its static start. It runs once, on the first run, so switching to
+    Essentials mid-session never turns the replay on.
+    """
+    if session.get(START_DONE_KEY):
+        return
+    session[START_DONE_KEY] = True
+    if (
+        session.get(UI_MODE) == SIMPLE
+        and not has_link_params(query_params)
+        and not restored
+    ):
+        session.setdefault(SINGLE_ANIMATE, True)
+
+
+def current_mode() -> str:
+    """The session's mode (Essentials before it is seeded)."""
+    import streamlit as st
+
+    return st.session_state.get(UI_MODE, SIMPLE)
+
+
+def cookie_mode() -> str:
+    """The mode the cookie holds: the viewer's last choice, else the session's."""
+    import streamlit as st
+
+    return parse_mode(st.session_state.get(COOKIE_MODE_KEY)) or current_mode()
+
+
+def is_simple() -> bool:
+    """Whether the session is in Essentials mode."""
+    return current_mode() == SIMPLE
+
+
+def cookie_script(mode: str) -> str:
+    """A same-origin script that remembers ``mode`` in a year-long cookie.
+
+    ``st.iframe`` embeds share the app's origin, so the parent document's
+    ``cookie`` is writable from here, the only way to keep a preference
+    browser-side without an account.
+    """
+    value = f"{UI_MODE_COOKIE}={parse_mode(mode) or SIMPLE}; max-age={_COOKIE_MAX_AGE}"
+    return (
+        "<script>window.parent.document.cookie = "
+        f'"{value}; path=/; SameSite=Lax";</script>'
+    )
+
+
+def has_link_params(query_params: Mapping) -> bool:
+    """Whether the URL carries anything besides ``?ui=``, i.e. is a deep link."""
+    return any(key != PARAM_UI for key in query_params)
+
+
+def mode_css(mode: str) -> str:
+    """A ``<style>`` hiding the containers that belong to the other mode.
+
+    Containers made by :func:`advanced_only` / :func:`simple_only` stay in the
+    page in both modes and are hidden by CSS, so switching mode never changes
+    which elements a rerun draws, and no widget loses its value.
+    """
+    advanced = parse_mode(mode) == ADVANCED
+    hidden = f'[class*="st-key-{_SIMPLE_PREFIX if advanced else _ADV_PREFIX}"]'
+    # In the rail, a hidden container's wrapper block would still take the
+    # rail's gap and the margin under each block: hide the wrapper with it. A
+    # rule of its own, so a browser without `:has()` still hides the container.
+    hide = (
+        f"{hidden} {{ display: none !important; }}"
+        ' .st-key-scanpath_rail [data-testid="stLayoutWrapper"]'
+        f":has(> {hidden}) {{ display: none !important; }}"
+    )
+    if advanced:
+        rules = hide
+    else:
+        cell = '[class*="st-key-railbtn_"] > div'
+        sort = f'> [class*="st-key-railbtn_"] > div:only-child > .st-key-{_ADV_PREFIX}{TRIAL_SORT}'
+        rules = hide + (
+            # The trial summary table's wrapper would still take the page's
+            # margin under each block.
+            ' [data-testid="stLayoutWrapper"]'
+            f":has(> .st-key-{_ADV_PREFIX}{TRIAL_CHIPS}) "
+            "{ display: none !important; }"
+            # With the slider gone its column would still hold a gap: drop it.
+            # Only the column that holds it directly, never one around the row.
+            ' [data-testid="stColumn"]:has(> [data-testid="stVerticalBlock"]'
+            ' > [data-testid="stLayoutWrapper"]'
+            f" > .st-key-{_ADV_PREFIX}{TRIAL_SLIDER})"
+            " { display: none !important; }"
+            # A ``railbtn_*`` cell holding only the hidden sort popover would
+            # still take the cluster's 3px neighbour margin: drop the cell, and
+            # the margin it gives the cell after it when it comes first.
+            f" {cell}:has({sort}) {{ display: none !important; }}"
+            f" {cell}:first-child:has({sort}) + div {{ margin-left: 0 !important; }}"
+        )
+    return f"<style>{rules}</style>"
+
+
+def advanced_only(host: DeltaGenerator, name: str) -> DeltaGenerator:
+    """A container under ``host`` that is shown in Full mode only."""
+    return host.container(key=f"{_ADV_PREFIX}{name}")
+
+
+def simple_only(host: DeltaGenerator, name: str) -> DeltaGenerator:
+    """A container under ``host`` that is shown in Essentials mode only."""
+    return host.container(key=f"{_SIMPLE_PREFIX}{name}")
+
+
+def _choose_mode(mode: object) -> None:
+    """Make ``mode`` the session's mode as the viewer's own choice.
+
+    Marks it chosen, which is what lets the cookie script remember it. Choosing
+    Essentials ends a running tutorial, and a change of mode ends a running welcome
+    tour. Anything that is not a mode (a deselected switch) changes nothing.
+    """
+    import streamlit as st
+
+    chosen = parse_mode(mode)
+    if chosen is not None:
+        if chosen == SIMPLE and st.session_state.get("tutorial_active"):
+            # The tutorials spotlight Full-only controls: leave the one
+            # running the way its Exit does.
+            from scanpath_studio import tour
+
+            tour._restore_tutorial_return()
+        if (
+            chosen != current_mode()
+            and st.session_state.get("tour_mode") == "spotlight"
+        ):
+            # Each mode has its own welcome tour, and a step number means a
+            # different step in the other one: end it, as Done would.
+            from scanpath_studio import tour
+
+            tour._exit_spotlight()
+        st.session_state[UI_MODE] = chosen
+        st.session_state[CHOSEN_KEY] = True
+        st.session_state[COOKIE_MODE_KEY] = chosen
+
+
+def _on_switch() -> None:
+    """Copy the switch into the session's mode; a deselect keeps the old one."""
+    import streamlit as st
+
+    _choose_mode(st.session_state.get(SWITCH_KEY))
+
+
+def _switch_to_advanced() -> None:
+    """The ＋ More lists' button: the same choice the header switch makes."""
+    _choose_mode(ADVANCED)
+
+
+def render_more_list(host: DeltaGenerator, area: str) -> None:
+    """Draw ``area``'s list of Full-only features, ending in a switch button.
+
+    The list names features only and holds no control, so opening it never
+    changes anything.
+    """
+    for title, line in MORE_IN_ADVANCED[area]:
+        host.markdown(f"**{title}**  \n{line}")
+    host.button(
+        "Switch to Full",
+        key=f"more_to_advanced_{area}",
+        on_click=_switch_to_advanced,
+    )
+
+
+def render_more_popover(host: DeltaGenerator, area: str, label: str = "More") -> None:
+    """Draw ``area``'s ＋ More popover, the list of what Full adds there."""
+    popover = host.popover(
+        label,
+        icon=ICONS["add"],
+        width="content",
+        help="What Full adds here",
+        key=f"iconpop_more_{area}",
+    )
+    render_more_list(popover, area)
+
+
+#: What each hidden setting in play is called in the note, in the order it is
+#: listed.
+_HIDDEN_PHRASES = (
+    ("narrowed", "a trial filter"),
+    ("sorted_", "a sort order"),
+    ("comparing", "Compare"),
+    ("custom_view", "plot settings from Full"),
+)
+
+
+def hidden_settings_reasons(
+    *, narrowed: bool, sorted_: bool, comparing: bool, custom_view: bool
+) -> list[str]:
+    """The Full-only settings shaping what Essentials shows, as short phrases.
+
+    ``narrowed``: a trial filter shortens the pool. ``sorted_``: the trial list
+    is not in its default order. ``comparing``: Compare is on. ``custom_view``:
+    the plot settings match none of Essentials' View tiles.
+    """
+    flags = {
+        "narrowed": narrowed,
+        "sorted_": sorted_,
+        "comparing": comparing,
+        "custom_view": custom_view,
+    }
+    return [phrase for name, phrase in _HIDDEN_PHRASES if flags[name]]
+
+
+def render_hidden_settings_note(host: DeltaGenerator, reasons: list[str]) -> None:
+    """Say, in one line, which Full settings are shaping Essentials' view.
+
+    Draws nothing for no ``reasons``; otherwise a caption naming them and a
+    button that switches to Full, where they can be changed.
+    """
+    if not reasons:
+        return
+    row = host.container(
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+        key="hidden_settings_note",
+    )
+    row.caption(
+        f"{ICONS['info']} Settings from Full are shaping this view: "
+        f"{', '.join(reasons)}."
+    )
+    row.button(
+        "Switch to Full",
+        key="hidden_note_to_advanced",
+        type="tertiary",
+        on_click=_switch_to_advanced,
+    )
+
+
+#: The widest viewport at which the switch leaves the header for the page:
+#: under it the header's logo, menu and the switch do not fit side by side.
+_SWITCH_FALLBACK_PX = 520
+
+#: The switch's stacking order: just above Streamlit's header (999990), whose
+#: bar it sits in and would otherwise swallow its clicks, and under the
+#: tour's card (`tour.GUIDE_Z_INDEX`) so a running tour is never covered by it.
+#: Streamlit's popovers and modals (1000060 and up) stay above both.
+SWITCH_Z_INDEX = 999991
+
+#: Where Streamlit's "Running… / Stop" status widget is shown while the switch
+#: is in the top bar: just under the bar (3.75rem tall), at its right edge. In
+#: the bar it would sit under the switch, and it is mounted only during a run,
+#: so making room for it there would move the switch on every rerun.
+_STATUS_WIDGET_CSS = (
+    '[data-testid="stStatusWidget"] { position: fixed; top: 4.25rem; right: 1rem;'
+    " padding: 0.15rem 0.6rem; border-radius: 0.5rem;"
+    " background: var(--sps-page-bg); border: 1px solid var(--sps-border);"
+    " box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08); }"
+)
+
+#: The title row that holds the switch's container, whichever column it is in.
+_SWITCH_ROW = (
+    '[data-testid="stLayoutWrapper"]'
+    f':has(> [data-testid="stHorizontalBlock"] .st-key-{SWITCH_BOX_KEY})'
+)
+
+
+def switch_css(visible: bool) -> str:
+    """A ``<style>`` that places the Essentials | Full switch.
+
+    The switch stays where the script draws it, so its state never depends on
+    the view. With ``visible`` it is lifted into Streamlit's top bar, just left
+    of the ⋮ menu, at a larger size, and the bar's menu cell grows to leave it
+    room. The switch never moves: Streamlit's "Running…" status widget, which
+    the bar would draw under it, is shown just below the bar instead. Below
+    ``_SWITCH_FALLBACK_PX`` it is an ordinary right-aligned row of the page.
+    Without it (the views that have no use for the mode) the switch is
+    hidden. Either way the title row it sits in takes no space of its own.
+    """
+    box = f".st-key-{SWITCH_BOX_KEY}"
+    # The cookie script's frame, which is there only once the switch has been
+    # used, takes no room, so the switch's box (sized to its contents) and the
+    # switch in it are the same with or without it.
+    cookie = (
+        f".st-key-{COOKIE_BOX_KEY} {{ position: absolute; width: 0; height: 0;"
+        " overflow: hidden; }"
+    )
+    wide = f"@media (min-width: {_SWITCH_FALLBACK_PX + 1}px)"
+    narrow = f"@media (max-width: {_SWITCH_FALLBACK_PX}px)"
+    collapse = (
+        # Out of the flow, so the page's rows sit where they would without it;
+        # a fixed box inside it still positions against the viewport.
+        f"{wide} {{ {_SWITCH_ROW} {{ position: absolute; width: 0; height: 0;"
+        " margin: 0 !important; overflow: visible; } }"
+    )
+    if not visible:
+        return (
+            f"<style>{box} {{ display: none !important; }} {collapse} {cookie}</style>"
+        )
+    button = f'{box} [data-testid="stButtonGroup"] button[data-variant]'
+    return (
+        "<style>"
+        f"{collapse} {cookie}"
+        f"{wide} {{"
+        f" {box} {{ position: fixed; top: 10px; right: 3.75rem;"
+        f" z-index: {SWITCH_Z_INDEX}; width: max-content; }}"
+        f" {_STATUS_WIDGET_CSS}"
+        # The header's right-hand cell is a fixed 200px: widen it so the
+        # navigation gives way before it would run under the switch.
+        ' [data-testid="stToolbar"] div:has(> [data-testid="stMainMenu"])'
+        " { width: 17.5rem !important; }"
+        " }"
+        f" {button} {{ min-height: 2.5rem; padding: 0 1.1rem; }}"
+        f" {button} p {{ font-size: 1rem; }}"
+        f"{narrow} {{"
+        # In the page: right-aligned, with the empty title column out of the way.
+        f" {box} {{ align-items: flex-end; }}"
+        f' [data-testid="stColumn"]:has(.st-key-about_header)'
+        " { display: none; }"
+        " }"
+        "</style>"
+    )
+
+
+def render_export_pointer(host: DeltaGenerator) -> None:
+    """Under Essentials' *Current figure*: where exporting many trials at once is."""
+    row = host.container(
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+        key="export_advanced_note",
+    )
+    row.caption(
+        f"{ICONS['info']} Exporting many trials at once, with figures and "
+        "tables for every trial, is in Full."
+    )
+    row.button(
+        "Switch to Full",
+        key="export_to_advanced",
+        type="tertiary",
+        on_click=_switch_to_advanced,
+    )
+
+
+def render_switch(host: DeltaGenerator, *, visible: bool = True) -> None:
+    """Draw the Essentials | Full switch in ``host``.
+
+    The widget's value is re-written from the session's mode on every run, so
+    a link or a restore that moves the mode moves the switch with it. It is
+    drawn on every run, on every view: ``visible`` only decides, by CSS,
+    whether it shows (see :func:`switch_css`), so nothing above a view moves
+    with the view. Once the viewer has used it, a same-origin script keeps the
+    choice in the browser's cookie for the next visit.
+    """
+    import streamlit as st
+
+    from scanpath_studio.html_embed import embed_html_iframe
+
+    st.session_state[SWITCH_KEY] = current_mode()
+    box = host.container(key=SWITCH_BOX_KEY)
+    box.html(switch_css(visible))
+    box.segmented_control(
+        "Interface",
+        options=list(MODES),
+        format_func=_LABELS.__getitem__,
+        key=SWITCH_KEY,
+        label_visibility="collapsed",
+        persist_state="session",
+        on_change=_on_switch,
+    )
+    # Drawn every run, so the switch's box holds the same elements whether or
+    # not the script is in it.
+    cookie = box.container(key=COOKIE_BOX_KEY)
+    if st.session_state.get(CHOSEN_KEY):
+        with cookie:
+            embed_html_iframe(cookie_script(cookie_mode()), height=0)

@@ -39,6 +39,8 @@ scanpath_studio/
 │  ├─ menu.py            the header: Streamlit's `st.navigation(position="top")` with three views
 │  │                     (🗺️ Scanpath · 📊 Corpus Analysis · 🗂️ Data Management) and ❓ Help's action
 │  │                     entries, which arm a dialog and bounce back to the current view
+│  ├─ ui_mode.py         the Scanpath view's Essentials | Full mode: how it is seeded (`?ui=`, cookie),
+│  │                     the header switch, the CSS that hides the other mode's containers, ＋ More lists
 │  ├─ tabs.py            the views' panels: Scanpath (plot + rail + subtabs), Corpus Analysis, the Data page
 │  ├─ controls.py        the Scanpath rail, the column-mapping UI and the trial filters
 │  ├─ fields.py          the `label | field` row primitive shared by the rail, the wizard and the subtabs
@@ -336,7 +338,10 @@ tag.
   to a single trace.
 - `tests/test_apptest.py` and many more files boot the whole app headless with
   `streamlit.testing.v1.AppTest.from_file("streamlit_app.py")` and drive
-  widgets — the preferred way to test app behavior.
+  widgets — the preferred way to test app behavior. `tests/conftest.py` pins
+  every `AppTest.from_file` to `?ui=full` (a test sets
+  `at.query_params["ui"]` itself to open Essentials); an `AppTest.from_function`
+  app seeds no mode, so `ui_mode.current_mode()` there is Essentials.
 - Contract tests: `tests/test_session_key_contract.py` pins the wire-format
   keys, `tests/test_citation.py` the version parity, `tests/test_computations.py`
   the computation register against the code.
@@ -417,6 +422,16 @@ on one the Share → Code snippet cannot reproduce.
   position, so one element more or fewer above `sps_view` shifts the whole view
   and redraws it from nothing. `st.dialog`, a bare `st.toast` and
   `@st.fragment` are safe; a bare `st.warning`, `st.markdown` or iframe is not.
+- **Essentials and Full draw the same widgets.** The modes are shown as
+  **Essentials** (code: `SIMPLE`, `simple_only`) and **Full** (code: `ADVANCED`,
+  `advanced_only`). Full-only UI sits in a
+  `ui_mode.advanced_only(host, name)` container (Essentials' own in
+  `ui_mode.simple_only`), one container per item, and `ui_mode.mode_css` hides
+  the other mode's by CSS. Never skip rendering a widget by mode: a widget not
+  drawn loses its value, and the rerun's element positions shift. The one
+  structural difference is the list of subtabs under the plot. The mode is
+  the viewer's own: `?ui=essentials|full` is read on a session's first run,
+  but Share never writes it into a link.
 - **Never give `st.select_slider` a single option** — the browser slider throws
   and blanks the tab (invisible to AppTest). Guard any new slider, as the trial
   picker does.

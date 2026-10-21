@@ -396,7 +396,7 @@ class TestTourLivesOnScanpath:
 
 
 class TestTourCardPlacement:
-    """The card moves out of the way of what a step shows."""
+    """The card moves out of the way of what a step shows (Full's steps)."""
 
     def test_the_filter_summary_and_rail_steps_dock_left(self):
         from scanpath_studio.tour import _SPOTLIGHT_STEPS
@@ -414,7 +414,9 @@ class TestTourCardPlacement:
     def test_a_docked_step_draws_its_dock(self):
         from scanpath_studio.tour import _CARD_DOCKS
 
-        at = AppTest.from_function(_welcome_tour_app).run()
+        at = AppTest.from_function(_welcome_tour_app)
+        at.session_state["ui_mode"] = "full"
+        at.run()
         for step, dock in ((4, "left"), (8, "top")):
             at.session_state["tour_step"] = step
             at.run()
@@ -1235,7 +1237,9 @@ class TestSpotlightSelectorsResolve:
         # last hand-tuning" slot — and the user's own named designs are the
         # library beneath it.
         assert 'key="viz_view_custom"' in control_source
-        assert "_render_saved_designs(viz)" in control_source
+        assert '_render_saved_designs(advanced_only(viz, "rail_designs"))' in (
+            control_source
+        )
         # A section is a `[toggle | ▾]` row, not an expander.
         assert "_rail_section(" in control_source
         assert 'viz.expander("↗️ Saccades"' not in control_source
@@ -1315,7 +1319,7 @@ class TestSpotlightSelectorsResolve:
         assert (
             "st.markdown(f\"## {ICONS['plot_controls']} Plot controls\")" in tab_source
         )
-        assert 'with st.container(key="plot_reset_footer"):' in tab_source
+        assert 'st.container(key="plot_reset_footer"),' in tab_source
         assert "render_viz_reset(st)" in tab_source
         # No second column in the heading row, and no reset above the controls.
         assert "rail_heading, rail_reset = st.columns(" not in tab_source
@@ -1516,3 +1520,316 @@ class TestEveryGuideCardFolds:
             assert f'"sps_guide_pos_{kind}"' in script
             assert f".st-key-guide_pill_{kind}" in script
             assert "__KIND__" not in script
+
+
+# -----------------------------------------------------------------------------
+# Essentials mode's welcome tour
+# -----------------------------------------------------------------------------
+
+#: The containers Essentials draws that the welcome tour may spotlight.
+_SIMPLE_TOUR_SELECTORS = {
+    None,
+    ".st-key-tour_grp_trial_picker",
+    ".st-key-tour_grp_plot",
+    ".st-key-tour_grp_simple_views",
+    ".st-key-tour_grp_subtabs",
+    ".st-key-tour_grp_ui_mode",
+}
+
+
+class TestSimpleWelcomeTour:
+    def test_simple_steps_target_only_simple_elements(self):
+        from scanpath_studio.tour import _SIMPLE_SPOTLIGHT_STEPS
+
+        assert {
+            s["selector"] for s in _SIMPLE_SPOTLIGHT_STEPS
+        } <= _SIMPLE_TOUR_SELECTORS
+        assert not any(s.get("popover") for s in _SIMPLE_SPOTLIGHT_STEPS)
+        assert 5 <= len(_SIMPLE_SPOTLIGHT_STEPS) <= 6
+        assert _SIMPLE_SPOTLIGHT_STEPS[0]["selector"] is None
+        assert _SIMPLE_SPOTLIGHT_STEPS[-1]["selector"] == ".st-key-tour_grp_ui_mode"
+
+    def test_simple_selectors_name_real_containers(self):
+        """Every selector is a key the code draws (the switch's lives in
+        ``ui_mode``, which the Full resolver test does not read)."""
+        from scanpath_studio import ui_mode
+        from scanpath_studio.tour import _SIMPLE_SPOTLIGHT_STEPS
+
+        keys = TestSpotlightSelectorsResolve()._keyed_containers()
+        keys.add(ui_mode.SWITCH_BOX_KEY)
+        missing = [
+            s["selector"]
+            for s in _SIMPLE_SPOTLIGHT_STEPS
+            if s["selector"] and s["selector"].removeprefix(".st-key-") not in keys
+        ]
+        assert not missing
+
+    def test_simple_steps_are_short_unique_and_dock_validly(self):
+        from scanpath_studio.tour import _CARD_DOCKS, _SIMPLE_SPOTLIGHT_STEPS
+
+        selectors = [s["selector"] for s in _SIMPLE_SPOTLIGHT_STEPS if s["selector"]]
+        assert len(selectors) == len(set(selectors))
+        for step in _SIMPLE_SPOTLIGHT_STEPS:
+            assert len(step["body"]) <= 240, step["body"]
+            assert step.get("dock", "left") in _CARD_DOCKS
+        text = " ".join(s["title"] + " " + s["body"] for s in _SIMPLE_SPOTLIGHT_STEPS)
+        for phrase in ("chip", "scrub", "pools", "at a glance", "opens over"):
+            assert phrase not in text.lower(), phrase
+
+    def test_the_subtab_step_names_what_more_adds(self):
+        from scanpath_studio.tour import _SIMPLE_SPOTLIGHT_STEPS
+
+        body = next(
+            s["body"]
+            for s in _SIMPLE_SPOTLIGHT_STEPS
+            if s["selector"] == ".st-key-tour_grp_subtabs"
+        )
+        for word in ("More", "Full", "questions", "annotations"):
+            assert word.lower() in body.lower(), word
+
+    def test_spotlight_steps_follow_the_mode(self):
+        from unittest.mock import patch
+
+        from scanpath_studio import tour
+
+        for mode, steps in (
+            ("essentials", tour._SIMPLE_SPOTLIGHT_STEPS),
+            ("full", tour._SPOTLIGHT_STEPS),
+        ):
+            with patch.object(tour.st, "session_state", {"ui_mode": mode}):
+                assert tour._spotlight_steps() is steps
+
+    def test_ui_param_does_not_suppress_the_tour(self):
+        from scanpath_studio.tour import tour_suppressed
+
+        assert tour_suppressed({"ui": "essentials"}) is False
+        assert tour_suppressed({"ui": "full"}) is False
+
+    def test_a_ui_link_alone_still_starts_the_tour_in_simple(self):
+        from pathlib import Path
+
+        app_script = Path(__file__).resolve().parent.parent / "streamlit_app.py"
+        at = AppTest.from_file(str(app_script), default_timeout=120)
+        at.query_params["ui"] = "essentials"
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["tour_mode"] == "spotlight"
+        assert any(b.key == "tour_sp_next" for b in at.button)
+
+    def test_the_card_counts_the_simple_steps(self):
+        from scanpath_studio.tour import _SIMPLE_SPOTLIGHT_STEPS
+
+        at = AppTest.from_function(_welcome_tour_app)
+        at.session_state["ui_mode"] = "essentials"
+        at.run()
+        assert not at.exception, at.exception
+        n = len(_SIMPLE_SPOTLIGHT_STEPS)
+        assert any(f"Step 1 of {n}" in str(p.proto.text) for p in at.get("progress"))
+        for _ in range(n - 1):
+            at.button(key="tour_sp_next").click().run()
+        assert not at.exception, at.exception
+        assert any(f"Step {n} of {n}" in str(p.proto.text) for p in at.get("progress"))
+        assert any(b.key == "tour_sp_done" for b in at.button)
+
+    def test_the_welcome_card_replays_the_tour_for_the_mode(self):
+        """The Tutorials dialog's *Welcome tour* card arms the tour
+        (``_arm_tour``), which then walks the current mode's steps."""
+        from scanpath_studio.tour import _SIMPLE_SPOTLIGHT_STEPS, _SPOTLIGHT_STEPS
+
+        for mode, steps in (
+            ("essentials", _SIMPLE_SPOTLIGHT_STEPS),
+            ("full", _SPOTLIGHT_STEPS),
+        ):
+            at = AppTest.from_function(_welcome_tour_replay_app)
+            at.session_state["ui_mode"] = mode
+            at.run()
+            assert not at.exception, at.exception
+            assert at.session_state["tour_mode"] == "spotlight"
+            assert at.session_state["tour_step"] == 0
+            assert at.session_state["ui_mode"] == mode
+            assert any(
+                f"Step 1 of {len(steps)}" in str(p.proto.text)
+                for p in at.get("progress")
+            )
+
+
+class TestWelcomeTourAcrossTheSwitch:
+    """Each mode walks its own welcome tour, so changing mode mid-tour ends it
+    rather than landing on the same step number of the other tour."""
+
+    def test_switching_mode_ends_the_welcome_tour(self):
+        from scanpath_studio.tour import _SIMPLE_SPOTLIGHT_STEPS
+
+        for start, other in (("essentials", "full"), ("full", "essentials")):
+            at = AppTest.from_function(_welcome_tour_with_switch_app)
+            at.session_state["ui_mode"] = start
+            at.run()
+            assert at.session_state["tour_mode"] == "spotlight"
+            at.session_state["tour_step"] = len(_SIMPLE_SPOTLIGHT_STEPS) - 1
+            at.segmented_control(key="ui_mode_switch").set_value(other).run()
+            assert not at.exception, at.exception
+            assert at.session_state["ui_mode"] == other
+            assert at.session_state["tour_mode"] is None
+            assert at.session_state["tour_seen"] is True
+            assert not at.get("progress")
+
+    def test_a_deselect_keeps_the_welcome_tour(self):
+        at = AppTest.from_function(_welcome_tour_with_switch_app)
+        at.session_state["ui_mode"] = "essentials"
+        at.run()
+        at.segmented_control(key="ui_mode_switch").set_value(None).run()
+        assert not at.exception, at.exception
+        assert at.session_state["ui_mode"] == "essentials"
+        assert at.session_state["tour_mode"] == "spotlight"
+
+
+def _welcome_tour_with_switch_app():
+    """The welcome tour beside the mode switch, as the header draws it."""
+    import streamlit as st
+
+    from scanpath_studio import ui_mode
+    from scanpath_studio.tour import maybe_show_welcome_tour, render_spotlight_tour
+
+    ui_mode.render_switch(st)
+    maybe_show_welcome_tour()
+    render_spotlight_tour()
+
+
+class TestTutorialsFromSimple:
+    """The task tutorials spotlight Full-only controls, so starting one in
+    Essentials moves the session to Full (the session only, never the cookie).
+    Every start (Start, Resume, Start over) goes through ``_start_use_case``."""
+
+    def test_starting_a_tutorial_in_simple_switches_this_session_to_advanced(self):
+        at = AppTest.from_function(_use_case_tutorial_app)
+        at.session_state["ui_mode"] = "essentials"
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["tutorial_active"] == "filter_annotate"
+        assert at.session_state["ui_mode"] == "full"
+        # Not the viewer's own choice: nothing for the cookie to remember.
+        assert "_ui_mode_chosen" not in at.session_state
+        assert "_ui_mode_cookie" not in at.session_state
+
+    def test_starting_a_tutorial_in_advanced_changes_nothing(self):
+        at = AppTest.from_function(_use_case_tutorial_app)
+        at.session_state["ui_mode"] = "full"
+        at.run()
+        assert at.session_state["tutorial_active"] == "filter_annotate"
+        assert at.session_state["ui_mode"] == "full"
+        assert "_ui_mode_chosen" not in at.session_state
+
+    def test_a_blocked_tutorial_leaves_the_mode_alone(self):
+        """A tutorial that cannot start (nothing to compare) changes nothing."""
+        from unittest.mock import patch
+
+        from scanpath_studio import tour
+
+        state = {"ui_mode": "essentials", "_tutorial_context": {"n_trials": 0}}
+        with patch.object(tour.st, "session_state", state):
+            tour._start_use_case("compare_readings")
+        assert state["ui_mode"] == "essentials"
+        assert "tutorial_active" not in state
+
+    def test_the_return_point_is_taken_before_the_switch(self):
+        """Exit returns to the subtab the viewer was on: Essentials' first one."""
+        from unittest.mock import patch
+
+        from scanpath_studio import tour
+        from scanpath_studio.constants import SUBTAB_EXPORT
+
+        state = {
+            "ui_mode": "essentials",
+            "_tutorial_context": {
+                "n_trials": 2,
+                "has_words": True,
+                "has_fixations": True,
+            },
+        }
+        with patch.object(tour.st, "session_state", state):
+            tour._start_use_case("filter_annotate")
+        assert state["tutorial_return"]["single_subtab"] == SUBTAB_EXPORT
+        assert state["ui_mode"] == "full"
+
+    def test_switching_to_simple_ends_the_running_tutorial(self):
+        """Back in Essentials the tutorial would point at hidden controls: choosing
+        Essentials leaves it as its Exit does, and the cookie follows the click."""
+        at = AppTest.from_function(_tutorial_with_switch_app)
+        at.session_state["ui_mode"] = "essentials"
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["tutorial_active"] == "filter_annotate"
+        assert at.session_state["ui_mode"] == "full"
+        at.segmented_control(key="ui_mode_switch").set_value("essentials").run()
+        assert not at.exception, at.exception
+        assert not at.session_state["tutorial_active"]
+        assert at.session_state["ui_mode"] == "essentials"
+        assert at.session_state["_ui_mode_cookie"] == "essentials"
+        assert not [b for b in at.button if b.key == "tutorial_exit"]
+
+    def test_a_deselect_in_advanced_keeps_the_tutorial(self):
+        """Only choosing Essentials ends a tutorial: a deselected switch (which
+        keeps the mode) leaves it running, in Full."""
+        at = AppTest.from_function(_tutorial_with_switch_app)
+        at.session_state["ui_mode"] = "full"
+        at.run()
+        assert at.session_state["tutorial_active"] == "filter_annotate"
+        at.segmented_control(key="ui_mode_switch").set_value(None).run()
+        assert not at.exception, at.exception
+        assert at.session_state["ui_mode"] == "full"
+        assert at.session_state["tutorial_active"] == "filter_annotate"
+        assert [b for b in at.button if b.key == "tutorial_exit"]
+
+    def test_a_tutorial_started_in_simple_never_rewrites_the_cookie(self):
+        """A viewer who had chosen Essentials keeps Essentials in the cookie: the
+        script that writes it follows their choice, not the session's mode."""
+        at = AppTest.from_function(_cookie_after_tutorial_app)
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["cookie_mode"] == "essentials"
+        assert at.session_state["ui_mode"] == "full"
+
+
+def _tutorial_with_switch_app():
+    """A tutorial armed once, beside the mode switch (as the header draws it)."""
+    import streamlit as st
+
+    from scanpath_studio import ui_mode
+    from scanpath_studio.constants import _VIEW_SCANPATH
+
+    st.session_state.setdefault("main_nav", _VIEW_SCANPATH)
+    if not st.session_state.get("_tutorial_armed_once"):
+        st.session_state["_tutorial_armed_once"] = True
+        st.session_state["_tutorial_context"] = {
+            "n_trials": 3,
+            "has_words": True,
+            "has_fixations": True,
+            "has_comparable_readings": True,
+            "has_corpus_variation": True,
+        }
+        from scanpath_studio.tour import _start_use_case
+
+        _start_use_case("filter_annotate")
+    ui_mode.render_switch(st)
+    from scanpath_studio.tour import render_use_case_tutorial
+
+    render_use_case_tutorial()
+
+
+def _cookie_after_tutorial_app():
+    """A viewer who chose Essentials, then started a tutorial in it."""
+    import streamlit as st
+
+    from scanpath_studio import tour, ui_mode
+
+    st.session_state["ui_mode"] = ui_mode.SIMPLE
+    ui_mode._choose_mode(ui_mode.SIMPLE)
+    st.session_state["_tutorial_context"] = {
+        "n_trials": 2,
+        "has_words": True,
+        "has_fixations": True,
+        "has_comparable_readings": True,
+        "has_corpus_variation": True,
+    }
+    tour._start_use_case("filter_annotate")
+    st.session_state["cookie_mode"] = ui_mode.cookie_mode()

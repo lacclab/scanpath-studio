@@ -130,9 +130,10 @@ def test_the_clipped_popovers_are_named_in_plain_words():
     for where, node in _calls():
         key = _keyword(node, "key")
         source = ast.unparse(key) if key is not None else ""
-        if node.func.attr != "popover" or not (
-            "iconpop_" in source or any(k in source for k in _KEYED_POPOVERS)
-        ):
+        # The ＋ More lists draw their name, so `styles.py` does not clip it.
+        if node.func.attr != "popover" or "iconpop_more_" in source:
+            continue
+        if not ("iconpop_" in source or any(k in source for k in _KEYED_POPOVERS)):
             continue
         clipped += 1
         text = _label_text(node.args[0])
@@ -174,8 +175,8 @@ def test_the_names_are_clipped_off_screen():
     for selector in (
         '[class*="st-key-split_mode_"] [data-testid="stPopoverButton"] '
         '[data-testid="stMarkdownContainer"]',
-        '[class*="st-key-iconpop_"] [data-testid="stPopoverButton"] '
-        '[data-testid="stMarkdownContainer"]',
+        '[class*="st-key-iconpop_"]:not([class*="st-key-iconpop_more_"]) '
+        '[data-testid="stPopoverButton"] [data-testid="stMarkdownContainer"]',
         '.st-key-add_dataset_menu [data-testid="stPopoverButton"] '
         '[data-testid="stMarkdownContainer"]',
         'button [data-testid="stMarkdownContainer"] em',

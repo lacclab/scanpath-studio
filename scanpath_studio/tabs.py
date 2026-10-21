@@ -25,7 +25,7 @@ import pandas as pd
 import plotly.io as pio
 import streamlit as st
 
-from scanpath_studio import alignment, loading, progress
+from scanpath_studio import alignment, loading, progress, ui_mode
 from scanpath_studio import metadata as _metadata_mod
 from scanpath_studio.aggregation import (
     MEASURES,
@@ -144,6 +144,7 @@ from scanpath_studio.constants import (
     SUBTAB_COMPARISONS,
     SUBTAB_EXPORT,
     SUBTAB_LINE_ASSIGNMENT,
+    SUBTAB_MORE,
     SUBTAB_SHARE,
     SUBTAB_STIMULUS,
     SYNTHETIC_CHOICE,
@@ -172,6 +173,7 @@ from scanpath_studio.constants import (
 from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
+    SIMPLE_VIEW_LIT_KEY,
     SUMMARY_CHIP_FIELDS,
     TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
@@ -397,6 +399,7 @@ from scanpath_studio.utils import (
     trial_id_layout,
     trial_id_shown,
     trial_options_snapshot_key,
+    trial_sort_is_set,
     trial_sort_keys,
     unqualify_for_export,
 )
@@ -5530,6 +5533,22 @@ def _dataset_table_names() -> dict[str, ColumnNames]:
     }
 
 
+def subtab_labels_for(simple: bool, *, line_assignment: bool) -> list[str]:
+    """The per-trial subtab bar's labels, in order, for the interface mode.
+
+    Essentials keeps what a first-time viewer reaches for (the current figure's
+    export and Share) plus a ＋ More list of what Full adds. Full adds
+    📐 Line assignment only while ``line_assignment`` (drift correction) is
+    offered. Dataset inspection is on the 🗂️ **Data** page, not this bar.
+    """
+    if simple:
+        return [SUBTAB_EXPORT, SUBTAB_SHARE, SUBTAB_MORE]
+    labels = [SUBTAB_ANNOTATIONS, SUBTAB_STIMULUS, SUBTAB_COMPARISONS]
+    if line_assignment:
+        labels.append(SUBTAB_LINE_ASSIGNMENT)
+    return labels + [SUBTAB_EXPORT, SUBTAB_SHARE]
+
+
 def _render_export_panel(
     displayed_fig,
     *,
@@ -5555,9 +5574,10 @@ def _render_export_panel(
     selected_trial: str,
     plot_key: str = "single",
     replay: _ReplayView | None = None,
+    include_bundle: bool = True,
 ) -> None:
     """Consolidated Export subtab: the currently-viewed figure on top, then a
-    bulk multi-trial export below.
+    bulk multi-trial export below (left out when ``include_bundle`` is false).
 
     "Current figure" exports the live figure (static PNG/SVG/PDF/HTML, or
     the HTML/GIF/MP4 animation when animating) so the on-screen view — including
@@ -5580,6 +5600,9 @@ def _render_export_panel(
         )
         render_cite_button(st, key="single_export")
 
+    if not include_bundle:
+        ui_mode.render_export_pointer(st)
+        return
     st.divider()
     st.markdown("## Export bundle")
     if animate or st.session_state.get(SINGLE_COMPARE_TOGGLE):
@@ -6276,8 +6299,14 @@ def render_single_trial_tab(
                 data_source_renderer(host)
 
         def _render_filters(host) -> None:
-            """Every way to narrow the pool, behind one funnel."""
-            pop = host.popover(
+            """Every way to narrow the pool, behind one funnel.
+
+            The funnel and the chips' menu are each their own Full-only
+            container, so each stays a direct child of the ``railbtn_*``
+            cluster and lays out as the cluster's other cells do. In Essentials
+            they stay in the page, hidden, with their values, and a ＋ More
+            list takes the cell."""
+            pop = ui_mode.advanced_only(host, "trial_filters").popover(
                 "Filter the trial list",
                 icon=_FILTER_ICON,
                 width="content",
@@ -6290,7 +6319,12 @@ def render_single_trial_tab(
             # table below has the plot's whole width, and hiding it
             # leaves no row behind. Drawn here, before the table reads
             # `trial_chip_fields`, so an edit applies the same run.
-            _render_chip_menu(host, words_all, fixations_all)
+            _render_chip_menu(
+                ui_mode.advanced_only(host, "chip_fields"), words_all, fixations_all
+            )
+            ui_mode.render_more_popover(
+                ui_mode.simple_only(host, "picker_more"), "picker"
+            )
 
         # A dataset with screens gets the screen navigator at the trial row's
         # right end; the cell is reserved now and filled once the trial (and so
@@ -6330,7 +6364,11 @@ def render_single_trial_tab(
         # `chips_slot`, its rows named in each scanpath's colour.
         # Keyed containers double as welcome-tour spotlight targets.
         compare_slot = st.container(key="tour_grp_compare_picker")
-        chips_slot = st.container(key="tour_grp_chips")
+        # Full-only: Essentials hides the trial summary table (the wrapper is
+        # drawn either way, so the figure keeps its position).
+        chips_slot = ui_mode.advanced_only(st, ui_mode.TRIAL_CHIPS).container(
+            key="tour_grp_chips"
+        )
         # Notes about the figure that come *before* it sit above the
         # stage, so the figure is always the stage's second child and a figure
         # already on screen stays put while the next one is built.
@@ -6435,7 +6473,12 @@ def render_single_trial_tab(
         # ordinary window size.
         with st.container(key="plot_controls_header"):
             st.markdown(f"## {ICONS['plot_controls']} Plot controls")
-        with rail.container(key="tour_grp_view_modes"):
+        # Essentials mode sets Animate from its View tiles and has no Compare, so
+        # the two mode rows are Full-only; they still run in Essentials, which
+        # keeps `animate` and `compare_enabled` resolved exactly as here.
+        with ui_mode.advanced_only(rail, "rail_modes").container(
+            key="tour_grp_view_modes"
+        ):
             # The mode and its settings are ONE control, laid out the way a
             # Zoom-style split button is: the toggle switches the mode on and off,
             # the ▾ beside it opens the settings. The horizontal container is what
@@ -6985,12 +7028,34 @@ def render_single_trial_tab(
                 selected_trial,
                 combo_row=primary_combo_row,
             ),
+            # Essentials' lit View tile follows the figure actually drawn.
+            animating=bool(animate),
         )
         # The scoped reset closes the rail, below every control it
         # resets, rather than sharing the heading row. It is last in creation
         # order, so it lands at the foot of the rail's own scroll area.
-        with st.container(key="plot_reset_footer"):
+        # Full-only: Essentials' View tiles are its way back to a preset.
+        with (
+            ui_mode.advanced_only(rail, "rail_reset"),
+            st.container(key="plot_reset_footer"),
+        ):
             render_viz_reset(st)
+
+    # Essentials hides the controls that Full sets, but they keep shaping the
+    # figure; say which are in play. The container is drawn on every run, in
+    # both modes and empty when there is nothing to say, so the notes below it
+    # never change position.
+    ui_mode.render_hidden_settings_note(
+        plot_notes_slot.container(),
+        ui_mode.hidden_settings_reasons(
+            narrowed=len(combos) < len(combos_all),
+            sorted_=trial_sort_is_set("single"),
+            comparing=bool(compare_enabled),
+            custom_view=st.session_state.get(SIMPLE_VIEW_LIT_KEY, "") is None,
+        )
+        if ui_mode.is_simple()
+        else [],
+    )
 
     # Second-trial selector + layout/legend options, rendered above the chips in
     # the plot column. Filled after the rail so the per-scanpath compare
@@ -7830,16 +7895,20 @@ def render_single_trial_tab(
     # and summary stats (configurable via the ✏️ chip editor).
     # The reserved keyed slot is the welcome-tour spotlight target.
     with subtabs_slot:
-        # 📐 Line assignment is only offered while drift correction is
-        # exposed (the experimental flag). Built as a list rather than a fixed
-        # tuple for that reason — the tab count is a function of the flag.
-        subtab_labels = [SUBTAB_ANNOTATIONS, SUBTAB_STIMULUS, SUBTAB_COMPARISONS]
-        if drift_correction_enabled():
-            subtab_labels.append(SUBTAB_LINE_ASSIGNMENT)
-        # Dataset inspection is on the 🗂️ **Data** page, not this bar —
-        # inspecting a dataset is setting it up, beside the source picker and
-        # the column mapping.
-        subtab_labels += [SUBTAB_EXPORT, SUBTAB_SHARE]
+        simple = ui_mode.is_simple()
+        subtab_labels = subtab_labels_for(
+            simple, line_assignment=drift_correction_enabled()
+        )
+        # The bar's identity includes its labels, so a mode switch makes it a
+        # new widget that would start on its first tab. Writing the selection
+        # back before the bar is created carries it over, and a subtab the mode
+        # lacks (a switch to Essentials from Comparisons, a tutorial step naming
+        # one) falls back to the mode's first.
+        if "single_subtab" in st.session_state:
+            held = st.session_state["single_subtab"]
+            st.session_state["single_subtab"] = (
+                held if held in subtab_labels else subtab_labels[0]
+            )
         _subtabs = st.tabs(
             subtab_labels,
             # A plain `st.tabs` executes EVERY tab's body on every run — only the
@@ -7857,30 +7926,34 @@ def render_single_trial_tab(
             on_change="rerun",
         )
         by_label = dict(zip(subtab_labels, _subtabs))
-        tab_annot = by_label[SUBTAB_ANNOTATIONS]
-        tab_stim = by_label[SUBTAB_STIMULUS]
-        tab_compare = by_label[SUBTAB_COMPARISONS]
+        tab_annot = by_label.get(SUBTAB_ANNOTATIONS)
+        tab_stim = by_label.get(SUBTAB_STIMULUS)
+        tab_compare = by_label.get(SUBTAB_COMPARISONS)
         tab_align = by_label.get(SUBTAB_LINE_ASSIGNMENT)
         tab_export = by_label[SUBTAB_EXPORT]
         tab_share = by_label[SUBTAB_SHARE]
-    with tab_annot, st.container(key="tutorial_annotations"):
-        render_trial_annotations(
-            selected_participant,
-            selected_trial,
-            screen_id=selected_screen,
-            bare=True,
-        )
-    with tab_stim:
-        # Gated like the other keyed tabs — a hidden panel does no work,
-        # and a trial whose context it cannot render costs only this tab.
-        if tab_stim.open:
-            _render_paragraph_panel(
-                trial_words, trial_fixations=trial_fixations, bare=True
+        tab_more = by_label.get(SUBTAB_MORE)
+    # Annotations, Stimulus and Comparisons are absent entirely in Essentials mode.
+    if tab_annot is not None:
+        with tab_annot, st.container(key="tutorial_annotations"):
+            render_trial_annotations(
+                selected_participant,
+                selected_trial,
+                screen_id=selected_screen,
+                bare=True,
             )
-    with tab_compare:
+    if tab_stim is not None:
+        with tab_stim:
+            # Gated like the other keyed tabs — a hidden panel does no work,
+            # and a trial whose context it cannot render costs only this tab.
+            if tab_stim.open:
+                _render_paragraph_panel(
+                    trial_words, trial_fixations=trial_fixations, bare=True
+                )
+    with tab_compare if tab_compare is not None else contextlib.nullcontext():
         # Only the selected tab's body runs (see the st.tabs call).
         # Nothing to render when closed — a hidden panel is not on screen.
-        if tab_compare.open:
+        if tab_compare is not None and tab_compare.open:
             # The chosen column selects other trials with the same value
             # as the main trial. A text field yields other readings of that text;
             # another field can intentionally cross texts.
@@ -7953,6 +8026,7 @@ def render_single_trial_tab(
                     selected_participant=selected_participant,
                     selected_trial=selected_trial,
                     plot_key=displayed_plot_key,
+                    include_bundle=not simple,
                 )
 
     # The Share subtab. app.main passes the renderer (it owns the
@@ -7966,6 +8040,10 @@ def render_single_trial_tab(
             share_renderer(tab_share.open)
         else:
             st.caption("Sharing is unavailable in this context.")
+
+    # Essentials mode's last subtab: what Full adds below the plot.
+    if tab_more is not None and tab_more.open:
+        ui_mode.render_more_list(tab_more, "subtabs")
 
 
 #: Set by Stop on a running bundle build, read (and dropped) by the next run

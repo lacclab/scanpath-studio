@@ -6,6 +6,10 @@ description: "Export an animated scanpath replay of a reading as GIF or MP4 for 
 
 Save an animated reading for a talk or supplement.
 
+These steps use the **Full** mode: switch to it in the top bar of the
+:material/route: **Scanpath** view, or add `ui=full` to the app's
+address ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
+
 1. Pick a trial in the :material/route: **Scanpath** view and turn on
    :material/movie: **Animate**.
 2. In **Animate** ▾ → **Replay**, set the **Speed**. Turn on the layers you

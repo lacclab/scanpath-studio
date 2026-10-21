@@ -359,7 +359,7 @@ def record(url: str, frames: Path) -> Path:
         pointer = Pointer(page)
         # The deep link sets the replay to ×3: at real time a few seconds of GIF
         # show a handful of fixations.
-        page.goto(f"{url}/?playback_speed=3", wait_until="domcontentloaded")
+        page.goto(f"{url}/?playback_speed=3&ui=full", wait_until="domcontentloaded")
         settle(page, quiet=3.0)
         page.add_style_tag(content=HIDE_CSS)
         close_tour(page)

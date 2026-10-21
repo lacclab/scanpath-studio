@@ -404,6 +404,12 @@ def _compare_style_params(*fields: str) -> dict[str, str]:
 #: corpus defaults. A one-shot handoff, not a setting.
 LINK_SETUP_STATE_KEY = "_link_setup_keys"
 
+#: The interface mode in force this session ("essentials" / "full"), seeded
+#: once from `?ui=` or the cookie by `ui_mode.seed_mode`.
+UI_MODE = "ui_mode"
+#: The browser cookie that remembers the mode between visits.
+UI_MODE_COOKIE = "sps_ui_mode"
+
 # ---------------------------------------------------------------------------
 # URL query-parameter names that are NOT viz settings — the selection half of a
 # deep link, plus legacy aliases still read from old links.
@@ -413,6 +419,9 @@ PARAM_PARTICIPANT = "participant"
 PARAM_TRIAL = "trial"  # slider index (read-only; Share emits `trial_id`)
 PARAM_TRIAL_ID = "trial_id"
 PARAM_TAB = "tab"
+# The Essentials / Full interface mode (`ui_mode.resolve_mode`). A viewer's own
+# preference, so it is read from a link but never written by Share.
+PARAM_UI = "ui"
 PARAM_ONESTOP_VARIANT = "onestop_variant"
 PARAM_ONESTOP_REGIME = "onestop_regime"
 PARAM_ONESTOP_PARTS = "onestop_parts"

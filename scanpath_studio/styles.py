@@ -358,12 +358,13 @@ def get_app_css() -> str:
        `.sps-sr-only` does.
        The other icon-only popovers are named the same way: the + menu (under
        its own key), the table previews, the chip-field editor and the ⇅ sorts,
-       each keyed `iconpop_*`. A plain label, so the popover's dialog, which
+       each keyed `iconpop_*` (but not the ＋ More lists, which show their name).
+       A plain label, so the popover's dialog, which
        takes the label as its `aria-label`, is named the same. */
     .st-key-add_dataset_menu [data-testid="stPopoverButton"]
         [data-testid="stMarkdownContainer"],
-    [class*="st-key-iconpop_"] [data-testid="stPopoverButton"]
-        [data-testid="stMarkdownContainer"],
+    [class*="st-key-iconpop_"]:not([class*="st-key-iconpop_more_"])
+        [data-testid="stPopoverButton"] [data-testid="stMarkdownContainer"],
     [class*="st-key-split_mode_"] [data-testid="stPopoverButton"]
         [data-testid="stMarkdownContainer"] {
         position: absolute !important; width: 1px; height: 1px;
@@ -1157,6 +1158,25 @@ def get_app_css() -> str:
         width: auto !important;
     }
     [class*="st-key-railbtn_"] > div + div { margin-left: 3px !important; }
+    /* A ＋ More trigger is quiet: a faint outline and dimmed text until it is
+       pointed at. It is the one popover that draws its name (the others clip
+       it), and it sits in a `railbtn_*` cluster in Essentials only, where it is the
+       cluster's sole visible cell, so the neighbour margin above is dropped. */
+    [class*="st-key-iconpop_more_"] [data-testid="stPopoverButton"] {
+        background: transparent !important;
+        border-color: var(--sps-border) !important;
+        opacity: 0.72;
+    }
+    [class*="st-key-iconpop_more_"] [data-testid="stPopoverButton"]:hover,
+    [class*="st-key-iconpop_more_"] [data-testid="stPopoverButton"]
+        [aria-expanded="true"],
+    [class*="st-key-iconpop_more_"] [data-testid="stPopoverButton"]:focus-visible {
+        background: var(--sps-hover-soft) !important;
+        opacity: 1;
+    }
+    [class*="st-key-railbtn_"] > div:has(> .st-key-simple_only_picker_more) {
+        margin-left: 0 !important;
+    }
     /* The floors under the `SELECTOR_ROW_GRID` tracks
        (`SELECTOR_ROW_FLOORS_REM`). A row of this grid is a column row whose
        last column holds a `railbtn_*` cluster directly (◀ ▶ ⇅ 🔎 on the trial
@@ -2067,10 +2087,50 @@ def get_app_css() -> str:
     .st-key-scanpath_rail .st-key-viz_view_scanpath button,
     .st-key-scanpath_rail .st-key-viz_view_heatmap button,
     .st-key-scanpath_rail .st-key-viz_view_illustration button,
-    .st-key-scanpath_rail .st-key-viz_view_custom button {
+    .st-key-scanpath_rail .st-key-viz_view_custom button,
+    .st-key-scanpath_rail [class*="st-key-simple_view_"] button {
         min-height: 2.6rem;
         padding-top: 0.25rem;
         padding-bottom: 0.25rem;
+    }
+    /* Essentials' View tiles are bigger than Full's presets: an icon over its
+       label, in a tile 4rem tall. Full's `quick_views_grid` keeps its own size. */
+    .st-key-scanpath_rail .st-key-tour_grp_simple_views button {
+        min-height: 4rem;
+        padding-top: 0.4rem;
+        padding-bottom: 0.4rem;
+    }
+    .st-key-scanpath_rail .st-key-tour_grp_simple_views button > div > span {
+        flex-direction: column;
+        align-items: center;
+        gap: 0.2rem;
+    }
+    .st-key-scanpath_rail .st-key-tour_grp_simple_views button p {
+        font-size: 1.05rem;
+        line-height: 1.2;
+    }
+    .st-key-scanpath_rail .st-key-tour_grp_simple_views button
+        span:has(> [data-testid="stIconMaterial"]),
+    .st-key-scanpath_rail .st-key-tour_grp_simple_views button
+        [data-testid="stIconMaterial"] {
+        width: 1.6rem;
+        height: 1.6rem;
+        font-size: 1.6rem;
+        line-height: 1.6rem;
+    }
+    /* An Essentials / Full wrapper (`ui_mode.advanced_only` / `simple_only`)
+       in the rail is one more block around what it holds. The wrapper takes
+       the app-wide 0.25rem under each block itself, so its last child gives
+       its own back: the rail's spacing is the same as without the wrapper. */
+    .st-key-scanpath_rail [class*="st-key-adv_only_"] > div:last-child,
+    .st-key-scanpath_rail [class*="st-key-simple_only_"] > div:last-child {
+        margin-bottom: 0 !important;
+    }
+    /* The trial summary table's Full-only wrapper (`ui_mode.TRIAL_CHIPS`)
+       holds the keyed table container alone: the wrapper's own margin under
+       it would double the page's 0.25rem. */
+    .st-key-adv_only_chips > [data-testid="stLayoutWrapper"]:last-child {
+        margin-bottom: 0 !important;
     }
     /* The presets' height — one line of label needs no more. */
     .st-key-scanpath_rail .st-key-reset_viz_settings_btn button {
@@ -2125,8 +2185,10 @@ def get_app_css() -> str:
         opacity: 0.72;
     }
     /* Give the heading a small breathing space, while keeping the 2×2 grid
-       itself tighter than ordinary Streamlit column rows. */
-    .st-key-scanpath_rail .st-key-quick_views_grid {
+       itself tighter than ordinary Streamlit column rows. Essentials mode's View
+       tiles (`tour_grp_simple_views`) are the same grid. */
+    .st-key-scanpath_rail .st-key-quick_views_grid,
+    .st-key-scanpath_rail .st-key-tour_grp_simple_views {
         margin-top: 0;
         padding-top: 0.45rem;
         margin-bottom: 0.05rem;
@@ -2135,11 +2197,16 @@ def get_app_css() -> str:
        (`gap="small"`, 0.4rem), not twice that: the rail's 0.3rem gap plus the
        app-wide 0.25rem under each block, twice over. The key sits on the
        vertical block itself, so the rule names it, not a child of it. */
-    .st-key-scanpath_rail .st-key-quick_views_grid[data-testid="stVerticalBlock"] {
+    .st-key-scanpath_rail .st-key-quick_views_grid[data-testid="stVerticalBlock"],
+    .st-key-scanpath_rail
+        .st-key-tour_grp_simple_views[data-testid="stVerticalBlock"] {
         gap: 0.4rem !important;
     }
     .st-key-scanpath_rail .st-key-quick_views_grid > div,
     .st-key-scanpath_rail .st-key-quick_views_grid [data-testid="stColumn"]
+        [data-testid="stVerticalBlock"] > div,
+    .st-key-scanpath_rail .st-key-tour_grp_simple_views > div,
+    .st-key-scanpath_rail .st-key-tour_grp_simple_views [data-testid="stColumn"]
         [data-testid="stVerticalBlock"] > div {
         margin-bottom: 0 !important;
     }
@@ -2256,30 +2323,49 @@ def get_app_css() -> str:
        starts at 178px, a few pixels of slack for other platforms' fonts — a
        window under ~1220px. */
     @container sps-rail (max-width: 240px) {
-        .st-key-quick_views_grid [data-testid="stHorizontalBlock"] {
+        .st-key-quick_views_grid [data-testid="stHorizontalBlock"],
+        .st-key-tour_grp_simple_views [data-testid="stHorizontalBlock"] {
             gap: 0.4rem !important;
         }
         .st-key-viz_view_scanpath button,
         .st-key-viz_view_heatmap button,
         .st-key-viz_view_illustration button,
-        .st-key-viz_view_custom button {
+        .st-key-viz_view_custom button,
+        [class*="st-key-simple_view_"] button {
             padding-left: 0.25rem;
             padding-right: 0.25rem;
         }
         .st-key-viz_view_scanpath button p,
         .st-key-viz_view_heatmap button p,
         .st-key-viz_view_illustration button p,
-        .st-key-viz_view_custom button p {
+        .st-key-viz_view_custom button p,
+        [class*="st-key-simple_view_"] button p {
             font-size: 0.8125rem;
             white-space: nowrap;
+        }
+        .st-key-scanpath_rail .st-key-tour_grp_simple_views button p {
+            font-size: 0.95rem;
         }
     }
     @container sps-rail (max-width: 178px) {
         .st-key-viz_view_scanpath button p,
         .st-key-viz_view_heatmap button p,
         .st-key-viz_view_illustration button p,
-        .st-key-viz_view_custom button p {
+        .st-key-viz_view_custom button p,
+        [class*="st-key-simple_view_"] button p {
             font-size: 0;
+        }
+        /* The View tiles carry their icon in the `icon=` slot, beside the
+           label: with the label gone, its spacing would push the icon
+           off-centre. */
+        [class*="st-key-simple_view_"] button [data-testid="stIconMaterial"] {
+            margin: 0 !important;
+        }
+        .st-key-scanpath_rail .st-key-tour_grp_simple_views button p {
+            font-size: 0;
+        }
+        .st-key-scanpath_rail .st-key-tour_grp_simple_views button > div > span {
+            gap: 0;
         }
         /* A markdown `:material/…:` renders as `span[role="img"]` — the
            `stIconMaterial` test id is only on the `icon=` slot. */

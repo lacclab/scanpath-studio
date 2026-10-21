@@ -6,6 +6,10 @@ description: "Compare two eye trackers or setups on the same text: put their sca
 
 Review the same text recorded with two trackers or setups.
 
+These steps use the **Full** mode: switch to it in the top bar of the
+:material/route: **Scanpath** view, or add `ui=full` to the app's
+address ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
+
 1. [Import each recording](../../guides/loading-data/index.md#add-your-own-data)
    as a separate dataset, each with the **Recording setup** of its tracker.
 2. Open the first dataset in the :material/route: **Scanpath** view and pick a

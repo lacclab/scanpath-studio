@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from . import progress
+from . import progress, ui_mode
 from .annotations import current_dataset as annotations_dataset
 from .annotations import get_entry, store_for_prefix
 from .column_names import COMPUTED_SUFFIX, active_all
@@ -1105,6 +1105,29 @@ def trial_id_help(part_names: tuple[str, ...]) -> str:
     return sentence
 
 
+def trial_sort_default_key(key_prefix: str) -> str:
+    """Session key holding the sort option the picker offers first (its default)."""
+    return f"_{key_prefix}_trial_sort_default"
+
+
+def trial_sort_is_set(key_prefix: str) -> bool:
+    """Whether the trial list is in an order other than the picker's default.
+
+    Reads what the ⇅ popover last stored: true for any other key and for Data
+    order reversed, false before the popover has run. Descending has no effect
+    on Trial ID order, which the popover returns unsorted.
+    """
+    default = st.session_state.get(trial_sort_default_key(key_prefix))
+    if default is None:
+        return False
+    choice = st.session_state.get(f"{key_prefix}_trial_sort", default)
+    if choice != default:
+        return True
+    return choice != TRIAL_SORT_DEFAULT and bool(
+        st.session_state.get(f"{key_prefix}_trial_sort_desc")
+    )
+
+
 def _render_trial_sort_popover(
     host,
     combos: pd.DataFrame,
@@ -1142,6 +1165,7 @@ def _render_trial_sort_popover(
     state_key = f"{key_prefix}_trial_sort"
     if st.session_state.get(state_key) not in options:
         st.session_state[state_key] = options[0]
+    st.session_state[trial_sort_default_key(key_prefix)] = options[0]
     # Named for screen readers; `styles.py` draws ⇅ alone.
     with host.popover(
         "Sort the trial list",
@@ -1297,6 +1321,22 @@ def row_tail(column, key_prefix: str, reserve_screen_cell):
     )
     reserve_screen_cell(tail)
     return tail.container(key=f"railbtn_{key_prefix}_menus", width="content")
+
+
+#: The key prefix of the main trial picker. Compare's B picker has its own, and
+#: Essentials keeps that one whole so a compared pair can still be navigated.
+_MAIN_PICKER_PREFIX = "single"
+
+
+def _advanced_part(host, name: str, key_prefix: str):
+    """``host``, or a Full-only container in it for the main picker.
+
+    Essentials hides the container with CSS, so what it holds is still drawn and
+    keeps its value. Any other picker (Compare's B) gets ``host`` itself.
+    """
+    if key_prefix != _MAIN_PICKER_PREFIX:
+        return host
+    return ui_mode.advanced_only(host, name)
 
 
 def _select_trial_none_mode(
@@ -1511,7 +1551,7 @@ def _select_trial_none_mode(
         # shape, matching the pill-shaped labelled buttons on the rows above
         # and below.
         sort_key, sort_desc, sort_choice = _render_trial_sort_popover(
-            sort_col,
+            _advanced_part(sort_col, ui_mode.TRIAL_SORT, key_prefix),
             combos,
             trial_field,
             key_prefix,
@@ -1610,7 +1650,7 @@ def _select_trial_none_mode(
 
     if n_trials > 1:
         slider_labels = {opt: _slider_label(opt) for opt in trial_options}
-        with slider_col:
+        with _advanced_part(slider_col, ui_mode.TRIAL_SLIDER, key_prefix):
             st.select_slider(
                 "Trial",
                 options=trial_options,

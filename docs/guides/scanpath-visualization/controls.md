@@ -31,8 +31,9 @@ For the corresponding Python keywords and CLI flags, use the
 <a class="sps-ctl sps-ctl--menu" data-label="Trial summary menu" href="../../../assets/screenshots/controls/chips.webp" title="Open full size"><img src="../../../assets/screenshots/controls/chips.webp" alt="The trial summary menu, opened from the pencil button" loading="lazy"></a>
 
 The bar above the plot: pick a dataset and a trial, step through the trials,
-and narrow, sort or label the list. Simple shows the dataset, trial and
-**◀ ▶** controls; the rest of this section is in Advanced.
+and narrow, sort or label the list. Simple has all of it except the slider,
+**⇅**, the filter (:material/filter_alt:) and the trial summary table with its
+pencil (:material/edit:), which are in Advanced.
 
 | Control | What it does |
 | --- | --- |

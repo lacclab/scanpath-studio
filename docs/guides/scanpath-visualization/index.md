@@ -27,17 +27,17 @@ the screen it was recorded on.
 ## Simple and Advanced
 
 The view opens in **Simple**, a trimmed version of the same view for a first
-look. The **Simple | Advanced** switch is in the top bar, left of the ⋮ menu,
-on the :material/route: **Scanpath** view only. The mode you choose is
-remembered in this browser. Opening the app with `?ui=advanced` (or
-`?ui=simple`) at the end of its address uses that mode for the visit without
+look. The **Simple | Advanced** switch is in the top bar, on the
+:material/route: **Scanpath** view only. The mode you choose is remembered in
+this browser. Adding `ui=advanced` (or `ui=simple`) to the app's address, as
+`?ui=advanced` or `&ui=advanced`, uses that mode for the visit without
 changing the saved choice, and a link made with **Share** does not carry the
 mode.
 
 Simple shows:
 
 - the dataset and trial pickers with **◀ ▶**;
-- the plot, which opens on a playing replay;
+- the plot, which on a new visit opens on a playing replay;
 - four view tiles (**Animation**, **Scanpath**, **Heatmap** and
   **Illustration**) and the **Palette**;
 - the **Export** tab, for the figure on screen, and **Share**.

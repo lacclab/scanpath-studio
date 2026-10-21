@@ -1,5 +1,8 @@
 """A real browser on the running app: it loads, the figure draws, a popover opens.
 
+Most tests open the app in Advanced (``?ui=advanced``), which draws every
+control; one opens it as a first visit does, in Simple.
+
 ``AppTest`` runs no frontend, so nothing else in the suite sees what the app's
 CSS and page scripts do to Streamlit's page: the true-scale plot iframe, the
 rail's popovers, the scripts that reach into the parent document. A Streamlit
@@ -81,21 +84,43 @@ def app_url():
 
 
 @pytest.fixture(scope="module")
-def page(app_url):
-    """One page on the app's first visit, with its uncaught errors collected."""
+def browser():
     with sync_api.sync_playwright() as pw:
         try:
             browser = pw.chromium.launch()
         except sync_api.Error as exc:
             pytest.skip(f"no Chromium for Playwright ({exc.message.splitlines()[0]})")
-        page = browser.new_page(viewport={"width": 1440, "height": 900})
-        page.errors = []
-        page.on("pageerror", lambda exc: page.errors.append(str(exc)))
-        page.goto(app_url)
-        _settle(page)
-        _close_tour(page)
-        yield page
+        yield browser
         browser.close()
+
+
+def _open(browser, url: str):
+    """A fresh browser context's page on ``url``, its uncaught errors collected,
+    settled and with the first-visit tour closed."""
+    page = browser.new_context(viewport={"width": 1440, "height": 900}).new_page()
+    page.errors = []
+    page.on("pageerror", lambda exc: page.errors.append(str(exc)))
+    page.goto(url)
+    _settle(page)
+    _close_tour(page)
+    return page
+
+
+@pytest.fixture(scope="module")
+def page(app_url, browser):
+    """One page on the app's first visit in Advanced, which draws every control
+    the tests below reach for (a first visit opens in Simple)."""
+    page = _open(browser, f"{app_url}/?ui=advanced")
+    yield page
+    page.context.close()
+
+
+@pytest.fixture(scope="module")
+def simple_page(app_url, browser):
+    """One page on the app's first visit, which opens in Simple."""
+    page = _open(browser, app_url)
+    yield page
+    page.context.close()
 
 
 def _settle(page, quiet_ms: int = 1500, timeout_s: float = 150) -> None:
@@ -204,4 +229,22 @@ def test_the_tour_card_shows_nothing_until_its_stylesheet_applies(page):
 
 
 def test_no_script_error_reached_the_page(page):
+    assert page.errors == []
+
+
+def test_simple_opens_on_the_replay_with_its_own_controls(simple_page):
+    """A first visit opens in Simple: the replay draws, the ＋ More list
+    opens, the switch shows, and an Advanced-only rail popover is hidden."""
+    page = simple_page
+    frame = _plot_frame(page, "single_anim")
+    frame.locator("#truescale-single_anim.js-plotly-plot").wait_for(timeout=60_000)
+    assert frame.locator("#truescale-single_anim .main-svg").count() >= 1
+    assert page.locator(".st-key-tour_grp_ui_mode").first.is_visible()
+    assert not page.locator(".st-key-split_mode_rail_fix_popover").first.is_visible()
+    page.locator(".st-key-iconpop_more_picker button").first.click()
+    body = page.locator('[data-testid="stPopoverBody"]')
+    body.first.wait_for(state="visible", timeout=15_000)
+    assert "Switch to Advanced" in body.first.inner_text()
+    page.keyboard.press("Escape")
+    assert not page.locator('[data-testid="stException"]').count()
     assert page.errors == []

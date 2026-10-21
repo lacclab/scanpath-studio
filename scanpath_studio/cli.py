@@ -1595,6 +1595,13 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Color of the --caption text (default: #555555).",
     )
     viz.add_argument(
+        "--credit",
+        dest="show_credit",
+        action="store_true",
+        help="A small 'Made with Scanpath Studio' line under the plot. "
+        "The figure grows to fit it.",
+    )
+    viz.add_argument(
         "--separable-layers",
         action="store_true",
         help="Also write one file per layer (word boxes, fixations, saccades, "
@@ -1887,6 +1894,7 @@ _SWITCH_OPTION_FLAGS = {
     "duration_size_legend": False,
     "show_stimulus_image": True,
     "show_plot_frame": False,
+    "show_credit": True,
 }
 
 #: The keys `--style-a` / `--style-b` take, each with its value parser.
@@ -4047,6 +4055,39 @@ def version(argv: list[str]) -> None:
         print(f"What's new: {result.latest.url}")
 
 
+def _cite_parser() -> argparse.ArgumentParser:
+    """The `cite` parser (see `_analyze_parser`)."""
+    from .citation import CORPORA, FORMATS
+
+    parser = _ShortErrorParser(
+        prog="scanpath-studio cite",
+        description="Print how to cite Scanpath Studio, and with --corpus the "
+        "corpus you used too. Every figure `render` writes also carries the "
+        "citation in its file metadata.",
+    )
+    parser.add_argument(
+        "--format",
+        choices=FORMATS,
+        default="bibtex",
+        help="bibtex (default), apa, ris (Zotero, Mendeley, EndNote), csl-json, "
+        "or credit: one sentence to paste into a figure caption.",
+    )
+    parser.add_argument(
+        "--corpus",
+        choices=tuple(CORPORA),
+        help="Add this public corpus's citation after the software's.",
+    )
+    return parser
+
+
+def cite(argv: list[str]) -> None:
+    """Print the citation (``api.cite``) in the format asked for."""
+    args = _cite_parser().parse_args(argv)
+    from .citation import cite as _cite
+
+    print(_cite(args.format, args.corpus))
+
+
 def _check_parser() -> argparse.ArgumentParser:
     """The `check` parser (see `_analyze_parser`)."""
     parser = _ShortErrorParser(
@@ -4223,6 +4264,9 @@ usage:
                                    show this build and how it was installed;
                                    --check asks GitHub whether a newer
                                    release is out
+  scanpath-studio cite [--format F] [--corpus C]
+                                   print how to cite Scanpath Studio (BibTeX,
+                                   APA, RIS, CSL-JSON or a figure credit)
   scanpath-studio --version        print the version
 
 Other flags are passed to `streamlit run` (e.g.
@@ -4233,7 +4277,16 @@ SCANPATH_LOCAL_FS=1."""
 
 
 #: The subcommands `main` dispatches, for the did-you-mean below.
-_COMMANDS = ("run", "render", "analyze", "corpus", "check", "cache", "version")
+_COMMANDS = (
+    "run",
+    "render",
+    "analyze",
+    "corpus",
+    "check",
+    "cache",
+    "version",
+    "cite",
+)
 
 
 def _commands() -> tuple[str, ...]:
@@ -4346,6 +4399,8 @@ def main(argv: list[str] | None = None) -> None:
         cache(argv[1:])
     elif argv[0] == "version":
         version(argv[1:])
+    elif argv[0] == "cite":
+        cite(argv[1:])
     elif argv[0] in ("-h", "--help"):
         print(_help_text())
     elif argv[0] in ("-V", "--version"):

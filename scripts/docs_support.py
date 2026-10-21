@@ -83,6 +83,7 @@ def _parsers() -> dict:
         "check": cli._check_parser,
         "cache": cli._cache_parser,
         "version": cli._version_parser,
+        "cite": cli._cite_parser,
     }
 
 
@@ -325,6 +326,7 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "title_font_size",
         "caption_font_size",
         "caption_color",
+        "show_credit",
     ),
     "Hover": ("word_hover_fields", "word_hover_measure", "fixation_hover_fields"),
     "Legends": (

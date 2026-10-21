@@ -42,6 +42,7 @@ from time import perf_counter
 import pandas as pd
 
 from .aggregation import reader_summary_table, trial_summary_table
+from .citation import CORPORA, CREDIT_LINE, cite, corpus_for, software_apa
 from .column_names import (
     ColumnNames,
     across_tables,
@@ -56,7 +57,6 @@ from .constants import (
     DEFAULT_CAPTION_FONT_SIZE,
     DEFAULT_PALETTE,
     DEFAULT_TITLE_FONT_SIZE,
-    DEMO_CHOICE,
     ICONS,
     PLOTLY_CONFIG,
     UNIFORM_COLOR_FIELD,
@@ -65,6 +65,8 @@ from .constants import (
 from .data import brought_reading_measures, shareable_frame
 from .export_status import ExportStage, StatusCallback, emit_status
 from .fields import panel_field
+from .file_citation import stamp as stamp_citation
+from .file_citation import stamp_html
 from .illustration import illustration_reasons, resolve_label_reasons
 from .measures import assign_fixations_to_words, enrich_fixations
 from .multipart import (
@@ -748,8 +750,8 @@ def bundle_member_names(options: ExportOptions | None = None) -> list[str]:
     """The paths a bulk export writes for itself, whichever trials it holds.
 
     Reserved before any trial's file is named (:class:`ArchiveNames`), so a
-    path pattern can never give a trial's file one of them — the README, the
-    ``index.csv`` inventory, ``columns.json``, ``run_config.json``,
+    path pattern can never give a trial's file one of them — the README, its
+    ``CITATION.bib``, the ``index.csv`` inventory, ``columns.json``, ``run_config.json``,
     ``annotations.json``, the combined tables and the metadata tables, in each
     table format. ``options`` narrows the combined tables to the ones a run
     with them can write; without it, every name a bundle can have.
@@ -763,6 +765,7 @@ def bundle_member_names(options: ExportOptions | None = None) -> list[str]:
         combined = ()
     names = [
         "README.md",
+        "CITATION.bib",
         "index.csv",
         "columns.json",
         "run_config.json",
@@ -887,6 +890,11 @@ def resolve_export_path(
 _TITLE_BAND_PAD_PX = 26
 _CAPTION_LINE_FACTOR = 22 / 13
 _CAPTION_PAD_PX = 12
+#: The credit line: small, grey, right-aligned in a band of its own at the
+#: very bottom, below any caption.
+_CREDIT_FONT_PX = 10
+_CREDIT_COLOR = "#8a8a8a"
+_CREDIT_BAND_PX = 18
 
 
 def annotate_figure(
@@ -897,6 +905,7 @@ def annotate_figure(
     title_font_size: float = DEFAULT_TITLE_FONT_SIZE,
     caption_font_size: float = DEFAULT_CAPTION_FONT_SIZE,
     caption_color: str = DEFAULT_CAPTION_COLOR,
+    show_credit: bool = False,
 ) -> None:
     """Stamp ``title`` / ``caption`` onto ``fig`` in place, without shrinking it.
 
@@ -904,9 +913,10 @@ def annotate_figure(
     the plotting area — and therefore the true-to-scale text — is byte-identical
     to the untitled figure. Both are drawn as written: ``<b>`` in a title shows
     as ``<b>``, and only a real newline starts a new caption line. The sizes are
-    in px; each band grows with its text.
+    in px; each band grows with its text. ``show_credit`` adds the
+    ``citation.CREDIT_LINE`` in a small band of its own below everything else.
     """
-    if not title and not caption:
+    if not title and not caption and not show_credit:
         return
     margin = fig.layout.margin
     height = fig.layout.height
@@ -949,6 +959,23 @@ def annotate_figure(
             align="left",
             font=dict(size=int(caption_font_size), color=caption_color),
         )
+    if show_credit:
+        original_bottom = fig.layout.margin.b or 0
+        fig.layout.margin.b = original_bottom + _CREDIT_BAND_PX
+        if fig.layout.height:
+            fig.layout.height = fig.layout.height + _CREDIT_BAND_PX
+        fig.add_annotation(
+            text=_plotly_literal(CREDIT_LINE),
+            xref="paper",
+            yref="paper",
+            x=1,
+            y=0,
+            xanchor="right",
+            yanchor="top",
+            yshift=-(original_bottom + 2),
+            showarrow=False,
+            font=dict(size=_CREDIT_FONT_PX, color=_CREDIT_COLOR),
+        )
 
 
 def figure_text_style(settings) -> dict:
@@ -966,6 +993,7 @@ def figure_text_style(settings) -> dict:
         title_font_size=int(get("title_font_size", DEFAULT_TITLE_FONT_SIZE)),
         caption_font_size=int(get("caption_font_size", DEFAULT_CAPTION_FONT_SIZE)),
         caption_color=str(get("caption_color", DEFAULT_CAPTION_COLOR)),
+        show_credit=bool(get("show_credit", False)),
     )
 
 
@@ -1060,7 +1088,8 @@ def _figure_renderer(enabled: bool):
     is unavailable — the per-trial failure is still surfaced as an export error.
 
     ``enabled`` also holds ``animation_export.KALEIDO_LOCK`` until the server has
-    stopped, since that server is one per process.
+    stopped, since that server is one per process. Every file it draws carries
+    the citation in its metadata (`file_citation.stamp`).
     """
     from .animation_export import KALEIDO_LOCK, warm_calc_fig
 
@@ -1090,10 +1119,11 @@ def _figure_renderer(enabled: bool):
                         "scale": scale,
                     },
                 )
-                return bytes(data)
-            return fig.to_image(
-                format=fmt, width=int(width), height=int(height), scale=scale
-            )
+            else:
+                data = fig.to_image(
+                    format=fmt, width=int(width), height=int(height), scale=scale
+                )
+            return stamp_citation(bytes(data), fmt)
 
         try:
             yield render
@@ -1999,10 +2029,12 @@ def pair_export(
             width = int(getattr(fig.layout, "width", None) or canvas_width)
             height = int(getattr(fig.layout, "height", None) or canvas_height)
             if fmt == "html":
-                data = fig.to_html(
-                    include_plotlyjs=html_plotlyjs(options.html_self_contained),
-                    full_html=True,
-                    config={**PLOTLY_CONFIG},
+                data = stamp_html(
+                    fig.to_html(
+                        include_plotlyjs=html_plotlyjs(options.html_self_contained),
+                        full_html=True,
+                        config={**PLOTLY_CONFIG},
+                    )
                 ).encode("utf-8")
             else:
                 data = render_static_figure_bytes(
@@ -2452,6 +2484,21 @@ def describe_plan(plan: ExportPlan) -> str:
     return f"Exports {readings}: {' and '.join(parts)}."
 
 
+def _cite_lines(corpus: str | None) -> list[str]:
+    """The README's *Cite* section: the software, and the corpus the trials
+    come from when it is a public one (`citation.corpus_for`)."""
+    lines = [
+        "If you use these files in a publication, please cite Scanpath Studio"
+        + (f" and {CORPORA[corpus].name}:" if corpus else ":"),
+        "",
+        f"- {software_apa()}",
+    ]
+    if corpus:
+        lines.append(f"- {CORPORA[corpus].apa()}")
+    lines += ["", "`CITATION.bib` has the same as BibTeX."]
+    return lines
+
+
 def _package_version() -> str:
     from scanpath_studio import __version__
 
@@ -2651,14 +2698,17 @@ def bulk_export(
         row["canonical"]: row["column"] for row in written.get("words", [])
     }
 
+    corpus = corpus_for(options.dataset_name)
     readme_lines = [
         "# Bulk export",
         f"Generated: {_local_stamp()}",
         "",
         f"Made with: {CITATION['title']}",
-        f"Tool authors: {CITATION['authors']}",
         f"Version: {_package_version()}",
         f"DOI: https://doi.org/{CITATION['doi']}",
+        "",
+        "## Cite",
+        *_cite_lines(corpus),
         "",
         "## Scope",
         *_scope_lines(options, combos, units),
@@ -2743,15 +2793,13 @@ def bulk_export(
             if measures_wanted and not brought
             else []
         ),
-        *(
-            ["", f"Demo data note: {CITATION['corpus_note']}"]
-            if options.dataset_name == DEMO_CHOICE
-            else []
-        ),
     ]
     path = members.own("README.md")
     zf.writestr(path, "\n".join(readme_lines))
     _inventory(path, "readme", "written")
+    path = members.own("CITATION.bib")
+    zf.writestr(path, cite("bibtex", corpus) + "\n")
+    _inventory(path, "citation", "written")
     if any(written.values()):
         path = members.own("columns.json")
         zf.writestr(path, json.dumps(columns_manifest(written), indent=2))
@@ -3041,12 +3089,14 @@ def bulk_export(
                         try:
                             if fmt == "html":
                                 # Browser-free + interactive; no Kaleido needed.
-                                data = fig.to_html(
-                                    include_plotlyjs=html_plotlyjs(
-                                        options.html_self_contained
-                                    ),
-                                    full_html=True,
-                                    config={**PLOTLY_CONFIG},
+                                data = stamp_html(
+                                    fig.to_html(
+                                        include_plotlyjs=html_plotlyjs(
+                                            options.html_self_contained
+                                        ),
+                                        full_html=True,
+                                        config={**PLOTLY_CONFIG},
+                                    )
                                 ).encode("utf-8")
                             else:
                                 scale = options.png_scale if fmt == "png" else 1

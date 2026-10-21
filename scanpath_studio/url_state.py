@@ -19,6 +19,7 @@ from urllib.parse import urlencode
 import pandas as pd
 import streamlit as st
 
+from scanpath_studio.cite_button import render_cite_button
 from scanpath_studio.html_embed import embed_html_iframe
 
 from .authoring import event_records_frame
@@ -35,6 +36,7 @@ from .code_snippet import (
     UNKNOWN_SOURCE_NOTE,
     FigureState,
     SnippetSource,
+    cite_comment,
     reproduction_code,
     upload_source,
 )
@@ -467,6 +469,7 @@ _DESIGN_PARAMS = {
     "caption_font_size": ("global_caption_font_size", CAPTION_FONT_SIZE_BOUNDS),
     "caption_color": ("global_caption_color", "color"),
     "show_plot_frame": ("global_show_plot_frame", None),
+    "show_credit": ("global_show_credit", None),
     "plot_frame_color": ("global_plot_frame_color", "color"),
     "saccade_arrow_size": ("global_saccade_arrow_size", SACCADE_ARROW_SIZE_BOUNDS),
     "fixation_outline_width": (
@@ -4202,9 +4205,16 @@ def _render_code_snippet_body(data_choice: str) -> None:
             )
         # The install line rides *in* the copied block (one 📋 copies both), so
         # pasting into a fresh shell works without hunting for the package name.
-        st.code(f"{INSTALL_COMMAND}\n\n{code.cli}", language="bash")
+        st.code(
+            f"{cite_comment(python=False)}\n{INSTALL_COMMAND}\n\n{code.cli}",
+            language="bash",
+        )
     else:
-        st.code(f"# {INSTALL_COMMAND}\n{code.python}", language="python")
+        st.code(
+            f"{cite_comment(python=True)}\n# {INSTALL_COMMAND}\n{code.python}",
+            language="python",
+        )
+    render_cite_button(st, key="share_code", what="the figure this code draws")
 
 
 #: The Share subtab's three ways to pass a figure on, as the options of

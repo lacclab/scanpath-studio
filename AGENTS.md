@@ -97,7 +97,10 @@ scanpath_studio/
    │                     `compare_scanpaths`, `save_figure`, `figure_code`, …)
    ├─ cli.py             `scanpath-studio`: `run`, `render`, `corpus`, `check`, `cache`, `version`, `analyze`
    ├─ __init__.py        `__release__`, the lazy `__version__`, and lazy re-exports of `api.py`
-   ├─ citation.py        the BibTeX / APA entries shown in About and on the docs' Cite page
+   ├─ citation.py        the citation in every format (BibTeX, APA, RIS, CSL-JSON, a figure credit),
+   │                     the public corpora's own, and `corpus_for` (the dataset → its corpus)
+   ├─ file_citation.py   writes the citation into each exported file's metadata, editing bytes in place
+   ├─ cite_button.py     the Cite popover under every figure, replay and bundle download
    ├─ build_info.py      which build this is (release, git checkout, desktop stamp, VCS install)
    ├─ updates.py         *Check for updates* against the latest GitHub release (on request only)
    └─ desktop_update.py  the desktop app's own *Update & restart*
@@ -491,6 +494,13 @@ on one the Share → Code snippet cannot reproduce.
 - **A new top-level trace** in `make_scanpath_figure` whose name isn't a
   fixation variant must be added to `plots._trace_layer`, or separable-layer
   export files it under fixations.
+- **Every exported file carries the citation in its metadata.** Static images
+  get it in `export._figure_renderer`, HTML pages through
+  `file_citation.stamp_html`, GIF / MP4 in `animation_export`, `save_figure`
+  files through `file_citation.stamp_file`, and the browser-saved PNG / SVG
+  from the bytes `tabs._render_save_plot_button` hands its component. A new
+  writer stamps its output too. The one exception is the plot toolbar's camera:
+  Plotly saves that PNG itself, and its config is JSON, so it takes no script.
 - Static image export (PNG/SVG/PDF) and the GIF/MP4 replay go through Kaleido,
   which needs Chrome (`plotly_get_chrome -y` locally; `packages.txt` installs
   `chromium` on Streamlit Cloud). The current figure's PNG/SVG is saved in the
@@ -569,7 +579,7 @@ parameter.
 | `word_hover_measure` | ✅ | ✅ | ❌ | |
 | colour bars (`{fixation,heatmap}_colorbar_*`) | ✅ | ✅ fixation only | ✅ | Through `plots._colorbar_dict` |
 | `x_field` / `y_field` | ✅ | ❌ | ❌ | Animation and comparison always plot spatial `x` / `y` |
-| `fit_to_monitor`, `crop_margin`, coordinate grid + font size, title / caption styling, `background_color`, `show_plot_frame` / `plot_frame_color` | ✅ | ✅ | ✅ | |
+| `fit_to_monitor`, `crop_margin`, coordinate grid + font size, title / caption styling, `show_credit`, `background_color`, `show_plot_frame` / `plot_frame_color` | ✅ | ✅ | ✅ | |
 | `fixation_outline_width` / `_color` | ✅ | ✅ | ✅ | |
 | `show_compare_legend`, `compare_stimulus` | ❌ | ✅ (co-animation) | ✅ | Widgets in `tabs.py` (⚙ Compare options) |
 | `anim_autoplay`, replay grid step / max frames, `playback_speed` | ❌ | ✅ | ❌ | Widgets in `tabs.py` (⚙ Playback) |

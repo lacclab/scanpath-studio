@@ -617,6 +617,7 @@ def _restore_config_app():
             "caption_font_size": 16,
             "caption_color": "#222222",
             "show_plot_frame": False,
+            "show_credit": True,
             "plot_frame_color": "#999999",
             "saccade_arrow_size": 18.0,
             "fixation_outline_width": 1.5,

@@ -156,6 +156,7 @@ def test_bundle_settings_restore_the_rendered_style(monkeypatch):
         "fixation_outline_width": 2,
         "heatmap_opacity": 0.3,
         "show_plot_frame": False,
+        "show_credit": True,
         "fixation_flags": {"long": {"mode": "Hide", "threshold_ms": 500}},
         "preprocessing": {"discard_blink_adjacent": False},
     }
@@ -177,6 +178,7 @@ def test_bundle_settings_restore_the_rendered_style(monkeypatch):
         "global_fixation_outline_width": 2,
         "global_heatmap_opacity": 0.3,
         "global_show_plot_frame": False,
+        "global_show_credit": True,
         "global_fixclass_long_mode": "Hide",
         "global_base_font_size": 18,
         "global_font_family": "Arial",

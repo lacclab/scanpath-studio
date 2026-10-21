@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import functools
 import hashlib
@@ -85,6 +86,7 @@ from scanpath_studio.annotations import (
     render_dataset_annotations,
     render_trial_annotations,
 )
+from scanpath_studio.cite_button import render_cite_button
 from scanpath_studio.code_snippet import (
     SNIPPET_STATE_KEY,
     UNPUBLISHED_SETTINGS,
@@ -294,6 +296,7 @@ from scanpath_studio.fields import (
     row_label,
     switch,
 )
+from scanpath_studio.file_citation import png_text_chunks, stamp_html, svg_metadata
 from scanpath_studio.html_embed import embed_html_iframe, plotlyjs_script
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
 from scanpath_studio.multipart import (
@@ -1315,6 +1318,14 @@ export default function (component) {
     }
     return ~c >>> 0;
   };
+  const afterHeader = (png, chunk) => {
+    const at = 33;  // signature (8) + IHDR (25)
+    const out = new Uint8Array(png.length + chunk.length);
+    out.set(png.subarray(0, at));
+    out.set(chunk, at);
+    out.set(png.subarray(at), at + chunk.length);
+    return out;
+  };
   const withDpi = (png, dpi) => {
     if (!dpi) return png;
     const chunk = new Uint8Array(21);
@@ -1326,13 +1337,17 @@ export default function (component) {
     view.setUint32(12, ppm);
     chunk[16] = 1;  // pixels per metre
     view.setUint32(17, crc32(chunk.subarray(4, 17)));
-    const at = 33;  // signature (8) + IHDR (25)
-    const out = new Uint8Array(png.length + chunk.length);
-    out.set(png.subarray(0, at));
-    out.set(chunk, at);
-    out.set(png.subarray(at), at + chunk.length);
-    return out;
+    return afterHeader(png, chunk);
   };
+  // The citation, as `file_citation` writes it into every file the server
+  // draws: PNG text chunks and an SVG <metadata> element, built in Python and
+  // spliced in as they are.
+  const fromBase64 = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+  const withCitation = (png) =>
+    data.png_citation ? afterHeader(png, fromBase64(data.png_citation)) : png;
+  const svgWithCitation = (svg) => data.svg_citation
+    ? svg.replace(/<svg\b[^>]*>/, (root) => root + data.svg_citation)
+    : svg;
 
   // Reassigned, not added: Streamlit reuses the component across reruns.
   button.onclick = async () => {
@@ -1351,8 +1366,8 @@ export default function (component) {
         imageDataOnly: true,
       });
       const blob = data.format === 'svg'
-        ? new Blob([image], { type: 'image/svg+xml;charset=utf-8' })
-        : new Blob([withDpi(Uint8Array.from(atob(image), (c) => c.charCodeAt(0)), data.dpi)],
+        ? new Blob([svgWithCitation(image)], { type: 'image/svg+xml;charset=utf-8' })
+        : new Blob([withCitation(withDpi(fromBase64(image), data.dpi))],
                    { type: 'image/png' });
       const href = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -1518,6 +1533,12 @@ def _render_save_plot_button(
                 if fmt == "PNG" and _print_size_setting()["width"]
                 else None,
                 "label": f"⬇ Download {fmt}",
+                # The citation every server-drawn file carries, for the browser
+                # to write into this one (`file_citation`).
+                "png_citation": base64.b64encode(png_text_chunks()).decode()
+                if fmt == "PNG"
+                else None,
+                "svg_citation": svg_metadata() if fmt == "SVG" else None,
             },
             height="content",
         )
@@ -1594,12 +1615,17 @@ def _figure_download_data(
 ) -> Callable[[], str | bytes]:
     """The zero-argument callable `st.download_button` runs on click."""
     if fmt == "HTML":
-        return partial(
-            fig.to_html,
-            include_plotlyjs=html_plotlyjs(self_contained),
-            full_html=True,
-            config={**PLOTLY_CONFIG},
-        )
+
+        def page() -> str:
+            return stamp_html(
+                fig.to_html(
+                    include_plotlyjs=html_plotlyjs(self_contained),
+                    full_html=True,
+                    config={**PLOTLY_CONFIG},
+                )
+            )
+
+        return page
     return partial(
         render_static_figure_bytes,
         fig,
@@ -1642,8 +1668,10 @@ def _animation_html(fig, *, self_contained: bool = False) -> str:
     if page is not None:
         # The frames travel packed; the script rebuilds them, then plays.
         figure_dict, script = page
-        return pio.to_html(figure_dict, validate=False, post_script=script, **options)
-    return pio.to_html(fig, validate=not isinstance(fig, dict), **options)
+        html = pio.to_html(figure_dict, validate=False, post_script=script, **options)
+    else:
+        html = pio.to_html(fig, validate=not isinstance(fig, dict), **options)
+    return stamp_html(html)
 
 
 def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
@@ -4994,7 +5022,7 @@ def _apply_title_caption(
     # `_amend_snippet_title_caption`. Amended even when both are empty, so a
     # branch that renders to nothing clears the pre-published pair.
     _amend_snippet_title_caption(title, caption)
-    if not title and not caption:
+    if not title and not caption and not viz_settings.get("show_credit"):
         return
     annotate_figure(
         fig, title=title, caption=caption, **figure_text_style(viz_settings)
@@ -5451,7 +5479,7 @@ def _build_and_render_animation(
                 anim_inputs["fixations_b"],
             )
         _annotate_preprocessing(fig, preprocessing)
-        if title or caption:
+        if title or caption or viz_settings.get("show_credit"):
             annotate_figure(
                 fig, title=title, caption=caption, **figure_text_style(viz_settings)
             )
@@ -5538,6 +5566,7 @@ def _render_export_panel(
     st.markdown("## Current figure")
     if animate and replay is not None:
         _render_animation_export(replay, file_stem=file_stem or "animation")
+        render_cite_button(st, key="anim_export", what="this replay")
     elif animate or displayed_fig is None:
         st.caption("Select a trial to export its figure.")
     else:
@@ -5549,6 +5578,7 @@ def _render_export_panel(
             key_prefix="single",
             plot_key=plot_key,
         )
+        render_cite_button(st, key="single_export")
 
     st.divider()
     st.markdown("## Export bundle")
@@ -5665,6 +5695,7 @@ def _render_export_panel(
         selected_participant=selected_participant,
         selected_trial=selected_trial,
     )
+    render_cite_button(st, key="bulk_export", what="these figures and tables")
 
 
 _CHIP_NEUTRAL_BG = "#EEF2F7"

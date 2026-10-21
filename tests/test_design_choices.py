@@ -198,6 +198,7 @@ def test_the_text_style_reads_settings_or_the_apps_dict():
         "title_font_size": 20,
         "caption_font_size": 13,
         "caption_color": "#123456",
+        "show_credit": False,
     }
 
 
@@ -245,7 +246,7 @@ def test_auto_leaves_the_heatmap_opacity_and_bar_length_unset():
 
 
 def test_the_replay_key_ignores_what_no_frame_draws():
-    """The heatmap's opacity and the title/caption styling never reach a
+    """The heatmap's opacity and the title/caption styling (and credit) never reach a
     replay frame, so changing one rebuilds none."""
     from scanpath_studio import tabs
 
@@ -272,6 +273,7 @@ def test_the_replay_key_ignores_what_no_frame_draws():
         key(
             heatmap_opacity=0.8,
             title_font_size=30,
+            show_credit=True,
             caption_font_size=18,
             caption_color="#222222",
         )
@@ -279,3 +281,49 @@ def test_the_replay_key_ignores_what_no_frame_draws():
     )
     # The arrowheads are drawn by the replay, so they are part of it.
     assert key(saccade_arrow_size=20.0) != key()
+
+
+def test_the_credit_line_grows_the_figure_below_the_caption():
+    import plotly.graph_objects as go
+
+    from scanpath_studio.citation import CREDIT_LINE
+    from scanpath_studio.export import annotate_figure
+
+    fig = go.Figure(layout=dict(height=400, margin=dict(b=20)))
+    annotate_figure(fig, caption="A caption", show_credit=True)
+    caption, credit = fig.layout.annotations
+    assert credit.text == CREDIT_LINE
+    assert credit.xanchor == "right"
+    # Its own band, below the caption's.
+    assert credit.yshift < caption.yshift
+    plain = go.Figure(layout=dict(height=400, margin=dict(b=20)))
+    annotate_figure(plain, caption="A caption")
+    assert fig.layout.height - plain.layout.height == fig.layout.margin.b - (
+        plain.layout.margin.b
+    )
+    assert fig.layout.height > plain.layout.height
+
+
+@pytest.mark.parametrize("builder", ["static", "animation", "overlay", "side_by_side"])
+def test_every_api_builder_draws_the_credit_only_when_asked(builder):
+    from scanpath_studio import api
+    from scanpath_studio.citation import CREDIT_LINE
+
+    data = api.load_sample_data(names="canonical")
+    trials = api.list_trials(data.words, data.fixations)
+    a = tuple(trials.iloc[0])
+    b = tuple(trials.iloc[1])
+
+    def texts(**kw):
+        if builder == "static":
+            fig = api.plot_scanpath(data.words, data.fixations, *a, **kw)
+        elif builder == "animation":
+            fig = api.animate_scanpath(data.words, data.fixations, *a, **kw)
+        else:
+            fig = api.compare_scanpaths(
+                data.words, data.fixations, a, b, layout=builder, **kw
+            )
+        return [annotation.text for annotation in fig.layout.annotations]
+
+    assert CREDIT_LINE not in texts()
+    assert CREDIT_LINE in texts(show_credit=True)

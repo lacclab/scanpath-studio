@@ -164,6 +164,10 @@ print(
 
 ::: scanpath_studio.api.check_for_updates
 
+## Citation
+
+::: scanpath_studio.api.cite
+
 ## See also
 
 - [Export and share](guides/exporting/index.md): the

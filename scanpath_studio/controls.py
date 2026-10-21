@@ -931,6 +931,7 @@ _VIZ_WIDGET_DEFAULTS = {
     # `_collect_viz_settings`, which reports them empty otherwise.
     "global_show_title": False,
     "global_show_caption": False,
+    "global_show_credit": False,
     "global_title_pattern": "",
     "global_caption_pattern": "",
     # How the title and caption are written.
@@ -6216,6 +6217,7 @@ def _collect_viz_settings(
             ss.get("global_caption_font_size") or DEFAULT_CAPTION_FONT_SIZE
         ),
         caption_color=ss.get("global_caption_color") or DEFAULT_CAPTION_COLOR,
+        show_credit=bool(ss.get("global_show_credit", False)),
         show_plot_frame=bool(ss.get("global_show_plot_frame", True)),
         plot_frame_color=ss.get("global_plot_frame_color") or DEFAULT_PLOT_FRAME_COLOR,
         coordinate_grid_font_size=int(
@@ -8684,6 +8686,18 @@ def render_plot_controls(
                 )
         if any_shown:
             render_pattern_help(st.container(), _title_caption_fields)
+        credit_help = (
+            "A small line under the plot saying the figure was made with "
+            "Scanpath Studio, for a figure shared without its "
+            "caption. The figure grows to make room."
+        )
+        _, credit_rest = _check_row(
+            "Credit",
+            key="global_show_credit",
+            persist_state="session",
+            help=credit_help,
+        )
+        _sub_caption(credit_rest, "Made with Scanpath Studio", credit_help)
 
     # The tooltips' fields, for words and for fixations — figure-wide rather
     # than one layer's, so they sit together here instead of closing the

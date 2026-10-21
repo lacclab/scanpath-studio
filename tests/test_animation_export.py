@@ -26,6 +26,7 @@ from scanpath_studio.animation_export import (
     export_animation,
     mime_for,
 )
+from scanpath_studio.file_citation import stamp
 from scanpath_studio.plots import animation_playback_ms, make_scanpath_animation
 
 _MP4_DT_MS = 1000.0 / 60.0  # the module's fixed MP4 timebase
@@ -281,7 +282,8 @@ class TestEncodeGif:
             optimize=True,
         )
         data = encode_gif(frames, 100.0)
-        assert data == reference.getvalue()
+        # Plus the citation's comment extension (`file_citation`).
+        assert data == stamp(reference.getvalue(), "gif")
         img = Image.open(io.BytesIO(data))
         assert img.n_frames == 5
         durations = []

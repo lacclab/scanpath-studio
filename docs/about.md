@@ -27,6 +27,8 @@ at the Technion and the University of Zurich.
 ## Cite Scanpath Studio
 
 Cite the software using its [Zenodo DOI](https://doi.org/10.5281/zenodo.22933884).
+`scanpath-studio cite` and [`cite`][scanpath_studio.api.cite] print the entry
+in Python or a terminal, also as RIS or CSL-JSON.
 
 ??? quote "Show BibTeX and APA"
 

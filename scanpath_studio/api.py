@@ -71,6 +71,7 @@ from .constants import (  # noqa: E402
 )
 from .experimental_setup import Provenance, SetupSnapshot  # noqa: E402
 from .export import annotate_figure, figure_text_style  # noqa: E402
+from .file_citation import stamp_file  # noqa: E402
 from .multipart import (  # noqa: E402
     SCREEN_ID,
     apply_trial_parts_manifest,
@@ -271,6 +272,7 @@ _CANONICAL_OPTION_NAMES = {
     "title_font_size",
     "caption_font_size",
     "caption_color",
+    "show_credit",
 }
 
 CANONICAL_FIGURE_DEFAULTS: dict = FigureSettings.defaults(
@@ -3775,6 +3777,11 @@ def save_figure(
 ) -> Path:
     """Save a figure, in the format its file extension names.
 
+    The file carries the citation of Scanpath Studio in its metadata — PNG text
+    chunks, an SVG ``<metadata>`` element, the PDF's document properties, the
+    HTML page's ``<head>`` — so a figure found later on its own still says how to
+    cite it ([`cite`][scanpath_studio.api.cite] prints it). Nothing is drawn.
+
     Args:
         fig: The figure.
         path: The file to write: ``.html`` (interactive), or ``.png``, ``.svg`` or
@@ -3843,12 +3850,14 @@ def save_figure(
             fig.write_html(str(path), auto_play=False, config={**PLOTLY_CONFIG})
         else:
             fig.write_html(str(path), config={**PLOTLY_CONFIG})
+        stamp_file(path)
         return path
     if suffix in (".png", ".svg", ".pdf"):
         try:
             fig.write_image(str(path), scale=scale, width=width, height=height)
             if dpi is not None:
                 _export.set_png_dpi(path, dpi)
+            stamp_file(path)
         except OSError:
             raise  # filesystem problem — the original error says it best
         except Exception as exc:  # Kaleido raises various types
@@ -4198,3 +4207,33 @@ def check_for_updates(timeout: float = 5.0) -> UpdateCheck:
     from .updates import check_for_updates as _check
 
     return _check(timeout)
+
+
+def cite(format: str = "bibtex", corpus: str | None = None) -> str:
+    """How to cite Scanpath Studio — and, optionally, the corpus you used.
+
+    The same entries as the app's Help → About and *Cite* buttons, and
+    ``scanpath-studio cite``. Every figure, replay and page `save_figure` writes
+    also carries the citation in its file metadata.
+
+    ```python
+    print(sps.cite())                       # BibTeX
+    print(sps.cite("apa", corpus="onestop"))  # APA, plus OneStop's reference
+    ```
+
+    Args:
+        format: ``"bibtex"``, ``"apa"``, ``"ris"`` (Zotero, Mendeley, EndNote),
+            ``"csl-json"``, or ``"credit"`` — one sentence to paste into a figure
+            caption.
+        corpus: ``"onestop"`` or ``"potec"`` to add that corpus's citation after
+            the software's; ``None`` for the software alone.
+
+    Returns:
+        The citation as text (APA without Markdown).
+
+    Raises:
+        ValueError: For an unknown ``format`` or ``corpus``.
+    """
+    from .citation import cite as _cite
+
+    return _cite(format, corpus)

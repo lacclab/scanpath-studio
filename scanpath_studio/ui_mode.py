@@ -244,13 +244,20 @@ def simple_only(host: DeltaGenerator, name: str) -> DeltaGenerator:
 def _choose_mode(mode: object) -> None:
     """Make ``mode`` the session's mode as the viewer's own choice.
 
-    Marks it chosen, which is what lets the cookie script remember it. Anything
-    that is not a mode (a deselected switch) changes nothing.
+    Marks it chosen, which is what lets the cookie script remember it. Choosing
+    Simple ends a running tutorial. Anything that is not a mode (a deselected
+    switch) changes nothing.
     """
     import streamlit as st
 
     chosen = parse_mode(mode)
     if chosen is not None:
+        if chosen == SIMPLE and st.session_state.get("tutorial_active"):
+            # The tutorials spotlight Advanced-only controls: leave the one
+            # running the way its Exit does.
+            from scanpath_studio import tour
+
+            tour._restore_tutorial_return()
         st.session_state[UI_MODE] = chosen
         st.session_state[CHOSEN_KEY] = True
         st.session_state[COOKIE_MODE_KEY] = chosen
@@ -359,9 +366,10 @@ _SWITCH_FALLBACK_PX = 520
 #: Streamlit's popovers and modals (1000060 and up) stay above both.
 SWITCH_Z_INDEX = 999991
 
-#: Room left in the top bar, between the switch and the ⋮ menu, for Streamlit's
-#: "Running…" status widget (measured at about 93px) so the switch never covers it.
-_STATUS_SLOT_REM = 7
+#: How far the switch steps left while Streamlit's "Running…" status widget is
+#: mounted (it exists only during a run; measured at about 93px wide, right of
+#: where the switch sits), so the switch never covers it.
+_STATUS_SHIFT_REM = 7
 
 #: The title row that holds the switch's container, whichever column it is in.
 _SWITCH_ROW = (
@@ -374,9 +382,10 @@ def switch_css(visible: bool) -> str:
     """A ``<style>`` that places the Simple | Advanced switch.
 
     The switch stays where the script draws it, so its state never depends on
-    the view. With ``visible`` it is lifted into Streamlit's top bar, left of
-    the ⋮ menu and of a slot kept free for the "Running…" status widget, at a
-    larger size, and the bar's menu cell grows to leave it room; below
+    the view. With ``visible`` it is lifted into Streamlit's top bar, just left
+    of the ⋮ menu, at a larger size, and the bar's menu cell grows to leave it
+    room. While the "Running…" status widget is mounted, which is only during a
+    run, the switch steps left of it instead of covering it. Below
     ``_SWITCH_FALLBACK_PX`` it is an ordinary right-aligned row of the page.
     Without it (the views that have no use for the mode) the switch is
     hidden. Either way the title row it sits in takes no space of its own.
@@ -397,14 +406,14 @@ def switch_css(visible: bool) -> str:
         "<style>"
         f"{collapse}"
         f"{wide} {{"
-        f" {box} {{ position: fixed; top: 10px;"
-        f" right: calc(3.75rem + {_STATUS_SLOT_REM}rem);"
+        f" {box} {{ position: fixed; top: 10px; right: 3.75rem;"
         f" z-index: {SWITCH_Z_INDEX}; width: max-content; }}"
+        f' .stApp:has([data-testid="stStatusWidget"]) {box}'
+        f" {{ right: calc(3.75rem + {_STATUS_SHIFT_REM}rem); }}"
         # The header's right-hand cell is a fixed 200px: widen it so the
-        # navigation gives way before it would run under the switch or the
-        # status widget's slot.
+        # navigation gives way before it would run under the switch.
         ' [data-testid="stToolbar"] div:has(> [data-testid="stMainMenu"])'
-        f" {{ width: {17.5 + _STATUS_SLOT_REM}rem !important; }}"
+        " { width: 17.5rem !important; }"
         " }"
         f" {button} {{ min-height: 2.5rem; padding: 0 1.1rem; }}"
         f" {button} p {{ font-size: 1rem; }}"

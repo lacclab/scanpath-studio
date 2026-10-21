@@ -177,14 +177,20 @@ def test_switch_stacks_between_the_header_and_the_tour():
     assert "z-index: 999980;" in tour._WELCOME_CSS
 
 
-def test_switch_leaves_room_for_the_status_widget():
-    """Streamlit's "Running…" widget sits left of the ⋮ menu, where the switch
-    would otherwise be: the switch moves left by the widget's slot, and the
-    header's menu cell grows by the same amount."""
+def test_switch_steps_aside_only_while_the_status_widget_is_mounted():
+    """Streamlit's "Running…" widget sits where the switch is, but exists only
+    during a run: the switch moves left of it then, and otherwise keeps its
+    place and the header's menu cell its width."""
     css = ui_mode.switch_css(True)
-    slot = ui_mode._STATUS_SLOT_REM
-    assert f"right: calc(3.75rem + {slot}rem)" in css
-    assert f"width: {17.5 + slot}rem !important" in css
+    shift = ui_mode._STATUS_SHIFT_REM
+    assert (
+        ".st-key-tour_grp_ui_mode { position: fixed; top: 10px; right: 3.75rem;" in css
+    )
+    assert (
+        '.stApp:has([data-testid="stStatusWidget"]) .st-key-tour_grp_ui_mode'
+        f" {{ right: calc(3.75rem + {shift}rem); }}"
+    ) in css
+    assert "width: 17.5rem !important" in css
 
 
 def test_switch_css_hidden_still_collapses_the_title_row():

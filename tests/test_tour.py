@@ -1709,6 +1709,31 @@ class TestTutorialsFromSimple:
         assert state["tutorial_return"]["single_subtab"] == SUBTAB_EXPORT
         assert state["ui_mode"] == "advanced"
 
+    def test_switching_to_simple_ends_the_running_tutorial(self):
+        """Back in Simple the tutorial would point at hidden controls: choosing
+        Simple leaves it as its Exit does, and the cookie follows the click."""
+        at = AppTest.from_function(_tutorial_with_switch_app)
+        at.session_state["ui_mode"] = "simple"
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["tutorial_active"] == "filter_annotate"
+        assert at.session_state["ui_mode"] == "advanced"
+        at.segmented_control(key="ui_mode_switch").set_value("simple").run()
+        assert not at.exception, at.exception
+        assert not at.session_state["tutorial_active"]
+        assert at.session_state["ui_mode"] == "simple"
+        assert at.session_state["_ui_mode_cookie"] == "simple"
+        assert not [b for b in at.button if b.key == "tutorial_exit"]
+
+    def test_switching_to_advanced_keeps_the_tutorial(self):
+        at = AppTest.from_function(_tutorial_with_switch_app)
+        at.session_state["ui_mode"] = "advanced"
+        at.run()
+        at.segmented_control(key="ui_mode_switch").set_value("simple").run()
+        at.segmented_control(key="ui_mode_switch").set_value("advanced").run()
+        assert not at.exception, at.exception
+        assert at.session_state["ui_mode"] == "advanced"
+
     def test_a_tutorial_started_in_simple_never_rewrites_the_cookie(self):
         """A viewer who had chosen Simple keeps Simple in the cookie: the
         script that writes it follows their choice, not the session's mode."""
@@ -1717,6 +1742,32 @@ class TestTutorialsFromSimple:
         assert not at.exception, at.exception
         assert at.session_state["cookie_mode"] == "simple"
         assert at.session_state["ui_mode"] == "advanced"
+
+
+def _tutorial_with_switch_app():
+    """A tutorial armed once, beside the mode switch (as the header draws it)."""
+    import streamlit as st
+
+    from scanpath_studio import ui_mode
+    from scanpath_studio.constants import _VIEW_SCANPATH
+
+    st.session_state.setdefault("main_nav", _VIEW_SCANPATH)
+    if not st.session_state.get("_tutorial_armed_once"):
+        st.session_state["_tutorial_armed_once"] = True
+        st.session_state["_tutorial_context"] = {
+            "n_trials": 3,
+            "has_words": True,
+            "has_fixations": True,
+            "has_comparable_readings": True,
+            "has_corpus_variation": True,
+        }
+        from scanpath_studio.tour import _start_use_case
+
+        _start_use_case("filter_annotate")
+    ui_mode.render_switch(st)
+    from scanpath_studio.tour import render_use_case_tutorial
+
+    render_use_case_tutorial()
 
 
 def _cookie_after_tutorial_app():

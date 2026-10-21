@@ -490,3 +490,72 @@ def test_rail_mode_wrappers_keep_the_rail_spacing():
     # The View tiles are drawn like the design presets they stand in for.
     assert '.st-key-scanpath_rail [class*="st-key-simple_view_"] button {' in css
     assert ".st-key-scanpath_rail .st-key-tour_grp_simple_views {" in css
+
+
+HIGH_CONTRAST = "High contrast"
+
+
+def _palette_colors(at: AppTest, name: str) -> dict:
+    from scanpath_studio import controls
+
+    return {key: at.session_state[key] for key in controls.palette_state(name)}
+
+
+def test_simple_palette_pick_keeps_the_tile_lit():
+    at = _boot()
+    at.button(key="simple_view_scanpath").click().run()
+    at.selectbox(key="global_palette").set_value(HIGH_CONTRAST).run()
+    assert not at.exception
+    assert at.session_state["global_palette"] == HIGH_CONTRAST
+    assert _lit_tiles(at) == ["scanpath"]
+    # Any other plot setting still reads as leaving the view.
+    at.toggle(key="global_show_stimulus").set_value(False).run()
+    assert _lit_tiles(at) == []
+
+
+def test_simple_tile_keeps_the_palette():
+    from scanpath_studio import controls
+
+    at = _boot()
+    at.button(key="simple_view_scanpath").click().run()
+    at.selectbox(key="global_palette").set_value(HIGH_CONTRAST).run()
+    at.button(key="simple_view_heatmap").click().run()
+    assert not at.exception
+    assert at.session_state["global_show_heatmap"] is True
+    assert at.session_state["global_palette"] == HIGH_CONTRAST
+    wanted = controls.palette_state(HIGH_CONTRAST)
+    assert {
+        k: controls._palette_match_key(v)
+        for k, v in _palette_colors(at, HIGH_CONTRAST).items()
+    } == {k: controls._palette_match_key(v) for k, v in wanted.items()}
+    assert _lit_tiles(at) == ["heatmap"]
+    # It holds on the next run too, and through the replay tile.
+    at.run()
+    assert at.session_state["global_palette"] == HIGH_CONTRAST
+    at.button(key="simple_view_animation").click().run()
+    assert at.session_state["global_palette"] == HIGH_CONTRAST
+    assert _lit_tiles(at) == ["animation"]
+
+
+def test_simple_hand_edited_colour_lights_no_tile():
+    """A colour past every palette is shaped in Advanced, and counts."""
+    at = _boot()
+    at.button(key="simple_view_scanpath").click().run()
+    # One run for the preset's held writes to settle (`write_through`).
+    at.run()
+    at.color_picker(key="global_fixation_color").pick("#123456").run()
+    assert not at.exception
+    assert at.session_state["global_palette"] == "Custom"
+    assert _lit_tiles(at) == []
+
+
+def test_advanced_palette_pick_still_drops_the_preset_to_custom():
+    at = _boot(mode="advanced")
+    at.button(key="viz_view_scanpath").click().run()
+    at.selectbox(key="global_palette").set_value(HIGH_CONTRAST).run()
+    assert at.button(key="viz_view_custom").proto.type == "primary"
+    assert at.button(key="viz_view_scanpath").proto.type == "secondary"
+    # An Advanced preset starts from the default colours, as before.
+    at.button(key="viz_view_heatmap").click().run()
+    assert at.session_state["global_palette"] != HIGH_CONTRAST
+    assert at.button(key="viz_view_heatmap").proto.type == "primary"

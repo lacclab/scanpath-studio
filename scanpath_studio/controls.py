@@ -2294,14 +2294,65 @@ def _apply_simple_view(name: str) -> None:
     Every tile sets Animate as well as the layers, so no Simple view is ever
     contradicted by the replay's own limits. `single_animate`'s toggle sits in
     a row, not a popover, so a plain write here holds (no `write_through`).
+
+    Palette is a Simple control too, so the palette picked stays across views:
+    a preset resets the colours, and the palette is applied again after it,
+    the way picking it does (`_on_palette_change`). Colours hand-edited in
+    Advanced, which match no palette, are reset like any preset resets them.
     """
+    palette = _active_palette()
     animation = name == _SIMPLE_ANIMATION
     _apply_view_preset("scanpath" if animation else name)
     st.session_state["single_animate"] = animation
+    if palette is not None and _active_palette() != palette:
+        st.session_state["global_palette"] = palette
+        _on_palette_change()
 
 
 #: The 🔵 Raw gaze layer's switch, which `app.seed_raw_gaze_default` seeds.
 _RAW_GAZE_LAYER = "global_show_raw_gaze"
+
+
+def _palette_keys() -> frozenset[str]:
+    """Every session key a palette writes, and the Palette selector's own."""
+    return frozenset(
+        {"global_palette"}.union(*(palette_state(name) for name in PALETTES))
+    )
+
+
+def _simple_ignored_keys() -> frozenset[str]:
+    """Plot settings Simple's tiles do not count as leaving a view.
+
+    Picking a palette is a Simple action, so its colours are ignored while
+    they are one of the palettes; colours hand-edited past every palette are
+    a setting shaped in Advanced, and count.
+    """
+    return _palette_keys() if _active_palette() is not None else frozenset()
+
+
+def _palette_only_drift() -> str | None:
+    """The built-in view a drift to Custom left, when only the palette moved.
+
+    The preset highlight drops to Custom on any colour change, the palette's
+    included. Simple's tiles hold the view against the baseline the drift
+    recorded, without the keys `_simple_ignored_keys` names.
+    """
+    drifted = st.session_state.get(_QUICK_VIEW_DRIFTED_FROM)
+    if not (isinstance(drifted, tuple) and len(drifted) == 2):
+        return None
+    name, applied = drifted
+    if name not in _VIEW_PRESETS or not isinstance(applied, dict):
+        return None
+    ignored = _simple_ignored_keys()
+    if not ignored:
+        return None
+    current = _capture_quick_view_state()
+    if _design_drifted(
+        {k: v for k, v in applied.items() if k not in ignored},
+        {k: v for k, v in current.items() if k not in ignored},
+    ):
+        return None
+    return name
 
 
 def _seeded_raw_gaze_view() -> str | None:
@@ -2313,14 +2364,16 @@ def _seeded_raw_gaze_view() -> str | None:
     highlight opens on Custom. That is the dataset's default, not a setting
     anyone shaped, so Simple's tiles read through it: the layer must still be
     at that default (the seed's stash is what says one was made), and every
-    other plot setting with a widget default must be the view's own. The
-    Advanced highlight is left as it is.
+    other plot setting with a widget default must be the view's own, the
+    palette's colours aside (`_simple_ignored_keys`). The Advanced highlight
+    is left as it is.
     """
     ss = st.session_state
     if not isinstance(ss.get(RAW_GAZE_SNAP_RESTORE_KEY), dict):
         return None
     if ss.get(_RAW_GAZE_LAYER) is not True or ss.get(_QUICK_VIEW_DRIFTED_FROM):
         return None
+    ignored = _simple_ignored_keys()
     current = _capture_quick_view_state()
     for name in ("illustration", "scanpath", "heatmap"):
         expected = {**_VIEW_PRESETS[name], _RAW_GAZE_LAYER: True}
@@ -2330,7 +2383,9 @@ def _seeded_raw_gaze_view() -> str | None:
                 expected.get(key, _VIZ_WIDGET_DEFAULTS.get(key, current.get(key)))
             )
             for key in current.keys() | expected.keys()
-            if not _is_drift_mirror(key) and key not in _VIEW_MODE_KEYS
+            if not _is_drift_mirror(key)
+            and key not in _VIEW_MODE_KEYS
+            and key not in ignored
         ) and not _link_departs_from(name):
             return name
     return None
@@ -2343,13 +2398,14 @@ def simple_active_view(*, animating: bool, active: str | None = None) -> str | N
     trial has fixations), so a trial without fixations, which draws its static
     figure, lights its static tile. ``active`` is the design preset in force,
     looked up with `_active_quick_view` when not given. Custom, a saved design,
-    or Heatmap / Illustration under the replay match no tile, except the Custom
-    that only a dataset's own raw-gaze default makes (`_seeded_raw_gaze_view`).
+    or Heatmap / Illustration under the replay match no tile, except a Custom
+    made only by Simple's own Palette (`_palette_only_drift`) or by a
+    dataset's raw-gaze default (`_seeded_raw_gaze_view`).
     """
     if active is None:
         active = _active_quick_view()
     if active == _CUSTOM_VIEW:
-        active = _seeded_raw_gaze_view() or active
+        active = _palette_only_drift() or _seeded_raw_gaze_view() or active
     if animating:
         return _SIMPLE_ANIMATION if active == "scanpath" else None
     return active if active in SIMPLE_VIEWS else None

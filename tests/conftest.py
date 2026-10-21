@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from streamlit.testing.v1 import AppTest
 
 from scanpath_studio import tabs
 from scanpath_studio.constants import _VIEW_DATA
@@ -45,6 +46,24 @@ def _local_filesystem_on():
     with pytest.MonkeyPatch.context() as mp:
         mp.setenv("SCANPATH_LOCAL_FS", "1")
         yield
+
+
+@pytest.fixture(autouse=True)
+def _advanced_ui_mode(monkeypatch):
+    """Boot every ``AppTest`` in Advanced mode, the full interface.
+
+    Most tests drive controls that Simple mode hides, so each app starts with
+    ``?ui=advanced``. A test that sets ``at.query_params["ui"]`` itself after
+    ``from_file`` overrides it.
+    """
+    from_file = AppTest.from_file.__func__
+
+    def pinned(cls, *args, **kwargs):
+        at = from_file(cls, *args, **kwargs)
+        at.query_params["ui"] = "advanced"
+        return at
+
+    monkeypatch.setattr(AppTest, "from_file", classmethod(pinned))
 
 
 @pytest.fixture

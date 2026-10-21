@@ -69,6 +69,7 @@ from scanpath_studio import (
     desktop_update,
     loading,
     progress,
+    ui_mode,
     wizard_shell,
     wizard_watch,
 )
@@ -704,6 +705,14 @@ _A11Y_NAMES_SCRIPT = """
 """
 
 
+def _cookies() -> dict:
+    """The browser's cookies, or none where there is no request (AppTest, bare mode)."""
+    try:
+        return dict(st.context.cookies)
+    except Exception:
+        return {}
+
+
 def configure_page() -> None:
     """Streamlit page config + custom CSS.
 
@@ -721,6 +730,10 @@ def configure_page() -> None:
         layout="wide",
     )
     st.markdown(get_app_css(), unsafe_allow_html=True)
+    # Seeded here, not later in the run: the stylesheet below hides one mode's
+    # containers, so it needs the mode on the very first run.
+    ui_mode.seed_mode(st.session_state, st.query_params, _cookies())
+    st.html(ui_mode.mode_css(ui_mode.current_mode()))
     embed_html_iframe(_FORCE_LTR_LOCALE_SCRIPT, height=0)
     embed_html_iframe(_TOOLTIP_OWNER_SCRIPT, height=0)
     embed_html_iframe(_IFRAME_CLICK_CLOSES_POPOVER_SCRIPT, height=0)
@@ -9008,8 +9021,9 @@ def _run_app() -> None:
             protect_data_source=url_source is not None,
             # A link opens on the view it was made for; only a bare visit
             # resumes the view this machine was on last. The app never writes
-            # query parameters itself, so any here came with the link.
-            protect_view=bool(st.query_params),
+            # query parameters itself, so any here came with the link — except
+            # `?ui=`, which names the interface mode and no view.
+            protect_view=ui_mode.has_link_params(st.query_params),
         )
     # Streamlit matches a rerun's elements to the last run's by position,
     # so a notice that shows on one run only (the unavailable-link warning below)
@@ -9185,6 +9199,7 @@ def _run_app() -> None:
 
     menu = render_top_menu(active_view=active_view)
     _render_about_panel(menu.title)
+    ui_mode.render_switch(menu.aside)
     _render_cancelled_load_notice(menu.notices)
     _render_backup_reminder(menu.notices, active_view)
 

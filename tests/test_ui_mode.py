@@ -129,10 +129,45 @@ def test_ui_param_does_not_write_the_cookie():
     assert "_ui_mode_chosen" not in at.session_state
 
 
+def _switch_style(at: AppTest) -> str:
+    """The ``<style>`` the switch's own container draws, which places it."""
+    return " ".join(
+        str(el.proto.body)
+        for el in at.get("html")
+        if ui_mode.SWITCH_BOX_KEY in str(el.proto.body)
+    )
+
+
 @pytest.mark.parametrize("view", [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA])
-def test_switch_shows_on_every_view(view):
+def test_switch_is_drawn_on_every_view_but_shown_on_scanpath(view):
     at = _boot(view)
+    # Drawn on every run, so nothing above a view shifts with the view.
     assert at.segmented_control(key=SWITCH).value == "simple"
+    style = _switch_style(at)
+    assert ("position: fixed" in style) == (view == _VIEW_SCANPATH)
+    assert ("display: none !important" in style) == (view != _VIEW_SCANPATH)
+
+
+def test_switch_css_lifts_the_switch_into_the_top_bar():
+    css = ui_mode.switch_css(True)
+    box = ".st-key-tour_grp_ui_mode"
+    assert f"{box} {{ position: fixed;" in css
+    assert "z-index: 1000000" in css
+    assert 'data-testid="stMainMenu"' in css
+    # Bigger than the default control: 1rem text, 2.5rem tall.
+    assert "min-height: 2.5rem" in css and "font-size: 1rem" in css
+    # The title row that holds it leaves the flow.
+    assert "position: absolute" in css and "height: 0" in css
+    # Below the fallback width it is an in-flow, right-aligned row.
+    assert f"@media (max-width: {ui_mode._SWITCH_FALLBACK_PX}px)" in css
+    assert "align-items: flex-end" in css
+
+
+def test_switch_css_hidden_still_collapses_the_title_row():
+    css = ui_mode.switch_css(False)
+    assert "display: none !important" in css
+    assert "position: fixed" not in css
+    assert "position: absolute" in css
 
 
 def test_deselecting_the_switch_keeps_the_mode():
@@ -161,7 +196,7 @@ def test_more_lists_cover_the_spec():
     def titles(area: str) -> str:
         return " | ".join(title for title, _ in more[area]).lower()
 
-    for word in ("filter", "sort", "slider", "summary chips"):
+    for word in ("filter", "sort", "slider", "trial summary table"):
         assert word in titles("picker")
     for word in (
         "replay",
@@ -837,3 +872,54 @@ def test_hidden_note_button_switches_to_advanced():
     assert not at.exception
     assert at.session_state["ui_mode"] == "advanced"
     assert at.session_state["_ui_mode_chosen"] is True
+
+
+def test_simple_hides_the_trial_summary_table_by_css():
+    simple = ui_mode.mode_css("simple")
+    assert "st-key-adv_only_chips" in simple
+    assert "st-key-adv_only_chips" not in ui_mode.mode_css("advanced")
+    # The table is still built in Simple, so a mode switch changes no element.
+    at = _boot()
+    assert not at.exception
+
+
+def test_more_picker_describes_the_summary_table():
+    lines = dict(ui_mode.MORE_IN_ADVANCED["picker"])
+    text = " ".join(lines).lower()
+    assert "trial summary table" in text and "chips" not in text
+    line = next(v for k, v in lines.items() if "summary" in k.lower())
+    assert "condition" in line and "above the plot" in line
+
+
+def test_simple_view_tiles_are_bigger_than_advanced_presets():
+    from scanpath_studio.styles import get_app_css
+
+    css = " ".join(get_app_css().split())
+    sel = ".st-key-scanpath_rail .st-key-tour_grp_simple_views button {"
+    assert sel in css
+    assert "min-height: 4rem" in css.split(sel)[1].split("}")[0]
+    assert "font-size: 1.05rem" in css
+    # The narrow tiers keep the grid on one line per tile.
+    assert "font-size: 0.95rem" in css
+    assert ".st-key-quick_views_grid button" not in css.split(sel)[1].split("}")[0]
+
+
+def test_simple_export_points_to_the_bundle_in_advanced():
+    at = _boot()
+    at.session_state["single_subtab"] = tabs.SUBTAB_EXPORT
+    at.run()
+    assert not at.exception
+    assert any(b.key == "export_to_advanced" for b in at.button)
+    at.button(key="export_to_advanced").click().run()
+    assert not at.exception
+    assert at.session_state["ui_mode"] == "advanced"
+    assert at.session_state["_ui_mode_chosen"] is True
+    assert any("Export bundle" in str(m.value) for m in at.markdown)
+
+
+def test_advanced_export_has_no_pointer():
+    at = _boot(mode="advanced")
+    at.session_state["single_subtab"] = tabs.SUBTAB_EXPORT
+    at.run()
+    assert not at.exception
+    assert not [b for b in at.button if b.key == "export_to_advanced"]

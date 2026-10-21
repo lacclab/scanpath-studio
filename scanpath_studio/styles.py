@@ -2093,12 +2093,43 @@ def get_app_css() -> str:
         padding-top: 0.25rem;
         padding-bottom: 0.25rem;
     }
+    /* Simple's View tiles are bigger than Advanced's presets: an icon over its
+       label, in a tile 4rem tall. (Advanced's `quick_views_grid` is untouched.) */
+    .st-key-scanpath_rail .st-key-tour_grp_simple_views button {
+        min-height: 4rem;
+        padding-top: 0.4rem;
+        padding-bottom: 0.4rem;
+    }
+    .st-key-scanpath_rail .st-key-tour_grp_simple_views button > div > span {
+        flex-direction: column;
+        align-items: center;
+        gap: 0.2rem;
+    }
+    .st-key-scanpath_rail .st-key-tour_grp_simple_views button p {
+        font-size: 1.05rem;
+        line-height: 1.2;
+    }
+    .st-key-scanpath_rail .st-key-tour_grp_simple_views button
+        span:has(> [data-testid="stIconMaterial"]),
+    .st-key-scanpath_rail .st-key-tour_grp_simple_views button
+        [data-testid="stIconMaterial"] {
+        width: 1.6rem;
+        height: 1.6rem;
+        font-size: 1.6rem;
+        line-height: 1.6rem;
+    }
     /* A Simple / Advanced wrapper (`ui_mode.advanced_only` / `simple_only`)
        in the rail is one more block around what it holds. The wrapper takes
        the app-wide 0.25rem under each block itself, so its last child gives
        its own back: the rail's spacing is the same as without the wrapper. */
     .st-key-scanpath_rail [class*="st-key-adv_only_"] > div:last-child,
     .st-key-scanpath_rail [class*="st-key-simple_only_"] > div:last-child {
+        margin-bottom: 0 !important;
+    }
+    /* The trial summary table's Advanced-only wrapper (`ui_mode.TRIAL_CHIPS`)
+       holds the keyed table container alone: the wrapper's own margin under
+       it would double the page's 0.25rem. */
+    .st-key-adv_only_chips > [data-testid="stLayoutWrapper"]:last-child {
         margin-bottom: 0 !important;
     }
     /* The presets' height — one line of label needs no more. */
@@ -2312,6 +2343,9 @@ def get_app_css() -> str:
             font-size: 0.8125rem;
             white-space: nowrap;
         }
+        .st-key-scanpath_rail .st-key-tour_grp_simple_views button p {
+            font-size: 0.95rem;
+        }
     }
     @container sps-rail (max-width: 178px) {
         .st-key-viz_view_scanpath button p,
@@ -2326,6 +2360,12 @@ def get_app_css() -> str:
            off-centre. */
         [class*="st-key-simple_view_"] button [data-testid="stIconMaterial"] {
             margin: 0 !important;
+        }
+        .st-key-scanpath_rail .st-key-tour_grp_simple_views button p {
+            font-size: 0;
+        }
+        .st-key-scanpath_rail .st-key-tour_grp_simple_views button > div > span {
+            gap: 0;
         }
         /* A markdown `:material/…:` renders as `span[role="img"]` — the
            `stIconMaterial` test id is only on the `icon=` slot. */

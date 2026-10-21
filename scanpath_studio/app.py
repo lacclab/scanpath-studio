@@ -9207,7 +9207,7 @@ def _run_app() -> None:
 
     menu = render_top_menu(active_view=active_view)
     _render_about_panel(menu.title)
-    ui_mode.render_switch(menu.aside)
+    ui_mode.render_switch(menu.aside, visible=active_view == _VIEW_SCANPATH)
     _render_cancelled_load_notice(menu.notices)
     _render_backup_reminder(menu.notices, active_view)
 

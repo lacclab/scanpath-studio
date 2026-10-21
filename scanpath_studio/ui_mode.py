@@ -37,6 +37,11 @@ TRIAL_SLIDER = "trial_slider"
 #: The `advanced_only` name of the trial picker's sort popover, whose
 #: ``railbtn_*`` cluster cell Simple drops when nothing else is in it.
 TRIAL_SORT = "trial_sort"
+#: The `advanced_only` name of the trial summary table above the plot; the
+#: wrapper that holds it is dropped whole in Simple.
+TRIAL_CHIPS = "chips"
+#: The key of the container the Simple | Advanced switch is drawn in.
+SWITCH_BOX_KEY = "tour_grp_ui_mode"
 
 SIMPLE = "simple"
 ADVANCED = "advanced"
@@ -60,8 +65,9 @@ MORE_IN_ADVANCED: dict[str, tuple[tuple[str, str], ...]] = {
             "Sweep through the trials quickly, with the count and id on it.",
         ),
         (
-            "✏️ Summary chips",
-            "Choose and reorder the chips shown above the plot.",
+            "📋 Trial summary table",
+            "Who read what, in which condition, with the trial's statistics "
+            "in a table above the plot; choose and reorder its fields.",
         ),
     ),
     "rail": (
@@ -194,6 +200,11 @@ def mode_css(mode: str) -> str:
         cell = '[class*="st-key-railbtn_"] > div'
         sort = f'> [class*="st-key-railbtn_"] > div:only-child > .st-key-{_ADV_PREFIX}{TRIAL_SORT}'
         rules = hide + (
+            # The trial summary table's wrapper would still take the page's
+            # margin under each block.
+            ' [data-testid="stLayoutWrapper"]'
+            f":has(> .st-key-{_ADV_PREFIX}{TRIAL_CHIPS}) "
+            "{ display: none !important; }"
             # With the slider gone its column would still hold a gap: drop it.
             # Only the column that holds it directly, never one around the row.
             ' [data-testid="stColumn"]:has(> [data-testid="stVerticalBlock"]'
@@ -326,20 +337,99 @@ def render_hidden_settings_note(host: DeltaGenerator, reasons: list[str]) -> Non
     )
 
 
-def render_switch(host: DeltaGenerator) -> None:
+#: The widest viewport at which the switch leaves the header for the page:
+#: under it the header's logo, menu and the switch no longer fit side by side.
+_SWITCH_FALLBACK_PX = 520
+
+#: The title row that holds the switch's container, whichever column it is in.
+_SWITCH_ROW = (
+    '[data-testid="stLayoutWrapper"]'
+    f':has(> [data-testid="stHorizontalBlock"] .st-key-{SWITCH_BOX_KEY})'
+)
+
+
+def switch_css(visible: bool) -> str:
+    """A ``<style>`` that places the Simple | Advanced switch.
+
+    The switch stays where the script draws it, so its state never depends on
+    the view. With ``visible`` it is lifted into Streamlit's top bar, just left
+    of the ⋮ menu, at a larger size, and the bar's menu cell grows to leave it
+    room; below ``_SWITCH_FALLBACK_PX`` it is an ordinary right-aligned row of
+    the page. Without it (the views that have no use for the mode) the switch is
+    hidden. Either way the title row it sits in takes no space of its own.
+    """
+    box = f".st-key-{SWITCH_BOX_KEY}"
+    wide = f"@media (min-width: {_SWITCH_FALLBACK_PX + 1}px)"
+    narrow = f"@media (max-width: {_SWITCH_FALLBACK_PX}px)"
+    collapse = (
+        # Out of the flow, so the page's rows sit where they would without it;
+        # a fixed box inside it still positions against the viewport.
+        f"{wide} {{ {_SWITCH_ROW} {{ position: absolute; width: 0; height: 0;"
+        " margin: 0 !important; overflow: visible; } }"
+    )
+    if not visible:
+        return f"<style>{box} {{ display: none !important; }} {collapse}</style>"
+    button = f'{box} [data-testid="stButtonGroup"] button[data-variant]'
+    return (
+        "<style>"
+        f"{collapse}"
+        f"{wide} {{"
+        f" {box} {{ position: fixed; top: 10px; right: 3.75rem;"
+        " z-index: 1000000; width: max-content; }"
+        # The header's right-hand cell is a fixed 200px: widen it so the
+        # navigation gives way before it would run under the switch.
+        ' [data-testid="stToolbar"] div:has(> [data-testid="stMainMenu"])'
+        " { width: 17.5rem !important; }"
+        " }"
+        f" {button} {{ min-height: 2.5rem; padding: 0 1.1rem; }}"
+        f" {button} p {{ font-size: 1rem; }}"
+        f"{narrow} {{"
+        # In the page: right-aligned, with the empty title column out of the way.
+        f" {box} {{ align-items: flex-end; }}"
+        f' [data-testid="stColumn"]:has(.st-key-about_header)'
+        " { display: none; }"
+        " }"
+        "</style>"
+    )
+
+
+def render_export_pointer(host: DeltaGenerator) -> None:
+    """Under Simple's *Current figure*: where exporting many trials at once is."""
+    row = host.container(
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+        key="export_advanced_note",
+    )
+    row.caption(
+        f"{ICONS['info']} Exporting many trials at once, with figures and "
+        "tables for every trial, is in Advanced."
+    )
+    row.button(
+        "Switch to Advanced",
+        key="export_to_advanced",
+        type="tertiary",
+        on_click=_switch_to_advanced,
+    )
+
+
+def render_switch(host: DeltaGenerator, *, visible: bool = True) -> None:
     """Draw the Simple | Advanced switch in ``host``.
 
     The widget's value is re-written from the session's mode on every run, so
-    a link or a restore that moves the mode moves the switch with it. Once the
-    viewer has used it, a same-origin script keeps the choice in the browser's
-    cookie for the next visit.
+    a link or a restore that moves the mode moves the switch with it. It is
+    drawn on every run, on every view: ``visible`` only decides, by CSS,
+    whether it shows (see :func:`switch_css`), so nothing above a view moves
+    with the view. Once the viewer has used it, a same-origin script keeps the
+    choice in the browser's cookie for the next visit.
     """
     import streamlit as st
 
     from scanpath_studio.html_embed import embed_html_iframe
 
     st.session_state[SWITCH_KEY] = current_mode()
-    box = host.container(key="tour_grp_ui_mode")
+    box = host.container(key=SWITCH_BOX_KEY)
+    box.html(switch_css(visible))
     box.segmented_control(
         "Interface",
         options=list(MODES),

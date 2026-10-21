@@ -5601,6 +5601,7 @@ def _render_export_panel(
         render_cite_button(st, key="single_export")
 
     if not include_bundle:
+        ui_mode.render_export_pointer(st)
         return
     st.divider()
     st.markdown("## Export bundle")
@@ -6362,7 +6363,11 @@ def render_single_trial_tab(
         # `chips_slot`, its rows named in each scanpath's colour.
         # Keyed containers double as welcome-tour spotlight targets.
         compare_slot = st.container(key="tour_grp_compare_picker")
-        chips_slot = st.container(key="tour_grp_chips")
+        # Advanced-only: Simple hides the trial summary table (the wrapper is
+        # drawn either way, so the figure keeps its position).
+        chips_slot = ui_mode.advanced_only(st, ui_mode.TRIAL_CHIPS).container(
+            key="tour_grp_chips"
+        )
         # Notes about the figure that come *before* it sit above the
         # stage, so the figure is always the stage's second child and a figure
         # already on screen stays put while the next one is built.
@@ -7036,18 +7041,20 @@ def render_single_trial_tab(
             render_viz_reset(st)
 
     # Simple hides the controls that Advanced sets, but they keep shaping the
-    # figure; say which are in play. The container is drawn on every Simple
-    # run, empty when nothing is, so the notes below it never change position.
-    if ui_mode.is_simple():
-        ui_mode.render_hidden_settings_note(
-            plot_notes_slot.container(),
-            ui_mode.hidden_settings_reasons(
-                narrowed=len(combos) < len(combos_all),
-                sorted_=trial_sort_is_set("single"),
-                comparing=bool(compare_enabled),
-                custom_view=st.session_state.get(SIMPLE_VIEW_LIT_KEY, "") is None,
-            ),
+    # figure; say which are in play. The container is drawn on every run, in
+    # both modes and empty when there is nothing to say, so the notes below it
+    # never change position.
+    ui_mode.render_hidden_settings_note(
+        plot_notes_slot.container(),
+        ui_mode.hidden_settings_reasons(
+            narrowed=len(combos) < len(combos_all),
+            sorted_=trial_sort_is_set("single"),
+            comparing=bool(compare_enabled),
+            custom_view=st.session_state.get(SIMPLE_VIEW_LIT_KEY, "") is None,
         )
+        if ui_mode.is_simple()
+        else [],
+    )
 
     # Second-trial selector + layout/legend options, rendered above the chips in
     # the plot column. Filled after the rail so the per-scanpath compare

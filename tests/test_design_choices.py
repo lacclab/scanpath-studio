@@ -246,7 +246,7 @@ def test_auto_leaves_the_heatmap_opacity_and_bar_length_unset():
 
 
 def test_the_replay_key_ignores_what_no_frame_draws():
-    """The heatmap's opacity and the title/caption styling never reach a
+    """The heatmap's opacity and the title/caption styling (and credit) never reach a
     replay frame, so changing one rebuilds none."""
     from scanpath_studio import tabs
 
@@ -273,6 +273,7 @@ def test_the_replay_key_ignores_what_no_frame_draws():
         key(
             heatmap_opacity=0.8,
             title_font_size=30,
+            show_credit=True,
             caption_font_size=18,
             caption_color="#222222",
         )

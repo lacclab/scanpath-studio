@@ -4198,3 +4198,33 @@ def check_for_updates(timeout: float = 5.0) -> UpdateCheck:
     from .updates import check_for_updates as _check
 
     return _check(timeout)
+
+
+def cite(format: str = "bibtex", corpus: str | None = None) -> str:
+    """How to cite Scanpath Studio — and, optionally, the corpus you used.
+
+    The same entries as the app's Help → About and *Cite* buttons, and
+    ``scanpath-studio cite``. Every figure, replay and page `save_figure` writes
+    also carries the citation in its file metadata.
+
+    ```python
+    print(sps.cite())                       # BibTeX
+    print(sps.cite("apa", corpus="onestop"))  # APA, plus OneStop's reference
+    ```
+
+    Args:
+        format: ``"bibtex"``, ``"apa"``, ``"ris"`` (Zotero, Mendeley, EndNote),
+            ``"csl-json"``, or ``"credit"`` — one sentence to paste into a figure
+            caption.
+        corpus: ``"onestop"`` or ``"potec"`` to add that corpus's citation after
+            the software's; ``None`` for the software alone.
+
+    Returns:
+        The citation as text (APA without Markdown).
+
+    Raises:
+        ValueError: For an unknown ``format`` or ``corpus``.
+    """
+    from .citation import cite as _cite
+
+    return _cite(format, corpus)

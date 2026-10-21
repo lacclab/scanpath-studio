@@ -11,6 +11,7 @@ __all__ = [
     "cache_status",
     "check_data_health",
     "check_for_updates",
+    "cite",
     "clear_cache",
     "compare_scanpaths",
     "figure_code",

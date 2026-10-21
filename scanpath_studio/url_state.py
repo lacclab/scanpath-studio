@@ -35,6 +35,7 @@ from .code_snippet import (
     UNKNOWN_SOURCE_NOTE,
     FigureState,
     SnippetSource,
+    cite_comment,
     reproduction_code,
     upload_source,
 )
@@ -4202,9 +4203,15 @@ def _render_code_snippet_body(data_choice: str) -> None:
             )
         # The install line rides *in* the copied block (one 📋 copies both), so
         # pasting into a fresh shell works without hunting for the package name.
-        st.code(f"{INSTALL_COMMAND}\n\n{code.cli}", language="bash")
+        st.code(
+            f"{cite_comment(python=False)}\n{INSTALL_COMMAND}\n\n{code.cli}",
+            language="bash",
+        )
     else:
-        st.code(f"# {INSTALL_COMMAND}\n{code.python}", language="python")
+        st.code(
+            f"{cite_comment(python=True)}\n# {INSTALL_COMMAND}\n{code.python}",
+            language="python",
+        )
 
 
 #: The Share subtab's three ways to pass a figure on, as the options of

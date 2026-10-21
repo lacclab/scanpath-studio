@@ -83,6 +83,7 @@ def _parsers() -> dict:
         "check": cli._check_parser,
         "cache": cli._cache_parser,
         "version": cli._version_parser,
+        "cite": cli._cite_parser,
     }
 
 

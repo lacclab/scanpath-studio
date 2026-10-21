@@ -51,6 +51,20 @@ SNIPPET_STATE_KEY = "_snippet_state"
 #: paste this into a fresh notebook or shell, not part of the recipe.
 INSTALL_COMMAND = "pip install scanpath-studio"
 
+
+def cite_comment(python: bool) -> str:
+    """The comment heading a snippet in Share → Code: what to cite, and the call
+    or command that prints the full entry."""
+    from .citation import _release
+    from .constants import CITATION
+
+    how = "sps.cite()" if python else "scanpath-studio cite"
+    return (
+        f"# Made with {CITATION['title']} {_release()}. Please cite "
+        f"https://doi.org/{CITATION['doi']} (BibTeX: {how})"
+    )
+
+
 #: The figure kinds a snippet can reproduce, matching ``api.figure_options``.
 KINDS = ("static", "animation", "comparison")
 

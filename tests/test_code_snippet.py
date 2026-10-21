@@ -897,10 +897,13 @@ def test_the_panel_switches_flavour():
         }
     )
     assert at.code[0].language == "bash"
-    # The install line leads the block so the whole thing pastes into a fresh
-    # shell; the command itself follows it.
+    # The citation comment and the install line lead the block so the whole
+    # thing pastes into a fresh shell; the command itself follows them.
     block = at.code[0].value
-    assert block.startswith(f"{cs.INSTALL_COMMAND}\n\n")
+    assert block.startswith(
+        f"{cs.cite_comment(python=False)}\n{cs.INSTALL_COMMAND}\n\n"
+    )
+    assert "scanpath-studio cite" in block.splitlines()[0]
     assert block.split("\n\n", 1)[1].startswith("scanpath-studio render")
 
 

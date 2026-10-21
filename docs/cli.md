@@ -15,6 +15,7 @@ it:
 | [`check`](#check) | Run the Data checks on your tables |
 | [`cache`](#cache) | Show or clear the recovery cache |
 | [`version`](#version) | Show the build, and whether a newer release is out |
+| [`cite`](#cite) | Print how to cite Scanpath Studio |
 
 Each command takes `--help`, and `scanpath-studio --version` prints the version.
 A word that is not a command is an error that suggests the closest command. It
@@ -373,3 +374,24 @@ commits after 0.35.0, at commit `8f18219`. The same check is
 **:material/help: Help → :material/info: About → :material/update: Check for
 updates** in the app, and
 [`check_for_updates`][scanpath_studio.api.check_for_updates] in Python.
+
+## cite
+
+`cite` prints how to cite Scanpath Studio. `--corpus` adds the citation of the
+public corpus you used.
+
+```bash
+scanpath-studio cite                           # BibTeX
+scanpath-studio cite --format apa --corpus onestop
+scanpath-studio cite --format credit           # one sentence for a figure caption
+```
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("cite"))
+```
+
+You don't have to add the citation to your files by hand: every figure `render`
+writes carries it in its file metadata. The same entries are
+[`cite`][scanpath_studio.api.cite] in Python.

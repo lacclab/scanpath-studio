@@ -359,9 +359,9 @@ def test_rail_wrappers_are_keyed_for_the_mode_css():
     assert 'simple_only(viz, "rail_more")' in source
 
 
-def _open_gaze_dataset(words, fixations, gaze) -> AppTest:
+def _open_gaze_dataset(words, fixations, gaze, *, mode: str = "simple") -> AppTest:
     at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
-    at.query_params["ui"] = "simple"
+    at.query_params["ui"] = mode
     pin_view(at, _VIEW_SCANPATH)
     at.session_state["_datasets"] = {
         "Gaze": {
@@ -411,20 +411,56 @@ def test_raw_gaze_only_trial_in_simple_highlights_scanpath():
     _assert_animation_keeps_the_static_tile(at)
 
 
-def test_samples_only_dataset_in_simple():
+def _open_samples_only(mode: str = "simple") -> AppTest:
     from scanpath_studio import api
     from scanpath_studio.data import empty_fixations_frame, empty_words_frame
 
-    at = _open_gaze_dataset(
+    return _open_gaze_dataset(
         empty_words_frame(),
         empty_fixations_frame(),
         api.load_sample_raw_gaze(names="canonical"),
+        mode=mode,
     )
-    # Its raw-gaze layer opens on, which no preset has, so no tile is lit
-    # until one is chosen.
-    assert "primary" not in {_tile_type(at, name) for name in ("scanpath", "heatmap")}
+
+
+SIMPLE_TILES = ("animation", "scanpath", "heatmap", "illustration")
+
+
+def _lit_tiles(at: AppTest) -> list[str]:
+    return [name for name in SIMPLE_TILES if _tile_type(at, name) == "primary"]
+
+
+def test_samples_only_dataset_opens_simple_on_the_scanpath_tile():
+    """The raw-gaze layer the dataset turns on is its default, not a setting
+    shaped in Advanced, so a fresh session lights Scanpath."""
+    at = _open_samples_only()
+    assert at.session_state["global_show_raw_gaze"] is True
+    assert _lit_tiles(at) == ["scanpath"]
     _assert_animation_keeps_the_static_tile(at)
     assert at.session_state["global_show_raw_gaze"] is True
+
+
+def test_samples_only_dataset_keeps_the_advanced_highlight():
+    """Only Simple's tiles read through the seed; Advanced's presets still
+    highlight Custom, as before."""
+    at = _open_samples_only("advanced")
+    assert at.button(key="viz_view_custom").proto.type == "primary"
+    assert at.button(key="viz_view_scanpath").proto.type == "secondary"
+
+
+def test_samples_only_dataset_with_the_layer_changed_lights_no_tile():
+    at = _open_samples_only()
+    at.toggle(key="global_show_raw_gaze").set_value(False).run()
+    assert not at.exception, at.exception
+    assert _lit_tiles(at) == []
+
+
+def test_samples_only_dataset_with_another_setting_changed_lights_no_tile():
+    at = _open_samples_only()
+    at.toggle(key="global_show_stimulus").set_value(False).run()
+    assert not at.exception, at.exception
+    assert at.session_state["global_show_raw_gaze"] is True
+    assert _lit_tiles(at) == []
 
 
 @pytest.mark.parametrize(

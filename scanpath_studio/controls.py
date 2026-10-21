@@ -2300,6 +2300,42 @@ def _apply_simple_view(name: str) -> None:
     st.session_state["single_animate"] = animation
 
 
+#: The 🔵 Raw gaze layer's switch, which `app.seed_raw_gaze_default` seeds.
+_RAW_GAZE_LAYER = "global_show_raw_gaze"
+
+
+def _seeded_raw_gaze_view() -> str | None:
+    """The built-in view the settings are, once the dataset's raw-gaze default
+    is allowed for; ``None`` when there is none.
+
+    A dataset recorded as raw gaze alone opens with its 🔵 Raw gaze layer on
+    (`app.seed_raw_gaze_default`), which no built-in view has, so the preset
+    highlight opens on Custom. That is the dataset's default, not a setting
+    anyone shaped, so Simple's tiles read through it: the layer must still be
+    at that default (the seed's stash is what says one was made), and every
+    other plot setting with a widget default must be the view's own. The
+    Advanced highlight is left as it is.
+    """
+    ss = st.session_state
+    if not isinstance(ss.get(RAW_GAZE_SNAP_RESTORE_KEY), dict):
+        return None
+    if ss.get(_RAW_GAZE_LAYER) is not True or ss.get(_QUICK_VIEW_DRIFTED_FROM):
+        return None
+    current = _capture_quick_view_state()
+    for name in ("illustration", "scanpath", "heatmap"):
+        expected = {**_VIEW_PRESETS[name], _RAW_GAZE_LAYER: True}
+        if all(
+            _write_match_key(current.get(key, ss.get(key)))
+            == _write_match_key(
+                expected.get(key, _VIZ_WIDGET_DEFAULTS.get(key, current.get(key)))
+            )
+            for key in current.keys() | expected.keys()
+            if not _is_drift_mirror(key) and key not in _VIEW_MODE_KEYS
+        ) and not _link_departs_from(name):
+            return name
+    return None
+
+
 def simple_active_view(*, animating: bool, active: str | None = None) -> str | None:
     """The Simple View tile the current settings match, or ``None``.
 
@@ -2307,10 +2343,13 @@ def simple_active_view(*, animating: bool, active: str | None = None) -> str | N
     trial has fixations), so a trial without fixations, which draws its static
     figure, lights its static tile. ``active`` is the design preset in force,
     looked up with `_active_quick_view` when not given. Custom, a saved design,
-    or Heatmap / Illustration under the replay match no tile.
+    or Heatmap / Illustration under the replay match no tile, except the Custom
+    that only a dataset's own raw-gaze default makes (`_seeded_raw_gaze_view`).
     """
     if active is None:
         active = _active_quick_view()
+    if active == _CUSTOM_VIEW:
+        active = _seeded_raw_gaze_view() or active
     if animating:
         return _SIMPLE_ANIMATION if active == "scanpath" else None
     return active if active in SIMPLE_VIEWS else None

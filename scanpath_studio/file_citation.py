@@ -54,10 +54,18 @@ def stamp_file(path, fmt: str | None = None) -> None:
     fmt = fmt or path.suffix
     if fmt.lower().lstrip(".") not in _STAMPERS:
         return
-    data = path.read_bytes()
+    try:
+        data = path.read_bytes()
+    except OSError:  # nothing was written there to stamp
+        return
     stamped = stamp(data, fmt)
     if stamped is not data:
         path.write_bytes(stamped)
+
+
+def stamp_html(page: str) -> str:
+    """An HTML page (as text) with the citation in its ``<head>``."""
+    return stamp(page.encode("utf-8"), "html").decode("utf-8")
 
 
 def mp4_metadata_args() -> list[str]:
@@ -66,8 +74,6 @@ def mp4_metadata_args() -> list[str]:
     return [
         "-metadata",
         f"comment={meta['Comment']}",
-        "-metadata",
-        f"encoder={meta['Software']}",
         "-metadata",
         f"description={meta['Source']}",
     ]
@@ -85,6 +91,17 @@ def _png_chunk(kind: bytes, body: bytes) -> bytes:
     )
 
 
+def png_text_chunks(meta: dict[str, str] | None = None) -> bytes:
+    """The citation as PNG ``iTXt`` chunks, ready to splice in before ``IDAT``
+    (the browser-side save in ``tabs`` splices these same bytes)."""
+    return b"".join(
+        # keyword NUL, compression flag + method, empty language and
+        # translated keyword, then the UTF-8 text.
+        _png_chunk(b"iTXt", key.encode("latin-1") + b"\0\0\0\0\0" + text.encode())
+        for key, text in (meta or file_metadata()).items()
+    )
+
+
 def _stamp_png(data: bytes, meta: dict[str, str]) -> bytes:
     if not data.startswith(_PNG_SIGNATURE):
         raise ValueError("not a PNG")
@@ -92,16 +109,19 @@ def _stamp_png(data: bytes, meta: dict[str, str]) -> bytes:
     if idat < 12:
         raise ValueError("no IDAT chunk")
     start = idat - 4  # the IDAT chunk's length field
-    chunks = b"".join(
-        # keyword NUL, compression flag + method, empty language and
-        # translated keyword, then the UTF-8 text.
-        _png_chunk(b"iTXt", key.encode("latin-1") + b"\0\0\0\0\0" + text.encode())
-        for key, text in meta.items()
-    )
-    return data[:start] + chunks + data[start:]
+    return data[:start] + png_text_chunks(meta) + data[start:]
 
 
 # --- SVG ----------------------------------------------------------------------
+
+
+def svg_metadata(meta: dict[str, str] | None = None) -> str:
+    """The citation as an SVG ``<metadata>`` element, the root's first child
+    (the browser-side save in ``tabs`` inserts this same text)."""
+    lines = "\n".join(
+        f"{key}: {escape(value)}" for key, value in (meta or file_metadata()).items()
+    )
+    return f"<metadata>\n{lines}\n</metadata>"
 
 
 def _stamp_svg(data: bytes, meta: dict[str, str]) -> bytes:
@@ -109,8 +129,7 @@ def _stamp_svg(data: bytes, meta: dict[str, str]) -> bytes:
     root = re.search(r"<svg\b[^>]*?(/?)>", text)
     if root is None or root.group(1):
         raise ValueError("no <svg> root with children")
-    lines = "\n".join(f"{key}: {escape(value)}" for key, value in meta.items())
-    block = f"<metadata>\n{lines}\n</metadata>"
+    block = svg_metadata(meta)
     return (text[: root.end()] + block + text[root.end() :]).encode("utf-8")
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import re
 import threading
 from contextlib import contextmanager
@@ -18,6 +19,7 @@ from scanpath_studio.export_status import (
     emit_status,
     export_signature,
 )
+from scanpath_studio.file_citation import png_text_chunks, svg_metadata
 
 
 def _figure(value: int = 1) -> go.Figure:
@@ -399,6 +401,11 @@ def test_png_and_svg_are_saved_by_the_browser(monkeypatch, fmt, scale):
         "scale": scale,
         "dpi": None,  # no print width is set
         "label": f"⬇ Download {fmt}",
+        # The citation the browser writes into the file (`file_citation`).
+        "png_citation": base64.b64encode(png_text_chunks()).decode()
+        if fmt == "PNG"
+        else None,
+        "svg_citation": svg_metadata() if fmt == "SVG" else None,
     }
 
 

@@ -65,6 +65,8 @@ from .constants import (
 from .data import brought_reading_measures, shareable_frame
 from .export_status import ExportStage, StatusCallback, emit_status
 from .fields import panel_field
+from .file_citation import stamp as stamp_citation
+from .file_citation import stamp_html
 from .illustration import illustration_reasons, resolve_label_reasons
 from .measures import assign_fixations_to_words, enrich_fixations
 from .multipart import (
@@ -1060,7 +1062,8 @@ def _figure_renderer(enabled: bool):
     is unavailable — the per-trial failure is still surfaced as an export error.
 
     ``enabled`` also holds ``animation_export.KALEIDO_LOCK`` until the server has
-    stopped, since that server is one per process.
+    stopped, since that server is one per process. Every file it draws carries
+    the citation in its metadata (`file_citation.stamp`).
     """
     from .animation_export import KALEIDO_LOCK, warm_calc_fig
 
@@ -1090,10 +1093,11 @@ def _figure_renderer(enabled: bool):
                         "scale": scale,
                     },
                 )
-                return bytes(data)
-            return fig.to_image(
-                format=fmt, width=int(width), height=int(height), scale=scale
-            )
+            else:
+                data = fig.to_image(
+                    format=fmt, width=int(width), height=int(height), scale=scale
+                )
+            return stamp_citation(bytes(data), fmt)
 
         try:
             yield render
@@ -1999,10 +2003,12 @@ def pair_export(
             width = int(getattr(fig.layout, "width", None) or canvas_width)
             height = int(getattr(fig.layout, "height", None) or canvas_height)
             if fmt == "html":
-                data = fig.to_html(
-                    include_plotlyjs=html_plotlyjs(options.html_self_contained),
-                    full_html=True,
-                    config={**PLOTLY_CONFIG},
+                data = stamp_html(
+                    fig.to_html(
+                        include_plotlyjs=html_plotlyjs(options.html_self_contained),
+                        full_html=True,
+                        config={**PLOTLY_CONFIG},
+                    )
                 ).encode("utf-8")
             else:
                 data = render_static_figure_bytes(
@@ -3041,12 +3047,14 @@ def bulk_export(
                         try:
                             if fmt == "html":
                                 # Browser-free + interactive; no Kaleido needed.
-                                data = fig.to_html(
-                                    include_plotlyjs=html_plotlyjs(
-                                        options.html_self_contained
-                                    ),
-                                    full_html=True,
-                                    config={**PLOTLY_CONFIG},
+                                data = stamp_html(
+                                    fig.to_html(
+                                        include_plotlyjs=html_plotlyjs(
+                                            options.html_self_contained
+                                        ),
+                                        full_html=True,
+                                        config={**PLOTLY_CONFIG},
+                                    )
                                 ).encode("utf-8")
                             else:
                                 scale = options.png_scale if fmt == "png" else 1

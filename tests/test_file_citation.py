@@ -5,6 +5,8 @@ from __future__ import annotations
 import io
 import json
 import re
+import shutil
+import subprocess
 
 import pytest
 from PIL import Image
@@ -175,3 +177,115 @@ def test_cli_cite_prints_the_asked_format(capsys):
     assert capsys.readouterr().out.strip() == cite("credit", "potec")
     with pytest.raises(SystemExit):
         cli.main(["cite", "--format", "mla"])
+
+
+# --- The browser-side PNG / SVG save ------------------------------------------
+
+NODE = shutil.which("node")
+
+#: Runs the image-download component's module against a stand-in page: one
+#: iframe whose Plotly hands back ``image``, and an ``<a download>`` whose blob
+#: is written to ``out``.
+_HARNESS = """
+import { readFileSync, writeFileSync } from 'node:fs';
+const [moduleUrl, configPath, out] = process.argv.slice(2);
+const config = JSON.parse(readFileSync(configPath, 'utf8'));
+const make = () => ({ textContent: '', disabled: false, onclick: null });
+const button = make(), note = make();
+let blob = null;
+globalThis.URL.createObjectURL = (b) => { blob = b; return 'blob:x'; };
+globalThis.URL.revokeObjectURL = () => {};
+globalThis.setTimeout = () => {};
+const gd = {};
+globalThis.document = {
+  querySelectorAll: () => [{
+    contentDocument: { getElementById: () => gd },
+    contentWindow: { Plotly: { toImage: async () => config.image } },
+  }],
+  createElement: () => ({ click() {}, remove() {} }),
+  body: { appendChild() {} },
+};
+const { default: init } = await import(moduleUrl);
+init({ data: config.data, parentElement: {
+  querySelector: (sel) => sel.endsWith('note') ? note : button } });
+await button.onclick();
+writeFileSync(out, Buffer.from(await blob.arrayBuffer()));
+if (note.textContent) throw new Error(note.textContent);
+"""
+
+
+def _browser_save(tmp_path, fmt: str, image: str) -> bytes:
+    import base64
+
+    from scanpath_studio import tabs
+    from scanpath_studio.file_citation import png_text_chunks, svg_metadata
+
+    module = tmp_path / "component.mjs"
+    module.write_text(tabs._IMAGE_DOWNLOAD_JS, encoding="utf-8")
+    harness = tmp_path / "harness.mjs"
+    harness.write_text(_HARNESS, encoding="utf-8")
+    config = tmp_path / "config.json"
+    data = {
+        "plot_id": "p",
+        "format": fmt,
+        "filename": f"f.{fmt}",
+        "width": 4,
+        "height": 3,
+        "scale": 1,
+        "dpi": 300 if fmt == "png" else None,
+        "label": "Download",
+        "png_citation": base64.b64encode(png_text_chunks()).decode()
+        if fmt == "png"
+        else None,
+        "svg_citation": svg_metadata() if fmt == "svg" else None,
+    }
+    config.write_text(json.dumps({"image": image, "data": data}), encoding="utf-8")
+    out = tmp_path / "out"
+    subprocess.run(
+        [NODE, str(harness), module.as_uri(), str(config), str(out)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    return out.read_bytes()
+
+
+@pytest.mark.skipif(NODE is None, reason="needs node to run the component's JS")
+def test_the_browser_png_carries_the_citation_and_the_dpi(tmp_path):
+    import base64
+
+    plain = io.BytesIO()
+    Image.new("RGB", (4, 3), "white").save(plain, format="PNG")
+    saved = _browser_save(tmp_path, "png", base64.b64encode(plain.getvalue()).decode())
+    image = Image.open(io.BytesIO(saved))
+    image.load()
+    assert image.text == file_metadata()
+    assert round(image.info["dpi"][0]) == 300
+
+
+@pytest.mark.skipif(NODE is None, reason="needs node to run the component's JS")
+def test_the_browser_svg_carries_the_citation(tmp_path):
+    svg = '<svg xmlns="http://www.w3.org/2000/svg" width="4" height="3"><g/></svg>'
+    saved = _browser_save(tmp_path, "svg", svg).decode()
+    assert saved.startswith(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="4" height="3"><metadata>'
+    )
+    assert DOI in saved
+
+
+def test_save_figure_stamps_every_format(tmp_path, figure):
+    from scanpath_studio import api
+    from scanpath_studio.animation_export import chrome_available
+
+    html = api.save_figure(figure, tmp_path / "f.html").read_text(encoding="utf-8")
+    assert '<meta name="generator"' in html
+    if not chrome_available():
+        pytest.skip("static export needs Chrome")
+    png = api.save_figure(figure, tmp_path / "f.png", width_mm=80, dpi=600)
+    image = Image.open(png)
+    image.load()
+    assert image.text["Source"] == f"https://doi.org/{DOI}"
+    assert round(image.info["dpi"][0]) == 600
+    assert b"<metadata>" in api.save_figure(figure, tmp_path / "f.svg").read_bytes()
+    assert b"/Creator <FEFF" in api.save_figure(figure, tmp_path / "f.pdf").read_bytes()

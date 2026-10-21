@@ -40,6 +40,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 from .export_status import ExportStage, StatusCallback, emit_status
+from .file_citation import mp4_metadata_args, stamp
 
 # The interactive formats live elsewhere; these are the rasterized clip formats.
 VIDEO_FORMATS: tuple[str, ...] = ("gif", "mp4")
@@ -542,7 +543,7 @@ def encode_gif(
         raise AnimationExportError("No frames to encode.")
     _flush()
     buf.write(b";")
-    return buf.getvalue()
+    return stamp(buf.getvalue(), "gif")
 
 
 def encode_mp4(pngs: list[bytes], frame_duration_ms: float) -> bytes:
@@ -582,6 +583,8 @@ def encode_mp4(pngs: list[bytes], frame_duration_ms: float) -> bytes:
             codec="libx264",
             pixelformat="yuv420p",
             macro_block_size=1,
+            # The citation, in the container's tags (`file_citation`).
+            output_params=mp4_metadata_args(),
         )
         try:
             pad = None

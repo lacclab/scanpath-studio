@@ -1217,6 +1217,73 @@ def render_cache_recovery_notice(host, app_url: str, *, key: str) -> bool:
     return True
 
 
+def downloaded_public_datasets() -> list[tuple[str, list[str]]]:
+    """The public corpora whose files are on this computer, by folder.
+
+    ``(folder, [picker names])`` for every downloadable registry entry whose
+    ``files_present`` check passes, one row per folder: the OneStop regimes
+    share theirs, so a folder holding two of them is listed once with both.
+    Empty where the app may not touch local folders — the files there are the
+    server's, not this computer's. Path stats only, never a read.
+    """
+    if not local_filesystem_enabled():
+        return []
+    registry = public_dataset_registry()
+    by_folder: dict[str, list[str]] = {}
+    for choice, spec in registry.items():
+        folder, present = spec.get("folder"), spec.get("files_present")
+        if not spec.get("downloadable") or folder is None or present is None:
+            continue
+        try:
+            if not present():
+                continue
+            root = str(folder())
+        except _MANIFEST_ERRORS:
+            continue
+        by_folder.setdefault(root, []).append(picker_name_for(choice, registry))
+    return list(by_folder.items())
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def _folder_bytes(folder: str, contents: tuple[str, ...]) -> int:
+    """The bytes under ``folder``, walked once per set of corpora it holds.
+
+    ``contents`` is the key, not an input: a download into the folder changes
+    which corpora it holds and so measures it again, while an ordinary rerun of
+    the Data page does not walk a corpus' thousand files each time."""
+    del contents
+    total = 0
+    for dirpath, _dirs, files in os.walk(folder):
+        for name in files:
+            with contextlib.suppress(OSError):
+                total += os.lstat(os.path.join(dirpath, name)).st_size
+    return total
+
+
+def _render_downloaded_datasets(host) -> None:
+    """*Saved on this computer* → the public corpora downloaded here.
+
+    The recovery cache never copies a public corpus — it reloads from its own
+    files — but those files are on this computer all the same, often the
+    largest thing the app put there, and **Clear what is saved…** leaves them.
+    So they are listed apart from the cache, with where they are and how big.
+    """
+    downloads = downloaded_public_datasets()
+    if not downloads:
+        return
+    lines = []
+    for folder, names in downloads:
+        size = human_size(_folder_bytes(folder, tuple(names)))
+        listed = ", ".join(md_literal(name) for name in names)
+        lines.append(f"- {listed}: `{folder}` · {size}")
+    host.markdown("**Downloaded public datasets:**\n\n" + "\n".join(lines))
+    host.caption(
+        "Downloads are kept in their own folders, apart from the saved session, "
+        "and clearing what is saved leaves them. Delete a folder to remove that "
+        "download."
+    )
+
+
 def _render_saved_here_section(app_url: str, host) -> None:
     """🗂️ Data → **Saved on this computer**.
 
@@ -1262,6 +1329,7 @@ def _render_saved_here_section(app_url: str, host) -> None:
                 f"Started with `--no-persist` or `{PERSIST_ENV_VAR}=0`; start "
                 "it without either to save again."
             )
+        _render_downloaded_datasets(host)
         return
 
     # "Nothing leaves" holds only where browser and server are one machine; a
@@ -1326,6 +1394,7 @@ def _render_saved_here_section(app_url: str, host) -> None:
             "is. Reload to try restoring it again, or delete it with "
             "`scanpath-studio cache --clear`."
         )
+    _render_downloaded_datasets(host)
 
 
 #: *Clear what is saved…*'s request flag, served right under the
@@ -1394,7 +1463,13 @@ def _clear_saved_dialog(app_url: str) -> None:
     )
     st.caption(
         "The app then starts over, as on a first visit. Your original files are "
-        "not touched. There is no undo."
+        "not touched"
+        + (
+            ", and neither are the public datasets you downloaded"
+            if downloaded_public_datasets()
+            else ""
+        )
+        + ". There is no undo."
     )
     cancel, confirm = st.columns(2)
     if cancel.button("Cancel", key="saved_here_clear_cancel", width="stretch"):
@@ -2120,19 +2195,27 @@ def _dataset_folder(key_prefix: str, default_dir: str) -> str:
     return _resolve_data_dir(typed)
 
 
+def _potec_folder() -> str:
+    return _dataset_folder("potec", _download_target(POTEC_DEFAULT_DIR))
+
+
+def _onestop_public_folder() -> str:
+    """The OSF OneStop folder, which every regime's dataset shares."""
+    return _dataset_folder(
+        "onestop_public", _download_target(ONESTOP_PUBLIC_DEFAULT_DIR)
+    )
+
+
 def _potec_files_present() -> bool:
     from scanpath_studio import datasets
 
-    root = _dataset_folder("potec", _download_target(POTEC_DEFAULT_DIR))
-    return datasets.potec_present(root)
+    return datasets.potec_present(_potec_folder())
 
 
 def _onestop_files_present(regime: str) -> bool:
     from scanpath_studio import datasets
 
-    root = _dataset_folder(
-        "onestop_public", _download_target(ONESTOP_PUBLIC_DEFAULT_DIR)
-    )
+    root = _onestop_public_folder()
     parts = datasets.onestop_regime_parts(regime)
     return datasets.onestop_present(root, regime=regime, parts=parts)
 
@@ -2686,6 +2769,8 @@ def _onestop_regime_entry(regime: str) -> dict:
         loader=partial(_load_onestop_regime_source, regime=regime),
         # The dataset table's Status, for a row that is not open.
         files_present=partial(_onestop_files_present, regime),
+        # Where those files are: *Saved on this computer* lists the downloads.
+        folder=_onestop_public_folder,
         downloadable=True,
         # OneStop presentation monitor (full-screen px coords). Sourced from
         # Berzak et al. 2025, Sci Data 12:1995, Methods → Apparatus, which
@@ -2708,6 +2793,7 @@ PUBLIC_DATASET_REGISTRY: dict = {
     "PoTeC — Potsdam Textbook Corpus": dict(
         loader=_load_potec_source,
         files_present=_potec_files_present,  # the dataset table's Status
+        folder=_potec_folder,  # where those files are
         downloadable=True,
         # The schema `load_potec` uses, so the app's Trial ID is the headless
         # one: reader + text, not the text name every reader shares.

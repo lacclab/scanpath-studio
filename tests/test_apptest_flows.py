@@ -773,6 +773,25 @@ class TestRecoveryCachePanelFlow:
         gone = {"Clear recovery cache", "Reset everything", "What's saved, and where"}
         assert not labels & gone, labels
 
+    def test_panel_lists_the_downloaded_public_datasets(self, tmp_path, monkeypatch):
+        """A downloaded corpus is on this computer too, though the cache never
+        copies it, so the section names it, its folder and its size."""
+        from scanpath_studio import datasets
+
+        downloads = tmp_path / "downloads"
+        (downloads / "PoTeC").mkdir(parents=True)
+        (downloads / "PoTeC" / "fixations.tsv").write_bytes(b"x" * 2048)
+        monkeypatch.setenv("SCANPATH_STUDIO_DOWNLOAD_DIR", str(downloads))
+        monkeypatch.setenv("SCANPATH_LOCAL_FS", "1")
+        monkeypatch.setattr(datasets, "potec_present", lambda root: True)
+        at = self._boot_local(tmp_path / "cache", monkeypatch)
+        _clean(at, "cache panel:")
+        body = " ".join(str(m.value) for m in at.markdown)
+        assert "**Downloaded public datasets:**" in body
+        assert f"- PoTeC: `{downloads / 'PoTeC'}` · 2.0 KB" in body
+        captions = " ".join(str(c.value) for c in at.caption)
+        assert "clearing what is saved leaves them" in captions
+
     def test_a_loopback_run_says_nothing_leaves_this_computer(
         self, tmp_path, monkeypatch
     ):

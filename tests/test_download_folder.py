@@ -104,3 +104,58 @@ def test_compare_looks_in_the_download_folder_too(monkeypatch, tmp_path):
     assert root == str(tmp_path / "PoTeC")
     root, _ = compare_source._public_location(app.ONESTOP_REGIME_CHOICES["repeated"])
     assert root == str(tmp_path / "OneStop")
+
+
+def _fresh_folder_state(monkeypatch, folder) -> None:
+    """Point every corpus at ``folder``'s default, with no box typed into."""
+    import streamlit as st
+
+    monkeypatch.setenv(DOWNLOAD_DIR_ENV, str(folder))
+    for key in ("potec_dir", "onestop_public_dir", DOWNLOAD_DIR_KEY):
+        st.session_state.pop(key, None)
+
+
+def test_saved_here_lists_the_downloaded_corpora_by_folder(monkeypatch, tmp_path):
+    """The OneStop regimes share a folder, so it is one row naming both."""
+    from scanpath_studio import datasets
+
+    _fresh_folder_state(monkeypatch, tmp_path)
+    monkeypatch.setenv(app.LOCAL_FS_ENV, "1")
+    monkeypatch.setattr(datasets, "potec_present", lambda root: True)
+    here = {"ordinary", "repeated"}
+    monkeypatch.setattr(
+        datasets, "onestop_present", lambda root, regime, parts: regime in here
+    )
+    assert app.downloaded_public_datasets() == [
+        (str(tmp_path / "PoTeC"), ["PoTeC"]),
+        (
+            str(tmp_path / "OneStop"),
+            [
+                app.picker_name_for(app.ONESTOP_REGIME_CHOICES["ordinary"]),
+                app.picker_name_for(app.ONESTOP_REGIME_CHOICES["repeated"]),
+            ],
+        ),
+    ]
+
+
+def test_saved_here_lists_nothing_not_downloaded(monkeypatch, tmp_path):
+    _fresh_folder_state(monkeypatch, tmp_path)
+    monkeypatch.setenv(app.LOCAL_FS_ENV, "1")
+    assert app.downloaded_public_datasets() == []
+
+
+def test_a_server_lists_no_downloads(monkeypatch, tmp_path):
+    """Where the app may not touch local folders, the files are the server's."""
+    from scanpath_studio import datasets
+
+    _fresh_folder_state(monkeypatch, tmp_path)
+    monkeypatch.setenv(app.LOCAL_FS_ENV, "0")
+    monkeypatch.setattr(datasets, "potec_present", lambda root: True)
+    assert app.downloaded_public_datasets() == []
+
+
+def test_a_download_is_measured_in_full(tmp_path):
+    (tmp_path / "stimuli").mkdir()
+    (tmp_path / "stimuli" / "a.tsv").write_bytes(b"x" * 1000)
+    (tmp_path / "b.tsv").write_bytes(b"y" * 24)
+    assert app._folder_bytes(str(tmp_path), ("PoTeC",)) == 1024

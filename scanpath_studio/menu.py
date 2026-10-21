@@ -102,7 +102,7 @@ class TopMenu:
     #: The page heading's slot — the left half of the row the menu shares.
     #: ``app._render_about_panel`` fills it; see :func:`render_top_menu`.
     title: DeltaGenerator | None = None
-    #: The right of the title row, where the Simple | Advanced switch sits.
+    #: The right of the title row, where the Essentials | Full switch sits.
     aside: DeltaGenerator | None = None
 
 

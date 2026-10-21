@@ -28,8 +28,8 @@ Mechanics worth knowing before editing:
 - Spotlight targets are ``.st-key-tour_grp_*`` classes from keyed wrapper
   containers around the page sections (app.py / tabs.py / controls.py) plus
   Streamlit's stable ``data-testid`` for the nav (``menu.NAV_SELECTOR``). Keep
-  ``_SPOTLIGHT_STEPS`` (Advanced) and ``_SIMPLE_SPOTLIGHT_STEPS`` (only what
-  Simple draws) in sync with them; ``_spotlight_steps`` picks by mode.
+  ``_SPOTLIGHT_STEPS`` (Full) and ``_SIMPLE_SPOTLIGHT_STEPS`` (only what
+  Essentials draws) in sync with them; ``_spotlight_steps`` picks by mode.
 - Every spotlight step points at the Scanpath view, so the tour runs only
   there: started on another view it switches to Scanpath first, and left for
   another view it folds to its tab (``_keep_tour_on_scanpath``).
@@ -735,12 +735,12 @@ _SPOTLIGHT_STEPS = [
     },
 ]
 
-# Simple mode's tour: the same card, over only what Simple draws. Its steps
+# Essentials mode's tour: the same card, over only what Essentials draws. Its steps
 # point at the picker row, the plot, the View tiles, the subtab bar and the
 # switch, never at a control that mode hides (the filter funnel, the summary
 # table, the Animate / Compare rows, the layer controls), so no step spotlights
 # an element that is not on screen. The subtab step says what the ＋ More tab
-# holds, since the Advanced-only panels have no tab here to point at.
+# holds, since the Full-only panels have no tab here to point at.
 _SIMPLE_SPOTLIGHT_STEPS = [
     _SPOTLIGHT_STEPS[0],
     {
@@ -748,7 +748,7 @@ _SIMPLE_SPOTLIGHT_STEPS = [
         "title": f"{ICONS['pick_trial']} Pick a trial",
         "body": "Choose the **dataset** and a **trial** here, and go to the "
         f"previous or next trial with ◀ ▶. **{ICONS['add']} More** lists what "
-        "Advanced adds, such as filtering and sorting the trials.",
+        "Full adds, such as filtering and sorting the trials.",
     },
     {
         "selector": ".st-key-tour_grp_plot",
@@ -772,16 +772,16 @@ _SIMPLE_SPOTLIGHT_STEPS = [
         "dock": "top",
         "title": f"{ICONS['panels']} Export and share",
         "body": "**Export** saves the figure; **Share** makes a link or the code "
-        f"for it. **{ICONS['add']} More** lists what Advanced adds: the passage "
+        f"for it. **{ICONS['add']} More** lists what Full adds: the passage "
         "with its questions, comparisons across readers, annotations, and "
         "exporting every trial.",
     },
     {
         "selector": f".st-key-{ui_mode.SWITCH_BOX_KEY}",
-        "title": f"{ICONS['settings']} Simple or Advanced",
-        "body": "**Advanced** shows every control. Switch here at any time: "
+        "title": f"{ICONS['settings']} Essentials or Full",
+        "body": "**Full** shows every control. Switch here at any time: "
         "your settings stay as they are. The tutorials under "
-        f"**{ICONS['help']} Help** use Advanced.",
+        f"**{ICONS['help']} Help** use Full.",
     },
 ]
 
@@ -793,7 +793,7 @@ def _spotlight_steps() -> list[dict]:
 
 #: The stacking order of the floating card and its folded tab (written as a
 #: literal in `_CARD_CSS` / `_GUIDE_MOVE_CSS`, which are plain strings): above
-#: Streamlit's header (999990) and the Simple | Advanced switch
+#: Streamlit's header (999990) and the Essentials | Full switch
 #: (`ui_mode.SWITCH_Z_INDEX`, which sits in the header's bar), so a tour never
 #: runs under either, and below Streamlit's popovers and modals (1000060 and up).
 GUIDE_Z_INDEX = 999995
@@ -1697,7 +1697,7 @@ def _keep_tour_on_scanpath(active_view: str) -> None:
       first card is drawn;
     - left for another view mid-tour, it folds to its tab, which keeps its step
       and brings it back to Scanpath when opened;
-    - left on its last step, which points at the nav (or, in Simple, at the
+    - left on its last step, which points at the nav (or, in Essentials, at the
       switch the other views hide) and so invites the click, it ends, as Done
       would.
 
@@ -1926,8 +1926,8 @@ def _tutorial_completed() -> dict[str, bool]:
 def _start_use_case(tutorial_id: str, *, restart: bool = False) -> None:
     """Start/resume one tutorial while remembering where Exit should return.
 
-    The tutorials spotlight controls that only Advanced draws (Compare,
-    annotations, the layer controls), so a session in Simple moves to Advanced
+    The tutorials spotlight controls that only Full draws (Compare,
+    annotations, the layer controls), so a session in Essentials moves to Full
     for them. That is the session's mode only: it is not the viewer's own
     choice, so the cookie keeps what they picked.
     """

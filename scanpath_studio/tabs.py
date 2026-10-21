@@ -5536,8 +5536,8 @@ def _dataset_table_names() -> dict[str, ColumnNames]:
 def subtab_labels_for(simple: bool, *, line_assignment: bool) -> list[str]:
     """The per-trial subtab bar's labels, in order, for the interface mode.
 
-    Simple keeps what a first-time viewer reaches for (the current figure's
-    export and Share) plus a ＋ More list of what Advanced adds. Advanced adds
+    Essentials keeps what a first-time viewer reaches for (the current figure's
+    export and Share) plus a ＋ More list of what Full adds. Full adds
     📐 Line assignment only while ``line_assignment`` (drift correction) is
     offered. Dataset inspection is on the 🗂️ **Data** page, not this bar.
     """
@@ -6301,9 +6301,9 @@ def render_single_trial_tab(
         def _render_filters(host) -> None:
             """Every way to narrow the pool, behind one funnel.
 
-            The funnel and the chips' menu are each their own Advanced-only
+            The funnel and the chips' menu are each their own Full-only
             container, so each stays a direct child of the ``railbtn_*``
-            cluster and lays out as the cluster's other cells do. In Simple
+            cluster and lays out as the cluster's other cells do. In Essentials
             they stay in the page, hidden, with their values, and a ＋ More
             list takes the cell."""
             pop = ui_mode.advanced_only(host, "trial_filters").popover(
@@ -6364,7 +6364,7 @@ def render_single_trial_tab(
         # `chips_slot`, its rows named in each scanpath's colour.
         # Keyed containers double as welcome-tour spotlight targets.
         compare_slot = st.container(key="tour_grp_compare_picker")
-        # Advanced-only: Simple hides the trial summary table (the wrapper is
+        # Full-only: Essentials hides the trial summary table (the wrapper is
         # drawn either way, so the figure keeps its position).
         chips_slot = ui_mode.advanced_only(st, ui_mode.TRIAL_CHIPS).container(
             key="tour_grp_chips"
@@ -6473,8 +6473,8 @@ def render_single_trial_tab(
         # ordinary window size.
         with st.container(key="plot_controls_header"):
             st.markdown(f"## {ICONS['plot_controls']} Plot controls")
-        # Simple mode sets Animate from its View tiles and has no Compare, so
-        # the two mode rows are Advanced-only; they still run in Simple, which
+        # Essentials mode sets Animate from its View tiles and has no Compare, so
+        # the two mode rows are Full-only; they still run in Essentials, which
         # keeps `animate` and `compare_enabled` resolved exactly as here.
         with ui_mode.advanced_only(rail, "rail_modes").container(
             key="tour_grp_view_modes"
@@ -7028,20 +7028,20 @@ def render_single_trial_tab(
                 selected_trial,
                 combo_row=primary_combo_row,
             ),
-            # Simple's lit View tile follows the figure actually drawn.
+            # Essentials' lit View tile follows the figure actually drawn.
             animating=bool(animate),
         )
         # The scoped reset closes the rail, below every control it
         # resets, rather than sharing the heading row. It is last in creation
         # order, so it lands at the foot of the rail's own scroll area.
-        # Advanced-only: Simple's View tiles are its way back to a preset.
+        # Full-only: Essentials' View tiles are its way back to a preset.
         with (
             ui_mode.advanced_only(rail, "rail_reset"),
             st.container(key="plot_reset_footer"),
         ):
             render_viz_reset(st)
 
-    # Simple hides the controls that Advanced sets, but they keep shaping the
+    # Essentials hides the controls that Full sets, but they keep shaping the
     # figure; say which are in play. The container is drawn on every run, in
     # both modes and empty when there is nothing to say, so the notes below it
     # never change position.
@@ -7902,7 +7902,7 @@ def render_single_trial_tab(
         # The bar's identity includes its labels, so a mode switch makes it a
         # new widget that would start on its first tab. Writing the selection
         # back before the bar is created carries it over, and a subtab the mode
-        # lacks (a switch to Simple from Comparisons, a tutorial step naming
+        # lacks (a switch to Essentials from Comparisons, a tutorial step naming
         # one) falls back to the mode's first.
         if "single_subtab" in st.session_state:
             held = st.session_state["single_subtab"]
@@ -7933,7 +7933,7 @@ def render_single_trial_tab(
         tab_export = by_label[SUBTAB_EXPORT]
         tab_share = by_label[SUBTAB_SHARE]
         tab_more = by_label.get(SUBTAB_MORE)
-    # Annotations, Stimulus and Comparisons are absent entirely in Simple mode.
+    # Annotations, Stimulus and Comparisons are absent entirely in Essentials mode.
     if tab_annot is not None:
         with tab_annot, st.container(key="tutorial_annotations"):
             render_trial_annotations(
@@ -8041,7 +8041,7 @@ def render_single_trial_tab(
         else:
             st.caption("Sharing is unavailable in this context.")
 
-    # Simple mode's last subtab: what Advanced adds below the plot.
+    # Essentials mode's last subtab: what Full adds below the plot.
     if tab_more is not None and tab_more.open:
         ui_mode.render_more_list(tab_more, "subtabs")
 

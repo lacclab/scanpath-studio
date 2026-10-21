@@ -2257,7 +2257,7 @@ def _active_quick_view() -> str | None:
     return _sync_quick_view_state()
 
 
-#: Simple mode's View tiles, in their grid order. Animation is the Scanpath
+#: Essentials mode's View tiles, in their grid order. Animation is the Scanpath
 #: preset replayed; the other three are the design presets of the same name.
 SIMPLE_VIEWS = ("animation", "scanpath", "heatmap", "illustration")
 #: The tile `render_simple_views` lit on this run (``None``: settings that match
@@ -2293,16 +2293,16 @@ _SIMPLE_VIEW_TILES = {
 
 
 def _apply_simple_view(name: str) -> None:
-    """Apply a Simple View tile: its design preset, and Animate on or off.
+    """Apply an Essentials View tile: its design preset, and Animate on or off.
 
-    Every tile sets Animate as well as the layers, so no Simple view is ever
+    Every tile sets Animate as well as the layers, so no Essentials view is ever
     contradicted by the replay's own limits. `single_animate`'s toggle sits in
     a row, not a popover, so a plain write here holds (no `write_through`).
 
-    Palette is a Simple control too, so the palette picked stays across views:
+    Palette is an Essentials control too, so the palette picked stays across views:
     a preset resets the colours, and the palette is applied again after it,
     the way picking it does (`_on_palette_change`). Colours hand-edited in
-    Advanced, which match no palette, are reset like any preset resets them.
+    Full, which match no palette, are reset like any preset resets them.
     """
     palette = _active_palette()
     animation = name == _SIMPLE_ANIMATION
@@ -2325,11 +2325,11 @@ def _palette_keys() -> frozenset[str]:
 
 
 def _simple_ignored_keys() -> frozenset[str]:
-    """Plot settings Simple's tiles do not count as leaving a view.
+    """Plot settings Essentials' tiles do not count as leaving a view.
 
-    Picking a palette is a Simple action, so its colours are ignored while
+    Picking a palette is an Essentials action, so its colours are ignored while
     they are one of the palettes; colours hand-edited past every palette are
-    a setting shaped in Advanced, and count.
+    a setting shaped in Full, and count.
     """
     return _palette_keys() if _active_palette() is not None else frozenset()
 
@@ -2338,7 +2338,7 @@ def _palette_only_drift() -> str | None:
     """The built-in view a drift to Custom left, when only the palette moved.
 
     The preset highlight drops to Custom on any colour change, the palette's
-    included. Simple's tiles hold the view against the baseline the drift
+    included. Essentials' tiles hold the view against the baseline the drift
     recorded, without the keys `_simple_ignored_keys` names.
     """
     drifted = st.session_state.get(_QUICK_VIEW_DRIFTED_FROM)
@@ -2366,10 +2366,10 @@ def _seeded_raw_gaze_view() -> str | None:
     A dataset recorded as raw gaze alone opens with its 🔵 Raw gaze layer on
     (`app.seed_raw_gaze_default`), which no built-in view has, so the preset
     highlight opens on Custom. That is the dataset's default, not a setting
-    anyone shaped, so Simple's tiles read through it: the layer must still be
+    anyone shaped, so Essentials' tiles read through it: the layer must still be
     at that default (the seed's stash is what says one was made), and every
     other plot setting with a widget default must be the view's own, the
-    palette's colours aside (`_simple_ignored_keys`). Advanced's preset
+    palette's colours aside (`_simple_ignored_keys`). Full's preset
     highlight does not read through it and shows Custom.
     """
     ss = st.session_state
@@ -2396,14 +2396,14 @@ def _seeded_raw_gaze_view() -> str | None:
 
 
 def simple_active_view(*, animating: bool, active: str | None = None) -> str | None:
-    """The Simple View tile the current settings match, or ``None``.
+    """The Essentials View tile the current settings match, or ``None``.
 
     ``animating`` is whether the replay is actually drawn (Animate on and the
     trial has fixations), so a trial without fixations, which draws its static
     figure, lights its static tile. ``active`` is the design preset in force,
     looked up with `_active_quick_view` when not given. Custom, a saved design,
     or Heatmap / Illustration under the replay match no tile, except a Custom
-    made only by Simple's own Palette (`_palette_only_drift`) or by a
+    made only by Essentials' own Palette (`_palette_only_drift`) or by a
     dataset's raw-gaze default (`_seeded_raw_gaze_view`).
     """
     if active is None:
@@ -2416,7 +2416,7 @@ def simple_active_view(*, animating: bool, active: str | None = None) -> str | N
 
 
 def render_simple_views(host, *, animating: bool, active: str | None = None) -> None:
-    """Draw Simple mode's View tiles: a 2×2 grid, the matching tile primary."""
+    """Draw Essentials mode's View tiles: a 2×2 grid, the matching tile primary."""
     current = simple_active_view(animating=animating, active=active)
     st.session_state[SIMPLE_VIEW_LIT_KEY] = current
     grid = host.container(key="tour_grp_simple_views")
@@ -6819,7 +6819,7 @@ def render_plot_controls(
     trial's fixations alone.
 
     ``animating`` is whether the replay is drawn (Animate on and the trial has
-    fixations), which picks Simple mode's lit View tile. Simple draws the View
+    fixations), which picks Essentials mode's lit View tile. Essentials draws the View
     tiles, Palette and ＋ More options; every other part sits in an
     ``advanced_only`` container, so both modes build the same widgets.
     """
@@ -6847,7 +6847,7 @@ def render_plot_controls(
     # switching to a built-in and back does not lose it. Naming settings you
     # want to keep is what "My designs" is for. The remaining preset keys
     # (`reading_order`, `everything`) stay in `_VIEW_PRESETS` for any deep link.
-    # Simple mode draws its View tiles in their place (below).
+    # Essentials mode draws its View tiles in their place (below).
     presets = advanced_only(viz, "rail_presets")
     presets.markdown(
         '<div class="sps-control-label">Design presets</div>',
@@ -6898,7 +6898,7 @@ def render_plot_controls(
         args=(_CUSTOM_VIEW,),
     )
     _render_saved_designs(advanced_only(viz, "rail_designs"))
-    # Simple mode's one choice: which view of this trial. It reuses the preset
+    # Essentials mode's one choice: which view of this trial. It reuses the preset
     # lookup above rather than syncing the quick-view state a second time.
     views = simple_only(viz, "views")
     views.markdown('<div class="sps-control-label">View</div>', unsafe_allow_html=True)
@@ -6936,7 +6936,7 @@ def render_plot_controls(
     # Keep the palette controls visually separate from the bordered layer cards.
     # A keyed wrapper gives the spacing a stable, narrowly scoped CSS hook.
     viz.container(key="palette_layers_divider").divider()
-    # Simple mode ends its rail here: a list of what Advanced adds, where the
+    # Essentials mode ends its rail here: a list of what Full adds, where the
     # layer rows would start.
     render_more_popover(simple_only(viz, "rail_more"), "rail", label="More options")
 

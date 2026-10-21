@@ -218,7 +218,7 @@ def test_design_presets_key_matches_controls_module():
 
 
 def test_ui_mode_spellings_pinned():
-    """The Simple / Advanced mode's link param, session key and cookie name."""
+    """The Essentials / Full mode's link param, session key and cookie name."""
     assert sk.PARAM_UI == "ui"
     assert sk.UI_MODE == "ui_mode"
     assert sk.UI_MODE_COOKIE == "sps_ui_mode"

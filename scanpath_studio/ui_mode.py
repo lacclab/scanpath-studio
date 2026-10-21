@@ -1,7 +1,7 @@
-"""The Simple / Advanced interface mode: which one is in force, and how it persists.
+"""The Essentials / Full interface mode: which one is in force, and how it persists.
 
 The mode is resolved once per session, in this order: a ``?ui=`` link
-parameter, the browser cookie from the last visit, then Simple. It is the
+parameter, the browser cookie from the last visit, then Essentials. It is the
 viewer's own preference, so Share never writes it into a link. The functions
 that decide take plain mappings, so they need no Streamlit runtime.
 """
@@ -28,36 +28,36 @@ CHOSEN_KEY = "_ui_mode_chosen"
 SWITCH_KEY = "ui_mode_switch"
 #: The mode the viewer last picked with the switch or a ＋ More button, which is
 #: what the cookie remembers. A mode the app moves the session to by itself (a
-#: tutorial that needs Advanced) never reaches it.
+#: tutorial that needs Full) never reaches it.
 COOKIE_MODE_KEY = "_ui_mode_cookie"
-#: Set on a session's first run, whichever mode it opened in, so the Simple
-#: start is never applied to a session that switched to Simple later.
+#: Set on a session's first run, whichever mode it opened in, so the Essentials
+#: start is never applied to a session that switched to Essentials later.
 START_DONE_KEY = "_ui_simple_start_done"
 _ADV_PREFIX = "adv_only_"
 _SIMPLE_PREFIX = "simple_only_"
-#: The `advanced_only` name of the trial picker's slider; Simple also hides the
+#: The `advanced_only` name of the trial picker's slider; Essentials also hides the
 #: column that holds it.
 TRIAL_SLIDER = "trial_slider"
 #: The `advanced_only` name of the trial picker's sort popover, whose
-#: ``railbtn_*`` cluster cell Simple drops when nothing else is in it.
+#: ``railbtn_*`` cluster cell Essentials drops when nothing else is in it.
 TRIAL_SORT = "trial_sort"
 #: The `advanced_only` name of the trial summary table above the plot; the
-#: wrapper that holds it is dropped whole in Simple.
+#: wrapper that holds it is dropped whole in Essentials.
 TRIAL_CHIPS = "chips"
-#: The key of the container the Simple | Advanced switch is drawn in.
+#: The key of the container the Essentials | Full switch is drawn in.
 SWITCH_BOX_KEY = "tour_grp_ui_mode"
 #: The key of the container, inside the switch's, that holds the script that
 #: writes the cookie.
 COOKIE_BOX_KEY = "ui_mode_cookie"
 
-SIMPLE = "simple"
-ADVANCED = "advanced"
+SIMPLE = "essentials"
+ADVANCED = "full"
 MODES = (SIMPLE, ADVANCED)
-_LABELS = {SIMPLE: "Simple", ADVANCED: "Advanced"}
+_LABELS = {SIMPLE: "Essentials", ADVANCED: "Full"}
 
 _COOKIE_MAX_AGE = 365 * 24 * 60 * 60
 
-#: What Advanced adds, area by area, as ``(title, one line)`` pairs. Simple names
+#: What Full adds, area by area, as ``(title, one line)`` pairs. Essentials names
 #: these where a viewer would look for them (the ＋ More lists) instead of
 #: drawing the controls, so the lines describe features and carry no widget.
 MORE_IN_ADVANCED: dict[str, tuple[tuple[str, str], ...]] = {
@@ -115,7 +115,7 @@ def parse_mode(value: object) -> str | None:
 
 
 def resolve_mode(param: object, cookie: object) -> str:
-    """The link's mode, else the cookie's, else Simple; junk values are skipped."""
+    """The link's mode, else the cookie's, else Essentials; junk values are skipped."""
     return parse_mode(param) or parse_mode(cookie) or SIMPLE
 
 
@@ -138,13 +138,13 @@ def seed_mode(session: MutableMapping, query_params: Mapping, cookies: Mapping) 
 def seed_simple_start(
     session: MutableMapping, query_params: Mapping, *, restored: bool
 ) -> None:
-    """Open a fresh Simple session on the playing replay.
+    """Open a fresh Essentials session on the playing replay.
 
     The replay is a starting value, not a lock: it applies only when the session
-    starts in Simple with no deep link and nothing restored, so a link, a saved
-    configuration or a recovered session keeps what it carries, and Advanced
+    starts in Essentials with no deep link and nothing restored, so a link, a saved
+    configuration or a recovered session keeps what it carries, and Full
     keeps its static start. It runs once, on the first run, so switching to
-    Simple mid-session never turns the replay on.
+    Essentials mid-session never turns the replay on.
     """
     if session.get(START_DONE_KEY):
         return
@@ -158,7 +158,7 @@ def seed_simple_start(
 
 
 def current_mode() -> str:
-    """The session's mode (Simple before it is seeded)."""
+    """The session's mode (Essentials before it is seeded)."""
     import streamlit as st
 
     return st.session_state.get(UI_MODE, SIMPLE)
@@ -172,7 +172,7 @@ def cookie_mode() -> str:
 
 
 def is_simple() -> bool:
-    """Whether the session is in Simple mode."""
+    """Whether the session is in Essentials mode."""
     return current_mode() == SIMPLE
 
 
@@ -239,12 +239,12 @@ def mode_css(mode: str) -> str:
 
 
 def advanced_only(host: DeltaGenerator, name: str) -> DeltaGenerator:
-    """A container under ``host`` that is shown in Advanced mode only."""
+    """A container under ``host`` that is shown in Full mode only."""
     return host.container(key=f"{_ADV_PREFIX}{name}")
 
 
 def simple_only(host: DeltaGenerator, name: str) -> DeltaGenerator:
-    """A container under ``host`` that is shown in Simple mode only."""
+    """A container under ``host`` that is shown in Essentials mode only."""
     return host.container(key=f"{_SIMPLE_PREFIX}{name}")
 
 
@@ -252,7 +252,7 @@ def _choose_mode(mode: object) -> None:
     """Make ``mode`` the session's mode as the viewer's own choice.
 
     Marks it chosen, which is what lets the cookie script remember it. Choosing
-    Simple ends a running tutorial, and a change of mode ends a running welcome
+    Essentials ends a running tutorial, and a change of mode ends a running welcome
     tour. Anything that is not a mode (a deselected switch) changes nothing.
     """
     import streamlit as st
@@ -260,7 +260,7 @@ def _choose_mode(mode: object) -> None:
     chosen = parse_mode(mode)
     if chosen is not None:
         if chosen == SIMPLE and st.session_state.get("tutorial_active"):
-            # The tutorials spotlight Advanced-only controls: leave the one
+            # The tutorials spotlight Full-only controls: leave the one
             # running the way its Exit does.
             from scanpath_studio import tour
 
@@ -292,7 +292,7 @@ def _switch_to_advanced() -> None:
 
 
 def render_more_list(host: DeltaGenerator, area: str) -> None:
-    """Draw ``area``'s list of Advanced-only features, ending in a switch button.
+    """Draw ``area``'s list of Full-only features, ending in a switch button.
 
     The list names features only and holds no control, so opening it never
     changes anything.
@@ -300,19 +300,19 @@ def render_more_list(host: DeltaGenerator, area: str) -> None:
     for title, line in MORE_IN_ADVANCED[area]:
         host.markdown(f"**{title}**  \n{line}")
     host.button(
-        "Switch to Advanced",
+        "Switch to Full",
         key=f"more_to_advanced_{area}",
         on_click=_switch_to_advanced,
     )
 
 
 def render_more_popover(host: DeltaGenerator, area: str, label: str = "More") -> None:
-    """Draw ``area``'s ＋ More popover, the list of what Advanced adds there."""
+    """Draw ``area``'s ＋ More popover, the list of what Full adds there."""
     popover = host.popover(
         label,
         icon=ICONS["add"],
         width="content",
-        help="What Advanced adds here",
+        help="What Full adds here",
         key=f"iconpop_more_{area}",
     )
     render_more_list(popover, area)
@@ -324,18 +324,18 @@ _HIDDEN_PHRASES = (
     ("narrowed", "a trial filter"),
     ("sorted_", "a sort order"),
     ("comparing", "Compare"),
-    ("custom_view", "plot settings from Advanced"),
+    ("custom_view", "plot settings from Full"),
 )
 
 
 def hidden_settings_reasons(
     *, narrowed: bool, sorted_: bool, comparing: bool, custom_view: bool
 ) -> list[str]:
-    """The Advanced-only settings shaping what Simple shows, as short phrases.
+    """The Full-only settings shaping what Essentials shows, as short phrases.
 
     ``narrowed``: a trial filter shortens the pool. ``sorted_``: the trial list
     is not in its default order. ``comparing``: Compare is on. ``custom_view``:
-    the plot settings match none of Simple's View tiles.
+    the plot settings match none of Essentials' View tiles.
     """
     flags = {
         "narrowed": narrowed,
@@ -347,10 +347,10 @@ def hidden_settings_reasons(
 
 
 def render_hidden_settings_note(host: DeltaGenerator, reasons: list[str]) -> None:
-    """Say, in one line, which Advanced settings are shaping Simple's view.
+    """Say, in one line, which Full settings are shaping Essentials' view.
 
     Draws nothing for no ``reasons``; otherwise a caption naming them and a
-    button that switches to Advanced, where they can be changed.
+    button that switches to Full, where they can be changed.
     """
     if not reasons:
         return
@@ -361,11 +361,11 @@ def render_hidden_settings_note(host: DeltaGenerator, reasons: list[str]) -> Non
         key="hidden_settings_note",
     )
     row.caption(
-        f"{ICONS['info']} Settings from Advanced are shaping this view: "
+        f"{ICONS['info']} Settings from Full are shaping this view: "
         f"{', '.join(reasons)}."
     )
     row.button(
-        "Switch to Advanced",
+        "Switch to Full",
         key="hidden_note_to_advanced",
         type="tertiary",
         on_click=_switch_to_advanced,
@@ -401,7 +401,7 @@ _SWITCH_ROW = (
 
 
 def switch_css(visible: bool) -> str:
-    """A ``<style>`` that places the Simple | Advanced switch.
+    """A ``<style>`` that places the Essentials | Full switch.
 
     The switch stays where the script draws it, so its state never depends on
     the view. With ``visible`` it is lifted into Streamlit's top bar, just left
@@ -458,7 +458,7 @@ def switch_css(visible: bool) -> str:
 
 
 def render_export_pointer(host: DeltaGenerator) -> None:
-    """Under Simple's *Current figure*: where exporting many trials at once is."""
+    """Under Essentials' *Current figure*: where exporting many trials at once is."""
     row = host.container(
         horizontal=True,
         vertical_alignment="center",
@@ -467,10 +467,10 @@ def render_export_pointer(host: DeltaGenerator) -> None:
     )
     row.caption(
         f"{ICONS['info']} Exporting many trials at once, with figures and "
-        "tables for every trial, is in Advanced."
+        "tables for every trial, is in Full."
     )
     row.button(
-        "Switch to Advanced",
+        "Switch to Full",
         key="export_to_advanced",
         type="tertiary",
         on_click=_switch_to_advanced,
@@ -478,7 +478,7 @@ def render_export_pointer(host: DeltaGenerator) -> None:
 
 
 def render_switch(host: DeltaGenerator, *, visible: bool = True) -> None:
-    """Draw the Simple | Advanced switch in ``host``.
+    """Draw the Essentials | Full switch in ``host``.
 
     The widget's value is re-written from the session's mode on every run, so
     a link or a restore that moves the mode moves the switch with it. It is

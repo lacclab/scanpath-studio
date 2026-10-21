@@ -1160,7 +1160,7 @@ def get_app_css() -> str:
     [class*="st-key-railbtn_"] > div + div { margin-left: 3px !important; }
     /* A ＋ More trigger is quiet: a faint outline and dimmed text until it is
        pointed at. It is the one popover that draws its name (the others clip
-       it), and it sits in a `railbtn_*` cluster in Simple only, where it is the
+       it), and it sits in a `railbtn_*` cluster in Essentials only, where it is the
        cluster's sole visible cell, so the neighbour margin above is dropped. */
     [class*="st-key-iconpop_more_"] [data-testid="stPopoverButton"] {
         background: transparent !important;
@@ -2093,8 +2093,8 @@ def get_app_css() -> str:
         padding-top: 0.25rem;
         padding-bottom: 0.25rem;
     }
-    /* Simple's View tiles are bigger than Advanced's presets: an icon over its
-       label, in a tile 4rem tall. Advanced's `quick_views_grid` keeps its own size. */
+    /* Essentials' View tiles are bigger than Full's presets: an icon over its
+       label, in a tile 4rem tall. Full's `quick_views_grid` keeps its own size. */
     .st-key-scanpath_rail .st-key-tour_grp_simple_views button {
         min-height: 4rem;
         padding-top: 0.4rem;
@@ -2118,7 +2118,7 @@ def get_app_css() -> str:
         font-size: 1.6rem;
         line-height: 1.6rem;
     }
-    /* A Simple / Advanced wrapper (`ui_mode.advanced_only` / `simple_only`)
+    /* An Essentials / Full wrapper (`ui_mode.advanced_only` / `simple_only`)
        in the rail is one more block around what it holds. The wrapper takes
        the app-wide 0.25rem under each block itself, so its last child gives
        its own back: the rail's spacing is the same as without the wrapper. */
@@ -2126,7 +2126,7 @@ def get_app_css() -> str:
     .st-key-scanpath_rail [class*="st-key-simple_only_"] > div:last-child {
         margin-bottom: 0 !important;
     }
-    /* The trial summary table's Advanced-only wrapper (`ui_mode.TRIAL_CHIPS`)
+    /* The trial summary table's Full-only wrapper (`ui_mode.TRIAL_CHIPS`)
        holds the keyed table container alone: the wrapper's own margin under
        it would double the page's 0.25rem. */
     .st-key-adv_only_chips > [data-testid="stLayoutWrapper"]:last-child {
@@ -2185,7 +2185,7 @@ def get_app_css() -> str:
         opacity: 0.72;
     }
     /* Give the heading a small breathing space, while keeping the 2×2 grid
-       itself tighter than ordinary Streamlit column rows. Simple mode's View
+       itself tighter than ordinary Streamlit column rows. Essentials mode's View
        tiles (`tour_grp_simple_views`) are the same grid. */
     .st-key-scanpath_rail .st-key-quick_views_grid,
     .st-key-scanpath_rail .st-key-tour_grp_simple_views {

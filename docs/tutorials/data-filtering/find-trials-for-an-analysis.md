@@ -6,9 +6,9 @@ description: "Find eye-tracking trials with particular fixation patterns — sho
 
 Locate trials containing particular fixation patterns.
 
-These steps use the **Advanced** mode: switch to it in the top bar of the
-:material/route: **Scanpath** view, or add `ui=advanced` to the app's
-address ([Simple and Advanced](../../guides/scanpath-visualization/index.md#simple-and-advanced)).
+These steps use the **Full** mode: switch to it in the top bar of the
+:material/route: **Scanpath** view, or add `ui=full` to the app's
+address ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
 
 1. Open :material/filter_list: **Filters & highlights** ▾ → **Fixations**.
 2. Set the **Mode** of the category you need to **Highlight**:

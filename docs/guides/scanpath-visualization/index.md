@@ -24,17 +24,17 @@ the screen it was recorded on.
     menu by menu, with a picture of each menu. Search it for what you want to
     change, such as *saccade color* or *legend position*.
 
-## Simple and Advanced
+## Essentials and Full
 
-The view opens in **Simple**, a trimmed version of the same view for a first
-look. The **Simple | Advanced** switch is in the top bar, on the
+The view opens in **Essentials**, a trimmed version of the same view for a first
+look. The **Essentials | Full** switch is in the top bar, on the
 :material/route: **Scanpath** view only. The mode you choose is remembered in
-this browser. Adding `ui=advanced` (or `ui=simple`) to the app's address, as
-`?ui=advanced` or `&ui=advanced`, uses that mode for the visit without
+this browser. Adding `ui=full` (or `ui=essentials`) to the app's address, as
+`?ui=full` or `&ui=full`, uses that mode for the visit without
 changing the saved choice, and a link made with **Share** does not carry the
 mode.
 
-Simple shows:
+Essentials shows:
 
 - the dataset and trial pickers with **◀ ▶**;
 - the plot, which on a new visit opens on a playing replay;
@@ -42,14 +42,14 @@ Simple shows:
   **Illustration**) and the **Palette**;
 - the **Export** tab, for the figure on screen, and **Share**.
 
-Where Advanced has more, a :material/add: **More** button lists what it adds
-there and ends in **Switch to Advanced**. A setting made in Advanced, such as a
-trial filter, still shapes the figure in Simple, and Simple says so in a short
+Where Full has more, a :material/add: **More** button lists what it adds
+there and ends in **Switch to Full**. A setting made in Full, such as a
+trial filter, still shapes the figure in Essentials, and Essentials says so in a short
 note. Starting a tutorial from :material/help: **Help** switches that visit to
-Advanced. :material/bar_chart: **Corpus Analysis** and
+Full. :material/bar_chart: **Corpus Analysis** and
 :material/database: **Data Management** are the same in both modes.
 
-The numbered regions above and the rest of this guide describe Advanced.
+The numbered regions above and the rest of this guide describe Full.
 
 ## Choose a trial
 

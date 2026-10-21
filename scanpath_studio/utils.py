@@ -1324,14 +1324,14 @@ def row_tail(column, key_prefix: str, reserve_screen_cell):
 
 
 #: The key prefix of the main trial picker. Compare's B picker has its own, and
-#: Simple keeps that one whole so a compared pair can still be navigated.
+#: Essentials keeps that one whole so a compared pair can still be navigated.
 _MAIN_PICKER_PREFIX = "single"
 
 
 def _advanced_part(host, name: str, key_prefix: str):
-    """``host``, or an Advanced-only container in it for the main picker.
+    """``host``, or a Full-only container in it for the main picker.
 
-    Simple hides the container with CSS, so what it holds is still drawn and
+    Essentials hides the container with CSS, so what it holds is still drawn and
     keeps its value. Any other picker (Compare's B) gets ``host`` itself.
     """
     if key_prefix != _MAIN_PICKER_PREFIX:

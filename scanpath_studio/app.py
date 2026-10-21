@@ -1351,7 +1351,7 @@ CLEAR_SAVED_REQUEST_KEY = "_clear_saved_requested"
 STARTED_OVER_KEY = "_started_over"
 #: What survives starting over: having seen or dismissed the welcome tour is not
 #: "your work", and the tour reopening over a fresh start would be noise. Nor is
-#: the Simple | Advanced choice, which the browser's cookie already holds; the
+#: the Essentials | Full choice, which the browser's cookie already holds; the
 #: session keeps it because the cookie Streamlit hands the app is the one read
 #: when the page connected, from before the choice.
 _KEPT_ON_START_OVER = (
@@ -9034,7 +9034,7 @@ def _run_app() -> None:
             # `?ui=`, which names the interface mode and no view.
             protect_view=ui_mode.has_link_params(st.query_params),
         )
-    # Before any view renders, so a fresh Simple session opens on the replay:
+    # Before any view renders, so a fresh Essentials session opens on the replay:
     # `tabs` seeds `single_animate` later with a `setdefault`, which this wins.
     ui_mode.seed_simple_start(
         st.session_state,

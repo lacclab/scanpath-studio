@@ -1,7 +1,7 @@
 """A real browser on the running app: it loads, the figure draws, a popover opens.
 
-Most tests open the app in Advanced (``?ui=advanced``), which draws every
-control; one opens it as a first visit does, in Simple.
+Most tests open the app in Full (``?ui=full``), which draws every
+control; one opens it as a first visit does, in Essentials.
 
 ``AppTest`` runs no frontend, so nothing else in the suite sees what the app's
 CSS and page scripts do to Streamlit's page: the true-scale plot iframe, the
@@ -108,16 +108,16 @@ def _open(browser, url: str):
 
 @pytest.fixture(scope="module")
 def page(app_url, browser):
-    """One page on the app's first visit in Advanced, which draws every control
-    the tests below reach for (a first visit opens in Simple)."""
-    page = _open(browser, f"{app_url}/?ui=advanced")
+    """One page on the app's first visit in Full, which draws every control
+    the tests below reach for (a first visit opens in Essentials)."""
+    page = _open(browser, f"{app_url}/?ui=full")
     yield page
     page.context.close()
 
 
 @pytest.fixture(scope="module")
 def simple_page(app_url, browser):
-    """One page on the app's first visit, which opens in Simple."""
+    """One page on the app's first visit, which opens in Essentials."""
     page = _open(browser, app_url)
     yield page
     page.context.close()
@@ -233,8 +233,8 @@ def test_no_script_error_reached_the_page(page):
 
 
 def test_simple_opens_on_the_replay_with_its_own_controls(simple_page):
-    """A first visit opens in Simple: the replay draws, the ＋ More list
-    opens, the switch shows, and an Advanced-only rail popover is hidden."""
+    """A first visit opens in Essentials: the replay draws, the ＋ More list
+    opens, the switch shows, and a Full-only rail popover is hidden."""
     page = simple_page
     frame = _plot_frame(page, "single_anim")
     frame.locator("#truescale-single_anim.js-plotly-plot").wait_for(timeout=60_000)
@@ -244,7 +244,7 @@ def test_simple_opens_on_the_replay_with_its_own_controls(simple_page):
     page.locator(".st-key-iconpop_more_picker button").first.click()
     body = page.locator('[data-testid="stPopoverBody"]')
     body.first.wait_for(state="visible", timeout=15_000)
-    assert "Switch to Advanced" in body.first.inner_text()
+    assert "Switch to Full" in body.first.inner_text()
     page.keyboard.press("Escape")
     assert not page.locator('[data-testid="stException"]').count()
     assert page.errors == []

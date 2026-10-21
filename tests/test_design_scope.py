@@ -238,8 +238,8 @@ class TestEveryPlotControlIsAccountedFor:
             and not key.endswith(("__num_lo", "__num_hi"))
             and not controls._is_design_key(key)
             and key not in NOT_A_DESIGN_SETTING
-            # Buttons, not settings: the presets, Simple's View tiles and the
-            # rail's ＋ More list's switch to Advanced.
+            # Buttons, not settings: the presets, Essentials' View tiles and the
+            # rail's ＋ More list's switch to Full.
             and not key.startswith(
                 (
                     "viz_view_",

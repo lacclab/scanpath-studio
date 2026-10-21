@@ -50,17 +50,17 @@ def _local_filesystem_on():
 
 @pytest.fixture(autouse=True)
 def _advanced_ui_mode(monkeypatch):
-    """Boot every ``AppTest`` in Advanced mode, the full interface.
+    """Boot every ``AppTest`` in Full mode, the full interface.
 
-    Most tests drive controls that Simple mode hides, so each app starts with
-    ``?ui=advanced``. A test that sets ``at.query_params["ui"]`` itself after
+    Most tests drive controls that Essentials mode hides, so each app starts with
+    ``?ui=full``. A test that sets ``at.query_params["ui"]`` itself after
     ``from_file`` overrides it.
     """
     from_file = AppTest.from_file.__func__
 
     def pinned(cls, *args, **kwargs):
         at = from_file(cls, *args, **kwargs)
-        at.query_params["ui"] = "advanced"
+        at.query_params["ui"] = "full"
         return at
 
     monkeypatch.setattr(AppTest, "from_file", classmethod(pinned))

@@ -15,117 +15,119 @@ SYNTHETIC_SOURCE = "Synthetic test trial"
 @pytest.mark.parametrize(
     ("param", "cookie", "expected"),
     [
-        (None, None, "simple"),
-        (None, "advanced", "advanced"),
-        ("advanced", "simple", "advanced"),
-        ("SIMPLE", "advanced", "simple"),
-        (" Advanced ", None, "advanced"),
-        ("foo", "advanced", "advanced"),
-        ("", None, "simple"),
-        ("foo", "bar", "simple"),
+        (None, None, "essentials"),
+        (None, "full", "full"),
+        ("full", "essentials", "full"),
+        ("ESSENTIALS", "full", "essentials"),
+        (" Full ", None, "full"),
+        ("foo", "full", "full"),
+        ("", None, "essentials"),
+        ("foo", "bar", "essentials"),
     ],
 )
 def test_resolve_mode_precedence(param, cookie, expected):
     assert ui_mode.resolve_mode(param, cookie) == expected
 
 
-@pytest.mark.parametrize("value", [None, 3, ["advanced"], b"advanced", object()])
+@pytest.mark.parametrize("value", [None, 3, ["full"], b"full", object()])
 def test_parse_mode_never_raises_on_a_non_string(value):
     assert ui_mode.parse_mode(value) is None
 
 
 def test_seed_mode_reads_the_link_then_the_cookie():
-    assert ui_mode.seed_mode({}, {sk.PARAM_UI: "advanced"}, {}) == "advanced"
-    cookies = {sk.UI_MODE_COOKIE: "advanced"}
-    assert ui_mode.seed_mode({}, {}, cookies) == "advanced"
-    assert ui_mode.seed_mode({}, {}, {}) == "simple"
+    assert ui_mode.seed_mode({}, {sk.PARAM_UI: "full"}, {}) == "full"
+    cookies = {sk.UI_MODE_COOKIE: "full"}
+    assert ui_mode.seed_mode({}, {}, cookies) == "full"
+    assert ui_mode.seed_mode({}, {}, {}) == "essentials"
 
 
 def test_seed_mode_writes_the_session_key():
     session: dict = {}
-    ui_mode.seed_mode(session, {sk.PARAM_UI: "advanced"}, {})
-    assert session[sk.UI_MODE] == "advanced"
+    ui_mode.seed_mode(session, {sk.PARAM_UI: "full"}, {})
+    assert session[sk.UI_MODE] == "full"
 
 
 def test_seed_mode_keeps_an_existing_session_choice():
-    session = {sk.UI_MODE: "advanced"}
-    assert ui_mode.seed_mode(session, {sk.PARAM_UI: "simple"}, {}) == "advanced"
+    session = {sk.UI_MODE: "full"}
+    assert ui_mode.seed_mode(session, {sk.PARAM_UI: "essentials"}, {}) == "full"
 
 
 def test_cookie_script_sets_a_year_long_cookie():
-    script = ui_mode.cookie_script("advanced")
-    assert "sps_ui_mode=advanced" in script
+    script = ui_mode.cookie_script("full")
+    assert "sps_ui_mode=full" in script
     assert "max-age=31536000" in script and "path=/" in script
     assert "SameSite=Lax" in script
 
 
 def test_cookie_script_only_embeds_a_valid_mode():
     script = ui_mode.cookie_script('x"; alert(1); "')
-    assert "sps_ui_mode=simple" in script and "alert" not in script
+    assert "sps_ui_mode=essentials" in script and "alert" not in script
 
 
 def test_seed_mode_prefers_this_sessions_choice_to_the_handshake_cookie():
     """The cookie Streamlit hands over is the one read when the page
     connected; a choice made since is in the session's cookie mode."""
-    session = {ui_mode.COOKIE_MODE_KEY: "advanced"}
-    cookies = {sk.UI_MODE_COOKIE: "simple"}
-    assert ui_mode.seed_mode(session, {}, cookies) == "advanced"
+    session = {ui_mode.COOKIE_MODE_KEY: "full"}
+    cookies = {sk.UI_MODE_COOKIE: "essentials"}
+    assert ui_mode.seed_mode(session, {}, cookies) == "full"
     # A link still wins, and junk falls through to the handshake cookie.
-    session = {ui_mode.COOKIE_MODE_KEY: "advanced"}
-    assert ui_mode.seed_mode(session, {sk.PARAM_UI: "simple"}, cookies) == "simple"
+    session = {ui_mode.COOKIE_MODE_KEY: "full"}
+    assert (
+        ui_mode.seed_mode(session, {sk.PARAM_UI: "essentials"}, cookies) == "essentials"
+    )
     session = {ui_mode.COOKIE_MODE_KEY: "junk"}
-    assert ui_mode.seed_mode(session, {}, cookies) == "simple"
+    assert ui_mode.seed_mode(session, {}, cookies) == "essentials"
 
 
 def test_starting_over_keeps_the_chosen_mode(monkeypatch):
     """*Clear what is saved…* empties the session, but a mode the viewer
-    picked with the switch comes back on the next run, not Simple."""
+    picked with the switch comes back on the next run, not Essentials."""
     from unittest.mock import patch
 
     from scanpath_studio import app
 
     session = {
-        sk.UI_MODE: "advanced",
+        sk.UI_MODE: "full",
         ui_mode.CHOSEN_KEY: True,
-        ui_mode.COOKIE_MODE_KEY: "advanced",
+        ui_mode.COOKIE_MODE_KEY: "full",
         "some_setting": 3,
     }
     monkeypatch.setattr(app, "clear_saved_work", lambda state: state.clear())
     with (
         patch.object(app.st, "session_state", session),
-        patch.object(app.st, "query_params", {sk.PARAM_UI: "advanced"}),
+        patch.object(app.st, "query_params", {sk.PARAM_UI: "full"}),
     ):
         app._clear_and_start_over()
     assert "some_setting" not in session and sk.UI_MODE not in session
-    handshake = {sk.UI_MODE_COOKIE: "simple"}
-    assert ui_mode.seed_mode(session, {}, handshake) == "advanced"
+    handshake = {sk.UI_MODE_COOKIE: "essentials"}
+    assert ui_mode.seed_mode(session, {}, handshake) == "full"
     assert session[ui_mode.CHOSEN_KEY] is True
 
 
 def test_seed_mode_replaces_a_junk_session_value():
     session = {sk.UI_MODE: "junk"}
-    assert ui_mode.seed_mode(session, {sk.PARAM_UI: "advanced"}, {}) == "advanced"
-    assert session[sk.UI_MODE] == "advanced"
+    assert ui_mode.seed_mode(session, {sk.PARAM_UI: "full"}, {}) == "full"
+    assert session[sk.UI_MODE] == "full"
 
 
 def test_ui_param_alone_is_not_a_link():
-    assert not ui_mode.has_link_params({"ui": "simple"})
-    assert ui_mode.has_link_params({"ui": "simple", "trial": "3"})
+    assert not ui_mode.has_link_params({"ui": "essentials"})
+    assert ui_mode.has_link_params({"ui": "essentials", "trial": "3"})
     assert not ui_mode.has_link_params({})
 
 
 def test_mode_css_hides_the_other_mode():
-    simple = ui_mode.mode_css("simple")
+    simple = ui_mode.mode_css("essentials")
     assert "st-key-adv_only_" in simple and "st-key-simple_only_" not in simple
-    advanced = ui_mode.mode_css("advanced")
+    advanced = ui_mode.mode_css("full")
     assert "st-key-simple_only_" in advanced and "st-key-adv_only_" not in advanced
     assert "display: none !important" in simple
 
 
-def _boot(view: str = _VIEW_SCANPATH, mode: str | None = "simple") -> AppTest:
+def _boot(view: str = _VIEW_SCANPATH, mode: str | None = "essentials") -> AppTest:
     at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
     if mode is None:
-        del at.query_params["ui"]  # the conftest pins ?ui=advanced
+        del at.query_params["ui"]  # the conftest pins ?ui=full
     else:
         at.query_params["ui"] = mode
     pin_view(at, view)
@@ -136,13 +138,13 @@ def _boot(view: str = _VIEW_SCANPATH, mode: str | None = "simple") -> AppTest:
 
 def test_fresh_session_is_simple():
     at = _boot(mode=None)
-    assert at.session_state["ui_mode"] == "simple"
-    assert at.segmented_control(key=SWITCH).value == "simple"
+    assert at.session_state["ui_mode"] == "essentials"
+    assert at.segmented_control(key=SWITCH).value == "essentials"
 
 
 def test_switch_flips_mode_and_keeps_every_value():
     at = _boot()
-    assert at.session_state["ui_mode"] == "simple"
+    assert at.session_state["ui_mode"] == "essentials"
     prefixes = ("global_", "single_", "filter_")
 
     def snapshot() -> dict:
@@ -152,18 +154,18 @@ def test_switch_flips_mode_and_keeps_every_value():
 
     before = snapshot()
     assert before
-    at.segmented_control(key=SWITCH).set_value("advanced").run()
+    at.segmented_control(key=SWITCH).set_value("full").run()
     assert not at.exception
-    assert at.session_state["ui_mode"] == "advanced"
+    assert at.session_state["ui_mode"] == "full"
     assert at.session_state["_ui_mode_chosen"] is True
     assert snapshot() == before
-    at.segmented_control(key=SWITCH).set_value("simple").run()
-    assert at.session_state["ui_mode"] == "simple"
+    at.segmented_control(key=SWITCH).set_value("essentials").run()
+    assert at.session_state["ui_mode"] == "essentials"
 
 
 def test_ui_param_does_not_write_the_cookie():
-    at = _boot(mode="advanced")
-    assert at.session_state["ui_mode"] == "advanced"
+    at = _boot(mode="full")
+    assert at.session_state["ui_mode"] == "full"
     assert "_ui_mode_chosen" not in at.session_state
 
 
@@ -180,7 +182,7 @@ def _switch_style(at: AppTest) -> str:
 def test_switch_is_drawn_on_every_view_but_shown_on_scanpath(view):
     at = _boot(view)
     # Drawn on every run, so nothing above a view shifts with the view.
-    assert at.segmented_control(key=SWITCH).value == "simple"
+    assert at.segmented_control(key=SWITCH).value == "essentials"
     style = _switch_style(at)
     assert ("position: fixed" in style) == (view == _VIEW_SCANPATH)
     assert ("display: none !important" in style) == (view != _VIEW_SCANPATH)
@@ -250,7 +252,7 @@ def test_the_cookie_script_takes_no_room_in_the_switch_box():
     assert "box.container(key=COOKIE_BOX_KEY)" in source
     assert "with cookie:" in source
     at = _boot()
-    at.segmented_control(key=SWITCH).set_value("advanced").run()
+    at.segmented_control(key=SWITCH).set_value("full").run()
     assert not at.exception
     assert _has_cookie_embed(at)
 
@@ -266,7 +268,7 @@ def test_deselecting_the_switch_keeps_the_mode():
     at = _boot()
     at.segmented_control(key=SWITCH).set_value(None).run()
     assert not at.exception
-    assert at.session_state["ui_mode"] == "simple"
+    assert at.session_state["ui_mode"] == "essentials"
     assert "_ui_mode_chosen" not in at.session_state
 
 
@@ -277,7 +279,7 @@ def _has_cookie_embed(at: AppTest) -> bool:
 def test_cookie_iframe_is_drawn_only_after_a_click():
     at = _boot()
     assert not _has_cookie_embed(at)
-    at.segmented_control(key=SWITCH).set_value("advanced").run()
+    at.segmented_control(key=SWITCH).set_value("full").run()
     assert _has_cookie_embed(at)
 
 
@@ -312,9 +314,9 @@ def test_more_button_switches_to_advanced():
     at = _boot()
     at.button(key="more_to_advanced_picker").click().run()
     assert not at.exception
-    assert at.session_state["ui_mode"] == "advanced"
+    assert at.session_state["ui_mode"] == "full"
     assert at.session_state["_ui_mode_chosen"] is True
-    assert at.segmented_control(key=SWITCH).value == "advanced"
+    assert at.segmented_control(key=SWITCH).value == "full"
 
 
 def test_simple_picker_keeps_every_widget_alive():
@@ -327,7 +329,7 @@ def test_simple_picker_keeps_every_widget_alive():
 
 def test_simple_single_trial_dataset_does_not_crash():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
-    at.query_params["ui"] = "simple"
+    at.query_params["ui"] = "essentials"
     at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
     pin_view(at, _VIEW_SCANPATH)
     at.run()
@@ -336,9 +338,9 @@ def test_simple_single_trial_dataset_does_not_crash():
 
 
 def test_simple_css_collapses_the_slider_column():
-    css = ui_mode.mode_css("simple")
+    css = ui_mode.mode_css("essentials")
     assert "stColumn" in css and "st-key-adv_only_trial_slider" in css
-    assert "st-key-adv_only_trial_slider" not in ui_mode.mode_css("advanced")
+    assert "st-key-adv_only_trial_slider" not in ui_mode.mode_css("full")
 
 
 def test_compare_pickers_are_never_hidden_in_simple():
@@ -357,10 +359,10 @@ def test_compare_pickers_are_never_hidden_in_simple():
 
 
 def test_simple_css_drops_the_cell_of_the_hidden_sort():
-    css = ui_mode.mode_css("simple")
+    css = ui_mode.mode_css("essentials")
     assert "st-key-adv_only_trial_sort" in css
     assert ":first-child:has(" in css and "margin-left: 0 !important" in css
-    assert "st-key-adv_only_trial_sort" not in ui_mode.mode_css("advanced")
+    assert "st-key-adv_only_trial_sort" not in ui_mode.mode_css("full")
 
 
 def test_more_triggers_are_muted_by_the_stylesheet():
@@ -450,21 +452,21 @@ def test_simple_rail_keeps_advanced_widgets_alive():
 
 def test_advanced_rail_still_draws_the_simple_tiles_hidden():
     """Both modes draw the same tree; CSS hides the other mode's containers."""
-    at = _boot(mode="advanced")
+    at = _boot(mode="full")
     assert at.button(key="simple_view_scanpath") is not None
     assert at.button(key="viz_view_scanpath") is not None
 
 
 def test_rail_wrappers_are_keyed_for_the_mode_css():
-    """Every Advanced-only rail part sits in an ``adv_only_*`` container, and the
-    Simple parts in ``simple_only_*`` ones, so `mode_css` hides them."""
+    """Every Full-only rail part sits in an ``adv_only_*`` container, and the
+    Essentials parts in ``simple_only_*`` ones, so `mode_css` hides them."""
     import inspect
     import re
 
     from scanpath_studio import controls, tabs
 
     rail = inspect.getsource(tabs.render_single_trial_tab)
-    # The two mode rows share one wrapper, so Simple leaves no empty
+    # The two mode rows share one wrapper, so Essentials leaves no empty
     # `tour_grp_view_modes` behind.
     for name in ("rail_modes", "rail_reset"):
         assert re.search(rf'advanced_only\(\s*\w+,\s*"{name}"\s*\)', rail), name
@@ -487,7 +489,7 @@ def test_rail_wrappers_are_keyed_for_the_mode_css():
 
 
 def test_picker_wrappers_are_keyed_for_the_mode_css():
-    """The trial picker's Advanced-only parts (the filter funnel, the chips'
+    """The trial picker's Full-only parts (the filter funnel, the chips'
     menu, the summary table, the sort popover and the slider) each sit in an
     ``adv_only_*`` container, and the ＋ More list in a ``simple_only_*`` one."""
     import inspect
@@ -510,7 +512,7 @@ def test_picker_wrappers_are_keyed_for_the_mode_css():
     assert "ui_mode.advanced_only(host, name)" in helper
 
 
-def _open_gaze_dataset(words, fixations, gaze, *, mode: str = "simple") -> AppTest:
+def _open_gaze_dataset(words, fixations, gaze, *, mode: str = "essentials") -> AppTest:
     at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
     at.query_params["ui"] = mode
     pin_view(at, _VIEW_SCANPATH)
@@ -562,7 +564,7 @@ def test_raw_gaze_only_trial_in_simple_highlights_scanpath():
     _assert_animation_keeps_the_static_tile(at)
 
 
-def _open_samples_only(mode: str = "simple") -> AppTest:
+def _open_samples_only(mode: str = "essentials") -> AppTest:
     from scanpath_studio import api
     from scanpath_studio.data import empty_fixations_frame, empty_words_frame
 
@@ -583,7 +585,7 @@ def _lit_tiles(at: AppTest) -> list[str]:
 
 def test_samples_only_dataset_opens_simple_on_the_scanpath_tile():
     """The raw-gaze layer the dataset turns on is its default, not a setting
-    shaped in Advanced, so a fresh session lights Scanpath."""
+    shaped in Full, so a fresh session lights Scanpath."""
     at = _open_samples_only()
     assert at.session_state["global_show_raw_gaze"] is True
     assert _lit_tiles(at) == ["scanpath"]
@@ -592,9 +594,9 @@ def test_samples_only_dataset_opens_simple_on_the_scanpath_tile():
 
 
 def test_samples_only_dataset_keeps_the_advanced_highlight():
-    """Only Simple's tiles read through the seed; Advanced's presets still
+    """Only Essentials' tiles read through the seed; Full's presets still
     highlight Custom."""
-    at = _open_samples_only("advanced")
+    at = _open_samples_only("full")
     assert at.button(key="viz_view_custom").proto.type == "primary"
     assert at.button(key="viz_view_scanpath").proto.type == "secondary"
 
@@ -615,7 +617,7 @@ def test_samples_only_dataset_with_another_setting_changed_lights_no_tile():
 
 
 @pytest.mark.parametrize(
-    ("mode", "hidden"), [("simple", "adv_only_"), ("advanced", "simple_only_")]
+    ("mode", "hidden"), [("essentials", "adv_only_"), ("full", "simple_only_")]
 )
 def test_mode_css_drops_the_rail_wrapper_of_a_hidden_part(mode, hidden):
     """A hidden rail part leaves no gap: its wrapper block goes too, in a rule
@@ -689,7 +691,7 @@ def test_simple_tile_keeps_the_palette():
 
 
 def test_simple_hand_edited_colour_lights_no_tile():
-    """A colour past every palette is shaped in Advanced, and counts."""
+    """A colour past every palette is shaped in Full, and counts."""
     at = _boot()
     at.button(key="simple_view_scanpath").click().run()
     # One run for the preset's held writes to settle (`write_through`).
@@ -701,12 +703,12 @@ def test_simple_hand_edited_colour_lights_no_tile():
 
 
 def test_advanced_palette_pick_still_drops_the_preset_to_custom():
-    at = _boot(mode="advanced")
+    at = _boot(mode="full")
     at.button(key="viz_view_scanpath").click().run()
     at.selectbox(key="global_palette").set_value(HIGH_CONTRAST).run()
     assert at.button(key="viz_view_custom").proto.type == "primary"
     assert at.button(key="viz_view_scanpath").proto.type == "secondary"
-    # An Advanced preset starts from the default colours.
+    # A Full preset starts from the default colours.
     at.button(key="viz_view_heatmap").click().run()
     assert at.session_state["global_palette"] != HIGH_CONTRAST
     assert at.button(key="viz_view_heatmap").proto.type == "primary"
@@ -725,7 +727,7 @@ def test_subtab_labels_for_simple():
         tabs.SUBTAB_SHARE,
         tabs.SUBTAB_MORE,
     ]
-    # Line assignment is Advanced-only, so the gate changes nothing here.
+    # Line assignment is Full-only, so the gate changes nothing here.
     assert tabs.subtab_labels_for(True, line_assignment=True) == [
         tabs.SUBTAB_EXPORT,
         tabs.SUBTAB_SHARE,
@@ -753,13 +755,13 @@ def test_simple_subtabs_render():
 
 
 def test_switching_to_simple_from_a_hidden_subtab_falls_back():
-    at = _boot(mode="advanced")
+    at = _boot(mode="full")
     at.session_state["single_subtab"] = tabs.SUBTAB_COMPARISONS
     at.run()
     assert not at.exception
-    at.segmented_control(key=SWITCH).set_value("simple").run()
+    at.segmented_control(key=SWITCH).set_value("essentials").run()
     assert not at.exception
-    assert at.session_state["ui_mode"] == "simple"
+    assert at.session_state["ui_mode"] == "essentials"
     assert at.session_state["single_subtab"] == tabs.SUBTAB_EXPORT
 
 
@@ -774,7 +776,7 @@ def test_simple_export_has_no_bundle():
 
 
 def test_advanced_export_keeps_the_bundle():
-    at = _boot(mode="advanced")
+    at = _boot(mode="full")
     at.session_state["single_subtab"] = tabs.SUBTAB_EXPORT
     at.run()
     assert not at.exception
@@ -789,17 +791,17 @@ def test_simple_more_subtab_lists_advanced_and_switches():
     assert any("Annotations" in str(m.value) for m in at.markdown)
     at.button(key="more_to_advanced_subtabs").click().run()
     assert not at.exception
-    assert at.session_state["ui_mode"] == "advanced"
+    assert at.session_state["ui_mode"] == "full"
 
 
 def test_select_share_in_advanced_stays_on_share_in_simple():
-    at = _boot(mode="advanced")
+    at = _boot(mode="full")
     at.session_state["single_subtab"] = tabs.SUBTAB_SHARE
     at.run()
     assert not at.exception
-    at.segmented_control(key=SWITCH).set_value("simple").run()
+    at.segmented_control(key=SWITCH).set_value("essentials").run()
     assert not at.exception
-    assert at.session_state["ui_mode"] == "simple"
+    assert at.session_state["ui_mode"] == "essentials"
     assert at.session_state["single_subtab"] == tabs.SUBTAB_SHARE
 
 
@@ -810,7 +812,7 @@ def test_more_in_simple_falls_back_to_advanceds_first_subtab():
     assert not at.exception
     at.button(key="more_to_advanced_subtabs").click().run()
     assert not at.exception
-    assert at.session_state["ui_mode"] == "advanced"
+    assert at.session_state["ui_mode"] == "full"
     assert at.session_state["single_subtab"] == tabs.SUBTAB_ANNOTATIONS
 
 
@@ -825,7 +827,7 @@ def test_fresh_simple_session_opens_on_the_replay():
 
 
 def test_advanced_session_keeps_the_static_start():
-    at = _boot(mode="advanced")
+    at = _boot(mode="full")
     assert at.session_state["single_animate"] is False
 
 
@@ -833,14 +835,14 @@ def test_advanced_session_keeps_the_static_start():
     ("query", "restored", "expected_set"),
     [
         ({}, False, True),
-        ({"ui": "simple"}, False, True),
+        ({"ui": "essentials"}, False, True),
         ({"trial": "3"}, False, False),
-        ({"ui": "simple", "trial": "3"}, False, False),
+        ({"ui": "essentials", "trial": "3"}, False, False),
         ({}, True, False),
     ],
 )
 def test_simple_start_skips_links_and_restores(query, restored, expected_set):
-    session = {sk.UI_MODE: "simple"}
+    session = {sk.UI_MODE: "essentials"}
     ui_mode.seed_simple_start(session, query, restored=restored)
     assert ("single_animate" in session) is expected_set
     if expected_set:
@@ -848,26 +850,26 @@ def test_simple_start_skips_links_and_restores(query, restored, expected_set):
 
 
 def test_simple_start_keeps_a_value_the_session_already_holds():
-    session = {sk.UI_MODE: "simple", "single_animate": False}
+    session = {sk.UI_MODE: "essentials", "single_animate": False}
     ui_mode.seed_simple_start(session, {}, restored=False)
     assert session["single_animate"] is False
 
 
 def test_simple_start_runs_once_per_session():
-    session = {sk.UI_MODE: "advanced"}
+    session = {sk.UI_MODE: "full"}
     ui_mode.seed_simple_start(session, {}, restored=False)
     assert "single_animate" not in session
-    session[sk.UI_MODE] = "simple"
+    session[sk.UI_MODE] = "essentials"
     ui_mode.seed_simple_start(session, {}, restored=False)
     assert "single_animate" not in session
 
 
 def test_switch_to_simple_mid_session_does_not_start_animation():
-    at = _boot(mode="advanced")
+    at = _boot(mode="full")
     assert at.session_state["single_animate"] is False
-    at.segmented_control(key=SWITCH).set_value("simple").run()
+    at.segmented_control(key=SWITCH).set_value("essentials").run()
     assert not at.exception
-    assert at.session_state["ui_mode"] == "simple"
+    assert at.session_state["ui_mode"] == "essentials"
     assert at.session_state["single_animate"] is False
 
 
@@ -878,7 +880,7 @@ def test_switch_to_simple_mid_session_does_not_start_animation():
         ({"narrowed": True}, ["a trial filter"]),
         ({"sorted_": True}, ["a sort order"]),
         ({"comparing": True}, ["Compare"]),
-        ({"custom_view": True}, ["plot settings from Advanced"]),
+        ({"custom_view": True}, ["plot settings from Full"]),
         (
             {
                 "custom_view": True,
@@ -890,7 +892,7 @@ def test_switch_to_simple_mid_session_does_not_start_animation():
                 "a trial filter",
                 "a sort order",
                 "Compare",
-                "plot settings from Advanced",
+                "plot settings from Full",
             ],
         ),
     ],
@@ -906,7 +908,7 @@ def test_hidden_settings_reasons(flags, phrases):
 
 
 def _notes(at: AppTest) -> list[str]:
-    return [str(c.value) for c in at.caption if "from Advanced" in str(c.value)]
+    return [str(c.value) for c in at.caption if "from Full" in str(c.value)]
 
 
 def test_a_plain_simple_session_shows_no_note():
@@ -916,7 +918,7 @@ def test_a_plain_simple_session_shows_no_note():
 
 
 def test_advanced_never_shows_the_note():
-    at = _boot(mode="advanced")
+    at = _boot(mode="full")
     at.session_state["filter_participants"] = ["l7_1090"]
     at.run()
     at.run()
@@ -947,13 +949,13 @@ def test_shared_link_with_a_filter_shows_the_note():
         assert not at.exception
         return at
 
-    simple = boot("simple")
+    simple = boot("essentials")
     notes = _notes(simple)
     assert len(notes) == 1
     assert "a trial filter" in notes[0]
-    assert "plot settings from Advanced" in notes[0]
+    assert "plot settings from Full" in notes[0]
     # The note describes; it changes nothing the figure is built from.
-    assert _viz_keys(simple) == _viz_keys(boot("advanced"))
+    assert _viz_keys(simple) == _viz_keys(boot("full"))
 
 
 def test_simple_sort_order_shows_the_note():
@@ -967,7 +969,7 @@ def test_simple_sort_order_shows_the_note():
 
 def test_simple_compare_from_link_keeps_b_picker():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
-    at.query_params["ui"] = "simple"
+    at.query_params["ui"] = "essentials"
     at.query_params["compare"] = "l37_1129:l37_1129_2_2_1_Adv"
     pin_view(at, _VIEW_SCANPATH)
     at.run()
@@ -980,21 +982,21 @@ def test_simple_compare_from_link_keeps_b_picker():
 
 def test_hidden_note_button_switches_to_advanced():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
-    at.query_params["ui"] = "simple"
+    at.query_params["ui"] = "essentials"
     at.query_params["show_raw_gaze"] = "1"
     pin_view(at, _VIEW_SCANPATH)
     at.run()
     at.button(key="hidden_note_to_advanced").click().run()
     assert not at.exception
-    assert at.session_state["ui_mode"] == "advanced"
+    assert at.session_state["ui_mode"] == "full"
     assert at.session_state["_ui_mode_chosen"] is True
 
 
 def test_simple_hides_the_trial_summary_table_by_css():
-    simple = ui_mode.mode_css("simple")
+    simple = ui_mode.mode_css("essentials")
     assert "st-key-adv_only_chips" in simple
-    assert "st-key-adv_only_chips" not in ui_mode.mode_css("advanced")
-    # The table is still built in Simple, so a mode switch changes no element.
+    assert "st-key-adv_only_chips" not in ui_mode.mode_css("full")
+    # The table is still built in Essentials, so a mode switch changes no element.
     at = _boot()
     assert not at.exception
 
@@ -1028,13 +1030,13 @@ def test_simple_export_points_to_the_bundle_in_advanced():
     assert any(b.key == "export_to_advanced" for b in at.button)
     at.button(key="export_to_advanced").click().run()
     assert not at.exception
-    assert at.session_state["ui_mode"] == "advanced"
+    assert at.session_state["ui_mode"] == "full"
     assert at.session_state["_ui_mode_chosen"] is True
     assert any("Export bundle" in str(m.value) for m in at.markdown)
 
 
 def test_advanced_export_has_no_pointer():
-    at = _boot(mode="advanced")
+    at = _boot(mode="full")
     at.session_state["single_subtab"] = tabs.SUBTAB_EXPORT
     at.run()
     assert not at.exception
@@ -1042,15 +1044,15 @@ def test_advanced_export_has_no_pointer():
 
 
 def test_cookie_follows_the_viewers_choice_not_the_session_mode():
-    """A mode the app sets by itself (a tutorial needing Advanced) is not what
+    """A mode the app sets by itself (a tutorial needing Full) is not what
     the cookie remembers."""
     from unittest.mock import patch
 
     import streamlit as st
 
-    state = {sk.UI_MODE: "advanced"}
+    state = {sk.UI_MODE: "full"}
     with patch.object(st, "session_state", state):
-        assert ui_mode.cookie_mode() == "advanced"
-        ui_mode._choose_mode("simple")
-        state[sk.UI_MODE] = "advanced"
-        assert ui_mode.cookie_mode() == "simple"
+        assert ui_mode.cookie_mode() == "full"
+        ui_mode._choose_mode("essentials")
+        state[sk.UI_MODE] = "full"
+        assert ui_mode.cookie_mode() == "essentials"

@@ -2369,8 +2369,8 @@ def _seeded_raw_gaze_view() -> str | None:
     anyone shaped, so Simple's tiles read through it: the layer must still be
     at that default (the seed's stash is what says one was made), and every
     other plot setting with a widget default must be the view's own, the
-    palette's colours aside (`_simple_ignored_keys`). The Advanced highlight
-    is left as it is.
+    palette's colours aside (`_simple_ignored_keys`). Advanced's preset
+    highlight does not read through it and shows Custom.
     """
     ss = st.session_state
     if not isinstance(ss.get(RAW_GAZE_SNAP_RESTORE_KEY), dict):

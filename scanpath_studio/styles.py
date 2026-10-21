@@ -2094,7 +2094,7 @@ def get_app_css() -> str:
         padding-bottom: 0.25rem;
     }
     /* Simple's View tiles are bigger than Advanced's presets: an icon over its
-       label, in a tile 4rem tall. (Advanced's `quick_views_grid` is untouched.) */
+       label, in a tile 4rem tall. Advanced's `quick_views_grid` keeps its own size. */
     .st-key-scanpath_rail .st-key-tour_grp_simple_views button {
         min-height: 4rem;
         padding-top: 0.4rem;

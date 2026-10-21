@@ -64,6 +64,44 @@ def test_cookie_script_only_embeds_a_valid_mode():
     assert "sps_ui_mode=simple" in script and "alert" not in script
 
 
+def test_seed_mode_prefers_this_sessions_choice_to_the_handshake_cookie():
+    """The cookie Streamlit hands over is the one read when the page
+    connected; a choice made since is in the session's cookie mode."""
+    session = {ui_mode.COOKIE_MODE_KEY: "advanced"}
+    cookies = {sk.UI_MODE_COOKIE: "simple"}
+    assert ui_mode.seed_mode(session, {}, cookies) == "advanced"
+    # A link still wins, and junk falls through to the handshake cookie.
+    session = {ui_mode.COOKIE_MODE_KEY: "advanced"}
+    assert ui_mode.seed_mode(session, {sk.PARAM_UI: "simple"}, cookies) == "simple"
+    session = {ui_mode.COOKIE_MODE_KEY: "junk"}
+    assert ui_mode.seed_mode(session, {}, cookies) == "simple"
+
+
+def test_starting_over_keeps_the_chosen_mode(monkeypatch):
+    """*Clear what is saved…* empties the session, but a mode the viewer
+    picked with the switch comes back on the next run, not Simple."""
+    from unittest.mock import patch
+
+    from scanpath_studio import app
+
+    session = {
+        sk.UI_MODE: "advanced",
+        ui_mode.CHOSEN_KEY: True,
+        ui_mode.COOKIE_MODE_KEY: "advanced",
+        "some_setting": 3,
+    }
+    monkeypatch.setattr(app, "clear_saved_work", lambda state: state.clear())
+    with (
+        patch.object(app.st, "session_state", session),
+        patch.object(app.st, "query_params", {sk.PARAM_UI: "advanced"}),
+    ):
+        app._clear_and_start_over()
+    assert "some_setting" not in session and sk.UI_MODE not in session
+    handshake = {sk.UI_MODE_COOKIE: "simple"}
+    assert ui_mode.seed_mode(session, {}, handshake) == "advanced"
+    assert session[ui_mode.CHOSEN_KEY] is True
+
+
 def test_seed_mode_replaces_a_junk_session_value():
     session = {sk.UI_MODE: "junk"}
     assert ui_mode.seed_mode(session, {sk.PARAM_UI: "advanced"}, {}) == "advanced"
@@ -177,20 +215,44 @@ def test_switch_stacks_between_the_header_and_the_tour():
     assert "z-index: 999980;" in tour._WELCOME_CSS
 
 
-def test_switch_steps_aside_only_while_the_status_widget_is_mounted():
-    """Streamlit's "Running…" widget sits where the switch is, but exists only
-    during a run: the switch moves left of it then, and otherwise keeps its
-    place and the header's menu cell its width."""
+def test_the_status_widget_moves_out_from_under_the_switch():
+    """Streamlit's "Running…" widget would sit under the switch, but exists
+    only during a run: it is shown below the top bar instead, and the switch
+    keeps one place whatever runs."""
     css = ui_mode.switch_css(True)
-    shift = ui_mode._STATUS_SHIFT_REM
     assert (
         ".st-key-tour_grp_ui_mode { position: fixed; top: 10px; right: 3.75rem;" in css
     )
+    # Nothing in the switch's own rules depends on the widget being mounted.
+    assert ':has([data-testid="stStatusWidget"])' not in css
     assert (
-        '.stApp:has([data-testid="stStatusWidget"]) .st-key-tour_grp_ui_mode'
-        f" {{ right: calc(3.75rem + {shift}rem); }}"
-    ) in css
+        '[data-testid="stStatusWidget"] { position: fixed; top: 4.25rem; right: 1rem;'
+        in css
+    )
+    # Only while the switch is in the bar: elsewhere the widget stays in it.
+    assert "stStatusWidget" not in ui_mode.switch_css(False)
     assert "width: 17.5rem !important" in css
+
+
+def test_the_cookie_script_takes_no_room_in_the_switch_box():
+    """The script that writes the cookie appears only once the switch is
+    used; its frame sits in a container that takes no room, so the box the
+    switch is sized and placed by is the same before and after a click."""
+    rule = (
+        f".st-key-{ui_mode.COOKIE_BOX_KEY} {{ position: absolute; width: 0;"
+        " height: 0; overflow: hidden; }"
+    )
+    assert rule in ui_mode.switch_css(True)
+    assert rule in ui_mode.switch_css(False)
+    import inspect
+
+    source = inspect.getsource(ui_mode.render_switch)
+    assert "box.container(key=COOKIE_BOX_KEY)" in source
+    assert "with cookie:" in source
+    at = _boot()
+    at.segmented_control(key=SWITCH).set_value("advanced").run()
+    assert not at.exception
+    assert _has_cookie_embed(at)
 
 
 def test_switch_css_hidden_still_collapses_the_title_row():
@@ -424,6 +486,30 @@ def test_rail_wrappers_are_keyed_for_the_mode_css():
     assert 'simple_only(viz, "rail_more")' in source
 
 
+def test_picker_wrappers_are_keyed_for_the_mode_css():
+    """The trial picker's Advanced-only parts (the filter funnel, the chips'
+    menu, the summary table, the sort popover and the slider) each sit in an
+    ``adv_only_*`` container, and the ＋ More list in a ``simple_only_*`` one."""
+    import inspect
+    import re
+
+    from scanpath_studio import tabs, utils
+
+    picker = inspect.getsource(tabs.render_single_trial_tab)
+    for name in ('"trial_filters"', '"chip_fields"', r"ui_mode\.TRIAL_CHIPS"):
+        assert re.search(rf"ui_mode\.advanced_only\(\s*\w+,\s*{name}\s*\)", picker), (
+            name
+        )
+    assert re.search(r'ui_mode\.simple_only\(\s*host,\s*"picker_more"\s*\)', picker)
+    trials = inspect.getsource(utils._select_trial_none_mode)
+    for name in ("TRIAL_SORT", "TRIAL_SLIDER"):
+        assert re.search(
+            rf"_advanced_part\(\s*\w+,\s*ui_mode\.{name},\s*key_prefix\s*\)", trials
+        ), name
+    helper = inspect.getsource(utils._advanced_part)
+    assert "ui_mode.advanced_only(host, name)" in helper
+
+
 def _open_gaze_dataset(words, fixations, gaze, *, mode: str = "simple") -> AppTest:
     at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
     at.query_params["ui"] = mode
@@ -507,7 +593,7 @@ def test_samples_only_dataset_opens_simple_on_the_scanpath_tile():
 
 def test_samples_only_dataset_keeps_the_advanced_highlight():
     """Only Simple's tiles read through the seed; Advanced's presets still
-    highlight Custom, as before."""
+    highlight Custom."""
     at = _open_samples_only("advanced")
     assert at.button(key="viz_view_custom").proto.type == "primary"
     assert at.button(key="viz_view_scanpath").proto.type == "secondary"
@@ -620,7 +706,7 @@ def test_advanced_palette_pick_still_drops_the_preset_to_custom():
     at.selectbox(key="global_palette").set_value(HIGH_CONTRAST).run()
     assert at.button(key="viz_view_custom").proto.type == "primary"
     assert at.button(key="viz_view_scanpath").proto.type == "secondary"
-    # An Advanced preset starts from the default colours, as before.
+    # An Advanced preset starts from the default colours.
     at.button(key="viz_view_heatmap").click().run()
     assert at.session_state["global_palette"] != HIGH_CONTRAST
     assert at.button(key="viz_view_heatmap").proto.type == "primary"

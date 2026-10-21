@@ -6303,8 +6303,9 @@ def render_single_trial_tab(
 
             The funnel and the chips' menu are each their own Advanced-only
             container, so each stays a direct child of the ``railbtn_*``
-            cluster and lays out as it always has. In Simple they stay in the
-            page, hidden, with their values, and a ＋ More list takes the cell."""
+            cluster and lays out as the cluster's other cells do. In Simple
+            they stay in the page, hidden, with their values, and a ＋ More
+            list takes the cell."""
             pop = ui_mode.advanced_only(host, "trial_filters").popover(
                 "Filter the trial list",
                 icon=_FILTER_ICON,

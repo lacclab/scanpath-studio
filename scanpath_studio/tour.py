@@ -755,7 +755,7 @@ _SIMPLE_SPOTLIGHT_STEPS = [
         "dock": "top",
         "title": f"{ICONS['view_scanpath']} The scanpath",
         "body": "Each circle is a **fixation**; its size shows how long it "
-        "lasted. The lines between them are **saccades**. A replay plays here: "
+        "lasted. The lines between them are **saccades**. When the replay plays, "
         "the bar above the plot pauses or restarts it.",
     },
     {

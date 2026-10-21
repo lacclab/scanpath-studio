@@ -1350,8 +1350,16 @@ CLEAR_SAVED_REQUEST_KEY = "_clear_saved_requested"
 #: of the fresh start says what happened.
 STARTED_OVER_KEY = "_started_over"
 #: What survives starting over: having seen or dismissed the welcome tour is not
-#: "your work", and the tour reopening over a fresh start would be noise.
-_KEPT_ON_START_OVER = ("_tour_dismissed", "tour_seen")
+#: "your work", and the tour reopening over a fresh start would be noise. Nor is
+#: the Simple | Advanced choice, which the browser's cookie already holds; the
+#: session keeps it because the cookie Streamlit hands the app is the one read
+#: when the page connected, from before the choice.
+_KEPT_ON_START_OVER = (
+    "_tour_dismissed",
+    "tour_seen",
+    ui_mode.CHOSEN_KEY,
+    ui_mode.COOKIE_MODE_KEY,
+)
 
 
 def _clear_and_start_over() -> None:

@@ -1653,6 +1653,48 @@ class TestSimpleWelcomeTour:
             )
 
 
+class TestWelcomeTourAcrossTheSwitch:
+    """Each mode walks its own welcome tour, so changing mode mid-tour ends it
+    rather than landing on the same step number of the other tour."""
+
+    def test_switching_mode_ends_the_welcome_tour(self):
+        from scanpath_studio.tour import _SIMPLE_SPOTLIGHT_STEPS
+
+        for start, other in (("simple", "advanced"), ("advanced", "simple")):
+            at = AppTest.from_function(_welcome_tour_with_switch_app)
+            at.session_state["ui_mode"] = start
+            at.run()
+            assert at.session_state["tour_mode"] == "spotlight"
+            at.session_state["tour_step"] = len(_SIMPLE_SPOTLIGHT_STEPS) - 1
+            at.segmented_control(key="ui_mode_switch").set_value(other).run()
+            assert not at.exception, at.exception
+            assert at.session_state["ui_mode"] == other
+            assert at.session_state["tour_mode"] is None
+            assert at.session_state["tour_seen"] is True
+            assert not at.get("progress")
+
+    def test_a_deselect_keeps_the_welcome_tour(self):
+        at = AppTest.from_function(_welcome_tour_with_switch_app)
+        at.session_state["ui_mode"] = "simple"
+        at.run()
+        at.segmented_control(key="ui_mode_switch").set_value(None).run()
+        assert not at.exception, at.exception
+        assert at.session_state["ui_mode"] == "simple"
+        assert at.session_state["tour_mode"] == "spotlight"
+
+
+def _welcome_tour_with_switch_app():
+    """The welcome tour beside the mode switch, as the header draws it."""
+    import streamlit as st
+
+    from scanpath_studio import ui_mode
+    from scanpath_studio.tour import maybe_show_welcome_tour, render_spotlight_tour
+
+    ui_mode.render_switch(st)
+    maybe_show_welcome_tour()
+    render_spotlight_tour()
+
+
 class TestTutorialsFromSimple:
     """The task tutorials spotlight Advanced-only controls, so starting one in
     Simple moves the session to Advanced (the session only, never the cookie).
@@ -1725,14 +1767,18 @@ class TestTutorialsFromSimple:
         assert at.session_state["_ui_mode_cookie"] == "simple"
         assert not [b for b in at.button if b.key == "tutorial_exit"]
 
-    def test_switching_to_advanced_keeps_the_tutorial(self):
+    def test_a_deselect_in_advanced_keeps_the_tutorial(self):
+        """Only choosing Simple ends a tutorial: a deselected switch (which
+        keeps the mode) leaves it running, in Advanced."""
         at = AppTest.from_function(_tutorial_with_switch_app)
         at.session_state["ui_mode"] = "advanced"
         at.run()
-        at.segmented_control(key="ui_mode_switch").set_value("simple").run()
-        at.segmented_control(key="ui_mode_switch").set_value("advanced").run()
+        assert at.session_state["tutorial_active"] == "filter_annotate"
+        at.segmented_control(key="ui_mode_switch").set_value(None).run()
         assert not at.exception, at.exception
         assert at.session_state["ui_mode"] == "advanced"
+        assert at.session_state["tutorial_active"] == "filter_annotate"
+        assert [b for b in at.button if b.key == "tutorial_exit"]
 
     def test_a_tutorial_started_in_simple_never_rewrites_the_cookie(self):
         """A viewer who had chosen Simple keeps Simple in the cookie: the

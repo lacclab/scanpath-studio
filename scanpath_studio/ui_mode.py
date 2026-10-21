@@ -46,6 +46,9 @@ TRIAL_SORT = "trial_sort"
 TRIAL_CHIPS = "chips"
 #: The key of the container the Simple | Advanced switch is drawn in.
 SWITCH_BOX_KEY = "tour_grp_ui_mode"
+#: The key of the container, inside the switch's, that holds the script that
+#: writes the cookie.
+COOKIE_BOX_KEY = "ui_mode_cookie"
 
 SIMPLE = "simple"
 ADVANCED = "advanced"
@@ -120,10 +123,14 @@ def seed_mode(session: MutableMapping, query_params: Mapping, cookies: Mapping) 
     """Fix the session's mode on its first run and return it.
 
     A mode already in the session wins: the header switch writes it, and a
-    link's ``?ui=`` must not undo a choice made after the page opened.
+    link's ``?ui=`` must not undo a choice made after the page opened. Past
+    the link, the choice this session last wrote to the cookie
+    (``COOKIE_MODE_KEY``, which survives starting over) beats ``cookies``,
+    which is read once, when the page connects, and so misses that write.
     """
+    remembered = parse_mode(session.get(COOKIE_MODE_KEY)) or cookies.get(UI_MODE_COOKIE)
     session[UI_MODE] = parse_mode(session.get(UI_MODE)) or resolve_mode(
-        query_params.get(PARAM_UI), cookies.get(UI_MODE_COOKIE)
+        query_params.get(PARAM_UI), remembered
     )
     return session[UI_MODE]
 
@@ -245,8 +252,8 @@ def _choose_mode(mode: object) -> None:
     """Make ``mode`` the session's mode as the viewer's own choice.
 
     Marks it chosen, which is what lets the cookie script remember it. Choosing
-    Simple ends a running tutorial. Anything that is not a mode (a deselected
-    switch) changes nothing.
+    Simple ends a running tutorial, and a change of mode ends a running welcome
+    tour. Anything that is not a mode (a deselected switch) changes nothing.
     """
     import streamlit as st
 
@@ -258,6 +265,15 @@ def _choose_mode(mode: object) -> None:
             from scanpath_studio import tour
 
             tour._restore_tutorial_return()
+        if (
+            chosen != current_mode()
+            and st.session_state.get("tour_mode") == "spotlight"
+        ):
+            # Each mode has its own welcome tour, and a step number means a
+            # different step in the other one: end it, as Done would.
+            from scanpath_studio import tour
+
+            tour._exit_spotlight()
         st.session_state[UI_MODE] = chosen
         st.session_state[CHOSEN_KEY] = True
         st.session_state[COOKIE_MODE_KEY] = chosen
@@ -357,7 +373,7 @@ def render_hidden_settings_note(host: DeltaGenerator, reasons: list[str]) -> Non
 
 
 #: The widest viewport at which the switch leaves the header for the page:
-#: under it the header's logo, menu and the switch no longer fit side by side.
+#: under it the header's logo, menu and the switch do not fit side by side.
 _SWITCH_FALLBACK_PX = 520
 
 #: The switch's stacking order: just above Streamlit's header (999990), whose
@@ -366,10 +382,16 @@ _SWITCH_FALLBACK_PX = 520
 #: Streamlit's popovers and modals (1000060 and up) stay above both.
 SWITCH_Z_INDEX = 999991
 
-#: How far the switch steps left while Streamlit's "Running…" status widget is
-#: mounted (it exists only during a run; measured at about 93px wide, right of
-#: where the switch sits), so the switch never covers it.
-_STATUS_SHIFT_REM = 7
+#: Where Streamlit's "Running… / Stop" status widget is shown while the switch
+#: is in the top bar: just under the bar (3.75rem tall), at its right edge. In
+#: the bar it would sit under the switch, and it is mounted only during a run,
+#: so making room for it there would move the switch on every rerun.
+_STATUS_WIDGET_CSS = (
+    '[data-testid="stStatusWidget"] { position: fixed; top: 4.25rem; right: 1rem;'
+    " padding: 0.15rem 0.6rem; border-radius: 0.5rem;"
+    " background: var(--sps-page-bg); border: 1px solid var(--sps-border);"
+    " box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08); }"
+)
 
 #: The title row that holds the switch's container, whichever column it is in.
 _SWITCH_ROW = (
@@ -384,13 +406,20 @@ def switch_css(visible: bool) -> str:
     The switch stays where the script draws it, so its state never depends on
     the view. With ``visible`` it is lifted into Streamlit's top bar, just left
     of the ⋮ menu, at a larger size, and the bar's menu cell grows to leave it
-    room. While the "Running…" status widget is mounted, which is only during a
-    run, the switch steps left of it instead of covering it. Below
+    room. The switch never moves: Streamlit's "Running…" status widget, which
+    the bar would draw under it, is shown just below the bar instead. Below
     ``_SWITCH_FALLBACK_PX`` it is an ordinary right-aligned row of the page.
     Without it (the views that have no use for the mode) the switch is
     hidden. Either way the title row it sits in takes no space of its own.
     """
     box = f".st-key-{SWITCH_BOX_KEY}"
+    # The cookie script's frame, which is there only once the switch has been
+    # used, takes no room, so the switch's box (sized to its contents) and the
+    # switch in it are the same with or without it.
+    cookie = (
+        f".st-key-{COOKIE_BOX_KEY} {{ position: absolute; width: 0; height: 0;"
+        " overflow: hidden; }"
+    )
     wide = f"@media (min-width: {_SWITCH_FALLBACK_PX + 1}px)"
     narrow = f"@media (max-width: {_SWITCH_FALLBACK_PX}px)"
     collapse = (
@@ -400,16 +429,17 @@ def switch_css(visible: bool) -> str:
         " margin: 0 !important; overflow: visible; } }"
     )
     if not visible:
-        return f"<style>{box} {{ display: none !important; }} {collapse}</style>"
+        return (
+            f"<style>{box} {{ display: none !important; }} {collapse} {cookie}</style>"
+        )
     button = f'{box} [data-testid="stButtonGroup"] button[data-variant]'
     return (
         "<style>"
-        f"{collapse}"
+        f"{collapse} {cookie}"
         f"{wide} {{"
         f" {box} {{ position: fixed; top: 10px; right: 3.75rem;"
         f" z-index: {SWITCH_Z_INDEX}; width: max-content; }}"
-        f' .stApp:has([data-testid="stStatusWidget"]) {box}'
-        f" {{ right: calc(3.75rem + {_STATUS_SHIFT_REM}rem); }}"
+        f" {_STATUS_WIDGET_CSS}"
         # The header's right-hand cell is a fixed 200px: widen it so the
         # navigation gives way before it would run under the switch.
         ' [data-testid="stToolbar"] div:has(> [data-testid="stMainMenu"])'
@@ -473,6 +503,9 @@ def render_switch(host: DeltaGenerator, *, visible: bool = True) -> None:
         persist_state="session",
         on_change=_on_switch,
     )
+    # Drawn every run, so the switch's box holds the same elements whether or
+    # not the script is in it.
+    cookie = box.container(key=COOKIE_BOX_KEY)
     if st.session_state.get(CHOSEN_KEY):
-        with box:
+        with cookie:
             embed_html_iframe(cookie_script(cookie_mode()), height=0)

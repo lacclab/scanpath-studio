@@ -31,7 +31,8 @@ For the corresponding Python keywords and CLI flags, use the
 <a class="sps-ctl sps-ctl--menu" data-label="Trial summary menu" href="../../../assets/screenshots/controls/chips.webp" title="Open full size"><img src="../../../assets/screenshots/controls/chips.webp" alt="The trial summary menu, opened from the pencil button" loading="lazy"></a>
 
 The bar above the plot: pick a dataset and a trial, step through the trials,
-and narrow, sort or label the list.
+and narrow, sort or label the list. Simple shows the dataset, trial and
+**◀ ▶** controls; the rest of this section is in Advanced.
 
 | Control | What it does |
 | --- | --- |
@@ -66,7 +67,8 @@ the whole figure at once. Under them, each layer of the figure has a row: the
 switch turns the layer on or off, and the **▾** beside it opens that layer's
 settings, described below one menu at a time. The last two rows,
 **Filters & highlights** and **Figure & canvas**, cover the figure as a whole.
-A grayed-out control says why when you hover over it.
+A grayed-out control says why when you hover over it. Simple shows only the
+view tiles and **Palette**; the rest of this section is in Advanced.
 
 ### :material/movie: Animate: play the reading as a video
 
@@ -314,7 +316,8 @@ several menus split into a **Scanpath A** and a **Scanpath B** group.
 
 <a class="sps-ctl sps-ctl--wide" href="../../../assets/screenshots/controls/under-the-plot.webp" title="Open full size"><img src="../../../assets/screenshots/controls/under-the-plot.webp" alt="The tabs under the plot" loading="lazy"></a>
 
-The tabs under the figure:
+The tabs under the figure. Simple has **Export**, for the current figure, and
+**Share**; the other tabs and the export bundle are in Advanced.
 
 | Tab | Control | What it does |
 | --- | --- | --- |

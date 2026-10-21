@@ -15,6 +15,9 @@ Save a figure, export many trials at once, or reuse a view in the app or in code
 | Share a view or copy its code | :material/share: **Share** → **Link** or **Code** |
 | Reuse the figure settings | :material/palette: **My designs**, or :material/share: **Share** → **Settings file** |
 
+In Simple mode, **Export** holds **Current figure** only; **Export bundle** is
+in Advanced.
+
 For step-by-step instructions, see the [export tutorials](../../tutorials/exporting-figures/index.md).
 
 ## Cite what you export { #cite }

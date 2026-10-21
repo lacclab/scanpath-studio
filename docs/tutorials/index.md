@@ -36,4 +36,5 @@ reference, see the [feature guides](../guides/index.md).
 </div>
 
 In the app, open :material/help: **Help** → :material/explore: **Tutorials**
-for guided tours of the controls.
+for guided tours of the controls. They use the Advanced mode, and starting one
+switches that visit to it.

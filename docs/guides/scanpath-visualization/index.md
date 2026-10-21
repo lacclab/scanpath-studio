@@ -24,6 +24,33 @@ the screen it was recorded on.
     menu by menu, with a picture of each menu. Search it for what you want to
     change, such as *saccade color* or *legend position*.
 
+## Simple and Advanced
+
+The view opens in **Simple**, a trimmed version of the same view for a first
+look. The **Simple | Advanced** switch is in the top bar, left of the ⋮ menu,
+on the :material/route: **Scanpath** view only. The mode you choose is
+remembered in this browser. Opening the app with `?ui=advanced` (or
+`?ui=simple`) at the end of its address uses that mode for the visit without
+changing the saved choice, and a link made with **Share** does not carry the
+mode.
+
+Simple shows:
+
+- the dataset and trial pickers with **◀ ▶**;
+- the plot, which opens on a playing replay;
+- four view tiles (**Animation**, **Scanpath**, **Heatmap** and
+  **Illustration**) and the **Palette**;
+- the **Export** tab, for the figure on screen, and **Share**.
+
+Where Advanced has more, a :material/add: **More** button lists what it adds
+there and ends in **Switch to Advanced**. A setting made in Advanced, such as a
+trial filter, still shapes the figure in Simple, and Simple says so in a short
+note. Starting a tutorial from :material/help: **Help** switches that visit to
+Advanced. :material/bar_chart: **Corpus Analysis** and
+:material/database: **Data Management** are the same in both modes.
+
+The numbered regions above and the rest of this guide describe Advanced.
+
 ## Choose a trial
 
 Pick a trial in **Select trial** above the plot, or step through the list with

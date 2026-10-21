@@ -194,9 +194,13 @@ def deep_link(page: Page, params: dict) -> None:
 
     Every layer a figure depends on is named explicitly: the app restores the
     previous session's plot settings on load, so anything left unsaid is
-    inherited from whatever ran last rather than from the defaults.
+    inherited from whatever ran last rather than from the defaults. The page
+    opens in Advanced mode unless ``params`` names another ``ui``.
     """
-    page.goto(f"{URL}/?{urlencode(params)}", wait_until="domcontentloaded")
+    page.goto(
+        f"{URL}/?{urlencode({'ui': 'advanced', **params})}",
+        wait_until="domcontentloaded",
+    )
     settle(page, quiet=2.5)
     close_tour(page)
     if not page.locator(

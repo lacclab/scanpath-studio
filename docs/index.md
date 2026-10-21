@@ -75,7 +75,7 @@ Bring your own data, or start with the bundled demo.
       <source src="assets/workflows/home-customize.mp4" type="video/mp4">
     </video>
 
-    **Make the view your own.** Start from a design preset, pick a palette, then adjust each layer in Plot controls.
+    **Make the view your own.** Start from a design preset, pick a palette, then adjust each layer in Plot controls, in Advanced mode.
 
     [Explore plot controls :material-arrow-right:](guides/scanpath-visualization/controls.md){ .md-button }
 

@@ -159,7 +159,7 @@ def software_credit() -> str:
 
 
 #: The short credit drawn on a figure when its credit line is on.
-CREDIT_LINE = f"Made with {CITATION['title']} · doi.org/{CITATION['doi']}"
+CREDIT_LINE = f"Made with {CITATION['title']}"
 
 
 # --- Built-in corpora ---------------------------------------------------------

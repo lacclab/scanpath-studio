@@ -1598,7 +1598,7 @@ def _render_parser() -> argparse.ArgumentParser:
         "--credit",
         dest="show_credit",
         action="store_true",
-        help="A small 'Made with Scanpath Studio · doi…' line under the plot. "
+        help="A small 'Made with Scanpath Studio' line under the plot. "
         "The figure grows to fit it.",
     )
     viz.add_argument(

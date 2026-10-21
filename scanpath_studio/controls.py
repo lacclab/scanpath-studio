@@ -8688,7 +8688,7 @@ def render_plot_controls(
             render_pattern_help(st.container(), _title_caption_fields)
         credit_help = (
             "A small line under the plot saying the figure was made with "
-            "Scanpath Studio, with its DOI, for a figure shared without its "
+            "Scanpath Studio, for a figure shared without its "
             "caption. The figure grows to make room."
         )
         _, credit_rest = _check_row(

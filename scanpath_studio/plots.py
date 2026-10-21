@@ -265,7 +265,7 @@ class FigureSettings:
     title_font_size: int = DEFAULT_TITLE_FONT_SIZE
     caption_font_size: int = DEFAULT_CAPTION_FONT_SIZE
     caption_color: str = DEFAULT_CAPTION_COLOR
-    #: A small "Made with Scanpath Studio · doi…" line under the plot, for a
+    #: A small "Made with Scanpath Studio" line under the plot, for a
     #: figure that travels without its caption (`export.annotate_figure`).
     show_credit: bool = False
     playback_speed: float = 1.0

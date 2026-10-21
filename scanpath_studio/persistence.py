@@ -37,6 +37,7 @@ manifest names any more are removed after the swap (:func:`_remove_unreferenced`
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import ipaddress
 import json
@@ -1670,6 +1671,9 @@ def cache_status(
                         key: int(value)
                         for key, value in dict(entry.get("rows") or {}).items()
                     },
+                    # Its stored copy's size: the Data page lists it beside the
+                    # downloaded corpora.
+                    "bytes": _entry_bytes(directory, entry),
                 }
             )
         status["datasets"] = good
@@ -1708,6 +1712,15 @@ def _metadata_file_problem(root: Path, pointer: dict) -> str:
     if not path.is_file():
         return f"its file is missing ({path.name})"
     return ""
+
+
+def _entry_bytes(root: Path, entry: dict) -> int:
+    """The bytes of a sound entry's frame files, a ``stat`` each."""
+    total = 0
+    for relative in dict(entry.get("frames") or {}).values():
+        with contextlib.suppress(OSError, ValueError):
+            total += _frame_path(root, relative).stat().st_size
+    return total
 
 
 def _entry_problem(root: Path, entry: Any) -> str:

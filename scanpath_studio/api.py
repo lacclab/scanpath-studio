@@ -4118,7 +4118,7 @@ def cache_status() -> dict:
     | --- | --- |
     | ``enabled``, ``directory`` | Whether caching is on, and where |
     | ``exists``, ``readable`` | Whether its manifest is there and can be read |
-    | ``datasets`` | Each stored dataset's name and per-frame row counts |
+    | ``datasets`` | Each stored dataset's name, per-frame row counts and size in bytes |
     | ``rows``, ``bytes``, ``saved_at`` | The totals, and when it was last written |
     | ``annotations``, ``designs``, ``metadata``, ``settings`` | What else is stored |
     | ``damaged`` | Each stored dataset whose entry or files are broken, with the reason. The app restores the others and keeps that one rather than dropping it |

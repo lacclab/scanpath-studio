@@ -127,8 +127,9 @@ it until you retry or clear it.
 Start the app with `scanpath-studio run --no-persist` to save nothing. To
 delete what is saved and start over, use **Clear what is saved…** under
 **Saved on this computer**, or close the app and run
-`scanpath-studio cache --clear`. See [Your data](about.md#your-data) and
-[Recovery cache](cli.md#cache).
+`scanpath-studio cache --clear`. That leaves the public datasets you
+downloaded: delete one with its :material/delete: button in the same section.
+See [Your data](about.md#your-data) and [Recovery cache](cli.md#cache).
 
 ## Help and versions
 

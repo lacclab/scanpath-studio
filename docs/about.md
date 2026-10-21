@@ -70,10 +70,11 @@ computer, so a refresh or a restart picks up where you left off.
   or close the app and run `scanpath-studio cache --clear`.
 - **To turn it off:** start the app with `scanpath-studio --no-persist`, or
   set `SCANPATH_STUDIO_PERSIST=0`.
-- **Downloaded public datasets** are kept apart, in the folders you
-  downloaded them to, and clearing what is saved leaves them. **Saved on this
-  computer** lists each with its folder and size. Delete a folder to remove
-  that download.
+- **Downloaded public datasets** stay in the folders you downloaded them to,
+  and clearing what is saved leaves them. **Saved on this computer** lists
+  them beside the datasets you added, each with its size and folder. Its
+  :material/delete: button deletes that download's files, after a
+  confirmation, and leaves anything else in the folder.
 
 The online demo saves nothing. A file you upload there is processed on
 Streamlit Community Cloud and not kept, so closing or refreshing the tab loses

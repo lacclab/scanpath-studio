@@ -26,6 +26,7 @@ from __future__ import annotations
 import io
 import json
 import zipfile
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -753,7 +754,7 @@ class TestRecoveryCachePanelFlow:
         at = self._boot_local(tmp_path, monkeypatch)
         _clean(at, "cache panel:")
         body = " ".join(str(m.value) for m in at.markdown)
-        assert "**Saved here:**" in body
+        assert "**Also saved:**" in body
         # The wizard's buttons say "Upload", so the note never says nothing is
         # uploaded. Under AppTest the server is not on loopback, where the
         # files did leave the browser's machine, so that sentence is left out.
@@ -762,7 +763,7 @@ class TestRecoveryCachePanelFlow:
         assert "Nothing is uploaded" not in captions
         assert "Nothing leaves this computer" not in captions
         # The folder is on the page itself, not behind a popover.
-        assert f"**Folder:** `{tmp_path}`" in body
+        assert f"**Session folder:** `{tmp_path}`" in body
 
         # Working in the app writes the cache — the panel's own claim.
         assert (tmp_path / "manifest.json").is_file()
@@ -773,24 +774,58 @@ class TestRecoveryCachePanelFlow:
         gone = {"Clear recovery cache", "Reset everything", "What's saved, and where"}
         assert not labels & gone, labels
 
-    def test_panel_lists_the_downloaded_public_datasets(self, tmp_path, monkeypatch):
+    def test_panel_lists_and_deletes_a_downloaded_dataset(self, tmp_path, monkeypatch):
         """A downloaded corpus is on this computer too, though the cache never
-        copies it, so the section names it, its folder and its size."""
-        from scanpath_studio import datasets
+        copies it: the list names it, beside the datasets you added, with its
+        size and folder, and its own 🗑
+        deletes its files — only after a confirmation, and only its files."""
+        from scanpath_studio import app, datasets
 
-        downloads = tmp_path / "downloads"
-        (downloads / "PoTeC").mkdir(parents=True)
-        (downloads / "PoTeC" / "fixations.tsv").write_bytes(b"x" * 2048)
-        monkeypatch.setenv("SCANPATH_STUDIO_DOWNLOAD_DIR", str(downloads))
+        potec = tmp_path / "downloads" / "PoTeC"
+        tsv = potec / "eyetracking_data" / "scanpaths" / "reader1.tsv"
+        tsv.parent.mkdir(parents=True)
+        tsv.write_bytes(b"x" * 2048)
+        (potec / "notes.txt").write_text("mine")
+        from scanpath_studio.persistence import save_state
+        from tests.test_persistence import _dataset
+
+        save_state({"_datasets": {"Corpus": _dataset()}}, tmp_path / "cache")
+        monkeypatch.setenv("SCANPATH_STUDIO_DOWNLOAD_DIR", str(potec.parent))
         monkeypatch.setenv("SCANPATH_LOCAL_FS", "1")
-        monkeypatch.setattr(datasets, "potec_present", lambda root: True)
+        monkeypatch.setattr(
+            datasets,
+            "potec_present",
+            lambda root: (Path(root) / "eyetracking_data").is_dir(),
+        )
         at = self._boot_local(tmp_path / "cache", monkeypatch)
         _clean(at, "cache panel:")
         body = " ".join(str(m.value) for m in at.markdown)
-        assert "**Downloaded public datasets:**" in body
-        assert f"- PoTeC: `{downloads / 'PoTeC'}` · 2.0 KB" in body
+        assert "**Datasets on this computer**" in body
+        assert "- **Corpus** · added · " in body
+        assert "· a copy in the session folder" in body
+        assert f"- **PoTeC** · downloaded · 2.0 KB · `{potec}`" in body
         captions = " ".join(str(c.value) for c in at.caption)
-        assert "clearing what is saved leaves them" in captions
+        assert "Downloads stay until you delete one here." in captions
+
+        at.button(key="saved_here_delete_0").click()
+        _rerun(at, view=VIEW_DATA)
+        body = " ".join(str(m.value) for m in at.markdown)
+        assert "This deletes 1 file of **PoTeC** (2.0 KB)" in body
+        assert tsv.is_file(), "nothing goes before Delete"
+        # Re-armed, as for *Clear what is saved…*: AppTest replays the script.
+        at.session_state[app.DELETE_DOWNLOAD_REQUEST_KEY] = (
+            "PoTeC — Potsdam Textbook Corpus"
+        )
+        at.button(key="saved_here_delete_confirm").click()
+        _rerun(at, view=VIEW_DATA)
+        assert not at.exception, at.exception
+        assert not tsv.exists()
+        assert (potec / "notes.txt").is_file()
+        assert "Deleted the downloaded PoTeC (2.0 KB)" in " ".join(
+            str(t.value) for t in at.toast
+        )
+        body = " ".join(str(m.value) for m in at.markdown)
+        assert "· downloaded ·" not in body
 
     def test_a_loopback_run_says_nothing_leaves_this_computer(
         self, tmp_path, monkeypatch
@@ -839,7 +874,7 @@ class TestRecoveryCachePanelFlow:
         at.run(timeout=60)
         _clean(at, "Scanpath view:")
         body = " ".join(str(m.value) for m in at.markdown)
-        assert "**Saved here:**" not in body
+        assert "**Also saved:**" not in body
 
     def test_an_attached_metadata_table_survives_a_refresh(self, tmp_path, monkeypatch):
         """End to end: attach a table, refresh, and its field is still in the
@@ -890,7 +925,7 @@ class TestRecoveryCachePanelFlow:
         captions = " ".join(str(c.value) for c in at.caption)
         assert "Not available here." in captions
         body = " ".join(str(m.value) for m in at.markdown)
-        assert "**Folder:**" not in body
+        assert "**Session folder:**" not in body
 
     def test_panel_says_saving_was_turned_off_in_plain_words(self, monkeypatch):
         """Turned off at launch: the sentence says so for everyone, and the

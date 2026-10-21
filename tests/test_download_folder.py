@@ -111,36 +111,53 @@ def _fresh_folder_state(monkeypatch, folder) -> None:
     import streamlit as st
 
     monkeypatch.setenv(DOWNLOAD_DIR_ENV, str(folder))
+    monkeypatch.setenv(app.LOCAL_FS_ENV, "1")
     for key in ("potec_dir", "onestop_public_dir", DOWNLOAD_DIR_KEY):
         st.session_state.pop(key, None)
 
 
-def test_saved_here_lists_the_downloaded_corpora_by_folder(monkeypatch, tmp_path):
-    """The OneStop regimes share a folder, so it is one row naming both."""
+def _write(path, size: int):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"x" * size)
+    return path
+
+
+def _onestop_reports(root, regime: str) -> list:
+    """Every report the regime's dataset reads, written into ``root``."""
     from scanpath_studio import datasets
 
-    _fresh_folder_state(monkeypatch, tmp_path)
-    monkeypatch.setenv(app.LOCAL_FS_ENV, "1")
-    monkeypatch.setattr(datasets, "potec_present", lambda root: True)
-    here = {"ordinary", "repeated"}
-    monkeypatch.setattr(
-        datasets, "onestop_present", lambda root, regime, parts: regime in here
-    )
-    assert app.downloaded_public_datasets() == [
-        (str(tmp_path / "PoTeC"), ["PoTeC"]),
-        (
-            str(tmp_path / "OneStop"),
-            [
-                app.picker_name_for(app.ONESTOP_REGIME_CHOICES["ordinary"]),
-                app.picker_name_for(app.ONESTOP_REGIME_CHOICES["repeated"]),
-            ],
-        ),
+    return [
+        _write(datasets._onestop_report_path(root, kind, regime, part), 10)
+        for part in datasets.onestop_regime_parts(regime)
+        for kind in ("ia", "fixations")
     ]
 
 
-def test_saved_here_lists_nothing_not_downloaded(monkeypatch, tmp_path):
+def test_each_download_is_its_own_files_and_the_ones_it_shares(monkeypatch, tmp_path):
+    """Two OneStop regimes read the same all-regimes reports: those are shared,
+    and each owns only its Paragraph reports."""
     _fresh_folder_state(monkeypatch, tmp_path)
-    monkeypatch.setenv(app.LOCAL_FS_ENV, "1")
+    onestop = tmp_path / "OneStop"
+    _onestop_reports(onestop, "ordinary")
+    _onestop_reports(onestop, "repeated")
+    # A lab export kept beside the download is not part of any of them.
+    _write(onestop / "lacclab" / "ia_Paragraph.csv.zip", 99)
+
+    rows = {row.name: row for row in app.downloaded_public_datasets()}
+    ordinary = app.picker_name_for(app.ONESTOP_REGIME_CHOICES["ordinary"])
+    repeated = app.picker_name_for(app.ONESTOP_REGIME_CHOICES["repeated"])
+    assert set(rows) == {ordinary, repeated}
+    assert {p.name for p in rows[ordinary].own} == {
+        "ia_Paragraph_ordinary.csv.zip",
+        "fixations_Paragraph_ordinary.csv.zip",
+    }
+    assert rows[ordinary].shared == rows[repeated].shared
+    assert "ia_Title.csv.zip" in {p.name for p in rows[ordinary].shared}
+    assert rows[ordinary].folder == str(onestop)
+
+
+def test_nothing_downloaded_lists_nothing(monkeypatch, tmp_path):
+    _fresh_folder_state(monkeypatch, tmp_path)
     assert app.downloaded_public_datasets() == []
 
 
@@ -154,8 +171,48 @@ def test_a_server_lists_no_downloads(monkeypatch, tmp_path):
     assert app.downloaded_public_datasets() == []
 
 
-def test_a_download_is_measured_in_full(tmp_path):
-    (tmp_path / "stimuli").mkdir()
-    (tmp_path / "stimuli" / "a.tsv").write_bytes(b"x" * 1000)
-    (tmp_path / "b.tsv").write_bytes(b"y" * 24)
-    assert app._folder_bytes(str(tmp_path), ("PoTeC",)) == 1024
+def test_deleting_a_download_keeps_what_others_use(monkeypatch, tmp_path):
+    """Deleting one regime leaves the reports another still reads, and the
+    last one takes them with it."""
+    _fresh_folder_state(monkeypatch, tmp_path)
+    onestop = tmp_path / "OneStop"
+    _onestop_reports(onestop, "ordinary")
+    _onestop_reports(onestop, "repeated")
+    ordinary = app.ONESTOP_REGIME_CHOICES["ordinary"]
+    repeated = app.ONESTOP_REGIME_CHOICES["repeated"]
+
+    app._delete_download(ordinary)
+    name, freed, error = app.st.session_state.pop(app.DOWNLOAD_DELETED_KEY)
+    assert (name, freed, error) == (app.picker_name_for(ordinary), 20, "")
+    assert [row.choice for row in app.downloaded_public_datasets()] == [repeated]
+    assert (onestop / "ia_Title.csv.zip").is_file()
+
+    app._delete_download(repeated)
+    app.st.session_state.pop(app.DOWNLOAD_DELETED_KEY)
+    assert app.downloaded_public_datasets() == []
+    assert not onestop.exists(), "an emptied folder goes too"
+
+
+def test_removing_files_stays_inside_the_folder(tmp_path):
+    from scanpath_studio import datasets
+
+    root = tmp_path / "PoTeC"
+    tsv = _write(root / "eyetracking_data" / "scanpaths" / "reader1.tsv", 7)
+    mine = _write(root / "stimuli" / "my_notes.txt", 3)
+    with pytest.raises(ValueError):
+        datasets.remove_downloaded_files(root, [tsv, tmp_path / "elsewhere.tsv"])
+    assert tsv.is_file(), "nothing goes when one path is outside"
+
+    assert datasets.remove_downloaded_files(root, [tsv]) == 7
+    assert not (root / "eyetracking_data").exists()
+    assert mine.is_file() and root.is_dir(), "a folder that still holds files stays"
+
+
+def test_potec_files_are_the_ones_its_download_writes(tmp_path):
+    from scanpath_studio import datasets
+
+    root = tmp_path / "PoTeC"
+    tsv = _write(root / "eyetracking_data" / "scanpaths" / "reader1.tsv", 1)
+    aoi = _write(root / "stimuli" / "aoi_texts" / "b0.ias", 1)
+    _write(root / "README.md", 1)
+    assert datasets.potec_files(root) == [tsv, aoi]

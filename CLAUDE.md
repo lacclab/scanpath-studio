@@ -30,12 +30,24 @@ Contributor setup is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
   the UI **and** the deep link / Share, the CLI, and the headless API — not just
   visually. See *Exposing a feature on every surface* in `@AGENTS.md`.
 - **Don't break existing functionality** unless it was explicitly agreed.
-- Prefer the **latest dependency versions**; don't add legacy or back-compat
-  shims. This is a research tool, not a version-pinned production deployment.
-  The exception is **CI tooling** — ruff, build, twine, PyInstaller are pinned
-  to an exact version (the `lint` extra in `pyproject.toml` and the workflows),
-  because an unpinned linter reds a branch that changed nothing. Bump those
-  deliberately, in their own commit, with whatever their new rules find.
+- Prefer the **latest dependency versions**; don't add shims to keep old
+  dependency versions working. This is a research tool, not a version-pinned
+  production deployment. The exception is **CI tooling** — ruff, build, twine,
+  PyInstaller are pinned to an exact version (the `lint` extra in
+  `pyproject.toml` and the workflows), because an unpinned linter reds a branch
+  that changed nothing. Bump those deliberately, in their own commit, with
+  whatever their new rules find.
+- **Consider backward compatibility; you don't always have to keep it.** The
+  app is released, so people already hold things it reads back: share links and
+  URL params, settings files, saved datasets and the recovery cache,
+  `annotations.json`, CLI flags and scripts calling `api.py`, export formats.
+  Before changing one, work out what breaks for an existing user and say so in
+  the PR. Keep it working when that is cheap — a settings-file migration
+  (`PLOT_CONFIG_SCHEMA_VERSION` + `url_state._PLOT_CONFIG_MIGRATIONS`), an old
+  URL value read as its new one, a deprecated alias for a CLI flag or API
+  parameter. When it isn't worth the cost, break it on purpose and say so in the
+  changelog fragment (`changed` / `removed`). Old code nothing a user saved or
+  scripted depends on can simply be deleted.
 - **Comments describe the code as it is now.** Explain what it does and why —
   the constraint, the quirk, the invariant. No issue numbers, dates, review
   rounds or "used to" history in comments, docstrings or docs: that belongs in

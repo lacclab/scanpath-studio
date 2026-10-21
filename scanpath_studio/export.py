@@ -42,6 +42,7 @@ from time import perf_counter
 import pandas as pd
 
 from .aggregation import reader_summary_table, trial_summary_table
+from .citation import CORPORA, cite, corpus_for, software_apa
 from .column_names import (
     ColumnNames,
     across_tables,
@@ -56,7 +57,6 @@ from .constants import (
     DEFAULT_CAPTION_FONT_SIZE,
     DEFAULT_PALETTE,
     DEFAULT_TITLE_FONT_SIZE,
-    DEMO_CHOICE,
     ICONS,
     PLOTLY_CONFIG,
     UNIFORM_COLOR_FIELD,
@@ -750,8 +750,8 @@ def bundle_member_names(options: ExportOptions | None = None) -> list[str]:
     """The paths a bulk export writes for itself, whichever trials it holds.
 
     Reserved before any trial's file is named (:class:`ArchiveNames`), so a
-    path pattern can never give a trial's file one of them — the README, the
-    ``index.csv`` inventory, ``columns.json``, ``run_config.json``,
+    path pattern can never give a trial's file one of them — the README, its
+    ``CITATION.bib``, the ``index.csv`` inventory, ``columns.json``, ``run_config.json``,
     ``annotations.json``, the combined tables and the metadata tables, in each
     table format. ``options`` narrows the combined tables to the ones a run
     with them can write; without it, every name a bundle can have.
@@ -765,6 +765,7 @@ def bundle_member_names(options: ExportOptions | None = None) -> list[str]:
         combined = ()
     names = [
         "README.md",
+        "CITATION.bib",
         "index.csv",
         "columns.json",
         "run_config.json",
@@ -2458,6 +2459,21 @@ def describe_plan(plan: ExportPlan) -> str:
     return f"Exports {readings}: {' and '.join(parts)}."
 
 
+def _cite_lines(corpus: str | None) -> list[str]:
+    """The README's *Cite* section: the software, and the corpus the trials
+    come from when it is a public one (`citation.corpus_for`)."""
+    lines = [
+        "If you use these files in a publication, please cite Scanpath Studio"
+        + (f" and {CORPORA[corpus].name}:" if corpus else ":"),
+        "",
+        f"- {software_apa()}",
+    ]
+    if corpus:
+        lines.append(f"- {CORPORA[corpus].apa()}")
+    lines += ["", "`CITATION.bib` has the same as BibTeX."]
+    return lines
+
+
 def _package_version() -> str:
     from scanpath_studio import __version__
 
@@ -2657,14 +2673,17 @@ def bulk_export(
         row["canonical"]: row["column"] for row in written.get("words", [])
     }
 
+    corpus = corpus_for(options.dataset_name)
     readme_lines = [
         "# Bulk export",
         f"Generated: {_local_stamp()}",
         "",
         f"Made with: {CITATION['title']}",
-        f"Tool authors: {CITATION['authors']}",
         f"Version: {_package_version()}",
         f"DOI: https://doi.org/{CITATION['doi']}",
+        "",
+        "## Cite",
+        *_cite_lines(corpus),
         "",
         "## Scope",
         *_scope_lines(options, combos, units),
@@ -2749,15 +2768,13 @@ def bulk_export(
             if measures_wanted and not brought
             else []
         ),
-        *(
-            ["", f"Demo data note: {CITATION['corpus_note']}"]
-            if options.dataset_name == DEMO_CHOICE
-            else []
-        ),
     ]
     path = members.own("README.md")
     zf.writestr(path, "\n".join(readme_lines))
     _inventory(path, "readme", "written")
+    path = members.own("CITATION.bib")
+    zf.writestr(path, cite("bibtex", corpus) + "\n")
+    _inventory(path, "citation", "written")
     if any(written.values()):
         path = members.own("columns.json")
         zf.writestr(path, json.dumps(columns_manifest(written), indent=2))

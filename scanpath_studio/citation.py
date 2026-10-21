@@ -291,6 +291,28 @@ CORPORA = {
     ),
 }
 
+
+def corpus_for(source: str | None) -> str | None:
+    """The `CORPORA` key of the public corpus a data source is, else ``None``.
+
+    ``source`` is the dataset picker's label (``data_source_choice``): the
+    bundled demo and every OneStop dataset are OneStop's, PoTeC is PoTeC's. A
+    dataset the user added is their own, so it has none.
+    """
+    from .constants import (
+        DEMO_CHOICE,
+        ONESTOP_CHOICE,
+        ONESTOP_REGIME_CHOICES,
+        POTEC_CHOICE,
+    )
+
+    if source in (DEMO_CHOICE, ONESTOP_CHOICE, *ONESTOP_REGIME_CHOICES.values()):
+        return "onestop"
+    if source == POTEC_CHOICE:
+        return "potec"
+    return None
+
+
 #: The ``format`` values ``cite`` takes, in the order the app offers them.
 FORMATS = ("bibtex", "apa", "ris", "csl-json", "credit")
 

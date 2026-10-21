@@ -692,13 +692,6 @@ CITATION = {
     "ideas_url": "https://github.com/lacclab/scanpath-studio/discussions/new?category=ideas",
     "desktop_url": "https://github.com/lacclab/scanpath-studio/releases/latest",
     "lab_url": "https://lacclab.github.io/",
-    "corpus_note": (
-        "Bundled demo data is a subset of OneStop Eye Movements: "
-        "Berzak, Malmaud, Shubi, Meiri, Lion, Levy (2025), "
-        '"OneStop: A 360-Participant English Eye Tracking Dataset with '
-        'Different Reading Regimes," Scientific Data. '
-        "https://doi.org/10.1038/s41597-025-06272-2"
-    ),
 }
 
 
@@ -711,6 +704,7 @@ MANUAL_SAMPLE_CHOICE = "Hand-drawn sample"
 DEMO_CHOICE = "Bundled demo"
 SYNTHETIC_CHOICE = "Synthetic test trial"
 PUBLIC_DATASETS_CHOICE = "Public datasets"
+POTEC_CHOICE = "PoTeC — Potsdam Textbook Corpus"
 POTEC_DEFAULT_DIR = "data/PoTeC"
 ONESTOP_CHOICE = "OneStop (local export)"
 # Public OneStop (OSF download-on-demand) — distinct from the env-var

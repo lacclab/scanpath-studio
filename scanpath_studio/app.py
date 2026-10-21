@@ -120,6 +120,7 @@ from scanpath_studio.constants import (
     ONESTOP_REGIME_CHOICES,
     ONESTOP_REGIME_LABELS,
     ONESTOP_REGIME_SOURCE_TOKENS,
+    POTEC_CHOICE,
     POTEC_DEFAULT_DIR,
     PUBLIC_DATASETS_CHOICE,
     RAW_GAZE_LINK_FOR_KEY,
@@ -2478,7 +2479,7 @@ def _load_potec_source(
         download=datasets.download_potec,
         size_hint="~45 MB",
         key_prefix="potec",
-        label="PoTeC — Potsdam Textbook Corpus",
+        label=POTEC_CHOICE,
     )
     if not ready:
         return load_sample_data()
@@ -2705,7 +2706,7 @@ def _onestop_regime_entry(regime: str) -> dict:
 
 
 PUBLIC_DATASET_REGISTRY: dict = {
-    "PoTeC — Potsdam Textbook Corpus": dict(
+    POTEC_CHOICE: dict(
         loader=_load_potec_source,
         files_present=_potec_files_present,  # the dataset table's Status
         downloadable=True,

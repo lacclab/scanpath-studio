@@ -289,3 +289,22 @@ def test_save_figure_stamps_every_format(tmp_path, figure):
     assert round(image.info["dpi"][0]) == 600
     assert b"<metadata>" in api.save_figure(figure, tmp_path / "f.svg").read_bytes()
     assert b"/Creator <FEFF" in api.save_figure(figure, tmp_path / "f.pdf").read_bytes()
+
+
+# --- The export bundle -------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("source", "corpus"),
+    [
+        ("Bundled demo", "onestop"),
+        ("OneStop — Repeated reading", "onestop"),
+        ("PoTeC — Potsdam Textbook Corpus", "potec"),
+        ("Upload tables", None),
+        (None, None),
+    ],
+)
+def test_corpus_for_names_the_public_corpus(source, corpus):
+    from scanpath_studio.citation import corpus_for
+
+    assert corpus_for(source) == corpus

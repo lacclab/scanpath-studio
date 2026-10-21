@@ -397,6 +397,32 @@ def _bulk(combos, words, fixations, settings, **options):
     return zipfile.ZipFile(io.BytesIO(zip_bytes))
 
 
+@pytest.mark.parametrize(
+    ("dataset", "corpus"), [("Bundled demo", "onestop"), ("Upload tables", None)]
+)
+def test_the_bundle_cites_the_software_and_its_corpus(
+    minimal_combos, minimal_words, minimal_fixations, base_settings, dataset, corpus
+):
+    from scanpath_studio.citation import CORPORA, cite, software_apa
+
+    zf = _bulk(
+        minimal_combos,
+        minimal_words,
+        minimal_fixations,
+        base_settings,
+        include_fixations=True,
+        dataset_name=dataset,
+    )
+    readme = zf.read("README.md").decode()
+    cited = readme.split("## Cite\n", 1)[1].split("\n## ", 1)[0]
+    assert software_apa() in cited
+    assert ("OneStop" in cited) == (corpus == "onestop")
+    if corpus:
+        assert CORPORA[corpus].apa() in cited
+    assert zf.read("CITATION.bib").decode() == cite("bibtex", corpus) + "\n"
+    assert "CITATION.bib,citation" in zf.read("index.csv").decode()
+
+
 class TestExportComputesNoMeasures:
     """The word tables carry the reading measures the dataset brought, and
     nothing is computed."""

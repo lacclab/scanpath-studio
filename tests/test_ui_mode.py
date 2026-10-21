@@ -152,7 +152,7 @@ def test_switch_css_lifts_the_switch_into_the_top_bar():
     css = ui_mode.switch_css(True)
     box = ".st-key-tour_grp_ui_mode"
     assert f"{box} {{ position: fixed;" in css
-    assert "z-index: 1000000" in css
+    assert f"z-index: {ui_mode.SWITCH_Z_INDEX}" in css
     assert 'data-testid="stMainMenu"' in css
     # Bigger than the default control: 1rem text, 2.5rem tall.
     assert "min-height: 2.5rem" in css and "font-size: 1rem" in css
@@ -161,6 +161,30 @@ def test_switch_css_lifts_the_switch_into_the_top_bar():
     # Below the fallback width it is an in-flow, right-aligned row.
     assert f"@media (max-width: {ui_mode._SWITCH_FALLBACK_PX}px)" in css
     assert "align-items: flex-end" in css
+
+
+def test_switch_stacks_between_the_header_and_the_tour():
+    """Above Streamlit's header (999990), whose bar it sits in; under the tour's
+    card and tab, so a running tour is never covered; under Streamlit's popovers
+    and modals (1000060 and up)."""
+    from scanpath_studio import tour
+
+    header = 999990
+    assert header < ui_mode.SWITCH_Z_INDEX < tour.GUIDE_Z_INDEX < 1000060
+    assert f"z-index: {tour.GUIDE_Z_INDEX};" in tour._CARD_CSS
+    assert f"z-index: {tour.GUIDE_Z_INDEX};" in tour._GUIDE_MOVE_CSS
+    # The welcome step's backdrop stays under the header, as the nav is.
+    assert "z-index: 999980;" in tour._WELCOME_CSS
+
+
+def test_switch_leaves_room_for_the_status_widget():
+    """Streamlit's "Running…" widget sits left of the ⋮ menu, where the switch
+    would otherwise be: the switch moves left by the widget's slot, and the
+    header's menu cell grows by the same amount."""
+    css = ui_mode.switch_css(True)
+    slot = ui_mode._STATUS_SLOT_REM
+    assert f"right: calc(3.75rem + {slot}rem)" in css
+    assert f"width: {17.5 + slot}rem !important" in css
 
 
 def test_switch_css_hidden_still_collapses_the_title_row():
@@ -923,3 +947,18 @@ def test_advanced_export_has_no_pointer():
     at.run()
     assert not at.exception
     assert not [b for b in at.button if b.key == "export_to_advanced"]
+
+
+def test_cookie_follows_the_viewers_choice_not_the_session_mode():
+    """A mode the app sets by itself (a tutorial needing Advanced) is not what
+    the cookie remembers."""
+    from unittest.mock import patch
+
+    import streamlit as st
+
+    state = {sk.UI_MODE: "advanced"}
+    with patch.object(st, "session_state", state):
+        assert ui_mode.cookie_mode() == "advanced"
+        ui_mode._choose_mode("simple")
+        state[sk.UI_MODE] = "advanced"
+        assert ui_mode.cookie_mode() == "simple"

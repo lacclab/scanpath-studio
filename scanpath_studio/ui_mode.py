@@ -26,6 +26,10 @@ if TYPE_CHECKING:
 #: is the choice written to the cookie (a ``?ui=`` link alone never is).
 CHOSEN_KEY = "_ui_mode_chosen"
 SWITCH_KEY = "ui_mode_switch"
+#: The mode the viewer last picked with the switch or a ＋ More button, which is
+#: what the cookie remembers. A mode the app moves the session to by itself (a
+#: tutorial that needs Advanced) never reaches it.
+COOKIE_MODE_KEY = "_ui_mode_cookie"
 #: Set on a session's first run, whichever mode it opened in, so the Simple
 #: start is never applied to a session that switched to Simple later.
 START_DONE_KEY = "_ui_simple_start_done"
@@ -153,6 +157,13 @@ def current_mode() -> str:
     return st.session_state.get(UI_MODE, SIMPLE)
 
 
+def cookie_mode() -> str:
+    """The mode the cookie holds: the viewer's last choice, else the session's."""
+    import streamlit as st
+
+    return parse_mode(st.session_state.get(COOKIE_MODE_KEY)) or current_mode()
+
+
 def is_simple() -> bool:
     """Whether the session is in Simple mode."""
     return current_mode() == SIMPLE
@@ -242,6 +253,7 @@ def _choose_mode(mode: object) -> None:
     if chosen is not None:
         st.session_state[UI_MODE] = chosen
         st.session_state[CHOSEN_KEY] = True
+        st.session_state[COOKIE_MODE_KEY] = chosen
 
 
 def _on_switch() -> None:
@@ -341,6 +353,16 @@ def render_hidden_settings_note(host: DeltaGenerator, reasons: list[str]) -> Non
 #: under it the header's logo, menu and the switch no longer fit side by side.
 _SWITCH_FALLBACK_PX = 520
 
+#: The switch's stacking order: just above Streamlit's header (999990), whose
+#: bar it sits in and would otherwise swallow its clicks, and under the
+#: tour's card (`tour.GUIDE_Z_INDEX`) so a running tour is never covered by it.
+#: Streamlit's popovers and modals (1000060 and up) stay above both.
+SWITCH_Z_INDEX = 999991
+
+#: Room left in the top bar, between the switch and the ⋮ menu, for Streamlit's
+#: "Running…" status widget (measured at about 93px) so the switch never covers it.
+_STATUS_SLOT_REM = 7
+
 #: The title row that holds the switch's container, whichever column it is in.
 _SWITCH_ROW = (
     '[data-testid="stLayoutWrapper"]'
@@ -352,10 +374,11 @@ def switch_css(visible: bool) -> str:
     """A ``<style>`` that places the Simple | Advanced switch.
 
     The switch stays where the script draws it, so its state never depends on
-    the view. With ``visible`` it is lifted into Streamlit's top bar, just left
-    of the ⋮ menu, at a larger size, and the bar's menu cell grows to leave it
-    room; below ``_SWITCH_FALLBACK_PX`` it is an ordinary right-aligned row of
-    the page. Without it (the views that have no use for the mode) the switch is
+    the view. With ``visible`` it is lifted into Streamlit's top bar, left of
+    the ⋮ menu and of a slot kept free for the "Running…" status widget, at a
+    larger size, and the bar's menu cell grows to leave it room; below
+    ``_SWITCH_FALLBACK_PX`` it is an ordinary right-aligned row of the page.
+    Without it (the views that have no use for the mode) the switch is
     hidden. Either way the title row it sits in takes no space of its own.
     """
     box = f".st-key-{SWITCH_BOX_KEY}"
@@ -374,12 +397,14 @@ def switch_css(visible: bool) -> str:
         "<style>"
         f"{collapse}"
         f"{wide} {{"
-        f" {box} {{ position: fixed; top: 10px; right: 3.75rem;"
-        " z-index: 1000000; width: max-content; }"
+        f" {box} {{ position: fixed; top: 10px;"
+        f" right: calc(3.75rem + {_STATUS_SLOT_REM}rem);"
+        f" z-index: {SWITCH_Z_INDEX}; width: max-content; }}"
         # The header's right-hand cell is a fixed 200px: widen it so the
-        # navigation gives way before it would run under the switch.
+        # navigation gives way before it would run under the switch or the
+        # status widget's slot.
         ' [data-testid="stToolbar"] div:has(> [data-testid="stMainMenu"])'
-        " { width: 17.5rem !important; }"
+        f" {{ width: {17.5 + _STATUS_SLOT_REM}rem !important; }}"
         " }"
         f" {button} {{ min-height: 2.5rem; padding: 0 1.1rem; }}"
         f" {button} p {{ font-size: 1rem; }}"
@@ -441,4 +466,4 @@ def render_switch(host: DeltaGenerator, *, visible: bool = True) -> None:
     )
     if st.session_state.get(CHOSEN_KEY):
         with box:
-            embed_html_iframe(cookie_script(current_mode()), height=0)
+            embed_html_iframe(cookie_script(cookie_mode()), height=0)

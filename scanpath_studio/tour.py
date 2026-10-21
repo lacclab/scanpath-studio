@@ -28,7 +28,8 @@ Mechanics worth knowing before editing:
 - Spotlight targets are ``.st-key-tour_grp_*`` classes from keyed wrapper
   containers around the page sections (app.py / tabs.py / controls.py) plus
   Streamlit's stable ``data-testid`` for the nav (``menu.NAV_SELECTOR``). Keep
-  ``_SPOTLIGHT_STEPS`` in sync with them.
+  ``_SPOTLIGHT_STEPS`` (Advanced) and ``_SIMPLE_SPOTLIGHT_STEPS`` (only what
+  Simple draws) in sync with them; ``_spotlight_steps`` picks by mode.
 - Every spotlight step points at the Scanpath view, so the tour runs only
   there: started on another view it switches to Scanpath first, and left for
   another view it folds to its tab (``_keep_tour_on_scanpath``).
@@ -66,6 +67,7 @@ from scanpath_studio import ui_mode
 from scanpath_studio.crash_report import guarded
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.menu import NAV_SELECTOR, switch_to_view
+from scanpath_studio.session_keys import UI_MODE
 
 from .constants import (
     _VIEW_CORPUS,
@@ -733,6 +735,69 @@ _SPOTLIGHT_STEPS = [
     },
 ]
 
+# Simple mode's tour: the same card, over only what Simple draws. Its steps
+# point at the picker row, the plot, the View tiles, the subtab bar and the
+# switch, never at a control that mode hides (the filter funnel, the summary
+# table, the Animate / Compare rows, the layer controls), so no step spotlights
+# an element that is not on screen. The subtab step says what the ＋ More tab
+# holds, since the Advanced-only panels have no tab here to point at.
+_SIMPLE_SPOTLIGHT_STEPS = [
+    _SPOTLIGHT_STEPS[0],
+    {
+        "selector": ".st-key-tour_grp_trial_picker",
+        "title": f"{ICONS['pick_trial']} Pick a trial",
+        "body": "Choose the **dataset** and a **trial** here, and go to the "
+        f"previous or next trial with ◀ ▶. **{ICONS['add']} More** lists what "
+        "Advanced adds, such as filtering and sorting the trials.",
+    },
+    {
+        "selector": ".st-key-tour_grp_plot",
+        "dock": "top",
+        "title": f"{ICONS['view_scanpath']} The scanpath",
+        "body": "Each circle is a **fixation**; its size shows how long it "
+        "lasted. The lines between them are **saccades**. A replay plays here: "
+        "the bar above the plot pauses or restarts it.",
+    },
+    {
+        "selector": ".st-key-tour_grp_simple_views",
+        "dock": "left",
+        "title": f"{ICONS['plot_controls']} Choose a view",
+        "body": "**Animation** replays the reading, **Scanpath** draws it "
+        "still, **Heatmap** shades each word by the time spent on it, and "
+        "**Illustration** is a clean figure for slides and papers. **Palette** "
+        "changes the colors.",
+    },
+    {
+        "selector": ".st-key-tour_grp_subtabs",
+        "dock": "top",
+        "title": f"{ICONS['panels']} Export and share",
+        "body": "**Export** saves the figure; **Share** makes a link or the code "
+        f"for it. **{ICONS['add']} More** lists what Advanced adds: the passage "
+        "with its questions, comparisons across readers, annotations, and "
+        "exporting every trial.",
+    },
+    {
+        "selector": f".st-key-{ui_mode.SWITCH_BOX_KEY}",
+        "title": f"{ICONS['settings']} Simple or Advanced",
+        "body": "**Advanced** shows every control. Switch here at any time: "
+        "your settings stay as they are. The tutorials under "
+        f"**{ICONS['help']} Help** use Advanced.",
+    },
+]
+
+
+def _spotlight_steps() -> list[dict]:
+    """The welcome tour's steps for the session's mode."""
+    return _SIMPLE_SPOTLIGHT_STEPS if ui_mode.is_simple() else _SPOTLIGHT_STEPS
+
+
+#: The stacking order of the floating card and its folded tab (written as a
+#: literal in `_CARD_CSS` / `_GUIDE_MOVE_CSS`, which are plain strings): above
+#: Streamlit's header (999990) and the Simple | Advanced switch
+#: (`ui_mode.SWITCH_Z_INDEX`, which sits in the header's bar), so a tour never
+#: runs under either, and below Streamlit's popovers and modals (1000060 and up).
+GUIDE_Z_INDEX = 999995
+
 # The floating card: a keyed st.container pinned bottom-right via its
 # `.st-key-tour_card` class. Plain strings (no .format) so the CSS braces
 # don't need escaping.
@@ -741,7 +806,7 @@ _CARD_CSS = """
     position: fixed;
     bottom: 1.25rem;
     right: 1.25rem;
-    z-index: 999990;
+    z-index: 999995;
     width: 410px;
     max-width: calc(100vw - 2.5rem);
     border-radius: 0.75rem;
@@ -976,7 +1041,7 @@ _GUIDE_MOVE_CSS = """
     position: fixed;
     bottom: 1.25rem;
     right: 1.25rem;
-    z-index: 999990;
+    z-index: 999995;
     width: auto;
     padding: 0.35rem 0.5rem 0.35rem 0.85rem;
     border-radius: 999px;
@@ -1258,7 +1323,7 @@ def _group_ring_script(selector: str) -> str:
 
 
 #: Measured live (Streamlit 1.62, 1440×900): a popover's panel is drawn at
-#: ``z-index: 1000060``, above the card's 999990 — so on a step that opens one,
+#: ``z-index: 1000060``, above the card's 999995 — so on a step that opens one,
 #: the panel covers the card's left edge and cuts the first word off every
 #: line. Raise the card **only on those steps**; everywhere else it stays under
 #: Streamlit's own overlays, where a floating card belongs.
@@ -1451,9 +1516,10 @@ def render_spotlight_tour() -> None:
         # (`_keep_tour_on_scanpath`). A full run has already taken the request
         # by the time it draws this fragment, so this never fires there.
         st.rerun(scope="app")
-    n = len(_SPOTLIGHT_STEPS)
+    steps = _spotlight_steps()
+    n = len(steps)
     step_idx = min(st.session_state.get("tour_step", 0), n - 1)
-    step = _SPOTLIGHT_STEPS[step_idx]
+    step = steps[step_idx]
 
     # Fall back to the app's brand blue (matches the pinned theme
     # `.streamlit/config.toml` primaryColor), never Streamlit's default red, so
@@ -1631,8 +1697,9 @@ def _keep_tour_on_scanpath(active_view: str) -> None:
       first card is drawn;
     - left for another view mid-tour, it folds to its tab, which keeps its step
       and brings it back to Scanpath when opened;
-    - left on its last step, which points at the nav and so invites the click,
-      it ends, as Done would.
+    - left on its last step, which points at the nav (or, in Simple, at the
+      switch the other views hide) and so invites the click, it ends, as Done
+      would.
 
     One switch per request: the request is dropped before switching, so a page
     that holds the screen whatever the nav says (the add-dataset wizard) folds
@@ -1649,7 +1716,7 @@ def _keep_tour_on_scanpath(active_view: str) -> None:
     if to_scanpath and st.session_state.get("main_nav") != _VIEW_SCANPATH:
         switch_to_view(_VIEW_SCANPATH)  # reruns
         return
-    if st.session_state.get("tour_step", 0) >= len(_SPOTLIGHT_STEPS) - 1:
+    if st.session_state.get("tour_step", 0) >= len(_spotlight_steps()) - 1:
         _exit_spotlight()
         return
     _set_guide_folded("tour", True)
@@ -1857,7 +1924,13 @@ def _tutorial_completed() -> dict[str, bool]:
 
 
 def _start_use_case(tutorial_id: str, *, restart: bool = False) -> None:
-    """Start/resume one tutorial while remembering where Exit should return."""
+    """Start/resume one tutorial while remembering where Exit should return.
+
+    The tutorials spotlight controls that only Advanced draws (Compare,
+    annotations, the layer controls), so a session in Simple moves to Advanced
+    for them. That is the session's mode only: it is not the viewer's own
+    choice, so the cookie keeps what they picked.
+    """
     if tutorial_id not in _TUTORIAL_BY_ID:
         return
     context = st.session_state.get("_tutorial_context") or {}
@@ -1869,6 +1942,8 @@ def _start_use_case(tutorial_id: str, *, restart: bool = False) -> None:
         "main_nav": st.session_state.get("main_nav", _VIEW_SCANPATH),
         "single_subtab": _current_subtab(),
     }
+    if ui_mode.is_simple():
+        st.session_state[UI_MODE] = ui_mode.ADVANCED
     if restart:
         _tutorial_progress()[tutorial_id] = 0
         _tutorial_completed().pop(tutorial_id, None)

@@ -453,6 +453,8 @@ def test_cache_status_describes_what_is_stored(tmp_path):
     assert status["annotations"] == 1
     assert status["settings"] >= 1
     assert status["bytes"] > 0
+    # The stored copy's own size, a part of the folder's.
+    assert 0 < status["datasets"][0]["bytes"] < status["bytes"]
     assert status["saved_at"]
 
 

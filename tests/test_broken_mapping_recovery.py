@@ -121,7 +121,7 @@ def test_the_data_page_still_reports_the_cache_while_the_app_is_wedged(
     at = open_data_view(at, timeout=180)
 
     body = " ".join(str(m.value) for m in at.markdown)
-    assert f"**Folder:** `{tmp_path}`" in body
+    assert f"**Session folder:** `{tmp_path}`" in body
 
 
 # --- the upload wizard, which reaches the same pipeline -----------------------

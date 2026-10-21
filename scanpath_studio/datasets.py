@@ -325,6 +325,29 @@ def potec_present(root) -> bool:
     return has_fixations and has_all_aoi
 
 
+def potec_files(root) -> list[Path]:
+    """The files of PoTeC's that :func:`download_potec` writes, as ``root`` holds them now.
+
+    The per-trial eye-tracking files of either fixation source and the per-text
+    AOI files — what a load reads, and all a delete of the download may touch:
+    anything else in the folder is not PoTeC's to remove.
+    """
+    root = Path(root)
+    files = [
+        path
+        for source in _POTEC_OSF_RESOURCES
+        for path in sorted((root / "eyetracking_data" / source).glob("*.tsv"))
+    ]
+    for text_id in _POTEC_TEXTS:
+        for rel in (
+            f"stimuli/word_aoi_texts/word_aoi_{text_id}.tsv",
+            f"stimuli/aoi_texts/{text_id}.ias",
+        ):
+            if (root / rel).is_file():
+                files.append(root / rel)
+    return files
+
+
 def _potec_words(root: Path, texts: Iterable[str]) -> pd.DataFrame:
     """Stimulus-level word table: one row per word per text, with boxes.
 
@@ -789,6 +812,52 @@ def onestop_present(
             if not _onestop_part_paths(root, kind, regime, part, variant).is_file():
                 return False
     return True
+
+
+def onestop_files(
+    root, *, regime: str = "ordinary", parts: Iterable[str] | None = None
+) -> list[Path]:
+    """The OSF reports of a regime and its parts that ``root`` holds now.
+
+    Exactly the files :func:`download_onestop` writes for them, so a folder
+    that also holds a lab export or anything else gives up only these. Every
+    part but Paragraph comes from the all-regimes release, so those files are
+    the same for every regime that loads that part.
+    """
+    root = Path(root)
+    return [
+        path
+        for part in _normalize_onestop_parts(parts)
+        for kind in ("ia", "fixations")
+        if (path := _onestop_report_path(root, kind, regime, part)).is_file()
+    ]
+
+
+def remove_downloaded_files(root, files: Iterable[Path]) -> int:
+    """Delete ``files`` from ``root``, and then the folders under it they emptied.
+
+    Returns the bytes freed. A path outside ``root`` raises ``ValueError``
+    before anything is deleted. A folder is removed only once empty, ``root``
+    itself included, so whatever else the user keeps there stays with its
+    folder.
+    """
+    root = Path(root).resolve()
+    targets = [Path(path).resolve() for path in files]
+    for path in targets:
+        if not path.is_relative_to(root) or path == root:
+            raise ValueError(f"{path} is not a file in {root}")
+    freed = 0
+    folders: set[Path] = set()
+    for path in targets:
+        size = path.stat().st_size
+        path.unlink()
+        freed += size
+        folders.update(parent for parent in path.parents if parent.is_relative_to(root))
+    # Deepest first, so a folder emptied by removing its subfolder goes too.
+    for folder in sorted(folders, key=lambda f: len(f.parts), reverse=True):
+        with contextlib.suppress(OSError):
+            folder.rmdir()
+    return freed
 
 
 def download_onestop(

@@ -1232,16 +1232,217 @@ def render_cache_recovery_notice(host, app_url: str, *, key: str) -> bool:
     return True
 
 
+@dataclass(frozen=True)
+class DownloadedDataset:
+    """A public corpus whose files are on this computer."""
+
+    choice: str  # its registry label
+    name: str  # as the source picker shows it
+    folder: str
+    #: Its files no other listed download uses — what deleting it removes.
+    own: tuple[Path, ...]
+    #: Its files another listed download uses too, kept while that one is.
+    shared: tuple[Path, ...]
+
+
+def _files_bytes(paths) -> int:
+    total = 0
+    for path in paths:
+        with contextlib.suppress(OSError):
+            total += path.stat().st_size
+    return total
+
+
+def downloaded_public_datasets() -> list[DownloadedDataset]:
+    """The public corpora whose files are on this computer.
+
+    Every downloadable registry entry whose ``files_present`` check passes,
+    with the files its download wrote (``download_files``) — never the rest of
+    its folder, which may hold anything else the user keeps there. The OneStop
+    regimes read the same all-regimes reports, so a file two listed corpora use
+    is ``shared`` by both and owned by neither.
+
+    Empty where the app may not touch local folders — the files there are the
+    server's, not this computer's. Path stats only, never a read.
+    """
+    if not local_filesystem_enabled():
+        return []
+    registry = public_dataset_registry()
+    found = []
+    for choice, spec in registry.items():
+        present, files = spec.get("files_present"), spec.get("download_files")
+        if not spec.get("downloadable") or present is None or files is None:
+            continue
+        try:
+            if not present():
+                continue
+            found.append((choice, str(spec["folder"]()), set(files())))
+        except _MANIFEST_ERRORS:
+            continue
+    rows = []
+    for choice, folder, files in found:
+        others = set().union(*(f for c, _, f in found if c != choice))
+        rows.append(
+            DownloadedDataset(
+                choice=choice,
+                name=picker_name_for(choice, registry),
+                folder=folder,
+                own=tuple(sorted(files - others)),
+                shared=tuple(sorted(files & others)),
+            )
+        )
+    return rows
+
+
+#: The download whose 🗑 was clicked, served right under the list.
+DELETE_DOWNLOAD_REQUEST_KEY = "_delete_download_requested"
+#: What :func:`_delete_download` did — ``(name, bytes freed, error)`` — for the
+#: run after it to say.
+DOWNLOAD_DELETED_KEY = "_download_deleted"
+
+
+def _arm_delete_download(choice: str) -> None:
+    st.session_state[DELETE_DOWNLOAD_REQUEST_KEY] = choice
+
+
+def _delete_download(choice: str) -> None:
+    """The delete dialog's **Delete**: the files that download alone wrote.
+
+    Looked up again rather than taken from the dialog's run, so a file another
+    download has come to share since is kept."""
+    from scanpath_studio import datasets
+
+    row = next((r for r in downloaded_public_datasets() if r.choice == choice), None)
+    if row is None:
+        st.session_state[DOWNLOAD_DELETED_KEY] = (choice, 0, "it is not here")
+        return
+    try:
+        freed = datasets.remove_downloaded_files(row.folder, row.own)
+    except (OSError, ValueError) as exc:
+        st.session_state[DOWNLOAD_DELETED_KEY] = (row.name, 0, str(exc))
+        return
+    st.session_state[DOWNLOAD_DELETED_KEY] = (row.name, freed, "")
+
+
+def _announce_download_deleted() -> None:
+    done = st.session_state.pop(DOWNLOAD_DELETED_KEY, None)
+    if not done:
+        return
+    name, freed, error = done
+    if error:
+        st.toast(
+            f"Couldn't delete the downloaded {name}: {error}.", icon=ICONS["warning"]
+        )
+    else:
+        st.toast(
+            f"Deleted the downloaded {name} ({human_size(freed)}).",
+            icon=ICONS["delete"],
+        )
+
+
+@st.dialog(f"{ICONS['delete']} Delete the download?")
+@guarded()
+def _delete_download_dialog(choice: str) -> None:
+    """Confirm deleting one downloaded corpus, saying what goes and what stays."""
+    row = next((r for r in downloaded_public_datasets() if r.choice == choice), None)
+    if row is None:
+        st.markdown("This dataset is no longer on this computer.")
+        return
+    st.markdown(
+        f"This deletes {plural(len(row.own), 'file')} of **{md_literal(row.name)}** "
+        f"({human_size(_files_bytes(row.own))}) from `{row.folder}`."
+    )
+    if row.shared:
+        st.markdown(
+            f"{plural(len(row.shared), 'file')} "
+            f"({human_size(_files_bytes(row.shared))}) that other downloaded "
+            "datasets use too stay."
+        )
+    st.caption(
+        "Anything else in the folder is not touched. You can download it again "
+        "from **Available datasets**. There is no undo."
+    )
+    cancel, confirm = st.columns(2)
+    if cancel.button("Cancel", key="saved_here_delete_cancel", width="stretch"):
+        st.rerun()
+    confirm.button(
+        "Delete",
+        icon=ICONS["delete"],
+        type="primary",
+        key="saved_here_delete_confirm",
+        width="stretch",
+        on_click=_delete_download,
+        args=(choice,),
+    )
+    if st.session_state.get(DOWNLOAD_DELETED_KEY):
+        st.rerun()  # the whole page, which closes this dialog
+
+
+def _render_datasets_here(
+    host, added: list[dict], downloads: list[DownloadedDataset]
+) -> None:
+    """*Saved on this computer* → **Datasets on this computer**, one list.
+
+    A dataset you added is here as the copy the saved session keeps of it; a
+    public one as the files its download wrote, in its own folder. Both are on
+    this computer, so both are listed, each with where it is and its size. What
+    differs is how each goes: **Clear what is saved…** deletes the copies,
+    while a download is deleted only from its own row, after a confirmation —
+    clearing a session must never cost a corpus that takes an hour to fetch.
+    """
+    host.markdown("**Datasets on this computer**")
+    if not added and not downloads:
+        host.caption(
+            "None yet. A dataset you add, or a public dataset you download, "
+            "is listed here."
+        )
+        return
+    for entry in added:
+        host.markdown(
+            f"- **{md_literal(entry['name'])}** · added · "
+            f"{human_size(int(entry.get('bytes') or 0))} · a copy in the session "
+            "folder"
+        )
+    for index, row in enumerate(downloads):
+        size = human_size(_files_bytes(row.own))
+        if row.shared:
+            size += (
+                f", plus {human_size(_files_bytes(row.shared))} shared with other "
+                "downloaded datasets"
+            )
+        line = host.container(horizontal=True, vertical_alignment="center")
+        line.markdown(
+            f"- **{md_literal(row.name)}** · downloaded · {size} · `{row.folder}`"
+        )
+        line.button(
+            # Named for screen readers; the bin is all that shows.
+            f"{ICONS['delete']} {spoken(f'Delete the downloaded {row.name}')}",
+            key=f"saved_here_delete_{index}",
+            help="Delete this download's files, after a confirmation.",
+            on_click=_arm_delete_download,
+            args=(row.choice,),
+        )
+    if downloads:
+        host.caption(
+            "**Clear what is saved…** deletes the copies of datasets you added. "
+            "Downloads stay until you delete one here."
+        )
+    requested = st.session_state.pop(DELETE_DOWNLOAD_REQUEST_KEY, None)
+    if requested:
+        _delete_download_dialog(requested)
+
+
 def _render_saved_here_section(app_url: str, host) -> None:
     """🗂️ Data → **Saved on this computer**.
 
-    The foot of the Data page's overview: what the recovery cache holds and the
-    folder it is in. It lives here because its count is "datasets **you
-    added**", which is the table above it.
+    The foot of the Data page's overview: the datasets on this computer — the
+    copies the recovery cache keeps of the ones you added and the public ones
+    you downloaded (:func:`_render_datasets_here`) — then the rest of the
+    cache and the folder it is in.
 
     Opting out is a launch choice (``run --no-persist`` /
-    ``SCANPATH_STUDIO_PERSIST=0``, in the FAQ), so its one control is **Clear
-    what is saved…**, behind a confirmation listing what goes
+    ``SCANPATH_STUDIO_PERSIST=0``, in the FAQ), so the cache's one control is
+    **Clear what is saved…**, behind a confirmation listing what goes
     (``persistence.clear_saved_work``) — the same as the CLI's
     ``scanpath-studio cache --clear``. The pause after a restore that crashed
     is the other in-session state it names.
@@ -1253,8 +1454,10 @@ def _render_saved_here_section(app_url: str, host) -> None:
     reports is worse than none.
     """
     status = cache_status(url=app_url)
+    downloads = downloaded_public_datasets()
     host.divider()
     host.subheader(f"{ICONS['recovery']} Saved on this computer")
+    _announce_download_deleted()
     if not status["enabled"]:
         turned_off = status["override"] == "off"
         host.caption(
@@ -1277,6 +1480,10 @@ def _render_saved_here_section(app_url: str, host) -> None:
                 f"Started with `--no-persist` or `{PERSIST_ENV_VAR}=0`; start "
                 "it without either to save again."
             )
+        # Nothing is copied while saving is off, but a download is on disk all
+        # the same.
+        if downloads:
+            _render_datasets_here(host, [], downloads)
         return
 
     # "Nothing leaves" holds only where browser and server are one machine; a
@@ -1289,27 +1496,29 @@ def _render_saved_here_section(app_url: str, host) -> None:
     )
     if restored_from_cache(st.session_state):
         host.success("Recovered when the app opened.", icon=ICONS["recovery"])
-    if status["exists"] and status["readable"]:
-        n_sets = len(status["datasets"])
-        # "datasets **you added**", not "datasets": only an upload is copied
-        # here — the bundled demo and the public corpora reload from their own
-        # source — so the count reads 0 while one of those is open, which looks
-        # like a bug unless the line says which datasets it is counting.
+    readable = status["exists"] and status["readable"]
+    if readable or downloads:
+        _render_datasets_here(
+            host, list(status["datasets"]) if readable else [], downloads
+        )
+    if readable:
+        # The rest of the saved session; its datasets are the list above.
         host.markdown(
-            f"**Saved here:** {n_sets} dataset{'s' if n_sets != 1 else ''} "
-            f"you added · {status['annotations']} annotation"
-            f"{'s' if status['annotations'] != 1 else ''} · "
-            f"{status['designs']} design"
-            f"{'s' if status['designs'] != 1 else ''} · "
-            # Metadata tables are named only when there are any, so the common
-            # line keeps its length.
-            + (
-                f"{status['metadata']} metadata table"
-                f"{'s' if status['metadata'] != 1 else ''} · "
-                if status.get("metadata")
-                else ""
+            "**Also saved:** "
+            + " · ".join(
+                [
+                    plural(int(status["annotations"]), "annotation"),
+                    plural(int(status["designs"]), "design"),
+                ]
+                # Metadata tables are named only when there are any, so the
+                # common line keeps its length.
+                + (
+                    [plural(int(status["metadata"]), "metadata table")]
+                    if status.get("metadata")
+                    else []
+                )
+                + ["your view, trial and plot settings"]
             )
-            + f"{human_size(status['bytes'])}"
         )
     elif status["exists"] and not cache_failure(st.session_state):
         host.warning(
@@ -1320,7 +1529,10 @@ def _render_saved_here_section(app_url: str, host) -> None:
     elif not status["exists"]:
         host.caption("Nothing saved yet. Your first change will be saved here.")
     render_cache_recovery_notice(host, app_url, key="saved_here_recovery")
-    host.markdown(f"**Folder:** `{status['directory']}`")
+    host.markdown(
+        f"**Session folder:** `{status['directory']}`"
+        + (f" · {human_size(status['bytes'])}" if status["exists"] else "")
+    )
     # Not offered for an unreadable cache: that box has its own Delete button.
     if status["exists"] and not cache_failure(st.session_state):
         host.button(
@@ -1417,7 +1629,13 @@ def _clear_saved_dialog(app_url: str) -> None:
     )
     st.caption(
         "The app then starts over, as on a first visit. Your original files are "
-        "not touched. There is no undo."
+        "not touched"
+        + (
+            ", and neither are the public datasets you downloaded"
+            if downloaded_public_datasets()
+            else ""
+        )
+        + ". There is no undo."
     )
     cancel, confirm = st.columns(2)
     if cancel.button("Cancel", key="saved_here_clear_cancel", width="stretch"):
@@ -2143,21 +2361,42 @@ def _dataset_folder(key_prefix: str, default_dir: str) -> str:
     return _resolve_data_dir(typed)
 
 
+def _potec_folder() -> str:
+    return _dataset_folder("potec", _download_target(POTEC_DEFAULT_DIR))
+
+
+def _onestop_public_folder() -> str:
+    """The OSF OneStop folder, which every regime's dataset shares."""
+    return _dataset_folder(
+        "onestop_public", _download_target(ONESTOP_PUBLIC_DEFAULT_DIR)
+    )
+
+
 def _potec_files_present() -> bool:
     from scanpath_studio import datasets
 
-    root = _dataset_folder("potec", _download_target(POTEC_DEFAULT_DIR))
-    return datasets.potec_present(root)
+    return datasets.potec_present(_potec_folder())
 
 
 def _onestop_files_present(regime: str) -> bool:
     from scanpath_studio import datasets
 
-    root = _dataset_folder(
-        "onestop_public", _download_target(ONESTOP_PUBLIC_DEFAULT_DIR)
-    )
+    root = _onestop_public_folder()
     parts = datasets.onestop_regime_parts(regime)
     return datasets.onestop_present(root, regime=regime, parts=parts)
+
+
+def _potec_download_files() -> list[Path]:
+    from scanpath_studio import datasets
+
+    return datasets.potec_files(_potec_folder())
+
+
+def _onestop_download_files(regime: str) -> list[Path]:
+    from scanpath_studio import datasets
+
+    parts = datasets.onestop_regime_parts(regime)
+    return datasets.onestop_files(_onestop_public_folder(), regime=regime, parts=parts)
 
 
 # Session slot describing a data source the user selected but that
@@ -2709,6 +2948,10 @@ def _onestop_regime_entry(regime: str) -> dict:
         loader=partial(_load_onestop_regime_source, regime=regime),
         # The dataset table's Status, for a row that is not open.
         files_present=partial(_onestop_files_present, regime),
+        # Where those files are, and which they are: *Saved on this computer*
+        # lists the download and can delete it.
+        folder=_onestop_public_folder,
+        download_files=partial(_onestop_download_files, regime),
         downloadable=True,
         # OneStop presentation monitor (full-screen px coords). Sourced from
         # Berzak et al. 2025, Sci Data 12:1995, Methods → Apparatus, which
@@ -2731,6 +2974,8 @@ PUBLIC_DATASET_REGISTRY: dict = {
     POTEC_CHOICE: dict(
         loader=_load_potec_source,
         files_present=_potec_files_present,  # the dataset table's Status
+        folder=_potec_folder,  # where those files are
+        download_files=_potec_download_files,  # and which they are
         downloadable=True,
         # The schema `load_potec` uses, so the app's Trial ID is the headless
         # one: reader + text, not the text name every reader shares.

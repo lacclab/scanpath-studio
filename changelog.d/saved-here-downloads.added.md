@@ -1,1 +1,0 @@
-Data Management → Saved on this computer now lists every dataset on this computer in one list: the datasets you added and the public datasets you downloaded, each with its size and location. A downloaded dataset can be deleted from its row, after a confirmation; clearing what is saved still leaves downloads alone.

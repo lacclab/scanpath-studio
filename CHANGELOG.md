@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/);
 `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.43.0] - 2026-10-22
+
+### Added
+- The docs home page has a Cite button beside Tutorials, linking to how to cite Scanpath Studio. ([#512](https://github.com/lacclab/scanpath-studio/issues/512))
+- Scanpath Studio is easier to cite: a Cite button beside the figure, replay and bundle downloads and in Share → Code gives a figure credit, APA, BibTeX and .bib / .ris files (naming OneStop or PoTeC too when the data comes from them), every figure, replay and page saved from Export, the API or the CLI (PNG, SVG, PDF, HTML, GIF, MP4) carries the citation in its file metadata, the export bundle adds a `CITATION.bib` and a README *Cite* section, an optional Credit line under the plot (Figure & canvas → Credit, `--credit`, `show_credit=True`) says where a shared figure came from, and `scanpath-studio cite` / `sps.cite()` print it headlessly. ([#514](https://github.com/lacclab/scanpath-studio/issues/514))
+- An Essentials mode for first-time users: a trimmed Scanpath view that opens a new visit on a playing replay, with an Essentials | Full switch in the header that the browser remembers. ([#516](https://github.com/lacclab/scanpath-studio/issues/516))
+- Data Management → Saved on this computer now lists every dataset on this computer in one list: the datasets you added and the public datasets you downloaded, each with its size and location. A downloaded dataset can be deleted from its row, after a confirmation; clearing what is saved still leaves downloads alone. ([#517](https://github.com/lacclab/scanpath-studio/issues/517))
+
 ## [0.42.1] - 2026-10-19
 
 ### Changed

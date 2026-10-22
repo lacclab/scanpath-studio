@@ -1,12 +1,12 @@
 # About Scanpath Studio
 
-**Scanpath Studio v0.42.1** — interactive visualization of eye movements in reading.
+**Scanpath Studio v0.43.0** — interactive visualization of eye movements in reading.
 
 Developed by [Omer Shubi](https://omershubi.github.io/), [Keren Gruteke Klein](https://kerengruteke.github.io/), [Maya Grossman](https://www.linkedin.com/in/maya-grossman-32b547292/), [Ella Lion](https://ella-lion.github.io/), [Deborah N. Jakobi](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/jakobi.html), [David R. Reich](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/reich.html), [Lena Jäger](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/group-leader/jaeger.html), and [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/), at the Technion and the University of Zurich.
 
 ## Cite Scanpath Studio
 
-Cite the software using its [Zenodo DOI](https://doi.org/10.5281/zenodo.22933884).
+Cite the software using its [Zenodo DOI](https://doi.org/10.5281/zenodo.22933884). `scanpath-studio cite` and cite print the entry in Python or a terminal, also as RIS or CSL-JSON.
 
 Show BibTeX and APA
 
@@ -22,14 +22,14 @@ Show BibTeX and APA
              Berzak, Yevgeni},
   title   = {{Scanpath Studio}},
   year    = {2026},
-  version = {0.42.1},
+  version = {0.43.0},
   doi     = {10.5281/zenodo.22933884},
   url     = {https://doi.org/10.5281/zenodo.22933884},
   license = {MIT},
 }
 ```
 
-Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.42.1) [Computer software]. https://doi.org/10.5281/zenodo.22933884
+Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.43.0) [Computer software]. https://doi.org/10.5281/zenodo.22933884
 
 ## Bundled demo
 
@@ -48,6 +48,7 @@ A local install (`scanpath-studio`) and the desktop app save your work on your c
 - **How long:** until you clear it. Removing a dataset from the app removes its saved copy.
 - **To clear it:** **Clear what is saved…** under **Saved on this computer**, or close the app and run `scanpath-studio cache --clear`.
 - **To turn it off:** start the app with `scanpath-studio --no-persist`, or set `SCANPATH_STUDIO_PERSIST=0`.
+- **Downloaded public datasets** stay in the folders you downloaded them to, and clearing what is saved leaves them. **Saved on this computer** lists them beside the datasets you added, each with its size and folder. Its button deletes that download's files, after a confirmation, and leaves anything else in the folder.
 
 The online demo saves nothing. A file you upload there is processed on Streamlit Community Cloud and not kept, so closing or refreshing the tab loses it. The app itself has no analytics, but Community Cloud's page around the app does; see its [privacy policy](https://streamlit.io/privacy-policy). Export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#back-up-your-work)).
 

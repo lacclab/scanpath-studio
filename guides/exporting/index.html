@@ -1587,6 +1587,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#cite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cite what you export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#from-the-app-to-a-script" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2356,6 +2367,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#cite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cite what you export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#from-the-app-to-a-script" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2485,7 +2507,26 @@
 </tr>
 </tbody>
 </table>
+<p>In Essentials mode, <strong>Export</strong> holds <strong>Current figure</strong> only; <strong>Export bundle</strong> is
+in Full.</p>
 <p>For step-by-step instructions, see the <a href="../../tutorials/exporting-figures/">export tutorials</a>.</p>
+<h2 id="cite">Cite what you export<a class="headerlink" href="#cite" title="Permanent link">&para;</a></h2>
+<p>Every file you export says how to cite Scanpath Studio in its own metadata:
+the PNG's text chunks, the SVG's <code>&lt;metadata&gt;</code>, the PDF's document properties,
+the HTML page's <code>&lt;head&gt;</code>, and the GIF's and MP4's comment. Nothing is drawn on
+the figure.</p>
+<ul>
+<li><span class="sps-icon" data-icon="format_quote" aria-hidden="true"></span> <strong>Cite</strong>, under each download and in
+  <span class="sps-icon" data-icon="share" aria-hidden="true"></span> <strong>Share</strong> → <strong>Code</strong>, gives a one-line figure credit, the
+  APA reference and BibTeX, and <code>.bib</code> and <code>.ris</code> files for Zotero, Mendeley or
+  EndNote. For the bundled demo, OneStop or PoTeC, it cites the corpus too.</li>
+<li>An export bundle has a <code>CITATION.bib</code>, and its <code>README.md</code> a <em>Cite</em> section.</li>
+<li><strong>Figure &amp; canvas</strong> → <strong>Credit</strong> adds a small <em>Made with Scanpath Studio</em>
+  line under the plot, for a figure shared without its caption. In code, pass
+  <code>show_credit=True</code>, or <code>--credit</code> to <code>render</code>.</li>
+<li>In code, <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;cite&lt;/span&gt;" href="../../api/#scanpath_studio.api.cite"><code>cite</code></a> and <code>scanpath-studio cite</code> print
+  the citation.</li>
+</ul>
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../assets/workflows/share-link_poster.webp" data-autoplay
        aria-label="Copying a link that reopens the same trial and design">

@@ -13,6 +13,21 @@ Looking for a specific button?
 
 [All controls](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/index.md) lists every button and setting on this view, menu by menu, with a picture of each menu. Search it for what you want to change, such as *saccade color* or *legend position*.
 
+## Essentials and Full
+
+The view opens in **Essentials**, a trimmed version of the same view for a first look. The **Essentials | Full** switch is in the top bar, on the **Scanpath** view only. The mode you choose is remembered in this browser. Adding `ui=full` (or `ui=essentials`) to the app's address, as `?ui=full` or `&ui=full`, uses that mode for the visit without changing the saved choice, and a link made with **Share** does not carry the mode.
+
+Essentials shows:
+
+- the dataset and trial pickers with **◀ ▶**;
+- the plot, which on a new visit opens on a playing replay;
+- four view tiles (**Animation**, **Scanpath**, **Heatmap** and **Illustration**) and the **Palette**;
+- the **Export** tab, for the figure on screen, and **Share**.
+
+Where Full has more, a **More** button lists what it adds there and ends in **Switch to Full**. A setting made in Full, such as a trial filter, still shapes the figure in Essentials, and Essentials says so in a short note. Starting a tutorial from **Help** switches that visit to Full. **Corpus Analysis** and **Data Management** are the same in both modes.
+
+The numbered regions above and the rest of this guide describe Full.
+
 ## Choose a trial
 
 Pick a trial in **Select trial** above the plot, or step through the list with **◀ ▶**. The filter () beside it narrows the list by text, participant, condition or annotation, and **⇅** sorts it. On a trial recorded over several screens, **Screen** picks the screen to draw. When several participants have the same trial ID, the list shows each reading with its participant in brackets, such as `3 [p2]`.

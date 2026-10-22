@@ -10,6 +10,7 @@
 | [`check`](#check)                           | Run the Data checks on your tables                      |
 | [`cache`](#cache)                           | Show or clear the recovery cache                        |
 | [`version`](#version)                       | Show the build, and whether a newer release is out      |
+| [`cite`](#cite)                             | Print how to cite Scanpath Studio                       |
 
 Each command takes `--help`, and `scanpath-studio --version` prints the version. A word that is not a command is an error that suggests the closest command. It is not passed on to Streamlit.
 
@@ -393,6 +394,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--title-size`         | `PX`                   | —       | Size of the `--title` text, 8–48 px (default: 20).                                                                                                                                           |
 | `--caption-size`       | `PX`                   | —       | Size of the `--caption` text, 6–36 px (default: 13).                                                                                                                                         |
 | `--caption-color`      | `COLOR`                | —       | Color of the `--caption` text (default: #555555).                                                                                                                                            |
+| `--credit`             | switch                 | —       | A small 'Made with Scanpath Studio' line under the plot. The figure grows to fit it.                                                                                                         |
 
 ### Hover
 
@@ -550,3 +552,20 @@ scanpath-studio version --check   # …and whether a newer release is out
 | `--timeout` | `SECONDS` | `5.0`   | How long to wait for GitHub, in seconds (default: 5).                 |
 
 Between releases the version names the build: `0.35.0.post3+g8f18219` is three commits after 0.35.0, at commit `8f18219`. The same check is **Help → About → Check for updates** in the app, and check_for_updates in Python.
+
+## cite
+
+`cite` prints how to cite Scanpath Studio. `--corpus` adds the citation of the public corpus you used.
+
+```
+scanpath-studio cite                           # BibTeX
+scanpath-studio cite --format apa --corpus onestop
+scanpath-studio cite --format credit           # one sentence for a figure caption
+```
+
+| Option     | Value                                        | Default  | Description                                                                                                               |
+| ---------- | -------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `--format` | `bibtex`, `apa`, `ris`, `csl-json`, `credit` | `bibtex` | Bibtex (default), apa, ris (Zotero, Mendeley, EndNote), csl-json, or credit: one sentence to paste into a figure caption. |
+| `--corpus` | `onestop`, `potec`                           | —        | Add this public corpus's citation after the software's.                                                                   |
+
+You don't have to add the citation to your files by hand: every figure `render` writes carries it in its file metadata. The same entries are cite in Python.

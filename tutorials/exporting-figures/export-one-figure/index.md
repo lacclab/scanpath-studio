@@ -2,6 +2,8 @@
 
 Save a scanpath, heatmap or comparison at the size you need.
 
+**Design presets**, **Compare** and **My designs** are in the **Full** mode: switch to it in the top bar of the **Scanpath** view, or add `ui=full` to the app's address ([Essentials and Full](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#essentials-and-full)). In Essentials, the view tiles choose the figure.
+
 ## 1. Choose the view
 
 Pick a trial in the **Scanpath** view. Choose one of the **Design presets**, or set the layers in the Plot controls. Turn on **Compare** if the figure needs two readings. Check that text and markers are readable and nothing is clipped.

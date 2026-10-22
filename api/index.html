@@ -2869,6 +2869,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#citation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Citation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Citation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.cite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;cite
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#see-also" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3642,6 +3670,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#citation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Citation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Citation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.cite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;cite
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#see-also" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3901,6 +3957,14 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;check_for_updates&lt;/span&gt;" href="#scanpath_studio.api.check_for_updates"><code>check_for_updates</code></a></td>
 <td>Ask GitHub whether a newer release than this build is out.</td>
+</tr>
+<tr>
+<td><strong>Citation</strong></td>
+<td></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;cite&lt;/span&gt;" href="#scanpath_studio.api.cite"><code>cite</code></a></td>
+<td>How to cite Scanpath Studio — and, optionally, the corpus you used.</td>
 </tr>
 </tbody>
 </table>
@@ -7572,6 +7636,11 @@ listing them for anything else.</p>
 <td><code>'#555555'</code></td>
 <td>Color of the <code>--caption</code> text.</td>
 </tr>
+<tr>
+<td><code>show_credit</code><br><code>--credit</code></td>
+<td><code>False</code></td>
+<td>A small 'Made with Scanpath Studio' line under the plot. The figure grows to fit it.</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -8212,6 +8281,10 @@ as <code># Note:</code> comments, as the app's ⚠️ captions and the <code>Not
     <div class="doc doc-contents first">
 
         <p>Save a figure, in the format its file extension names.</p>
+<p>The file carries the citation of Scanpath Studio in its metadata — PNG text
+chunks, an SVG <code>&lt;metadata&gt;</code> element, the PDF's document properties, the
+HTML page's <code>&lt;head&gt;</code> — so a figure found later on its own still says how to
+cite it (<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;cite&lt;/span&gt;" href="#scanpath_studio.api.cite"><code>cite</code></a> prints it). Nothing is drawn.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -8457,7 +8530,7 @@ page under <em>Saved on this computer</em>, and in <code>scanpath-studio cache</
 </tr>
 <tr>
 <td><code>datasets</code></td>
-<td>Each stored dataset's name and per-frame row counts</td>
+<td>Each stored dataset's name, per-frame row counts and size in bytes</td>
 </tr>
 <tr>
 <td><code>rows</code>, <code>bytes</code>, <code>saved_at</code></td>
@@ -8670,6 +8743,85 @@ is the app's Help → About → <em>Check for updates</em>, and <code>scanpath-s
           –
           <div class="doc-md-description">
             <p>The answer, as an <code>UpdateCheck</code>.</p>
+          </div>
+        </li>
+    </ul>
+
+
+    </div>
+
+</div><h2 id="citation">Citation<a class="headerlink" href="#citation" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.cite" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">cite</span>
+
+
+<a href="#scanpath_studio.api.cite" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">cite</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="s1">'bibtex'</span><span class="p">,</span> <span class="n">corpus</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>How to cite Scanpath Studio — and, optionally, the corpus you used.</p>
+<p>The same entries as the app's Help → About and <em>Cite</em> buttons, and
+<code>scanpath-studio cite</code>. Every figure, replay and page <code>save_figure</code> writes
+also carries the citation in its file metadata.</p>
+<div class="highlight"><pre><span></span><code><a id="scanpath_studio.api.cite--__codelineno-0-1" name="scanpath_studio.api.cite--__codelineno-0-1" href="#scanpath_studio.api.cite--__codelineno-0-1"></a><span class="nb">print</span><span class="p">(</span><span class="n">sps</span><span class="o">.</span><span class="n">cite</span><span class="p">())</span>                       <span class="c1"># BibTeX</span>
+<a id="scanpath_studio.api.cite--__codelineno-0-2" name="scanpath_studio.api.cite--__codelineno-0-2" href="#scanpath_studio.api.cite--__codelineno-0-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">sps</span><span class="o">.</span><span class="n">cite</span><span class="p">(</span><span class="s2">"apa"</span><span class="p">,</span> <span class="n">corpus</span><span class="o">=</span><span class="s2">"onestop"</span><span class="p">))</span>  <span class="c1"># APA, plus OneStop's reference</span>
+</code></pre></div>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>format</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>, default:
+                  <code>&#39;bibtex&#39;</code>
+)
+          –
+          <div class="doc-md-description">
+            <p><code>"bibtex"</code>, <code>"apa"</code>, <code>"ris"</code> (Zotero, Mendeley, EndNote),
+<code>"csl-json"</code>, or <code>"credit"</code> — one sentence to paste into a figure
+caption.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>corpus</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p><code>"onestop"</code> or <code>"potec"</code> to add that corpus's citation after
+the software's; <code>None</code> for the software alone.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>
+          –
+          <div class="doc-md-description">
+            <p>The citation as text (APA without Markdown).</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError">ValueError</a></code>
+            –
+          <div class="doc-md-description">
+            <p>For an unknown <code>format</code> or <code>corpus</code>.</p>
           </div>
         </li>
     </ul>

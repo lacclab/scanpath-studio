@@ -2579,6 +2579,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#cite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cite
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2996,6 +3007,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#cite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cite
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3098,6 +3120,10 @@ it:</p>
 <tr>
 <td><a href="#version"><code>version</code></a></td>
 <td>Show the build, and whether a newer release is out</td>
+</tr>
+<tr>
+<td><a href="#cite"><code>cite</code></a></td>
+<td>Print how to cite Scanpath Studio</td>
 </tr>
 </tbody>
 </table>
@@ -4428,6 +4454,12 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>—</td>
 <td>Color of the <code>--caption</code> text (default: #555555).</td>
 </tr>
+<tr>
+<td><code>--credit</code></td>
+<td>switch</td>
+<td>—</td>
+<td>A small 'Made with Scanpath Studio' line under the plot. The figure grows to fit it.</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -5020,6 +5052,42 @@ commits after 0.35.0, at commit <code>8f18219</code>. The same check is
 <strong><span class="sps-icon" data-icon="help" aria-hidden="true"></span> Help → <span class="sps-icon" data-icon="info" aria-hidden="true"></span> About → <span class="sps-icon" data-icon="update" aria-hidden="true"></span> Check for
 updates</strong> in the app, and
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;check_for_updates&lt;/span&gt;" href="../api/#scanpath_studio.api.check_for_updates"><code>check_for_updates</code></a> in Python.</p>
+<h2 id="cite">cite<a class="headerlink" href="#cite" title="Permanent link">&para;</a></h2>
+<p><code>cite</code> prints how to cite Scanpath Studio. <code>--corpus</code> adds the citation of the
+public corpus you used.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>scanpath-studio<span class="w"> </span>cite<span class="w">                           </span><span class="c1"># BibTeX</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>apa<span class="w"> </span>--corpus<span class="w"> </span>onestop
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>credit<span class="w">           </span><span class="c1"># one sentence for a figure caption</span>
+</code></pre></div>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--format</code></td>
+<td><code>bibtex</code>, <code>apa</code>, <code>ris</code>, <code>csl-json</code>, <code>credit</code></td>
+<td><code>bibtex</code></td>
+<td>Bibtex (default), apa, ris (Zotero, Mendeley, EndNote), csl-json, or credit: one sentence to paste into a figure caption.</td>
+</tr>
+<tr>
+<td><code>--corpus</code></td>
+<td><code>onestop</code>, <code>potec</code></td>
+<td>—</td>
+<td>Add this public corpus's citation after the software's.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>You don't have to add the citation to your files by hand: every figure <code>render</code>
+writes carries it in its file metadata. The same entries are
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;cite&lt;/span&gt;" href="../api/#scanpath_studio.api.cite"><code>cite</code></a> in Python.</p>
 
 
 

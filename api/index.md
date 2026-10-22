@@ -60,6 +60,8 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 | **Version and updates**                       |                                                                                  |
 | version_info                                  | Say which build of Scanpath Studio this is, without using the network.           |
 | check_for_updates                             | Ask GitHub whether a newer release than this build is out.                       |
+| **Citation**                                  |                                                                                  |
+| cite                                          | How to cite Scanpath Studio — and, optionally, the corpus you used.              |
 
 ## Column names
 
@@ -1064,6 +1066,7 @@ Examples:
 | `title_font_size` `--title-size`          | `20`        | Size of the `--title` text, 8–48 px.                                                                                                                             |
 | `caption_font_size` `--caption-size`      | `13`        | Size of the `--caption` text, 6–36 px.                                                                                                                           |
 | `caption_color` `--caption-color`         | `'#555555'` | Color of the `--caption` text.                                                                                                                                   |
+| `show_credit` `--credit`                  | `False`     | A small 'Made with Scanpath Studio' line under the plot. The figure grows to fit it.                                                                             |
 
 ### Hover
 
@@ -1253,6 +1256,8 @@ save_figure(
 
 Save a figure, in the format its file extension names.
 
+The file carries the citation of Scanpath Studio in its metadata — PNG text chunks, an SVG `<metadata>` element, the PDF's document properties, the HTML page's `<head>` — so a figure found later on its own still says how to cite it (cite prints it). Nothing is drawn.
+
 Parameters:
 
 - **`fig`** (`Figure`) – The figure.
@@ -1309,7 +1314,7 @@ A local or desktop app stores completed uploaded datasets, column mappings, view
 | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `enabled`, `directory`                           | Whether caching is on, and where                                                                                                             |
 | `exists`, `readable`                             | Whether its manifest is there and can be read                                                                                                |
-| `datasets`                                       | Each stored dataset's name and per-frame row counts                                                                                          |
+| `datasets`                                       | Each stored dataset's name, per-frame row counts and size in bytes                                                                           |
 | `rows`, `bytes`, `saved_at`                      | The totals, and when it was last written                                                                                                     |
 | `annotations`, `designs`, `metadata`, `settings` | What else is stored                                                                                                                          |
 | `damaged`                                        | Each stored dataset whose entry or files are broken, with the reason. The app restores the others and keeps that one rather than dropping it |
@@ -1382,6 +1387,36 @@ Parameters:
 Returns:
 
 - `UpdateCheck` – The answer, as an UpdateCheck.
+
+## Citation
+
+### cite
+
+```
+cite(format='bibtex', corpus=None)
+```
+
+How to cite Scanpath Studio — and, optionally, the corpus you used.
+
+The same entries as the app's Help → About and *Cite* buttons, and `scanpath-studio cite`. Every figure, replay and page `save_figure` writes also carries the citation in its file metadata.
+
+```
+print(sps.cite())                       # BibTeX
+print(sps.cite("apa", corpus="onestop"))  # APA, plus OneStop's reference
+```
+
+Parameters:
+
+- **`format`** (`str`, default: `'bibtex'` ) – "bibtex", "apa", "ris" (Zotero, Mendeley, EndNote), "csl-json", or "credit" — one sentence to paste into a figure caption.
+- **`corpus`** (`str | None`, default: `None` ) – "onestop" or "potec" to add that corpus's citation after the software's; None for the software alone.
+
+Returns:
+
+- `str` – The citation as text (APA without Markdown).
+
+Raises:
+
+- `ValueError` – For an unknown format or corpus.
 
 ## See also
 

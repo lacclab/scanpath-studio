@@ -2,6 +2,8 @@
 
 Locate trials containing particular fixation patterns.
 
+These steps use the **Full** mode: switch to it in the top bar of the **Scanpath** view, or add `ui=full` to the app's address ([Essentials and Full](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#essentials-and-full)).
+
 1. Open **Filters & highlights** ▾ → **Fixations**.
 
 1. Set the **Mode** of the category you need to **Highlight**:

@@ -2,6 +2,8 @@
 
 Save an animated reading for a talk or supplement.
 
+These steps use the **Full** mode: switch to it in the top bar of the **Scanpath** view, or add `ui=full` to the app's address ([Essentials and Full](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#essentials-and-full)).
+
 1. Pick a trial in the **Scanpath** view and turn on **Animate**.
 1. In **Animate** ▾ → **Replay**, set the **Speed**. Turn on the layers you want to show.
 1. Open the **Export** tab. Under **Current figure**, set **Download format** to **GIF**, **MP4** or **HTML**.

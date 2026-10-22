@@ -11,7 +11,18 @@ Save a figure, export many trials at once, or reuse a view in the app or in code
 | Share a view or copy its code       | **Share** → **Link** or **Code**                 |
 | Reuse the figure settings           | **My designs**, or **Share** → **Settings file** |
 
+In Essentials mode, **Export** holds **Current figure** only; **Export bundle** is in Full.
+
 For step-by-step instructions, see the [export tutorials](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/index.md).
+
+## Cite what you export
+
+Every file you export says how to cite Scanpath Studio in its own metadata: the PNG's text chunks, the SVG's `<metadata>`, the PDF's document properties, the HTML page's `<head>`, and the GIF's and MP4's comment. Nothing is drawn on the figure.
+
+- **Cite**, under each download and in **Share** → **Code**, gives a one-line figure credit, the APA reference and BibTeX, and `.bib` and `.ris` files for Zotero, Mendeley or EndNote. For the bundled demo, OneStop or PoTeC, it cites the corpus too.
+- An export bundle has a `CITATION.bib`, and its `README.md` a *Cite* section.
+- **Figure & canvas** → **Credit** adds a small *Made with Scanpath Studio* line under the plot, for a figure shared without its caption. In code, pass `show_credit=True`, or `--credit` to `render`.
+- In code, cite and `scanpath-studio cite` print the citation.
 
 \[!\[
 

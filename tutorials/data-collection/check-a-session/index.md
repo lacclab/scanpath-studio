@@ -2,6 +2,8 @@
 
 Inspect a recording and save the trials that need attention.
 
+These steps use the **Full** mode: switch to it in the top bar of the **Scanpath** view, or add `ui=full` to the app's address ([Essentials and Full](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#essentials-and-full)).
+
 ## 1. Open the session
 
 [Import your tables](https://lacclab.github.io/scanpath-studio/guides/loading-data/#add-your-own-data), or select a loaded dataset. Check that its **Recording setup** matches the screen used in the experiment.

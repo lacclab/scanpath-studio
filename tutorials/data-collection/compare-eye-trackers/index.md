@@ -2,6 +2,8 @@
 
 Review the same text recorded with two trackers or setups.
 
+These steps use the **Full** mode: switch to it in the top bar of the **Scanpath** view, or add `ui=full` to the app's address ([Essentials and Full](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#essentials-and-full)).
+
 1. [Import each recording](https://lacclab.github.io/scanpath-studio/guides/loading-data/#add-your-own-data) as a separate dataset, each with the **Recording setup** of its tracker.
 1. Open the first dataset in the **Scanpath** view and pick a trial.
 1. Turn on **Compare**. In scanpath B's row, choose the second dataset in **Dataset B** and a trial of the same text in **Trial B**.

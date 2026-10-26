@@ -933,9 +933,10 @@ class TestUnreadableNumbers:
 
 
 class TestTextWordIds:
-    """Word IDs are read as numbers, so text ids (`w1`, `w2`) parse to NaN —
-    and pandas joins NaN to NaN, so without a guard every coordinate-less
-    fixation would be placed on the first word's box."""
+    """Text Word IDs (`w1`, `w2`) are keys, matched across the two tables by
+    their text; a missing id is no key — pandas joins NaN to NaN, so without a
+    guard every coordinate-less fixation would be placed on the first word's
+    box. `tests/test_text_word_ids.py` covers the keys in depth."""
 
     WORD_SCHEMA = {
         "participant": "participant",
@@ -999,19 +1000,23 @@ class TestTextWordIds:
             names="canonical",
         )
 
-    def test_text_ids_with_no_xy_are_refused(self):
-        """Unrefused, both fixations would land on 'Hello' (x 25)."""
-        with (
-            pytest.raises(data_module.UnplacedFixationsError) as raised,
-            pytest.warns(
-                UserWarning,
-                match="Words table: Word ID is mapped to 'id', but 2 of its 2",
-            ),
-        ):
-            self._load(self._words(), self._fixations())
+    def test_text_ids_with_no_xy_place_each_fixation_on_its_word(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")  # text ids are not unreadable numbers
+            words, fixations = self._load(self._words(), self._fixations())
+        assert words["word_id"].tolist() == [1.0, 2.0]
+        assert fixations["word_id"].tolist() == [1.0, 2.0]
+        assert fixations["x"].tolist() == [25.0, 125.0]
+
+    def test_text_ids_against_numbers_with_no_xy_are_refused(self):
+        """A text id never names a numbered word: placed by guess, both
+        fixations would land somewhere they were never recorded."""
+        with pytest.raises(data_module.UnplacedFixationsError) as raised:
+            self._load(self._words(ids=(1, 2)), self._fixations())
         message = str(raised.value)
         assert message.startswith(
-            "Fixations: the Word ID column `id` holds no numbers (e.g. 'w1', 'w2')."
+            "Fixations: the Word IDs are text (e.g. 'w1', 'w2'), but the Words "
+            "table's are numbers"
         )
         assert "Map the fixations' X and Y" in message
         assert isinstance(raised.value, ValueError)  # for API callers
@@ -1033,8 +1038,9 @@ class TestTextWordIds:
         assert fixations["x"].isna().tolist() == [True, False]
         assert fixations["x"].iloc[1] == 125.0
 
-    def test_mapped_xy_need_no_numeric_ids(self):
-        with pytest.warns(UserWarning, match="aren't numbers"):
+    def test_mapped_xy_keep_their_positions_beside_text_ids(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
             _, fixations = self._load(
                 self._words(),
                 self._fixations(fx=[10.0, 110.0], fy=[5.0, 5.0]),
@@ -1042,10 +1048,13 @@ class TestTextWordIds:
                 y="fy",
             )
         assert fixations["x"].tolist() == [10.0, 110.0]
+        assert fixations["word_id"].tolist() == [1.0, 2.0]
 
     def test_an_edit_that_leaves_only_text_ids_is_refused(self):
-        """✏️ Edit dataset re-normalizes the stored frame: a Word ID moved
-        onto a kept text column, with X and Y cleared, is the same mapping."""
+        """✏️ Edit dataset re-normalizes the stored frame and harmonizes it with
+        the stored words: a Word ID moved onto a kept text column, with X and Y
+        cleared, names none of the stored words' numbers."""
+        words = normalize_words(self._words(ids=(1, 2)), self.WORD_SCHEMA)
         stored = normalize_fixations(
             self._fixations(ids=(1, 2), label=["w1", "w2"], fx=[1.0, 2.0], fy=[0, 0]),
             {**self.FIX_SCHEMA, "x": "fx", "y": "fy"},
@@ -1057,18 +1066,21 @@ class TestTextWordIds:
             "word_id": "label",
             "duration": "duration_ms",
         }
-        with pytest.raises(data_module.UnplacedFixationsError, match="`label`"):
-            data_module.remap_normalized_frame(stored, remap, kind="fixations")
+        remapped = data_module.remap_normalized_frame(stored, remap, kind="fixations")
+        with pytest.raises(data_module.UnplacedFixationsError, match="are text"):
+            data_module.harmonize_frames(words, remapped)
 
     def test_the_cli_says_it_in_its_own_terms(self):
         from scanpath_studio.cli import _load_error_message
 
+        words = normalize_words(self._words(ids=(1, 2)), self.WORD_SCHEMA)
+        fixations = normalize_fixations(self._fixations(), self.FIX_SCHEMA)
         exc = data_module.UnplacedFixationsError(
-            data_module.unplaced_fixations_issue(self._fixations(), self.FIX_SCHEMA)
+            data_module.unplaced_fixations_issue(words, fixations)
         )
         said = _load_error_message(exc)
         assert "`" not in said
-        assert "column 'id' holds no numbers" in said
+        assert "the Word IDs are text (e.g. 'w1', 'w2')" in said
         assert "--fix-schema" in said
         assert "--fix-schema" not in _load_error_message(exc, schema_flags=False)
 

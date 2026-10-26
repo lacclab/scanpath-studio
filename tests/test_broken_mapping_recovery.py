@@ -188,15 +188,14 @@ def test_the_open_wizard_survives_an_upload_the_pipeline_rejects(one_sided_uploa
     assert finalize and finalize[0].disabled
 
 
-def test_text_word_ids_with_no_xy_block_the_add(monkeypatch):
-    """Fixations with no X/Y are placed by their Word ID, which is read as a
-    number — so text ids place none of them, and the add is blocked, saying
-    why, directly above ✅ Add dataset."""
+def _upload_text_word_ids(monkeypatch, *, word_ids, fixation_ids) -> AppTest:
+    """The wizard over an AOI-sequence pair: fixations with no X/Y, placed by
+    their Word ID alone."""
     from scanpath_studio import app
 
-    words = _WIZARD_WORDS.drop(columns=["page"]).assign(word_id=["w0", "w1", "w2"])
+    words = _WIZARD_WORDS.drop(columns=["page"]).assign(word_id=list(word_ids))
     fixations = _WIZARD_FIXATIONS.drop(columns=["x", "y"]).assign(
-        word_id=["w0", "w1", "w2"]
+        word_id=list(fixation_ids)
     )
     monkeypatch.setattr(
         app,
@@ -206,11 +205,49 @@ def test_text_word_ids_with_no_xy_block_the_add(monkeypatch):
         ),
     )
     at = _upload_apptest(wizard_active=True)
-
     assert not at.exception
-    said = [e.value for e in at.error if "holds no numbers" in e.value]
-    assert said, "text Word IDs loaded without a word"
-    assert "`word_id`" in said[0] and "Map the fixations' X and Y" in said[0]
+    return at
+
+
+def test_text_word_ids_with_no_xy_place_the_fixations(monkeypatch):
+    """Text Word IDs are keys: each fixation is placed at the box of the word
+    with the same id, and the add goes ahead with nothing to warn about."""
+    at = _upload_text_word_ids(
+        monkeypatch, word_ids=("w0", "w1", "w2"), fixation_ids=("w2", "w0", "w1")
+    )
+
+    assert not [e.value for e in at.error]
+    assert not [w.value for w in at.warning if "Word ID" in w.value]
+    payload = at.session_state["_wizard_finalize_payload"]
+    fixations = payload["fixations"]
+    assert fixations["word_id"].tolist() == [3.0, 1.0, 2.0]
+    assert fixations["x"].tolist() == [130.0, 30.0, 80.0]  # the boxes' centers
+    # The ids themselves are kept, under the file's own column name.
+    names = payload["column_names"]["fixations"]
+    assert names["word_key"]["sources"] == ["word_id"]
+
+
+def test_the_wizard_says_which_text_word_ids_name_no_word(monkeypatch):
+    at = _upload_text_word_ids(
+        monkeypatch, word_ids=("w0", "w1", "w2"), fixation_ids=("w0", "w1", "nope")
+    )
+
+    said = [w.value for w in at.warning if "no word of" in w.value]
+    assert said, "a fixation whose text id names no word was dropped silently"
+    assert "1 of 3 Word IDs names no word of its trial" in said[0]
+    assert "'nope'" in said[0]
+
+
+def test_text_word_ids_against_numeric_ones_block_the_add(monkeypatch):
+    """A text id never names a numbered word, so with no X/Y nothing can be
+    placed, and the add is blocked, saying why, directly above ✅ Add dataset."""
+    at = _upload_text_word_ids(
+        monkeypatch, word_ids=(0, 1, 2), fixation_ids=("w0", "w1", "w2")
+    )
+
+    said = [e.value for e in at.error if "Word IDs are text" in e.value]
+    assert said, "text Word IDs loaded against numeric ones without a word"
+    assert "Map the fixations' X and Y" in said[0]
     finalize = [b for b in at.button if b.key == "wizard_finalize"]
     assert finalize and finalize[0].disabled
     assert "_wizard_finalize_payload" not in at.session_state

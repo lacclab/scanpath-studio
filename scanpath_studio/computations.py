@@ -267,15 +267,47 @@ REGISTER: tuple[Computation, ...] = (
         unit="px",
         precedence="Only when x/y are absent; recorded coordinates always win.",
         missing=(
-            "No matching word box, or no word id (blank, or not a number) ⇒ the "
-            "fixation keeps no coordinates — a missing id never matches a box "
-            "with none. No x/y mapped and a Word ID column with no numbers "
-            "at all ⇒ UnplacedFixationsError, never an empty figure."
+            "No matching word box, or no word id (blank, or a text id that names "
+            "no word) ⇒ the fixation keeps no coordinates — a missing id never "
+            "matches a box with none. No x/y, text Word IDs involved "
+            "(`norm.text_word_ids`) and not one fixation placed ⇒ "
+            "UnplacedFixationsError, never an empty figure."
         ),
         tiers="A, C",
         status=STATUS_VERIFIED,
         consumers=(_UI, _API, _CLI),
-        tests=("tests/test_data.py",),
+        tests=("tests/test_data.py", "tests/test_text_word_ids.py"),
+    ),
+    Computation(
+        id="norm.text_word_ids",
+        name="Text word IDs",
+        category=CATEGORY_NORMALIZATION,
+        summary="Read a Word ID column of text (w1, Hello_3) as keys, and number them.",
+        formula=(
+            "A Word ID column with filled cells and not one number is text: "
+            "each cell, stripped, is kept in `word_key`. Words: `word_id` = 1, "
+            "2, … for each distinct key in the order the Words table first lists "
+            "it. Fixations: `word_id` = the `word_id` of the word whose key "
+            "equals the fixation's exactly, in the same trial."
+        ),
+        code="scanpath_studio/data.py:match_text_word_ids",
+        output="word_id, word_key",
+        grouping="(participant_id, trial_id[, screen_id])",
+        precedence=(
+            "Only for a column with no number in it: a column with any number is "
+            "read as numbers, its other cells as blanks."
+        ),
+        missing=(
+            "A blank cell or `.` is no key, so no number. A fixation key its "
+            "trial does not list ⇒ no word, warned with the count. A text id "
+            "never matches a number: numeric fixation ids against text word ids "
+            "are set aside (warned), and with x/y the word is then assigned by "
+            "geometry. A key a trial lists twice is one word."
+        ),
+        tiers="A, C",
+        status=STATUS_VERIFIED,
+        consumers=(_UI, _API, _CLI, _EXPORT),
+        tests=("tests/test_text_word_ids.py",),
     ),
     Computation(
         id="norm.participant_metadata",

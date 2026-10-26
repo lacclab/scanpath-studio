@@ -31,6 +31,7 @@ from .constants import (
     PACKAGE_NAME,
     SAMPLE_INDEX,
     UPLOAD_FILE_TYPES,
+    WORD_KEY,
     plural,
 )
 from .multipart import (
@@ -1728,6 +1729,13 @@ def _holds_no_number(values: pd.Series) -> bool:
     return not filled.empty and _to_number(filled).isna().all()
 
 
+def _pick_word_id(frame: pd.DataFrame, candidates: Iterable[str]) -> str | None:
+    """The Word ID column to propose: a ``word_key`` first — the text Word IDs
+    of a table Scanpath Studio wrote, beside the ``word_id`` it numbered them
+    with — so loading it again keeps them; else the first candidate found."""
+    return pick_column(frame, [WORD_KEY]) or pick_column(frame, candidates)
+
+
 def _propose_word_schema_by_field(words: pd.DataFrame) -> dict[str, str | None]:
     return dict(
         participant=pick_column(words, PARTICIPANT_CANDIDATES),
@@ -1737,7 +1745,7 @@ def _propose_word_schema_by_field(words: pd.DataFrame) -> dict[str, str | None]:
         canvas_width=pick_column(words, CANVAS_WIDTH_CANDIDATES),
         canvas_height=pick_column(words, CANVAS_HEIGHT_CANDIDATES),
         text_id=pick_column(words, TEXT_ID_CANDIDATES),
-        word_id=pick_column(words, WORD_ID_CANDIDATES),
+        word_id=_pick_word_id(words, WORD_ID_CANDIDATES),
         text=pick_column(words, TEXT_CANDIDATES),
         line=pick_column(words, LINE_CANDIDATES),
         x=pick_column(words, WORD_X_CANDIDATES),
@@ -1772,7 +1780,7 @@ def propose_fix_schema(fixations: pd.DataFrame) -> dict[str, str | None]:
         duration=pick_column(fixations, FIX_DURATION_CANDIDATES),
         x=pick_column(fixations, FIX_X_CANDIDATES),
         y=pick_column(fixations, FIX_Y_CANDIDATES),
-        word_id=pick_column(fixations, FIX_WORD_ID_CANDIDATES),
+        word_id=_pick_word_id(fixations, FIX_WORD_ID_CANDIDATES),
     )
 
 
@@ -2543,6 +2551,12 @@ _UNPARSED_CONSEQUENCE = {
     "and left off the plot if not",
     "word_id": "those rows have no word id",
 }
+#: Said after a Word ID's consequence, in either table: text ids are read as
+#: keys only when the column holds no number at all, so a column of numbers
+#: and a few words has numbers and blanks.
+_WORD_ID_TEXT_RULE = (
+    " (a Word ID column is read as text only when none of its values is a number)"
+)
 #: The same for the Words table, where x/y are a box's corner, not a gaze.
 _UNPARSED_WORD_CONSEQUENCE = dict.fromkeys(
     ("x", "y", "width", "height", "left", "right", "top", "bottom"),
@@ -2559,7 +2573,7 @@ NUMERIC_FIELD_TEXT: dict[tuple[str, str], tuple[str, str]] = {
     ("fixations", "timestamp"): ("Timestamp (ms)", "fixation start times"),
     ("fixations", "x"): ("X coordinate", "horizontal gaze positions in pixels"),
     ("fixations", "y"): ("Y coordinate", "vertical gaze positions in pixels"),
-    ("fixations", "word_id"): ("Word ID", "the number of the word fixated"),
+    ("fixations", "word_id"): ("Word ID", "the ID of the word fixated"),
     ("fixations", "fixation_id"): ("Fixation ID", "fixation numbers"),
     ("fixations", "canvas_width"): ("Screen canvas width", "screen widths in pixels"),
     ("fixations", "canvas_height"): (
@@ -2575,7 +2589,7 @@ NUMERIC_FIELD_TEXT: dict[tuple[str, str], tuple[str, str]] = {
     ("words", "top"): ("Box top", "each word box's top edge in pixels"),
     ("words", "bottom"): ("Box bottom", "each word box's bottom edge in pixels"),
     ("words", "line"): ("Line index", "each word's line number"),
-    ("words", "word_id"): ("Word ID", "each word's number"),
+    ("words", "word_id"): ("Word ID", "each word's ID"),
     ("words", "canvas_width"): ("Screen canvas width", "screen widths in pixels"),
     ("words", "canvas_height"): ("Screen canvas height", "screen heights in pixels"),
 }
@@ -2622,6 +2636,17 @@ class ColumnParse:
     parsed: pd.Series
     failed: pd.Series | None = None
     empty: pd.Series | None = None
+
+    @property
+    def holds_no_number(self) -> bool:
+        """Filled cells, and not one of them a number: for a Word ID, a column
+        of text ids (``w1``, ``w2``), which :func:`read_word_ids` reads as
+        keys rather than as numbers that did not parse."""
+        return (
+            self.failed is not None
+            and not self.failed.empty
+            and not self.parsed.notna().any()
+        )
 
     def summary(self, keep: pd.Series | None = None) -> UnparsedColumn | None:
         """The :class:`UnparsedColumn` over the rows ``keep`` selects (all
@@ -2723,7 +2748,10 @@ def wrong_column_note(
     """
     if column not in raw.columns:
         return ""
-    found = column_parse(raw, column, fingerprint=fingerprint).summary()
+    read = column_parse(raw, column, fingerprint=fingerprint)
+    if key == "word_id" and read.holds_no_number:
+        return ""  # text ids, read as keys
+    found = read.summary()
     if found is None or not found.wrong_column or found.thousands:
         return ""
     _name, holds = _field_text(key, fixations=fixations)
@@ -2781,11 +2809,14 @@ def numeric_parse_issues(
     equally be thousands separators is, with that named.
 
     ``parses`` (:func:`_parses_for`) and ``keep`` — the rows the load keeps —
-    come from :func:`normalization_issues`.
+    come from :func:`normalization_issues`. A Word ID column of text ids is
+    not an issue either: :func:`read_word_ids` reads it as keys.
     """
     parses = _parses_for(raw, schema, parses)
     issues: list[str] = []
     for key, column in _mapped_numeric_columns(raw, schema):
+        if key == "word_id" and parses[column].holds_no_number:
+            continue
         found = parses[column].summary(keep)
         if found is None:
             continue
@@ -2809,6 +2840,8 @@ def numeric_parse_issues(
                 "with no X and Y mapped, those fixations have no position and are "
                 "left off the plot"
             )
+        if key == "word_id":
+            consequence += _WORD_ID_TEXT_RULE
         line += f"; {consequence}."
         if found.thousands:
             line += (
@@ -2933,46 +2966,18 @@ def value_range_issues(
 
 
 class UnplacedFixationsError(ValueError):
-    """Fixations whose only position is a Word ID that holds no numbers.
+    """Fixations with no position whose text Word IDs name no word.
 
-    With no X and Y mapped, a fixation is placed at the center of the word box
-    its Word ID names, and Word IDs are read as numbers: a column of text
-    ids (``w1``, ``w2`` …) leaves every fixation without a position. Raised by
-    :func:`normalize_fixations` — so by the headless API and every loader built
+    With no X and Y, a fixation is placed at the center of the word box its
+    Word ID names. A text Word ID (``w1``, ``w2`` …) names a word only through
+    the same text in the Words table (:func:`match_text_word_ids`), so when
+    either table's Word IDs are text and not one fixation's names a word of
+    its trial, every fixation is left without a position. Raised by
+    :func:`harmonize_frames` — so by the headless API and every loader built
     on it — rather than load a dataset with nothing to draw: the add-dataset
-    wizard and ✏️ Edit dataset block on it, and the CLI prints it."""
-
-
-def unplaced_fixations_issue(
-    raw: pd.DataFrame, schema: dict, *, table: str = "Fixations"
-) -> str | None:
-    """The :class:`UnplacedFixationsError` message for ``raw`` under ``schema``.
-
-    ``None`` unless X or Y is unmapped, a Word ID is mapped, and not one of
-    its filled cells reads as a number. A few unreadable ids among numbers are
-    :func:`numeric_parse_issues`' warning instead: only those fixations are left
-    off the plot.
-    """
-    if schema.get("x") and schema.get("y"):
-        return None
-    column = schema.get("word_id")
-    if not isinstance(column, str) or column not in raw.columns:
-        return None
-    values = raw[column]
-    if pd.api.types.is_numeric_dtype(values) or pd.api.types.is_bool_dtype(values):
-        return None
-    filled = _filled_cells(values)
-    failed = _unparsed_cells(values, _to_number(values))
-    if filled.empty or len(failed) < len(filled):
-        return None
-    examples = ", ".join(f"'{v}'" for v in failed.drop_duplicates().head(3))
-    return (
-        f"{table}: the Word ID column `{column}` holds no numbers (e.g. "
-        f"{examples}). Without X and Y, a fixation is placed at the center of "
-        "the word box its Word ID names, and Word IDs must be numbers, so "
-        "none of these fixations can be placed. Map the fixations' X and Y, or "
-        "use numeric Word IDs in both tables."
-    )
+    wizard and ✏️ Edit dataset block on it, and the CLI prints it. Numeric
+    Word IDs on both sides are matched as numbers, and an id that names no box
+    leaves only that fixation unplaced."""
 
 
 def _identity_columns(source: pd.DataFrame, schema: dict) -> list[str]:
@@ -5348,10 +5353,11 @@ def fill_fixation_xy_from_words(
     untouched.
 
     A missing key is no key: pandas joins NaN to NaN, so a fixation with no
-    ``word_id`` — one whose Word ID did not parse as a number, say — would
-    land on the first box that has none either, and a table of text ids
-    (``w1``, ``w2`` …) would put every fixation on one word. Rows missing any key are
-    left out on both sides, so they keep NaN coordinates."""
+    ``word_id`` — a blank Word ID, or a text one that names no word of its
+    trial — would land on the first box that has none either, and a table of
+    such fixations would put every one of them on one word. Rows missing any
+    key are left out on both sides, so they keep NaN coordinates. Text Word
+    IDs have their numbers by now (:func:`match_text_word_ids`)."""
     if fixations.empty or words.empty:
         return fixations
     missing = fixations["x"].isna() | fixations["y"].isna()
@@ -5373,6 +5379,214 @@ def fill_fixation_xy_from_words(
     fixations.loc[fill, "x"] = merged["_word_cx"].to_numpy()[fill]
     fixations.loc[fill, "y"] = merged["_word_cy"].to_numpy()[fill]
     return fixations
+
+
+#: How the column-name map says a Word ID read as text was numbered
+#: (`column_names.ColumnNames.with_rewrites`): the rewrite names
+#: :data:`~scanpath_studio.constants.WORD_KEY`, which takes the Word ID
+#: column's name, and ``word_id`` becomes the app's number.
+WORD_KEY_NUMBERED = {
+    "words": ", numbered by its order in the trial",
+    "fixations": ", numbered as the Words table numbers it",
+    # Text ids against a Words table of numbers (or none) name no word.
+    "unmatched": ", not used: the Words table has no text Word IDs",
+}
+
+
+def _text_keyed(frame: pd.DataFrame | None) -> bool:
+    """Whether ``frame``'s Word IDs were read as text (:func:`read_word_ids`)."""
+    return (
+        isinstance(frame, pd.DataFrame)
+        and WORD_KEY in frame.columns
+        and bool(frame[WORD_KEY].notna().any())
+    )
+
+
+def match_text_word_ids(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> tuple[pd.DataFrame, tuple[Rewrite, ...]]:
+    """Give each fixation with a text Word ID the number its word has.
+
+    A text Word ID is a key. A fixation's ``word_id`` is the number
+    :func:`normalize_words` gave the word with exactly that key in the same
+    trial (and screen) — never a near spelling — so a key its trial does not
+    list leaves the fixation on no word, as a numeric id that names no box
+    does. The fixation keeps its key.
+
+    A number is never matched to a text id, nor a text id to a number: either
+    would be a guess. Text ids in the fixations against numeric ones in the
+    Words table name no word. Numeric fixation ids against a Words table of
+    text ids are set aside (``word_id`` blank), since read against the words'
+    numbers they would name positions they never meant; with X and Y, each of
+    those fixations is matched to the box it falls in instead
+    (``measures.assign_fixations_to_words``).
+
+    Also returns the :data:`Rewrite` entries for the column-name map: each
+    table whose Word IDs are text, and fixation ids set aside.
+    """
+    rewrites: list[Rewrite] = []
+    words_text, fixations_text = _text_keyed(words), _text_keyed(fixations)
+    if words_text:
+        rewrites.append(("words", WORD_KEY, WORD_KEY_NUMBERED["words"]))
+    if fixations_text:
+        how = WORD_KEY_NUMBERED["fixations" if words_text else "unmatched"]
+        rewrites.append(("fixations", WORD_KEY, how))
+    if fixations.empty or "word_id" not in fixations.columns:
+        return fixations, tuple(rewrites)
+    if fixations_text:
+        number = np.full(len(fixations), np.nan)
+        keys = grouping_columns(fixations)
+        if words_text and keys == grouping_columns(words):
+            on = [*keys, WORD_KEY]
+            # Missing keys dropped first: pandas joins NaN to NaN.
+            lookup = words.loc[
+                words[WORD_KEY].notna() & words["word_id"].notna(),
+                [*on, "word_id"],
+            ].drop_duplicates(on)
+            known = fixations[WORD_KEY].notna().to_numpy()
+            merged = fixations.loc[known, on].merge(lookup, on=on, how="left")
+            number[known] = merged["word_id"].to_numpy(dtype=float)
+        fixations = fixations.copy()
+        fixations["word_id"] = number
+    elif words_text and fixations["word_id"].notna().any():
+        fixations = fixations.copy()
+        fixations["word_id"] = np.nan
+        rewrites.append(
+            ("fixations", "word_id", ", set aside: the Words table's Word IDs are text")
+        )
+    return fixations, tuple(rewrites)
+
+
+def _key_examples(values: pd.Series, limit: int = 2) -> str:
+    """``'w1', 'w2'`` — a few distinct ids, quoted, for a message."""
+    shown = pd.Series(values).dropna().astype(str).drop_duplicates().head(limit)
+    return ", ".join(f"'{v}'" for v in shown)
+
+
+def _positioned(fixations: pd.DataFrame) -> pd.Series:
+    """The fixations that have an X and a Y."""
+    if not {"x", "y"} <= set(fixations.columns):
+        return pd.Series(False, index=fixations.index)
+    return fixations["x"].notna() & fixations["y"].notna()
+
+
+_UNPLACED_TAIL = (
+    " Without X and Y, a fixation is placed at the center of the word box its "
+    "Word ID names, so none of these fixations can be placed. Map the "
+    "fixations' X and Y, or use the same Word IDs in both tables."
+)
+
+
+def unplaced_fixations_issue(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    *,
+    set_aside: bool = False,
+    table: str = "Fixations",
+) -> str | None:
+    """The :class:`UnplacedFixationsError` message for a harmonized pair.
+
+    ``None`` unless text Word IDs are involved — the fixations', or the Words
+    table's against numeric fixation ids :func:`match_text_word_ids` set aside
+    (``set_aside``) — and not one fixation has a position. Numeric ids on both
+    sides are never refused here.
+    """
+    fixations_text = _text_keyed(fixations)
+    if not (fixations_text or set_aside):
+        return None
+    if fixations.empty or _positioned(fixations).any():
+        return None
+    words_text = _text_keyed(words)
+    if fixations_text:
+        ids = _key_examples(fixations[WORD_KEY])
+        if words_text:
+            said = (
+                f"{table}: no fixation's Word ID (e.g. {ids}) names a word of its "
+                "trial in the Words table (its Word IDs are e.g. "
+                f"{_key_examples(words[WORD_KEY])})."
+            )
+        elif words is None or words.empty:
+            said = (
+                f"{table}: the Word IDs are text (e.g. {ids}), and there is no "
+                "Words table to find them in."
+            )
+        else:
+            said = (
+                f"{table}: the Word IDs are text (e.g. {ids}), but the Words "
+                "table's are numbers, and a text ID never names a numbered word."
+            )
+        return said + _UNPLACED_TAIL
+    if set_aside and words_text:
+        return (
+            f"{table}: the Word IDs are numbers, but the Words table's are text "
+            f"(e.g. {_key_examples(words[WORD_KEY])}), and a number never names "
+            "a word that has a text ID." + _UNPLACED_TAIL
+        )
+    return None
+
+
+def text_word_id_issues(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    *,
+    fixation_word_ids: bool,
+    table: str = "Fixations",
+) -> list[str]:
+    """Warnings about a harmonized pair's text Word IDs, for the load to say.
+
+    Fixations whose text id names no word of their trial — a misspelling, or
+    ids the Words table does not share — and Word IDs of one kind against a
+    Words table of the other: text ids against numbers, or numeric ids set
+    aside against text ones (``fixation_word_ids``: the fixations' Word ID is
+    mapped). Each line says what became of those fixations; a pair
+    :func:`unplaced_fixations_issue` refuses gets that error instead.
+    """
+    if fixations is None or fixations.empty:
+        return []
+    words_text, fixations_text = _text_keyed(words), _text_keyed(fixations)
+    issues: list[str] = []
+    if fixations_text and not words_text:
+        if words is not None and not words.empty and _positioned(fixations).any():
+            issues.append(
+                f"{table}: the Word IDs are text (e.g. "
+                f"{_key_examples(fixations[WORD_KEY])}), but the Words table's are "
+                "numbers, and a text ID never names a numbered word, so they are "
+                "not used: each fixation is matched to the word box it falls in "
+                "instead."
+            )
+    elif fixations_text:
+        keyed = fixations[WORD_KEY].notna()
+        unmatched = keyed & fixations["word_id"].isna()
+        if unmatched.any():
+            count, total = int(unmatched.sum()), int(keyed.sum())
+            one = count == 1
+            examples = _key_examples(fixations.loc[unmatched, WORD_KEY])
+            line = (
+                f"{table}: {count:,} of {total:,} Word IDs "
+                + ("names no word of its" if one else "name no word of their")
+                + f" trial in the Words table (e.g. {examples}), so "
+                + ("that fixation is" if one else "those fixations are")
+                + " on no word"
+            )
+            positioned = _positioned(fixations[unmatched])
+            if not positioned.any():
+                line += ", and left off the plot"
+            elif not positioned.all():
+                line += ", and those without X and Y are left off the plot"
+            issues.append(line + ". Check that both tables spell them the same way.")
+    elif (
+        words_text
+        and fixation_word_ids
+        and WORD_KEY not in fixations.columns
+        and _positioned(fixations).any()
+    ):
+        issues.append(
+            f"{table}: the Word IDs are numbers, but the Words table's are text "
+            f"(e.g. {_key_examples(words[WORD_KEY])}), and a number never names a "
+            "word that has a text ID, so they are not used: each fixation is "
+            "matched to the word box it falls in instead."
+        )
+    return issues
 
 
 def _reconcile_participant_asymmetry(
@@ -5624,9 +5838,13 @@ def harmonize_frames_reporting(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame, StimulusJoin | None, tuple[Rewrite, ...]]:
     """:func:`harmonize_frames_with_join`, also saying which columns' values it
-    changed (:data:`Rewrite`): ids it zero-padded, a fixation ``word_id``
-    shifted onto 0-based boxes, fixation positions filled from word boxes, and
-    a repeated reading's ``_rN`` trial id."""
+    changed (:data:`Rewrite`): ids it zero-padded, text Word IDs numbered, a
+    fixation ``word_id`` shifted onto 0-based boxes, fixation positions filled
+    from word boxes, and a repeated reading's ``_rN`` trial id.
+
+    Raises :class:`UnplacedFixationsError` when text Word IDs leave every
+    fixation without a position, and warns (``UserWarning``) about the
+    fixations a text Word ID leaves on no word (:func:`text_word_id_issues`)."""
     from .preprocessing import add_text_direction
 
     rewrites: list[Rewrite] = []
@@ -5642,6 +5860,11 @@ def harmonize_frames_reporting(
     words = normalize_screen_identity(words)
     fixations = normalize_screen_identity(fixations)
     validate_matching_parts(words, fixations)
+    fixation_word_ids = "word_id" in fixations.columns and (
+        bool(fixations["word_id"].notna().any()) or _text_keyed(fixations)
+    )
+    fixations, keyed = match_text_word_ids(words, fixations)
+    rewrites += keyed
     offset = detect_word_id_offset(words, fixations)
     fixations = correct_word_id_offset(words, fixations, offset=offset)
     if offset:
@@ -5659,6 +5882,15 @@ def harmonize_frames_reporting(
             for axis in ("x", "y")
             if filled[axis] > 0
         ]
+    set_aside = any(column == "word_id" for _table, column, _how in keyed)
+    if (
+        unplaced := unplaced_fixations_issue(words, fixations, set_aside=set_aside)
+    ) is not None:
+        raise UnplacedFixationsError(unplaced)
+    for issue in text_word_id_issues(
+        words, fixations, fixation_word_ids=fixation_word_ids
+    ):
+        warnings.warn(issue, UserWarning, stacklevel=2)
     if (
         BASE_TRIAL_ID in fixations.columns
         and (_as_key(fixations["trial_id"]) != _as_key(fixations[BASE_TRIAL_ID]))
@@ -6354,13 +6586,18 @@ def _drop_reserved_columns(
     The pipeline reads those names as its own bookkeeping — a join route, the
     stimulus flag, the Edit-dataset collapse key — so an incoming column that
     carries one must not reach any of them; normalization rebuilds
-    them. The names are the pipeline's own, so the usual source is a table
+    them. :data:`~scanpath_studio.constants.WORD_KEY` too: it is the mapped
+    Word ID's text, and one left over from another mapping would match
+    fixations to words by ids the mapping no longer names. The names are the
+    pipeline's own, so the usual source is a table
     Scanpath Studio wrote being loaded again, a normal round-trip: logged at
     INFO, not warned about. One the mapping names is the user's data and is
     left alone."""
     referenced = _schema_source_columns(schema)
     clash = sorted(
-        c for c in INTERNAL_COLUMNS if c in raw.columns and c not in referenced
+        c
+        for c in (*INTERNAL_COLUMNS, WORD_KEY)
+        if c in raw.columns and c not in referenced
     )
     if not clash:
         return raw
@@ -6371,6 +6608,64 @@ def _drop_reserved_columns(
         ", ".join(repr(c) for c in clash),
     )
     return raw.drop(columns=clash)
+
+
+def read_word_ids(values: pd.Series) -> tuple[pd.Series, pd.Series | None]:
+    """A mapped Word ID column, as ``(number, key)``.
+
+    A column that holds any number is read as numbers, as every other id the
+    pipeline joins on, and ``key`` is ``None``: a few cells in it that are not
+    numbers are blanks, which :func:`numeric_parse_issues` reports. A column
+    that holds text and not one number (``w1``, ``Hello_3``) is a column of
+    text ids: ``key`` is each cell's text, stripped — a blank cell or
+    EyeLink's ``.`` is no id — and ``number`` is all blank, for
+    :func:`normalize_words` to number and :func:`match_text_word_ids` to look
+    up. The test is the same as :attr:`ColumnParse.holds_no_number`'s, so the
+    warnings and the load read a column alike.
+    """
+    number = _to_number(values)
+    if (
+        pd.api.types.is_numeric_dtype(values)
+        or pd.api.types.is_bool_dtype(values)
+        or number.notna().any()
+    ):
+        return number, None
+    # By position, never by label: a concatenated frame repeats its labels.
+    present = values.notna().to_numpy()
+    text = values[present].astype(str).str.strip()
+    filled = ((text != "") & (text != MISSING_MARKER)).to_numpy()
+    if not filled.any():
+        return number, None
+    keys = np.full(len(values), np.nan, dtype=object)
+    keys[np.flatnonzero(present)[filled]] = text.to_numpy()[filled]
+    return number, pd.Series(keys, index=values.index, dtype=object)
+
+
+def _number_word_keys(df: pd.DataFrame, keys: pd.Series) -> pd.Series:
+    """Each text Word ID's number in its trial (and screen): 1, 2, … in the
+    order the Words table first lists it.
+
+    The table's own row order is the word order — every interest-area export
+    has one, while a text id carries none — so the numbers order the words
+    for everything that reads ``word_id`` as an order (regressions, the
+    reading-order line, NLD). A key a trial lists twice is one word, numbered
+    where it first appears, as two rows of one numeric id are one word that
+    *Data checks* reports twice. A row with no key has no number."""
+    number = np.full(len(df), np.nan)
+    known = keys.notna().to_numpy()
+    if known.any():
+        columns = grouping_columns(df)
+        rows = df.loc[known, columns].reset_index(drop=True)
+        rows[WORD_KEY] = keys.to_numpy()[known]
+        # `ngroup` numbers the (trial, key) pairs in the order they first
+        # appear, so ranking them within the trial counts its distinct keys.
+        seen = rows.groupby([*columns, WORD_KEY], sort=False, dropna=False).ngroup()
+        number[known] = (
+            seen.groupby([rows[c] for c in columns], sort=False, dropna=False)
+            .rank(method="dense")
+            .to_numpy()
+        )
+    return pd.Series(number, index=df.index)
 
 
 def normalize_words(
@@ -6431,13 +6726,22 @@ def normalize_words(
     if mapped is not None:
         df[TEXT_ID_MAPPED] = mapped
     df = _copy_screen_fields(df, words, schema)
-    df["word_id"] = _to_number(words[schema["word_id"]])
+    word_id, word_key = read_word_ids(words[schema["word_id"]])
+    if word_key is None:
+        df["word_id"] = word_id
+    else:
+        # Text ids: the number every consumer joins and orders on is the
+        # word's place in its trial, and the id itself is kept beside it.
+        df["word_id"] = _number_word_keys(df, word_key)
+        df[WORD_KEY] = word_key
     if schema.get("text"):
         # A missing cell is an empty word, never NaN — pandas 3's
         # `astype(str)` keeps NaN as NaN, and every " ".join over a trial's text
         # downstream then raises on the float.
         text = words[schema["text"]]
         df["text"] = text.where(text.notna(), "").astype(str)
+    elif word_key is not None:
+        df["text"] = word_key.where(word_key.notna(), "").astype(str)
     else:
         df["text"] = df["word_id"].apply(lambda v: f"w{int(v)}" if pd.notna(v) else "")
     df["text"] = df["text"].str.replace(r"\s+", " ", regex=True).str.strip()
@@ -6463,8 +6767,13 @@ def normalize_words(
 
     emitted = _apply_optional_fields(df, words, WORD_OPTIONAL_FIELDS, keep_columns)
     if keep_columns is not None:
+        # Never a `word_key` the mapping did not just read: a stored one
+        # re-normalized under another Word ID would match by stale ids.
         _carry_extra_columns(
-            df, words, keep_columns, _schema_source_columns(schema) | emitted
+            df,
+            words,
+            keep_columns,
+            _schema_source_columns(schema) | emitted | {WORD_KEY},
         )
     # After the passthrough and the extras, so the mapping has the last
     # word on every measure it names.
@@ -6484,8 +6793,6 @@ def normalize_fixations(
 ) -> pd.DataFrame:
     if not _renormalizing:
         fixations = _drop_reserved_columns(fixations, schema, table="Fixations")
-    if (unplaced := unplaced_fixations_issue(fixations, schema)) is not None:
-        raise UnplacedFixationsError(unplaced)
     _warn_normalization_issues(fixations, schema, table="Fixations", fixations=True)
     fixations = _drop_rows_missing_identity(fixations, schema)
     # Explicit index so a constant participant placeholder fills every row.
@@ -6556,7 +6863,11 @@ def normalize_fixations(
             df[SCREEN_FIXATION_ID] = df.groupby(part_keys, sort=False).cumcount().add(1)
 
     if schema.get("word_id"):
-        df["word_id"] = _to_number(fixations[schema["word_id"]])
+        # Text ids are looked up in the Words table by harmonize_frames
+        # (`match_text_word_ids`), which numbers them; until then, no number.
+        df["word_id"], word_key = read_word_ids(fixations[schema["word_id"]])
+        if word_key is not None:
+            df[WORD_KEY] = word_key
     else:
         df["word_id"] = np.nan
 
@@ -6566,8 +6877,11 @@ def normalize_fixations(
     # measures.enrich_fixations when absent.
     emitted = _apply_optional_fields(df, fixations, FIX_OPTIONAL_FIELDS, keep_columns)
     if keep_columns is not None:
-        _carry_extra_columns(
-            df, fixations, keep_columns, _schema_source_columns(schema) | emitted
+        _carry_extra_columns(  # never a stale `word_key` — see normalize_words
+            df,
+            fixations,
+            keep_columns,
+            _schema_source_columns(schema) | emitted | {WORD_KEY},
         )
 
     df = _preserve_composite_columns(df, fixations, schema["trial"])

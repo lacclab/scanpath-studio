@@ -156,6 +156,7 @@ from scanpath_studio.constants import (
     WORD_BOX_FILL_COLOR,
     WORD_BOX_FILL_OPACITY,
     WORD_BOX_LINE_OPACITY,
+    WORD_KEY,
     WORD_LABEL_COLOR,
     compare_palette_color,
     computed_measures_enabled,
@@ -14621,6 +14622,10 @@ def _remap_proposed(schema: dict | None, frame_columns, canon: dict) -> dict:
             # always seed it so a remap preserves text grouping instead of
             # collapsing every reading of a text into its own trial_id.
             proposed[key] = canonical
+        elif key == "word_id" and schema.get(key) and WORD_KEY in cols:
+            # Text Word IDs: the ids themselves, which the save numbers and
+            # matches again, never the numbers the load gave them.
+            proposed[key] = WORD_KEY
         else:
             proposed[key] = canonical if schema.get(key) else None
     return proposed

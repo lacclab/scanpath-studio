@@ -87,6 +87,7 @@ from .data import (
     propose_word_schema,
     source_file_regex_collisions,
     split_source_file,
+    text_word_id_issues,
     trial_id_series,
     trial_keys,
     trial_mapping_columns,
@@ -4509,6 +4510,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 continue
             for line in _c_normalization_issues(
                 raw, schema, frame_fingerprint(raw), _schema_key(schema), table
+            ):
+                s6.warning(f"{ICONS['warning']} {line}")
+        # Text Word IDs are matched across the two tables, so what the match
+        # left on no word is said here too; the load's own warning reaches only
+        # the terminal.
+        if has_words and has_fix:
+            for line in text_word_id_issues(
+                words_norm,
+                fixations_norm,
+                fixation_word_ids=bool(fix_schema.get("word_id")),
             ):
                 s6.warning(f"{ICONS['warning']} {line}")
 

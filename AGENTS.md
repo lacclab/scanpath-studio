@@ -141,6 +141,14 @@ After `normalize_words` / `normalize_fixations`:
   `screen_fixation_id`, and per-screen canvas metadata. Scientific grouping
   uses `(participant_id, trial_id, screen_id)`; coordinate spaces are never
   connected across screens.
+- **Text Word IDs.** A Word/IA ID column that holds text and not one number
+  (`w1`, `Hello_3`) is read as keys (`data.read_word_ids`): the text goes to
+  `word_key` (`constants.WORD_KEY`, shown and exported under the column's own
+  name), and `word_id` stays numeric for every consumer — on the words, each
+  key's position in its trial (and screen), 1, 2, … in the table's row order;
+  on the fixations, the number of the word with exactly that key in the same
+  trial (`data.match_text_word_ids`, in `harmonize_frames`). A column with any
+  number in it is read as numbers, and its other cells as blanks.
 - `data.INTERNAL_COLUMNS` (`_aoi_trial_id`, `_base_trial_id`,
   `_stimulus_words`, …) stay in the frames and the recovery cache and are
   dropped by `data.drop_internal_columns` wherever data leaves the app (export,
@@ -178,7 +186,9 @@ the box that starts there. Positions *inside* a word go through
 `word_char_advance` / `word_glyph_span`.
 
 The **fixation→word assignment** is the data's own when the fixation table maps
-a Word ID — used exactly as given, a blank staying blank. Only when it has
+a Word ID — used exactly as given, a blank staying blank; a text Word ID is
+looked up by its exact text in its trial's words, and a text ID is never
+matched to a number, nor a number to a text ID. Only when it has
 none does `measures.assign_fixations_to_words` derive it from geometry:
 box containment, else `word_id = NaN` (no snapping to a nearby word). That
 assignment feeds the reading measures and the "out-of-text" flag
@@ -462,7 +472,9 @@ on one the Share → Code snippet cannot reproduce.
   match (`AOI_LEFT`, `LEFT_px`) only when exactly one column survives it;
   ambiguity falls through to manual mapping.
 - `*` on a mapping field means exactly "validation blocks without it". A Word/IA
-  ID is read as a number, so one that holds no numbers is no location.
+  ID is a location only through the Words table: without X/Y, fixations whose
+  text ids name no word of their trial (or numeric ids against a Words table
+  of text ids) are refused by `harmonize_frames` (`UnplacedFixationsError`).
 - **pandas joins NaN to NaN** — in `merge` and in `Series.map` over a dict — so
   any lookup keyed on a word id drops missing keys first.
 - Repeated readings of a trial get a `_r2` suffix on `trial_id` (ranked on

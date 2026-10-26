@@ -60,6 +60,9 @@ metadata field.
 - Times in milliseconds. A time column whose header names its unit, such as
   `[s]`, `[μs]` or `[ns]`, is converted.
 - Word boxes as `x/y/width/height` or EyeLink's `IA_LEFT/RIGHT/TOP/BOTTOM`
+- Word IDs as numbers, or as text such as `w1`. Spell text IDs the same way in
+  the Fixations and Words tables. With text IDs, the order of the rows in the
+  Words table sets the word order.
 
 ### Trials over several screens { #multipart-logical-trials }
 

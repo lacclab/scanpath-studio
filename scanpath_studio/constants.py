@@ -13,6 +13,13 @@ PACKAGE_NAME = "scanpath_studio"
 #: number, so the plot can colour by order without calling it time.
 SAMPLE_INDEX = "sample_index"
 
+#: A Word ID the data spells as text (``w1``, ``Hello_3``) rather than as a
+#: number, as the file spells it. The numeric ``word_id`` every consumer joins
+#: on is then the word's position in its trial (`data.normalize_words`), and a
+#: fixation's is looked up through this key (`data.match_text_word_ids`). A
+#: column the user sees and exports, under the Word ID column's own name.
+WORD_KEY = "word_key"
+
 
 # --- Experimental features ----------------------------------------------------
 # Features that are built but not yet validated or fully integrated are off

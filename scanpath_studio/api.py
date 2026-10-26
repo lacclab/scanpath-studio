@@ -840,6 +840,12 @@ def load_scanpath_data(
       Trials that match none raise a ``data.StimulusJoinWarning`` (a ``UserWarning``).
     - **Fixations without x/y** but with a word ID are placed at the centers of their
       word boxes.
+    - **Text word IDs.** A word ID column that holds text and no numbers (``w1``,
+      ``Hello_3``) is read as keys, kept in a ``word_key`` column (under the column's
+      own name with ``names="source"``). Each word's ``word_id`` is then its position
+      in its trial, 1, 2, … in the Words table's row order, and a fixation's is the
+      number of the word with the same text ID in its trial — exactly the same text,
+      else none. A text ID never matches a number.
     - **Bookkeeping columns.** Columns named in ``data.INTERNAL_COLUMNS`` are the
       pipeline's own; ``data.drop_internal_columns`` removes them.
 
@@ -887,8 +893,9 @@ def load_scanpath_data(
         data.StimulusJoinError: A stimulus-level Words table shares neither a trial ID
             nor a ``text_id`` with any trial (or, multipart, with every screen a trial
             has fixations on). A ``ValueError``.
-        data.UnplacedFixationsError: The fixations map no x/y and their word ID column
-            holds no numbers, so none could be placed. A ``ValueError``.
+        data.UnplacedFixationsError: The fixations have no x/y, and not one of their
+            word IDs names a word: text IDs the Words table does not have, or numbers
+            against a Words table of text IDs. A ``ValueError``.
     """
     _check_names_choice(names)
     if words is None and fixations is None:

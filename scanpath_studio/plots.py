@@ -78,6 +78,7 @@ from .constants import (
     WORD_BOX_FILL_COLOR,
     WORD_BOX_FILL_OPACITY,
     WORD_BOX_LINE_OPACITY,
+    WORD_KEY,
     WORD_LABEL_COLOR,
     canonical_legend_position,
     compare_palette_color,
@@ -587,6 +588,10 @@ def redact_word_text(words: pd.DataFrame | None) -> pd.DataFrame | None:
         )
     )
     out["text"] = masked.where(present, words["text"])
+    if WORD_KEY in out.columns:
+        # A text Word ID often spells its word (`Hello_3`); the hovers then
+        # name the word by its number.
+        out = out.drop(columns=WORD_KEY)
     return out
 
 
@@ -3070,6 +3075,7 @@ def _hover_label(field: str, table: str | None = None) -> str:
     aliases = {
         "text": "Word",
         "word_id": "Word #",
+        WORD_KEY: "Word ID",
         "line_idx": "Line #",
         "order_in_trial": "Fixation #",
         "duration_ms": "Duration",
@@ -3149,18 +3155,27 @@ def _fixation_hover_head(
     """The fixation hover's lead line, one string per row.
 
     The word a fixation landed on is named by its text when the trial's word
-    table has it (and its word ids are unique); a fixation on no word reads
-    "outside the text"."""
+    table has it (and its word ids are unique), and by its own Word ID when
+    the data spells that as text; a fixation on no word reads "outside the
+    text"."""
     word_text: dict[float, str] = {}
+    word_name: dict[float, str] = {}
     if (
         "word_id" in head
         and words is not None
         and not words.empty
-        and {"word_id", "text"} <= set(words.columns)
+        and "word_id" in words.columns
     ):
         ids = pd.to_numeric(words["word_id"], errors="coerce")
         if ids.notna().all() and ids.is_unique:
-            word_text = dict(zip(ids.astype(float), words["text"].astype(str)))
+            if "text" in words.columns:
+                word_text = dict(zip(ids.astype(float), words["text"].astype(str)))
+            if WORD_KEY in words.columns:
+                word_name = {
+                    word: str(key)
+                    for word, key in zip(ids.astype(float), words[WORD_KEY])
+                    if pd.notna(key)
+                }
     columns = {field: frame[field].tolist() for field in head}
     # A fixation with no word id is "outside the text" only when it is outside
     # every word box: the data's own assignment can be blank inside one.
@@ -3192,7 +3207,12 @@ def _fixation_hover_head(
                     parts.append("outside the text")
             else:
                 text = word_text.get(float(value))
-                word = f"word {_hover_number(value)}"
+                name = word_name.get(float(value))
+                word = (
+                    _plotly_literal(name)
+                    if name is not None
+                    else f"word {_hover_number(value)}"
+                )
                 parts.append(
                     f"on “{_plotly_literal(text)}” ({word})" if text else f"on {word}"
                 )
@@ -3251,6 +3271,15 @@ def _hover_payload(
             rows.append("%{customdata[0]}")
             valid = [field for field in valid if field not in head]
     for idx, field in enumerate(valid, start=len(values)):
+        if (
+            field == "word_id"
+            and WORD_KEY not in valid
+            and WORD_KEY in frame.columns
+            and frame[WORD_KEY].notna().any()
+        ):
+            # Text Word IDs: the id the data spells, not the number the app
+            # gave it to order and match the words by.
+            field = WORD_KEY
         series = (
             line_display
             if field == "line_idx" and line_display is not None
@@ -3458,11 +3487,15 @@ def _add_word_label_trace(
         else:
             # No field list (the API's default, and old deep links): the three
             # fixed identity lines plus the single optional measure.
+            keyed = WORD_KEY in words.columns and words[WORD_KEY].notna().any()
             customdata_parts: list[pd.Series] = [
-                _plotly_literal_values(words["word_id"]),
+                _plotly_literal_values(words[WORD_KEY if keyed else "word_id"]),
                 line_display,
             ]
-            hover = "Word: %{text}<br>Word #%{customdata[0]}<br>Line #%{customdata[1]}"
+            word_line = (
+                "Word ID: %{customdata[0]}" if keyed else "Word #%{customdata[0]}"
+            )
+            hover = f"Word: %{{text}}<br>{word_line}<br>Line #%{{customdata[1]}}"
             if word_hover_measure and word_hover_measure in words.columns:
                 label = _table_label(
                     word_hover_measure, "words"

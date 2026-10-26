@@ -145,9 +145,11 @@ After `normalize_words` / `normalize_fixations`:
   (`w1`, `Hello_3`) is read as keys (`data.read_word_ids`): the text goes to
   `word_key` (`constants.WORD_KEY`, shown and exported under the column's own
   name), and `word_id` stays numeric for every consumer — on the words, each
-  key's position in its trial (and screen), 1, 2, … in the table's row order;
-  on the fixations, the number of the word with exactly that key in the same
-  trial (`data.match_text_word_ids`, in `harmonize_frames`). A column with any
+  key's position in its text (and screen), 1, 2, … in the row order of the
+  reading that lists the most of the text's keys, one number for every reader
+  (`data._number_word_keys`); on the fixations, the number of the word with
+  exactly that key in the same trial (`data.match_text_word_ids`, in
+  `harmonize_frames`). A column with any
   number in it is read as numbers, and its other cells as blanks.
 - `data.INTERNAL_COLUMNS` (`_aoi_trial_id`, `_base_trial_id`,
   `_stimulus_words`, …) stay in the frames and the recovery cache and are

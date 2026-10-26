@@ -843,9 +843,10 @@ def load_scanpath_data(
     - **Text word IDs.** A word ID column that holds text and no numbers (``w1``,
       ``Hello_3``) is read as keys, kept in a ``word_key`` column (under the column's
       own name with ``names="source"``). Each word's ``word_id`` is then its position
-      in its trial, 1, 2, … in the Words table's row order, and a fixation's is the
-      number of the word with the same text ID in its trial — exactly the same text,
-      else none. A text ID never matches a number.
+      in its text, 1, 2, … in the Words table's row order (the order of the reading
+      that lists the most of the text), one number for every reader, and a
+      fixation's is the number of the word with the same text ID in its trial —
+      exactly the same text, else none. A text ID never matches a number.
     - **Bookkeeping columns.** Columns named in ``data.INTERNAL_COLUMNS`` are the
       pipeline's own; ``data.drop_internal_columns`` removes them.
 

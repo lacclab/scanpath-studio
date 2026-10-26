@@ -2,10 +2,10 @@
 
 A Word ID column with text and not one number is read as keys
 (`data.read_word_ids`): the text is kept in `word_key`, each word's numeric
-`word_id` is its place in its trial in the Words table's row order, and a
-fixation's is the number of the word with exactly its key in the same trial
-(`data.match_text_word_ids`). Every numeric consumer then works unchanged, and
-a numeric Word ID reads exactly as it always did.
+`word_id` is its place in its text in the Words table's row order — one
+number for every reader — and a fixation's is the number of the word with
+exactly its key in the same trial (`data.match_text_word_ids`). Every numeric
+consumer then works unchanged, and a numeric Word ID reads as numbers.
 """
 
 from __future__ import annotations
@@ -155,6 +155,63 @@ class TestNumberingTheWords:
         schema = {**WORD_SCHEMA, "text": None}
         words = normalize_words(_words(("Hello_1", "world_2")), schema)
         assert words["text"].tolist() == ["Hello_1", "world_2"]
+
+    def test_one_key_is_one_number_for_every_reader_of_a_text(self):
+        """Readers pooled by (text, word_id) must mean the same word: r2's
+        table lists only some of the text's keys, in its own order, and the
+        first table read is the partial one."""
+        raw = pd.concat(
+            [
+                _words(("w1", "w3"), reader="r2", trial="r2_t"),
+                _words(("w1", "w2", "w3"), reader="r1", trial="r1_t"),
+            ],
+            ignore_index=True,
+        ).assign(passage="P")
+        words = normalize_words(raw, {**WORD_SCHEMA, "text_id": "passage"})
+        number = dict(
+            zip(zip(words["participant_id"], words[WORD_KEY]), words["word_id"])
+        )
+        assert number == {
+            ("r2", "w1"): 1.0,
+            ("r2", "w3"): 3.0,
+            # The fullest listing, r1's, sets the order: w2 is between them.
+            ("r1", "w1"): 1.0,
+            ("r1", "w2"): 2.0,
+            ("r1", "w3"): 3.0,
+        }
+
+    def test_pooled_readers_measure_the_same_word(self):
+        """A word's measure across readers (`aggregation`'s per-reader
+        profiles key on text and word_id) counts the same word for both."""
+        raw_words = pd.concat(
+            [
+                _words(("w1", "w3"), reader="r2", trial="t"),
+                _words(("w1", "w2", "w3"), reader="r1", trial="t"),
+            ],
+            ignore_index=True,
+        )
+        raw_fix = pd.concat(
+            [
+                _fixations(["w3"], reader="r1", trial="t"),
+                _fixations(["w3"], reader="r2", trial="t"),
+            ],
+            ignore_index=True,
+        )
+        words, fixations = _quiet_load(raw_words, raw_fix)
+        assert fixations["word_id"].tolist() == [3.0, 3.0]
+        pooled = words.groupby(["text_id", "word_id"])[WORD_KEY].unique()
+        assert all(len(keys) == 1 for keys in pooled)
+
+    def test_a_row_with_no_text_id_is_numbered_in_its_own_reading(self):
+        raw = pd.concat(
+            [
+                _words(("w2", "w3"), reader="r2", trial="t"),
+                _words(("w1", "w2", "w3"), reader="r1", trial="t"),
+            ],
+            ignore_index=True,
+        ).assign(passage=None)
+        words = normalize_words(raw, {**WORD_SCHEMA, "text_id": "passage"})
+        assert words["word_id"].tolist() == [1.0, 2.0, 1.0, 2.0, 3.0]
 
     def test_each_screen_numbers_its_own_words(self):
         raw = pd.concat(
@@ -433,6 +490,79 @@ class TestLoadingItAgain:
         assert words_again["word_id"].tolist() == words["word_id"].tolist()
         assert fixations_again["word_id"].tolist() == [3.0, 2.0]
         assert fixations_again[WORD_KEY].tolist() == ["world_3", "big_2"]
+
+    @staticmethod
+    def _save_fixations_only(stored, pending_fix):
+        """Press ✅ Save changes (`tabs._apply_remap`) on a dataset with no
+        Words table."""
+        import streamlit as st
+
+        from scanpath_studio import tabs
+
+        entry = {
+            "words": pd.DataFrame(),
+            "fixations": stored,
+            "raw_gaze": pd.DataFrame(),
+            "schemas": {"fixations": {**FIX_SCHEMA, "x": "fx", "y": "fy"}},
+        }
+        st.session_state.clear()
+        st.session_state["data_source_choice"] = "study"
+        st.session_state["_datasets"] = {"study": entry}
+        st.session_state["_remap_pending_schemas"] = {"fixations": pending_fix}
+        st.session_state["_remap_added_tables"] = []
+        tabs._apply_remap()
+        return (
+            st.session_state.get("_remap_problems"),
+            st.session_state["_datasets"]["study"],
+        )
+
+    @staticmethod
+    def _stored_fixations_only():
+        return api.load_scanpath_data(
+            fixations=_fixations(
+                [1, 2], fx=[10.0, 20.0], fy=[0.0, 0.0], lbl=["w1", "w2"]
+            ),
+            fix_schema={**FIX_SCHEMA, "x": "fx", "y": "fy"},
+            keep_columns=["lbl"],
+            names="canonical",
+        ).fixations
+
+    def test_an_edit_leaving_a_fixations_only_table_unplaceable_is_refused(self):
+        """With no Words table nothing harmonizes the save, but a Word ID moved
+        onto text, with X and Y cleared, still places no fixation — refused
+        like the add screen refuses it, and nothing is saved."""
+        stored = self._stored_fixations_only()
+        problems, saved = self._save_fixations_only(
+            stored,
+            {
+                "participant": "participant_id",
+                "trial": "trial_id",
+                "word_id": "lbl",
+                "duration": "duration_ms",
+                "x": None,
+                "y": None,
+            },
+        )
+        assert problems and "fixations" in problems
+        assert "no Words table" in problems["fixations"][0]
+        assert saved["fixations"] is stored
+
+    def test_an_edit_keeping_the_positions_saves(self):
+        stored = self._stored_fixations_only()
+        problems, saved = self._save_fixations_only(
+            stored,
+            {
+                "participant": "participant_id",
+                "trial": "trial_id",
+                "word_id": "lbl",
+                "duration": "duration_ms",
+                "x": "x",
+                "y": "y",
+            },
+        )
+        assert not problems
+        assert saved["fixations"][WORD_KEY].tolist() == ["w1", "w2"]
+        assert saved["fixations"]["x"].tolist() == [10.0, 20.0]
 
     def test_an_edit_to_numeric_ids_drops_the_stored_keys(self):
         """A `word_key` left over from the old mapping would match fixations

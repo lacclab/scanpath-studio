@@ -15,8 +15,9 @@ SAMPLE_INDEX = "sample_index"
 
 #: A Word ID the data spells as text (``w1``, ``Hello_3``) rather than as a
 #: number, as the file spells it. The numeric ``word_id`` every consumer joins
-#: on is then the word's position in its trial (`data.normalize_words`), and a
-#: fixation's is looked up through this key (`data.match_text_word_ids`). A
+#: on is then the word's position in its text, one number for every reader
+#: (`data.normalize_words`), and a fixation's is looked up through this key
+#: (`data.match_text_word_ids`). A
 #: column the user sees and exports, under the Word ID column's own name.
 WORD_KEY = "word_key"
 

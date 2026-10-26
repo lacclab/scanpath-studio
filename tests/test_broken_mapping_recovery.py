@@ -188,15 +188,18 @@ def test_the_open_wizard_survives_an_upload_the_pipeline_rejects(one_sided_uploa
     assert finalize and finalize[0].disabled
 
 
-def _upload_text_word_ids(monkeypatch, *, word_ids, fixation_ids) -> AppTest:
-    """The wizard over an AOI-sequence pair: fixations with no X/Y, placed by
-    their Word ID alone."""
+def _upload_text_word_ids(
+    monkeypatch, *, word_ids, fixation_ids, keep_xy: bool = False
+) -> AppTest:
+    """The wizard over an AOI-sequence pair: fixations with no X/Y (unless
+    ``keep_xy``), placed by their Word ID alone."""
     from scanpath_studio import app
 
     words = _WIZARD_WORDS.drop(columns=["page"]).assign(word_id=list(word_ids))
-    fixations = _WIZARD_FIXATIONS.drop(columns=["x", "y"]).assign(
-        word_id=list(fixation_ids)
+    fixations = (
+        _WIZARD_FIXATIONS if keep_xy else _WIZARD_FIXATIONS.drop(columns=["x", "y"])
     )
+    fixations = fixations.assign(word_id=list(fixation_ids))
     monkeypatch.setattr(
         app,
         "_read_uploaded_frame",
@@ -251,6 +254,29 @@ def test_text_word_ids_against_numeric_ones_block_the_add(monkeypatch):
     finalize = [b for b in at.button if b.key == "wizard_finalize"]
     assert finalize and finalize[0].disabled
     assert "_wizard_finalize_payload" not in at.session_state
+
+
+def test_numeric_word_ids_against_text_ones_are_said_to_be_set_aside(monkeypatch):
+    at = _upload_text_word_ids(
+        monkeypatch, word_ids=("w0", "w1", "w2"), fixation_ids=(2, 0, 1), keep_xy=True
+    )
+
+    said = [w.value for w in at.warning if "Word IDs are numbers" in w.value]
+    assert said and "matched to the word box it falls in" in said[0]
+
+
+def test_a_blank_fixation_word_id_beside_text_ones_is_not_warned_about(monkeypatch):
+    """The wizard warns on what the load did: a mapped fixations Word ID with
+    no value in it set nothing aside, so there is nothing to say."""
+    at = _upload_text_word_ids(
+        monkeypatch,
+        word_ids=("w0", "w1", "w2"),
+        fixation_ids=(None, None, None),
+        keep_xy=True,
+    )
+
+    assert at.selectbox(key="col_map_fix_word_id").value == "word_id"
+    assert not [w.value for w in at.warning if "Word IDs are numbers" in w.value]
 
 
 def test_a_collapsed_wizard_upload_recovers_like_any_other_bad_mapping(

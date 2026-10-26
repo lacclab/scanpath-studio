@@ -256,6 +256,7 @@ from scanpath_studio.data import (
     trial_keys,
     trial_mapping_columns,
     trial_order_label,
+    unplaced_fixations_issue,
     user_columns,
     validate_fix_schema,
     validate_raw_gaze_schema,
@@ -14912,6 +14913,20 @@ def _apply_remap() -> None:
         new_entry["words"] = words
         if has_fixations:
             new_entry["fixations"] = fixations
+    elif not harmonized and "fixations" in pending:
+        # No Words table to harmonize with, so the refusal `harmonize_frames`
+        # makes is made here: fixations whose only position is a text Word ID
+        # have nothing to place them, and saving them would draw nothing.
+        fixations = new_entry.get("fixations")
+        if isinstance(fixations, pd.DataFrame) and (
+            problem := unplaced_fixations_issue(empty_words_frame(), fixations)
+        ):
+            from scanpath_studio.app import MAPPING_FAILURE_LEAD
+
+            st.session_state["_remap_problems"] = {
+                "fixations": [f"{MAPPING_FAILURE_LEAD}: {problem}"]
+            }
+            return
     new_entry["schemas"] = new_schemas
     new_entry["column_names"] = {
         table: ColumnNames.from_payload(payload)

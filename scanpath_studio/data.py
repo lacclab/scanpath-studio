@@ -5386,11 +5386,25 @@ def fill_fixation_xy_from_words(
 #: :data:`~scanpath_studio.constants.WORD_KEY`, which takes the Word ID
 #: column's name, and ``word_id`` becomes the app's number.
 WORD_KEY_NUMBERED = {
-    "words": ", numbered by its order in the trial",
+    "words": ", numbered by its order in the text",
     "fixations": ", numbered as the Words table numbers it",
     # Text ids against a Words table of numbers (or none) name no word.
     "unmatched": ", not used: the Words table has no text Word IDs",
 }
+#: The rewrite of the fixations' ``word_id`` when :func:`match_text_word_ids`
+#: sets numeric fixation ids aside against a Words table of text ids.
+WORD_IDS_SET_ASIDE = (
+    "fixations",
+    "word_id",
+    ", set aside: the Words table's Word IDs are text",
+)
+
+
+def word_ids_set_aside(rewrites: Iterable[Rewrite] | None) -> bool:
+    """Whether a load's rewrites say it set numeric fixation Word IDs aside
+    (:data:`WORD_IDS_SET_ASIDE`) — what the add-dataset wizard reads, since
+    the harmonized frame no longer holds them."""
+    return WORD_IDS_SET_ASIDE in tuple(rewrites or ())
 
 
 def _text_keyed(frame: pd.DataFrame | None) -> bool:
@@ -5451,15 +5465,14 @@ def match_text_word_ids(
     elif words_text and fixations["word_id"].notna().any():
         fixations = fixations.copy()
         fixations["word_id"] = np.nan
-        rewrites.append(
-            ("fixations", "word_id", ", set aside: the Words table's Word IDs are text")
-        )
+        rewrites.append(WORD_IDS_SET_ASIDE)
     return fixations, tuple(rewrites)
 
 
 def _key_examples(values: pd.Series, limit: int = 2) -> str:
-    """``'w1', 'w2'`` — a few distinct ids, quoted, for a message."""
-    shown = pd.Series(values).dropna().astype(str).drop_duplicates().head(limit)
+    """``'w1', 'w2'`` — a few distinct ids, quoted, for a message. Only those
+    few are turned into text, not the column."""
+    shown = pd.unique(pd.Series(values).dropna().to_numpy())[:limit]
     return ", ".join(f"'{v}'" for v in shown)
 
 
@@ -5529,7 +5542,7 @@ def text_word_id_issues(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     *,
-    fixation_word_ids: bool,
+    set_aside: bool = False,
     table: str = "Fixations",
 ) -> list[str]:
     """Warnings about a harmonized pair's text Word IDs, for the load to say.
@@ -5537,9 +5550,10 @@ def text_word_id_issues(
     Fixations whose text id names no word of their trial — a misspelling, or
     ids the Words table does not share — and Word IDs of one kind against a
     Words table of the other: text ids against numbers, or numeric ids set
-    aside against text ones (``fixation_word_ids``: the fixations' Word ID is
-    mapped). Each line says what became of those fixations; a pair
-    :func:`unplaced_fixations_issue` refuses gets that error instead.
+    aside against text ones (``set_aside``: :func:`word_ids_set_aside` of the
+    load's rewrites, the same answer the load warned on). Each line says what
+    became of those fixations; a pair :func:`unplaced_fixations_issue`
+    refuses gets that error instead.
     """
     if fixations is None or fixations.empty:
         return []
@@ -5574,12 +5588,7 @@ def text_word_id_issues(
             elif not positioned.all():
                 line += ", and those without X and Y are left off the plot"
             issues.append(line + ". Check that both tables spell them the same way.")
-    elif (
-        words_text
-        and fixation_word_ids
-        and WORD_KEY not in fixations.columns
-        and _positioned(fixations).any()
-    ):
+    elif set_aside and words_text and _positioned(fixations).any():
         issues.append(
             f"{table}: the Word IDs are numbers, but the Words table's are text "
             f"(e.g. {_key_examples(words[WORD_KEY])}), and a number never names a "
@@ -5860,9 +5869,6 @@ def harmonize_frames_reporting(
     words = normalize_screen_identity(words)
     fixations = normalize_screen_identity(fixations)
     validate_matching_parts(words, fixations)
-    fixation_word_ids = "word_id" in fixations.columns and (
-        bool(fixations["word_id"].notna().any()) or _text_keyed(fixations)
-    )
     fixations, keyed = match_text_word_ids(words, fixations)
     rewrites += keyed
     offset = detect_word_id_offset(words, fixations)
@@ -5882,14 +5888,12 @@ def harmonize_frames_reporting(
             for axis in ("x", "y")
             if filled[axis] > 0
         ]
-    set_aside = any(column == "word_id" for _table, column, _how in keyed)
+    set_aside = word_ids_set_aside(keyed)
     if (
         unplaced := unplaced_fixations_issue(words, fixations, set_aside=set_aside)
     ) is not None:
         raise UnplacedFixationsError(unplaced)
-    for issue in text_word_id_issues(
-        words, fixations, fixation_word_ids=fixation_word_ids
-    ):
+    for issue in text_word_id_issues(words, fixations, set_aside=set_aside):
         warnings.warn(issue, UserWarning, stacklevel=2)
     if (
         BASE_TRIAL_ID in fixations.columns
@@ -6642,29 +6646,71 @@ def read_word_ids(values: pd.Series) -> tuple[pd.Series, pd.Series | None]:
 
 
 def _number_word_keys(df: pd.DataFrame, keys: pd.Series) -> pd.Series:
-    """Each text Word ID's number in its trial (and screen): 1, 2, … in the
-    order the Words table first lists it.
+    """Each text Word ID's number in its text (and screen): one key, one
+    number, for every reading of that text.
 
-    The table's own row order is the word order — every interest-area export
-    has one, while a text id carries none — so the numbers order the words
-    for everything that reads ``word_id`` as an order (regressions, the
-    reading-order line, NLD). A key a trial lists twice is one word, numbered
-    where it first appears, as two rows of one numeric id are one word that
-    *Data checks* reports twice. A row with no key has no number."""
+    Readings are pooled by ``text_id`` — the mapped Text ID, else the trial ID
+    — which is how the consumers pool the readers of a text (a word's measure
+    across readers, its tint, NLD), so a key names one word for all of them
+    however each reader's table lists it. A row with no text id is numbered
+    within its own reading.
+
+    The order is a reading's own, since a text id carries none and the table's
+    row order is the word order: the reading that lists the most of the text's
+    keys (the first such) numbers them 1, 2, … in its row order, and a key only
+    other readings list follows, in the order the table first lists it. When
+    every reader's table lists the whole text — an interest-area report does —
+    that is each reader's own row order. A key a reading lists twice is one
+    word, numbered where it first appears, as two rows of one numeric id are
+    one word that *Data checks* reports twice. A row with no key has no number.
+    """
     number = np.full(len(df), np.nan)
     known = keys.notna().to_numpy()
-    if known.any():
-        columns = grouping_columns(df)
-        rows = df.loc[known, columns].reset_index(drop=True)
-        rows[WORD_KEY] = keys.to_numpy()[known]
-        # `ngroup` numbers the (trial, key) pairs in the order they first
-        # appear, so ranking them within the trial counts its distinct keys.
-        seen = rows.groupby([*columns, WORD_KEY], sort=False, dropna=False).ngroup()
-        number[known] = (
-            seen.groupby([rows[c] for c in columns], sort=False, dropna=False)
-            .rank(method="dense")
-            .to_numpy()
-        )
+    if not known.any():
+        return pd.Series(number, index=df.index)
+    rows = df.loc[known].reset_index(drop=True)
+    reading = rows["participant_id"].astype(str) + "\x1f" + rows["trial_id"].astype(str)
+    if "text_id" in rows.columns:
+        text = rows["text_id"].astype(object)
+        named = text.notna() & text.astype(str).str.strip().ne("")
+    else:
+        text = pd.Series(np.nan, index=rows.index, dtype=object)
+        named = pd.Series(False, index=rows.index)
+    # A row with no text id is a text of its own reading; the separator never
+    # starts a real id.
+    frame = pd.DataFrame(
+        {
+            "_text": text.where(named, "\x1e" + reading),
+            "_reading": reading,
+            WORD_KEY: keys.to_numpy()[known],
+        }
+    )
+    group = ["_text"]
+    if SCREEN_ID in df.columns:
+        frame["_screen"] = rows[SCREEN_ID].to_numpy()
+        group.append("_screen")
+    # Each reading's distinct keys, in the order its rows list them.
+    listed = frame.drop_duplicates([*group, "_reading", WORD_KEY])
+    counts = (
+        listed.groupby([*group, "_reading"], sort=False, dropna=False)
+        .size()
+        .rename("_listed")
+        .reset_index()
+    )
+    # The reading that lists the most keys of its text; the stable sort keeps
+    # the first of a tie first.
+    fullest = counts.sort_values("_listed", ascending=False, kind="stable")
+    fullest = fullest.drop_duplicates(group)[[*group, "_reading"]]
+    order = pd.concat(
+        [
+            listed.merge(fullest, on=[*group, "_reading"])[[*group, WORD_KEY]],
+            listed[[*group, WORD_KEY]],
+        ],
+        ignore_index=True,
+    ).drop_duplicates([*group, WORD_KEY])
+    order["_number"] = order.groupby(group, sort=False, dropna=False).cumcount() + 1
+    numbered = frame.merge(order, on=[*group, WORD_KEY], how="left")
+    number[known] = numbered["_number"].to_numpy(dtype=float)
     return pd.Series(number, index=df.index)
 
 
@@ -6731,7 +6777,7 @@ def normalize_words(
         df["word_id"] = word_id
     else:
         # Text ids: the number every consumer joins and orders on is the
-        # word's place in its trial, and the id itself is kept beside it.
+        # word's place in its text, and the id itself is kept beside it.
         df["word_id"] = _number_word_keys(df, word_key)
         df[WORD_KEY] = word_key
     if schema.get("text"):

@@ -37,6 +37,7 @@ from .constants import (
     SETUP_OVERRIDE_FOR_KEY,
     TRIAL_IDENTITY_CHECK_KEY,
     WIZARD_LEAVE_KEY,
+    WORD_KEY,
     plural,
     upload_identity,
     upload_limit_label,
@@ -94,6 +95,7 @@ from .data import (
     validate_fix_schema,
     validate_raw_gaze_schema,
     validate_word_schema,
+    word_ids_set_aside,
 )
 from .experimental_setup import (
     FONT_CHOICES,
@@ -812,6 +814,23 @@ def _readers_do_not_line_up(words: pd.DataFrame, fixations: pd.DataFrame) -> boo
 
     key = (frame_fingerprint(words), frame_fingerprint(fixations))
     return frame_cache("wizard_readers_line_up", key, check)
+
+
+def _text_word_id_issues(words: pd.DataFrame, fixations: pd.DataFrame) -> list[str]:
+    """`data.text_word_id_issues` for the normalized pair, read once per pair.
+
+    Whether the load set numeric fixation ids aside comes from its own rewrites
+    (`app.HARMONIZE_REWRITES_KEY`), so the wizard warns on exactly what the
+    load did. Free on numeric Word IDs, which no frame holds as keys."""
+    if WORD_KEY not in words.columns and WORD_KEY not in fixations.columns:
+        return []
+    set_aside = word_ids_set_aside(st.session_state.get(app.HARMONIZE_REWRITES_KEY))
+    key = (frame_fingerprint(words), frame_fingerprint(fixations), set_aside)
+    return frame_cache(
+        "wizard_text_word_id_issues",
+        key,
+        lambda: text_word_id_issues(words, fixations, set_aside=set_aside),
+    )
 
 
 @st.cache_data(show_spinner=False)
@@ -4516,11 +4535,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # left on no word is said here too; the load's own warning reaches only
         # the terminal.
         if has_words and has_fix:
-            for line in text_word_id_issues(
-                words_norm,
-                fixations_norm,
-                fixation_word_ids=bool(fix_schema.get("word_id")),
-            ):
+            for line in _text_word_id_issues(words_norm, fixations_norm):
                 s6.warning(f"{ICONS['warning']} {line}")
 
     # A Words table with no Participant ID is shared by the readings

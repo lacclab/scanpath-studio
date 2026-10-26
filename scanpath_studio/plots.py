@@ -588,11 +588,18 @@ def redact_word_text(words: pd.DataFrame | None) -> pd.DataFrame | None:
         )
     )
     out["text"] = masked.where(present, words["text"])
-    if WORD_KEY in out.columns:
-        # A text Word ID often spells its word (`Hello_3`); the hovers then
-        # name the word by its number.
-        out = out.drop(columns=WORD_KEY)
-    return out
+    return without_word_keys(out)
+
+
+def without_word_keys(frame: pd.DataFrame | None) -> pd.DataFrame | None:
+    """``frame`` without its text Word IDs, for ``redact_text``.
+
+    A text Word ID often spells its word (``Hello_3``), so a figure that masks
+    the words draws neither table's: the hovers then name each word by its
+    number, and no hover field can show one."""
+    if frame is None or WORD_KEY not in frame.columns:
+        return frame
+    return frame.drop(columns=WORD_KEY)
 
 
 def _compute_axis_ranges(
@@ -10264,7 +10271,7 @@ def make_scanpath_figure(
     fields_xy = (resolved.x_field, resolved.y_field)
     words = _finite_for_plotting(words, drop_on=_WORD_BOX_COLUMNS)
     if resolved.redact_text:
-        words = redact_word_text(words)
+        words, fixations = redact_word_text(words), without_word_keys(fixations)
     fixations = _finite_for_plotting(fixations, fields_xy)
     raw_gaze = _finite_for_plotting(raw_gaze)
     with _labelled_columns(resolved.column_labels):
@@ -10346,6 +10353,8 @@ def build_scanpath_replay(
     words_b = _finite_for_plotting(words_b, drop_on=_WORD_BOX_COLUMNS)
     if resolved.redact_text:
         words, words_b = redact_word_text(words), redact_word_text(words_b)
+        fixations = without_word_keys(fixations)
+        fixations_b = without_word_keys(fixations_b)
     fixations = _finite_for_plotting(fixations)
     fixations_b = _finite_for_plotting(fixations_b)
     with _labelled_columns(resolved.column_labels):
@@ -10474,7 +10483,7 @@ def make_comparison_figure(
             )
     words = _finite_for_plotting(words, drop_on=_WORD_BOX_COLUMNS)
     if resolved.redact_text:
-        words = redact_word_text(words)
+        words, fixations = redact_word_text(words), without_word_keys(fixations)
     fixations = _finite_for_plotting(fixations)
     raw_gaze = _finite_for_plotting(raw_gaze)
     with _labelled_columns(resolved.column_labels):

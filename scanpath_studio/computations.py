@@ -286,13 +286,16 @@ REGISTER: tuple[Computation, ...] = (
         formula=(
             "A Word ID column with filled cells and not one number is text: "
             "each cell, stripped, is kept in `word_key`. Words: `word_id` = 1, "
-            "2, … for each distinct key in the order the Words table first lists "
-            "it. Fixations: `word_id` = the `word_id` of the word whose key "
-            "equals the fixation's exactly, in the same trial."
+            "2, … per text (`text_id`, else the trial; and screen), one number "
+            "for every reader: the keys of the reading that lists the most of "
+            "them in its row order, then any other reading's keys in the order "
+            "the table first lists them. Fixations: `word_id` = the `word_id` "
+            "of the word whose key equals the fixation's exactly, in the same "
+            "trial."
         ),
         code="scanpath_studio/data.py:match_text_word_ids",
         output="word_id, word_key",
-        grouping="(participant_id, trial_id[, screen_id])",
+        grouping="Words: (text_id[, screen_id]); fixations: (participant_id, trial_id[, screen_id])",
         precedence=(
             "Only for a column with no number in it: a column with any number is "
             "read as numbers, its other cells as blanks."

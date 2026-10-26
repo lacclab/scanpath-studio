@@ -158,6 +158,7 @@ from scanpath_studio.controls import (
     background_swatch,
     clear_trial_filter,
     clear_trial_filters,
+    column_mapping_from_state,
     column_mapping_ui,
     has_active_trial_filters,
     read_trial_filters,
@@ -304,7 +305,7 @@ from scanpath_studio.session_keys import (
     PARAM_CORPUS,
     PARAM_DATASET,
 )
-from scanpath_studio.styles import get_app_css, widen_menu
+from scanpath_studio.styles import compact_css, get_app_css, widen_menu
 from scanpath_studio.tabs import (
     _EDITOR_KEY_NOISE,
     _REMAP_DIRTY_KEY,
@@ -730,7 +731,7 @@ def configure_page() -> None:
         page_icon="👀",
         layout="wide",
     )
-    st.markdown(get_app_css(), unsafe_allow_html=True)
+    st.html(_app_stylesheet())
     # Seeded here, not later in the run: the stylesheet below hides one mode's
     # containers, so it needs the mode on the very first run.
     ui_mode.seed_mode(st.session_state, st.query_params, _cookies())
@@ -750,6 +751,19 @@ LOGO_PATH = Path(__file__).parent / "assets" / "scanpath_studio_title_logo.png"
 #: The same wordmark with light text, for the dark theme. Both are
 #: transparent, so neither theme draws a tile behind them.
 LOGO_DARK_PATH = LOGO_PATH.with_name("scanpath_studio_title_logo_dark.png")
+
+
+@functools.cache
+def _app_stylesheet() -> str:
+    """The app stylesheet as sent: compacted, for a style-only `st.html`.
+
+    Not a markdown block: Streamlit applies a markdown block's raw HTML only
+    once its own HTML renderer has loaded and parsed the whole block, which on
+    a slow connection left the first screen unstyled for seconds. Built once
+    per process — the sheet depends on nothing but module constants, and
+    compacting it costs ~10 ms, on every rerun otherwise.
+    """
+    return compact_css(get_app_css())
 
 
 @functools.cache
@@ -3775,7 +3789,8 @@ def reset_column_mapping() -> None:
 #: ✕ Cancel puts the keys back.
 BUILTIN_MAPPING_HELD_KEY = "_builtin_mapping_held"
 #: The panels' current picks, ``{"words": schema, "fixations": schema}``,
-#: written by `prepare_data` on every run that draws them.
+#: written by `prepare_data` on every run of a source that has them, drawn or
+#: read from their keys.
 BUILTIN_MAPPING_PENDING_KEY = "_builtin_mapping_pending"
 #: Set by ✅ Save changes for the success line on the screen it returns to.
 BUILTIN_MAPPING_SAVED_KEY = "_builtin_mapping_saved"
@@ -4040,12 +4055,18 @@ def prepare_data(
     declared_fix_schema: dict | None = None,
     mapping_dataset: object = None,
     held_schemas: dict | None = None,
+    render_mapping: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame, list]:
     """Infer schemas and normalize incoming dataframes to canonical column names.
 
-    When ``allow_override`` is True, render the mapping panels that let the
-    user pick the exact column names for each field (pre-filled with auto-detection).
-    Otherwise just auto-detect.
+    When ``allow_override`` is True, the user's picks in the mapping panels
+    (pre-filled with auto-detection) decide each field. Otherwise just
+    auto-detect.
+
+    ``render_mapping`` says whether those panels are drawn this run. They are
+    only on screen while ✏️ Edit dataset is open, so every other run reads the
+    same picks from session state (`controls.column_mapping_from_state`)
+    instead of building sixty-odd hidden selectboxes.
 
     Returns ``(words_norm, fixations_norm, problems)``. ``problems`` is a list
     of human-readable strings; when it's non-empty the column mapping isn't
@@ -4066,8 +4087,9 @@ def prepare_data(
     happen to match (``controls.forget_mapping_for_other_table``).
 
     ``held_schemas`` (``{"words": …, "fixations": …}``) is the mapping the
-    dataset keeps while ✏️ Edit dataset is open: the panels still render and
-    their picks are published as the draft (``BUILTIN_MAPPING_PENDING_KEY``),
+    dataset keeps while ✏️ Edit dataset is open: the panels' picks (drawn, or
+    read from their keys on another view) are published as the draft
+    (``BUILTIN_MAPPING_PENDING_KEY``),
     but the frames are normalized under the held mapping until ✅ Save changes.
     """
     has_words = not words_df.empty
@@ -4081,7 +4103,15 @@ def prepare_data(
         word_proposed = _apply_declared_schema(
             _proposed_schema("words", words_df), declared_word_schema
         )
-        if allow_override:
+        if allow_override and not render_mapping:
+            word_schema = column_mapping_from_state(
+                words_df,
+                "col_map_words",
+                WORD_FIELD_SPECS,
+                word_proposed,
+                dataset=mapping_dataset,
+            )
+        elif allow_override:
             word_schema = column_mapping_ui(
                 words_df,
                 table_label="Words (interest areas)",
@@ -4099,6 +4129,7 @@ def prepare_data(
                 stack_labels=True,
                 dataset=mapping_dataset,
             )
+        if allow_override:
             pending["words"] = word_schema
             if held_schemas and held_schemas.get("words") is not None:
                 word_schema = held_schemas["words"]
@@ -4112,7 +4143,15 @@ def prepare_data(
         fix_proposed = _apply_declared_schema(
             _proposed_schema("fixations", fixations_df), declared_fix_schema
         )
-        if allow_override:
+        if allow_override and not render_mapping:
+            fix_schema = column_mapping_from_state(
+                fixations_df,
+                "col_map_fix",
+                FIX_FIELD_SPECS,
+                fix_proposed,
+                dataset=mapping_dataset,
+            )
+        elif allow_override:
             fix_schema = column_mapping_ui(
                 fixations_df,
                 table_label="Fixations",
@@ -4126,6 +4165,7 @@ def prepare_data(
                 stack_labels=True,
                 dataset=mapping_dataset,
             )
+        if allow_override:
             pending["fixations"] = fix_schema
             if held_schemas and held_schemas.get("fixations") is not None:
                 fix_schema = held_schemas["fixations"]
@@ -9553,11 +9593,14 @@ def _run_app() -> None:
     # The page is built on EVERY run and merely hidden when another view is
     # active (`DATA_PAGE_OFFSCREEN_KEY` → `display: none` in styles.py). That is
     # not laziness: the slots below are filled by the loaders' directory input,
-    # ⬇ Download button, source options and column-mapping selectboxes, all of
-    # which *drive* `prepare_data` on every rerun — and Streamlit drops the key
-    # of a widget that did not render. Rendering-then-hiding keeps every
-    # loader's every-run semantics without splitting each into a render/resolve
-    # pair.
+    # ⬇ Download button and source options, all of which *drive* the load on
+    # every rerun — and Streamlit drops the key of a widget that did not
+    # render. Rendering-then-hiding keeps every loader's every-run semantics
+    # without splitting each into a render/resolve pair. The one exception is
+    # the built-in sources' column-mapping panels, sixty-odd selectboxes and a
+    # sixth of every rerun's bytes: they are split that way
+    # (`controls.column_mapping_from_state`) and drawn only while ✏️ Edit
+    # dataset shows them.
     #
     # The page has two *parts*, both built every run for the same reason the
     # page itself is (above): the overview always shows, and the editor opens
@@ -9949,8 +9992,9 @@ def _run_app() -> None:
     else:
         deep_link_pid = None
     raw_gaze_df: pd.DataFrame | None = None
-    # Did this load already draw the editable pre-normalization mapping panels
-    # into the page's Column mapping section? (Mode A — see the dispatch below.)
+    # Is the open source one whose mapping the editable pre-normalization
+    # panels decide, in the page's Column mapping section? (Mode A — see the
+    # dispatch below. They are drawn only while ✏️ Edit dataset is open.)
     mapping_editor_rendered = False
     # Start each load with a clean column-mapping stash; each branch below
     # records the schema it used for the Data page's mapping section.
@@ -10107,8 +10151,11 @@ def _run_app() -> None:
             # default first-load source; pre-filled with auto-detection, so an
             # untouched mapping normalizes identically.
             allow_override=mapping_editor_rendered,
-            # Mode A of the Data page's one Column mapping section.
+            # Mode A of the Data page's one Column mapping section, drawn only
+            # while ✏️ Edit dataset shows it; every other run reads the same
+            # picks from their keys.
             mapping_host=mapping_body_slot,
+            render_mapping=data_view and editing,
             # A corpus that publishes its schema starts from it, not from
             # auto-detection. The panels stay editable — this only changes what
             # they start at.
@@ -10154,6 +10201,11 @@ def _run_app() -> None:
                 _render_dataset_load_failure(
                     _dataset_display_name(_dataset_owner), mapping_problems
                 )
+        # The mapping panels on ✏️ Edit dataset are a draft until ✅ Save
+        # changes, and the dataset keeps the mapping that cannot load — so the
+        # editor needs its Save here too, or a field fixed there never applies.
+        if data_view and editing and mapping_editor_rendered:
+            _render_builtin_editor_footer(editor_footer_slot)
         _render_offpage_setup_notice(data_view)
         _finish_page()
         _render_datasets_table(None, None, None)

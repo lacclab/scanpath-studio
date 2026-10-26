@@ -271,6 +271,46 @@ def open_data_view(at, timeout: int = 60):
     return at.run(timeout=timeout)
 
 
+def open_dataset_editor(at, timeout: int = 60):
+    """Open ✏️ Edit dataset on the open dataset's row, as a user does.
+
+    A built-in source's column-mapping panels are drawn only while it is
+    open; on every other run their picks are read from session state."""
+    from scanpath_studio.app import _dataset_row_slug
+
+    open_data_view(at, timeout=timeout)
+    token = str(at.session_state["data_source_choice"])
+    at.button(key=f"dataset_row_edit_{_dataset_row_slug(token)}").click()
+    pin_data_view(at)
+    return at.run(timeout=timeout)
+
+
+def edit_builtin_mapping(at, picks: dict, timeout: int = 60):
+    """Change a built-in source's column mapping the way a user does.
+
+    Opens ✏️ Edit dataset, sets each ``{widget key: value}`` in its panels and
+    presses ✅ Save changes — until then the panels are a draft and the
+    dataset keeps its mapping."""
+    open_dataset_editor(at, timeout=timeout)
+    for key, value in picks.items():
+        widget = next(
+            (
+                w
+                for group in (at.selectbox, at.multiselect, at.radio)
+                for w in group
+                if w.key == key
+            ),
+            None,
+        )
+        assert widget is not None, f"no mapping widget {key!r} in the editor"
+        widget.set_value(value)
+    pin_data_view(at)
+    at.run(timeout=timeout)
+    at.button(key="builtin_mapping_save").click()
+    pin_data_view(at)
+    return at.run(timeout=timeout)
+
+
 def answer_setup_step(at, *, screen=None, geometry=None, text=None):
     """Answer the add-dataset wizard's Recording-setup step.
 

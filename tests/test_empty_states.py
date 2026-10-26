@@ -285,10 +285,10 @@ class TestDatasetUnavailableState:
         at.run()
         assert not at.exception, at.exception
         assert missing_note(at)
-        # The demo stands in for PoTeC; unmap a field it needs, and the run
-        # leaves at the mapping-problems return, before the note is shown.
-        duration = next(s for s in at.selectbox if s.key == "col_map_fix_duration")
-        duration.set_value(None)
+        # The demo stands in for PoTeC; unmap a field it needs (as a restored
+        # settings file can), and the run leaves at the mapping-problems
+        # return, before the note is shown.
+        at.session_state["col_map_fix_duration"] = None
         at.run()
         assert not at.exception, at.exception
         assert not missing_note(at)
@@ -315,8 +315,7 @@ class TestADeadEndStillShowsTheWayOut:
 
         at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
         at.run()
-        duration = next(s for s in at.selectbox if s.key == "col_map_fix_duration")
-        duration.set_value(None)
+        at.session_state["col_map_fix_duration"] = None
         at.run()
         pin_view(at, _VIEW_DATA)
         at.run()

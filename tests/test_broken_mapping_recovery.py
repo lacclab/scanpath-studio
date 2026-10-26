@@ -16,11 +16,14 @@ import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from scanpath_studio.constants import ICONS
+from scanpath_studio.constants import _VIEW_SCANPATH, ICONS
 from tests.conftest import (
     APP_SCRIPT,
+    edit_builtin_mapping,
     open_data_view,
+    open_dataset_editor,
     pin_data_view,
+    pin_view,
 )
 
 #: Any real fixation column: mapping it as `screen_id` on one report only is
@@ -35,10 +38,16 @@ def _boot() -> AppTest:
     return at
 
 
+def _remap(at: AppTest, picks: dict) -> AppTest:
+    """Save ``picks`` in ✏️ Edit dataset, then go back to the Scanpath view."""
+    edit_builtin_mapping(at, picks, timeout=180)
+    pin_view(at, _VIEW_SCANPATH)
+    return at.run(timeout=180)
+
+
 def _break_the_mapping(at: AppTest) -> AppTest:
     """Map `screen_id` on the fixations report and nowhere else."""
-    at.selectbox(key="col_map_fix_screen_id").select(BOGUS_SCREEN_COLUMN).run()
-    return at
+    return _remap(at, {"col_map_fix_screen_id": BOGUS_SCREEN_COLUMN})
 
 
 def test_a_rejected_mapping_does_not_crash_the_app():
@@ -62,10 +71,12 @@ def test_a_rejected_mapping_says_what_is_wrong_and_where_to_fix_it():
 def test_the_rejected_mapping_stays_editable_so_it_can_be_undone():
     at = _break_the_mapping(_boot())
 
-    # The panel that made the mistake is still on the page, still holding it.
+    # The panel that made the mistake is still in ✏️ Edit dataset, still
+    # holding it.
+    open_dataset_editor(at, timeout=180)
     assert at.selectbox(key="col_map_fix_screen_id").value == BOGUS_SCREEN_COLUMN
 
-    at.selectbox(key="col_map_fix_screen_id").set_value(None).run()
+    _remap(at, {"col_map_fix_screen_id": None})
 
     assert not at.exception
     assert not any("isn't set up yet" in info.value for info in at.info)
@@ -81,7 +92,7 @@ def test_resetting_the_column_mapping_recovers_a_wedged_dataset():
     reset[0].click().run(timeout=180)
 
     assert not at.exception
-    assert at.selectbox(key="col_map_fix_screen_id").value is None
+    assert at.session_state["col_map_fix_screen_id"] is None
 
 
 # --- the escape hatches that don't go through the 🗂️ Data page -----------------
@@ -98,7 +109,7 @@ def test_a_wedged_dataset_can_be_abandoned_without_visiting_the_data_page():
 
     assert not at.exception
     assert not any("isn't set up yet" in info.value for info in at.info)
-    assert at.selectbox(key="col_map_fix_screen_id").value is None
+    assert at.session_state["col_map_fix_screen_id"] is None
 
 
 def test_the_data_page_still_reports_the_cache_while_the_app_is_wedged(
@@ -368,9 +379,7 @@ def test_the_scanpath_view_says_when_the_data_checks_fail_badly():
     at = _boot()
     assert not any("fails the data checks" in w.value for w in at.warning)
 
-    at.selectbox(key="col_map_fix_duration").select(
-        "CURRENT_FIX_INTEREST_AREA_LABEL"
-    ).run(timeout=180)
+    at = _remap(at, {"col_map_fix_duration": "CURRENT_FIX_INTEREST_AREA_LABEL"})
 
     assert not at.exception
     (notice,) = [w.value for w in at.warning if "fails the data checks" in w.value]

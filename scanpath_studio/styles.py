@@ -1544,15 +1544,12 @@ def get_app_css() -> str:
        harmless (zero height) but it pads the row with dead space below the
        buttons. Collapsing `_rest` to zero instead avoids that: three fixed
        widths always fit the first line, so nothing wraps. `!important`
-       because these override Streamlit's own stylesheet `flex`. */
+       because these override Streamlit's own stylesheet `flex`.
        A prefix match, not `.st-key-wizard_footer_row`: the ✏️ Edit dataset
        screen wears this same footer under its own key
        (`wizard_footer_row_edit`, since the offscreen editor and an open wizard
        can both exist in one run and two containers may not share a key), and
        the two screens' last rows have to line up to the pixel. */
-    [class*="st-key-wizard_footer_row"] [data-testid="stHorizontalBlock"] {
-        flex-wrap: nowrap !important;
-    }
     [class*="st-key-wizard_footer_row"] [data-testid="stColumn"]:nth-of-type(1),
     [class*="st-key-wizard_footer_row"] [data-testid="stColumn"]:nth-of-type(2) {
         flex: 0 0 12.5rem !important;
@@ -2607,6 +2604,43 @@ def get_app_css() -> str:
         .replace("__SELECTOR_ROW_WRAP__", f"{SELECTOR_ROW_WRAP_REM:g}rem")
     )
     return css
+
+
+def compact_css(css: str) -> str:
+    """``css`` with its comments dropped and each run of whitespace made one
+    space: the same rules in well under half the bytes.
+
+    The app stylesheet is documented inline, and its comments are more than
+    half of it, so it is sent compacted. Quoted strings are copied untouched,
+    a ``/*`` inside one included; like CSS, a string also ends at an
+    unescaped line break. A comment becomes nothing rather than a space, as
+    CSS reads it, so ``.a/**/.b`` stays one compound selector.
+    """
+    out: list[str] = []
+    i, n = 0, len(css)
+    while i < n:
+        char = css[i]
+        if char in "\"'":
+            end = i + 1
+            while end < n and css[end] not in (char, "\n"):
+                end += 2 if css[end] == "\\" else 1
+            # The closing quote is kept; a line break is left for the
+            # whitespace branch.
+            stop = end + 1 if end < n and css[end] == char else end
+            out.append(css[i:stop])
+            i = stop
+        elif css.startswith("/*", i):
+            end = css.find("*/", i + 2)
+            i = n if end < 0 else end + 2
+        elif char.isspace():
+            while i < n and css[i].isspace():
+                i += 1
+            if not out or out[-1] != " ":
+                out.append(" ")
+        else:
+            out.append(char)
+            i += 1
+    return "".join(out).strip()
 
 
 def menu_width_css(widget_key: str, labels) -> str:

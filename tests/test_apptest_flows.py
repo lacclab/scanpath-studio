@@ -38,6 +38,8 @@ from tests.conftest import (
     SUBTAB_EXPORT,
     SUBTAB_KEY,
     VIEW_DATA,
+    edit_builtin_mapping,
+    open_dataset_editor,
     pin_view,
 )
 
@@ -188,8 +190,7 @@ class TestColumnMappingOverrideFlow:
         assert at.session_state["_active_column_mapping"]["words"]["text"] == "IA_LABEL"
         assert not before <= _POS_TAGS, "demo should start with real word labels"
 
-        at.selectbox(key="col_map_words_text").set_value("universal_pos")
-        _rerun(at, view=VIEW_DATA)
+        edit_builtin_mapping(at, {"col_map_words_text": "universal_pos"})
         _clean(at, "after remapping word text:")
 
         # The mapping the app normalized with — and the read-only table that
@@ -199,7 +200,9 @@ class TestColumnMappingOverrideFlow:
             == "universal_pos"
         )
         # The Column mapping section's editable panel is its own report — the
-        # selectbox itself; no read-only table repeats it underneath.
+        # selectbox itself; no read-only table repeats it underneath. ✅ Save
+        # changes closed the editor, so open it again to read the panel.
+        open_dataset_editor(at)
         assert at.selectbox(key="col_map_words_text").value == "universal_pos"
         # The panel says the auto-detected pick was overridden — on the ✨
         # flag's tooltip, so it is the `data-tip` that carries it, not a
@@ -240,8 +243,7 @@ class TestColumnMappingOverrideFlow:
         # first rows are the sample file's first rows.
         assert _fixation_durations(at)[:5] == before_expected
 
-        at.selectbox(key="col_map_fix_duration").set_value("NEXT_SAC_AMPLITUDE")
-        _rerun(at, view=VIEW_DATA)
+        edit_builtin_mapping(at, {"col_map_fix_duration": "NEXT_SAC_AMPLITUDE"})
         _clean(at, "after remapping the fixation duration:")
 
         assert (
@@ -249,31 +251,36 @@ class TestColumnMappingOverrideFlow:
             == "NEXT_SAC_AMPLITUDE"
         )
         assert _fixation_durations(at)[:5] == after_expected
+        open_dataset_editor(at)
         assert at.selectbox(key="col_map_fix_duration").value == "NEXT_SAC_AMPLITUDE"
 
     def test_clearing_a_required_field_shows_guidance_and_recovers(self):
-        # Un-mapping a *required* field must degrade to the guidance view (the
-        # raw tables + what's missing), not halt or crash — and re-mapping it
-        # must bring the app straight back.
+        # A mapping with a *required* field un-mapped — what a restored
+        # settings file can carry, since ✅ Save changes refuses one — must
+        # degrade to the guidance view (the raw tables + what's missing), not
+        # halt or crash; and re-mapping it must bring the app straight back.
         at = _boot()
         assert len(_trial_ids(at)) == DEMO_TRIALS_IN_PICKER
 
-        at.selectbox(key="col_map_words_word_id").set_value(None)
+        at.session_state["col_map_words_word_id"] = None
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         warnings = " ".join(w.value for w in at.warning)
         assert "Finish the column mapping" in warnings
         assert "Word ID" in warnings, warnings
-        # No plot/picker while the mapping is unusable, but the mapping control
-        # itself stays editable so the user can fix it from where they are.
+        # No plot/picker while the mapping is unusable.
         assert _trial_ids(at) == []
+
+        # The mapping control stays editable on ✏️ Edit dataset, beside the
+        # raw (un-normalized) words table to choose the column from.
+        open_dataset_editor(at)
         assert "col_map_words_word_id" in {s.key for s in at.selectbox}
-        # The raw (un-normalized) words table is shown to choose the column from.
         assert _frames_with(at, "IA_ID", "IA_LABEL"), "raw words table not shown"
 
-        at.selectbox(key="col_map_words_word_id").set_value("IA_ID")
-        at.run(timeout=60)
+        edit_builtin_mapping(at, {"col_map_words_word_id": "IA_ID"})
         _clean(at, "after restoring the mapping:")
+        pin_view(at, _VIEW_SCANPATH)
+        at.run(timeout=60)
         assert [w.value for w in at.warning] == []
         assert len(_trial_ids(at)) == DEMO_TRIALS_IN_PICKER
 

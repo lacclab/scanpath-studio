@@ -3227,6 +3227,122 @@ def forget_mapping_for_other_table(
         st.session_state.get(TOUCHED_FIELDS_KEY, set()).discard(key)
 
 
+def _mapping_options(df: pd.DataFrame, state_key_prefix: str) -> list:
+    """The columns a mapping field may name.
+
+    The file's full header, not `df.columns`: the planned read narrows `df` to
+    only the columns it decided to *parse* (auto-detect + the optional-field
+    registry + whatever a `col_map_*` key already names, session-wide), so a
+    column nobody has named yet is never in it. And since those `col_map_*`
+    keys have no dataset scoping, re-uploading the same file for a *second*
+    dataset would narrow the read to exactly what was kept last time, as if the
+    picker *remembered* which fields to hide. `app._read_uploaded_frame` stashes
+    the file's real header the moment it reads it, independent of what the plan
+    parsed. Empty outside an upload context (the 🗂️ Data page's remap editor has
+    no raw file to ask, and offers only what survived the original import by
+    design) — fall back to the parsed frame there.
+    """
+    full_header = st.session_state.get(f"{state_key_prefix}_header")
+    return list(full_header) if full_header else user_columns(df)
+
+
+def _seed_select_key(state_key: str, default, options: list) -> None:
+    """Settle one single-column field's key before it is read.
+
+    Absent key -> seed from auto-detection. Present but holding something this
+    table cannot offer -> blank it: that is an old `"(none)"` from a saved
+    config, or a column a new upload does not have, and Streamlit raises on a
+    stored value outside `options`. Present and already None -> left alone,
+    because that is the user having cleared it on purpose.
+    """
+    if state_key in st.session_state:
+        stored = st.session_state[state_key]
+        if stored is not None and stored not in options:
+            st.session_state[state_key] = None
+    else:
+        st.session_state[state_key] = default if default in options else None
+
+
+def _seed_box_format_key(fmt_key: str, proposed: dict) -> None:
+    """Seed the word box's format via session state (no `index=`), so it
+    survives reruns and never fights a default arg.
+
+    A stored value that is not a format (a hand-edited or older cache) is
+    reset to the first, as the format radio itself resets one."""
+    if fmt_key not in st.session_state:
+        st.session_state[fmt_key] = _default_box_format(proposed)
+    elif st.session_state[fmt_key] not in _BOX_SUBFIELDS:
+        st.session_state[fmt_key] = next(iter(_BOX_SUBFIELDS))
+
+
+def _seed_multi_key(state_key: str, default, df: pd.DataFrame) -> list[str]:
+    """Settle a multi-column field's key; returns the auto-detected columns.
+
+    A source may *declare* a composite id (PoTeC's reader + text). Seeded via
+    session state instead of `default=` so the stale-column reset below never
+    fights a default arg. A new upload changes the column universe — silently
+    keeping stale picks would leave the field empty (`_seed_select_key` blanks
+    a stale value itself; a multiselect would not), so unknown columns are
+    dropped, falling back to the auto-proposal when nothing survives.
+    """
+    parts = default if isinstance(default, (list, tuple)) else [default]
+    proposed_default = [c for c in parts if c is not None and c in df.columns]
+    stored = st.session_state.get(state_key)
+    if stored is None:
+        st.session_state[state_key] = proposed_default
+    else:
+        valid = [c for c in stored if c in df.columns]
+        if len(valid) != len(stored):
+            st.session_state[state_key] = valid or proposed_default
+    return proposed_default
+
+
+def column_mapping_from_state(
+    df: pd.DataFrame,
+    state_key_prefix: str,
+    field_specs: list[dict],
+    proposed: dict[str, str | None],
+    *,
+    dataset: object = None,
+) -> dict[str, str | None]:
+    """The mapping :func:`column_mapping_ui` returns, without drawing it.
+
+    For a run where the panels are not on screen. The keys are settled exactly
+    as the widgets settle them (the same seeding, the same stale-pick clearing,
+    the same dataset scoping), so opening the panels later shows what this
+    returned, and a mapping made in the panels keeps applying while they are
+    closed — their widgets keep their keys through ``persist_state="session"``.
+    """
+    forget_mapping_for_other_table(df, state_key_prefix, field_specs, dataset=dataset)
+    options = _mapping_options(df, state_key_prefix)
+
+    def _pick(field_key: str, _label: str, _help=None) -> str | None:
+        state_key = f"{state_key_prefix}_{field_key}"
+        _seed_select_key(state_key, proposed.get(field_key), options)
+        chosen = st.session_state[state_key]
+        return None if chosen in (None, NONE_OPTION) else chosen
+
+    def _pick_box_format(_spec: dict) -> str:
+        fmt_key = f"{state_key_prefix}_box_format"
+        _seed_box_format_key(fmt_key, proposed)
+        return st.session_state[fmt_key]
+
+    def _pick_multi(spec: dict, default, _label: str) -> list[str]:
+        state_key = f"{state_key_prefix}_{spec['key']}"
+        _seed_multi_key(state_key, default, df)
+        return list(st.session_state[state_key])
+
+    return _assemble_mapping(
+        df,
+        field_specs,
+        proposed,
+        None,
+        pick=_pick,
+        pick_box_format=_pick_box_format,
+        pick_multi=_pick_multi,
+    )
+
+
 def column_mapping_ui(
     df: pd.DataFrame,
     table_label: str,
@@ -3283,20 +3399,7 @@ def column_mapping_ui(
     whatever it holds; its stored value is never rewritten.
     """
     forget_mapping_for_other_table(df, state_key_prefix, field_specs, dataset=dataset)
-    # Offer the file's full header, not `df.columns`: the planned read narrows
-    # `df` to only the columns it decided to *parse* (auto-detect + the
-    # optional-field registry + whatever a `col_map_*` key already names,
-    # session-wide), so a column nobody has named yet is never in it. And since
-    # those `col_map_*` keys have no dataset scoping, re-uploading the same file
-    # for a *second* dataset would narrow the read to exactly what was kept last
-    # time, as if the picker *remembered* which fields to hide.
-    # `app._read_uploaded_frame` stashes the file's real header the moment it
-    # reads it, independent of what the plan parsed. Empty outside an upload
-    # context (the 🗂️ Data page's remap editor has no raw file to ask, and offers
-    # only what survived the original import by design) — fall back to the
-    # parsed frame there.
-    full_header = st.session_state.get(f"{state_key_prefix}_header")
-    options = list(full_header) if full_header else user_columns(df)
+    options = _mapping_options(df, state_key_prefix)
 
     # ✏️ Edit dataset offers the stored *canonical* columns; the caller
     # passes the dataset's own names for them. The values stay canonical.
@@ -3425,18 +3528,7 @@ def column_mapping_ui(
         # sets `clearable=(index is None)`. So the empty state is a real `None`
         # rather than a `"(none)"` sentinel option, and the ✕ sits *inside*
         # the control instead of beside it.
-        #
-        # Absent key -> seed from auto-detection. Present but holding something
-        # this table cannot offer -> blank it: that is an old `"(none)"` from a
-        # saved config, or a column a new upload does not have, and Streamlit
-        # raises on a stored value outside `options`. Present and already None ->
-        # left alone, because that is the user having cleared it on purpose.
-        if state_key in st.session_state:
-            stored = st.session_state[state_key]
-            if stored is not None and stored not in options:
-                st.session_state[state_key] = None
-        else:
-            st.session_state[state_key] = default if default in options else None
+        _seed_select_key(state_key, default, options)
         chosen = field_col.selectbox(
             field_label,
             options=options,
@@ -3582,11 +3674,7 @@ def column_mapping_ui(
             there is one waiting.
             """
             fmt_key = f"{state_key_prefix}_box_format"
-            if fmt_key not in st.session_state:
-                # Seed via session state (no `index=`) so it survives reruns
-                # and never fights a default arg — same pattern as the
-                # multiselect below.
-                st.session_state[fmt_key] = _default_box_format(proposed)
+            _seed_box_format_key(fmt_key, proposed)
             star = " *" if spec.get("required") else ""
             box_host = hosts["main"]
             title = html.escape(_plain(spec["label"]) + star)
@@ -3636,23 +3724,7 @@ def column_mapping_ui(
 
         def _render_multi(spec: dict, default, label: str) -> list[str]:
             state_key = f"{state_key_prefix}_{spec['key']}"
-            # A source may *declare* a composite id (PoTeC's reader + text).
-            parts = default if isinstance(default, (list, tuple)) else [default]
-            proposed_default = [c for c in parts if c is not None and c in df.columns]
-            stored = st.session_state.get(state_key)
-            if stored is None:
-                # Seed via session state instead of `default=` so the
-                # stale-column reset below never fights a default arg.
-                st.session_state[state_key] = proposed_default
-            else:
-                # A new upload changes the column universe — silently
-                # keeping stale picks would leave the field empty
-                # (`_selectbox` blanks a stale value itself; a multiselect
-                # would not). Drop unknown columns and fall back to the
-                # auto-proposal when nothing survives.
-                valid = [c for c in stored if c in df.columns]
-                if len(valid) != len(stored):
-                    st.session_state[state_key] = valid or proposed_default
+            proposed_default = _seed_multi_key(state_key, default, df)
             field_col, note_col = _row(spec["key"], label, spec.get("help"))
             # A keyed cell, like `_selectbox`'s, so `_emit_field_tints`
             # has something to colour when this required field is left empty.

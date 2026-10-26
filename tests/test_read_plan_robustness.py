@@ -190,6 +190,43 @@ class TestWordTextIsReadVerbatim:
         words, _ = api.load_scanpath_data(words=str(path), names="canonical")
         assert words["text"].tolist() == self.WORDS
 
+    def _whole_file(self) -> tuple[str, ReadPlan]:
+        """The table as TSV text with an "NA" in a number column, and the
+        whole-file plan the headless API reads it under."""
+        table = self._table()
+        table["IA_TOP"] = ["NA", *table["IA_TOP"].iloc[1:]]
+        plan = data_module.verbatim_text_plan(list(table.columns))
+        return table.to_csv(sep="\t", index=False), plan
+
+    def _assert_read_as_planned(self, frame: pd.DataFrame) -> None:
+        assert frame["IA_LABEL"].tolist() == self.WORDS
+        # Every other column still reads pandas' own NA spellings as missing.
+        assert frame["IA_TOP"].isna().tolist() == [True] + [False] * 4
+
+    def test_a_whole_zipped_member_keeps_the_words(self, tmp_path):
+        text, plan = self._whole_file()
+        path = tmp_path / "ia.zip"
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("ia.tsv", text)
+        self._assert_read_as_planned(read_table(path, plan=plan))
+
+    def test_a_stream_that_cannot_rewind_keeps_the_words(self):
+        class OneWay(io.RawIOBase):
+            def __init__(self, data: bytes):
+                self._inner = io.BytesIO(data)
+
+            def readable(self) -> bool:
+                return True
+
+            def readinto(self, buffer) -> int:
+                chunk = self._inner.read(len(buffer))
+                buffer[: len(chunk)] = chunk
+                return len(chunk)
+
+        text, plan = self._whole_file()
+        stream = io.BufferedReader(OneWay(text.encode()))
+        self._assert_read_as_planned(data_module._read_delimited(stream, "\t", plan))
+
     def test_a_hand_mapped_text_column_is_the_one_kept(self):
         from scanpath_studio.app import upload_read_plan
 

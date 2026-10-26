@@ -3498,7 +3498,9 @@ def _add_word_label_trace(
     if rtl is None:
         rtl = words["text"].astype(str).map(detect_right_to_left)
     else:
-        rtl = rtl.fillna(False).astype(bool)
+        # As object first: a float flag column (1.0 / NaN) cannot take a
+        # boolean fill value.
+        rtl = rtl.astype(object).fillna(False).astype(bool)
     label_x = _word_label_x(words)
     # The word drawn as its own characters (not as Plotly markup),
     # escaped before the direction isolates wrap it; the hover's `%{text}`

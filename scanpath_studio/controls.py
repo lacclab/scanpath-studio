@@ -1590,20 +1590,25 @@ def _apply_view_preset(name: str) -> None:
 
 
 def _hold_view_writes(ss, before: dict) -> None:
-    """Hold every value a design preset changed (see `write_through`).
+    """Hold every value a design preset changed in a popover (see `write_through`).
 
     A popover widget the user has opened keeps echoing the value it last
     showed, so a preset's write to it (Saccades ▾ → Arc, Fixations ▾ → Snap,
     the defaults a preset resets to) would hold for one run and snap back. So
-    each changed value goes through `write_through`. The dataset-seeded keys
-    are left alone: the rerun seeds them from the data, and holding the
-    static default would overwrite that.
+    each changed value goes through `write_through`, against the value it
+    replaced: what the browser sent with the click.
+
+    Two kinds of key are left alone. The dataset-seeded keys: the rerun seeds
+    them from the data, and holding the static default would overwrite that.
+    And the keys drawn outside every popover (`_MOUNTED_VIEW_KEYS`): the
+    browser has those widgets on screen, so it takes the plain write, and a
+    hold would read the user flipping one back as that echo and undo it.
     """
     for key, old in before.items():
-        if key in _SEEDED_VIEW_KEYS or key not in ss:
+        if key in _SEEDED_VIEW_KEYS or key in _MOUNTED_VIEW_KEYS or key not in ss:
             continue
         if _write_match_key(ss[key]) != _write_match_key(old):
-            write_through(key, ss[key])
+            write_through(key, ss[key], shown=old)
 
 
 #: Keys `app.seed_canvas_state` / the font and raw-gaze seeding refill after a
@@ -1616,6 +1621,30 @@ _SEEDED_VIEW_KEYS = frozenset(
         "global_font_family",
         "global_scale_text_to_boxes",
         "global_show_raw_gaze",
+    }
+)
+
+#: Plot settings whose widgets are drawn outside every popover: the rail's
+#: layer switches and Palette box, the ⚖️ Compare switch above the plot, and
+#: the preprocessing controls. They are mounted whenever a design is picked
+#: (Essentials hides the rail's rows with CSS, which keeps them mounted), so
+#: `_hold_view_writes` writes them plainly. `tests/test_viz_palette.py`
+#: checks the set against the widgets the app draws.
+_MOUNTED_VIEW_KEYS = frozenset(
+    {
+        "global_show_fix",
+        "global_show_saccades",
+        "global_show_stimulus",
+        "global_show_words",
+        "global_show_heatmap",
+        "global_show_raw_gaze",
+        "global_palette",
+        SINGLE_COMPARE_TOGGLE,
+        "global_preproc_enabled",
+        "global_preproc_short_policy",
+        "global_preproc_short_threshold_ms",
+        "global_preproc_merge_distance_chars",
+        "global_preproc_blink_adjacent",
     }
 )
 
@@ -2482,10 +2511,16 @@ def apply_palette(name: str) -> None:
 
 
 #: Programmatic widget writes the browser may not have taken yet:
-#: ``{key: [value, stale_echo]}``. See `write_through`.
+#: ``{key: [value, stale_echo, fresh]}``. ``stale_echo`` is what the browser
+#: sent for the key with the run that wrote it, and ``fresh`` says that run's
+#: script has not started yet. See `write_through`.
 _PENDING_WRITES_KEY = "_pending_widget_writes"
-_WRITE_FRESH = "\x00fresh"  # written this run: the browser has not answered yet
-_WRITE_UNSEEN = "\x00unseen"  # one run on: the next echo is the browser's
+#: ``stale_echo`` when the key held no value as it was written — its widget
+#: was not drawn on the last run, or the same callback cleared the key first.
+#: The first value the browser sends after the write is taken as the echo.
+_ECHO_UNKNOWN = "\x00unknown"
+#: `write_through`'s default ``shown``: the value the key holds as it writes.
+_SHOWN_IN_STATE = object()
 
 
 def _write_match_key(value):
@@ -2498,7 +2533,7 @@ def _write_match_key(value):
     return _palette_match_key(value)
 
 
-def write_through(key: str, value) -> None:
+def write_through(key: str, value, *, shown=_SHOWN_IN_STATE) -> None:
     """Write ``value`` to a widget's key so that a closed popover cannot undo it.
 
     A widget inside an ``st.popover`` is mounted in the browser only
@@ -2508,46 +2543,62 @@ def write_through(key: str, value) -> None:
     holds for one run and the next rerun puts the remembered value back (a
     palette applied after Fixations ▾ has been opened would not stick).
 
-    So the write is also recorded here, and `reassert_pending_writes` repeats
-    it at the top of each run while the browser keeps echoing the old value.
+    So the write is also recorded here, with the echo to expect: the value the
+    browser sent with the run that writes, which a callback finds in the key
+    before it writes (``shown`` passes it instead, for a caller that has
+    already overwritten the key). `reassert_pending_writes` repeats the write
+    at the top of each run while the browser keeps sending that value back.
     It lets go as soon as the browser sends anything else: the written value
-    (the widget remounted and took it) or a new pick of the user's own.
+    (the widget remounted and took it) or another pick of the user's own, made
+    once the widget took the write. A pick of exactly the old value reads as
+    the echo, since nothing the browser sends tells the two apart — which is
+    why a widget that is always on screen is written plainly instead.
     Call it from a callback, like any write to a widget key.
     """
     ss = st.session_state
-    ss[key] = value
     pending = dict(ss.get(_PENDING_WRITES_KEY) or {})
-    pending[key] = [deepcopy(value), _WRITE_FRESH]
+    earlier = pending.get(key)
+    if earlier is not None and earlier[2]:
+        # Written already in this run's callbacks: the browser's value is the
+        # one that write recorded, not the value it put in the key.
+        stale = earlier[1]
+    elif shown is not _SHOWN_IN_STATE:
+        stale = deepcopy(shown)
+    else:
+        stale = deepcopy(ss[key]) if key in ss else _ECHO_UNKNOWN
+    ss[key] = value
+    pending[key] = [deepcopy(value), stale, True]
     ss[_PENDING_WRITES_KEY] = pending
 
 
 def reassert_pending_writes() -> None:
     """Re-apply `write_through` writes the browser has not taken yet.
 
-    Runs at the top of every script run, before any widget is built. The first
-    run after a write learns what the browser echoes for the key; while it
-    keeps echoing that, the write is repeated; any other value ends it.
+    Runs at the top of every script run, before any widget is built. While the
+    browser keeps sending a key the value it sent before the write, the write
+    is repeated; the written value, or any other, ends it. A write that could
+    not record that value (`_ECHO_UNKNOWN`) takes the first one sent after it.
     """
     ss = st.session_state
     pending = ss.get(_PENDING_WRITES_KEY)
     if not pending:
         return
     kept = {}
-    for key, (value, stale) in pending.items():
-        if stale == _WRITE_FRESH:
+    for key, (value, stale, fresh) in pending.items():
+        if fresh:
             # The run the callback wrote in: the write itself is what reads
-            # back, so there is nothing to learn yet.
-            kept[key] = [value, _WRITE_UNSEEN]
+            # back, and the browser has not answered yet.
+            kept[key] = [value, stale, False]
             continue
         current = _write_match_key(ss.get(key))
         if current == _write_match_key(value):
             continue  # the browser has it
-        if stale == _WRITE_UNSEEN:
-            stale = current
-        elif current != stale:
+        if stale == _ECHO_UNKNOWN:
+            stale = deepcopy(ss.get(key))
+        elif current != _write_match_key(stale):
             continue  # the user picked something else
         ss[key] = deepcopy(value)
-        kept[key] = [value, stale]
+        kept[key] = [value, stale, False]
     if kept:
         ss[_PENDING_WRITES_KEY] = kept
     else:

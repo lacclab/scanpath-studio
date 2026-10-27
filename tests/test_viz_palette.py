@@ -455,6 +455,44 @@ class TestAPaletteSurvivesAClosedPopover:
         self._run(state)  # nothing stale: the value read back is the write
         assert _PENDING_WRITES_KEY not in state
 
+    def test_the_first_pick_after_the_palette_is_the_users(self, state):
+        """The echo is the colour the browser sent with the click, so the first
+        rerun bringing a different one is a pick the user made in the picker
+        once it showed the palette's colour, and it stands."""
+        from scanpath_studio.controls import apply_palette
+
+        state["global_fixation_color"] = "#111111"  # what the browser sent
+        apply_palette("High contrast")  # the callback run
+        self._run(state)
+        self._run(state, {"global_fixation_color": "#ff0000"})  # the user's pick
+        assert state["global_fixation_color"] == "#ff0000"
+        self._run(state, {"global_fixation_color": "#ff0000"})
+        assert state["global_fixation_color"] == "#ff0000"
+
+    def test_a_second_write_in_one_callback_keeps_the_first_ones_echo(self, state):
+        """An Essentials view applies its design, then the palette, in one
+        callback: the browser's echo is still the colour from before both."""
+        from scanpath_studio.controls import write_through
+
+        state["global_fixation_color"] = "#111111"
+        write_through("global_fixation_color", "#222222")
+        write_through("global_fixation_color", "#333333")
+        self._run(state)
+        for _ in range(3):
+            self._run(state, {"global_fixation_color": "#111111"})
+            assert state["global_fixation_color"] == "#333333"
+
+    def test_a_key_cleared_before_the_write_learns_its_echo(self, state):
+        """A key the callback cleared first (a design's reset does) has no
+        value to record, so the first one sent after the write is the echo."""
+        from scanpath_studio.controls import write_through
+
+        write_through("global_text_color", "#222222")
+        self._run(state)
+        for _ in range(3):
+            self._run(state, {"global_text_color": "#999999"})
+            assert state["global_text_color"] == "#222222"
+
 
 class TestSaccadeDirectionMode:
     """Forward vs. regression, between Uniform and the five-way split."""
@@ -583,3 +621,89 @@ class TestADesignPresetSurvivesAClosedPopover:
             state["global_saccade_render_mode"] = "Straight"
             reassert_pending_writes()
             assert state["global_saccade_render_mode"] == "Arc"
+
+    def test_the_layer_switches_are_written_plainly(self, state):
+        from scanpath_studio.controls import _PENDING_WRITES_KEY, _apply_view_preset
+
+        state["global_show_saccades"] = True
+        state["global_show_fix"] = True
+        _apply_view_preset("heatmap")
+        assert state["global_show_saccades"] is False
+        held = state.get(_PENDING_WRITES_KEY, {})
+        assert "global_show_saccades" not in held
+        assert "global_show_fix" not in held
+
+
+def _design_keys_outside_popovers(at) -> set[str]:
+    """The plot-setting widget keys the last run drew outside every popover."""
+    from scanpath_studio import controls
+
+    found: set[str] = set()
+
+    def walk(node, in_popover: bool) -> None:
+        proto = getattr(node, "proto", None)
+        if (
+            getattr(getattr(proto, "DESCRIPTOR", None), "name", None) == "Block"
+            and proto.WhichOneof("type") == "popover"
+        ):
+            in_popover = True
+        key = getattr(node, "key", None)
+        if key and not in_popover and controls._is_design_key(key):
+            found.add(key)
+        for child in getattr(node, "children", {}).values():
+            walk(child, in_popover)
+
+    walk(at._tree, False)
+    return found
+
+
+class TestALayerSwitchFlippedAfterAPreset:
+    """The rail's layer switches are on screen whenever a design is picked, so
+    the browser takes a preset's plain write to them. Held the way a closed
+    popover's widget is, the user's first flip of one would read as the
+    browser's stale echo and be undone, on that flip and every one after it."""
+
+    @pytest.mark.timeout(180)
+    def test_the_first_flip_after_a_preset_holds(self):
+        streamlit_testing = pytest.importorskip("streamlit.testing.v1")
+
+        at = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=120)
+        at.run()
+        assert not at.exception
+        at.button(key="viz_view_heatmap").click().run()
+        assert at.session_state["global_show_saccades"] is False
+        assert at.session_state["global_show_fix"] is False
+
+        for key in ("global_show_saccades", "global_show_fix"):
+            at.toggle(key=key).set_value(True).run()
+            assert not at.exception
+            assert at.session_state[key] is True, key
+        at.run()
+        assert at.session_state["global_show_saccades"] is True
+        assert at.session_state["global_show_fix"] is True
+        at.toggle(key="global_show_saccades").set_value(False).run()
+        assert at.session_state["global_show_saccades"] is False
+
+    @pytest.mark.timeout(240)
+    def test_the_mounted_keys_are_the_ones_drawn_outside_a_popover(self):
+        """`controls._MOUNTED_VIEW_KEYS` is what `_hold_view_writes` leaves
+        unheld, so it must be exactly the plot settings drawn outside every
+        popover, in each of the rail's modes."""
+        from scanpath_studio import controls
+
+        streamlit_testing = pytest.importorskip("streamlit.testing.v1")
+
+        at = streamlit_testing.AppTest.from_file(APP_SCRIPT, default_timeout=120)
+        at.run()
+        drawn = _design_keys_outside_popovers(at)
+        at.toggle(key="single_compare_toggle").set_value(True).run()
+        drawn |= _design_keys_outside_popovers(at)
+        at.toggle(key="single_compare_toggle").set_value(False).run()
+        at.toggle(key="single_animate").set_value(True).run()
+        drawn |= _design_keys_outside_popovers(at)
+        assert not at.exception
+        assert drawn == controls._MOUNTED_VIEW_KEYS, (
+            f"drawn outside a popover but not listed: "
+            f"{sorted(drawn - controls._MOUNTED_VIEW_KEYS)}; listed but not "
+            f"drawn: {sorted(controls._MOUNTED_VIEW_KEYS - drawn)}"
+        )

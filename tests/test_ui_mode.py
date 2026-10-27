@@ -694,8 +694,8 @@ def test_simple_hand_edited_colour_lights_no_tile():
     """A colour past every palette is shaped in Full, and counts."""
     at = _boot()
     at.button(key="simple_view_scanpath").click().run()
-    # One run for the preset's held writes to settle (`write_through`).
-    at.run()
+    # Straight after the view: the preset holds its write to the picker
+    # (`write_through`), and a pick of the user's own still stands.
     at.color_picker(key="global_fixation_color").pick("#123456").run()
     assert not at.exception
     assert at.session_state["global_palette"] == "Custom"

@@ -2079,13 +2079,18 @@ def aggregate_char_boxes(
 
 
 def _read_by_extension(
-    buf, name: str, plan: ReadPlan | None = None, *, sep: str | None = None
+    buf,
+    name: str,
+    plan: ReadPlan | None = None,
+    *,
+    sep: str | None = None,
+    file_columns: Sequence[str] | None = None,
 ) -> pd.DataFrame:
     """Dispatch a buffer/path to a pandas reader by its (lowercased) name.
 
-    ``sep`` is the delimiter of a text table when the caller already knows it
-    (a zip member, which cannot be peeked at); otherwise it is read off the
-    header line.
+    ``sep`` and ``file_columns`` are the delimiter and the column names of a
+    text table when the caller already knows them (a zip member, which cannot
+    be peeked at); otherwise they are read off the header line.
 
     ``plan`` narrows the read to the columns normalization keeps and
     declares EyeLink's ``.`` missing in the numeric ones. Delimited text and
@@ -2111,11 +2116,18 @@ def _read_by_extension(
         if not _is_workbook(buf, name):
             # EyeLink Data Viewer's "Excel" export is tab-separated text
             # with an .xls name — read it as what it is.
-            return _read_delimited(buf, sep or _sniff_delimiter(buf, name), plan)
+            return _read_delimited(
+                buf,
+                sep or _sniff_delimiter(buf, name),
+                plan,
+                file_columns=file_columns,
+            )
         # First sheet.
         frame = pd.read_excel(buf, **_excel_na_kwargs(buf, plan))
         return frame[[c for c in columns if c in frame.columns]] if columns else frame
-    return _read_delimited(buf, sep or _sniff_delimiter(buf, name), plan)
+    return _read_delimited(
+        buf, sep or _sniff_delimiter(buf, name), plan, file_columns=file_columns
+    )
 
 
 #: The delimiters a text table is looked for with, and the one assumed when its
@@ -2245,7 +2257,14 @@ def _can_reread(buf) -> bool:
 _BINARY_SNIFF_BYTES = 8192
 
 
-def _read_delimited(buf, sep: str, plan: ReadPlan | None, **extra) -> pd.DataFrame:
+def _read_delimited(
+    buf,
+    sep: str,
+    plan: ReadPlan | None,
+    *,
+    file_columns: Sequence[str] | None = None,
+    **extra,
+) -> pd.DataFrame:
     """``read_csv`` with the encoding fallback a non-UTF-8 export needs.
 
     A CSV saved by Excel on Windows is cp1252, and one umlaut in it would fail
@@ -2263,13 +2282,24 @@ def _read_delimited(buf, sep: str, plan: ReadPlan | None, **extra) -> pd.DataFra
     leaves out the rows with more fields than its header, and says so in the
     frame's `READ_NOTES_ATTR` — see :func:`_overflow_lines` for why `usecols`
     alone would keep them.
+
+    A whole-file read with verbatim columns needs the header (``file_columns``,
+    else read off the file first) to name every other column's NA spellings;
+    a stream that cannot be rewound is taken into memory for it.
     """
     rereadable = _can_reread(buf)
+    if plan is not None and plan.verbatim and not plan.columns and file_columns is None:
+        if not rereadable:
+            data = buf.read()
+            buf = io.BytesIO(data) if isinstance(data, bytes) else io.StringIO(data)
+            rereadable = True
+        file_columns = _header(buf, sep)
+        _rewind(buf)
     head = _peek(buf, _BINARY_SNIFF_BYTES) if rereadable else b""
     bom = _bom_encoding(head)
     if not bom and b"\x00" in head:
         raise _not_text_error(str(getattr(buf, "name", buf)), head)
-    kwargs = {**_read_kwargs(plan), **extra}
+    kwargs = {**_read_kwargs(plan, file_columns), **extra}
     skipped: list[int] = []
     if plan is not None and plan.columns and "nrows" not in extra and rereadable:
         header = _header(buf, sep)
@@ -3202,32 +3232,53 @@ class ReadPlan:
         )
 
 
-def _read_kwargs(plan: ReadPlan | None) -> dict:
+def _read_kwargs(
+    plan: ReadPlan | None, file_columns: Sequence[str] | None = None
+) -> dict:
     """``read_csv`` keywords for a plan (nothing at all for ``None``).
 
     An empty ``columns`` reads the whole file, matching the columnar readers in
     :func:`_read_by_extension` — `usecols=[]` would parse nothing at all, and
     the two must not disagree about what an empty plan means.
+
+    ``file_columns`` is the file's header, needed only by a whole-file read
+    (no ``columns``) with verbatim columns: :func:`_verbatim_na_kwargs` names
+    every column being read.
     """
     if plan is None:
         return {}
     kwargs: dict = {}
     if plan.columns:
         kwargs["usecols"] = list(plan.columns)
-    if plan.na_values:
-        kwargs["na_values"] = plan.na_values
+    text = {column: str for column in (*plan.identity, *plan.verbatim)}
+    if text:
+        kwargs["dtype"] = text
     if plan.verbatim:
-        # A converter receives the cell's raw text before NA detection runs, and
-        # leaves every other column's NA handling exactly as it was.
-        kwargs["converters"] = {column: str for column in plan.verbatim}
-    if plan.identity:
-        kwargs["dtype"] = {column: str for column in plan.identity}
+        kwargs.update(_verbatim_na_kwargs(plan, plan.columns or file_columns or ()))
+    elif plan.na_values:
+        kwargs["na_values"] = plan.na_values
     return kwargs
 
 
+def _verbatim_na_kwargs(plan: ReadPlan, columns: Iterable[str]) -> dict:
+    """NA keywords under which no cell of a plan's verbatim columns is missing.
+
+    A per-column ``na_values`` only adds to pandas' default spellings, and the
+    defaults reach a column read as ``str`` or through a converter too. So the
+    defaults are switched off and given back, with the plan's own spellings, to
+    every other column of ``columns`` — the ones being read — by name.
+    """
+    na_values = {
+        column: sorted(PANDAS_DEFAULT_NA | set(plan.na_values.get(column, ())))
+        for column in columns
+        if column not in plan.verbatim
+    }
+    return {"keep_default_na": False, "na_values": na_values}
+
+
 #: pandas' own default missing-value spellings (``read_csv``'s ``na_values``
-#: docs). Spelled out because an Excel read with a verbatim column has to switch
-#: the defaults off and hand them back to every *other* column by name.
+#: docs). Spelled out because a read with a verbatim column has to switch the
+#: defaults off and hand them back to every *other* column by name.
 PANDAS_DEFAULT_NA = frozenset(
     {
         "",
@@ -3256,10 +3307,9 @@ PANDAS_DEFAULT_NA = frozenset(
 def _excel_na_kwargs(buf, plan: ReadPlan | None) -> dict:
     """``read_excel`` keywords that keep a plan's verbatim columns literal.
 
-    ``read_excel`` applies its NA spellings before a converter sees the cell,
-    so the CSV path's converter trick does not reach it: the defaults are turned
-    off and given back to every other column by name, which needs the header
-    first. Excel is never the large-file format, so the second pass is cheap.
+    A workbook is read whole and pruned after, so the NA spellings name every
+    column of its header (:func:`_verbatim_na_kwargs`), which is read first.
+    Excel is never the large-file format, so the second pass is cheap.
     """
     if plan is None:
         return {}
@@ -3270,12 +3320,7 @@ def _excel_na_kwargs(buf, plan: ReadPlan | None) -> dict:
         return kwargs
     header = list(pd.read_excel(buf, nrows=0).columns)
     _rewind(buf)
-    na_values = {
-        column: sorted(PANDAS_DEFAULT_NA | set(plan.na_values.get(column, ())))
-        for column in header
-        if column not in plan.verbatim
-    }
-    return {**kwargs, "keep_default_na": False, "na_values": na_values}
+    return {**kwargs, **_verbatim_na_kwargs(plan, header)}
 
 
 def verbatim_text_plan(header: Sequence[str], schema: dict | None = None) -> ReadPlan:
@@ -4235,7 +4280,11 @@ def _read_zipped_table(
                     try:
                         frames.append(
                             _read_by_extension(
-                                io.BufferedReader(stream), name, member_plan, sep=sep
+                                io.BufferedReader(stream),
+                                name,
+                                member_plan,
+                                sep=sep,
+                                file_columns=header,
                             )
                         )
                     except UnicodeDecodeError:
@@ -4248,7 +4297,9 @@ def _read_zipped_table(
                             )
                             buf = io.BytesIO(stream.read())
                         frames.append(
-                            _read_by_extension(buf, name, member_plan, sep=sep)
+                            _read_by_extension(
+                                buf, name, member_plan, sep=sep, file_columns=header
+                            )
                         )
             remaining -= stream.consumed
             labels.append(member)

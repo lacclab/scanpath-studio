@@ -141,7 +141,7 @@ def test_canvas_add_move_reorder_and_delete_use_stable_identity():
     )
     added_id = selected
     assert added_id == 3
-    assert events.loc[2, "word_id"] is None
+    assert pd.isna(events.loc[2, "word_id"])
 
     events, selected = apply_authoring_event(
         events,

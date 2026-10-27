@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Record one short GIF per workflow in the running app, with the clicks counted.
 
-``record_app_demo.py`` records the README's tour of the whole app. This records
+``record_app_demo.py`` records the README's opening animation. This records
 the workflows one at a time — exporting a figure, adding your own data, styling
 the plot, filtering trials, comparing readers — each as its own clip, for the
 README's *See it in action* and the docs Gallery's *The app at work*. A bar in
@@ -25,7 +25,7 @@ does — and the app saves, as a local install does, into a scratch folder empti
 before each workflow (without it, an upload brings up the hosted demo's
 "nothing is saved here" reminder).
 
-The recording is real time, sped up by the same ``GIF_SPEEDUP`` as the app demo.
+The recording is real time, sped up by ``record_app_demo.GIF_SPEEDUP``.
 A wait for the app's own work — building a zip of 24 trials, rendering a replay —
 is fast-forwarded, and the bar says so while it is (``⏩ ×4``).
 """
@@ -75,6 +75,11 @@ PARK = APP_DEMO_PARK
 HEADER = 70
 #: The orange the docs' screenshot callouts use, so the two read as one set.
 ACCENT = "#d55e00"
+#: The bar's distance from the window's right edge, and its widest: it sits in
+#: the header between the views and the Essentials | Full switch, covering
+#: neither.
+HUD_RIGHT = 240
+HUD_MAX_WIDTH = 700
 #: What *Don't show this again* writes (``tour.TOUR_OPTOUT_COOKIE`` and
 #: ``tour.WIZARD_GUIDE_OPTOUT_COOKIE``): a returning user's browser.
 OPT_OUT_COOKIES = ("sps_tour_optout", "sps_wizard_guide_optout")
@@ -109,7 +114,7 @@ OVERLAY_JS = f"""
   }} else noHover();
   // Init scripts run in every frame, and the figure is an iframe.
   if (window !== window.top) return;
-  const FONT = '"Source Sans 3","Source Sans Pro",system-ui,-apple-system,sans-serif';
+  const FONT = '"Source Sans","Source Sans 3","Source Sans Pro",system-ui,-apple-system,sans-serif';
   const MOUSE = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" ' +
     'stroke="currentColor" stroke-width="2.4" stroke-linecap="round" ' +
     'stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px">' +
@@ -159,8 +164,8 @@ OVERLAY_JS = f"""
   // their scenes with it, where a count would describe one source clip.
   window.demoHud = (n, caption, fast, where, label) => {{
     const h = node('demo-hud',
-      'position:fixed;right:22px;z-index:2147483647;pointer-events:none;' +
-      'display:flex;align-items:center;gap:12px;max-width:800px;' +
+      'position:fixed;right:{HUD_RIGHT}px;z-index:2147483647;pointer-events:none;' +
+      'display:flex;align-items:center;gap:12px;max-width:{HUD_MAX_WIDTH}px;' +
       'padding:6px 18px 6px 6px;border-radius:999px;' +
       'background:rgba(17,24,39,.94);color:#fff;' +
       `font:600 18px/1.3 ${{FONT}};box-shadow:0 4px 14px rgba(0,0,0,.25);`);

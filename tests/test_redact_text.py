@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from scanpath_studio import api
+from scanpath_studio.constants import WORD_KEY
 from scanpath_studio.measures import assign_fixations_to_words, word_glyph_span
 from scanpath_studio.plots import (
     make_comparison_figure,
@@ -146,3 +147,55 @@ def test_api_takes_the_option(words, fixations):
         words, fixations, "synthetic", "synthetic_2line_demo", redact_text=True
     )
     assert _leaks(fig) == [] and _blocks(fig)
+
+
+def test_text_word_ids_that_spell_the_words_are_redacted_too(words, fixations):
+    """A text Word ID (`Zebrafish_0`) spells its word, in both tables: a
+    hover field that names it must not bring the word back."""
+    keys = {
+        wid: f"{text}_{i}"
+        for i, (wid, text) in enumerate(zip(words["word_id"], words["text"]))
+    }
+    words = words.assign(**{WORD_KEY: words["word_id"].map(keys)})
+    fixations = fixations.assign(**{WORD_KEY: fixations["word_id"].map(keys)})
+    hovers = dict(
+        word_hover_fields=["text", "word_id", WORD_KEY],
+        fixation_hover_fields=["order_in_trial", "duration_ms", "word_id", WORD_KEY],
+    )
+    plain = make_scanpath_figure(words, fixations, **hovers, **CANVAS)
+    assert _leaks(plain), "the keys were never drawn, so this proves nothing"
+
+    fig = make_scanpath_figure(words, fixations, redact_text=True, **hovers, **CANVAS)
+    assert _leaks(fig) == []
+    anim = make_scanpath_animation(
+        words,
+        fixations,
+        fixations_b=fixations,
+        words_b=words,
+        redact_text=True,
+        **hovers,
+        **CANVAS,
+    )
+    assert _leaks(anim) == []
+    reading = ("synthetic", "synthetic_2line_demo")
+    for layout in ("overlay", "side_by_side"):
+        cmp = make_comparison_figure(
+            words,
+            fixations,
+            reading,
+            reading,
+            redact_text=True,
+            layout=layout,
+            **hovers,
+            **CANVAS,
+        )
+        assert _leaks(cmp) == [], layout
+    via_api = api.plot_scanpath(
+        words,
+        fixations,
+        "synthetic",
+        "synthetic_2line_demo",
+        redact_text=True,
+        **hovers,
+    )
+    assert _leaks(via_api) == []

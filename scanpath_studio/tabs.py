@@ -156,6 +156,7 @@ from scanpath_studio.constants import (
     WORD_BOX_FILL_COLOR,
     WORD_BOX_FILL_OPACITY,
     WORD_BOX_LINE_OPACITY,
+    WORD_KEY,
     WORD_LABEL_COLOR,
     compare_palette_color,
     computed_measures_enabled,
@@ -255,6 +256,7 @@ from scanpath_studio.data import (
     trial_keys,
     trial_mapping_columns,
     trial_order_label,
+    unplaced_fixations_issue,
     user_columns,
     validate_fix_schema,
     validate_raw_gaze_schema,
@@ -14621,6 +14623,10 @@ def _remap_proposed(schema: dict | None, frame_columns, canon: dict) -> dict:
             # always seed it so a remap preserves text grouping instead of
             # collapsing every reading of a text into its own trial_id.
             proposed[key] = canonical
+        elif key == "word_id" and schema.get(key) and WORD_KEY in cols:
+            # Text Word IDs: the ids themselves, which the save numbers and
+            # matches again, never the numbers the load gave them.
+            proposed[key] = WORD_KEY
         else:
             proposed[key] = canonical if schema.get(key) else None
     return proposed
@@ -14907,6 +14913,20 @@ def _apply_remap() -> None:
         new_entry["words"] = words
         if has_fixations:
             new_entry["fixations"] = fixations
+    elif not harmonized and "fixations" in pending:
+        # No Words table to harmonize with, so the refusal `harmonize_frames`
+        # makes is made here: fixations whose only position is a text Word ID
+        # have nothing to place them, and saving them would draw nothing.
+        fixations = new_entry.get("fixations")
+        if isinstance(fixations, pd.DataFrame) and (
+            problem := unplaced_fixations_issue(empty_words_frame(), fixations)
+        ):
+            from scanpath_studio.app import MAPPING_FAILURE_LEAD
+
+            st.session_state["_remap_problems"] = {
+                "fixations": [f"{MAPPING_FAILURE_LEAD}: {problem}"]
+            }
+            return
     new_entry["schemas"] = new_schemas
     new_entry["column_names"] = {
         table: ColumnNames.from_payload(payload)

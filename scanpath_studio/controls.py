@@ -2769,8 +2769,9 @@ WORD_FIELD_SPECS: list[dict] = [
         "key": "word_id",
         "label": "Word ID",
         "required": True,
-        "help": "ID of each word (interest area). Fixations are matched to words "
-        "by it, and it sets the word order within a trial.",
+        "help": "ID of each word (interest area): a number, or text such as w1. "
+        "Fixations are matched to words by it. A numeric ID sets the word order "
+        "within a trial; with text IDs, the table's row order does.",
     },
     {
         "key": "text",
@@ -2919,7 +2920,8 @@ FIX_FIELD_SPECS: list[dict] = [
         "key": "word_id",
         "label": "Word ID",
         "required": False,
-        "help": "Which word/AOI each fixation landed on. When mapped, it is used "
+        "help": "Which word/AOI each fixation landed on, as the Words table's Word "
+        "ID names it: the same number, or the same text. When mapped, it is used "
         "instead of matching fixations to word boxes by position. For AOI-only "
         "data, leave X/Y empty and map this.",
     },

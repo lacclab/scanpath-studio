@@ -19,7 +19,7 @@ import json
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
-from .constants import SAMPLE_INDEX
+from .constants import SAMPLE_INDEX, WORD_KEY
 
 #: How a canonical column came to be.
 MAPPED = "mapped"  # read from one source column, unchanged
@@ -104,6 +104,7 @@ _CANONICAL_LABELS: dict[str, str] = {
     "line_idx": "Line",
     "text": "Word",
     "word_id": "Word #",
+    WORD_KEY: "Word ID",
     "x": "X",
     "y": "Y",
     "saccade_amplitude": "Saccade amplitude (px)",
@@ -147,6 +148,7 @@ ROLE_LABELS: dict[str, str] = {
     "unique_text_id": "Text",
     "screen_id": "Screen",
     "word_id": "Word #",
+    WORD_KEY: "Word ID",
     "text": "Word",
     "line_idx": "Line",
     "x": "X",
@@ -205,8 +207,21 @@ IDENTITY_COLUMNS = frozenset(
         "unique_text_id",
         "screen_id",
         "word_id",
+        WORD_KEY,
     }
 )
+
+
+def _text_word_id_entries(entry: SourceName | None, how: str) -> dict:
+    """The entries for a Word ID read as text (:meth:`ColumnNames.with_rewrites`),
+    from the ``word_id`` entry the schema implied; none unless that names the
+    file's column."""
+    if entry is None or entry.kind != MAPPED or len(entry.sources) != 1:
+        return {}
+    return {
+        WORD_KEY: SourceName(entry.sources, MAPPED),
+        "word_id": SourceName((), GENERATED, entry.display + how),
+    }
 
 
 def canonical_label(column) -> str:
@@ -446,9 +461,17 @@ class ColumnNames:
         ``table``) marked converted: a padded id, a shifted word id, positions
         filled from word boxes are no longer what the file held under its name,
         so the column is labelled "<source><how>" and exported under its
-        internal name."""
+        internal name.
+
+        A rewrite of :data:`~scanpath_studio.constants.WORD_KEY` is a Word ID
+        read as text: the text is the file's column, so ``word_key`` takes
+        the Word ID's source name, and ``word_id`` — the number the app gave
+        each text id — becomes generated, "<source><how>" its note."""
         changed = dict(self.entries)
         for rewritten_table, column, how in rewrites or ():
+            if rewritten_table == table and column == WORD_KEY:
+                changed.update(_text_word_id_entries(changed.get("word_id"), how))
+                continue
             entry = changed.get(column)
             if rewritten_table != table or entry is None or entry.kind != MAPPED:
                 continue

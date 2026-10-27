@@ -16556,9 +16556,10 @@ def _render_column_mapping_section(
     frames to remap, and after it there is no raw table to map from.
 
     * ``editor_rendered`` — mode **A**: the pre-normalization
-      ``controls.column_mapping_ui`` panels were already drawn into this section
-      by ``app.prepare_data`` (a raw source with ``allow_override``), so all
-      that is left to add is the recording-setup note.
+      ``controls.column_mapping_ui`` panels belong to this section, drawn into
+      it by ``app.prepare_data`` (a raw source with ``allow_override``) while
+      ✏️ Edit dataset is open, so all that is left to add is the
+      recording-setup note.
     * A stored uploaded dataset — mode **B**: the post-normalization
       ``_render_remap_editor``, offering only the columns that survived import.
     * Anything else — mode **C**: a read-only table built from the schemas the

@@ -228,6 +228,56 @@ def test_the_tour_card_shows_nothing_until_its_stylesheet_applies(page):
         context.close()
 
 
+def test_the_app_stylesheet_does_not_wait_for_the_markdown_renderer(page):
+    """The app's stylesheet is a style-only `st.html`, so it applies without
+    the script a markdown block's raw HTML waits for: with that script never
+    arriving, the off-screen Data page is still hidden."""
+    blocked = []
+
+    def block(route):
+        blocked.append(route.request.url)
+        route.abort()
+
+    context = page.context.browser.new_context(viewport={"width": 1440, "height": 900})
+    other = context.new_page()
+    try:
+        other.route(re.compile(r"/rehype-raw[^/]*\.js"), block)
+        other.goto(page.url)
+        _settle(other)
+        if not blocked:
+            pytest.skip("this Streamlit fetches no separate rehype-raw script")
+        hidden = other.locator(".st-key-data_setup_page_offscreen")
+        hidden.wait_for(state="attached", timeout=30_000)
+        assert hidden.evaluate("el => getComputedStyle(el).display") == "none"
+    finally:
+        context.close()
+
+
+def test_the_app_stylesheet_reaches_the_page_rule_for_rule(page):
+    """Compacted and passed through `st.html`'s sanitizer, the stylesheet on
+    the page holds every rule of the documented one, unchanged."""
+    from scanpath_studio.styles import get_app_css
+
+    source = re.sub(r"^\s*<style>|</style>\s*$", "", get_app_css().strip())
+    found = page.evaluate(
+        """(source) => {
+          const norm = (sheet) =>
+            [...sheet.cssRules].map((r) => r.cssText.replace(/\\s+/g, " "));
+          const live = [...document.querySelectorAll("style")].find((s) =>
+            s.textContent.includes(".st-key-data_setup_page_offscreen"));
+          const probe = document.createElement("style");
+          probe.textContent = source;
+          document.head.appendChild(probe);
+          const want = norm(probe.sheet);
+          probe.remove();
+          return {want, got: live ? norm(live.sheet) : null};
+        }""",
+        source,
+    )
+    assert found["got"] is not None, "the app stylesheet is not on the page"
+    assert found["got"] == found["want"]
+
+
 def test_no_script_error_reached_the_page(page):
     assert page.errors == []
 

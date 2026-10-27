@@ -637,8 +637,9 @@ def test_the_app_maps_potec_trials_as_reader_and_text(potec_root, monkeypatch):
     pin_data_view(at)
     at.run()
     assert not at.exception, at.exception
-    assert at.multiselect(key="col_map_fix_trial").value == ["reader_id", "text_id"]
-    assert at.multiselect(key="col_map_words_trial").value == ["text_id"]
+    # The panels are drawn only in ✏️ Edit dataset; their keys hold the picks.
+    assert at.session_state["col_map_fix_trial"] == ["reader_id", "text_id"]
+    assert at.session_state["col_map_words_trial"] == ["text_id"]
     rows = at.session_state[app.DATASET_TABLE_ROWS_KEY]
     potec = next(r for r in rows if r["_token"] == label)
     assert (potec["Participants"], potec["Trials"], potec["Words"]) == (2, 2, 4)

@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/icon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -4041,6 +4041,13 @@ rest, unless <code>keep_columns</code> names them.</p>
   Trials that match none raise a <code>data.StimulusJoinWarning</code> (a <code>UserWarning</code>).</li>
 <li><strong>Fixations without x/y</strong> but with a word ID are placed at the centers of their
   word boxes.</li>
+<li><strong>Text word IDs.</strong> A word ID column that holds text and no numbers (<code>w1</code>,
+  <code>Hello_3</code>) is read as keys, kept in a <code>word_key</code> column (under the column's
+  own name with <code>names="source"</code>). Each word's <code>word_id</code> is then its position
+  in its text, 1, 2, … in the Words table's row order (the order of the reading
+  that lists the most of the text), one number for every reader, and a
+  fixation's is the number of the word with the same text ID in its trial —
+  exactly the same text, else none. A text ID never matches a number.</li>
 <li><strong>Bookkeeping columns.</strong> Columns named in <code>data.INTERNAL_COLUMNS</code> are the
   pipeline's own; <code>data.drop_internal_columns</code> removes them.</li>
 </ul>
@@ -4206,8 +4213,9 @@ has fixations on). A <code>ValueError</code>.</p>
               <code><span title="scanpath_studio.data.UnplacedFixationsError">UnplacedFixationsError</span></code>
             –
           <div class="doc-md-description">
-            <p>The fixations map no x/y and their word ID column
-holds no numbers, so none could be placed. A <code>ValueError</code>.</p>
+            <p>The fixations have no x/y, and not one of their
+word IDs names a word: text IDs the Words table does not have, or numbers
+against a Words table of text IDs. A <code>ValueError</code>.</p>
           </div>
         </li>
     </ul>
@@ -8977,10 +8985,10 @@ the software's; <code>None</code> for the software alone.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.instant", "navigation.instant.progress", "navigation.path", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.instant", "navigation.instant.progress", "navigation.path", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../assets/_markdown_exec_pyodide.js"></script>
       

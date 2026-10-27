@@ -116,6 +116,7 @@ Columns are auto-detected from EyeLink, Gazepoint, Tobii, SMI, Pupil Labs and sn
 - **One table is enough.** Leave out the table a dataset doesn't have: it comes back as an empty frame, and the plots skip that layer.
 - **Stimulus-level words.** A Words table without a participant column holds each text's word boxes once, and they are copied onto every trial in the fixations. Each trial is matched by its trial ID, else the trial ID it had before a repeat's `_r2` suffix, else its `text_id` (for trial IDs that embed the participant). Trials that match none raise a `data.StimulusJoinWarning` (a `UserWarning`).
 - **Fixations without x/y** but with a word ID are placed at the centers of their word boxes.
+- **Text word IDs.** A word ID column that holds text and no numbers (`w1`, `Hello_3`) is read as keys, kept in a `word_key` column (under the column's own name with `names="source"`). Each word's `word_id` is then its position in its text, 1, 2, … in the Words table's row order (the order of the reading that lists the most of the text), one number for every reader, and a fixation's is the number of the word with the same text ID in its trial — exactly the same text, else none. A text ID never matches a number.
 - **Bookkeeping columns.** Columns named in `data.INTERNAL_COLUMNS` are the pipeline's own; `data.drop_internal_columns` removes them.
 
 Parameters:
@@ -139,7 +140,7 @@ Raises:
 - `ValueError` – A required field can't be found. The message names the field, the column names auto-detection looked for, and the columns the table has.
 - `ValueError` – image_root does not exist, or image_pattern is absolute or climbs out of it.
 - `StimulusJoinError` – A stimulus-level Words table shares neither a trial ID nor a text_id with any trial (or, multipart, with every screen a trial has fixations on). A ValueError.
-- `UnplacedFixationsError` – The fixations map no x/y and their word ID column holds no numbers, so none could be placed. A ValueError.
+- `UnplacedFixationsError` – The fixations have no x/y, and not one of their word IDs names a word: text IDs the Words table does not have, or numbers against a Words table of text IDs. A ValueError.
 
 ### ScanpathData
 

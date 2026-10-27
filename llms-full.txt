@@ -631,6 +631,7 @@ The app detects columns from common eye-tracker exports. Check and correct the m
 - Positions in pixels
 - Times in milliseconds. A time column whose header names its unit, such as `[s]`, `[μs]` or `[ns]`, is converted.
 - Word boxes as `x/y/width/height` or EyeLink's `IA_LEFT/RIGHT/TOP/BOTTOM`
+- Word IDs as numbers, or as text such as `w1`. Spell text IDs the same way in the Fixations and Words tables. With text IDs, the order of the rows in the Words table sets the word order.
 
 ### Trials over several screens
 
@@ -1280,6 +1281,7 @@ Columns are auto-detected from EyeLink, Gazepoint, Tobii, SMI, Pupil Labs and sn
 - **One table is enough.** Leave out the table a dataset doesn't have: it comes back as an empty frame, and the plots skip that layer.
 - **Stimulus-level words.** A Words table without a participant column holds each text's word boxes once, and they are copied onto every trial in the fixations. Each trial is matched by its trial ID, else the trial ID it had before a repeat's `_r2` suffix, else its `text_id` (for trial IDs that embed the participant). Trials that match none raise a `data.StimulusJoinWarning` (a `UserWarning`).
 - **Fixations without x/y** but with a word ID are placed at the centers of their word boxes.
+- **Text word IDs.** A word ID column that holds text and no numbers (`w1`, `Hello_3`) is read as keys, kept in a `word_key` column (under the column's own name with `names="source"`). Each word's `word_id` is then its position in its text, 1, 2, … in the Words table's row order (the order of the reading that lists the most of the text), one number for every reader, and a fixation's is the number of the word with the same text ID in its trial — exactly the same text, else none. A text ID never matches a number.
 - **Bookkeeping columns.** Columns named in `data.INTERNAL_COLUMNS` are the pipeline's own; `data.drop_internal_columns` removes them.
 
 Parameters:
@@ -1303,7 +1305,7 @@ Raises:
 - `ValueError` – A required field can't be found. The message names the field, the column names auto-detection looked for, and the columns the table has.
 - `ValueError` – image_root does not exist, or image_pattern is absolute or climbs out of it.
 - `StimulusJoinError` – A stimulus-level Words table shares neither a trial ID nor a text_id with any trial (or, multipart, with every screen a trial has fixations on). A ValueError.
-- `UnplacedFixationsError` – The fixations map no x/y and their word ID column holds no numbers, so none could be placed. A ValueError.
+- `UnplacedFixationsError` – The fixations have no x/y, and not one of their word IDs names a word: text IDs the Words table does not have, or numbers against a Words table of text IDs. A ValueError.
 
 ### ScanpathData
 
@@ -3753,7 +3755,7 @@ sps.save_figure(fig, "word-boxes.html")
 
 # About Scanpath Studio
 
-**Scanpath Studio v0.43.0** — interactive visualization of eye movements in reading.
+**Scanpath Studio v0.44.0** — interactive visualization of eye movements in reading.
 
 Developed by [Omer Shubi](https://omershubi.github.io/), [Keren Gruteke Klein](https://kerengruteke.github.io/), [Maya Grossman](https://www.linkedin.com/in/maya-grossman-32b547292/), [Ella Lion](https://ella-lion.github.io/), [Deborah N. Jakobi](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/jakobi.html), [David R. Reich](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/reich.html), [Lena Jäger](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/group-leader/jaeger.html), and [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/), at the Technion and the University of Zurich.
 
@@ -3775,14 +3777,14 @@ Show BibTeX and APA
              Berzak, Yevgeni},
   title   = {{Scanpath Studio}},
   year    = {2026},
-  version = {0.43.0},
+  version = {0.44.0},
   doi     = {10.5281/zenodo.22933884},
   url     = {https://doi.org/10.5281/zenodo.22933884},
   license = {MIT},
 }
 ```
 
-Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.43.0) [Computer software]. https://doi.org/10.5281/zenodo.22933884
+Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.44.0) [Computer software]. https://doi.org/10.5281/zenodo.22933884
 
 ## Bundled demo
 

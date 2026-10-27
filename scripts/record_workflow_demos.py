@@ -279,14 +279,18 @@ class Workflow:
     #: What the bar says before the first click — the task, in a user's words.
     goal: str
     run: Callable[[Demo], None]
+    #: The interface mode the recording opens in (``?ui=``).
+    ui: str = "full"
 
 
 WORKFLOWS: dict[str, Workflow] = {}
 
 
-def workflow(name: str, goal: str) -> Callable[[Callable[[Demo], None]], None]:
+def workflow(
+    name: str, goal: str, ui: str = "full"
+) -> Callable[[Callable[[Demo], None]], None]:
     def register(fn: Callable[[Demo], None]) -> None:
-        WORKFLOWS[name] = Workflow(name, goal, fn)
+        WORKFLOWS[name] = Workflow(name, goal, fn, ui)
 
     return register
 
@@ -674,6 +678,30 @@ def plot_controls(d: Demo) -> None:
     d.finish("Regressions, word boxes and reading order")
 
 
+@workflow("essentials", "Take a first look in Essentials", ui="essentials")
+def essentials(d: Demo) -> None:
+    page = d.page
+    # A first visit opens on the replay, already playing.
+    d.pause(2.6)
+    d.click(page.locator(".st-key-simple_view_scanpath button"), "Scanpath", hold=1.4)
+    d.choose("global_palette", "High contrast", "palette", hold=1.2)
+    d.click(page.locator(".st-key-simple_view_heatmap button"), "Heatmap", hold=1.4)
+    d.click(page.locator(".st-key-single_next_trial button"), "next trial", hold=1.6)
+    d.click(
+        page.locator(".st-key-iconpop_more_rail button"),
+        "More options",
+        wait=False,
+        hold=2.4,
+    )
+    d.close_popover()
+    d.click(
+        page.locator(".st-key-ui_mode_switch button").filter(has_text="Full"),
+        "Full",
+        hold=1.8,
+    )
+    d.finish("Essentials for a first look, Full one click away")
+
+
 @workflow("design-presets", "Switch between ready-made designs")
 def design_presets(d: Demo) -> None:
     page = d.page
@@ -905,7 +933,7 @@ def record_one(browser, url: str, flow: Workflow, frames: Path) -> Path:
     )
     context.add_init_script(OVERLAY_JS)
     page = context.new_page()
-    page.goto(f"{url}/?ui=full", wait_until="domcontentloaded")
+    page.goto(f"{url}/?ui={flow.ui}", wait_until="domcontentloaded")
     demo = Demo(page, flow.goal)
     demo.settle(quiet=3.0)
     page.add_style_tag(content=HIDE_CSS + LOCAL_PATHS_CSS)

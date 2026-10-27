@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/);
 `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.44.0] - 2026-10-27
+
+### Added
+- Word IDs can be text, such as `w1` or `Hello_3`: fixations are matched to the word with the same ID in their trial, so a dataset keyed by text IDs loads without fixation coordinates, and its IDs are shown and exported as the file spells them. ([#415](https://github.com/lacclab/scanpath-studio/issues/415))
+
+### Changed
+- Moving between trials sends about a quarter less to the browser and takes about a third less server time, and on a slow connection the app's styling now arrives within a few seconds of the page instead of about 20 seconds after it. ([#506](https://github.com/lacclab/scanpath-studio/issues/506))
+
+### Fixed
+- A layer switch you flip right after picking a design preset now stays flipped instead of snapping back, and the first option you pick in a layer's ▾ menu after a preset is no longer undone. ([#485](https://github.com/lacclab/scanpath-studio/issues/485))
+- Words that read "None", "NA" or "null", and blank word cells, in a CSV or TSV words table are kept as words under pandas 3.1 too, instead of being read as missing. ([#524](https://github.com/lacclab/scanpath-studio/issues/524))
+- A built-in dataset whose column mapping cannot load now shows Save changes on its Edit dataset screen, so a field fixed there takes effect. ([#525](https://github.com/lacclab/scanpath-studio/issues/525))
+
 ## [0.43.0] - 2026-10-22
 
 ### Added

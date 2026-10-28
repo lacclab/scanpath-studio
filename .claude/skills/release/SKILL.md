@@ -29,6 +29,14 @@ like any other change, and the tag is cut on `main` *after* that PR merges.
 3. `python scripts/changelog_fragments.py check` passes and `changelog.d/`
    holds fragments — a release with none is almost always a mistake; confirm
    with the user if empty.
+4. **The app's media show this release.** List what changed in the UI since
+   the media were last captured:
+   `git log --oneline $(git log -1 --format=%H -- docs/assets/screenshots)..origin/main -- scanpath_studio/ ':!scanpath_studio/api.py' ':!scanpath_studio/cli.py'`.
+   If any of it is visible in the app (a control, a label, a header element,
+   a layout change), stop and refresh the media first: run
+   `sh scripts/refresh_docs_media.sh` on a branch from `origin/main`, look
+   through every changed image, and land it as its own PR before cutting the
+   release. Name the commits you judged invisible when you skip this.
 
 ## Steps
 

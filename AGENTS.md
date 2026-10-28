@@ -292,7 +292,7 @@ python desktop/smoke_test.py     # signature + selfcheck + server-boot smoke tes
 pip install -e ".[docs]"
 mkdocs serve                 # local preview
 mkdocs build --strict        # CI gate on every PR and on deploy
-uv run --with playwright python scripts/capture_docs_screenshots.py  # re-capture app screenshots
+sh scripts/refresh_docs_media.sh   # re-capture every screenshot, GIF and video of the app
 ```
 
 User-facing docs live in `docs/` and publish to
@@ -628,6 +628,13 @@ Priority, the approval gate — are in `CLAUDE.md` → *Tracking work*.
 
 ## Releasing
 
+0. **Re-capture the app's media when the UI changed.** If anything visible in
+   the app changed since the screenshots and recordings were last captured
+   (`git log -1 -- docs/assets/screenshots`), run
+   `sh scripts/refresh_docs_media.sh`, look through every image, and land the
+   result in its own PR before the release — a new control, a renamed label or
+   a new header element otherwise leaves the README and docs showing the old
+   app.
 1. `python scripts/changelog_fragments.py release <version>` writes the
    `changelog.d/` fragments into a `CHANGELOG.md` section and deletes them.
 2. Bump `__release__` in `scanpath_studio/__init__.py` — the single source of

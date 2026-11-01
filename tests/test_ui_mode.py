@@ -236,6 +236,22 @@ def test_the_status_widget_moves_out_from_under_the_switch():
     assert "width: 17.5rem !important" in css
 
 
+def test_switch_css_moves_the_switch_left_of_cloud_toolbar_actions():
+    """Community Cloud draws Fork / GitHub just left of the ⋮ menu, where the
+    switch sits: the switch moves left of them, and only when there are any."""
+    css = ui_mode.switch_css(True)
+    assert (
+        '[data-testid="stToolbarActions"]:not(:empty)'
+        " { width: 5.5rem; justify-content: flex-end; }" in css
+    )
+    assert (
+        '.stApp:has([data-testid="stToolbarActions"]:not(:empty))'
+        " .st-key-tour_grp_ui_mode { right: 9rem; }" in css
+    )
+    assert "width: 23.5rem !important" in css
+    assert "stToolbarActions" not in ui_mode.switch_css(False)
+
+
 def test_the_cookie_script_takes_no_room_in_the_switch_box():
     """The script that writes the cookie appears only once the switch is
     used; its frame sits in a container that takes no room, so the box the

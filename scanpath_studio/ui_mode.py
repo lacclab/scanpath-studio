@@ -444,6 +444,14 @@ def switch_css(visible: bool) -> str:
         # navigation gives way before it would run under the switch.
         ' [data-testid="stToolbar"] div:has(> [data-testid="stMainMenu"])'
         " { width: 17.5rem !important; }"
+        # Streamlit Community Cloud fills the toolbar's actions (Fork, GitHub)
+        # just left of the menu, where the switch sits: move them past it,
+        # and widen the cell by their width.
+        ' [data-testid="stToolbarActions"]:not(:empty) { margin-right: 11.5rem; }'
+        ' [data-testid="stToolbar"]'
+        ' div:has(> [data-testid="stToolbarActions"]:not(:empty))'
+        ':has(> [data-testid="stMainMenu"])'
+        " { width: 23.5rem !important; }"
         " }"
         f" {button} {{ min-height: 2.5rem; padding: 0 1.1rem; }}"
         f" {button} p {{ font-size: 1rem; }}"

@@ -445,9 +445,12 @@ def switch_css(visible: bool) -> str:
         ' [data-testid="stToolbar"] div:has(> [data-testid="stMainMenu"])'
         " { width: 17.5rem !important; }"
         # Streamlit Community Cloud fills the toolbar's actions (Fork, GitHub)
-        # just left of the menu, where the switch sits: move them past it,
-        # and widen the cell by their width.
-        ' [data-testid="stToolbarActions"]:not(:empty) { margin-right: 11.5rem; }'
+        # just left of the menu, where the switch sits: give them a fixed
+        # width, move the switch left of them, and widen the cell to match.
+        ' [data-testid="stToolbarActions"]:not(:empty)'
+        " { width: 5.5rem; justify-content: flex-end; }"
+        ' .stApp:has([data-testid="stToolbarActions"]:not(:empty))'
+        f" {box} {{ right: 9rem; }}"
         ' [data-testid="stToolbar"]'
         ' div:has(> [data-testid="stToolbarActions"]:not(:empty))'
         ':has(> [data-testid="stMainMenu"])'

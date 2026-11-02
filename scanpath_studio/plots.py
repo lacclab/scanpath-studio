@@ -8451,14 +8451,12 @@ def _make_split_comparison_figure(
     grid_left, grid_bottom = _grid_reserves(
         show_coordinate_grid, settings.coordinate_grid_font_size
     )
-    # A slim top band, for the panels' titles and the optional legend.
-    top_px = _compare_legend_font(base_font_size)["size"] + 14
+    # The top band holds the panels' names on their top edge and, above them,
+    # the legend's own row; it is sized once the legend's entries are known, and
+    # the figure grows by it, so it never takes height from the panels.
     figure_width = total_width + grid_left + right_px
     figure_height = total_height + bottom_px + grid_bottom
-    plot_area = (
-        max(figure_width - grid_left - right_px, 1),
-        max(figure_height - top_px - bottom_px - grid_bottom, 1),
-    )
+    plot_area = (max(total_width, 1), max(total_height, 1))
     if is_stacked:
         fig = make_subplots(
             rows=2,
@@ -8683,11 +8681,10 @@ def _make_split_comparison_figure(
         height=figure_height,
         width=figure_width,
         autosize=False,
-        margin=dict(l=grid_left, r=right_px, t=top_px, b=bottom_px + grid_bottom),
+        margin=dict(l=grid_left, r=right_px, t=0, b=bottom_px + grid_bottom),
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.05,
             xanchor="right",
             x=1,
             font=_compare_legend_font(base_font_size, font_family),
@@ -8697,6 +8694,25 @@ def _make_split_comparison_figure(
         paper_bgcolor=background_color,
         font=font_settings,
         shapes=all_shapes,
+    )
+    # Both rows are placed in px above the panels' top edge — a paper fraction
+    # would rise with a tall stacked figure, out of the band and into the
+    # title's, which `export.annotate_figure` adds above it.
+    names_font_px = max(
+        (
+            float(a.font.size or 16)
+            for a in fig.layout.annotations
+            if a.text in subplot_titles
+        ),
+        default=16.0,
+    )
+    names_row_px = names_font_px * 1.3 + _LEGEND_GAP_PX
+    legend_px = _default_legend_height(fig)
+    top_px = names_row_px + legend_px
+    fig.update_layout(
+        height=figure_height + top_px,
+        margin_t=top_px,
+        legend_y=1.0 + names_row_px / plot_area[1],
     )
     return fig
 

@@ -164,6 +164,53 @@ class TestSameDataset:
         assert titled.layout.margin.t > band
         assert titled.layout.legend.y == pytest.approx(plain.layout.legend.y)
 
+    @pytest.mark.parametrize("layout", ["side_by_side", "stacked"])
+    @pytest.mark.parametrize(
+        "legend_layout",
+        [
+            {"compare": {"position": "top-center-outside"}},
+            {"size_key": {"position": "top-right-outside"}},
+            {
+                "compare": {"position": "top-left-outside"},
+                "size_key": {"position": "top-center-outside"},
+            },
+        ],
+        ids=["legend", "size-key", "both"],
+    )
+    def test_whatever_is_moved_above_the_panels_clears_their_names(
+        self, layout, legend_layout
+    ):
+        """A legend or the size key moved to a spot above the panels stacks
+        beyond their "A · …" / "B · …" names and the default legend, inside
+        the top band the figure grows by."""
+        words, fixations = _pair()
+        fig = api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            layout=layout,
+            labels=("Reader one", "Reader two"),
+            canvas_size=(2560, 1440),
+            legend_layout=legend_layout,
+        )
+        _plot_w, plot_h, margin = plots._plot_px(fig)
+        floor = plots._panel_names_px(fig) + plots._default_legend_height(fig)
+        assert plots._panel_names_px(fig) > 0
+        bottoms = []
+        if "compare" in legend_layout:
+            moved = fig.layout.to_plotly_json()["legend2"]
+            assert moved["yanchor"] == "bottom"
+            bottoms.append((moved["y"] - 1.0) * plot_h)
+        if "size_key" in legend_layout:
+            labels = [
+                a for a in fig.layout.annotations if a.name == "duration_size_key"
+            ]
+            assert labels
+            bottoms += [a.yshift - a.font.size / 2 for a in labels]
+        assert min(bottoms) >= floor
+        assert max(bottoms) < margin["t"]
+
     def test_the_renamed_copy_never_reaches_a_label(self):
         """The rename is for slicing the figure; the legend names the real id."""
         words, fixations = _pair()

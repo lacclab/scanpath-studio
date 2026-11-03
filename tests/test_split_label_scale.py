@@ -114,11 +114,12 @@ def test_two_screens_keep_each_panels_text_to_its_boxes():
     """Two screens a factor of two apart: the same 20-px AOI renders 19.2 px high in A and
     9.6 px in B, so A's 16-px font is drawn twice the size of B's."""
     fig = _figure("side_by_side", (1600, 1200))
-    assert (fig.layout.width, fig.layout.height) == (1600, 600)
+    # The A/B panel titles' band is added above the panels, not taken from them.
+    layout = fig.layout
+    assert layout.width == 1600
+    assert layout.height - layout.margin.t - layout.margin.b == pytest.approx(600)
     fonts = _label_fonts(fig)
     assert fonts[0] == pytest.approx(2 * fonts[1])
-    # 15.36 / 7.68 on the full height; the A/B panel titles' band takes a
-    # little of it.
     assert fonts[0] == pytest.approx(15.36, rel=0.03)
 
 

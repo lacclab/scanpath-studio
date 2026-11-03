@@ -2000,7 +2000,7 @@ class _LegendSlots:
         self.base = dict(margin)
         # Above the plot, legends stand on the content's top, not the edge.
         self.inset = _content_top_inset(fig) if inset is None else inset
-        self.top_start = top_start - self.inset
+        self.top_start = _panel_names_px(fig) + top_start - self.inset
         self.used: dict = {}
         # The first legend's height on each outside edge, which a size key on
         # that edge is centred against.
@@ -2113,6 +2113,21 @@ def _default_legend_height(fig: go.Figure) -> float:
     return h + (rows - 1) * (h - 10.0)
 
 
+#: The ``name`` of a split comparison's panel titles ("A · …" / "B · …").
+_PANEL_NAME = "panel_name"
+
+
+def _panel_names_px(fig: go.Figure) -> float:
+    """The height of the row of panel names on the plot's top edge — a split
+    comparison's — or 0. Anything placed above the plot stands beyond it."""
+    sizes = [
+        float(a.font.size or 16)
+        for a in fig.layout.annotations
+        if a.name == _PANEL_NAME and float(a.y or 0) >= 1.0
+    ]
+    return max(sizes) * 1.3 + _LEGEND_GAP_PX if sizes else 0.0
+
+
 def _content_top_inset(fig: go.Figure) -> float:
     """How far, in px, the topmost thing drawn sits below the plot's top edge.
 
@@ -2124,7 +2139,7 @@ def _content_top_inset(fig: go.Figure) -> float:
     highest fixation. 0 for a figure of several panels, without a fixed y range, or
     whose content reaches the edge.
     """
-    if getattr(fig, "_grid_ref", None) is not None:
+    if getattr(fig, "_grid_ref", None) is not None or _panel_names_px(fig):
         return 0.0
     y_range = fig.layout.yaxis.range
     if not y_range or y_range[0] == y_range[1]:
@@ -2228,8 +2243,9 @@ def apply_legend_layout(
     # well above it. The default legend is lowered onto that line, and its
     # strip above the plot (exactly that reserve on the single-trial figures
     # and the Compare overlay; a title is added later, in a band of its own)
-    # shrinks to what still pokes out of the plot. The side-by-side and stacked
-    # layouts keep theirs: their panels' names sit in it.
+    # shrinks to what still pokes out of the plot. On the side-by-side and
+    # stacked layouts it holds the panels' names and, above them, the default
+    # legend while it has entries.
     plot_w, plot_h, margin = _plot_px(fig)
     inset = _content_top_inset(fig)
     default_h = _default_legend_height(fig)
@@ -2245,6 +2261,9 @@ def apply_legend_layout(
             if default_h:
                 _plot_w, plot_h, _margin = _plot_px(fig)
                 fig.layout.legend.y = 1.0 + (_LEGEND_GAP_PX - inset) / plot_h
+    names_px = _panel_names_px(fig)
+    if names_px:
+        _grow(fig, "t", names_px + default_h - margin["t"])
     slots = _LegendSlots(fig, top_start=default_h, inset=inset)
     fig._sps_legend_slots = slots
     _place_highlight_key(fig, specs["highlight"], slots, show=show_highlight)
@@ -2415,9 +2434,11 @@ def _size_key_anchor(
     Above the plot, the key always sits right on the screen's top line: its
     labels' text (``clear`` px above the box's bottom) `_SIZE_KEY_LINE_GAP_PX`
     over it — never lowered onto the text below or lifted into a legend's row.
+    A split comparison has no one screen line, and its panels' names sit on the
+    plot's edge: there the key stacks above them like any legend.
     """
     edge, along, outside = _spot_parts(position)
-    if edge == "top" and outside:
+    if edge == "top" and outside and not _panel_names_px(fig):
         bottom = _SIZE_KEY_LINE_GAP_PX - clear
         _plot_w, _plot_h, margin = _plot_px(fig)
         _grow(fig, "t", max(0.0, bottom + h - _free_top_px(fig, margin)))
@@ -8471,6 +8492,7 @@ def _make_split_comparison_figure(
             horizontal_spacing=0.04,
             subplot_titles=subplot_titles,
         )
+    fig.update_annotations(name=_PANEL_NAME)
 
     # Each panel's data→screen scale, from the subplot space it actually gets
     # in the final figure: its domain's share of the plot area, then the
@@ -8698,15 +8720,7 @@ def _make_split_comparison_figure(
     # Both rows are placed in px above the panels' top edge — a paper fraction
     # would rise with a tall stacked figure, out of the band and into the
     # title's, which `export.annotate_figure` adds above it.
-    names_font_px = max(
-        (
-            float(a.font.size or 16)
-            for a in fig.layout.annotations
-            if a.text in subplot_titles
-        ),
-        default=16.0,
-    )
-    names_row_px = names_font_px * 1.3 + _LEGEND_GAP_PX
+    names_row_px = _panel_names_px(fig)
     legend_px = _default_legend_height(fig)
     top_px = names_row_px + legend_px
     fig.update_layout(

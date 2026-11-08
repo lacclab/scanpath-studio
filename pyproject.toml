@@ -84,7 +84,7 @@ test = [
 # unpinned ruff means a local run and CI can disagree — a new release lands new
 # rules and reds a branch that changed nothing. Bump both together.
 lint = [
-    "ruff==0.16.8",
+    "ruff==0.17.4",
 ]
 # Build the documentation site (MkDocs Material + API autodoc from docstrings).
 # Material caps MkDocs below 2.0, which has no plugin system; every plugin here
@@ -101,7 +101,7 @@ docs = [
     "mkdocs-llmstxt>=0.5.0",
     # mkdocstrings wraps the API reference's signatures with it. Pinned with
     # the `lint` extra's, so the two extras resolve together.
-    "ruff==0.16.8",
+    "ruff==0.17.4",
 ]
 
 [project.urls]

@@ -137,7 +137,7 @@ jobs:
       # new rules — and bump the `lint` extra in pyproject.toml with it, so a
       # local `ruff check` is the same ruff CI runs.
       - name: Install ruff
-        run: pip install ruff==0.16.8
+        run: pip install ruff==0.17.4
 
       - name: ruff check
         run: ruff check .

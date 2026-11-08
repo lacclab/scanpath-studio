@@ -5744,7 +5744,7 @@ def detect_word_id_offset(words: pd.DataFrame, fixations: pd.DataFrame) -> int:
         .groupby(keys, sort=False)["_id"]
         .agg(["min", "max"])
     )
-    joined = w_stats.join(f_stats, how="inner", lsuffix="_w", rsuffix="_f")
+    joined = w_stats.join(f_stats, how="inner", suffixes=("_w", "_f"))
     if joined.empty:
         return 0
     zero_based = joined["min_w"] == 0

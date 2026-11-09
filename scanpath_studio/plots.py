@@ -1135,6 +1135,22 @@ def _is_fullwidth(ch: str) -> bool:
     )
 
 
+#: How far below its box's middle a label drawn in a CJK font is anchored, in
+#: ems. Plotly centres a text label with one fixed shift for every font, which
+#: puts the baseline of Noto Sans (Mono) CJK about 0.15 em higher than the line
+#: a page typeset in it sits on: on MultiplEYE's stimulus images (28 px), every
+#: line's labels drew 4 px above the image's own text, Chinese and Latin words
+#: alike. A Latin font's labels centre on its text already.
+_CJK_FONT_LABEL_DROP_EM = 0.15
+
+
+def _label_drop_em(font_family: str | None) -> float:
+    """`_CJK_FONT_LABEL_DROP_EM` when the label font is a CJK one (its first
+    family names CJK), else 0."""
+    first = str(font_family or "").split(",", 1)[0]
+    return _CJK_FONT_LABEL_DROP_EM if "cjk" in first.lower() else 0.0
+
+
 def _latin_advance(words: pd.DataFrame) -> float:
     """Per-em advance of *Latin* glyphs for this corpus' font.
 
@@ -3592,6 +3608,9 @@ def _add_word_label_trace(
             mode="text",
             textposition="middle center",
             textfont=dict(color=label_color, size=base_font_size, family=font_family),
+        )
+        label_y = label_y + _label_drop_em(font_family) * base_font_size / (
+            px_per_unit or 1.0
         )
     trace = go.Scatter(
         x=label_x,

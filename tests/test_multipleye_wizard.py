@@ -409,3 +409,27 @@ class TestWhatTheOtherSurfacesSay:
             fixations=True,
         )
         assert "changed in Edit dataset" in edited.note
+
+
+def test_labels_in_a_cjk_font_sit_on_the_stimulus_text():
+    """Plotly centres every font's labels with one fixed shift, which draws
+    Noto Sans (Mono) CJK about 0.15 em above the line its stimulus pages were
+    typeset on; labels in a CJK font are lowered by that much, and a Latin
+    font's are left at their box's middle."""
+    import plotly.graph_objects as go
+
+    from scanpath_studio import plots
+
+    words = pd.DataFrame(
+        {"text": ["月球", "Moon"], "x": [0.0, 100.0], "y": [10.0, 10.0]}
+        | {"width": [56.0, 56.0], "height": [34.0, 34.0], "word_id": [1, 2]}
+    )
+    cjk = "'Noto Sans Mono CJK SC', 'Noto Sans CJK SC', monospace"
+    for family, drop in ((cjk, 0.15 * 28), ("monospace", 0.0)):
+        fig = go.Figure()
+        plots._add_word_label_trace(fig, words, 28, family)
+        assert list(fig.data[0].y) == pytest.approx([27.0 + drop, 27.0 + drop])
+    # Half the screen px per data unit: the same drop is twice as many units.
+    fig = go.Figure()
+    plots._add_word_label_trace(fig, words, 28, cjk, px_per_unit=0.5)
+    assert fig.data[0].y[0] == pytest.approx(27.0 + 0.15 * 56)

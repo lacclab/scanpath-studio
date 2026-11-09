@@ -9071,12 +9071,8 @@ def _render_backup_reminder(host, active_view: str) -> None:
         return
     box = host.container(key="sps_backup_reminder", border=True)
     box.markdown(
-        f"{ICONS['warning']} **This server saves nothing.** Closing or "
-        "refreshing the tab loses the datasets you added, their column mappings, "
-        "your annotations and designs. Keep the files you uploaded, and export your "
-        f"annotations from {ICONS['view_data']} **Data Management → Annotations** and each "
-        "dataset's mapping from "
-        f"{ICONS['edit']} **Edit dataset → Download setup file**. "
+        f"{ICONS['warning']} **This server saves nothing.** Refreshing or "
+        "closing the tab loses your datasets, annotations and designs. "
         f"[How to keep copies of your work ↗]({BACKUP_GUIDE_URL})"
     )
     row = box.container(horizontal=True, gap="small")

@@ -1,1 +1,1 @@
-Word labels drawn in a CJK font (MultiplEYE's Noto Sans Mono CJK) sit on the stimulus image's own text instead of about 4 px above it.
+Word labels in a CJK font (MultiplEYE's Noto Sans Mono CJK) line up with the stimulus image's own text: no longer about 4 px above it, and no longer slid sideways in a word with two full-width punctuation marks side by side.

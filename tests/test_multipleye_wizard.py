@@ -433,3 +433,16 @@ def test_labels_in_a_cjk_font_sit_on_the_stimulus_text():
     fig = go.Figure()
     plots._add_word_label_trace(fig, words, 28, cjk, px_per_unit=0.5)
     assert fig.data[0].y[0] == pytest.approx(27.0 + 0.15 * 56)
+
+
+def test_adjacent_full_width_marks_keep_their_width():
+    """A browser trims the space between two full-width marks side by side,
+    so a centred label would slide off the stimulus text; a word joiner
+    between them keeps each mark its em, and nothing else changes."""
+    from scanpath_studio import plots
+
+    wj = "⁠"
+    assert plots._keep_punctuation_width("光秒），或约") == f"光秒）{wj}，或约"
+    assert plots._keep_punctuation_width("好。」「好") == f"好。{wj}」{wj}「好"
+    for unchanged in ("（即英里", "Moon", "30倍。", "a), b", ""):
+        assert plots._keep_punctuation_width(unchanged) == unchanged

@@ -1144,6 +1144,34 @@ def _is_fullwidth(ch: str) -> bool:
 _CJK_FONT_LABEL_DROP_EM = 0.15
 
 
+#: Full-width punctuation, which a browser trims when two stand side by side.
+_FULLWIDTH_PUNCTUATION = re.compile(
+    "[\u2018\u2019\u201c\u201d\u3000-\u303f\uff01-\uff0f\uff1a-\uff20"
+    "\uff3b-\uff40\uff5b-\uff65]"
+)
+#: Word joiner: no width, no line break, and it keeps two marks from touching.
+_WORD_JOINER = "\u2060"
+
+
+def _keep_punctuation_width(text: str) -> str:
+    """``text`` with a word joiner between each two adjacent full-width marks.
+
+    Chrome trims the space between two full-width punctuation marks side by
+    side (CSS ``text-spacing-trim``), so ``），`` draws half an em narrower
+    than the full em each mark takes on a stimulus page. A label centred in
+    its box then slides toward the middle on both sides of the pair. The
+    joiner is invisible and has no width, but the marks no longer touch, so
+    each keeps its em."""
+    if len(text) < 2:
+        return text
+    out = [text[0]]
+    for prev, ch in itertools.pairwise(text):
+        if _FULLWIDTH_PUNCTUATION.match(prev) and _FULLWIDTH_PUNCTUATION.match(ch):
+            out.append(_WORD_JOINER)
+        out.append(ch)
+    return "".join(out)
+
+
 def _label_drop_em(font_family: str | None) -> float:
     """`_CJK_FONT_LABEL_DROP_EM` when the label font is a CJK one (its first
     family names CJK), else 0."""
@@ -3584,7 +3612,9 @@ def _add_word_label_trace(
     # reads this same string, so it shows the word literally too.
     label_text = [
         f"\u2067{_plotly_literal(value)}\u2069" if is_rtl else _plotly_literal(value)
-        for value, is_rtl in zip(words["text"].astype(str), rtl)
+        for value, is_rtl in zip(
+            words["text"].astype(str).map(_keep_punctuation_width), rtl
+        )
     ]
     label_y = words["y"] + words["height"] / 2
     if redact:

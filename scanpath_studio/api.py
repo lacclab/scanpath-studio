@@ -3974,7 +3974,8 @@ def figure_code(
         kind: ``"static"``, ``"animation"`` or ``"comparison"``: the builder the snippet
             calls.
         source: How the data is loaded: ``"demo"``, ``"synthetic"``, ``"files"``,
-            ``"potec"``, ``"onestop"``, ``"author"``, ``"raw_gaze"`` (a dataset recorded
+            ``"potec"``, ``"onestop"``, ``"multipleye"``, ``"author"``, ``"raw_gaze"``
+            (a dataset recorded
             as raw gaze alone, whose samples at ``source_options["raw_gaze"]`` are the
             data), or ``"unknown"`` for data a snippet can't name.
         source_options: That loader's arguments: ``{"root": …}``, ``{"words": [...],

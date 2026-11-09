@@ -2575,10 +2575,8 @@ def test_multipleye_uploads_with_questions_and_participant_meta():
     _, fixations = datasets_module.load_multipleye_uploads(
         scan, None, questions_df=questions, participant_meta_df=meta, names="canonical"
     )
-    assert (
-        json.loads(fixations["comprehension_questions"].iloc[0])[0]["target"]
-        == "Because"
-    )
+    # The questions go on the words, and without AOI files there are none.
+    assert "comprehension_questions" not in fixations.columns
     assert fixations["pp_age"].iloc[0] == 22
     assert fixations["pp_gender"].iloc[0] == "F"
 
@@ -2594,9 +2592,9 @@ def test_load_multipleye_real_sample_side_data():
     assert "participant_id" in words.columns
     assert words["first_fixation_ms"].notna().any()  # FFD → IA_FIRST_FIXATION_DURATION
     assert words["total_fixation_duration_ms"].notna().any()  # TFT → IA_DWELL_TIME
-    # Reader metadata + comprehension + image path on the fixations.
+    # Reader metadata + image path on the fixations, the questions on the words.
     assert fixations["pp_age"].notna().any()
-    questions = json.loads(fixations["comprehension_questions"].dropna().iloc[0])
+    questions = json.loads(words["comprehension_questions"].dropna().iloc[0])
     assert len(questions) >= 1 and questions[0]["question"]
     img = fixations["image_path"].dropna().iloc[0]
     assert __import__("os").path.exists(img)

@@ -232,10 +232,11 @@ class TestFromUploads:
         at.run()
 
         assert not at.exception, at.exception
-        fixations = at.session_state["_wizard_finalize_payload"]["fixations"]
+        payload = at.session_state["_wizard_finalize_payload"]
+        fixations = payload["fixations"]
         assert fixations["pp_age"].dropna().iloc[0] == 22
         assert fixations["pp_gender"].dropna().iloc[0] == "F"
-        q = json.loads(fixations["comprehension_questions"].dropna().iloc[0])
+        q = json.loads(payload["words"]["comprehension_questions"].dropna().iloc[0])
         assert q[0]["target"] == "Because"
 
 
@@ -333,3 +334,96 @@ class TestCliAndApi:
         ]
         # Each session set stamps its own monitor, so the snippet passes none.
         assert cs.source_canvas(cs.SOURCE_MULTIPLEYE) is None
+
+
+class TestTheFolderReadIsCachedHonestly:
+    def test_the_signature_sees_a_new_trial_file_and_an_edited_config(
+        self, session_set
+    ):
+        from scanpath_studio import wizard
+        from tests.multipleye_fixtures import write_screen_config
+
+        before = wizard._multipleye_folder_signature(str(session_set), "scanpaths")
+        assert before == wizard._multipleye_folder_signature(
+            str(session_set), "scanpaths"
+        )
+        session = next((session_set / "scanpaths").iterdir())
+        (session / "new_trial.csv").write_text("x\n")
+        after_trial = wizard._multipleye_folder_signature(str(session_set), "scanpaths")
+        assert after_trial != before
+        write_screen_config(session_set, monitor=(2560, 1440))
+        assert (
+            wizard._multipleye_folder_signature(str(session_set), "scanpaths")
+            != after_trial
+        )
+
+    def test_a_folder_without_word_boxes_fails_before_reading_trials(
+        self, session_set, monkeypatch
+    ):
+        import shutil
+
+        from scanpath_studio import datasets
+
+        shutil.rmtree(session_set / "stimuli_Demo" / "aoi_stimuli_demo")
+        read = []
+        monkeypatch.setattr(
+            datasets, "_multipleye_fixations", lambda *a, **k: read.append(1)
+        )
+        with pytest.raises(FileNotFoundError, match="AOI directory"):
+            datasets.multipleye_raw_frames(session_set)
+        assert read == []
+
+
+class TestWhatTheOtherSurfacesSay:
+    def test_a_share_link_says_to_add_the_session_set_again(self, monkeypatch):
+        """A MultiplEYE dataset has no mapping to send; the recipient adds the
+        same session set the same way."""
+        from scanpath_studio import url_state
+        from tests.test_app import _FakeSt
+
+        fake = _FakeSt()
+        fake.session_state = {
+            "_datasets": {
+                "Zurich": {"source_recipe": {"multipleye": {"root": "/d/MPE"}}},
+                "Mine": {"source_recipe": {"schemas": {}}},
+            }
+        }
+        monkeypatch.setattr(url_state, "st", fake)
+        _query, caveats = url_state._build_share_query("Zurich")
+        assert any("MultiplEYE session set" in c for c in caveats)
+        assert not any("Download setup file" in c for c in caveats)
+        _query, caveats = url_state._build_share_query("Mine")
+        assert any("Download setup file" in c for c in caveats)
+
+    def test_edit_dataset_offers_no_setup_file_for_a_session_set(
+        self, monkeypatch, session_set
+    ):
+        from scanpath_studio.constants import DATASET_EDITOR_OPEN_KEY
+
+        at = _wizard(monkeypatch, local=True)
+        at.session_state["wizard_dataset_name"] = "Zurich demo"
+        at.session_state["wizard_multipleye_dir"] = str(session_set)
+        at.run()
+        next(b for b in at.button if b.key == "wizard_finalize").click().run()
+        pin_data_view(at)
+        at.session_state[DATASET_EDITOR_OPEN_KEY] = True
+        at.run()
+
+        assert not at.exception, at.exception
+        assert any(b.key == "remap_apply_Zurich demo" for b in at.button)
+        downloads = [d.proto.id for d in at.get("download_button")]
+        assert not any("remap_setup_download" in d for d in downloads)
+        assert any("read from a MultiplEYE session set" in c.value for c in at.caption)
+
+    def test_the_snippet_says_what_the_loader_cannot_replay(self):
+        uploaded = cs.upload_source(
+            "MPE", {"multipleye": {"root": None}}, words=True, fixations=True
+        )
+        assert "that the upload left out" in uploaded.note
+        edited = cs.upload_source(
+            "MPE",
+            {"multipleye": {"root": "/d/MPE"}, "schemas": {"words": {"text": "word"}}},
+            words=True,
+            fixations=True,
+        )
+        assert "changed in Edit dataset" in edited.note

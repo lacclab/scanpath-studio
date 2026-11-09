@@ -120,8 +120,10 @@ from the folder and file names.
 [`load_multipleye`][scanpath_studio.datasets.load_multipleye] takes `sessions`
 and `stimuli` to read part of a session set, `fixation_source`, and
 `include_question_screens`. `render` takes `--multipleye-fixations` and
-`--no-question-screens`. Share → **Code** writes this call for a MultiplEYE
-dataset, with the folder it was read from.
+`--no-question-screens`. In code the screen comes with the data, but the font
+does not: pass `base_font_size` and `font_family` (`--font-size` and
+`--font-family`) for the session set's typeface. Share → **Code** writes this
+call for a MultiplEYE dataset, with the folder it was read from and the font.
 
 Corpus Analysis describes one screen at a time: word IDs are unique within a
 screen, so its per-text views have a **Screen** picker beside the text picker.

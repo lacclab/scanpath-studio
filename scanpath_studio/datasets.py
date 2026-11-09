@@ -2516,6 +2516,7 @@ def multipleye_raw_frames(
     fixation_source: str = "scanpaths",
     attach_reading_measures: bool = True,
     include_question_screens: bool = True,
+    screen: MultiplEYEScreen | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Raw (pre-normalization) MultiplEYE ``(words, fixations)`` frames.
 
@@ -2537,8 +2538,9 @@ def multipleye_raw_frames(
     reader's own question-screen boxes appended. ``include_question_screens``
     (on by default) opts out of the comprehension-question screens; they are
     also skipped when the answer-layout version table is missing, since guessing
-    a layout would draw entirely plausible boxes in the wrong places. Use
-    :func:`load_multipleye` for normalized frames.
+    a layout would draw entirely plausible boxes in the wrong places. ``screen``
+    is the session set's `MultiplEYEScreen`, read from ``root`` when not given.
+    Use :func:`load_multipleye` for normalized frames.
     """
     root = Path(root)
     if fixation_source not in MULTIPLEYE_FIXATION_SOURCES:
@@ -2557,6 +2559,8 @@ def multipleye_raw_frames(
                 f"'scanpaths' or 'fixations' folder of per-session subfolders."
             )
         fixation_source = alt
+    # Before any trial file is read: a set without word boxes fails at once.
+    aoi_dir = _multipleye_aoi_dir(root)
 
     fixations = _multipleye_fixations(
         root,
@@ -2570,7 +2574,6 @@ def multipleye_raw_frames(
         fixations, _multipleye_participant_meta(root)
     )
 
-    aoi_dir = _multipleye_aoi_dir(root)
     stim_boxes = _multipleye_word_boxes(aoi_dir, fixations["stimulus"].unique())
     versions = _multipleye_read_layout_versions(root)
     question_boxes = (
@@ -2599,12 +2602,14 @@ def multipleye_raw_frames(
         words, fixations, by_onset="participant_id" in words.columns
     )
 
-    # Comprehension questions + stimulus images, stamped on both frames.
+    # Comprehension questions on the words, which the Stimulus & context panel
+    # reads (a stimulus' questions are ~1 KB, too much to repeat per fixation);
+    # stimulus images on both frames.
     qpath = _multipleye_questions_path(root)
     if qpath is not None:
-        qmap = _multipleye_questions_by_stimulus(qpath)
-        words = _multipleye_stamp_questions(words, qmap)
-        fixations = _multipleye_stamp_questions(fixations, qmap)
+        words = _multipleye_stamp_questions(
+            words, _multipleye_questions_by_stimulus(qpath)
+        )
     image = _multipleye_image_dir(root)
     if image is not None:
         image_dir, lang = image
@@ -2619,7 +2624,9 @@ def multipleye_raw_frames(
         )
     # The session set's own screen: where the image sat on the monitor, and the
     # typeface the images were drawn in.
-    return _multipleye_place_on_screen(words, fixations, multipleye_screen(root))
+    if screen is None:
+        screen = multipleye_screen(root)
+    return _multipleye_place_on_screen(words, fixations, screen)
 
 
 def load_multipleye(
@@ -2803,7 +2810,6 @@ def multipleye_frames_from_uploads(
         if questions_df is not None
         else {}
     )
-    fixations = _multipleye_stamp_questions(fixations, qmap)
 
     has_aoi = aoi_df is not None and not getattr(aoi_df, "empty", True)
     if fixations.empty or not has_aoi or SOURCE_FILE_COLUMN not in aoi_df.columns:

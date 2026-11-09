@@ -40,6 +40,7 @@ from .code_snippet import (
     reproduction_code,
     upload_source,
 )
+from .column_names import is_multipleye_entry
 from .constants import (
     _VIEW_DATA,
     _VIEW_SCANPATH,
@@ -3518,16 +3519,28 @@ def _build_share_query(
         #
         # The link names the dataset, so the recipient's app can open one of
         # that name and say which is missing when it has none.
-        if data_choice in (st.session_state.get("_datasets") or {}):
+        stored = (st.session_state.get("_datasets") or {}).get(data_choice)
+        if stored is not None:
             params[PARAM_DATASET] = str(data_choice)
-        caveats.append(
-            "A link can't carry this dataset's files, so the recipient needs them "
-            "too. Send the files with the setup file "
-            f"({ICONS['edit']} **Edit dataset → Download setup file**). The "
-            f"recipient adds the dataset with {ICONS['add']} **Add dataset → "
-            "Import files** and restores the setup there. The link names the "
-            "dataset and carries the view settings."
-        )
+        if is_multipleye_entry(stored):
+            # A session set is read as it is laid out, with no mapping to
+            # send: the recipient adds the same session set the same way.
+            caveats.append(
+                "A link can't carry this dataset's files, so the recipient needs "
+                "the MultiplEYE session set too. They add it with "
+                f"{ICONS['add']} **Add dataset → Import files → MultiplEYE "
+                "session set**, with the same *Fixations from* and question-screen "
+                "choices. The link names the dataset and carries the view settings."
+            )
+        else:
+            caveats.append(
+                "A link can't carry this dataset's files, so the recipient needs "
+                "them too. Send the files with the setup file "
+                f"({ICONS['edit']} **Edit dataset → Download setup file**). The "
+                f"recipient adds the dataset with {ICONS['add']} **Add dataset → "
+                "Import files** and restores the setup there. The link names the "
+                "dataset and carries the view settings."
+            )
 
     if data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
         params["author_text"] = str(st.session_state.get("author_text", ""))

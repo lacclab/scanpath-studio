@@ -102,6 +102,7 @@ from scanpath_studio.column_names import (
     active_figure_labels,
     as_written,
     from_schema,
+    is_multipleye_entry,
     source_schema,
     stored_source_recipe,
 )
@@ -15925,12 +15926,20 @@ def _render_remap_editor(
         st.info(
             f"Editing **{md_literal(name)}**. Its mapping and saved tables are below."
         )
-    st.caption(
-        "Change which of this dataset's columns fills each field the app reads. "
-        "Only columns kept when the dataset was added are available. To use a "
-        "column that isn't listed, remove this dataset and add it again from its "
-        "files."
-    )
+    if is_multipleye_entry(stored):
+        st.caption(
+            "This dataset was read from a MultiplEYE session set, so these are "
+            "the tables the app built from it, not files of your own. A change "
+            "here applies in the app; Share → Code reads the session set again "
+            "as it was added."
+        )
+    else:
+        st.caption(
+            "Change which of this dataset's columns fills each field the app "
+            "reads. Only columns kept when the dataset was added are available. "
+            "To use a column that isn't listed, remove this dataset and add it "
+            "again from its files."
+        )
     # The same wide option lists the add-dataset screen gets — this is
     # the same mapping, in the same shape.
     st.markdown(mapping_menu_css(), unsafe_allow_html=True)
@@ -16435,17 +16444,23 @@ def render_dataset_editor_footer(host) -> None:
         _FOOTER_ROW_W, gap="small", vertical_alignment="center"
     )
     config = _editor_setup_config(name)
-    save_col.download_button(
-        f"{ICONS['download']} Download setup file",
-        data=json.dumps(config, indent=2),
-        file_name="scanpath_studio_setup.json",
-        mime="application/json",
-        key=f"remap_setup_download_{name}",
-        width="stretch",
-        help="Save this dataset's column mapping and recording setup to reuse "
-        "on similar data, or to send with the files. Whoever loads them can "
-        "restore it with *Start from → A setup file* instead of mapping by hand.",
-    )
+    if is_multipleye_entry(_stored):
+        # A session set has no mapping of the user's files to save: whoever
+        # loads it adds it again as a MultiplEYE session set.
+        apply_col = save_col
+    else:
+        save_col.download_button(
+            f"{ICONS['download']} Download setup file",
+            data=json.dumps(config, indent=2),
+            file_name="scanpath_studio_setup.json",
+            mime="application/json",
+            key=f"remap_setup_download_{name}",
+            width="stretch",
+            help="Save this dataset's column mapping and recording setup to "
+            "reuse on similar data, or to send with the files. Whoever loads "
+            "them can restore it with *Start from → A setup file* instead of "
+            "mapping by hand.",
+        )
     apply_col.button(
         # The add-dataset screen's ✅ Add dataset, for the screen that
         # edits one — same shape, same place, same filled blue.
@@ -16458,7 +16473,7 @@ def render_dataset_editor_footer(host) -> None:
     )
     # What a restore over the original files will not reproduce on its own —
     # said before the file is sent, not discovered by whoever restores it.
-    if config["column_mapping_notes"]:
+    if config["column_mapping_notes"] and not is_multipleye_entry(_stored):
         box.caption(
             "**Some of the saved setup needs fixing after restoring.** "
             + " ".join(config["column_mapping_notes"])

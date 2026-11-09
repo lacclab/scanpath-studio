@@ -466,12 +466,9 @@ def test_questions_join_by_stimulus_not_by_trial(full_tree):
     # Arg_Other_2 ships no questions → NaN, not another stimulus' questions.
     arg = words[words["text_id"] == ARG]["comprehension_questions"]
     assert arg.isna().all()
-    # The same payload rides along on the fixations (the panel reads either frame).
-    fix_lit = fixations[fixations["text_id"] == LIT]["comprehension_questions"]
-    assert fix_lit.notna().all()
-    assert (
-        fixations[fixations["text_id"] == ARG]["comprehension_questions"].isna().all()
-    )
+    # Only the words carry them: the Stimulus & context panel reads the words,
+    # and ~1 KB of questions repeated on every fixation is memory for nothing.
+    assert "comprehension_questions" not in fixations.columns
 
 
 @requires_openpyxl

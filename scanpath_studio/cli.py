@@ -603,8 +603,8 @@ def _render_parser() -> argparse.ArgumentParser:
         "scanpaths/ or fixations/ folder and its stimuli_*/ folder. A trial is "
         "one reading of one stimulus (e.g. Lit_Alchemist_4), with its pages and "
         "comprehension questions as screens; a participant is a session (e.g. "
-        "001_ZH_CH_1_ET1). The screen and font come from the session set's own "
-        "config.",
+        "001_ZH_CH_1_ET1). The screen comes from the session set's own config; "
+        "set the font with --font-size and --font-family.",
     )
     src.add_argument(
         "--multipleye-fixations",

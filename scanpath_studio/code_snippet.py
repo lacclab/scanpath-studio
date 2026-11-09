@@ -425,7 +425,7 @@ def upload_source(
     """
     recipe = recipe if isinstance(recipe, dict) else {}
     if isinstance(multipleye := recipe.get("multipleye"), dict):
-        return multipleye_source(label, multipleye)
+        return multipleye_source(label, multipleye, edited=bool(recipe.get("schemas")))
     schemas = recipe.get("schemas") if isinstance(recipe.get("schemas"), dict) else {}
     steps = [str(s) for s in recipe.get("steps") or ()]
     notes = [
@@ -486,15 +486,34 @@ def upload_source(
     )
 
 
-def multipleye_source(label: str, recipe: dict) -> SnippetSource:
+def multipleye_source(
+    label: str, recipe: dict, *, edited: bool = False
+) -> SnippetSource:
     """The data half for a MultiplEYE session set added through the app.
 
     ``recipe`` is the dataset's ``source_recipe["multipleye"]``: the ``root``
     folder it was read from (``None`` for an upload), its ``fixation_source``
     and ``include_question_screens``. ``load_multipleye`` reads the same files
     the app did, so a folder-added dataset's snippet runs as it is; an uploaded
-    one names a placeholder folder instead."""
+    one names a placeholder folder instead, and the whole session set there may
+    hold more than the files uploaded. ``edited`` says ✏️ Edit dataset changed
+    the mapping since, which the loader does not replay."""
     root = recipe.get("root")
+    notes = []
+    if not root:
+        notes.append(
+            "This dataset was added from uploaded files, so the snippet can't "
+            f"name their folder. Replace `{MULTIPLEYE_ROOT_PLACEHOLDER}` with the "
+            "MultiplEYE session set they came from. The loader reads the whole "
+            "session set, so it can include trials, question screens, reading "
+            "measures and page images that the upload left out."
+        )
+    if edited:
+        notes.append(
+            "Its mapping was changed in Edit dataset after it was added. The "
+            "loader reads the session set as it was added, so make the same "
+            "change in your script."
+        )
     return SnippetSource(
         kind=SOURCE_MULTIPLEYE,
         label=label,
@@ -504,13 +523,7 @@ def multipleye_source(label: str, recipe: dict) -> SnippetSource:
             "include_question_screens": recipe.get("include_question_screens", True)
             is not False,
         },
-        note=""
-        if root
-        else (
-            "This dataset was added from uploaded files, so the snippet can't "
-            f"name their folder. Replace `{MULTIPLEYE_ROOT_PLACEHOLDER}` with the "
-            "MultiplEYE session set they came from."
-        ),
+        note=" ".join(notes),
     )
 
 

@@ -16,6 +16,7 @@ avoids an app⇄wizard import cycle.
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import NamedTuple
@@ -24,7 +25,12 @@ import pandas as pd
 import streamlit as st
 
 from . import app, wizard_shell
-from .column_names import ColumnNames, for_tables, stored_source_recipe
+from .column_names import (
+    ColumnNames,
+    for_tables,
+    is_multipleye_entry,
+    stored_source_recipe,
+)
 from .constants import (
     _VIEW_DATA,
     CITATION,
@@ -69,6 +75,7 @@ from .data import (
     READING_MEASURE_KEYS,
     SOURCE_FILE_COLUMN,
     WORD_OPTIONAL_FIELDS,
+    adopt_source,
     aggregate_char_boxes,
     assign_derived,
     canvas_geometry_frames,
@@ -3340,39 +3347,60 @@ are read from the folder and file names, so there are no columns to map.
 """
 
 
-def is_multipleye_entry(entry) -> bool:
-    """Whether a stored dataset was added with the MultiplEYE format."""
-    recipe = entry.get("source_recipe") if isinstance(entry, dict) else None
-    return isinstance(recipe, dict) and isinstance(recipe.get("multipleye"), dict)
-
-
 def _multipleye_folder_signature(root: str, fixation_source: str) -> tuple:
-    """When the session set's folders last changed: a folder fixed on disk is
-    read again rather than served from the cache."""
-    stamps = []
-    for sub in ("", fixation_source, "fixations", "reading_measures"):
+    """What the folder read is cached on besides its path.
+
+    The folders it reads (a session's folder changes when a trial file is
+    added, removed or renamed into it) and, by size and time, the small files
+    it reads whole: the configs, the answer-layout versions, the participants
+    and the questions workbook. A trial or AOI file rewritten in place under
+    the same name is not seen until the server restarts."""
+    base = Path(root)
+    folders = [base, base / fixation_source, base / "fixations"]
+    folders += [base / "reading_measures", *base.glob("stimuli_*")]
+    folders += [*base.glob("stimuli_*/aoi_stimuli_*"), *base.glob("stimuli_*/config")]
+    for top in (base / fixation_source, base / "fixations", base / "reading_measures"):
         try:
-            stamps.append(Path(root, sub).stat().st_mtime_ns)
+            folders += [Path(e.path) for e in os.scandir(top) if e.is_dir()]
         except OSError:
-            stamps.append(None)
-    return tuple(stamps)
+            continue
+    files = [base / "participant_data.csv"]
+    files += [
+        *base.glob("stimuli_*/config/*.py"),
+        *base.glob("stimuli_*/config/*.json"),
+    ]
+    files += [*base.glob("stimuli_*/config/stimulus_order_versions_*.csv")]
+    files += [*base.glob("stimuli_*/multipleye_comprehension_questions_*.xlsx")]
+    stamps = []
+    for path, sized in [(f, False) for f in folders] + [(f, True) for f in files]:
+        try:
+            stat = path.stat()
+        except OSError:
+            stamps.append((str(path), None))
+            continue
+        stamps.append((str(path), stat.st_mtime_ns, stat.st_size if sized else None))
+    return tuple(sorted(stamps, key=lambda s: s[0]))
 
 
-@st.cache_data(show_spinner="Reading the MultiplEYE session set…")
+@st.cache_data(show_spinner="Reading the MultiplEYE session set…", max_entries=4)
 def _c_multipleye_folder(
     root: str, fixation_source: str, include_question_screens: bool, signature: tuple
 ):
     from scanpath_studio.datasets import multipleye_raw_frames, multipleye_screen
 
+    # Read once, and handed to the loader, so the frames are placed with the
+    # same screen Recording setup is pre-answered from.
+    screen = multipleye_screen(root)
     words, fixations = multipleye_raw_frames(
         root,
         fixation_source=fixation_source,
         include_question_screens=include_question_screens,
+        screen=screen,
     )
-    return (*stamp_source((words, fixations)), multipleye_screen(root))
+    return (*stamp_source((words, fixations)), screen)
 
 
-@st.cache_data(show_spinner="Reading the MultiplEYE files…")
+@st.cache_data(show_spinner="Reading the MultiplEYE files…", max_entries=4)
 def _c_multipleye_uploads(
     _fixations, _aoi, _questions, _participants, fingerprints: tuple, screen, include
 ):
@@ -3417,6 +3445,8 @@ def _multipleye_from_folder(host, active: bool, include: bool):
         key=MULTIPLEYE_FIXATION_SOURCE_KEY,
         required=True,
         disabled=not active,
+        # Kept while Upload files is chosen, which doesn't draw it.
+        persist_state="session",
         help="**scanpaths**: each fixation already mapped to its word. "
         "**fixations**: the eye tracker's fixations, with no word. Question "
         "screens always come from fixations/, the only export that has them.",
@@ -3446,8 +3476,11 @@ def _multipleye_from_folder(host, active: bool, include: bool):
             include,
             _multipleye_folder_signature(root, fixation_source),
         )
-    except (FileNotFoundError, ValueError, OSError) as exc:
+    except (OSError, ValueError, KeyError) as exc:
         return (*empty, f"Couldn't read a MultiplEYE session set from `{root}`: {exc}")
+    # The loader's own ID for these tables, so normalization is keyed on the
+    # read they came from rather than hashing them on every rerun.
+    adopt_source(words, fixations)
     if fixations.empty:
         return (
             *empty,
@@ -3516,17 +3549,23 @@ def _multipleye_from_uploads(host, active: bool, include: bool):
     def optional(frame):
         return frame if not frame.empty else None
 
-    words, fixations = _c_multipleye_uploads(
-        fix_df,
-        optional(aoi_df),
-        optional(questions_df),
-        optional(participant_df),
-        tuple(
-            frame_fingerprint(f) for f in (fix_df, aoi_df, questions_df, participant_df)
-        ),
-        screen,
-        include,
-    )
+    try:
+        words, fixations = _c_multipleye_uploads(
+            fix_df,
+            optional(aoi_df),
+            optional(questions_df),
+            optional(participant_df),
+            tuple(
+                frame_fingerprint(f)
+                for f in (fix_df, aoi_df, questions_df, participant_df)
+            ),
+            screen,
+            include,
+        )
+    except (ValueError, KeyError, TypeError) as exc:
+        recipe = {"root": None, "include_question_screens": include}
+        return (*empty, recipe, f"Couldn't read these MultiplEYE files: {exc}")
+    adopt_source(words, fixations)
     recipe = {
         "root": None,
         "fixation_source": "scanpaths"
@@ -3656,8 +3695,8 @@ def _render_multipleye_setup(body, s1, active: bool, part) -> _UploadResult:
     fix_schema = multipleye_fix_schema(fix_raw)
     keep_fix = keep_words = None
     if problem is None:
-        # The upload path keeps only named columns, so the corpus' facets and
-        # side data are named here to survive normalization.
+        # Normalization keeps only named columns, so the corpus' facets and
+        # side data are named here to survive it.
         keep_fix = compute_keep_columns(
             fix_schema,
             keep_columns={
@@ -3666,7 +3705,6 @@ def _render_multipleye_setup(body, s1, active: bool, part) -> _UploadResult:
                 "participant",
                 "is_practice",
                 "trial_num",
-                "comprehension_questions",
                 "image_path",
                 "image_x",
                 "image_y",

@@ -20,19 +20,15 @@ The format was built and tested on one session set, Zurich Chinese
 2. Under **Dataset format**, choose **MultiplEYE session set**.
 3. Under **Files**, choose where it comes from:
     - **Folder on this computer** (the desktop app or a pip install): type the
-      session set's folder, or choose it with :material/folder_open:. It is the
-      folder that holds `scanpaths/` (or `fixations/`) and `stimuli_*/`.
-      **Fixations from** picks the export the reading pages are read from:
-      `scanpaths`, where each fixation is already mapped to its word, or
-      `fixations`, where it is not.
+      session set's folder under **Session set folder**, or choose it with
+      :material/folder_open:. It is the folder that holds `scanpaths/` (or
+      `fixations/`) and `stimuli_*/`.
     - **Upload files**: the per-trial `*_scanpath.csv` or `*_fixation.csv`
       files, and optionally the `*_aoi.csv` files for word boxes, the
       comprehension-questions workbook, `participant_data.csv` and the two
       configuration files. On a server other machines can reach, such as the
       online demo, uploads are the only choice.
-4. **Comprehension-question screens** is on by default. Turn it off to load the
-   reading pages only.
-5. Check **Recording setup**, which is filled in from the session set's
+4. Check **Recording setup**, which is filled in from the session set's
    configuration, and click :material/check: **Add dataset**.
 
 Each session set you add is its own dataset, so several labs or languages can
@@ -67,6 +63,9 @@ from the folder and file names.
   screen navigator beside the trial picker.
 - **A participant is a session**, such as `001_ZH_CH_1_ET1`. ET1 and ET2 read
   different stimuli.
+- **The reading pages come from `scanpaths/`**, where each fixation is already
+  mapped to its word, or from `fixations/` when a session set has no
+  `scanpaths/`.
 - **The screen order comes from the reader's own fixations**, so a reader's
   shuffled question order is kept. `screen_kind` is `reading` or `question`.
 - **Question screens always come from `fixations/`**, because the `scanpaths/`
@@ -119,8 +118,8 @@ from the folder and file names.
 
 [`load_multipleye`][scanpath_studio.datasets.load_multipleye] takes `sessions`
 and `stimuli` to read part of a session set, `fixation_source`, and
-`include_question_screens`. `render` takes `--multipleye-fixations` and
-`--no-question-screens`. In code the screen comes with the data, but the font
+`include_question_screens` (`False` loads the reading pages only). In code the
+screen comes with the data, but the font
 does not: pass `base_font_size` and `font_family` (`--font-size` and
 `--font-family`) for the session set's typeface. Share → **Code** writes this
 call for a MultiplEYE dataset, with the folder it was read from and the font.

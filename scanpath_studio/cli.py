@@ -607,23 +607,6 @@ def _render_parser() -> argparse.ArgumentParser:
         "set the font with --font-size and --font-family.",
     )
     src.add_argument(
-        "--multipleye-fixations",
-        metavar="SOURCE",
-        choices=["scanpaths", "fixations"],
-        default="scanpaths",
-        help="Which MultiplEYE export --multipleye reads the reading pages from: "
-        "scanpaths, which maps each fixation to its word (default), or "
-        "fixations, which does not. Question screens always come from "
-        "fixations.",
-    )
-    src.add_argument(
-        "--no-question-screens",
-        action="store_true",
-        help="--multipleye: load the reading pages only, without the "
-        "comprehension-question screens.",
-    )
-
-    src.add_argument(
         "--participant-metadata",
         metavar="FILE",
         nargs="+",
@@ -2410,11 +2393,7 @@ def _snippet_data_source(args) -> SnippetSource:
         return cs.SnippetSource(
             kind=cs.SOURCE_MULTIPLEYE,
             label="MultiplEYE",
-            options={
-                "root": args.multipleye,
-                "fixation_source": args.multipleye_fixations,
-                "include_question_screens": not args.no_question_screens,
-            },
+            options={"root": args.multipleye},
         )
     if args.words or args.fixations:
         options = {
@@ -2613,13 +2592,7 @@ def _parse_xy(value: str | None, flag: str = "--stimulus-image-origin") -> tuple
     return (x, y)
 
 
-def _load_multipleye_render(
-    root: str,
-    participant: str | None,
-    *,
-    fixation_source: str = "scanpaths",
-    include_question_screens: bool = True,
-):
+def _load_multipleye_render(root: str, participant: str | None):
     """`render --multipleye`: the session set, normalized like the app's.
 
     ``participant`` is a session id, matched case-insensitively; given one, only
@@ -2628,7 +2601,7 @@ def _load_multipleye_render(
     """
     from .datasets import load_multipleye, multipleye_inventory
 
-    sessions, _ = multipleye_inventory(root, fixation_source=fixation_source)
+    sessions, _ = multipleye_inventory(root)
     if not sessions:
         raise FileNotFoundError(
             f"No MultiplEYE sessions under {root}: expected a scanpaths/ or "
@@ -2644,11 +2617,7 @@ def _load_multipleye_render(
                 f"(sessions: {', '.join(sessions)})."
             )
     data = load_multipleye(
-        root,
-        sessions=[session] if session else None,
-        fixation_source=fixation_source,
-        include_question_screens=include_question_screens,
-        names="canonical",
+        root, sessions=[session] if session else None, names="canonical"
     )
     return data, session
 
@@ -2920,10 +2889,7 @@ def render(argv: list[str]) -> None:
     elif args.multipleye:
         try:
             data, args.participant = _load_multipleye_render(
-                args.multipleye,
-                args.participant,
-                fixation_source=args.multipleye_fixations,
-                include_question_screens=not args.no_question_screens,
+                args.multipleye, args.participant
             )
         except (ValueError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))

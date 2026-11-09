@@ -315,17 +315,11 @@ MULTIPLEYE_ROOT_PLACEHOLDER = "path/to/MultiplEYE_session_set"
 
 
 def _multipleye_python(source: SnippetSource) -> list[str]:
-    lines = [
+    return [
         "words, fixations = sps.load_multipleye(",
         f"    {_py(_root(source, MULTIPLEYE_ROOT_PLACEHOLDER))},",
+        ")",
     ]
-    fixation_source = source.options.get("fixation_source")
-    if fixation_source and fixation_source != "scanpaths":
-        lines.append(f"    fixation_source={_py(str(fixation_source))},")
-    if source.options.get("include_question_screens") is False:
-        lines.append("    include_question_screens=False,")
-    lines.append(")")
-    return lines
 
 
 def _unknown_python(source: SnippetSource) -> list[str]:
@@ -379,13 +373,7 @@ def _onestop_cli(source: SnippetSource) -> list[str]:
 
 
 def _multipleye_cli(source: SnippetSource) -> list[str]:
-    argv = ["--multipleye", _root(source, MULTIPLEYE_ROOT_PLACEHOLDER)]
-    fixation_source = source.options.get("fixation_source")
-    if fixation_source and fixation_source != "scanpaths":
-        argv += ["--multipleye-fixations", str(fixation_source)]
-    if source.options.get("include_question_screens") is False:
-        argv.append("--no-question-screens")
-    return argv
+    return ["--multipleye", _root(source, MULTIPLEYE_ROOT_PLACEHOLDER)]
 
 
 def _unknown_cli(source: SnippetSource) -> list[str]:
@@ -492,9 +480,9 @@ def multipleye_source(
     """The data half for a MultiplEYE session set added through the app.
 
     ``recipe`` is the dataset's ``source_recipe["multipleye"]``: the ``root``
-    folder it was read from (``None`` for an upload), its ``fixation_source``
-    and ``include_question_screens``. ``load_multipleye`` reads the same files
-    the app did, so a folder-added dataset's snippet runs as it is; an uploaded
+    folder it was read from, ``None`` for an upload. ``load_multipleye`` reads
+    the same files the app did, so a folder-added dataset's snippet runs as it
+    is; an uploaded
     one names a placeholder folder instead, and the whole session set there may
     hold more than the files uploaded. ``edited`` says ✏️ Edit dataset changed
     the mapping since, which the loader does not replay."""
@@ -517,12 +505,7 @@ def multipleye_source(
     return SnippetSource(
         kind=SOURCE_MULTIPLEYE,
         label=label,
-        options={
-            "root": str(root) if root else None,
-            "fixation_source": str(recipe.get("fixation_source") or "scanpaths"),
-            "include_question_screens": recipe.get("include_question_screens", True)
-            is not False,
-        },
+        options={"root": str(root) if root else None},
         note=" ".join(notes),
     )
 

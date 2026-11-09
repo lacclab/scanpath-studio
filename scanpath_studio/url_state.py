@@ -3524,13 +3524,13 @@ def _build_share_query(
             params[PARAM_DATASET] = str(data_choice)
         if is_multipleye_entry(stored):
             # A session set is read as it is laid out, with no mapping to
-            # send: the recipient adds the same session set the same way.
+            # send: the recipient adds the same session set.
             caveats.append(
                 "A link can't carry this dataset's files, so the recipient needs "
                 "the MultiplEYE session set too. They add it with "
                 f"{ICONS['add']} **Add dataset → Import files → MultiplEYE "
-                "session set**, with the same *Fixations from* and question-screen "
-                "choices. The link names the dataset and carries the view settings."
+                "session set**. The link names the dataset and carries the view "
+                "settings."
             )
         else:
             caveats.append(

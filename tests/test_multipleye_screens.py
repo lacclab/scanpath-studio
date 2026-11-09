@@ -521,20 +521,15 @@ def test_the_headless_api_lists_and_plots_a_question_screen(screens_root):
     assert set(labels[0].text) == {"ST", "EM", "TA", "ET", "DI", "_A", "_B", "_C"}
 
 
-def test_the_cli_reads_one_session_and_can_drop_the_questions(screens_root):
-    """`render --multipleye` reads the session named by ``-p`` (matched without
-    case) and passes ``--no-question-screens`` to the loader."""
+def test_the_cli_reads_one_session(screens_root):
+    """`render --multipleye` reads the session named by ``-p``, matched without
+    case, with its question screens."""
     from scanpath_studio.cli import _load_multipleye_render
 
     (_, fixations), pid = _load_multipleye_render(str(screens_root), READER_A.lower())
     assert pid == READER_A
     assert set(fixations["participant_id"]) == {READER_A}
     assert f"question_{Q1}" in set(fixations["screen_id"])
-
-    (_, reading_only), _ = _load_multipleye_render(
-        str(screens_root), READER_A, include_question_screens=False
-    )
-    assert set(reading_only["screen_id"]) == {"page_1", "page_2"}
 
     with pytest.raises(ValueError, match="No MultiplEYE session"):
         _load_multipleye_render(str(screens_root), "999_ZH_CH_1_ET1")

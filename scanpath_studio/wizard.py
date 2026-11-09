@@ -47,6 +47,7 @@ from .constants import (
     WIZARD_LEAVE_KEY,
     WORD_KEY,
     plural,
+    spoken,
     upload_identity,
     upload_limit_label,
     upload_limit_mb,
@@ -124,7 +125,7 @@ from .experimental_setup import (
     font_other_text,
     font_size_px,
 )
-from .fields import switch, tooltip
+from .fields import row_label, switch, tooltip
 from .menu import view_label
 from .persistence import is_loopback_url, persistence_enabled, rename_cached_dataset
 from .session_keys import COMPARE_SOURCE_STATE_KEY
@@ -208,8 +209,6 @@ def _reset_wizard_widgets() -> None:
         "mpe_config_upload",
         "wizard_multipleye_from",
         "wizard_multipleye_dir",
-        "wizard_multipleye_fixation_source",
-        "wizard_multipleye_questions",
         "_wizard_multipleye_setup_applied",
         "wizard_filename_split",
         "wizard_filename_mode",
@@ -3316,10 +3315,8 @@ _FROM_LABELS = {
     MULTIPLEYE_FROM_FOLDER: "Folder on this computer",
     MULTIPLEYE_FROM_UPLOAD: "Upload files",
 }
-#: `app._dataset_dir_input` keeps the typed folder under ``<prefix>_dir``.
-MULTIPLEYE_DIR_PREFIX = "wizard_multipleye"
-MULTIPLEYE_FIXATION_SOURCE_KEY = "wizard_multipleye_fixation_source"
-MULTIPLEYE_QUESTIONS_KEY = "wizard_multipleye_questions"
+#: The typed session-set folder.
+MULTIPLEYE_DIR_KEY = "wizard_multipleye_dir"
 _MULTIPLEYE_CONFIG_UPLOAD_KEY = "mpe_config_upload"
 #: The screen whose values Recording setup was last pre-answered with.
 _MULTIPLEYE_SETUP_APPLIED_KEY = "_wizard_multipleye_setup_applied"
@@ -3347,7 +3344,7 @@ are read from the folder and file names, so there are no columns to map.
 """
 
 
-def _multipleye_folder_signature(root: str, fixation_source: str) -> tuple:
+def _multipleye_folder_signature(root: str) -> tuple:
     """What the folder read is cached on besides its path.
 
     The folders it reads (a session's folder changes when a trial file is
@@ -3356,10 +3353,10 @@ def _multipleye_folder_signature(root: str, fixation_source: str) -> tuple:
     and the questions workbook. A trial or AOI file rewritten in place under
     the same name is not seen until the server restarts."""
     base = Path(root)
-    folders = [base, base / fixation_source, base / "fixations"]
-    folders += [base / "reading_measures", *base.glob("stimuli_*")]
+    exports = [base / "scanpaths", base / "fixations", base / "reading_measures"]
+    folders = [base, *exports, *base.glob("stimuli_*")]
     folders += [*base.glob("stimuli_*/aoi_stimuli_*"), *base.glob("stimuli_*/config")]
-    for top in (base / fixation_source, base / "fixations", base / "reading_measures"):
+    for top in exports:
         try:
             folders += [Path(e.path) for e in os.scandir(top) if e.is_dir()]
         except OSError:
@@ -3383,26 +3380,19 @@ def _multipleye_folder_signature(root: str, fixation_source: str) -> tuple:
 
 
 @st.cache_data(show_spinner="Reading the MultiplEYE session set…", max_entries=4)
-def _c_multipleye_folder(
-    root: str, fixation_source: str, include_question_screens: bool, signature: tuple
-):
+def _c_multipleye_folder(root: str, signature: tuple):
     from scanpath_studio.datasets import multipleye_raw_frames, multipleye_screen
 
     # Read once, and handed to the loader, so the frames are placed with the
     # same screen Recording setup is pre-answered from.
     screen = multipleye_screen(root)
-    words, fixations = multipleye_raw_frames(
-        root,
-        fixation_source=fixation_source,
-        include_question_screens=include_question_screens,
-        screen=screen,
-    )
+    words, fixations = multipleye_raw_frames(root, screen=screen)
     return (*stamp_source((words, fixations)), screen)
 
 
 @st.cache_data(show_spinner="Reading the MultiplEYE files…", max_entries=4)
 def _c_multipleye_uploads(
-    _fixations, _aoi, _questions, _participants, fingerprints: tuple, screen, include
+    _fixations, _aoi, _questions, _participants, fingerprints: tuple, screen
 ):
     from scanpath_studio.datasets import multipleye_frames_from_uploads
 
@@ -3412,7 +3402,6 @@ def _c_multipleye_uploads(
             _aoi,
             questions_df=_questions,
             participant_meta_df=_participants,
-            include_question_screens=include,
             screen=screen,
         )
     )
@@ -3433,37 +3422,63 @@ def _multipleye_screen_from_uploads(files) -> object:
     return multipleye_screen_from_texts(config, lab)
 
 
-def _multipleye_from_folder(host, active: bool, include: bool):
-    """The folder fields, and what they read: ``(words, fixations, screen,
-    recipe, problem)``."""
-    from scanpath_studio.datasets import MULTIPLEYE_FIXATION_SOURCES, MultiplEYEScreen
+def _multipleye_folder_field(host, active: bool) -> str:
+    """*Session set folder*: the path box and the folder picker on one line.
 
-    st.session_state.setdefault(MULTIPLEYE_FIXATION_SOURCE_KEY, "scanpaths")
-    fixation_source = host.segmented_control(
-        "Fixations from",
-        list(MULTIPLEYE_FIXATION_SOURCES),
-        key=MULTIPLEYE_FIXATION_SOURCE_KEY,
-        required=True,
+    Titled like the add screen's other fields, with its help on the title's
+    hover, and the picker beside the box rather than in a column of its own
+    (which wraps under the box on a narrow screen). Returns the resolved folder,
+    or ``""`` before one is typed."""
+    # A pick from the folder dialog lands before the box is drawn: a widget's
+    # key can't be written once it is.
+    if picked := st.session_state.pop(f"{MULTIPLEYE_DIR_KEY}_picked", None):
+        st.session_state[MULTIPLEYE_DIR_KEY] = picked
+    help_text = (
+        "The session set's folder: the one that holds scanpaths/ (or "
+        "fixations/) and stimuli_*/."
+    )
+    row_label(host, "Session set folder", help_text)
+    row = host.container(horizontal=True, vertical_alignment="center", gap="small")
+    typed = row.text_input(
+        "Session set folder",
+        key=MULTIPLEYE_DIR_KEY,
+        placeholder="/path/to/MultiplEYE_ZH_CH_Zurich_1_2025",
+        help=help_text,
+        label_visibility="collapsed",
         disabled=not active,
+        width="stretch",
         # Kept while Upload files is chosen, which doesn't draw it.
         persist_state="session",
-        help="**scanpaths**: each fixation already mapped to its word. "
-        "**fixations**: the eye tracker's fixations, with no word. Question "
-        "screens always come from fixations/, the only export that has them.",
     )
-    root = app._dataset_dir_input(
-        host,
-        default_dir="",
-        dir_help="The session set's folder: the one holding scanpaths/ (or "
-        "fixations/) and stimuli_*/.",
-        structure_md=_MULTIPLEYE_STRUCTURE_MD,
-        key_prefix=MULTIPLEYE_DIR_PREFIX,
-    )
-    recipe = {
-        "root": root,
-        "fixation_source": fixation_source,
-        "include_question_screens": include,
-    }
+    if row.button(
+        f"{ICONS['folder']} {spoken('Choose the folder')}",
+        key=f"{MULTIPLEYE_DIR_KEY}_browse",
+        help="Choose the folder",
+        disabled=not active,
+        width="content",
+    ):
+        if chosen := app._pick_directory_dialog():
+            st.session_state[f"{MULTIPLEYE_DIR_KEY}_picked"] = chosen
+            st.rerun()
+        host.caption("No folder picker here. Type or paste the path.")
+    resolved = app._resolve_data_dir(str(typed or ""))
+    if resolved and resolved != str(typed).strip():
+        host.caption(f"Full path: `{resolved}`")
+    if active:
+        with host.expander("Expected files", expanded=False):
+            st.markdown(_MULTIPLEYE_STRUCTURE_MD)
+    return resolved
+
+
+def _multipleye_from_folder(host, active: bool):
+    """The folder field, and what it reads: ``(words, fixations, screen,
+    recipe, problem)``. The loader reads ``scanpaths/``, where each fixation is
+    mapped to its word, falling back to ``fixations/``; question screens come
+    along whenever the session set has what they need."""
+    from scanpath_studio.datasets import MultiplEYEScreen
+
+    root = _multipleye_folder_field(host, active)
+    recipe = {"root": root}
     empty = (pd.DataFrame(), pd.DataFrame(), MultiplEYEScreen(), recipe)
     if not root:
         return (*empty, _MULTIPLEYE_FOLDER_PROMPT)
@@ -3471,10 +3486,7 @@ def _multipleye_from_folder(host, active: bool, include: bool):
         return (*empty, f"There is no folder at `{root}`.")
     try:
         words, fixations, screen = _c_multipleye_folder(
-            root,
-            fixation_source,
-            include,
-            _multipleye_folder_signature(root, fixation_source),
+            root, _multipleye_folder_signature(root)
         )
     except (OSError, ValueError, KeyError) as exc:
         return (*empty, f"Couldn't read a MultiplEYE session set from `{root}`: {exc}")
@@ -3490,7 +3502,7 @@ def _multipleye_from_folder(host, active: bool, include: bool):
     return words, fixations, screen, recipe, None
 
 
-def _multipleye_from_uploads(host, active: bool, include: bool):
+def _multipleye_from_uploads(host, active: bool):
     """The upload boxes, and what they read: ``(words, fixations, screen,
     recipe, problem)``."""
 
@@ -3543,8 +3555,7 @@ def _multipleye_from_uploads(host, active: bool, include: bool):
     screen = _multipleye_screen_from_uploads(configs)
     empty = (pd.DataFrame(), pd.DataFrame(), screen)
     if fix_df.empty:
-        recipe = {"root": None, "include_question_screens": include}
-        return (*empty, recipe, _MULTIPLEYE_UPLOAD_PROMPT)
+        return (*empty, {"root": None}, _MULTIPLEYE_UPLOAD_PROMPT)
 
     def optional(frame):
         return frame if not frame.empty else None
@@ -3560,19 +3571,11 @@ def _multipleye_from_uploads(host, active: bool, include: bool):
                 for f in (fix_df, aoi_df, questions_df, participant_df)
             ),
             screen,
-            include,
         )
     except (ValueError, KeyError, TypeError) as exc:
-        recipe = {"root": None, "include_question_screens": include}
-        return (*empty, recipe, f"Couldn't read these MultiplEYE files: {exc}")
+        return (*empty, {"root": None}, f"Couldn't read these MultiplEYE files: {exc}")
     adopt_source(words, fixations)
-    recipe = {
-        "root": None,
-        "fixation_source": "scanpaths"
-        if "word_idx" in fixations.columns
-        else "fixations",
-        "include_question_screens": include,
-    }
+    recipe = {"root": None}
     if fixations.empty:
         return (
             *empty,
@@ -3659,6 +3662,12 @@ def _render_multipleye_setup(body, s1, active: bool, part) -> _UploadResult:
         st.session_state[MULTIPLEYE_FROM_KEY] = MULTIPLEYE_FROM_UPLOAD
     st.session_state.setdefault(MULTIPLEYE_FROM_KEY, MULTIPLEYE_FROM_FOLDER)
     if local:
+        files_help = (
+            "Folder on this computer reads the whole session set, with its "
+            "reading measures, page images and config. Upload files takes the "
+            "CSVs one by one."
+        )
+        row_label(s1, "Files", files_help)
         s1.segmented_control(
             "Files",
             list(_FROM_LABELS),
@@ -3666,27 +3675,16 @@ def _render_multipleye_setup(body, s1, active: bool, part) -> _UploadResult:
             required=True,
             format_func=_FROM_LABELS.get,
             disabled=not active,
-            help="**Folder on this computer** reads the whole session set: "
-            "reading measures, page images and the config come with it. "
-            "**Upload files** takes the CSVs one by one.",
+            help=files_help,
+            label_visibility="collapsed",
         )
-    st.session_state.setdefault(MULTIPLEYE_QUESTIONS_KEY, True)
-    include = switch(
-        s1,
-        "toggle",
-        "Comprehension-question screens",
-        key=MULTIPLEYE_QUESTIONS_KEY,
-        disabled=not active,
-        help="Each question a reader answered, as a screen of its trial after "
-        "the reading pages. Off loads the reading pages only.",
-    )
     if st.session_state.get(MULTIPLEYE_FROM_KEY) == MULTIPLEYE_FROM_FOLDER:
         words_raw, fix_raw, screen, recipe, problem = _multipleye_from_folder(
-            s1, active, include
+            s1, active
         )
     else:
         words_raw, fix_raw, screen, recipe, problem = _multipleye_from_uploads(
-            s1, active, include
+            s1, active
         )
 
     words_norm, fixations_norm = empty_words_frame(), empty_fixations_frame()
@@ -4183,6 +4181,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # read the way the corpus lays it out, and branches off here. Drawn on every
     # run, collapsed review panel included, so the choice survives it.
     st.session_state.setdefault(_FORMAT_KEY, FORMAT_GENERIC)
+    format_help = (
+        "Your own tables: upload your words, fixations or raw gaze and map "
+        "their columns. MultiplEYE session set: a session set exported by the "
+        "MultiplEYE project, read from its folder or its files. Participants, "
+        "trials and screens come from the file names, so there is nothing to map."
+    )
+    row_label(s1, "Dataset format", format_help)
     s1.segmented_control(
         "Dataset format",
         list(_FORMAT_LABELS),
@@ -4190,11 +4195,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
         required=True,
         format_func=_FORMAT_LABELS.get,
         disabled=not active,
-        help="**Your own tables**: upload your words, fixations or raw gaze "
-        "and map their columns. **MultiplEYE session set**: a session set "
-        "exported by the MultiplEYE project, read from its folder or its "
-        "files. Participants, trials and screens come from the file names, so "
-        "there is nothing to map.",
+        help=format_help,
+        label_visibility="collapsed",
     )
     if st.session_state.get(_FORMAT_KEY) == FORMAT_MULTIPLEYE:
         return _render_multipleye_setup(body, s1, active, _part)

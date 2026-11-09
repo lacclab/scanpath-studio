@@ -72,9 +72,7 @@ class TestFromAFolder:
         setup = payload["setup"]
         assert (setup["canvas_width"], setup["canvas_height"]) == MONITOR
         assert setup["provenance"]["screen"] == "measured"
-        recipe = payload["source_recipe"]["multipleye"]
-        assert recipe["root"] == str(session_set)
-        assert recipe["fixation_source"] == "scanpaths"
+        assert payload["source_recipe"]["multipleye"] == {"root": str(session_set)}
         # The session set's own reading measures come along, as they do from
         # `load_multipleye`, so Corpus Analysis has them.
         from scanpath_studio.data import brought_reading_measures
@@ -306,32 +304,19 @@ class TestCliAndApi:
         )
         assert out.stat().st_size > 0
 
-    def test_render_help_lists_the_multipleye_flags(self, capsys):
+    def test_render_help_lists_one_multipleye_flag(self, capsys):
         with pytest.raises(SystemExit):
             cli.main(["render", "--help"])
         text = capsys.readouterr().out
-        for flag in ("--multipleye", "--multipleye-fixations", "--no-question-screens"):
-            assert flag in text
+        assert "--multipleye DIR" in text
+        assert "--multipleye-fixations" not in text
+        assert "--no-question-screens" not in text
 
-    def test_the_snippet_names_a_non_default_reading(self):
-        source = cs.SnippetSource(
-            kind=cs.SOURCE_MULTIPLEYE,
-            options={
-                "root": "d/MPE",
-                "fixation_source": "fixations",
-                "include_question_screens": False,
-            },
-        )
+    def test_the_snippet_reads_the_session_set_again(self):
+        source = cs.SnippetSource(kind=cs.SOURCE_MULTIPLEYE, options={"root": "d/MPE"})
         python = "\n".join(cs._multipleye_python(source))
-        assert "fixation_source='fixations'" in python
-        assert "include_question_screens=False" in python
-        assert cs._multipleye_cli(source) == [
-            "--multipleye",
-            "d/MPE",
-            "--multipleye-fixations",
-            "fixations",
-            "--no-question-screens",
-        ]
+        assert python == "words, fixations = sps.load_multipleye(\n    'd/MPE',\n)"
+        assert cs._multipleye_cli(source) == ["--multipleye", "d/MPE"]
         # Each session set stamps its own monitor, so the snippet passes none.
         assert cs.source_canvas(cs.SOURCE_MULTIPLEYE) is None
 
@@ -343,19 +328,14 @@ class TestTheFolderReadIsCachedHonestly:
         from scanpath_studio import wizard
         from tests.multipleye_fixtures import write_screen_config
 
-        before = wizard._multipleye_folder_signature(str(session_set), "scanpaths")
-        assert before == wizard._multipleye_folder_signature(
-            str(session_set), "scanpaths"
-        )
+        before = wizard._multipleye_folder_signature(str(session_set))
+        assert before == wizard._multipleye_folder_signature(str(session_set))
         session = next((session_set / "scanpaths").iterdir())
         (session / "new_trial.csv").write_text("x\n")
-        after_trial = wizard._multipleye_folder_signature(str(session_set), "scanpaths")
+        after_trial = wizard._multipleye_folder_signature(str(session_set))
         assert after_trial != before
         write_screen_config(session_set, monitor=(2560, 1440))
-        assert (
-            wizard._multipleye_folder_signature(str(session_set), "scanpaths")
-            != after_trial
-        )
+        assert wizard._multipleye_folder_signature(str(session_set)) != after_trial
 
     def test_a_folder_without_word_boxes_fails_before_reading_trials(
         self, session_set, monkeypatch

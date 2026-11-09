@@ -1,27 +1,20 @@
 # Usage stats
 
-## 2026-11-02
+## 2026-11-09
 
-- PyPI: last_day 15 / last 7 days 240 / last 30 days 737. Without mirrors (UTC days up to 2026-11-01): last 7 days 246 vs previous 7 days 526 (-280).
-- PyPI top OS (30d): Linux 152, Darwin 100. Top Python (30d): 3.11 138, 3.12 92, 3.14 19. Latest version 0.44.0, uploaded 2026-10-27 (6 days ago).
-- Desktop bundles (v0.44.0): ScanpathStudio-linux-x86_64.tar.gz 1 (+1), ScanpathStudio-macos-arm64.dmg 1 (+1), ScanpathStudio-windows-x86_64-setup.exe 1 (+1), ScanpathStudio-windows-x86_64.zip 0 (+0). All-time across releases: 90 (+3).
-- Repo: 8 (+0) stars / 0 (+0) forks / 1 (+1) watchers / 4 (-28) open issues.
-- Traffic, last 14 days: 81 views (34 uniques), 2964 clones (324 uniques).
-- Top referrers: aocr.org (21), lacclab.github.io (2), Google (1). Top paths: /lacclab/scanpath-studio/issues (16), /lacclab/scanpath-studio (7), /lacclab/scanpath-studio/pulls (6).
-- Flags: new PyPI version 0.44.0; new release v0.44.0; open issues + PRs fell from 32 to 4 (2 issues, 2 PRs open now); aocr.org is a new top referrer (21 views).
-- (Compared with snapshot 2026-10-26.)
+- PyPI: last_day 6 / last 7 days 92 / last 30 days 737. Without mirrors (UTC days up to 2026-11-08): last 7 days 92 vs previous 7 days 246 (-154).
+- PyPI top OS (30d): Linux 103, Darwin 70. Top Python (30d): 3.11 94, 3.12 61, 3.14 14. Latest version 0.44.0, uploaded 2026-10-27 (13 days ago).
+- Desktop bundles (v0.44.0): ScanpathStudio-linux-x86_64.tar.gz 5 (+4), ScanpathStudio-macos-arm64.dmg 8 (+7), ScanpathStudio-windows-x86_64-setup.exe 7 (+6), ScanpathStudio-windows-x86_64.zip 4 (+4). All-time across releases: 111 (+21).
+- Repo: 8 (+0) stars / 0 (+0) forks / 1 (+0) watchers / 4 (+0) open issues.
+- Traffic, last 14 days: 117 views (74 uniques), 542 clones (130 uniques).
+- Top referrers: aocr.org (57), Google (1), github.com (1). Top paths: /lacclab/scanpath-studio (17), /lacclab/scanpath-studio/issues (17), /lacclab/scanpath-studio/pulls (7).
+- Flags: views spike on 2026-11-05: 37 (7-day avg 4.4).
+- (Compared with snapshot 2026-11-02.)
 
 ## Last 30 days
 
 | date | PyPI downloads | views | uniques | clones | unique clones |
 |---|---|---|---|---|---|
-| 2026-10-03 | 22 | 12 | 2 | 617 | 156 |
-| 2026-10-04 | 93 | 3 | 3 | 353 | 94 |
-| 2026-10-05 | 47 | 6 | 4 | 51 | 25 |
-| 2026-10-06 | 94 | 74 | 5 | 892 | 162 |
-| 2026-10-07 | 307 | 45 | 7 | 866 | 164 |
-| 2026-10-08 | 25 | 7 | 4 | 279 | 91 |
-| 2026-10-09 | 11 | 4 | 1 | 296 | 67 |
 | 2026-10-10 | 169 | 7 | 1 | 161 | 56 |
 | 2026-10-11 | 20 | 2 | 2 | 137 | 29 |
 | 2026-10-12 | 19 | 2 | 2 | 64 | 21 |
@@ -45,3 +38,10 @@
 | 2026-10-30 | 5 | 3 | 3 | 8 | 6 |
 | 2026-10-31 | 23 | 1 | 1 | 32 | 6 |
 | 2026-11-01 | 15 | 6 | 5 | 33 | 6 |
+| 2026-11-02 | 7 | 2 | 2 | 19 | 6 |
+| 2026-11-03 | 29 | 2 | 1 | 40 | 21 |
+| 2026-11-04 | 2 | 2 | 2 | 17 | 8 |
+| 2026-11-05 | 18 | 37 | 37 | 12 | 6 |
+| 2026-11-06 | 27 | 1 | 1 | 6 | 4 |
+| 2026-11-07 | 3 | 0 | 0 | 3 | 2 |
+| 2026-11-08 | 6 | 9 | 2 | 54 | 12 |

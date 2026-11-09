@@ -41,7 +41,7 @@ READER_B = "014_ZH_CH_1_ET2"  # reads Lit_Demo_1 (2 pages) + Arg_Other_2 (1 page
 LIT = "Lit_Demo_1"
 ARG = "Arg_Other_2"
 # A trial is one *reading of a stimulus*; its pages are screens inside
-# it. Each constant below is the (trial_id, screen_id) pair that names one page.
+# it. Each constant below is the (text_id, screen_id) pair that names one page.
 LIT_P1 = (LIT, "page_1")
 LIT_P2 = (LIT, "page_2")
 ARG_P1 = (ARG, "page_1")
@@ -316,7 +316,7 @@ def _screen_rows(frame: pd.DataFrame, reader: str, screen: tuple) -> pd.DataFram
     trial, screen_id = screen
     return frame[
         (frame["participant_id"] == reader)
-        & (frame["trial_id"] == trial)
+        & (frame["text_id"] == trial)
         & (frame["screen_id"] == screen_id)
     ]
 
@@ -343,8 +343,8 @@ def _assert_canonical_intact(words: pd.DataFrame, fixations: pd.DataFrame) -> No
     Word boxes: two 20px characters at image x=80..120, y=50..80, shifted by the
     centering offset. Fixations: reader A's page_1 pair and page_2 single.
     """
-    assert set(words["trial_id"]) == {LIT, ARG}
-    assert set(zip(words["trial_id"], words["screen_id"])) == {LIT_P1, LIT_P2, ARG_P1}
+    assert set(words["text_id"]) == {LIT, ARG}
+    assert set(zip(words["text_id"], words["screen_id"])) == {LIT_P1, LIT_P2, ARG_P1}
     assert set(fixations["participant_id"]) == {READER_A, READER_B}
 
     aa = _word_row(words, READER_A, LIT_P1, 0)
@@ -359,7 +359,7 @@ def _assert_canonical_intact(words: pd.DataFrame, fixations: pd.DataFrame) -> No
     # Reader B alone read Arg_Other_2 — reader A must not inherit its box.
     ee = _word_row(words, READER_B, ARG_P1, 0)
     assert ee["text"] == "EE"
-    assert words[(words["participant_id"] == READER_A)]["trial_id"].eq(LIT).all()
+    assert words[(words["participant_id"] == READER_A)]["text_id"].eq(LIT).all()
 
     # 3 fixations per reader on Lit_Demo_1, plus reader B's single Arg fixation.
     assert len(fixations) == 7
@@ -673,7 +673,7 @@ def test_stimulus_image_path_resolves_per_stimulus_and_page(full_tree):
         (LIT_P2, "lit_demo_id1_page_2_zh.png"),
         (ARG_P1, "arg_other_id2_page_1_zh.png"),
     ):
-        rows = words[(words["trial_id"] == trial) & (words["screen_id"] == screen)]
+        rows = words[(words["text_id"] == trial) & (words["screen_id"] == screen)]
         paths = set(rows["image_path"])
         assert paths == {str(image_dir / filename)}
         assert os.path.exists(paths.pop())
@@ -734,7 +734,7 @@ def test_side_data_is_scoped_to_the_narrowed_load(full_tree):
         full_tree, stimuli=[ARG], names="canonical"
     )
 
-    assert set(zip(words["trial_id"], words["screen_id"])) == {ARG_P1}
+    assert set(zip(words["text_id"], words["screen_id"])) == {ARG_P1}
     assert set(fixations["participant_id"]) == {READER_B}  # only B read Arg_Other_2
     assert len(fixations) == 1
     assert _word_row(words, READER_B, ARG_P1, 0)["text"] == "EE"

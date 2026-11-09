@@ -268,10 +268,11 @@ def test_a_stimulus_is_one_trial_with_its_pages_as_screens(screens_root):
         screens_root, include_question_screens=False, names="canonical"
     )
 
-    # trial_id == text_id == the stimulus; the pages live inside it as screens.
-    assert set(words["trial_id"]) == {LIT}
+    # The Trial ID names each reading, the Text ID the stimulus; the pages live
+    # inside the trial as screens.
+    assert set(words["trial_id"]) == {f"{READER_A}_{LIT}", f"{READER_B}_{LIT}"}
     assert set(words["text_id"]) == {LIT}
-    assert (words["trial_id"] == words["text_id"]).all()
+    assert (words["trial_id"] == words["participant_id"] + "_" + words["text_id"]).all()
     screens = _screens(words, READER_A)
     assert list(screens["screen_id"]) == ["page_1", "page_2"]
     assert list(screens["screen_index"]) == [1, 2]
@@ -497,7 +498,7 @@ def test_include_question_screens_false_yields_reading_screens_only(screens_root
 def test_the_headless_api_lists_and_plots_a_question_screen(screens_root):
     words, fixations = datasets.load_multipleye(screens_root, names="canonical")
 
-    catalog = api.list_parts(words, fixations, READER_A, LIT)
+    catalog = api.list_parts(words, fixations, READER_A, f"{READER_A}_{LIT}")
     assert list(catalog["screen_id"]) == [
         "page_1",
         "page_2",
@@ -510,7 +511,7 @@ def test_the_headless_api_lists_and_plots_a_question_screen(screens_root):
         words,
         fixations,
         READER_A,
-        LIT,
+        f"{READER_A}_{LIT}",
         screen=f"question_{Q1}",
         canvas_size=MONITOR,
     )

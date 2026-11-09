@@ -1256,7 +1256,8 @@ def load_onestop(
 # * **One stimulus spans several screens** ``page_1..page_N`` (plus the
 #   comprehension-question screens that follow them) which all reuse the *same*
 #   on-screen coordinates. The loader models that directly: one reading of one
-#   stimulus is **one trial** (``trial_id == text_id == "<stimulus>"``) whose
+#   stimulus is **one trial** (``text_id == "<stimulus>"``, and
+#   ``trial_id == "<session>_<stimulus>"`` once the frames are finished) whose
 #   screens are the corpus's own ``page`` values — ``screen_id = "page_1"`` /
 #   ``"question_4111"`` — each its own coordinate space (``multipart.py``).
 #   ``screen_index`` is ranked from **that reader's own fixation onsets**, never
@@ -1430,6 +1431,30 @@ def multipleye_screen(root) -> MultiplEYEScreen:
         _read("stimuli_*/config/config_*.py"),
         _read("stimuli_*/config/*_lab_configuration.json"),
     )
+
+
+def _multipleye_reading_ids(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Give every reading its own Trial ID: ``<session>_<stimulus>``.
+
+    The loader keys a trial by its stimulus while it assembles the frames, and a
+    stimulus is read by more than one session; the finished frames name each
+    reading the way the other corpora do (``<participant>_<text>``), so a Trial
+    ID is unique on its own. The Text ID stays the stimulus. Stimulus-level word
+    boxes (no ``participant_id``) keep the stimulus as their Trial ID and attach
+    to the readings by Text ID."""
+    frames = []
+    for frame in (words, fixations):
+        if not frame.empty and {"participant_id", "stimulus"} <= set(frame.columns):
+            frame = frame.copy()
+            frame["trial_id"] = (
+                frame["participant_id"].astype(str)
+                + "_"
+                + frame["stimulus"].astype(str)
+            )
+        frames.append(frame)
+    return frames[0], frames[1]
 
 
 def _multipleye_place_on_screen(
@@ -1784,7 +1809,8 @@ def _stamp_multipleye_fixations(
     screens survive (``reading`` and/or ``question`` — see
     :func:`_multipleye_screen_kind`; every other screen is always dropped). Rows
     keep the corpus's own ``page`` as the ``screen_id`` and gain ``screen_kind``;
-    ``trial_id`` is the stimulus, since one reading of a stimulus is one trial.
+    ``trial_id`` is the stimulus while the frames are assembled
+    (`_multipleye_reading_ids` names each reading once they are).
     ``name == 'fixation'`` filtering applies to the ``scanpaths`` export, which
     tags each row. Returns an empty frame if nothing remains (or the upload has no
     ``page`` column at all). Shared by the directory loader (one file) and the
@@ -2523,7 +2549,8 @@ def multipleye_raw_frames(
     Same inputs as :func:`load_multipleye`, but returns the frames *before*
     schema normalization — for callers that run their own auto-detection /
     column mapping (e.g. the Streamlit app's MultiplEYE data source). Fixations
-    carry parsed ``participant_id`` (the session), ``trial_id`` (the stimulus),
+    carry parsed ``participant_id`` (the session), ``trial_id`` (the reading,
+    ``<session>_<stimulus>``), ``text_id`` (the stimulus),
     the screen (``page`` + ``screen_index`` + ``screen_kind``), pixel
     ``location_x/y``, the trial-level facets (``genre`` / ``session`` /
     ``is_practice`` / ``trial_num``), and any reader metadata
@@ -2626,6 +2653,7 @@ def multipleye_raw_frames(
     # typeface the images were drawn in.
     if screen is None:
         screen = multipleye_screen(root)
+    words, fixations = _multipleye_reading_ids(words, fixations)
     return _multipleye_place_on_screen(words, fixations, screen)
 
 
@@ -2650,7 +2678,8 @@ def load_multipleye(
 
     Participants are session ids (ET1 and ET2 read disjoint stimuli, so each is
     a distinct reader). A trial is **one reading of one stimulus**
-    (``trial_id == text_id == "Lit_Alchemist_4"``), and its screens — the reading
+    (``trial_id == "001_ZH_CH_1_ET1_Lit_Alchemist_4"``, ``text_id ==
+    "Lit_Alchemist_4"``), and its screens — the reading
     pages ``page_1…page_N`` plus the comprehension-question screens — are
     ``screen_id`` values in presentation order (``screen_index``, ranked from
     that reader's own fixation onsets, since the question order is shuffled per
@@ -2817,6 +2846,7 @@ def multipleye_frames_from_uploads(
             fixations = _multipleye_apply_screen_order(
                 pd.DataFrame(), fixations, by_onset=True
             )[1]
+        _, fixations = _multipleye_reading_ids(pd.DataFrame(), fixations)
         return _multipleye_place_on_screen(
             pd.DataFrame(), fixations, screen or MultiplEYEScreen()
         )
@@ -2858,6 +2888,7 @@ def multipleye_frames_from_uploads(
     words, fixations = _multipleye_apply_screen_order(
         words, fixations, by_onset="participant_id" in words.columns
     )
+    words, fixations = _multipleye_reading_ids(words, fixations)
     return _multipleye_place_on_screen(words, fixations, screen or MultiplEYEScreen())
 
 

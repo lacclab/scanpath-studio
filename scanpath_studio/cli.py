@@ -600,10 +600,11 @@ def _render_parser() -> argparse.ArgumentParser:
         "--multipleye",
         metavar="DIR",
         help="Load a MultiplEYE session set from DIR, the folder holding its "
-        "scanpaths/ or fixations/ folder and its stimuli_*/ folder. A trial is "
-        "one reading of one stimulus (e.g. Lit_Alchemist_4), with its pages and "
-        "comprehension questions as screens; a participant is a session (e.g. "
-        "001_ZH_CH_1_ET1). The screen comes from the session set's own config; "
+        "scanpaths/ or fixations/ folder and its stimuli_*/ folder. A participant "
+        "is a session (e.g. 001_ZH_CH_1_ET1) and a trial is one reading of one "
+        "stimulus (e.g. 001_ZH_CH_1_ET1_Lit_Alchemist_4), with its pages and "
+        "comprehension questions as screens. The screen comes from the session "
+        "set's own config; "
         "set the font with --font-size and --font-family.",
     )
     src.add_argument(

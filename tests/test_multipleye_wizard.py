@@ -66,7 +66,9 @@ class TestFromAFolder:
         assert "col_map_fix_duration" not in {s.key for s in at.selectbox}
         payload = at.session_state["_wizard_finalize_payload"]
         fixations = payload["fixations"]
-        assert set(fixations["trial_id"]) == {"Lit_Demo_1", "Arg_Other_2"}
+        assert set(fixations["text_id"]) == {"Lit_Demo_1", "Arg_Other_2"}
+        # One Trial ID per reading: the session, then the stimulus.
+        assert fixations.groupby("trial_id")["participant_id"].nunique().eq(1).all()
         assert fixations["x"].min() >= OFF_X  # placed on the monitor
         # Recording setup: the monitor is the config's, measured, not estimated.
         setup = payload["setup"]
@@ -160,7 +162,7 @@ class TestFromUploads:
         assert payload["composite_trial_columns"] == []
         assert payload["filter_fields"] == ["genre", "session", "is_practice"]
         fixations = payload["fixations"]
-        assert set(fixations["trial_id"]) == {"Lit_Demo_1"}
+        assert set(fixations["trial_id"]) == {"001_ZH_CH_1_ET1_Lit_Demo_1"}
         assert set(fixations["screen_id"]) == {"page_1", "page_2"}
         assert not payload["words"].empty
         # No config uploaded: the coordinates stay the image's own.
@@ -295,7 +297,7 @@ class TestCliAndApi:
                 "-p",
                 READER_A.lower(),
                 "-t",
-                "Lit_Demo_1",
+                f"{READER_A}_Lit_Demo_1",
                 "--screen",
                 "page_1",
                 "-o",

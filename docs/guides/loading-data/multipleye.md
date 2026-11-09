@@ -57,8 +57,9 @@ values are missing so you can enter them under **Recording setup**.
 A session set has no ID columns. Participant, session, trial and stimulus come
 from the folder and file names.
 
-- **A trial is one reading of one stimulus**, such as `Lit_Alchemist_4`. Its
-  screens are the reading pages, `page_1` to `page_N`, then the
+- **A trial is one reading of one stimulus.** Its Trial ID is the session,
+  then the stimulus, such as `001_ZH_CH_1_ET1_Lit_Alchemist_4`, and its Text ID
+  is the stimulus, `Lit_Alchemist_4`. Its screens are the reading pages, `page_1` to `page_N`, then the
   comprehension-question screens, `question_<id>`. Step through them with the
   screen navigator beside the trial picker.
 - **A participant is a session**, such as `001_ZH_CH_1_ET1`. ET1 and ET2 read
@@ -113,7 +114,8 @@ from the folder and file names.
     ```bash
     scanpath-studio render --multipleye data/MultiplEYE_ZH_CH_Zurich_1_2025 --list-trials
     scanpath-studio render --multipleye data/MultiplEYE_ZH_CH_Zurich_1_2025 \
-      -p 001_ZH_CH_1_ET1 -t Lit_Alchemist_4 --screen page_1 -o page.html
+      -p 001_ZH_CH_1_ET1 -t 001_ZH_CH_1_ET1_Lit_Alchemist_4 --screen page_1 \
+      -o page.html
     ```
 
 [`load_multipleye`][scanpath_studio.datasets.load_multipleye] takes `sessions`

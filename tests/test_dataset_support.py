@@ -1446,9 +1446,13 @@ def test_load_multipleye(multipleye_root):
 
     # Reader key = full session; ET1/ET2 are distinct readers.
     assert set(fixations["participant_id"]) == {"001_ZH_CH_1_ET1", "014_ZH_CH_1_ET2"}
-    # One trial per reading of a stimulus, its pages as ordered screens inside it.
-    assert set(words["trial_id"]) == {"Lit_Demo_1", "Arg_Other_2"}
-    assert set(zip(words["trial_id"], words["screen_id"])) == {
+    # One trial per reading of a stimulus, its pages as ordered screens inside it:
+    # the Trial ID names the reading, the Text ID the stimulus.
+    assert set(words["trial_id"]) == {
+        "001_ZH_CH_1_ET1_Lit_Demo_1",
+        "014_ZH_CH_1_ET2_Arg_Other_2",
+    }
+    assert set(zip(words["text_id"], words["screen_id"])) == {
         ("Lit_Demo_1", "page_1"),
         ("Lit_Demo_1", "page_2"),
         ("Arg_Other_2", "page_1"),
@@ -1460,7 +1464,7 @@ def test_load_multipleye(multipleye_root):
     # Char AOIs aggregated to one box per (page, word_idx): AA spans x 80..120 in
     # image space, shifted to where the centered stimulus sat on the monitor.
     off_x, off_y = OFF_X, OFF_Y
-    aa = words[(words["trial_id"] == "Lit_Demo_1") & (words["screen_id"] == "page_1")]
+    aa = words[(words["text_id"] == "Lit_Demo_1") & (words["screen_id"] == "page_1")]
     aa = aa[aa["word_id"] == 0]
     assert aa["text"].iloc[0] == "AA"
     assert aa["x"].iloc[0] == 80 + off_x and aa["width"].iloc[0] == 40
@@ -1469,13 +1473,17 @@ def test_load_multipleye(multipleye_root):
     # Fixations carry the word index (scanpaths source) and link to boxes.
     f1 = fixations[fixations["participant_id"] == "001_ZH_CH_1_ET1"]
     assert f1["word_id"].notna().all()
-    assert sorted(f1["trial_id"].unique()) == ["Lit_Demo_1"]
+    assert sorted(f1["trial_id"].unique()) == ["001_ZH_CH_1_ET1_Lit_Demo_1"]
     assert sorted(f1["screen_id"].unique()) == ["page_1", "page_2"]
     assert sorted(f1["screen_index"].unique()) == [1, 2]
 
     # The monitor rides on the fixations, so no canvas_size is needed.
     fig = sps.plot_scanpath(
-        words, fixations, "001_ZH_CH_1_ET1", "Lit_Demo_1", screen="page_1"
+        words,
+        fixations,
+        "001_ZH_CH_1_ET1",
+        "001_ZH_CH_1_ET1_Lit_Demo_1",
+        screen="page_1",
     )
     assert len(fig.data) > 0
     assert tuple(fig.layout.xaxis.range) == (0, MONITOR[0])
@@ -1508,7 +1516,7 @@ def test_load_multipleye_fixations_source_fallback(multipleye_root):
     assert fixations["word_id"].isna().all()
     assert fixations["x"].notna().all()
     assert len(fixations) == 2
-    assert set(fixations["trial_id"]) == {"Lit_Demo_1"}
+    assert set(fixations["trial_id"]) == {"001_ZH_CH_1_ET1_Lit_Demo_1"}
     assert set(fixations["screen_id"]) == {"page_1", "page_2"}
 
 
@@ -1561,7 +1569,11 @@ def test_without_both_sizes_the_coordinates_stay_image_relative(
     assert screen.image_origin is None
     # The plot reads its screen off the data instead.
     fig = sps.plot_scanpath(
-        words, fixations, "001_ZH_CH_1_ET1", "Lit_Demo_1", screen="page_1"
+        words,
+        fixations,
+        "001_ZH_CH_1_ET1",
+        "001_ZH_CH_1_ET1_Lit_Demo_1",
+        screen="page_1",
     )
     assert len(fig.data) > 0
 
@@ -1662,7 +1674,7 @@ def test_multipleye_raw_frames_auto_detect_path(multipleye_root):
     words, fixations = data_module.harmonize_frames(words, fixations)
     assert set(words["text_id"]) == {"Lit_Demo_1"}
     assert set(words["participant_id"]) == {"001_ZH_CH_1_ET1"}  # broadcast worked
-    assert set(words["trial_id"]) == {"Lit_Demo_1"}
+    assert set(words["trial_id"]) == {"001_ZH_CH_1_ET1_Lit_Demo_1"}
     assert set(words["screen_id"]) == {"page_1", "page_2"}
 
 
@@ -2180,8 +2192,10 @@ def test_generic_wizard_tools_reproduce_multipleye_upload_recipe():
 
     assert len(words) == len(words_ref)
     assert len(fixations) == len(fixations_ref)
+    # The generic mapping keys a trial by its stimulus, which is the recipe's
+    # Text ID; the recipe's Trial ID names each reading.
     assert {t.lower() for t in words["trial_id"].unique()} == {
-        t.lower() for t in words_ref["trial_id"].unique()
+        t.lower() for t in words_ref["text_id"].unique()
     }
     assert {p.lower() for p in fixations["participant_id"].unique()} == {
         p.lower() for p in fixations_ref["participant_id"].unique()
@@ -2201,7 +2215,7 @@ def test_multipleye_uploads_fixations_only():
     )
     assert words.empty and not fixations.empty
     assert fixations["x"].notna().all()
-    assert set(fixations["trial_id"]) == {"Arg_Other_2"}
+    assert set(fixations["text_id"]) == {"Arg_Other_2"}
     assert set(fixations["screen_id"]) == {"page_1"}
 
 

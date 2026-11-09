@@ -21,7 +21,8 @@ the :material/database: **Data Management** page:
   which you can edit.
 - Public datasets: OneStop and PoTeC. In the desktop app or a pip install, each
   downloads the first time you open it.
-- **+** → :material/upload: **Import files**: your own tables.
+- **+** → :material/upload: **Import files**: your own tables, or a
+  [MultiplEYE session set](multipleye.md) from its folder or its files.
 - **+** → :material/draw: **Draw a scanpath**: write a text and place its
   fixations by hand.
 

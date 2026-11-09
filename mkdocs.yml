@@ -150,7 +150,9 @@ nav:
       - Scanpath visualization:
           - guides/scanpath-visualization/index.md
           - All controls: guides/scanpath-visualization/controls.md
-      - Data Management: guides/loading-data/index.md
+      - Data Management:
+          - guides/loading-data/index.md
+          - MultiplEYE session sets: guides/loading-data/multipleye.md
       - Corpus Analysis:
           - guides/corpus-workspace/index.md
       - Export and share: guides/exporting/index.md
@@ -231,7 +233,7 @@ plugins:
         architecture.md: https://github.com/lacclab/scanpath-studio/blob/main/AGENTS.md
         security.md: https://github.com/lacclab/scanpath-studio/blob/main/SECURITY.md
         benchmark-corpora.md: guides/loading-data/index.md
-        multipleye.md: guides/loading-data/index.md
+        multipleye.md: guides/loading-data/multipleye.md
         rendering.md: guides/scanpath-visualization/index.md
         contributing-a-dataset.md: https://github.com/lacclab/scanpath-studio/blob/main/docs/contributing-a-dataset.md
         # Folded into Getting started and the FAQ.

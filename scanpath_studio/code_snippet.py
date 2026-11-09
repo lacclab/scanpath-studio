@@ -87,6 +87,7 @@ SOURCE_FILES = "files"
 SOURCE_AUTHOR = "author"
 SOURCE_POTEC = "potec"
 SOURCE_ONESTOP = "onestop"
+SOURCE_MULTIPLEYE = "multipleye"
 #: A dataset recorded as raw gaze alone — no words or fixations table,
 #: so its data half is the samples (``options["raw_gaze"]``, the paths) and the
 #: builder is handed ``None`` for the other two.
@@ -155,6 +156,8 @@ def source_canvas(kind: str) -> tuple[int, int] | None:
         return (1680, 1050)  # PoTeC monitor (DELL P2210)
     if kind == SOURCE_AUTHOR:
         return (1200, 800)
+    # MultiplEYE stamps each session set's own monitor on its fixations, so it
+    # is read off the data like any other dataset's.
     return None
 
 
@@ -306,6 +309,19 @@ def _onestop_python(source: SnippetSource) -> list[str]:
     return lines
 
 
+#: The folder a MultiplEYE snippet loads when the dataset was uploaded, and so
+#: has no folder the server could quote.
+MULTIPLEYE_ROOT_PLACEHOLDER = "path/to/MultiplEYE_session_set"
+
+
+def _multipleye_python(source: SnippetSource) -> list[str]:
+    return [
+        "words, fixations = sps.load_multipleye(",
+        f"    {_py(_root(source, MULTIPLEYE_ROOT_PLACEHOLDER))},",
+        ")",
+    ]
+
+
 def _unknown_python(source: SnippetSource) -> list[str]:
     if source.options.get("keep_columns"):
         return [
@@ -356,6 +372,10 @@ def _onestop_cli(source: SnippetSource) -> list[str]:
     return argv
 
 
+def _multipleye_cli(source: SnippetSource) -> list[str]:
+    return ["--multipleye", _root(source, MULTIPLEYE_ROOT_PLACEHOLDER)]
+
+
 def _unknown_cli(source: SnippetSource) -> list[str]:
     return ["--words", "words.csv", "--fixations", "fixations.csv", *_keep_cli(source)]
 
@@ -392,6 +412,8 @@ def upload_source(
     placeholders: an upload has no path the server could quote.
     """
     recipe = recipe if isinstance(recipe, dict) else {}
+    if isinstance(multipleye := recipe.get("multipleye"), dict):
+        return multipleye_source(label, multipleye, edited=bool(recipe.get("schemas")))
     schemas = recipe.get("schemas") if isinstance(recipe.get("schemas"), dict) else {}
     steps = [str(s) for s in recipe.get("steps") or ()]
     notes = [
@@ -449,6 +471,42 @@ def upload_source(
         label=label,
         options=options,
         note=" ".join(n.strip() for n in notes if n.strip()),
+    )
+
+
+def multipleye_source(
+    label: str, recipe: dict, *, edited: bool = False
+) -> SnippetSource:
+    """The data half for a MultiplEYE session set added through the app.
+
+    ``recipe`` is the dataset's ``source_recipe["multipleye"]``: the ``root``
+    folder it was read from, ``None`` for an upload. ``load_multipleye`` reads
+    the same files the app did, so a folder-added dataset's snippet runs as it
+    is; an uploaded
+    one names a placeholder folder instead, and the whole session set there may
+    hold more than the files uploaded. ``edited`` says ✏️ Edit dataset changed
+    the mapping since, which the loader does not replay."""
+    root = recipe.get("root")
+    notes = []
+    if not root:
+        notes.append(
+            "This dataset was added from uploaded files, so the snippet can't "
+            f"name their folder. Replace `{MULTIPLEYE_ROOT_PLACEHOLDER}` with the "
+            "MultiplEYE session set they came from. The loader reads the whole "
+            "session set, so it can include trials, question screens, reading "
+            "measures and page images that the upload left out."
+        )
+    if edited:
+        notes.append(
+            "Its mapping was changed in Edit dataset after it was added. The "
+            "loader reads the session set as it was added, so make the same "
+            "change in your script."
+        )
+    return SnippetSource(
+        kind=SOURCE_MULTIPLEYE,
+        label=label,
+        options={"root": str(root) if root else None},
+        note=" ".join(notes),
     )
 
 
@@ -551,6 +609,7 @@ _SOURCE_WRITERS: dict[str, tuple[Any, Any]] = {
     SOURCE_AUTHOR: (_author_python, _author_cli),
     SOURCE_POTEC: (_potec_python, _potec_cli),
     SOURCE_ONESTOP: (_onestop_python, _onestop_cli),
+    SOURCE_MULTIPLEYE: (_multipleye_python, _multipleye_cli),
     SOURCE_RAW_GAZE: (_raw_gaze_only_python, _raw_gaze_only_cli),
     SOURCE_UPLOAD: (_upload_python, _upload_cli),
     SOURCE_UNKNOWN: (_unknown_python, _unknown_cli),

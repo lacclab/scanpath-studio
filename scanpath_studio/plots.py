@@ -1135,6 +1135,50 @@ def _is_fullwidth(ch: str) -> bool:
     )
 
 
+#: How far below its box's middle a label drawn in a CJK font is anchored, in
+#: ems. Plotly centres a text label with one fixed shift for every font, which
+#: puts the baseline of Noto Sans (Mono) CJK about 0.15 em higher than the line
+#: a page typeset in it sits on: on MultiplEYE's stimulus images (28 px), every
+#: line's labels drew 4 px above the image's own text, Chinese and Latin words
+#: alike. A Latin font's labels centre on its text already.
+_CJK_FONT_LABEL_DROP_EM = 0.15
+
+
+#: Full-width punctuation, which a browser trims when two stand side by side.
+_FULLWIDTH_PUNCTUATION = re.compile(
+    "[\u2018\u2019\u201c\u201d\u3000-\u303f\uff01-\uff0f\uff1a-\uff20"
+    "\uff3b-\uff40\uff5b-\uff65]"
+)
+#: Word joiner: no width, no line break, and it keeps two marks from touching.
+_WORD_JOINER = "\u2060"
+
+
+def _keep_punctuation_width(text: str) -> str:
+    """``text`` with a word joiner between each two adjacent full-width marks.
+
+    Chrome trims the space between two full-width punctuation marks side by
+    side (CSS ``text-spacing-trim``), so ``），`` draws half an em narrower
+    than the full em each mark takes on a stimulus page. A label centred in
+    its box then slides toward the middle on both sides of the pair. The
+    joiner is invisible and has no width, but the marks no longer touch, so
+    each keeps its em."""
+    if len(text) < 2:
+        return text
+    out = [text[0]]
+    for prev, ch in itertools.pairwise(text):
+        if _FULLWIDTH_PUNCTUATION.match(prev) and _FULLWIDTH_PUNCTUATION.match(ch):
+            out.append(_WORD_JOINER)
+        out.append(ch)
+    return "".join(out)
+
+
+def _label_drop_em(font_family: str | None) -> float:
+    """`_CJK_FONT_LABEL_DROP_EM` when the label font is a CJK one (its first
+    family names CJK), else 0."""
+    first = str(font_family or "").split(",", 1)[0]
+    return _CJK_FONT_LABEL_DROP_EM if "cjk" in first.lower() else 0.0
+
+
 def _latin_advance(words: pd.DataFrame) -> float:
     """Per-em advance of *Latin* glyphs for this corpus' font.
 
@@ -3568,7 +3612,9 @@ def _add_word_label_trace(
     # reads this same string, so it shows the word literally too.
     label_text = [
         f"\u2067{_plotly_literal(value)}\u2069" if is_rtl else _plotly_literal(value)
-        for value, is_rtl in zip(words["text"].astype(str), rtl)
+        for value, is_rtl in zip(
+            words["text"].astype(str).map(_keep_punctuation_width), rtl
+        )
     ]
     label_y = words["y"] + words["height"] / 2
     if redact:
@@ -3592,6 +3638,9 @@ def _add_word_label_trace(
             mode="text",
             textposition="middle center",
             textfont=dict(color=label_color, size=base_font_size, family=font_family),
+        )
+        label_y = label_y + _label_drop_em(font_family) * base_font_size / (
+            px_per_unit or 1.0
         )
     trace = go.Scatter(
         x=label_x,
@@ -3622,7 +3671,7 @@ def _image_to_data_uri(src: str | None) -> str | None:
     """A ``data:`` URI for an image path, or pass through an existing one.
 
     Returns None for a missing / unreadable file so the background-image layer
-    simply doesn't draw (e.g. an uploaded dataset has no image path)."""
+    simply doesn't draw (e.g. an uploaded MultiplEYE dataset has no image path)."""
     if not src:
         return None
     text = str(src)
@@ -7352,7 +7401,7 @@ def _render_scanpath_animation(
     grid_left, grid_bottom = _grid_reserves(
         show_coordinate_grid, settings.coordinate_grid_font_size
     )
-    # Stimulus-page background image — same layout image as
+    # Stimulus-page background image (MultiplEYE) — same layout image as
     # make_scanpath_figure: placed at its (centered) origin, UNDER every trace,
     # and persisting across frames (a layout image, not per-frame data). Lets the
     # animated replay show the rendered page exactly like the static plot.

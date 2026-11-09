@@ -67,7 +67,7 @@ scanpath_studio/
 │  ├─ multipart.py       trials recorded over several screens
 │  ├─ metadata.py        participant / trial / text metadata tables (never broadcast onto frames)
 │  ├─ annotations.py     favorites / tags / notes, one store per dataset
-│  ├─ datasets.py        public-corpus loaders: PoTeC, OneStop
+│  ├─ datasets.py        public-corpus loaders: PoTeC, OneStop, MultiplEYE
 │  ├─ compare_source.py  Compare's second dataset (scanpath B): widget-free readiness + loading
 │  ├─ experimental_setup.py
 │  │                     display-geometry conversions + `SetupSnapshot` with per-group provenance

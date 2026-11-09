@@ -1223,14 +1223,26 @@ def get_app_css() -> str:
                 flex-wrap: wrap;
                 row-gap: 0.5rem;
             }
-            /* On a line of its own, the screen tail is never wider than the
-               row: its floor gives way, and the screen picker and ⇅ 🔎 ✏️
-               inside it wrap too. Doubled class match, so it outranks the
-               tail's own one-line rule below. */
+            /* Wrapped, the ◀ ▶ track and the screen tail are only as wide as
+               what they hold, and pack to the left of the next line: ◀ ▶,
+               the screen picker with its own ◀ ▶, then ⇅ 🔎 ✏️, on one line
+               where it fits. Stretched to their tracks' weights instead, ◀ ▶
+               sat alone at the bottom of a wide column and ⇅ 🔎 ✏️ dropped
+               to a third line. The tail is never wider than the row: past
+               that, the screen picker and ⇅ 🔎 ✏️ inside it wrap too.
+               Doubled class match, so it outranks the tail's own one-line
+               rule below; `!important` outranks the track floors, which are
+               not wanted on a line the tracks no longer share. */
+            [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(
+                > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
+                > [class*="_trail_steps"]),
             [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(
                 > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]
                 > [class*="_row_tail"]) {
-                min-width: min(__SELECTOR_SCREEN_FLOOR__, 100%);
+                flex: 0 0 auto !important;
+                width: auto !important;
+                min-width: 0 !important;
+                max-width: 100%;
             }
             [class*="_row_tail"][class*="_row_tail"] {
                 flex-wrap: wrap !important;

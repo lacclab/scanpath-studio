@@ -19,6 +19,7 @@ __all__ = [
     "list_parts",
     "list_trials",
     "load_authored_scanpath",
+    "load_multipleye",
     "load_onestop",
     "load_participant_metadata",
     "load_potec",
@@ -60,7 +61,7 @@ _HELD_BACK_EXPORTS = frozenset(
         "trial_summary",
     }
 )
-_DATASET_EXPORTS = frozenset({"load_potec", "load_onestop"})
+_DATASET_EXPORTS = frozenset({"load_potec", "load_multipleye", "load_onestop"})
 _API_EXPORTS = (
     (frozenset(__all__) | _HELD_BACK_EXPORTS)
     - {"__version__", "main"}

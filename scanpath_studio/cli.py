@@ -30,6 +30,7 @@ from . import column_names as _cn
 from .code_snippet import (
     SOURCE_AUTHOR,
     SOURCE_DEMO,
+    SOURCE_MULTIPLEYE,
     SOURCE_ONESTOP,
     SOURCE_POTEC,
     SnippetSource,
@@ -596,6 +597,17 @@ def _render_parser() -> argparse.ArgumentParser:
     )
 
     src.add_argument(
+        "--multipleye",
+        metavar="DIR",
+        help="Load a MultiplEYE session set from DIR, the folder holding its "
+        "scanpaths/ or fixations/ folder and its stimuli_*/ folder. A participant "
+        "is a session (e.g. 001_ZH_CH_1_ET1) and a trial is one reading of one "
+        "stimulus (e.g. 001_ZH_CH_1_ET1_Lit_Alchemist_4), with its pages and "
+        "comprehension questions as screens. The screen comes from the session "
+        "set's own config; "
+        "set the font with --font-size and --font-family.",
+    )
+    src.add_argument(
         "--participant-metadata",
         metavar="FILE",
         nargs="+",
@@ -1113,7 +1125,8 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="WxH",
         help="Screen size in px, e.g. 2560x1440 (default: 2560x1440 for "
         "--sample and --onestop, 1680x1050 for --potec, 1200x800 for "
-        "--authoring, otherwise estimated from the data).",
+        "--authoring, the session set's own monitor for --multipleye, "
+        "otherwise estimated from the data).",
     )
     viz.add_argument(
         "--coordinate-grid",
@@ -2377,6 +2390,12 @@ def _snippet_data_source(args) -> SnippetSource:
                 "parts": list(args.onestop_part or ["Paragraph"]),
             },
         )
+    if args.multipleye:
+        return cs.SnippetSource(
+            kind=cs.SOURCE_MULTIPLEYE,
+            label="MultiplEYE",
+            options={"root": args.multipleye},
+        )
     if args.words or args.fixations:
         options = {
             "words": list(args.words or []),
@@ -2574,6 +2593,36 @@ def _parse_xy(value: str | None, flag: str = "--stimulus-image-origin") -> tuple
     return (x, y)
 
 
+def _load_multipleye_render(root: str, participant: str | None):
+    """`render --multipleye`: the session set, normalized like the app's.
+
+    ``participant`` is a session id, matched case-insensitively; given one, only
+    that session is read. Returns ``(data, participant)`` — the loaded frames
+    and the session id as the export spells it.
+    """
+    from .datasets import load_multipleye, multipleye_inventory
+
+    sessions, _ = multipleye_inventory(root)
+    if not sessions:
+        raise FileNotFoundError(
+            f"No MultiplEYE sessions under {root}: expected a scanpaths/ or "
+            "fixations/ folder holding one folder per session."
+        )
+    session = None
+    if participant is not None:
+        want = str(participant).strip().lower()
+        session = next((s for s in sessions if s.lower() == want), None)
+        if session is None:
+            raise ValueError(
+                f"No MultiplEYE session {participant!r} under {root} "
+                f"(sessions: {', '.join(sessions)})."
+            )
+    data = load_multipleye(
+        root, sessions=[session] if session else None, names="canonical"
+    )
+    return data, session
+
+
 def _apply_shared_colorbar_flags(args: argparse.Namespace) -> None:
     """Hand v0.33.0's shared ``--colorbar-*`` values to each bar that was not
     given its own; a bar's own flag wins, wherever it sits on the line.
@@ -2628,6 +2677,7 @@ def render(argv: list[str]) -> None:
         bool(args.authoring),
         bool(args.potec),
         bool(args.onestop),
+        bool(args.multipleye),
     ]
     # Your own tables are words and/or fixations — or raw gaze alone, for a
     # dataset recorded as samples only. Beside any other input, --raw-gaze is
@@ -2636,7 +2686,13 @@ def render(argv: list[str]) -> None:
         bool(args.raw_gaze) and not any(corpus_inputs)
     )
     if sum([*corpus_inputs, own_tables]) != 1:
-        inputs = ["--sample", "--authoring PATH", "--potec DIR", "--onestop DIR"]
+        inputs = [
+            "--sample",
+            "--authoring PATH",
+            "--potec DIR",
+            "--onestop DIR",
+            "--multipleye DIR",
+        ]
         raise SystemExit(
             f"Provide exactly one input: {', '.join(inputs)}, or your own tables "
             "(--words and/or --fixations; one of them is enough for "
@@ -2831,6 +2887,18 @@ def render(argv: list[str]) -> None:
         words, fixations = data
         column_names = dict(data.column_names)
         canvas = canvas or source_canvas(SOURCE_ONESTOP)
+    elif args.multipleye:
+        try:
+            data, args.participant = _load_multipleye_render(
+                args.multipleye, args.participant
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        words, fixations = data
+        column_names = dict(data.column_names)
+        # Each fixation carries the session set's monitor (`canvas_width`), so
+        # the screen is read off the data.
+        canvas = canvas or source_canvas(SOURCE_MULTIPLEYE)
     else:
         manifest = None
         if args.trial_parts_manifest:

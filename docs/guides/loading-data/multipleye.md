@@ -16,6 +16,12 @@ The format was built and tested on one session set, Zurich Chinese
 
 ## Add one
 
+<video class="sps-shot" controls muted loop playsinline preload="none"
+       poster="../../../assets/workflows/multipleye_poster.webp" data-autoplay
+       aria-label="Adding a MultiplEYE session set from its folder, then stepping through its screens">
+  <source src="../../../assets/workflows/multipleye.mp4" type="video/mp4">
+</video>
+
 1. Choose **+** → :material/upload: **Import files** and name the dataset.
 2. Under **Dataset format**, choose **MultiplEYE session set**.
 3. Under **Files**, choose where it comes from:

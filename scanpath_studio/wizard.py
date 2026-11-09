@@ -3765,7 +3765,8 @@ def _render_multipleye_setup(body, s1, active: bool, part) -> _UploadResult:
         )
         s1.success(
             f"**{fixations_norm['participant_id'].nunique()}** sessions · "
-            f"**{fixations_norm['trial_id'].nunique()}** stimuli · "
+            f"**{fixations_norm['trial_id'].nunique()}** readings of "
+            f"**{fixations_norm['text_id'].nunique()}** stimuli · "
             f"**{len(fixations_norm):,}** fixations" + boxes
         )
         if missing := screen.missing():

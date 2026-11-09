@@ -281,16 +281,19 @@ class Workflow:
     run: Callable[[Demo], None]
     #: The interface mode the recording opens in (``?ui=``).
     ui: str = "full"
+    #: Recorded by a bare run (every workflow). One that needs data the repo
+    #: doesn't ship is recorded only when named.
+    default: bool = True
 
 
 WORKFLOWS: dict[str, Workflow] = {}
 
 
 def workflow(
-    name: str, goal: str, ui: str = "full"
+    name: str, goal: str, ui: str = "full", default: bool = True
 ) -> Callable[[Callable[[Demo], None]], None]:
     def register(fn: Callable[[Demo], None]) -> None:
-        WORKFLOWS[name] = Workflow(name, goal, fn, ui)
+        WORKFLOWS[name] = Workflow(name, goal, fn, ui, default)
 
     return register
 
@@ -648,6 +651,91 @@ def add_your_data(d: Demo) -> None:
     d.finish("Your data, mapped and on screen")
 
 
+#: The MultiplEYE session set the ``multipleye`` workflow adds (not in the repo:
+#: MultiplEYE's data isn't public). ``DEMO_MULTIPLEYE`` points elsewhere.
+MULTIPLEYE = Path(
+    os.environ.get(
+        "DEMO_MULTIPLEYE", ROOT / "data" / "MultiplEYE_ZH_CH_Zurich_1_2025_sample"
+    )
+)
+
+
+@workflow("multipleye", "Add a MultiplEYE session set", default=False)
+def multipleye(d: Demo) -> None:
+    page = d.page
+    if not MULTIPLEYE.is_dir():
+        raise RuntimeError(f"no MultiplEYE session set at {MULTIPLEYE}")
+    # Typed through a link under /tmp, so the recording shows that path and not
+    # where the data lives on the recording machine.
+    folder = Path("/tmp") / MULTIPLEYE.name
+    if folder.is_symlink() or folder.exists():
+        folder.unlink()
+    folder.symlink_to(MULTIPLEYE.resolve(), target_is_directory=True)
+    # A field title's help opens on hover and would sit over the folder box.
+    page.add_style_tag(
+        content=".sps-fhelp::after, .sps-fhelp::before { display: none !important; }"
+    )
+    d.pause(0.8)
+    d.click(page.locator(".st-key-add_dataset_menu button"), "+", wait=False, hold=0.4)
+    d.click(
+        page.locator('[data-testid="stPopoverBody"] button').filter(
+            has_text="Import files"
+        ),
+        "Import files",
+    )
+    d.type_into(
+        page.locator('[data-testid="stMain"] input[type="text"]').first,
+        "MultiplEYE Zurich",
+        "name it",
+    )
+    d.click(
+        page.locator(".st-key-wizard_dataset_format button").filter(
+            has_text="MultiplEYE session set"
+        ),
+        "MultiplEYE session set",
+        hold=0.6,
+    )
+    with d.fast():
+        d.type_into(
+            page.locator(".st-key-wizard_multipleye_dir input"),
+            str(folder),
+            "its folder",
+        )
+    d.step("sessions, stimuli, screens read")
+    d.pause(2.2)
+    d.scroll(430)
+    d.step("screen and font from its config")
+    d.pause(2.6)
+    d.click(page.locator(".st-key-wizard_finalize button"), "Add dataset", hold=0.6)
+    with d.fast():
+        d.click(
+            page.locator('[role="dialog"] button').filter(
+                has_text="Open in Scanpath view"
+            ),
+            "Open in Scanpath view",
+            hold=0.4,
+        )
+        d.settle(quiet=1.2)
+    d.pause(1.4)
+    d.click(
+        page.locator(".st-key-split_mode_rail_stim_popover button"),
+        "Stimulus ▾",
+        wait=False,
+        hold=0.5,
+    )
+    d.click(
+        page.locator(".st-key-global_show_stimulus_image label"),
+        "page image",
+        hold=0.6,
+    )
+    d.close_popover()
+    d.pause(1.8)
+    for label in ("next screen", "a question"):
+        d.click(page.locator(".st-key-single_screen_next button"), label, hold=1.6)
+    d.click(page.locator(".st-key-single_next_trial button"), "next trial", hold=1.8)
+    d.finish("A session set: its readings, pages and questions")
+
+
 @workflow("plot-controls", "Make the regressions stand out")
 def plot_controls(d: Demo) -> None:
     page = d.page
@@ -981,7 +1069,9 @@ def main() -> None:
     if not shutil.which("ffmpeg"):
         raise SystemExit("ffmpeg is not on PATH")
     flows = (
-        [WORKFLOWS[n] for n in args.names] if args.names else list(WORKFLOWS.values())
+        [WORKFLOWS[n] for n in args.names]
+        if args.names
+        else [flow for flow in WORKFLOWS.values() if flow.default]
     )
     app = None
     url = URL

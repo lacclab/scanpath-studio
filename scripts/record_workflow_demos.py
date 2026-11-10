@@ -685,7 +685,7 @@ def multipleye(d: Demo) -> None:
     )
     d.type_into(
         page.locator('[data-testid="stMain"] input[type="text"]').first,
-        "MultiplEYE Zurich",
+        "MultiplEYE Demo",
         "name it",
     )
     d.click(

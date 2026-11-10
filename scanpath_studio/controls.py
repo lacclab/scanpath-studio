@@ -8142,8 +8142,8 @@ def render_plot_controls(
                 label_visibility="collapsed",
             )
 
-        # A stimulus image can come from the dataset (a per-trial
-        # `image_path`) OR be uploaded here for any dataset (a
+        # A stimulus image can come from the dataset (MultiplEYE stamps a
+        # per-trial `image_path`) OR be uploaded here for any dataset (a
         # full-monitor screenshot of the reading screen). The upload's `data:`
         # URI is stashed in session for the tab to place + the (pure) collector
         # to read; the switch is enabled whenever either source exists.
@@ -9319,7 +9319,7 @@ _DEFAULT_FILTER_FIELDS = [
     # on every export) and worth filtering on — it is how you exclude the start
     # or the tail of a session when you suspect practice or fatigue effects.
     "TRIAL_INDEX",
-    # Common trial-level facets (offered only when the data has them).
+    # MultiplEYE facets (present only when that corpus is loaded).
     "genre",
     "session",
     "is_practice",
@@ -9693,9 +9693,11 @@ _CHIP_DEFAULT_CONDITIONS = [
     "question_preview",
     "repeated_reading_trial",
     "is_correct",
-    # Common trial-level facets (shown only when the data has them).
+    # MultiplEYE facets + reader metadata (present only for that corpus).
     "genre",
     "session",
+    "pp_age",
+    "pp_gender",
 ]
 # Virtual chip fields → label. These are computed per trial (not data columns)
 # and always trial-level.

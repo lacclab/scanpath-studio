@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/);
 `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.45.0] - 2026-11-10
+
+### Added
+- The docs home page opens its "From recording to publication" tour with a short clip of a first look in Essentials. ([#527](https://github.com/lacclab/scanpath-studio/issues/527))
+- Add a MultiplEYE session set from its folder or from its files: choose MultiplEYE session set under Dataset format when you import. Each reading of a stimulus is a trial, with its pages and comprehension questions as screens, drawn on the screen the session set's own config records. load_multipleye and render --multipleye load one in code. ([#533](https://github.com/lacclab/scanpath-studio/issues/533))
+
+### Changed
+- The README and docs screenshots and recordings show the current app, including the Essentials | Full switch, which the Scanpath guide's numbered overview now points out. ([#527](https://github.com/lacclab/scanpath-studio/issues/527))
+- Scanpath Studio now needs Streamlit 1.67 and pandas 3.1, and asks for newer pyarrow, Kaleido, Pillow, imageio, watchdog and truststore. ([#532](https://github.com/lacclab/scanpath-studio/issues/532))
+- The "This server saves nothing" notice is shorter: what a refresh loses, and a link to how to keep copies. ([#534](https://github.com/lacclab/scanpath-studio/issues/534))
+- The button that opens a dataset in the Scanpath view, after Add dataset and on the Data Management page, now reads "Open in Scanpath view". ([#534](https://github.com/lacclab/scanpath-studio/issues/534))
+
+### Fixed
+- On Streamlit Community Cloud, the Essentials | Full switch no longer covers the toolbar's Fork and GitHub buttons; it sits to their left. ([#528](https://github.com/lacclab/scanpath-studio/issues/528))
+- A side-by-side or stacked Compare figure with a title no longer draws the A/B legend under the title: the legend now has its own row between the title and the panels' names, and the figure grows to make room. ([#529](https://github.com/lacclab/scanpath-studio/issues/529))
+- In a side-by-side or stacked Compare figure, a legend or the size key moved to a spot above the plot no longer lands on the panels' A / B names; it stacks above them and the A/B legend. ([#530](https://github.com/lacclab/scanpath-studio/issues/530))
+- Word labels in a CJK font (MultiplEYE's Noto Sans Mono CJK) line up with the stimulus image's own text: no longer about 4 px above it, and no longer slid sideways in a word with two full-width punctuation marks side by side. ([#534](https://github.com/lacclab/scanpath-studio/issues/534))
+- In a narrow window, a trial with screens keeps its ◀ ▶, screen picker and menus together on the line under the trial picker, without the gaps around them. ([#534](https://github.com/lacclab/scanpath-studio/issues/534))
+
 ## [0.44.0] - 2026-10-27
 
 ### Added

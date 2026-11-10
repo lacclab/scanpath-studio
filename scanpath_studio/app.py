@@ -6321,7 +6321,7 @@ def _dataset_added_dialog(message: str) -> None:
 
     Raised once by ``main`` on the run after ✅ Add dataset, once the new
     dataset's frames are loaded, so ``message`` carries its counts. Closing it
-    keeps the user on 🗂️ Data Management, where **Open in Scanpath** under the
+    keeps the user on 🗂️ Data Management, where **Open in Scanpath view** under the
     list of datasets does the same later. Buttons are handled by their return
     value, never ``on_click`` — a dialog body is a fragment (see
     ``_leave_dataset_editor_dialog``).
@@ -6329,7 +6329,7 @@ def _dataset_added_dialog(message: str) -> None:
     st.markdown(message)
     open_col, again_col = st.columns(2, gap="small")
     if open_col.button(
-        f"{ICONS['view_scanpath']} Open in Scanpath",
+        f"{ICONS['view_scanpath']} Open in Scanpath view",
         key="dataset_added_open",
         type="primary",
         width="stretch",
@@ -6349,7 +6349,7 @@ def _dataset_added_dialog(message: str) -> None:
         st.rerun(scope="app")
     st.caption(
         f"Close this to stay on {ICONS['view_data']} Data Management. "
-        "**Open in Scanpath**, under the list of datasets, opens it later."
+        "**Open in Scanpath view**, under the list of datasets, opens it later."
     )
 
 
@@ -9071,12 +9071,8 @@ def _render_backup_reminder(host, active_view: str) -> None:
         return
     box = host.container(key="sps_backup_reminder", border=True)
     box.markdown(
-        f"{ICONS['warning']} **This server saves nothing.** Closing or "
-        "refreshing the tab loses the datasets you added, their column mappings, "
-        "your annotations and designs. Keep the files you uploaded, and export your "
-        f"annotations from {ICONS['view_data']} **Data Management → Annotations** and each "
-        "dataset's mapping from "
-        f"{ICONS['edit']} **Edit dataset → Download setup file**. "
+        f"{ICONS['warning']} **This server saves nothing.** Refreshing or "
+        "closing the tab loses your datasets, annotations and designs. "
         f"[How to keep copies of your work ↗]({BACKUP_GUIDE_URL})"
     )
     row = box.container(horizontal=True, gap="small")
@@ -9788,7 +9784,7 @@ def _run_app() -> None:
     dataset_table_slot = setup_source_slot.container(key="tutorial_available_datasets")
     # The two ways to make a dataset are one **+ Add
     # dataset** menu (the Scanpath picker's + with its name spelled out), under
-    # the list it adds to, beside **Open in Scanpath** for the dataset the list
+    # the list it adds to, beside **Open in Scanpath view** for the dataset the list
     # marks Current. Filled once `data_choice` is known.
     add_dataset_slot = (
         setup_source_slot.container(key="data_page_add", horizontal=True)
@@ -9843,7 +9839,7 @@ def _run_app() -> None:
         # picked from the list: the view switch is a request, since this is
         # an `on_click` callback (see `url_state._go_scanpath`).
         add_dataset_slot.button(
-            "Open in Scanpath",
+            "Open in Scanpath view",
             icon=ICONS["view_scanpath"],
             key="data_open_in_scanpath",
             on_click=_go_scanpath,
@@ -10362,10 +10358,10 @@ def _run_app() -> None:
             st.session_state[TRIAL_IDENTITY_CHECK_KEY] = asked_by
     if added:
         # Say what ✅ Add dataset brought in, and offer the next step: a
-        # dialog with Open in Scanpath / Add another. The Trial ID verdict
+        # dialog with Open in Scanpath view / Add another. The Trial ID verdict
         # takes the run's one dialog when it has something to say, and any
         # other dialog already open wins too; the counts then go to a toast,
-        # and **Open in Scanpath** under the list is the way on.
+        # and **Open in Scanpath view** under the list is the way on.
         message = dataset_added_message(str(added), words_all, fixations_all)
         offered = False
         if not identity_modal:

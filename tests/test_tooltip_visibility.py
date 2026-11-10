@@ -100,10 +100,13 @@ def test_streamlit_bundle_still_has_the_tooltip_dom_this_relies_on() -> None:
             "the new tooltip DOM"
         )
     # The owner script finds a panel's trigger through `aria-describedby` on
-    # the hover target and the panel's `role="tooltip"`.
+    # the hover target and the panel's `role="tooltip"`. Streamlit drops both
+    # for a tooltip built with `hideFromAssistiveTech` — only a navigation
+    # link's `help` — which the app does not use: such a panel would never be
+    # marked owned, and the CSS would keep it hidden.
     trigger_chunk = next(c for c in chunks if "`stTooltipHoverTarget`" in c)
     assert '"aria-describedby"' in trigger_chunk
-    assert "role:`tooltip`" in trigger_chunk
+    assert re.search(r"role:(?:[\w$]+\?void 0:)?`tooltip`", trigger_chunk)
 
 
 def test_the_dead_base_web_sweeper_is_gone() -> None:

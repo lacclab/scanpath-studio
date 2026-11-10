@@ -371,6 +371,11 @@ def test_an_animation_carries_its_playback_settings():
             "--onestop-regime repeated",
         ),
         (
+            cs.SnippetSource(kind=cs.SOURCE_MULTIPLEYE, options={"root": "d/MPE"}),
+            "load_multipleye(",
+            "--multipleye d/MPE",
+        ),
+        (
             cs.SnippetSource(
                 kind=cs.SOURCE_FILES,
                 options={"words": ["w.csv"], "fixations": ["f1.csv", "f2.csv"]},
@@ -2016,6 +2021,21 @@ def test_what_the_loader_cannot_replay_is_named():
     # they are all there is to change.
     assert "`words.csv`" in source.note and "fixations.csv" not in source.note
 
+    # A MultiplEYE dataset reads its session set again with its own loader.
+    folder = cs.upload_source(
+        "MPE",
+        {"multipleye": {"root": "/d/MPE", "fixation_source": "fixations"}},
+        words=True,
+        fixations=True,
+    )
+    assert folder.kind == cs.SOURCE_MULTIPLEYE and folder.note == ""
+    assert folder.options["root"] == "/d/MPE"
+    uploaded = cs.upload_source(
+        "MPE", {"multipleye": {"root": None}}, words=True, fixations=True
+    )
+    assert uploaded.kind == cs.SOURCE_MULTIPLEYE
+    assert cs.MULTIPLEYE_ROOT_PLACEHOLDER in uploaded.note
+
 
 def test_an_edited_mapping_is_restated_in_the_files_names():
     """✏️ Edit dataset stores a mapping onto the canonical columns; the
@@ -2084,7 +2104,7 @@ def test_render_args_hand_their_schemas_to_the_snippet_source():
         authoring=None,
         potec=None,
         onestop=None,
-        source=None,
+        multipleye=None,
         words=["w.csv"],
         fixations=["f.csv"],
         word_schema='{"trial": "TRIAL"}',

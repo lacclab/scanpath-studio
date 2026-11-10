@@ -102,6 +102,7 @@ from scanpath_studio.column_names import (
     active_figure_labels,
     as_written,
     from_schema,
+    is_multipleye_entry,
     source_schema,
     stored_source_recipe,
 )
@@ -512,6 +513,21 @@ def _render_screen_navigator(
         args=(key_prefix, options, 1),
     )
     return str(selected)
+
+
+def _part_catalog_for_display(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> pd.DataFrame:
+    """Use MultiplEYE's fixation-onset order if cached word order is stale."""
+    try:
+        return part_catalog(words, fixations)
+    except ValueError as exc:
+        if (
+            str(exc) == "Multipart metadata 'screen_index' conflicts across tables."
+            and "screen_kind" in fixations.columns
+        ):
+            return part_catalog(fixations)
+        raise
 
 
 def _embed_html_iframe(
@@ -3719,7 +3735,7 @@ def _parse_comprehension_questions(raw: str) -> tuple[list[_Question], int]:
 def _render_comprehension_questions(trial_words: pd.DataFrame) -> None:
     """Render structured comprehension questions for the trial's stimulus.
 
-    Parses the ``comprehension_questions`` JSON column into a list of
+    Parses the ``comprehension_questions`` JSON column (MultiplEYE) into a list of
     questions, each with the target (✓ reference answer) and distractors. The
     corpus records no per-reader answer, so the target is shown as the key only —
     not as a 'selected'/'correct' result. No-op when the column is absent or
@@ -3957,12 +3973,12 @@ def _render_paragraph_panel(
             _render_paragraph_with_spans(trial_words, span_bg)
 
         # Breathing room between the stimulus text and the question block (generic
-        # Q&A fields and/or structured comprehension questions).
+        # Q&A fields and/or MultiplEYE's structured comprehension questions).
         has_comprehension = bool(_first_str(trial_words, "comprehension_questions"))
         if qa_cols or has_comprehension:
             st.markdown("<div style='height:1.2rem'></div>", unsafe_allow_html=True)
 
-        # Structured comprehension questions (target + distractors).
+        # MultiplEYE structured comprehension questions (target + distractors).
         _render_comprehension_questions(trial_words)
 
         # Trial context fields, generically. Keep OneStop's combined
@@ -6409,7 +6425,7 @@ def render_single_trial_tab(
         # samples, so each screen draws in its own coordinate space.
         part_catalog(parent_raw_gaze)
         if parent_words.empty and parent_fixations.empty
-        else part_catalog(parent_words, parent_fixations)
+        else _part_catalog_for_display(parent_words, parent_fixations)
     )
     selected_screen = _render_screen_navigator(screens, host=screen_slot)
     if selected_screen is not None:
@@ -6451,7 +6467,7 @@ def render_single_trial_tab(
     trial_has_fixations = not trial_fixations.empty
     has_raw_gaze = raw_gaze is not None and not raw_gaze.empty
 
-    # Stimulus-page background image: the trial's (screen's) own.
+    # Stimulus-page background image (MultiplEYE): the trial's (screen's) own.
     trial_image = _reading_stimulus_image(trial_words, trial_fixations)
     has_stimulus_image = trial_image is not None
     trial_image_path, trial_image_size, trial_image_origin = trial_image or (
@@ -7123,7 +7139,7 @@ def render_single_trial_tab(
             compare_parent_fixations = extract_trial(
                 compare_fixations_pool, compare_participant, compare_trial
             )
-            compare_screens = part_catalog(
+            compare_screens = _part_catalog_for_display(
                 compare_parent_words, compare_parent_fixations
             )
         else:
@@ -9249,6 +9265,7 @@ _GROUP_SPLIT_CANDIDATES = (
     "is_correct",
     "genre",
     "session",
+    "pp_gender",
     "participant_id",
 )
 _FILTER_SET_FIELDS = (
@@ -12213,7 +12230,7 @@ def _generation_column_options(fixations: pd.DataFrame) -> list:
             cols.append(c)
         except TypeError:
             # A column holding unhashable values (e.g. a list / JSON column like
-            # `comprehension_questions`) can't group scanpaths.
+            # MultiplEYE's `comprehension_questions`) can't group scanpaths.
             continue
 
     def _rank(col: str) -> tuple:
@@ -15909,12 +15926,20 @@ def _render_remap_editor(
         st.info(
             f"Editing **{md_literal(name)}**. Its mapping and saved tables are below."
         )
-    st.caption(
-        "Change which of this dataset's columns fills each field the app reads. "
-        "Only columns kept when the dataset was added are available. To use a "
-        "column that isn't listed, remove this dataset and add it again from its "
-        "files."
-    )
+    if is_multipleye_entry(stored):
+        st.caption(
+            "This dataset was read from a MultiplEYE session set, so these are "
+            "the tables the app built from it, not files of your own. A change "
+            "here applies in the app; Share → Code reads the session set again "
+            "as it was added."
+        )
+    else:
+        st.caption(
+            "Change which of this dataset's columns fills each field the app "
+            "reads. Only columns kept when the dataset was added are available. "
+            "To use a column that isn't listed, remove this dataset and add it "
+            "again from its files."
+        )
     # The same wide option lists the add-dataset screen gets — this is
     # the same mapping, in the same shape.
     st.markdown(mapping_menu_css(), unsafe_allow_html=True)
@@ -16419,17 +16444,23 @@ def render_dataset_editor_footer(host) -> None:
         _FOOTER_ROW_W, gap="small", vertical_alignment="center"
     )
     config = _editor_setup_config(name)
-    save_col.download_button(
-        f"{ICONS['download']} Download setup file",
-        data=json.dumps(config, indent=2),
-        file_name="scanpath_studio_setup.json",
-        mime="application/json",
-        key=f"remap_setup_download_{name}",
-        width="stretch",
-        help="Save this dataset's column mapping and recording setup to reuse "
-        "on similar data, or to send with the files. Whoever loads them can "
-        "restore it with *Start from → A setup file* instead of mapping by hand.",
-    )
+    if is_multipleye_entry(_stored):
+        # A session set has no mapping of the user's files to save: whoever
+        # loads it adds it again as a MultiplEYE session set.
+        apply_col = save_col
+    else:
+        save_col.download_button(
+            f"{ICONS['download']} Download setup file",
+            data=json.dumps(config, indent=2),
+            file_name="scanpath_studio_setup.json",
+            mime="application/json",
+            key=f"remap_setup_download_{name}",
+            width="stretch",
+            help="Save this dataset's column mapping and recording setup to "
+            "reuse on similar data, or to send with the files. Whoever loads "
+            "them can restore it with *Start from → A setup file* instead of "
+            "mapping by hand.",
+        )
     apply_col.button(
         # The add-dataset screen's ✅ Add dataset, for the screen that
         # edits one — same shape, same place, same filled blue.
@@ -16442,7 +16473,7 @@ def render_dataset_editor_footer(host) -> None:
     )
     # What a restore over the original files will not reproduce on its own —
     # said before the file is sent, not discovered by whoever restores it.
-    if config["column_mapping_notes"]:
+    if config["column_mapping_notes"] and not is_multipleye_entry(_stored):
         box.caption(
             "**Some of the saved setup needs fixing after restoring.** "
             + " ".join(config["column_mapping_notes"])

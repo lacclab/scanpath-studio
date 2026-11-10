@@ -51,7 +51,7 @@ def test_a_bare_visit_resumes_the_restored_view():
 
 def test_later_requests_still_switch_the_view():
     """Only the first run defers to the URL: the app's own requests (the Data
-    page's Open in Scanpath, the tour, Add dataset) keep working after it."""
+    page's Open in Scanpath view, the tour, Add dataset) keep working after it."""
     at = _first_run("data", _VIEW_CORPUS)
     at.session_state[NAV_KEY] = _VIEW_SCANPATH
     at.run(timeout=90)

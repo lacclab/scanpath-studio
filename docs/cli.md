@@ -77,11 +77,15 @@ scanpath-studio render --authoring authored-scanpath.json -o authored.html
 scanpath-studio render --potec ./potec --list-trials
 scanpath-studio render --onestop ./onestop --onestop-variant public \
   --onestop-regime ordinary --onestop-part Paragraph --list-trials
+
+# A MultiplEYE session set, from its folder
+scanpath-studio render --multipleye ./MultiplEYE_ZH_CH_Zurich_1_2025 --list-trials
 ```
 
 The Python API loads the same datasets with
-[`load_potec`][scanpath_studio.datasets.load_potec] and
-[`load_onestop`][scanpath_studio.datasets.load_onestop].
+[`load_potec`][scanpath_studio.datasets.load_potec],
+[`load_onestop`][scanpath_studio.datasets.load_onestop] and
+[`load_multipleye`][scanpath_studio.datasets.load_multipleye].
 
 ### Common tasks
 

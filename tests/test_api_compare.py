@@ -11,7 +11,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from scanpath_studio import api
+from scanpath_studio import api, plots
 from scanpath_studio.experimental_setup import Provenance, SetupSnapshot
 
 
@@ -125,6 +125,91 @@ class TestSameDataset:
         titles = [a for a in fig.layout.annotations if a.name != "duration_size_key"]
         assert [t.text.split(" · ")[0] for t in titles] == ["A", "B"]
         assert fig.layout.margin.t > 0
+
+    @pytest.mark.parametrize("layout", ["side_by_side", "stacked"])
+    def test_the_legend_sits_between_the_title_and_the_panel_names(self, layout):
+        """The legend has a row of its own in the split figure's top band,
+        pinned in px above the panels' names. A paper fraction would rise with
+        a tall (stacked, large-screen) figure, out of the band and under the
+        title `annotate_figure` adds above it."""
+        words, fixations = _pair()
+
+        def build(title):
+            return api.compare_scanpaths(
+                words,
+                fixations,
+                ("p1", "t1"),
+                ("p2", "t2"),
+                layout=layout,
+                labels=("Reader one", "Reader two"),
+                canvas_size=(2560, 1440),
+                title=title,
+            )
+
+        plain, titled = build(""), build("Some title")
+        band = plain.layout.margin.t
+        names_px = max(
+            a.font.size or 16
+            for a in plain.layout.annotations
+            if a.text.startswith(("A · ", "B · "))
+        )
+        for fig in (plain, titled):
+            layout_ = fig.layout
+            plot_h = layout_.height - layout_.margin.t - layout_.margin.b
+            legend_bottom = (layout_.legend.y - 1.0) * plot_h
+            legend_top = legend_bottom + plots._default_legend_height(fig)
+            assert legend_bottom >= names_px
+            assert legend_top <= band + 1e-6
+        # The title's band is added above the legend's, never over it.
+        assert titled.layout.margin.t > band
+        assert titled.layout.legend.y == pytest.approx(plain.layout.legend.y)
+
+    @pytest.mark.parametrize("layout", ["side_by_side", "stacked"])
+    @pytest.mark.parametrize(
+        "legend_layout",
+        [
+            {"compare": {"position": "top-center-outside"}},
+            {"size_key": {"position": "top-right-outside"}},
+            {
+                "compare": {"position": "top-left-outside"},
+                "size_key": {"position": "top-center-outside"},
+            },
+        ],
+        ids=["legend", "size-key", "both"],
+    )
+    def test_whatever_is_moved_above_the_panels_clears_their_names(
+        self, layout, legend_layout
+    ):
+        """A legend or the size key moved to a spot above the panels stacks
+        beyond their "A · …" / "B · …" names and the default legend, inside
+        the top band the figure grows by."""
+        words, fixations = _pair()
+        fig = api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            layout=layout,
+            labels=("Reader one", "Reader two"),
+            canvas_size=(2560, 1440),
+            legend_layout=legend_layout,
+        )
+        _plot_w, plot_h, margin = plots._plot_px(fig)
+        floor = plots._panel_names_px(fig) + plots._default_legend_height(fig)
+        assert plots._panel_names_px(fig) > 0
+        bottoms = []
+        if "compare" in legend_layout:
+            moved = fig.layout.to_plotly_json()["legend2"]
+            assert moved["yanchor"] == "bottom"
+            bottoms.append((moved["y"] - 1.0) * plot_h)
+        if "size_key" in legend_layout:
+            labels = [
+                a for a in fig.layout.annotations if a.name == "duration_size_key"
+            ]
+            assert labels
+            bottoms += [a.yshift - a.font.size / 2 for a in labels]
+        assert min(bottoms) >= floor
+        assert max(bottoms) < margin["t"]
 
     def test_the_renamed_copy_never_reaches_a_label(self):
         """The rename is for slicing the figure; the legend names the real id."""

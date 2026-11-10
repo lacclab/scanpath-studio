@@ -1135,6 +1135,50 @@ def _is_fullwidth(ch: str) -> bool:
     )
 
 
+#: How far below its box's middle a label drawn in a CJK font is anchored, in
+#: ems. Plotly centres a text label with one fixed shift for every font, which
+#: puts the baseline of Noto Sans (Mono) CJK about 0.15 em higher than the line
+#: a page typeset in it sits on: on MultiplEYE's stimulus images (28 px), every
+#: line's labels drew 4 px above the image's own text, Chinese and Latin words
+#: alike. A Latin font's labels centre on its text already.
+_CJK_FONT_LABEL_DROP_EM = 0.15
+
+
+#: Full-width punctuation, which a browser trims when two stand side by side.
+_FULLWIDTH_PUNCTUATION = re.compile(
+    "[\u2018\u2019\u201c\u201d\u3000-\u303f\uff01-\uff0f\uff1a-\uff20"
+    "\uff3b-\uff40\uff5b-\uff65]"
+)
+#: Word joiner: no width, no line break, and it keeps two marks from touching.
+_WORD_JOINER = "\u2060"
+
+
+def _keep_punctuation_width(text: str) -> str:
+    """``text`` with a word joiner between each two adjacent full-width marks.
+
+    Chrome trims the space between two full-width punctuation marks side by
+    side (CSS ``text-spacing-trim``), so ``），`` draws half an em narrower
+    than the full em each mark takes on a stimulus page. A label centred in
+    its box then slides toward the middle on both sides of the pair. The
+    joiner is invisible and has no width, but the marks no longer touch, so
+    each keeps its em."""
+    if len(text) < 2:
+        return text
+    out = [text[0]]
+    for prev, ch in itertools.pairwise(text):
+        if _FULLWIDTH_PUNCTUATION.match(prev) and _FULLWIDTH_PUNCTUATION.match(ch):
+            out.append(_WORD_JOINER)
+        out.append(ch)
+    return "".join(out)
+
+
+def _label_drop_em(font_family: str | None) -> float:
+    """`_CJK_FONT_LABEL_DROP_EM` when the label font is a CJK one (its first
+    family names CJK), else 0."""
+    first = str(font_family or "").split(",", 1)[0]
+    return _CJK_FONT_LABEL_DROP_EM if "cjk" in first.lower() else 0.0
+
+
 def _latin_advance(words: pd.DataFrame) -> float:
     """Per-em advance of *Latin* glyphs for this corpus' font.
 
@@ -2000,7 +2044,7 @@ class _LegendSlots:
         self.base = dict(margin)
         # Above the plot, legends stand on the content's top, not the edge.
         self.inset = _content_top_inset(fig) if inset is None else inset
-        self.top_start = top_start - self.inset
+        self.top_start = _panel_names_px(fig) + top_start - self.inset
         self.used: dict = {}
         # The first legend's height on each outside edge, which a size key on
         # that edge is centred against.
@@ -2113,6 +2157,21 @@ def _default_legend_height(fig: go.Figure) -> float:
     return h + (rows - 1) * (h - 10.0)
 
 
+#: The ``name`` of a split comparison's panel titles ("A · …" / "B · …").
+_PANEL_NAME = "panel_name"
+
+
+def _panel_names_px(fig: go.Figure) -> float:
+    """The height of the row of panel names on the plot's top edge — a split
+    comparison's — or 0. Anything placed above the plot stands beyond it."""
+    sizes = [
+        float(a.font.size or 16)
+        for a in fig.layout.annotations
+        if a.name == _PANEL_NAME and float(a.y or 0) >= 1.0
+    ]
+    return max(sizes) * 1.3 + _LEGEND_GAP_PX if sizes else 0.0
+
+
 def _content_top_inset(fig: go.Figure) -> float:
     """How far, in px, the topmost thing drawn sits below the plot's top edge.
 
@@ -2124,7 +2183,7 @@ def _content_top_inset(fig: go.Figure) -> float:
     highest fixation. 0 for a figure of several panels, without a fixed y range, or
     whose content reaches the edge.
     """
-    if getattr(fig, "_grid_ref", None) is not None:
+    if getattr(fig, "_grid_ref", None) is not None or _panel_names_px(fig):
         return 0.0
     y_range = fig.layout.yaxis.range
     if not y_range or y_range[0] == y_range[1]:
@@ -2228,8 +2287,9 @@ def apply_legend_layout(
     # well above it. The default legend is lowered onto that line, and its
     # strip above the plot (exactly that reserve on the single-trial figures
     # and the Compare overlay; a title is added later, in a band of its own)
-    # shrinks to what still pokes out of the plot. The side-by-side and stacked
-    # layouts keep theirs: their panels' names sit in it.
+    # shrinks to what still pokes out of the plot. On the side-by-side and
+    # stacked layouts it holds the panels' names and, above them, the default
+    # legend while it has entries.
     plot_w, plot_h, margin = _plot_px(fig)
     inset = _content_top_inset(fig)
     default_h = _default_legend_height(fig)
@@ -2245,6 +2305,9 @@ def apply_legend_layout(
             if default_h:
                 _plot_w, plot_h, _margin = _plot_px(fig)
                 fig.layout.legend.y = 1.0 + (_LEGEND_GAP_PX - inset) / plot_h
+    names_px = _panel_names_px(fig)
+    if names_px:
+        _grow(fig, "t", names_px + default_h - margin["t"])
     slots = _LegendSlots(fig, top_start=default_h, inset=inset)
     fig._sps_legend_slots = slots
     _place_highlight_key(fig, specs["highlight"], slots, show=show_highlight)
@@ -2415,9 +2478,11 @@ def _size_key_anchor(
     Above the plot, the key always sits right on the screen's top line: its
     labels' text (``clear`` px above the box's bottom) `_SIZE_KEY_LINE_GAP_PX`
     over it — never lowered onto the text below or lifted into a legend's row.
+    A split comparison has no one screen line, and its panels' names sit on the
+    plot's edge: there the key stacks above them like any legend.
     """
     edge, along, outside = _spot_parts(position)
-    if edge == "top" and outside:
+    if edge == "top" and outside and not _panel_names_px(fig):
         bottom = _SIZE_KEY_LINE_GAP_PX - clear
         _plot_w, _plot_h, margin = _plot_px(fig)
         _grow(fig, "t", max(0.0, bottom + h - _free_top_px(fig, margin)))
@@ -3547,7 +3612,9 @@ def _add_word_label_trace(
     # reads this same string, so it shows the word literally too.
     label_text = [
         f"\u2067{_plotly_literal(value)}\u2069" if is_rtl else _plotly_literal(value)
-        for value, is_rtl in zip(words["text"].astype(str), rtl)
+        for value, is_rtl in zip(
+            words["text"].astype(str).map(_keep_punctuation_width), rtl
+        )
     ]
     label_y = words["y"] + words["height"] / 2
     if redact:
@@ -3571,6 +3638,9 @@ def _add_word_label_trace(
             mode="text",
             textposition="middle center",
             textfont=dict(color=label_color, size=base_font_size, family=font_family),
+        )
+        label_y = label_y + _label_drop_em(font_family) * base_font_size / (
+            px_per_unit or 1.0
         )
     trace = go.Scatter(
         x=label_x,
@@ -3601,7 +3671,7 @@ def _image_to_data_uri(src: str | None) -> str | None:
     """A ``data:`` URI for an image path, or pass through an existing one.
 
     Returns None for a missing / unreadable file so the background-image layer
-    simply doesn't draw (e.g. an uploaded dataset has no image path)."""
+    simply doesn't draw (e.g. an uploaded MultiplEYE dataset has no image path)."""
     if not src:
         return None
     text = str(src)
@@ -7331,7 +7401,7 @@ def _render_scanpath_animation(
     grid_left, grid_bottom = _grid_reserves(
         show_coordinate_grid, settings.coordinate_grid_font_size
     )
-    # Stimulus-page background image — same layout image as
+    # Stimulus-page background image (MultiplEYE) — same layout image as
     # make_scanpath_figure: placed at its (centered) origin, UNDER every trace,
     # and persisting across frames (a layout image, not per-frame data). Lets the
     # animated replay show the rendered page exactly like the static plot.
@@ -8451,14 +8521,12 @@ def _make_split_comparison_figure(
     grid_left, grid_bottom = _grid_reserves(
         show_coordinate_grid, settings.coordinate_grid_font_size
     )
-    # A slim top band, for the panels' titles and the optional legend.
-    top_px = _compare_legend_font(base_font_size)["size"] + 14
+    # The top band holds the panels' names on their top edge and, above them,
+    # the legend's own row; it is sized once the legend's entries are known, and
+    # the figure grows by it, so it never takes height from the panels.
     figure_width = total_width + grid_left + right_px
     figure_height = total_height + bottom_px + grid_bottom
-    plot_area = (
-        max(figure_width - grid_left - right_px, 1),
-        max(figure_height - top_px - bottom_px - grid_bottom, 1),
-    )
+    plot_area = (max(total_width, 1), max(total_height, 1))
     if is_stacked:
         fig = make_subplots(
             rows=2,
@@ -8473,6 +8541,7 @@ def _make_split_comparison_figure(
             horizontal_spacing=0.04,
             subplot_titles=subplot_titles,
         )
+    fig.update_annotations(name=_PANEL_NAME)
 
     # Each panel's data→screen scale, from the subplot space it actually gets
     # in the final figure: its domain's share of the plot area, then the
@@ -8683,11 +8752,10 @@ def _make_split_comparison_figure(
         height=figure_height,
         width=figure_width,
         autosize=False,
-        margin=dict(l=grid_left, r=right_px, t=top_px, b=bottom_px + grid_bottom),
+        margin=dict(l=grid_left, r=right_px, t=0, b=bottom_px + grid_bottom),
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.05,
             xanchor="right",
             x=1,
             font=_compare_legend_font(base_font_size, font_family),
@@ -8697,6 +8765,17 @@ def _make_split_comparison_figure(
         paper_bgcolor=background_color,
         font=font_settings,
         shapes=all_shapes,
+    )
+    # Both rows are placed in px above the panels' top edge — a paper fraction
+    # would rise with a tall stacked figure, out of the band and into the
+    # title's, which `export.annotate_figure` adds above it.
+    names_row_px = _panel_names_px(fig)
+    legend_px = _default_legend_height(fig)
+    top_px = names_row_px + legend_px
+    fig.update_layout(
+        height=figure_height + top_px,
+        margin_t=top_px,
+        legend_y=1.0 + names_row_px / plot_area[1],
     )
     return fig
 

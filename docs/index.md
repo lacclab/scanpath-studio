@@ -43,6 +43,18 @@ Bring your own data, or start with the bundled demo.
 
 <div class="sps-home-workflows" markdown>
 
+=== "First look"
+
+    <video class="sps-shot" controls muted loop playsinline preload="none"
+           poster="assets/workflows/essentials_poster.webp" data-autoplay
+           aria-label="Start in Essentials">
+      <source src="assets/workflows/essentials.mp4" type="video/mp4">
+    </video>
+
+    **Start in Essentials.** The app opens on a replay of the reading. Switch between four ready-made views, pick a palette and step through the trials. Every other control is one click away in Full.
+
+    [Essentials and Full :material-arrow-right:](guides/scanpath-visualization/index.md#essentials-and-full){ .md-button }
+
 === "Bring your data"
 
     <video class="sps-shot" controls muted loop playsinline preload="none"

@@ -1,5 +1,5 @@
-"""What follows ✅ Add dataset: a dialog offering Open in Scanpath or Add
-another, and an **Open in Scanpath** button beside **Add dataset** on the Data
+"""What follows ✅ Add dataset: a dialog offering Open in Scanpath view or Add
+another, and an **Open in Scanpath view** button beside **Add dataset** on the Data
 page for whichever dataset the list marks Current."""
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ def test_the_data_page_offers_open_in_scanpath(data_page):
 
     assert data_page.session_state[NAV_KEY] == _VIEW_DATA
     button = data_page.button(key="data_open_in_scanpath")
-    assert button.label == "Open in Scanpath"
+    assert button.label == "Open in Scanpath view"
     assert "Bundled demo" in button.help
 
     button.click().run(timeout=90)
@@ -78,4 +78,4 @@ def test_the_setup_guide_no_longer_promises_to_open_the_dataset():
 
     text = " ".join(str(step.get("body", "")) for step in tour._WIZARD_GUIDE_STEPS)
     assert "saves the dataset and opens it" not in text
-    assert "Open in Scanpath" in text
+    assert "Open in Scanpath view" in text

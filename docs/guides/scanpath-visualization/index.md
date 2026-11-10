@@ -9,11 +9,12 @@ description: "Visualize eye movements over the text: fixations, saccades, word b
 </figure>
 
 1. Views and :material/help: Help.
-2. The trial control bar: dataset, trial, screen, sort (⇅) and filter (:material/filter_alt:).
-3. The trial's summary.
-4. The figure.
-5. Plot controls.
-6. The tabs: Annotations, Stimulus & context, Comparisons, Export and Share.
+2. The **Essentials | Full** switch ([below](#essentials-and-full)).
+3. The trial control bar: dataset, trial, screen, sort (⇅) and filter (:material/filter_alt:).
+4. The trial's summary.
+5. The figure.
+6. Plot controls.
+7. The tabs: Annotations, Stimulus & context, Comparisons, Export and Share.
 
 The :material/route: **Scanpath** view draws one reading at a time, at the size of
 the screen it was recorded on.

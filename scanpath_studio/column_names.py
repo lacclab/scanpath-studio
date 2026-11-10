@@ -1012,6 +1012,14 @@ def stored_source_recipe(stored: Mapping) -> dict:
     return {"schemas": schemas, "unresolved": unresolved}
 
 
+def is_multipleye_entry(stored) -> bool:
+    """Whether a stored dataset was added as a MultiplEYE session set: its
+    ``source_recipe`` records the session set (``"multipleye"``), not a
+    mapping of the user's files."""
+    recipe = stored.get("source_recipe") if isinstance(stored, Mapping) else None
+    return isinstance(recipe, Mapping) and isinstance(recipe.get("multipleye"), Mapping)
+
+
 # --- A frame that carries its own names ---------------------------------------
 
 #: The `DataFrame.attrs` key a frame under the dataset's own names carries its

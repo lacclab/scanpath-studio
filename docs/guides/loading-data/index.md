@@ -21,7 +21,8 @@ the :material/database: **Data Management** page:
   which you can edit.
 - Public datasets: OneStop and PoTeC. In the desktop app or a pip install, each
   downloads the first time you open it.
-- **+** → :material/upload: **Import files**: your own tables.
+- **+** → :material/upload: **Import files**: your own tables, or a
+  [MultiplEYE session set](multipleye.md) from its folder or its files.
 - **+** → :material/draw: **Draw a scanpath**: write a text and place its
   fixations by hand.
 
@@ -85,7 +86,7 @@ EyeLink's `IA_*` columns are detected.
 4. Optionally, in the desktop app or a local install, attach the stimulus
    images from a folder.
 5. Click :material/check: **Add dataset**, then :material/route: **Open in
-   Scanpath** to see its first trial. Later, **Open in Scanpath** beside
+   Scanpath view** to see its first trial. Later, **Open in Scanpath view** beside
    **Add dataset** on the Data page does the same for the selected dataset.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"

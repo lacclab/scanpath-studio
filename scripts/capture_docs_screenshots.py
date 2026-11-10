@@ -49,6 +49,7 @@ WEBP_QUALITY = 82
 #: on its region's top-right corner, where the app leaves space.
 SCANPATH_CALLOUTS = (
     ('[data-testid="stTopNavLinkContainer"]', "last"),  # the views and dialogs
+    (".st-key-tour_grp_ui_mode", "first"),  # the Essentials | Full switch
     (".st-key-tour_grp_trial_picker", "first"),  # dataset and trial pickers
     (".st-key-tour_grp_chips", "first"),  # the trial's summary chips
     (".st-key-tour_grp_plot", "first"),  # the figure

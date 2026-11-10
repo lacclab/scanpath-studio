@@ -19,7 +19,7 @@ columns to map.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../../assets/workflows/multipleye_poster.webp" data-autoplay
-       aria-label="Adding a MultiplEYE session set from its folder, then stepping through its screens">
+       aria-label="Adding a MultiplEYE session set from its folder">
   <source src="../../../assets/workflows/multipleye.mp4" type="video/mp4">
 </video>
 

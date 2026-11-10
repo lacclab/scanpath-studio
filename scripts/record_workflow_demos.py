@@ -707,33 +707,12 @@ def multipleye(d: Demo) -> None:
     d.step("screen and font from its config")
     d.pause(2.6)
     d.click(page.locator(".st-key-wizard_finalize button"), "Add dataset", hold=0.6)
-    with d.fast():
-        d.click(
-            page.locator('[role="dialog"] button').filter(
-                has_text="Open in Scanpath view"
-            ),
-            "Open in Scanpath view",
-            hold=0.4,
-        )
-        d.settle(quiet=1.2)
-    d.pause(1.4)
-    d.click(
-        page.locator(".st-key-split_mode_rail_stim_popover button"),
-        "Stimulus ▾",
-        wait=False,
-        hold=0.5,
-    )
-    d.click(
-        page.locator(".st-key-global_show_stimulus_image label"),
-        "page image",
-        hold=0.6,
-    )
-    d.close_popover()
-    d.pause(1.8)
-    for label in ("next screen", "a question"):
-        d.click(page.locator(".st-key-single_screen_next button"), label, hold=1.6)
-    d.click(page.locator(".st-key-single_next_trial button"), "next trial", hold=1.8)
-    d.finish("A session set: its readings, pages and questions")
+    # Ends on the dialog that confirms the dataset was added: the clip is about
+    # loading a session set, not looking through it.
+    page.locator('[role="dialog"]').wait_for()
+    d.settle(quiet=0.8)
+    d.pause(2.2)
+    d.finish("A MultiplEYE session set, added")
 
 
 @workflow("plot-controls", "Make the regressions stand out")

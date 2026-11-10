@@ -1,1 +1,0 @@
-A side-by-side or stacked Compare figure with a title no longer draws the A/B legend under the title: the legend now has its own row between the title and the panels' names, and the figure grows to make room.

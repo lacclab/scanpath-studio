@@ -9,7 +9,7 @@ Pick a dataset in **Select dataset** above the plot, or in the dataset list on t
 - **Bundled demo**: 24 trials from OneStop, with two participants and 12 texts.
 - **Hand-drawn sample**: a scanpath drawn by hand over a short English text, which you can edit.
 - Public datasets: OneStop and PoTeC. In the desktop app or a pip install, each downloads the first time you open it.
-- **+** → **Import files**: your own tables.
+- **+** → **Import files**: your own tables, or a [MultiplEYE session set](https://lacclab.github.io/scanpath-studio/guides/loading-data/multipleye/index.md) from its folder or its files.
 - **+** → **Draw a scanpath**: write a text and place its fixations by hand.
 
 ### OneStop
@@ -53,7 +53,7 @@ Corpus Analysis uses the per-word reading measures in your Words table, such as 
 1. Upload your tables and check the column mapping.
 1. Under **Recording setup**, enter the **Screen**, **Monitor width** and **Text size** if you know them.
 1. Optionally, in the desktop app or a local install, attach the stimulus images from a folder.
-1. Click **Add dataset**, then **Open in Scanpath** to see its first trial. Later, **Open in Scanpath** beside **Add dataset** on the Data page does the same for the selected dataset.
+1. Click **Add dataset**, then **Open in Scanpath view** to see its first trial. Later, **Open in Scanpath view** beside **Add dataset** on the Data page does the same for the selected dataset.
 
 \[!\[
 

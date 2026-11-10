@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/icon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -1414,9 +1414,32 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../guides/loading-data/" class="md-nav__link">
+    
+    
+      
         
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../guides/loading-data/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -1430,7 +1453,59 @@
   
   
 
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Data Management
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/loading-data/multipleye/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MultiplEYE session sets
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -2331,15 +2406,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#load-the-bundled-demo-and-public-datasets" class="md-nav__link">
+  <a href="#load-the-bundled-demo-and-corpora" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Load the bundled demo and public datasets
+        Load the bundled demo and corpora
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Load the bundled demo and public datasets">
+    <nav class="md-nav" aria-label="Load the bundled demo and corpora">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2380,6 +2455,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;load_onestop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.datasets.load_multipleye" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;load_multipleye
       
     </span>
   </a>
@@ -3132,15 +3218,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#load-the-bundled-demo-and-public-datasets" class="md-nav__link">
+  <a href="#load-the-bundled-demo-and-corpora" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Load the bundled demo and public datasets
+        Load the bundled demo and corpora
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Load the bundled demo and public datasets">
+    <nav class="md-nav" aria-label="Load the bundled demo and corpora">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -3181,6 +3267,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;load_onestop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.datasets.load_multipleye" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;load_multipleye
       
     </span>
   </a>
@@ -3835,7 +3932,7 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 <td>Load a text-level metadata table: one row per text.</td>
 </tr>
 <tr>
-<td><strong>Load the bundled demo and public datasets</strong></td>
+<td><strong>Load the bundled demo and corpora</strong></td>
 <td></td>
 </tr>
 <tr>
@@ -3853,6 +3950,10 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;load_onestop&lt;/span&gt;" href="#scanpath_studio.datasets.load_onestop"><code>load_onestop</code></a></td>
 <td>Load OneStop as normalized <code>(words, fixations)</code> frames, ready to plot.</td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;load_multipleye&lt;/span&gt;" href="#scanpath_studio.datasets.load_multipleye"><code>load_multipleye</code></a></td>
+<td>Load MultiplEYE as normalized <code>(words, fixations)</code> frames, ready to plot.</td>
 </tr>
 <tr>
 <td><strong>Draw a scanpath</strong></td>
@@ -4792,7 +4893,7 @@ missing from either side.</p>
 
     </div>
 
-</div><h2 id="load-the-bundled-demo-and-public-datasets">Load the bundled demo and public datasets<a class="headerlink" href="#load-the-bundled-demo-and-public-datasets" title="Permanent link">&para;</a></h2>
+</div><h2 id="load-the-bundled-demo-and-corpora">Load the bundled demo and corpora<a class="headerlink" href="#load-the-bundled-demo-and-corpora" title="Permanent link">&para;</a></h2>
 
 
 <div class="doc doc-object doc-function">
@@ -5123,6 +5224,63 @@ internal ones (see <code>api.load_scanpath_data</code>).</p>
 <a id="scanpath_studio.datasets.load_onestop--__codelineno-0-6" name="scanpath_studio.datasets.load_onestop--__codelineno-0-6" href="#scanpath_studio.datasets.load_onestop--__codelineno-0-6"></a><span class="n">pid</span><span class="p">,</span> <span class="n">tid</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">list_trials</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># one reading</span>
 <a id="scanpath_studio.datasets.load_onestop--__codelineno-0-7" name="scanpath_studio.datasets.load_onestop--__codelineno-0-7" href="#scanpath_studio.datasets.load_onestop--__codelineno-0-7"></a><span class="n">fig</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="n">canvas_size</span><span class="o">=</span><span class="p">(</span><span class="mi">2560</span><span class="p">,</span> <span class="mi">1440</span><span class="p">))</span>
 </code></pre></div>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.datasets.load_multipleye" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">load_multipleye</span>
+
+
+<a href="#scanpath_studio.datasets.load_multipleye" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_multipleye</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">root</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">sessions</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">stimuli</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">fixation_source</span><span class="o">=</span><span class="s2">"scanpaths"</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">include_question_screens</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">names</span><span class="o">=</span><span class="s2">"source"</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Load MultiplEYE as normalized <code>(words, fixations)</code> frames, ready to plot.</p>
+<p>Under the loader's column names; <code>names="canonical"</code> for the internal
+ones (see <code>api.load_scanpath_data</code>).</p>
+<p><code>root</code> is a MultiplEYE session set (e.g.
+<code>data/MultiplEYE_ZH_CH_Zurich_1_2025</code>). Narrow the load with <code>sessions</code>
+(full session ids, e.g. <code>["001_ZH_CH_1_ET1"]</code>) and/or <code>stimuli</code> (e.g.
+<code>["Lit_Alchemist_4"]</code>).</p>
+<p>Participants are session ids (ET1 and ET2 read disjoint stimuli, so each is
+a distinct reader). A trial is <strong>one reading of one stimulus</strong>
+(<code>trial_id == "001_ZH_CH_1_ET1_Lit_Alchemist_4"</code>, <code>text_id ==
+"Lit_Alchemist_4"</code>), and its screens — the reading
+pages <code>page_1…page_N</code> plus the comprehension-question screens — are
+<code>screen_id</code> values in presentation order (<code>screen_index</code>, ranked from
+that reader's own fixation onsets, since the question order is shuffled per
+reader). <code>screen_kind</code> is <code>reading</code> or <code>question</code>::</p>
+<div class="highlight"><pre><span></span><code>words, fixations = load_multipleye(
+    "data/MultiplEYE_ZH_CH_Zurich_1_2025", stimuli=["Lit_Alchemist_4"]
+)
+pid, tid = scanpath_studio.list_trials(words, fixations).iloc[0]
+fig = scanpath_studio.plot_scanpath(words, fixations, pid, tid, screen="page_1")
+</code></pre></div>
+<p>The screen is the session set's own (<code>multipleye_screen</code>): with its config's
+monitor resolution and stimulus image size, every fixation carries the
+monitor as <code>canvas_width</code> / <code>canvas_height</code>, which <code>plot_scanpath</code>
+draws on when no <code>canvas_size</code> is given. Without them the coordinates stay
+relative to the stimulus image.</p>
+<p><code>fixation_source</code> is <code>"scanpaths"</code> (default; fixations pre-tagged with
+page + word index) or <code>"fixations"</code> (raw, no word linkage); question
+screens always come from <code>fixations/</code>, which is the only export that keeps
+them. <code>include_question_screens=False</code> loads the reading pages alone.</p>
 
 
     </div>
@@ -7926,7 +8084,8 @@ calls.</p>
           –
           <div class="doc-md-description">
             <p>How the data is loaded: <code>"demo"</code>, <code>"synthetic"</code>, <code>"files"</code>,
-<code>"potec"</code>, <code>"onestop"</code>, <code>"author"</code>, <code>"raw_gaze"</code> (a dataset recorded
+<code>"potec"</code>, <code>"onestop"</code>, <code>"multipleye"</code>, <code>"author"</code>, <code>"raw_gaze"</code>
+(a dataset recorded
 as raw gaze alone, whose samples at <code>source_options["raw_gaze"]</code> are the
 data), or <code>"unknown"</code> for data a snippet can't name.</p>
           </div>
@@ -8988,7 +9147,7 @@ the software's; <code>None</code> for the software alone.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.instant", "navigation.instant.progress", "navigation.path", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../assets/_markdown_exec_pyodide.js"></script>
       

@@ -1,6 +1,7 @@
 # Scanpath visualization
 
 1. Views and Help.
+1. The **Essentials | Full** switch ([below](#essentials-and-full)).
 1. The trial control bar: dataset, trial, screen, sort (⇅) and filter ().
 1. The trial's summary.
 1. The figure.

@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/icon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -1414,9 +1414,32 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../guides/loading-data/" class="md-nav__link">
+    
+    
+      
         
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../guides/loading-data/" class="md-nav__link ">
+              
   
   
   <span class="md-ellipsis">
@@ -1430,7 +1453,59 @@
   
   
 
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Data Management
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/loading-data/multipleye/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MultiplEYE session sets
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -3175,10 +3250,14 @@ has a flag.</p>
 <a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--potec<span class="w"> </span>./potec<span class="w"> </span>--list-trials
 <a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--onestop<span class="w"> </span>./onestop<span class="w"> </span>--onestop-variant<span class="w"> </span>public<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">  </span>--onestop-regime<span class="w"> </span>ordinary<span class="w"> </span>--onestop-part<span class="w"> </span>Paragraph<span class="w"> </span>--list-trials
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="c1"># A MultiplEYE session set, from its folder</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--multipleye<span class="w"> </span>./MultiplEYE_ZH_CH_Zurich_1_2025<span class="w"> </span>--list-trials
 </code></pre></div>
 <p>The Python API loads the same datasets with
-<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;load_potec&lt;/span&gt;" href="../api/#scanpath_studio.datasets.load_potec"><code>load_potec</code></a> and
-<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;load_onestop&lt;/span&gt;" href="../api/#scanpath_studio.datasets.load_onestop"><code>load_onestop</code></a>.</p>
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;load_potec&lt;/span&gt;" href="../api/#scanpath_studio.datasets.load_potec"><code>load_potec</code></a>,
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;load_onestop&lt;/span&gt;" href="../api/#scanpath_studio.datasets.load_onestop"><code>load_onestop</code></a> and
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;load_multipleye&lt;/span&gt;" href="../api/#scanpath_studio.datasets.load_multipleye"><code>load_multipleye</code></a>.</p>
 <h3 id="common-tasks">Common tasks<a class="headerlink" href="#common-tasks" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -3658,6 +3737,12 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>public</code>, <code>lacclab</code></td>
 <td><code>public</code></td>
 <td>OneStop source for <code>--onestop</code>: public, downloaded from OSF, or lacclab, a local lab-processed export with no download.</td>
+</tr>
+<tr>
+<td><code>--multipleye</code></td>
+<td><code>DIR</code></td>
+<td>—</td>
+<td>Load a MultiplEYE session set from DIR, the folder holding its scanpaths/ or fixations/ folder and its stimuli_*/ folder. A participant is a session (e.g. 001_ZH_CH_1_ET1) and a trial is one reading of one stimulus (e.g. 001_ZH_CH_1_ET1_Lit_Alchemist_4), with its pages and comprehension questions as screens. The screen comes from the session set's own config; set the font with <code>--font-size</code> and <code>--font-family</code>.</td>
 </tr>
 <tr>
 <td><code>--participant-metadata</code></td>
@@ -4335,7 +4420,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--canvas</code></td>
 <td><code>WxH</code></td>
 <td>—</td>
-<td>Screen size in px, e.g. 2560x1440 (default: 2560x1440 for <code>--sample</code> and <code>--onestop</code>, 1680x1050 for <code>--potec</code>, 1200x800 for <code>--authoring</code>, otherwise estimated from the data).</td>
+<td>Screen size in px, e.g. 2560x1440 (default: 2560x1440 for <code>--sample</code> and <code>--onestop</code>, 1680x1050 for <code>--potec</code>, 1200x800 for <code>--authoring</code>, the session set's own monitor for <code>--multipleye</code>, otherwise estimated from the data).</td>
 </tr>
 <tr>
 <td><code>--coordinate-grid</code></td>
@@ -5232,7 +5317,7 @@ writes carries it in its file metadata. The same entries are
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.annotate", "content.code.copy", "content.tabs.link", "content.tooltips", "navigation.footer", "navigation.indexes", "navigation.instant", "navigation.instant.progress", "navigation.path", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../assets/_markdown_exec_pyodide.js"></script>
       

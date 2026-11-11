@@ -127,6 +127,7 @@ from scanpath_studio.constants import (
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
+    DEFAULT_ORDER_LABEL_POSITION,
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
     FOCUS_MAPPING_KEY,
@@ -2056,6 +2057,9 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         legend_layout=viz_settings.get("legend_layout"),
         order_font_size=viz_settings["order_font_size"],
         order_font_color=viz_settings["order_font_color"],
+        order_label_position=viz_settings.get(
+            "order_label_position", DEFAULT_ORDER_LABEL_POSITION
+        ),
         **{
             key: viz_settings.get(key, default)
             for key, default in COLORBAR_DEFAULTS.items()

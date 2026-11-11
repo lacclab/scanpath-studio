@@ -219,6 +219,15 @@ DEFAULT_MARKER_DURATION_RANGE = (50, 600)
 #: The duration-bounds widget's own limits (ms).
 MARKER_DURATION_BOUNDS = (10, 3000)
 DEFAULT_ORDER_FONT_COLOR = "#111111"
+#: Where each fixation's index number sits relative to its marker → the
+#: Plotly ``textposition`` that puts it there. "inside" centres it on the
+#: marker, which reads best with a light label colour on large markers.
+ORDER_LABEL_POSITIONS = {
+    "above": "top center",
+    "inside": "middle center",
+    "below": "bottom center",
+}
+DEFAULT_ORDER_LABEL_POSITION = "above"
 
 WORD_BOX_COLOR = "#6c757d"
 #: The outline's opacity; 1 draws it solid.

@@ -1,0 +1,1 @@
+Fixation index numbers can sit above, inside or below each fixation: Fixations → Fixation index → Position in the app, order_label_position in the Python API and share links, and --order-label-position in render.

@@ -72,6 +72,7 @@ from .constants import (
     ONESTOP_REGIME_LABELS,
     ONESTOP_REGIME_SOURCE_TOKENS,
     ONESTOP_VARIANT_LABELS,
+    ORDER_LABEL_POSITIONS,
     PALETTES,
     PUBLIC_DATASETS_CHOICE,
     SACCADE_ARROW_SIZE_BOUNDS,
@@ -263,6 +264,10 @@ def _parse_compare_stimulus(v) -> str:
 
 def _parse_marker_size_scale(v) -> str:
     return _parse_choice(v, tuple(MARKER_SIZE_SCALES), "marker size scale")
+
+
+def _parse_order_label_position(v) -> str:
+    return _parse_choice(v, tuple(ORDER_LABEL_POSITIONS), "index label position")
 
 
 #: The one colour spelling every `st.color_picker` holds and every figure
@@ -590,6 +595,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     # The duration scale: always emitted (it is seeded). A link carrying layer
     # toggles but no scale opens on the relative one — see `_apply_url_preset`.
     "marker_size_scale": "global_marker_size_scale",
+    "order_label_position": "global_order_label_position",
     "illustration_label": "global_illustration_label",
     "illustration_text": "global_illustration_text",
     # Vertical drift correction ("Off" or a Carr et al. (2021) algorithm). It
@@ -833,6 +839,10 @@ _URL_PRESETS = {
     "cmp_layout": ("single_compare_layout", _parse_compare_layout),
     "cmp_stimulus": ("single_compare_stimulus", _parse_compare_stimulus),
     "marker_size_scale": ("global_marker_size_scale", _parse_marker_size_scale),
+    "order_label_position": (
+        "global_order_label_position",
+        _parse_order_label_position,
+    ),
     # And for every colour, which Plotly rejects outright.
     **{k: (_SHARE_VALUE_PARAMS[k], _parse_hex_color) for k in _SHARE_COLOR_PARAMS},
     # Figure text from a link is text, never markup.
@@ -1740,6 +1750,7 @@ _CHOICE_STATE_PARSERS = {
     },
     "global_illustration_label": _closed_choice(("Auto", "Show", "Hide")),
     "global_marker_size_scale": _closed_choice(tuple(MARKER_SIZE_SCALES)),
+    "global_order_label_position": _closed_choice(tuple(ORDER_LABEL_POSITIONS)),
     "global_preproc_short_policy": _closed_choice(
         ("Off", "Merge", "Merge then discard", "Discard")
     ),
@@ -2848,6 +2859,13 @@ def _restore_plot_config(
     color = sizing.get("order_font_color")
     if isinstance(color, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", color):
         put("global_order_font_color", color)
+    if "order_label_position" in sizing:
+        put_valid(
+            sizing["order_label_position"] in tuple(ORDER_LABEL_POSITIONS),
+            "global_order_label_position",
+            sizing["order_label_position"],
+            "order label position",
+        )
     if "base_font_size" in sizing:
         put_int(
             sizing["base_font_size"],

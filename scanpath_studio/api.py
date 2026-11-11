@@ -212,6 +212,7 @@ _CANONICAL_OPTION_NAMES = {
     "legend_layout",
     "order_font_size",
     "order_font_color",
+    "order_label_position",
     "show_fixation_colorbar",
     "fixation_colorbar_orientation",
     "fixation_colorbar_tickangle",

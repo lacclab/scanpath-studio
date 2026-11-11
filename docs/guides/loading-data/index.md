@@ -66,9 +66,15 @@ metadata field.
 - Several files for one table, such as one file per trial, are stacked into
   one table, with each file's name in a `source_file` column. When an ID is
   only in the file name, **Derive columns from text** splits it out into a
-  column you can map.
+  column you can map. When you click **Apply**, a derived column named like an
+  ID, such as `participant`, `trial` or `stimulus`, fills that ID field if it
+  is empty.
+- Trial and Text IDs are matched exactly, so spell them the same way in both
+  tables, including upper and lower case. The import screen says when they
+  differ only in case.
 - Words tables with one box per character, as in Chinese or Japanese: turn on
-  **Merge character boxes into word boxes**.
+  **Merge character boxes into word boxes**. The import screen suggests it
+  when a word's rows are at different positions.
 
 ### Trials over several screens { #multipart-logical-trials }
 
@@ -94,6 +100,11 @@ EyeLink's `IA_*` columns are detected.
 5. Click :material/check: **Add dataset**, then :material/route: **Open in
    Scanpath view** to see its first trial. Later, **Open in Scanpath view** beside
    **Add dataset** on the Data page does the same for the selected dataset.
+
+To import similar files again, click :material/download: **Download setup file**
+before **Add dataset**. Next time, choose **Start from** → **A setup file** and
+upload your tables: the column mapping, derived columns, character-box merge
+and recording setup are filled in.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../assets/workflows/add-your-data_poster.webp" data-autoplay
@@ -136,8 +147,8 @@ duration read as 0 ms, the Scanpath view says so above the plot.
 
 Use :material/edit: **Edit dataset** to change its name, column mapping,
 recording setup or metadata, then click :material/check: **Save changes**.
-**Download setup file** saves the mapping and recording setup, so you can apply
-them to similar data.
+**Download setup file** saves the mapping, recording setup and character-box
+merge, so you can apply them to similar data.
 
 The editor offers only the columns kept when the dataset was added. To use a
 column that isn't listed, remove the dataset and add it again from its files,

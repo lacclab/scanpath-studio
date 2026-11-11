@@ -76,6 +76,8 @@ from .data import (
     PARTICIPANT_CANDIDATES,
     READING_MEASURE_KEYS,
     SOURCE_FILE_COLUMN,
+    TEXT_ID_CANDIDATES,
+    TRIAL_CANDIDATES,
     WORD_OPTIONAL_FIELDS,
     adopt_source,
     aggregate_char_boxes,
@@ -108,6 +110,7 @@ from .data import (
     validate_raw_gaze_schema,
     validate_word_schema,
     word_ids_set_aside,
+    words_with_several_boxes,
 )
 from .experimental_setup import (
     FONT_CHOICES,
@@ -216,6 +219,8 @@ def _reset_wizard_widgets() -> None:
         "wizard_filename_regex",
         "wizard_filename_regex_lower",
         _FILENAME_DERIVE_LINE_COUNT_KEY,
+        _DERIVED_ID_PROPOSALS_KEY,
+        _DERIVED_IDS_FILLED_KEY,
         "wizard_aggregate_char_boxes",
         # A new dataset starts unattempted, so its required fields are
         # blank rather than red until this one is asked to be added — and
@@ -781,19 +786,78 @@ def _trial_id_values(raw, schema) -> set | None:
     """Set of distinct trial-id strings for a raw frame + its trial mapping
     (composite mappings are joined, mirroring ``data.trial_id_series``). ``None``
     when the trial isn't mapped or its columns are absent."""
-    if raw is None or getattr(raw, "empty", True) or not schema.get("trial"):
+    return _id_values(raw, schema.get("trial"))
+
+
+def _id_values(raw, mapping) -> set | None:
+    """Distinct values of one identifier mapping (one column or several,
+    joined like ``data.trial_id_series``) on a raw frame; ``None`` when it is
+    not mapped or its columns are absent."""
+    if raw is None or getattr(raw, "empty", True) or not mapping:
         return None
-    cols = trial_mapping_columns(schema["trial"])
+    cols = trial_mapping_columns(mapping)
     if not cols or not all(c in raw.columns for c in cols):
         return None
     return set(
         _trial_id_values_cached(
-            raw,
-            schema["trial"],
-            frame_fingerprint(raw),
-            _mapping_key(schema["trial"]),
+            raw, mapping, frame_fingerprint(raw), _mapping_key(mapping)
         )
     )
+
+
+def case_only_matches(
+    fixation_ids: set, word_ids: set
+) -> tuple[int, tuple[str, str] | None]:
+    """How many of the fixations' ids name a Words-table id only when upper
+    and lower case are ignored, with one such pair.
+
+    The tables are joined on exact ids, so these find no word boxes; an id
+    either table spells the same is not counted."""
+    by_fold: dict[str, str] = {}
+    for value in word_ids:
+        by_fold.setdefault(str(value).casefold(), str(value))
+    exact = {str(value) for value in word_ids}
+    count, example = 0, None
+    for value in sorted(map(str, fixation_ids)):
+        if value in exact:
+            continue
+        match = by_fold.get(value.casefold())
+        if match is not None:
+            count += 1
+            example = example or (value, match)
+    return count, example
+
+
+def case_only_hint(
+    raw_words, word_schema, raw_fix, fix_schema, *, lowercase_offered: bool
+) -> str | None:
+    """The note above ✅ Add dataset when the two tables' Trial IDs (else their
+    Text IDs) differ only in upper and lower case (`case_only_matches`).
+
+    ``lowercase_offered`` is whether *Derive columns from text* has a regex
+    line applied, whose **Lowercase** is then the fix to name."""
+    for field, label in (("trial", "Trial ID"), ("text_id", "Text ID")):
+        fixation_ids = _id_values(raw_fix, fix_schema.get(field))
+        word_ids = _id_values(raw_words, word_schema.get(field))
+        if not fixation_ids or not word_ids:
+            continue
+        count, example = case_only_matches(fixation_ids, word_ids)
+        if not count:
+            continue
+        fix = (
+            "Turn on **Lowercase** on each *Derive columns from text* line that "
+            "makes them, then click **Apply**."
+            if lowercase_offered
+            else "Make both tables spell them the same way, for example with "
+            "*Derive columns from text* and its **Lowercase**."
+        )
+        verb = "matches" if count == 1 else "match"
+        return (
+            f"{ICONS['warning']} {plural(count, label)} in Fixations {verb} one in the "
+            f"Words table only when case is ignored ({example[0]!r} and "
+            f"{example[1]!r}). IDs must match exactly. {fix}"
+        )
+    return None
 
 
 @st.cache_data(show_spinner="Detecting columns…")
@@ -821,6 +885,27 @@ def _c_categorize_columns(_raw, _schema, _registry, fingerprint: tuple, key: tup
 @st.cache_data(show_spinner="Aggregating character boxes…")
 def _c_aggregate_char_boxes(_raw, _schema, fingerprint: tuple, key: tuple):
     return aggregate_char_boxes(_raw, _schema)
+
+
+@st.cache_data(show_spinner=False)
+def _c_words_with_several_boxes(_raw, _schema, fingerprint: tuple, key: tuple) -> int:
+    return words_with_several_boxes(_raw, _schema)
+
+
+def merge_boxes_hint(several: int, *, screen_mapped: bool) -> str:
+    """The note under *Merge character boxes into word boxes* when ``several``
+    words of the Words table have rows at different positions
+    (`data.words_with_several_boxes`). Without a Screen ID, trials over several
+    screens look the same, so the note names that cause too."""
+    lead = (
+        f"{ICONS['tip']} {plural(several, 'word')} "
+        f"{'has' if several == 1 else 'have'} rows at different positions, as a "
+        "table with one row per character does. Turn this on to merge them into "
+        "one box per word."
+    )
+    if screen_mapped:
+        return lead
+    return f"{lead} If your trials span several screens, map **Screen ID** instead."
 
 
 def _readers_do_not_line_up(words: pd.DataFrame, fixations: pd.DataFrame) -> bool:
@@ -963,6 +1048,7 @@ def _render_identity_field(
         tables.append(("words", WORDS_TABLE_LABEL, raw_words, word_schema))
 
     tinted: dict[str, list[str]] = {}
+    derived = st.session_state.get(_DERIVED_ID_PROPOSALS_KEY) or {}
     for cell, (slug, table_label, raw, schema) in zip(cells, tables):
         key = f"col_map_{slug}_{field_key}"
         # The file's real header, not `raw.columns`: the upload parses
@@ -975,7 +1061,13 @@ def _render_identity_field(
         # dataset's already-normalized frames, which have no header to ask).
         full_header = st.session_state.get(f"col_map_{slug}_header")
         options = list(full_header) if full_header else list(raw.columns)
-        _seed(key, options, default_cols)
+        # What detection proposes for this table: the shared proposal, else
+        # the column derived from text that is detected as this field
+        # (`_derived_id_proposals`), which only this table may have.
+        detected = [c for c in default_cols if c in options] or [
+            c for c in (derived.get(key),) if c in options
+        ]
+        _seed(key, options, detected)
         # Title on the cell's first line, control on its second, so the row
         # reads as a line of names over a line of pickers. The title carries no
         # table name: the rows are grouped *by* table and each is labelled once
@@ -1008,7 +1100,7 @@ def _render_identity_field(
             state_key=key,
             cell_key=cell_key,
             chosen=list(chosen),
-            default=[c for c in default_cols if c in options],
+            default=detected,
             required=required,
             preview=value_preview_tip(raw, field_key, list(chosen)),
         )
@@ -1192,6 +1284,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         ),
     )
     if not enabled:
+        st.session_state.pop(_DERIVED_ID_PROPOSALS_KEY, None)
         return raw_words, raw_fix, raw_gaze
 
     # Every table, always — including empty ones — so a line whose
@@ -1348,6 +1441,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
 
     applied = st.session_state.get(_FILENAME_DERIVE_APPLIED_KEY)
     if not applied:
+        st.session_state.pop(_DERIVED_ID_PROPOSALS_KEY, None)
         return raw_words, raw_fix, raw_gaze
     # An older saved setup commits one dict with no "table" key; Apply always
     # writes a list where every entry has one. Normalize so both process
@@ -1359,6 +1453,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     # what makes a second split of the same column continue numbering rather
     # than reusing (and silently overwriting) the first split's own columns.
     existing_by_table = {label: set(fr.columns) for label, fr in frames.items()}
+    derived_by_table: dict[str, list] = {}
 
     for line, config in enumerate(applied_configs):
         # An older saved setup names no column — `source_file` was the only
@@ -1472,6 +1567,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
 
         frames[target_table] = target
         if new_cols:
+            derived_by_table.setdefault(target_table, []).extend(new_cols)
             # Publish the derived columns into the table's own header stash.
             # `column_mapping_ui` offers `col_map_<slug>_header` over the live
             # frame's own columns (an upload parses only the columns it needs),
@@ -1493,10 +1589,116 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                 hide_index=True,
             )
 
+    proposals = _derived_id_proposals(derived_by_table)
+    st.session_state[_DERIVED_ID_PROPOSALS_KEY] = {
+        f"{prefix}_{field}": column
+        for prefix, fields in proposals.items()
+        for field, column in fields.items()
+    }
+    if apply_clicked:
+        _map_derived_ids(proposals)
+
     raw_fix = frames["Fixations"]
     raw_words = frames["Words table"]
     raw_gaze = frames["Raw gaze"]
     return raw_words, raw_fix, raw_gaze
+
+
+#: The identity fields a derived column can fill, in the order they claim one.
+#: A column named like a stimulus fits both the Trial ID and the Text ID
+#: (`data.TRIAL_CANDIDATES` and `TEXT_ID_CANDIDATES`), and the Trial ID takes it:
+#: an empty Text ID already reads as the Trial ID.
+_DERIVED_ID_FIELDS = (
+    ("trial", TRIAL_CANDIDATES),
+    ("participant", PARTICIPANT_CANDIDATES),
+    ("text_id", TEXT_ID_CANDIDATES),
+)
+
+#: ``{col_map key: column}``: the identity fields the applied derivation's own
+#: columns are detected as, by the same candidate names as a file's columns.
+#: `_render_identity_field` reads it as the field's detected value, so a picker
+#: Apply filled shows the ✨ mark of an auto-detected one, not a choice made by
+#: hand.
+_DERIVED_ID_PROPOSALS_KEY = "_wizard_derived_id_proposals"
+
+
+def _regex_derive_applied() -> bool:
+    """Whether *Derive columns from text* is on with a regex line applied —
+    the lines that carry a **Lowercase** switch."""
+    if not st.session_state.get("wizard_filename_split"):
+        return False
+    applied = st.session_state.get(_FILENAME_DERIVE_APPLIED_KEY)
+    configs = applied if isinstance(applied, list) else [applied]
+    return any(
+        isinstance(config, dict) and config.get("mode") == "Extract with a regex"
+        for config in configs
+    )
+
+
+def _derived_id_proposals(
+    derived_by_table: dict[str, list],
+) -> dict[str, dict[str, str]]:
+    """``{col_map prefix: {field: column}}``: the identity fields each table's
+    derived columns are detected as.
+
+    Detection looks at the derived columns alone, so only a column the
+    derivation made is proposed, and one column fills one field per table.
+    """
+    proposals: dict[str, dict[str, str]] = {}
+    for table, columns in derived_by_table.items():
+        header = pd.DataFrame(columns=list(dict.fromkeys(columns)))
+        fields: dict[str, str] = {}
+        for field, candidates in _DERIVED_ID_FIELDS:
+            column = pick_column(header, candidates)
+            if column is not None and column not in fields.values():
+                fields[field] = column
+        if fields:
+            proposals[_DERIVE_TABLE_PREFIX[table]] = fields
+    return proposals
+
+
+#: ``{col_map key: column}`` Apply has filled each identity field with
+#: (`_map_derived_ids`).
+_DERIVED_IDS_FILLED_KEY = "_wizard_derived_ids_filled"
+
+
+def _map_derived_ids(proposals: dict[str, dict[str, str]]) -> None:
+    """Fill each empty identity field Apply's derived columns are detected as.
+
+    Runs on Apply's own run, before the identity pickers are drawn, so writing
+    their keys is safe. A field that names a column stays as it is, and a
+    column another identity field of the same table already names is not used
+    twice. A field cleared after Apply filled it stays clear on the next Apply
+    while the same column is proposed: emptying it was the answer.
+
+    Whether a person touched a field (`TOUCHED_FIELDS_KEY`) is no guide here:
+    the browser re-sends an identity picker's empty value after a change of
+    columns re-checks the mapping, which marks the field touched by itself. A
+    field filled here is unmarked, so it shows as detected until confirmed.
+    """
+    touched = st.session_state.get(TOUCHED_FIELDS_KEY, set())
+    filled = st.session_state.setdefault(_DERIVED_IDS_FILLED_KEY, {})
+    for prefix, fields in proposals.items():
+        in_use = {
+            mapped
+            for field, _candidates in _DERIVED_ID_FIELDS
+            for mapped in trial_mapping_columns(
+                st.session_state.get(f"{prefix}_{field}") or []
+            )
+        }
+        for field, column in fields.items():
+            key = f"{prefix}_{field}"
+            if st.session_state.get(key) or column in in_use:
+                continue
+            if filled.get(key) == column:
+                continue
+            in_use.add(column)
+            filled[key] = column
+            touched.discard(key)
+            # The Fixations and Words identity pickers are multiselects; Raw
+            # gaze maps its Participant and Text ID with one select each.
+            single = prefix == "col_map_raw_gaze" and field != "trial"
+            st.session_state[key] = column if single else [column]
 
 
 def _wizard_trial_step(
@@ -1980,6 +2182,7 @@ def _dataset_setup_config(name: str) -> dict | None:
         "experimental_setup": setup if isinstance(setup, dict) else None,
         "filename_derive": choices.get("filename_derive"),
         "keep_and_filter": choices.get("keep_and_filter"),
+        "steps": list(stored_source_recipe(entry).get("steps") or []),
     }
 
 
@@ -1999,6 +2202,8 @@ def _clean_setup_config(config: dict) -> dict:
     for section in _SETUP_CONFIG_SECTIONS:
         if section in clean and not isinstance(clean[section], dict):
             clean.pop(section)
+    if "steps" in clean and not isinstance(clean["steps"], list):
+        clean.pop("steps")
     for section, field in (
         ("keep_and_filter", "wizard_keep_by_table"),
         ("filename_derive", "widgets"),
@@ -2033,6 +2238,8 @@ def _setup_config_writes(config: dict) -> set:
     widgets = (config.get("filename_derive") or {}).get("widgets")
     if isinstance(widgets, dict):
         keys.update(widgets)
+    if "steps" in config:
+        keys.add("wizard_aggregate_char_boxes")
     by_table = (config.get("keep_and_filter") or {}).get("wizard_keep_by_table")
     keys.update(
         f"wizard_keep_{prefix}" for prefix in (by_table or _WIZARD_MAPPING_PREFIXES)
@@ -2069,6 +2276,8 @@ def _applied_summary(config: dict) -> str:
                 len(applied) if isinstance(applied, list) else 1, "column derivation"
             )
         )
+    if "aggregate_char_boxes" in (config.get("steps") or ()):
+        parts.append("character-box merge")
     if isinstance(config.get("experimental_setup"), dict):
         parts.append("recording setup")
     return ", ".join(parts) if parts else "nothing this screen uses"
@@ -2123,6 +2332,12 @@ def _apply_setup_config(config: dict, *, source: str, kind: str) -> None:
                 st.session_state[f"wizard_keep_{prefix}"] = list(
                     kf["wizard_keep_extra"]
                 )
+    # The steps run on the uploaded tables (a list, possibly empty). A file
+    # without the section predates it and leaves the switch as it is.
+    if isinstance(config.get("steps"), list):
+        st.session_state["wizard_aggregate_char_boxes"] = (
+            "aggregate_char_boxes" in config["steps"]
+        )
     if isinstance(config.get("experimental_setup"), dict):
         # A plot config keeps the canvas in a sibling `canvas_px` section; merge
         # it in, or `_restored_setup_snapshot` would fall back to the class
@@ -2211,6 +2426,7 @@ def _wizard_restore_config(host) -> None:
         "experimental_setup",
         "filename_derive",
         "keep_and_filter",
+        "steps",
     )
     if not isinstance(config, dict) or not any(k in config for k in _setup_sections):
         # An unrelated JSON must not report "Restored" with nothing restored.
@@ -2272,8 +2488,9 @@ def _render_start_from(host) -> None:
             "Copy its setup",
             key="wizard_copy_setup",
             on_click=_copy_dataset_setup,
-            help="Copies its column mapping, kept fields, column derivation and "
-            "recording setup to this screen. You still upload your files below.",
+            help="Copies its column mapping, kept fields, column derivation, "
+            "character-box merge and recording setup to this screen. You still "
+            "upload your files below.",
         )
     elif choice == _START_FILE:
         box = host.container(key="wiz_start_from_file")
@@ -2411,6 +2628,13 @@ def _wizard_setup_config() -> dict:
         "experimental_setup": current_setup_section(),
         "filename_derive": _filename_derive_section(),
         "keep_and_filter": _keep_and_filter_section(),
+        # What runs on the uploaded tables before they are mapped, in
+        # `source_recipe["steps"]`'s codes.
+        "steps": (
+            ["aggregate_char_boxes"]
+            if st.session_state.get("wizard_aggregate_char_boxes")
+            else []
+        ),
     }
 
 
@@ -4843,6 +5067,21 @@ def _render_data_setup(active: bool) -> _UploadResult:
                         ["block"],
                     )
                 )
+            else:
+                # Rows of one word at different positions are what the switch
+                # is for, so it says so when the table has them.
+                several = _c_words_with_several_boxes(
+                    raw_words,
+                    word_schema,
+                    frame_fingerprint(raw_words),
+                    _schema_key(word_schema),
+                )
+                if several:
+                    aoi_extra.caption(
+                        merge_boxes_hint(
+                            several, screen_mapped=bool(word_schema.get("screen_id"))
+                        )
+                    )
 
     # The raw-gaze pickers and everything after render even with nothing
     # uploaded — the guards below tolerate all three tables being empty.
@@ -5023,6 +5262,19 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # `setup_blockers`): a restored setup config can answer every group with
     # nothing uploaded, which must still block — there is nothing to add.
     blocked = nothing_uploaded or bool(problems) or bool(setup_blockers)
+
+    if active and has_words and has_fix:
+        # Ids that differ only in case attach nothing, and neither the join's
+        # own line below nor the error that refuses it can say why.
+        hint = case_only_hint(
+            raw_words,
+            word_schema,
+            raw_fix,
+            fix_schema,
+            lowercase_offered=_regex_derive_applied(),
+        )
+        if hint:
+            s6.warning(hint)
 
     # No review table: every figure is stated where it is decided — row counts
     # beside each upload, the trial count under the trial picker

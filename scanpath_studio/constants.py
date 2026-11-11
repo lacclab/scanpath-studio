@@ -132,6 +132,18 @@ def derived_analysis_tables_enabled() -> bool:
     return experimental_features_enabled()
 
 
+def multipleye_format_enabled() -> bool:
+    """Whether a MultiplEYE session set can be added as one: the Add-dataset
+    wizard's *Dataset format* choice, ``datasets.load_multipleye`` and
+    ``render --multipleye``.
+
+    Off unless ``SCANPATH_EXPERIMENTAL`` is set. Off, a session set's files
+    still load as your own tables; the reader in ``datasets.py`` stays
+    importable, and a dataset already added this way still opens.
+    """
+    return experimental_features_enabled()
+
+
 # Default text font. A single generic family that renders (monospaced) on every
 # platform including the Streamlit Cloud demo; the font field accepts any CSS
 # font name or stack if you want the exact experiment font.

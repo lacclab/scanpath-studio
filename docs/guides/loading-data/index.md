@@ -21,8 +21,7 @@ the :material/database: **Data Management** page:
   which you can edit.
 - Public datasets: OneStop and PoTeC. In the desktop app or a pip install, each
   downloads the first time you open it.
-- **+** → :material/upload: **Import files**: your own tables, or a
-  [MultiplEYE session set](multipleye.md) from its folder or its files.
+- **+** → :material/upload: **Import files**: your own tables.
 - **+** → :material/draw: **Draw a scanpath**: write a text and place its
   fixations by hand.
 
@@ -64,12 +63,19 @@ metadata field.
 - Word IDs as numbers, or as text such as `w1`. Spell text IDs the same way in
   the Fixations and Words tables. With text IDs, the order of the rows in the
   Words table sets the word order.
+- Several files for one table, such as one file per trial, are stacked into
+  one table, with each file's name in a `source_file` column. When an ID is
+  only in the file name, **Derive columns from text** splits it out into a
+  column you can map.
+- Words tables with one box per character, as in Chinese or Japanese: turn on
+  **Merge character boxes into word boxes**.
 
 ### Trials over several screens { #multipart-logical-trials }
 
 Map the **Screen ID** field in your tables. A column named `screen_index` sets
 the order of the screens. Without one, the screens are ordered by where they
-first appear. The app draws one screen at a time.
+first appear, in the Fixations table when the dataset has one. The app draws one
+screen at a time.
 
 ### Reading measures { #reading-measures }
 

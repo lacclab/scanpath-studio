@@ -528,6 +528,107 @@ def test_a_stamped_screen_order_survives_a_mapping_that_does_not_name_it():
     assert order.to_dict() == {"intro": 1, "question": 2}
 
 
+def _paged_pair(word_pages, fixation_pages, *, word_index=None, fix_index=None):
+    """A stimulus-level Words table (one box per page, pages listed in
+    ``word_pages`` order) and one reading that fixates ``fixation_pages`` in
+    that order. ``*_index`` maps a page to the screen number its table maps."""
+    words = pd.DataFrame(
+        {
+            "text_id": "story",
+            "page": word_pages,
+            "word_id": 0,
+            "word": [f"w_{page}" for page in word_pages],
+            "x": 0.0,
+            "y": 0.0,
+            "width": 50.0,
+            "height": 20.0,
+        }
+    )
+    fixations = pd.DataFrame(
+        {
+            "participant_id": "p1",
+            "trial_id": "story",
+            "text_id": "story",
+            "page": fixation_pages,
+            "x": 10.0,
+            "y": 10.0,
+            "duration_ms": 200,
+            "onset": range(0, 300 * len(fixation_pages), 300),
+        }
+    )
+    word_schema = {
+        "trial": "text_id",
+        "text_id": "text_id",
+        "screen_id": "page",
+        "word_id": "word_id",
+        "text": "word",
+        "x": "x",
+        "y": "y",
+        "width": "width",
+        "height": "height",
+    }
+    fix_schema = {
+        "participant": "participant_id",
+        "trial": "trial_id",
+        "text_id": "text_id",
+        "screen_id": "page",
+        "x": "x",
+        "y": "y",
+        "duration": "duration_ms",
+        "timestamp": "onset",
+    }
+    if word_index:
+        words["page_no"] = words["page"].map(word_index)
+        word_schema["screen_index"] = "page_no"
+    if fix_index:
+        fixations["page_no"] = fixations["page"].map(fix_index)
+        fix_schema["screen_index"] = "page_no"
+    return api.load_scanpath_data(
+        words,
+        fixations,
+        word_schema=word_schema,
+        fix_schema=fix_schema,
+        names="canonical",
+    )
+
+
+def test_an_unmapped_screen_order_follows_the_reading_not_the_word_file():
+    """With no screen number mapped, each table numbers its screens in the order
+    it first lists them, and a word file that lists ``page_10`` before
+    ``page_2`` disagrees with the reading. The Words table takes the reading's
+    order, and every screen plots."""
+    words, fixations = _paged_pair(
+        ["page_1", "page_10", "page_2"], ["page_1", "page_2", "page_10"]
+    )
+    parts = api.list_parts(words, fixations)
+    assert parts[SCREEN_ID].tolist() == ["page_1", "page_2", "page_10"]
+    order = words.drop_duplicates(SCREEN_ID).set_index(SCREEN_ID)["screen_index"]
+    assert order.to_dict() == {"page_1": 1, "page_2": 2, "page_10": 3}
+    for screen in parts[SCREEN_ID]:
+        api.plot_scanpath(words, fixations, "p1", "story", screen=screen)
+
+
+def test_a_mapped_screen_order_wins_over_a_derived_one():
+    words, fixations = _paged_pair(
+        ["page_1", "page_2", "page_3"],
+        ["page_3", "page_1", "page_2"],
+        word_index={"page_1": 1, "page_2": 2, "page_3": 3},
+    )
+    parts = api.list_parts(words, fixations)
+    assert parts[SCREEN_ID].tolist() == ["page_1", "page_2", "page_3"]
+
+
+def test_two_mapped_screen_orders_that_disagree_are_still_refused():
+    words, fixations = _paged_pair(
+        ["page_1", "page_2"],
+        ["page_1", "page_2"],
+        word_index={"page_1": 1, "page_2": 2},
+        fix_index={"page_1": 2, "page_2": 1},
+    )
+    with pytest.raises(ValueError, match="conflicts across tables"):
+        api.list_parts(words, fixations)
+
+
 def test_an_unmapped_screen_index_column_does_not_make_a_table_multipart():
     """With no screen field mapped, a raw `screen_index` column must not ride
     through the stamp path above — deriving a `screen_id` from it would leave an

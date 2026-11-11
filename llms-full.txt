@@ -632,8 +632,9 @@ The app detects columns from common eye-tracker exports. Check and correct the m
 - Times in milliseconds. A time column whose header names its unit, such as `[s]`, `[μs]` or `[ns]`, is converted.
 - Word boxes as `x/y/width/height` or EyeLink's `IA_LEFT/RIGHT/TOP/BOTTOM`
 - Word IDs as numbers, or as text such as `w1`. Spell text IDs the same way in the Fixations and Words tables. With text IDs, the order of the rows in the Words table sets the word order.
-- Several files for one table, such as one file per trial, are stacked into one table, with each file's name in a `source_file` column. When an ID is only in the file name, **Derive columns from text** splits it out into a column you can map.
-- Words tables with one box per character, as in Chinese or Japanese: turn on **Merge character boxes into word boxes**.
+- Several files for one table, such as one file per trial, are stacked into one table, with each file's name in a `source_file` column. When an ID is only in the file name, **Derive columns from text** splits it out into a column you can map. When you click **Apply**, a derived column named like an ID, such as `participant`, `trial` or `stimulus`, fills that ID field if it is empty.
+- Trial and Text IDs are matched exactly, so spell them the same way in both tables, including upper and lower case. The import screen says when they differ only in case.
+- Words tables with one box per character, as in Chinese or Japanese: turn on **Merge character boxes into word boxes**. The import screen suggests it when a word's rows are at different positions.
 
 ### Trials over several screens
 
@@ -650,6 +651,8 @@ Corpus Analysis uses the per-word reading measures in your Words table, such as 
 1. Under **Recording setup**, enter the **Screen**, **Monitor width** and **Text size** if you know them.
 1. Optionally, in the desktop app or a local install, attach the stimulus images from a folder.
 1. Click **Add dataset**, then **Open in Scanpath view** to see its first trial. Later, **Open in Scanpath view** beside **Add dataset** on the Data page does the same for the selected dataset.
+
+To import similar files again, click **Download setup file** before **Add dataset**. Next time, choose **Start from** → **A setup file** and upload your tables: the column mapping, derived columns, character-box merge and recording setup are filled in.
 
 \[!\[
 
@@ -679,7 +682,7 @@ For raw gaze, metadata and explicit column mappings, see the [loaders](https://l
 
 Click a dataset in the dataset list to open it. Below the list, **What's in *‹dataset›*** shows its tables, annotations and **Data checks**. When a check flags more than half of a table, such as every duration read as 0 ms, the Scanpath view says so above the plot.
 
-Use **Edit dataset** to change its name, column mapping, recording setup or metadata, then click **Save changes**. **Download setup file** saves the mapping and recording setup, so you can apply them to similar data.
+Use **Edit dataset** to change its name, column mapping, recording setup or metadata, then click **Save changes**. **Download setup file** saves the mapping, recording setup and character-box merge, so you can apply them to similar data.
 
 The editor offers only the columns kept when the dataset was added. To use a column that isn't listed, remove the dataset and add it again from its files, mapping the column or keeping it under **Extra fields to keep**.
 
@@ -902,6 +905,7 @@ The **Fixations** switch draws the fixation markers. Its **▾** holds:
 | **Color bar** → **Vertical** / **Horizontal**, **Angle**, **Size**, **Thickness**, **Length** | Set the bar's direction (right of the plot or below it), its tick-label angle and size, and its thickness and length.                                                                                                                                                                                                                                            |
 | **Fixation index** → **Show**                                                                 | Number each fixation in reading order.                                                                                                                                                                                                                                                                                                                           |
 | **Fixation index** → color, **Size**                                                          | Choose the numbers' color and size.                                                                                                                                                                                                                                                                                                                              |
+| **Fixation index** → **Position**                                                             | Put each number above its fixation, inside it, or below it.                                                                                                                                                                                                                                                                                                      |
 | **Snap** → **To line**                                                                        | Move each fixation up or down onto its line of text. This makes a schematic, labeled *Illustration*.                                                                                                                                                                                                                                                             |
 | **Snap** → **Position**                                                                       | Choose where on its line a snapped fixation sits.                                                                                                                                                                                                                                                                                                                |
 
@@ -2127,6 +2131,7 @@ Examples:
 | `show_order` `--no-fixation-index` `--fixation-index`                 | `False`       | Number the fixations in order (the app's Fixation index).                                                                                                                                                                                                                                                                                                       |
 | `order_font_size` `--order-font-size`                                 | `10`          | Size of the fixation index numbers.                                                                                                                                                                                                                                                                                                                             |
 | `order_font_color` `--order-font-color`                               | `'#111111'`   | Color of the fixation index numbers.                                                                                                                                                                                                                                                                                                                            |
+| `order_label_position` `--order-label-position`                       | `'above'`     | Where each fixation index number sits on its fixation. One of `'above'`, `'inside'`, `'below'`.                                                                                                                                                                                                                                                                 |
 | `fixation_snap_to_line` `--snap-fixations`                            | `False`       | Move each fixation up or down onto its text line: its word's line, else the nearest. Its x stays. `--snap-position` sets where on the line. *Plot and compare only.*                                                                                                                                                                                            |
 | `fixation_snap_position` `--snap-position`                            | `-0.5`        | Where on its line a snapped fixation sits, in line heights from the line's middle: 0 centers it, -0.5 is the top edge, 0.5 the bottom edge. Used with `--snap-fixations`. *Plot and compare only.*                                                                                                                                                              |
 
@@ -2863,6 +2868,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--fixation-color-range`            | `LO HI`                                                                                | —       | Fix the `--color-by` color scale to LO..HI instead of the trial's range, so several figures share one scale.                                                                                                                                                                                                                |
 | `--order-font-size`                 | `PX`                                                                                   | —       | Size of the fixation index numbers (default: 10).                                                                                                                                                                                                                                                                           |
 | `--order-font-color`                | `COLOR`                                                                                | —       | Color of the fixation index numbers (default: #111111).                                                                                                                                                                                                                                                                     |
+| `--order-label-position`            | `above`, `inside`, `below`                                                             | —       | Where each fixation index number sits on its fixation (default: above).                                                                                                                                                                                                                                                     |
 | `--no-fixation-colorbar`            | switch                                                                                 | —       | Leave out `--color-by`'s color bar.                                                                                                                                                                                                                                                                                         |
 | `--fixation-colorbar-orientation`   | `vertical`, `horizontal`                                                               | —       | Fixation color bar: beside the plot (vertical, default) or below it.                                                                                                                                                                                                                                                        |
 | `--fixation-colorbar-tickangle`     | `DEG`                                                                                  | —       | Fixation color bar: tick-label angle, -90–90 (default: 0).                                                                                                                                                                                                                                                                  |
@@ -3758,7 +3764,7 @@ sps.save_figure(fig, "word-boxes.html")
 
 # About Scanpath Studio
 
-**Scanpath Studio v0.45.1** — interactive visualization of eye movements in reading.
+**Scanpath Studio v0.46.0** — interactive visualization of eye movements in reading.
 
 Developed by [Omer Shubi](https://omershubi.github.io/), [Keren Gruteke Klein](https://kerengruteke.github.io/), [Maya Grossman](https://www.linkedin.com/in/maya-grossman-32b547292/), [Ella Lion](https://ella-lion.github.io/), [Deborah N. Jakobi](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/jakobi.html), [David R. Reich](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/lab-members/reich.html), [Lena Jäger](https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people/group-leader/jaeger.html), and [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/), at the Technion and the University of Zurich.
 
@@ -3780,14 +3786,14 @@ Show BibTeX and APA
              Berzak, Yevgeni},
   title   = {{Scanpath Studio}},
   year    = {2026},
-  version = {0.45.1},
+  version = {0.46.0},
   doi     = {10.5281/zenodo.22933884},
   url     = {https://doi.org/10.5281/zenodo.22933884},
   license = {MIT},
 }
 ```
 
-Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.45.1) [Computer software]. https://doi.org/10.5281/zenodo.22933884
+Shubi, O., Gruteke Klein, K., Grossman, M., Lion, E., Jakobi, D. N., Reich, D. R., Jäger, L., & Berzak, Y. (2026). *Scanpath Studio* (Version 0.46.0) [Computer software]. https://doi.org/10.5281/zenodo.22933884
 
 ## Bundled demo
 

@@ -2669,9 +2669,15 @@ metadata field.</p>
 <li>Several files for one table, such as one file per trial, are stacked into
   one table, with each file's name in a <code>source_file</code> column. When an ID is
   only in the file name, <strong>Derive columns from text</strong> splits it out into a
-  column you can map.</li>
+  column you can map. When you click <strong>Apply</strong>, a derived column named like an
+  ID, such as <code>participant</code>, <code>trial</code> or <code>stimulus</code>, fills that ID field if it
+  is empty.</li>
+<li>Trial and Text IDs are matched exactly, so spell them the same way in both
+  tables, including upper and lower case. The import screen says when they
+  differ only in case.</li>
 <li>Words tables with one box per character, as in Chinese or Japanese: turn on
-  <strong>Merge character boxes into word boxes</strong>.</li>
+  <strong>Merge character boxes into word boxes</strong>. The import screen suggests it
+  when a word's rows are at different positions.</li>
 </ul>
 <h3 id="multipart-logical-trials">Trials over several screens<a class="headerlink" href="#multipart-logical-trials" title="Permanent link">&para;</a></h3>
 <p>Map the <strong>Screen ID</strong> field in your tables. A column named <code>screen_index</code> sets
@@ -2694,6 +2700,10 @@ EyeLink's <code>IA_*</code> columns are detected.</p>
    Scanpath view</strong> to see its first trial. Later, <strong>Open in Scanpath view</strong> beside
    <strong>Add dataset</strong> on the Data page does the same for the selected dataset.</li>
 </ol>
+<p>To import similar files again, click <span class="sps-icon" data-icon="download" aria-hidden="true"></span> <strong>Download setup file</strong>
+before <strong>Add dataset</strong>. Next time, choose <strong>Start from</strong> → <strong>A setup file</strong> and
+upload your tables: the column mapping, derived columns, character-box merge
+and recording setup are filled in.</p>
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../assets/workflows/add-your-data_poster.webp" data-autoplay
        aria-label="Importing a Fixations table and a Words table">
@@ -2731,8 +2741,8 @@ the app does.</p>
 duration read as 0 ms, the Scanpath view says so above the plot.</p>
 <p>Use <span class="sps-icon" data-icon="edit" aria-hidden="true"></span> <strong>Edit dataset</strong> to change its name, column mapping,
 recording setup or metadata, then click <span class="sps-icon" data-icon="check" aria-hidden="true"></span> <strong>Save changes</strong>.
-<strong>Download setup file</strong> saves the mapping and recording setup, so you can apply
-them to similar data.</p>
+<strong>Download setup file</strong> saves the mapping, recording setup and character-box
+merge, so you can apply them to similar data.</p>
 <p>The editor offers only the columns kept when the dataset was added. To use a
 column that isn't listed, remove the dataset and add it again from its files,
 mapping the column or keeping it under <strong>Extra fields to keep</strong>.</p>

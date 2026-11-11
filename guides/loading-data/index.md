@@ -38,8 +38,9 @@ The app detects columns from common eye-tracker exports. Check and correct the m
 - Times in milliseconds. A time column whose header names its unit, such as `[s]`, `[μs]` or `[ns]`, is converted.
 - Word boxes as `x/y/width/height` or EyeLink's `IA_LEFT/RIGHT/TOP/BOTTOM`
 - Word IDs as numbers, or as text such as `w1`. Spell text IDs the same way in the Fixations and Words tables. With text IDs, the order of the rows in the Words table sets the word order.
-- Several files for one table, such as one file per trial, are stacked into one table, with each file's name in a `source_file` column. When an ID is only in the file name, **Derive columns from text** splits it out into a column you can map.
-- Words tables with one box per character, as in Chinese or Japanese: turn on **Merge character boxes into word boxes**.
+- Several files for one table, such as one file per trial, are stacked into one table, with each file's name in a `source_file` column. When an ID is only in the file name, **Derive columns from text** splits it out into a column you can map. When you click **Apply**, a derived column named like an ID, such as `participant`, `trial` or `stimulus`, fills that ID field if it is empty.
+- Trial and Text IDs are matched exactly, so spell them the same way in both tables, including upper and lower case. The import screen says when they differ only in case.
+- Words tables with one box per character, as in Chinese or Japanese: turn on **Merge character boxes into word boxes**. The import screen suggests it when a word's rows are at different positions.
 
 ### Trials over several screens
 
@@ -56,6 +57,8 @@ Corpus Analysis uses the per-word reading measures in your Words table, such as 
 1. Under **Recording setup**, enter the **Screen**, **Monitor width** and **Text size** if you know them.
 1. Optionally, in the desktop app or a local install, attach the stimulus images from a folder.
 1. Click **Add dataset**, then **Open in Scanpath view** to see its first trial. Later, **Open in Scanpath view** beside **Add dataset** on the Data page does the same for the selected dataset.
+
+To import similar files again, click **Download setup file** before **Add dataset**. Next time, choose **Start from** → **A setup file** and upload your tables: the column mapping, derived columns, character-box merge and recording setup are filled in.
 
 \[!\[
 
@@ -85,6 +88,6 @@ For raw gaze, metadata and explicit column mappings, see the [loaders](https://l
 
 Click a dataset in the dataset list to open it. Below the list, **What's in *‹dataset›*** shows its tables, annotations and **Data checks**. When a check flags more than half of a table, such as every duration read as 0 ms, the Scanpath view says so above the plot.
 
-Use **Edit dataset** to change its name, column mapping, recording setup or metadata, then click **Save changes**. **Download setup file** saves the mapping and recording setup, so you can apply them to similar data.
+Use **Edit dataset** to change its name, column mapping, recording setup or metadata, then click **Save changes**. **Download setup file** saves the mapping, recording setup and character-box merge, so you can apply them to similar data.
 
 The editor offers only the columns kept when the dataset was added. To use a column that isn't listed, remove the dataset and add it again from its files, mapping the column or keeping it under **Extra fields to keep**.

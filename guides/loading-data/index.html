@@ -16,7 +16,7 @@
         <link rel="prev" href="../scanpath-visualization/controls/">
       
       
-        <link rel="next" href="multipleye/">
+        <link rel="next" href="../corpus-workspace/">
       
       
         
@@ -1421,32 +1421,16 @@
   
   
   
-    
-    
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
       
         
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
           
-        
-      
-        
-      
-    
-    
-    
-      
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" checked>
-        
-          
-          <div class="md-nav__link md-nav__container">
-            <a href="./" class="md-nav__link md-nav__link--active">
-              
   
   
   <span class="md-ellipsis">
@@ -1460,43 +1444,17 @@
   
   
 
-            </a>
-            
-              
-              <label class="md-nav__link md-nav__link--active" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
-                <span class="md-nav__icon md-icon"></span>
-              </label>
-            
-          </div>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_4_3">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Data Management
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="multipleye/" class="md-nav__link">
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
   <span class="md-ellipsis">
     
   
-    MultiplEYE session sets
+    Data Management
   
 
     
@@ -1505,13 +1463,136 @@
   
 
       </a>
-    </li>
-  
+      
+        
 
-              
-            
-          </ul>
-        </nav>
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#choose-a-dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choose a dataset
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Choose a dataset">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#onestop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OneStop
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-your-data-needs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What your data needs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What your data needs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files and units
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multipart-logical-trials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trials over several screens
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reading-measures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading measures
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#add-your-own-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add your own data
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#load-and-inspect-in-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Load and inspect in code
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#manage-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manage datasets
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -2496,24 +2577,6 @@
   
 
       
-        
-  
-  
-    
-    
-      <li class="md-path__item">
-        <a href="./" class="md-path__link">
-          
-  <span class="md-ellipsis">
-    Data Management
-  </span>
-
-        </a>
-      </li>
-    
-  
-
-      
     </ol>
   </nav>
 
@@ -2541,8 +2604,7 @@ the <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <stro
   which you can edit.</li>
 <li>Public datasets: OneStop and PoTeC. In the desktop app or a pip install, each
   downloads the first time you open it.</li>
-<li><strong>+</strong> → <span class="sps-icon" data-icon="upload" aria-hidden="true"></span> <strong>Import files</strong>: your own tables, or a
-  <a href="multipleye/">MultiplEYE session set</a> from its folder or its files.</li>
+<li><strong>+</strong> → <span class="sps-icon" data-icon="upload" aria-hidden="true"></span> <strong>Import files</strong>: your own tables.</li>
 <li><strong>+</strong> → <span class="sps-icon" data-icon="draw" aria-hidden="true"></span> <strong>Draw a scanpath</strong>: write a text and place its
   fixations by hand.</li>
 </ul>
@@ -2604,11 +2666,18 @@ metadata field.</p>
 <li>Word IDs as numbers, or as text such as <code>w1</code>. Spell text IDs the same way in
   the Fixations and Words tables. With text IDs, the order of the rows in the
   Words table sets the word order.</li>
+<li>Several files for one table, such as one file per trial, are stacked into
+  one table, with each file's name in a <code>source_file</code> column. When an ID is
+  only in the file name, <strong>Derive columns from text</strong> splits it out into a
+  column you can map.</li>
+<li>Words tables with one box per character, as in Chinese or Japanese: turn on
+  <strong>Merge character boxes into word boxes</strong>.</li>
 </ul>
 <h3 id="multipart-logical-trials">Trials over several screens<a class="headerlink" href="#multipart-logical-trials" title="Permanent link">&para;</a></h3>
 <p>Map the <strong>Screen ID</strong> field in your tables. A column named <code>screen_index</code> sets
 the order of the screens. Without one, the screens are ordered by where they
-first appear. The app draws one screen at a time.</p>
+first appear, in the Fixations table when the dataset has one. The app draws one
+screen at a time.</p>
 <h3 id="reading-measures">Reading measures<a class="headerlink" href="#reading-measures" title="Permanent link">&para;</a></h3>
 <p>Corpus Analysis uses the per-word reading measures in your Words table, such as
 first fixation duration or total fixation duration. Map them when you import.
@@ -2724,13 +2793,13 @@ mapping the column or keeping it under <strong>Extra fields to keep</strong>.</p
         
         
           
-          <a href="multipleye/" class="md-footer__link md-footer__link--next" aria-label="Next: MultiplEYE session sets">
+          <a href="../corpus-workspace/" class="md-footer__link md-footer__link--next" aria-label="Next: Corpus Analysis">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                MultiplEYE session sets
+                Corpus Analysis
               </div>
             </div>
             <div class="md-footer__button md-icon">

@@ -18,51 +18,50 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 
 ## At a glance
 
-| Function                              | What it does                                                                     |
-| ------------------------------------- | -------------------------------------------------------------------------------- |
-| **Load your data**                    |                                                                                  |
-| load_scanpath_data                    | Load and normalize a Words table, a Fixations table, or both.                    |
-| ScanpathData                          | The `(words, fixations)` frames `load_scanpath_data` returns, with their names.  |
-| propose_schema                        | Find the column mapping auto-detection would use for a raw table.                |
-| attach_stimulus_images                | Fill `image_path` from a folder of stimulus images, on frames already loaded.    |
-| load_raw_gaze                         | Load and normalize a raw, sample-level gaze table, for `raw_gaze=`.              |
-| load_participant_metadata             | Load a participant-level metadata table: one row per participant.                |
-| load_trial_metadata                   | Load a trial-level metadata table: one row per trial.                            |
-| load_text_metadata                    | Load a text-level metadata table: one row per text.                              |
-| **Load the bundled demo and corpora** |                                                                                  |
-| load_sample_data                      | Load the bundled demo, normalized and ready to plot.                             |
-| load_sample_raw_gaze                  | Load the bundled demo's raw gaze: what the app overlays on it.                   |
-| load_potec                            | Load PoTeC as normalized `(words, fixations)` frames, ready to plot.             |
-| load_onestop                          | Load OneStop as normalized `(words, fixations)` frames, ready to plot.           |
-| load_multipleye                       | Load MultiplEYE as normalized `(words, fixations)` frames, ready to plot.        |
-| **Draw a scanpath**                   |                                                                                  |
-| build_authored_scanpath               | Build normalized Words and Fixations frames from a hand-drawn scanpath.          |
-| load_authored_scanpath                | Load a draft file as normalized Words and Fixations frames.                      |
-| **Inspect**                           |                                                                                  |
-| list_trials                           | List every plottable trial: one row per participant and trial.                   |
-| list_parts                            | List the ordered screens of multipart data, optionally for one trial.            |
-| check_data_health                     | Find values that loaded as numbers but cannot be right: the app's *Data checks*. |
-| **Plot**                              |                                                                                  |
-| plot_scanpath                         | Build one trial's scanpath figure, by default in the app's Scanpath design.      |
-| animate_scanpath                      | Build the animated replay of one trial's scanpath, or of two on one clock.       |
-| compare_scanpaths                     | Build a figure comparing two scanpaths: the app's **Compare** mode.              |
-| render_parent_trial                   | Render every screen of one multipart trial, each in its own coordinates.         |
-| plot_corpus_figure                    | Plot a corpus profile, distribution or difference figure from a tidy table.      |
-| **Figure options**                    |                                                                                  |
-| figure_options                        | List every figure keyword a builder takes, with the default it renders with.     |
-| **Reproduce a figure in code**        |                                                                                  |
-| figure_code                           | Write the API or CLI code that reproduces a figure.                              |
-| **Save**                              |                                                                                  |
-| save_figure                           | Save a figure, in the format its file extension names.                           |
-| save_figure_layers                    | Save a scanpath figure as one file per layer, for editing.                       |
-| **Recovery cache**                    |                                                                                  |
-| cache_status                          | Describe the recovery cache a local run keeps, without launching the app.        |
-| clear_cache                           | Delete the recovery cache.                                                       |
-| **Version and updates**               |                                                                                  |
-| version_info                          | Say which build of Scanpath Studio this is, without using the network.           |
-| check_for_updates                     | Ask GitHub whether a newer release than this build is out.                       |
-| **Citation**                          |                                                                                  |
-| cite                                  | How to cite Scanpath Studio — and, optionally, the corpus you used.              |
+| Function                                      | What it does                                                                     |
+| --------------------------------------------- | -------------------------------------------------------------------------------- |
+| **Load your data**                            |                                                                                  |
+| load_scanpath_data                            | Load and normalize a Words table, a Fixations table, or both.                    |
+| ScanpathData                                  | The `(words, fixations)` frames `load_scanpath_data` returns, with their names.  |
+| propose_schema                                | Find the column mapping auto-detection would use for a raw table.                |
+| attach_stimulus_images                        | Fill `image_path` from a folder of stimulus images, on frames already loaded.    |
+| load_raw_gaze                                 | Load and normalize a raw, sample-level gaze table, for `raw_gaze=`.              |
+| load_participant_metadata                     | Load a participant-level metadata table: one row per participant.                |
+| load_trial_metadata                           | Load a trial-level metadata table: one row per trial.                            |
+| load_text_metadata                            | Load a text-level metadata table: one row per text.                              |
+| **Load the bundled demo and public datasets** |                                                                                  |
+| load_sample_data                              | Load the bundled demo, normalized and ready to plot.                             |
+| load_sample_raw_gaze                          | Load the bundled demo's raw gaze: what the app overlays on it.                   |
+| load_potec                                    | Load PoTeC as normalized `(words, fixations)` frames, ready to plot.             |
+| load_onestop                                  | Load OneStop as normalized `(words, fixations)` frames, ready to plot.           |
+| **Draw a scanpath**                           |                                                                                  |
+| build_authored_scanpath                       | Build normalized Words and Fixations frames from a hand-drawn scanpath.          |
+| load_authored_scanpath                        | Load a draft file as normalized Words and Fixations frames.                      |
+| **Inspect**                                   |                                                                                  |
+| list_trials                                   | List every plottable trial: one row per participant and trial.                   |
+| list_parts                                    | List the ordered screens of multipart data, optionally for one trial.            |
+| check_data_health                             | Find values that loaded as numbers but cannot be right: the app's *Data checks*. |
+| **Plot**                                      |                                                                                  |
+| plot_scanpath                                 | Build one trial's scanpath figure, by default in the app's Scanpath design.      |
+| animate_scanpath                              | Build the animated replay of one trial's scanpath, or of two on one clock.       |
+| compare_scanpaths                             | Build a figure comparing two scanpaths: the app's **Compare** mode.              |
+| render_parent_trial                           | Render every screen of one multipart trial, each in its own coordinates.         |
+| plot_corpus_figure                            | Plot a corpus profile, distribution or difference figure from a tidy table.      |
+| **Figure options**                            |                                                                                  |
+| figure_options                                | List every figure keyword a builder takes, with the default it renders with.     |
+| **Reproduce a figure in code**                |                                                                                  |
+| figure_code                                   | Write the API or CLI code that reproduces a figure.                              |
+| **Save**                                      |                                                                                  |
+| save_figure                                   | Save a figure, in the format its file extension names.                           |
+| save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                       |
+| **Recovery cache**                            |                                                                                  |
+| cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.        |
+| clear_cache                                   | Delete the recovery cache.                                                       |
+| **Version and updates**                       |                                                                                  |
+| version_info                                  | Say which build of Scanpath Studio this is, without using the network.           |
+| check_for_updates                             | Ask GitHub whether a newer release than this build is out.                       |
+| **Citation**                                  |                                                                                  |
+| cite                                          | How to cite Scanpath Studio — and, optionally, the corpus you used.              |
 
 ## Column names
 
@@ -339,7 +338,7 @@ meta = sps.load_text_metadata("texts.csv", texts=words)
 meta.names  # ('genre', 'difficulty')
 ```
 
-## Load the bundled demo and corpora
+## Load the bundled demo and public datasets
 
 ### load_sample_data
 
@@ -454,40 +453,6 @@ words, fixations = sps.load_onestop(
 pid, tid = sps.list_trials(words, fixations).iloc[0]  # one reading
 fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
 ```
-
-### load_multipleye
-
-```
-load_multipleye(
-    root,
-    *,
-    sessions=None,
-    stimuli=None,
-    fixation_source="scanpaths",
-    include_question_screens=True,
-    names="source",
-)
-```
-
-Load MultiplEYE as normalized `(words, fixations)` frames, ready to plot.
-
-Under the loader's column names; `names="canonical"` for the internal ones (see `api.load_scanpath_data`).
-
-`root` is a MultiplEYE session set (e.g. `data/MultiplEYE_ZH_CH_Zurich_1_2025`). Narrow the load with `sessions` (full session ids, e.g. `["001_ZH_CH_1_ET1"]`) and/or `stimuli` (e.g. `["Lit_Alchemist_4"]`).
-
-Participants are session ids (ET1 and ET2 read disjoint stimuli, so each is a distinct reader). A trial is **one reading of one stimulus** (`trial_id == "001_ZH_CH_1_ET1_Lit_Alchemist_4"`, `text_id == "Lit_Alchemist_4"`), and its screens — the reading pages `page_1…page_N` plus the comprehension-question screens — are `screen_id` values in presentation order (`screen_index`, ranked from that reader's own fixation onsets, since the question order is shuffled per reader). `screen_kind` is `reading` or `question`::
-
-```
-words, fixations = load_multipleye(
-    "data/MultiplEYE_ZH_CH_Zurich_1_2025", stimuli=["Lit_Alchemist_4"]
-)
-pid, tid = scanpath_studio.list_trials(words, fixations).iloc[0]
-fig = scanpath_studio.plot_scanpath(words, fixations, pid, tid, screen="page_1")
-```
-
-The screen is the session set's own (`multipleye_screen`): with its config's monitor resolution and stimulus image size, every fixation carries the monitor as `canvas_width` / `canvas_height`, which `plot_scanpath` draws on when no `canvas_size` is given. Without them the coordinates stay relative to the stimulus image.
-
-`fixation_source` is `"scanpaths"` (default; fixations pre-tagged with page + word index) or `"fixations"` (raw, no word linkage); question screens always come from `fixations/`, which is the only export that keeps them. `include_question_screens=False` loads the reading pages alone.
 
 ## Draw a scanpath
 
@@ -1222,7 +1187,7 @@ The headless form of the app's **Share** → **Code**. Give it the arguments you
 Parameters:
 
 - **`kind`** (`str`, default: `'static'` ) – "static", "animation" or "comparison": the builder the snippet calls.
-- **`source`** (`str`, default: `'demo'` ) – How the data is loaded: "demo", "synthetic", "files", "potec", "onestop", "multipleye", "author", "raw_gaze" (a dataset recorded as raw gaze alone, whose samples at source_options["raw_gaze"] are the data), or "unknown" for data a snippet can't name.
+- **`source`** (`str`, default: `'demo'` ) – How the data is loaded: "demo", "synthetic", "files", "potec", "onestop", "author", "raw_gaze" (a dataset recorded as raw gaze alone, whose samples at source_options["raw_gaze"] are the data), or "unknown" for data a snippet can't name.
 - **`source_options`** (`dict | None`, default: `None` ) – That loader's arguments: {"root": …}, {"words": [...], "fixations": [...]} and so on. With show_raw_gaze=True, "raw_gaze" (and an optional "raw_gaze_schema") names the raw-gaze files; the demo uses its own.
 - **`participant`** (`str`, default: `''` ) – The participant ID. Left empty, the snippet renders the first available trial, as render does.
 - **`trial`** (`str`, default: `''` ) – The trial ID, likewise.

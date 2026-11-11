@@ -9,7 +9,7 @@ Pick a dataset in **Select dataset** above the plot, or in the dataset list on t
 - **Bundled demo**: 24 trials from OneStop, with two participants and 12 texts.
 - **Hand-drawn sample**: a scanpath drawn by hand over a short English text, which you can edit.
 - Public datasets: OneStop and PoTeC. In the desktop app or a pip install, each downloads the first time you open it.
-- **+** → **Import files**: your own tables, or a [MultiplEYE session set](https://lacclab.github.io/scanpath-studio/guides/loading-data/multipleye/index.md) from its folder or its files.
+- **+** → **Import files**: your own tables.
 - **+** → **Draw a scanpath**: write a text and place its fixations by hand.
 
 ### OneStop
@@ -38,10 +38,12 @@ The app detects columns from common eye-tracker exports. Check and correct the m
 - Times in milliseconds. A time column whose header names its unit, such as `[s]`, `[μs]` or `[ns]`, is converted.
 - Word boxes as `x/y/width/height` or EyeLink's `IA_LEFT/RIGHT/TOP/BOTTOM`
 - Word IDs as numbers, or as text such as `w1`. Spell text IDs the same way in the Fixations and Words tables. With text IDs, the order of the rows in the Words table sets the word order.
+- Several files for one table, such as one file per trial, are stacked into one table, with each file's name in a `source_file` column. When an ID is only in the file name, **Derive columns from text** splits it out into a column you can map.
+- Words tables with one box per character, as in Chinese or Japanese: turn on **Merge character boxes into word boxes**.
 
 ### Trials over several screens
 
-Map the **Screen ID** field in your tables. A column named `screen_index` sets the order of the screens. Without one, the screens are ordered by where they first appear. The app draws one screen at a time.
+Map the **Screen ID** field in your tables. A column named `screen_index` sets the order of the screens. Without one, the screens are ordered by where they first appear, in the Fixations table when the dataset has one. The app draws one screen at a time.
 
 ### Reading measures
 

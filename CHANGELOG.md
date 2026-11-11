@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/);
 `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.45.1] - 2026-11-11
+
+### Removed
+- The MultiplEYE session-set format, load_multipleye and render --multipleye are withdrawn for now. A session set's files still load as your own tables, and a dataset already added this way still opens. ([#539](https://github.com/lacclab/scanpath-studio/issues/539))
+
+### Fixed
+- A dataset over several screens with no screen number mapped no longer fails to plot when its Words table lists the screens in another order than the fixations do (page_10 before page_2): the screens follow the order they first appear in the fixations. ([#539](https://github.com/lacclab/scanpath-studio/issues/539))
+
 ## [0.45.0] - 2026-11-10
 
 ### Added

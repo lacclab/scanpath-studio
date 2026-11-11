@@ -1,1 +1,0 @@
-The MultiplEYE session-set format, load_multipleye and render --multipleye are withdrawn for now. A session set's files still load as your own tables, and a dataset already added this way still opens.

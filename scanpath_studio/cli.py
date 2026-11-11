@@ -54,6 +54,7 @@ from .constants import (
     SACCADE_WIDTH_BOUNDS,
     UNIFORM_COLOR_FIELD,
     drift_correction_enabled,
+    multipleye_format_enabled,
     palette_settings,
 )
 
@@ -596,17 +597,22 @@ def _render_parser() -> argparse.ArgumentParser:
         "lacclab, a local lab-processed export with no download.",
     )
 
-    src.add_argument(
-        "--multipleye",
-        metavar="DIR",
-        help="Load a MultiplEYE session set from DIR, the folder holding its "
-        "scanpaths/ or fixations/ folder and its stimuli_*/ folder. A participant "
-        "is a session (e.g. 001_ZH_CH_1_ET1) and a trial is one reading of one "
-        "stimulus (e.g. 001_ZH_CH_1_ET1_Lit_Alchemist_4), with its pages and "
-        "comprehension questions as screens. The screen comes from the session "
-        "set's own config; "
-        "set the font with --font-size and --font-family.",
-    )
+    # Experimental, like --drift-correction: not added while gated off, so
+    # `--help` doesn't list it and passing it is an unrecognized argument.
+    if multipleye_format_enabled():
+        src.add_argument(
+            "--multipleye",
+            metavar="DIR",
+            help="Load a MultiplEYE session set from DIR, the folder holding its "
+            "scanpaths/ or fixations/ folder and its stimuli_*/ folder. A "
+            "participant is a session (e.g. 001_ZH_CH_1_ET1) and a trial is one "
+            "reading of one stimulus (e.g. 001_ZH_CH_1_ET1_Lit_Alchemist_4), with "
+            "its pages and comprehension questions as screens. The screen comes "
+            "from the session set's own config; set the font with --font-size "
+            "and --font-family.",
+        )
+    else:
+        src.set_defaults(multipleye=None)
     src.add_argument(
         "--participant-metadata",
         metavar="FILE",
@@ -1125,8 +1131,13 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="WxH",
         help="Screen size in px, e.g. 2560x1440 (default: 2560x1440 for "
         "--sample and --onestop, 1680x1050 for --potec, 1200x800 for "
-        "--authoring, the session set's own monitor for --multipleye, "
-        "otherwise estimated from the data).",
+        "--authoring, "
+        + (
+            "the session set's own monitor for --multipleye, "
+            if multipleye_format_enabled()
+            else ""
+        )
+        + "otherwise estimated from the data).",
     )
     viz.add_argument(
         "--coordinate-grid",
@@ -2691,7 +2702,7 @@ def render(argv: list[str]) -> None:
             "--authoring PATH",
             "--potec DIR",
             "--onestop DIR",
-            "--multipleye DIR",
+            *(["--multipleye DIR"] if multipleye_format_enabled() else []),
         ]
         raise SystemExit(
             f"Provide exactly one input: {', '.join(inputs)}, or your own tables "

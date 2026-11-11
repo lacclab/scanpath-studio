@@ -19,7 +19,6 @@ __all__ = [
     "list_parts",
     "list_trials",
     "load_authored_scanpath",
-    "load_multipleye",
     "load_onestop",
     "load_participant_metadata",
     "load_potec",
@@ -61,6 +60,8 @@ _HELD_BACK_EXPORTS = frozenset(
         "trial_summary",
     }
 )
+# `load_multipleye` is experimental too (`constants.multipleye_format_enabled`):
+# it resolves, and raises without SCANPATH_EXPERIMENTAL=1, but is not listed.
 _DATASET_EXPORTS = frozenset({"load_potec", "load_multipleye", "load_onestop"})
 _API_EXPORTS = (
     (frozenset(__all__) | _HELD_BACK_EXPORTS)

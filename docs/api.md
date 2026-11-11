@@ -67,7 +67,7 @@ print(words[columns].head(3))
 
 ::: scanpath_studio.api.load_text_metadata
 
-## Load the bundled demo and corpora
+## Load the bundled demo and public datasets
 
 ::: scanpath_studio.api.load_sample_data
 
@@ -76,8 +76,6 @@ print(words[columns].head(3))
 ::: scanpath_studio.datasets.load_potec
 
 ::: scanpath_studio.datasets.load_onestop
-
-::: scanpath_studio.datasets.load_multipleye
 
 ## Draw a scanpath
 

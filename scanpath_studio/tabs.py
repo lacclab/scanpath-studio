@@ -16361,11 +16361,6 @@ def _setup_file_mapping(
                 f"{label}: {', '.join(sorted(from_file_names))} came from "
                 "*Derive columns from text*. Set it up again after restoring."
             )
-    if "aggregate_char_boxes" in (recipe.get("steps") or ()):
-        notes.append(
-            "Words: character boxes were merged into word boxes. Turn on "
-            "*Merge character boxes into word boxes* again after restoring."
-        )
     return mapping, notes
 
 
@@ -16397,6 +16392,15 @@ def _editor_setup_config(name: str) -> dict:
         },
     )
     setup = st.session_state.get("_remap_pending_setup")
+    # The steps the dataset's files went through, so *Start from → A setup
+    # file* runs them again; a Words table being added goes by its own switch.
+    steps = [
+        step
+        for step in (stored.get("source_recipe") or {}).get("steps") or ()
+        if not ("words" in added and step == "aggregate_char_boxes")
+    ]
+    if "words" in added and st.session_state.get(aggregate_key(name)):
+        steps.append("aggregate_char_boxes")
     return {
         "schema": PLOT_CONFIG_SCHEMA,
         "app": {"name": "Scanpath Studio", "version": __version__},
@@ -16405,6 +16409,7 @@ def _editor_setup_config(name: str) -> dict:
         "column_mapping": mapping,
         "column_mapping_notes": notes,
         "experimental_setup": dict(setup) if isinstance(setup, dict) else None,
+        "steps": list(dict.fromkeys(steps)),
     }
 
 

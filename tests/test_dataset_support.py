@@ -1732,7 +1732,11 @@ def test_load_multipleye_real_sample():
     assert not words.empty and not fixations.empty
     # One trial per reading of the stimulus; its pages + question screens inside.
     assert set(words["text_id"]) == {"Lit_Alchemist_4"}
-    assert set(words["trial_id"]) == {"Lit_Alchemist_4"}
+    # A trial is one reading: the session, then the stimulus.
+    readings = words[["participant_id", "trial_id"]].drop_duplicates()
+    assert (
+        readings["trial_id"] == readings["participant_id"] + "_Lit_Alchemist_4"
+    ).all()
     screens = (
         words[words["participant_id"] == "001_ZH_CH_1_ET1"][
             ["screen_index", "screen_id", "screen_kind"]

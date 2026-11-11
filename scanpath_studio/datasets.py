@@ -2701,7 +2701,17 @@ def load_multipleye(
     page + word index) or ``"fixations"`` (raw, no word linkage); question
     screens always come from ``fixations/``, which is the only export that keeps
     them. ``include_question_screens=False`` loads the reading pages alone.
+
+    Experimental (``constants.multipleye_format_enabled``): raises a
+    ``ValueError`` unless ``SCANPATH_EXPERIMENTAL=1``.
     """
+    from .constants import EXPERIMENTAL_ENV_VAR, multipleye_format_enabled
+
+    if not multipleye_format_enabled():
+        raise ValueError(
+            "load_multipleye is experimental and off by default. Set "
+            f"{EXPERIMENTAL_ENV_VAR}=1 to use it anyway."
+        )
     words_raw, fixations_raw = multipleye_raw_frames(
         root,
         sessions=sessions,

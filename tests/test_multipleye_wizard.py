@@ -1,4 +1,5 @@
 """MultiplEYE on every surface: Add dataset's format, Share → Code, the CLI, the API.
+Experimental: the suite runs with ``SCANPATH_EXPERIMENTAL=1``.
 
 The wizard reads a session set from a folder (a local install) or from uploaded
 files, pre-answers Recording setup from the session set's own config, and stores
@@ -279,8 +280,9 @@ def test_recording_setup_takes_each_value_the_config_gives():
 
 
 class TestCliAndApi:
-    def test_load_multipleye_is_public(self):
-        assert "load_multipleye" in sps.__all__
+    def test_load_multipleye_resolves_from_the_package_but_is_not_listed(self):
+        """Experimental: reachable as ``sps.load_multipleye``, not advertised."""
+        assert "load_multipleye" not in sps.__all__
         assert sps.load_multipleye.__module__ == "scanpath_studio.datasets"
 
     def test_render_lists_and_draws_a_session_set(self, session_set, tmp_path, capsys):

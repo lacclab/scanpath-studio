@@ -1,0 +1,1 @@
+A dataset over several screens with no screen number mapped no longer fails to plot when its Words table lists the screens in another order than the fixations do (page_10 before page_2): the screens follow the order they first appear in the fixations.

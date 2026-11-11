@@ -490,3 +490,64 @@ class TestComputedMeasuresGate:
             "fixation" in o.lower() or "saccade" in o.lower() for o in picker.options
         )
         assert not any("per-fixation measure" in i.value for i in at.info)
+
+
+class TestMultiplEYEFormatGate:
+    """Adding a MultiplEYE session set as one is experimental. Its files still
+    load as your own tables, and the reader stays in ``datasets.py``."""
+
+    def test_it_is_hidden_by_default(self):
+        assert constants.multipleye_format_enabled() is False
+
+    def test_the_experimental_flag_brings_it_back(self, monkeypatch):
+        monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        assert constants.multipleye_format_enabled() is True
+
+    def test_the_loader_refuses_naming_the_env_var(self, tmp_path):
+        from scanpath_studio.datasets import load_multipleye
+
+        with pytest.raises(ValueError, match=constants.EXPERIMENTAL_ENV_VAR):
+            load_multipleye(tmp_path)
+
+    def test_the_package_resolves_it_but_does_not_list_it(self):
+        import scanpath_studio as sps
+
+        assert "load_multipleye" not in sps.__all__
+        assert callable(sps.load_multipleye)
+
+    def test_render_help_does_not_mention_it(self, capsys):
+        from scanpath_studio import cli
+
+        with pytest.raises(SystemExit):
+            cli.main(["render", "--help"])
+        assert "multipleye" not in capsys.readouterr().out.lower()
+
+    def test_passing_the_flag_is_an_argparse_error(self, capsys):
+        from scanpath_studio import cli
+
+        with pytest.raises(SystemExit):
+            cli.main(["render", "--multipleye", "somewhere", "-o", "x.html"])
+        assert "multipleye" in capsys.readouterr().err
+
+    def test_the_parser_still_carries_the_attribute(self):
+        from scanpath_studio import cli
+
+        args = cli._render_parser().parse_args(["--sample", "-o", "x.html"])
+        assert args.multipleye is None
+
+    def test_the_wizard_offers_no_format_choice(self):
+        from scanpath_studio import app
+        from tests.conftest import pin_data_view
+
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state["_show_upload_wizard"] = True
+        at.session_state["setup_complete"] = False
+        # Even a format left over in the session falls back to your own tables.
+        at.session_state["wizard_dataset_format"] = "MultiplEYE"
+        pin_data_view(at)
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["wizard_dataset_format"] == "Generic"
+        labels = [element.label for element in at.get("button_group")]
+        assert "Dataset format" not in labels

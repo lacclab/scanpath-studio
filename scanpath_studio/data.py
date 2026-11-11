@@ -4824,6 +4824,11 @@ TEXT_ID_MAPPED = "_text_id_mapped"
 #: (the summaries' reading time and speed, the replay clock) lays the
 #: fixations end to end by their durations instead and says it is an estimate.
 TIMESTAMP_SYNTHESIZED = "_timestamp_synthesized"
+#: On a multi-screen row: its `screen_index` was derived from the order the
+#: table first lists its screens, because the mapping gave no screen number —
+#: so `harmonize_frames` may renumber it to match the other table
+#: (`_align_derived_screen_order`).
+SCREEN_ORDER_DERIVED = "_screen_order_derived"
 #: Bookkeeping columns the pipeline needs and the user never sees: kept in the
 #: frames and the recovery cache, dropped from exports and the Data page's
 #: tables (`drop_internal_columns`), and never offered as a field — their
@@ -4835,6 +4840,7 @@ INTERNAL_COLUMNS = frozenset(
         AOI_TRIAL_ID,
         TEXT_ID_MAPPED,
         TIMESTAMP_SYNTHESIZED,
+        SCREEN_ORDER_DERIVED,
     }
 )
 
@@ -5869,6 +5875,78 @@ def _restore_zero_padding(
     return words, fixations
 
 
+def _screen_order_derived(frame: pd.DataFrame) -> bool:
+    """Whether every screen number in ``frame`` was derived, not mapped."""
+    if SCREEN_ORDER_DERIVED not in frame.columns:
+        return False
+    return bool(frame[SCREEN_ORDER_DERIVED].fillna(False).astype(bool).all())
+
+
+def _renumber_screens_like(
+    target: pd.DataFrame, reference: pd.DataFrame
+) -> pd.DataFrame:
+    """``target`` with each screen numbered as ``reference`` numbers it.
+
+    A screen ``reference`` lacks comes after the reading's last one, in the
+    order ``target`` gave it."""
+    part_key = [*PARENT_KEY, SCREEN_ID]
+    ref = (
+        reference[[*part_key, SCREEN_INDEX]]
+        .drop_duplicates(part_key)
+        .rename(columns={SCREEN_INDEX: "_ref_index"})
+    )
+    screens = (
+        target[[*part_key, SCREEN_INDEX]]
+        .drop_duplicates(part_key)
+        .merge(ref, on=part_key, how="left")
+    )
+    last = screens.groupby(list(PARENT_KEY), dropna=False)["_ref_index"].transform(
+        "max"
+    )
+    extra = (
+        screens["_ref_index"]
+        .isna()
+        .groupby([screens[c] for c in PARENT_KEY], dropna=False)
+        .cumsum()
+    )
+    screens["_new_index"] = screens["_ref_index"].fillna(last.fillna(0) + extra)
+    numbers = screens.set_index(part_key)["_new_index"]
+    keys = pd.MultiIndex.from_frame(target[part_key])
+    out = target.copy()
+    out[SCREEN_INDEX] = numbers.reindex(keys).to_numpy().astype(int)
+    return out
+
+
+def _align_derived_screen_order(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Number the screens alike in both tables when one table's order is derived.
+
+    A table whose mapping names no screen number has its screens numbered in
+    the order its rows first list them (`normalize_screen_identity`), and two
+    tables can list them differently: a stimulus table in file order
+    (``page_1, page_10, page_2, …``), the fixations in the order the reader
+    saw them. The two numbers for one screen would then conflict
+    (`multipart.part_catalog`). So a derived order takes the other table's
+    numbers, and when neither table mapped one, the fixations' order wins,
+    since it is the reader's own. Two mapped orders are left as they are, so a
+    real disagreement is still refused."""
+    if not (
+        SCREEN_ID in words.columns
+        and SCREEN_ID in fixations.columns
+        and SCREEN_INDEX in words.columns
+        and SCREEN_INDEX in fixations.columns
+    ):
+        return words, fixations
+    if words.empty or fixations.empty:
+        return words, fixations
+    if _screen_order_derived(words):
+        return _renumber_screens_like(words, fixations), fixations
+    if _screen_order_derived(fixations):
+        return words, _renumber_screens_like(fixations, words)
+    return words, fixations
+
+
 def harmonize_frames_with_join(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame, StimulusJoin | None]:
@@ -5919,6 +5997,7 @@ def harmonize_frames_reporting(
     words = _reconcile_participant_asymmetry(words, fixations)
     words = normalize_screen_identity(words)
     fixations = normalize_screen_identity(fixations)
+    words, fixations = _align_derived_screen_order(words, fixations)
     validate_matching_parts(words, fixations)
     fixations, keyed = match_text_word_ids(words, fixations)
     rewrites += keyed
@@ -6597,7 +6676,11 @@ def _copy_screen_fields(
         and SCREEN_INDEX in source.columns
     ):
         df[SCREEN_INDEX] = _to_number(source[SCREEN_INDEX])
-    return normalize_screen_identity(df)
+    derived = SCREEN_ID in df.columns and SCREEN_INDEX not in df.columns
+    df = normalize_screen_identity(df)
+    if derived:
+        df[SCREEN_ORDER_DERIVED] = True
+    return df
 
 
 def _text_id_values(

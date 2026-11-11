@@ -46,6 +46,7 @@ from .constants import (
     TRIAL_IDENTITY_CHECK_KEY,
     WIZARD_LEAVE_KEY,
     WORD_KEY,
+    multipleye_format_enabled,
     plural,
     spoken,
     upload_identity,
@@ -4180,25 +4181,30 @@ def _render_data_setup(active: bool) -> _UploadResult:
     s1 = _part("data")
     # Your own tables are mapped column by column; a MultiplEYE session set is
     # read the way the corpus lays it out, and branches off here. Drawn on every
-    # run, collapsed review panel included, so the choice survives it.
+    # run, collapsed review panel included, so the choice survives it. The
+    # choice is experimental: without it there is one format, and no row.
+    if not multipleye_format_enabled():
+        st.session_state[_FORMAT_KEY] = FORMAT_GENERIC
     st.session_state.setdefault(_FORMAT_KEY, FORMAT_GENERIC)
-    format_help = (
-        "Your own tables: upload your words, fixations or raw gaze and map "
-        "their columns. MultiplEYE session set: a session set exported by the "
-        "MultiplEYE project, read from its folder or its files. Participants, "
-        "trials and screens come from the file names, so there is nothing to map."
-    )
-    row_label(s1, "Dataset format", format_help)
-    s1.segmented_control(
-        "Dataset format",
-        list(_FORMAT_LABELS),
-        key=_FORMAT_KEY,
-        required=True,
-        format_func=_FORMAT_LABELS.get,
-        disabled=not active,
-        help=format_help,
-        label_visibility="collapsed",
-    )
+    if multipleye_format_enabled():
+        format_help = (
+            "Your own tables: upload your words, fixations or raw gaze and map "
+            "their columns. MultiplEYE session set: a session set exported by the "
+            "MultiplEYE project, read from its folder or its files. Participants, "
+            "trials and screens come from the file names, so there is nothing to "
+            "map."
+        )
+        row_label(s1, "Dataset format", format_help)
+        s1.segmented_control(
+            "Dataset format",
+            list(_FORMAT_LABELS),
+            key=_FORMAT_KEY,
+            required=True,
+            format_func=_FORMAT_LABELS.get,
+            disabled=not active,
+            help=format_help,
+            label_visibility="collapsed",
+        )
     if st.session_state.get(_FORMAT_KEY) == FORMAT_MULTIPLEYE:
         return _render_multipleye_setup(body, s1, active, _part)
     if active:

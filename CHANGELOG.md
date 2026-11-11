@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Changes not yet released are one file each in [`changelog.d/`](changelog.d/);
 `scripts/changelog_fragments.py release` writes them in here.
 
+## [0.46.0] - 2026-11-11
+
+### Added
+- Fixation index numbers can sit above, inside or below each fixation: Fixations → Fixation index → Position in the app, order_label_position in the Python API and share links, and --order-label-position in render. ([#542](https://github.com/lacclab/scanpath-studio/issues/542))
+- Clicking Apply under Derive columns from text fills an empty Trial, Participant or Text ID field with a derived column named like one, such as participant, trial or stimulus. ([#543](https://github.com/lacclab/scanpath-studio/issues/543))
+- The import screen says when the Fixations and Words tables' Trial or Text IDs differ only in upper and lower case, and how to make them match. ([#543](https://github.com/lacclab/scanpath-studio/issues/543))
+- The import screen suggests Merge character boxes into word boxes when a word's rows in the Words table are at different positions. ([#543](https://github.com/lacclab/scanpath-studio/issues/543))
+- A setup file now saves and restores Merge character boxes into word boxes, from both the import screen and Edit dataset. ([#543](https://github.com/lacclab/scanpath-studio/issues/543))
+
 ## [0.45.1] - 2026-11-11
 
 ### Removed

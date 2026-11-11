@@ -245,6 +245,7 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "show_order",
         "order_font_size",
         "order_font_color",
+        "order_label_position",
         "fixation_snap_to_line",
         "fixation_snap_position",
     ),

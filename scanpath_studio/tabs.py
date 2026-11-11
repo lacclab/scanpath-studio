@@ -127,6 +127,7 @@ from scanpath_studio.constants import (
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
+    DEFAULT_ORDER_LABEL_POSITION,
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
     FOCUS_MAPPING_KEY,
@@ -2056,6 +2057,9 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         legend_layout=viz_settings.get("legend_layout"),
         order_font_size=viz_settings["order_font_size"],
         order_font_color=viz_settings["order_font_color"],
+        order_label_position=viz_settings.get(
+            "order_label_position", DEFAULT_ORDER_LABEL_POSITION
+        ),
         **{
             key: viz_settings.get(key, default)
             for key, default in COLORBAR_DEFAULTS.items()
@@ -16357,11 +16361,6 @@ def _setup_file_mapping(
                 f"{label}: {', '.join(sorted(from_file_names))} came from "
                 "*Derive columns from text*. Set it up again after restoring."
             )
-    if "aggregate_char_boxes" in (recipe.get("steps") or ()):
-        notes.append(
-            "Words: character boxes were merged into word boxes. Turn on "
-            "*Merge character boxes into word boxes* again after restoring."
-        )
     return mapping, notes
 
 
@@ -16393,6 +16392,15 @@ def _editor_setup_config(name: str) -> dict:
         },
     )
     setup = st.session_state.get("_remap_pending_setup")
+    # The steps the dataset's files went through, so *Start from → A setup
+    # file* runs them again; a Words table being added goes by its own switch.
+    steps = [
+        step
+        for step in (stored.get("source_recipe") or {}).get("steps") or ()
+        if not ("words" in added and step == "aggregate_char_boxes")
+    ]
+    if "words" in added and st.session_state.get(aggregate_key(name)):
+        steps.append("aggregate_char_boxes")
     return {
         "schema": PLOT_CONFIG_SCHEMA,
         "app": {"name": "Scanpath Studio", "version": __version__},
@@ -16401,6 +16409,7 @@ def _editor_setup_config(name: str) -> dict:
         "column_mapping": mapping,
         "column_mapping_notes": notes,
         "experimental_setup": dict(setup) if isinstance(setup, dict) else None,
+        "steps": list(dict.fromkeys(steps)),
     }
 
 

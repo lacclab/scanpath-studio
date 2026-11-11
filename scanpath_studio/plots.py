@@ -44,6 +44,7 @@ from .constants import (
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
+    DEFAULT_ORDER_LABEL_POSITION,
     DEFAULT_PLOT_FRAME_COLOR,
     DEFAULT_SACCADE_ARROW_SIZE,
     DEFAULT_SACCADE_WIDTH,
@@ -61,6 +62,7 @@ from .constants import (
     LEGEND_KINDS,
     LEGEND_POSITIONS,
     MARKER_SIZE_SCALES,
+    ORDER_LABEL_POSITIONS,
     OUT_OF_TEXT_COLOR,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_LABELS,
@@ -153,6 +155,9 @@ class FigureSettings:
     legend_layout: dict | None = None
     order_font_size: int | None = 10
     order_font_color: str = "#111111"
+    #: Where the index number sits on its fixation: "above", "inside" or
+    #: "below" (``constants.ORDER_LABEL_POSITIONS``).
+    order_label_position: str = DEFAULT_ORDER_LABEL_POSITION
     #: Each colour scale's bar has its own switch and style: the fixations'
     #: (a numeric ``color_by``) and the heatmap's.
     show_fixation_colorbar: bool = True
@@ -358,6 +363,7 @@ FIGURE_OPTION_CHOICES: dict[str, tuple[str, ...]] = {
     "saccade_render_mode": ("Straight", "Arc"),
     "saccade_style": tuple(SACCADE_DASH_OPTIONS.values()),
     "marker_size_scale": tuple(MARKER_SIZE_SCALES),
+    "order_label_position": tuple(ORDER_LABEL_POSITIONS),
     "fixation_symbol": tuple(FIXATION_SYMBOLS),
     "fixation_colorbar_orientation": ("Vertical", "Horizontal"),
     "heatmap_colorbar_orientation": ("Vertical", "Horizontal"),
@@ -378,10 +384,25 @@ _CHOICE_ALIASES: dict[str, dict[str, str]] = {
         "bydirection": "Forward / regression",
     },
     "saccade_render_mode": {"arcs": "Arc"},
+    "order_label_position": {
+        "top": "above",
+        "center": "inside",
+        "middle": "inside",
+        "bottom": "below",
+    },
     "saccade_style": {
         _choice_key(label): value for label, value in SACCADE_DASH_OPTIONS.items()
     },
 }
+
+
+def _order_textposition(position: str) -> str:
+    """The Plotly ``textposition`` that puts a fixation's index number
+    ``position`` ("above", "inside" or "below") its marker; any spelling
+    :func:`normalize_option_value` reads, else ``ValueError``."""
+    return ORDER_LABEL_POSITIONS[
+        normalize_option_value("order_label_position", position)
+    ]
 
 
 def normalize_option_value(name: str, value: object) -> object:
@@ -4270,6 +4291,7 @@ def _render_scanpath_figure(
     marker_size_range = settings.marker_size_range
     order_font_size = settings.order_font_size
     order_font_color = settings.order_font_color
+    order_textposition = _order_textposition(settings.order_label_position)
     show_colorbars = settings.show_fixation_colorbar
     show_heatmap_colorbar = settings.show_heatmap_colorbar
     fixation_color_range = settings.fixation_color_range
@@ -4823,7 +4845,7 @@ def _render_scanpath_figure(
                             size=order_font_size,
                             family=font_settings["family"],
                         ),
-                        textposition="top center",
+                        textposition=order_textposition,
                         hoverinfo="skip",
                         name="Fixation index",
                         showlegend=False,
@@ -4842,7 +4864,7 @@ def _render_scanpath_figure(
                         size=order_font_size,
                         family=font_settings["family"],
                     ),
-                    textposition="top center",
+                    textposition=order_textposition,
                     hovertemplate=hovertemplate,
                     customdata=customdata,
                     name="Fixations",
@@ -6637,6 +6659,7 @@ def _render_scanpath_animation(
     marker_size_range = settings.marker_size_range
     order_font_size = settings.order_font_size
     order_font_color = settings.order_font_color
+    order_textposition = _order_textposition(settings.order_label_position)
     color_by = settings.color_by
     # As in `make_scanpath_figure` — "line" is colour-by-line.
     color_by_line = settings.color_by_line or color_by == "line"
@@ -7075,7 +7098,7 @@ def _render_scanpath_animation(
                         size=order_font_size,
                         family=font_settings["family"],
                     ),
-                    textposition="top center",
+                    textposition=order_textposition,
                     showlegend=False,
                     legendgroup=s["label"],
                     hoverinfo="skip",
@@ -7295,7 +7318,7 @@ def _render_scanpath_animation(
                             size=order_font_size,
                             family=font_settings["family"],
                         ),
-                        textposition="top center",
+                        textposition=order_textposition,
                     )
                 )
                 traces_idx_in_frame.append(s["idx_order"])
@@ -7700,6 +7723,7 @@ def _add_comparison_fixation_trace(
     outline_color: str = DEFAULT_FIXATION_OUTLINE_COLOR,
     show_order: bool = True,
     order_font_size: int | None = None,
+    order_label_position: str = DEFAULT_ORDER_LABEL_POSITION,
     show_legend: bool = False,
     color_by: str | None = None,
     colorscale: str = DEFAULT_FIXATION_COLORSCALE,
@@ -7955,7 +7979,7 @@ def _add_comparison_fixation_trace(
                     y=trial_fix["y"],
                     mode="text",
                     text=trial_fix["order_in_trial"],
-                    textposition="top center",
+                    textposition=_order_textposition(order_label_position),
                     textfont=order_font,
                     name=f"{display_name} · index",
                     legendgroup=display_name,
@@ -7977,7 +8001,7 @@ def _add_comparison_fixation_trace(
                 legendgroup=display_name,
                 showlegend=show_legend and not own_entry,
                 text=trial_fix["order_in_trial"] if show_order else None,
-                textposition="top center",
+                textposition=_order_textposition(order_label_position),
                 textfont=order_font,
                 hovertemplate=f"{display_name}<br>{hovertemplate}",
                 customdata=customdata,
@@ -8663,6 +8687,7 @@ def _make_split_comparison_figure(
             outline_color=settings.fixation_outline_color,
             show_order=show_order,
             order_font_size=order_font_size,
+            order_label_position=settings.order_label_position,
             show_legend=show_legend,
             color_by=color_by,
             colorscale=fixation_colorscale,
@@ -9083,6 +9108,7 @@ def _render_comparison_figure(
             outline_color=settings.fixation_outline_color,
             show_order=show_order,
             order_font_size=order_font_size,
+            order_label_position=settings.order_label_position,
             show_legend=show_legend,
             color_by=color_by,
             colorscale=fixation_colorscale,

@@ -899,7 +899,7 @@ _LAYER_OPTIONS = {
         "word_box_fill_color",
         "word_box_fill_opacity",
     ),
-    "show_order": ("order_font_size", "order_font_color"),
+    "show_order": ("order_font_size", "order_font_color", "order_label_position"),
     "show_heatmap": (
         "heatmap_metric",
         "heatmap_style",
@@ -1507,6 +1507,7 @@ _CLI_EMITTERS: dict[str, Any] = {
     "heatmap_range": _two_numbers("--heatmap-range"),
     "order_font_size": _int_valued("--order-font-size"),
     "order_font_color": _valued("--order-font-color"),
+    "order_label_position": _valued("--order-label-position"),
     "text_color": _valued("--text-color"),
     "redact_text": _flag_when("--redact-text", True),
     "highlight_text_color": _valued("--highlight-text-color"),

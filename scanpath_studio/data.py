@@ -1987,6 +1987,57 @@ def _renumber_word_ids_across_blocks(
     return out.drop(columns="_block_rank").reset_index(drop=True)
 
 
+def _char_box_group_columns(
+    df: pd.DataFrame, schema: dict[str, str | None]
+) -> list[str]:
+    """The columns whose values make one word of a Words table: its mapped
+    trial id, participant, text id, screen id and block, then the word id.
+
+    ``[]`` when the trial or the word id is not mapped or the word id is not on
+    ``df``. A mapped screen id narrows the group like participant and text id
+    do: a multi-screen (multipart) trial commonly restarts word numbering per
+    screen, so without it a shared word id on two screens of the same trial
+    would be one word, the same failure ``block`` prevents within one screen.
+    """
+    word_col = schema.get("word_id")
+    trial = schema.get("trial")
+    if not word_col or not trial:
+        return []
+    group_cols = list(trial_mapping_columns(trial))
+    for key in ("participant", "text_id", "screen_id"):
+        mapped = schema.get(key)
+        if mapped:
+            group_cols += trial_mapping_columns(mapped)
+    if schema.get("block"):
+        group_cols.append(schema["block"])
+    group_cols.append(word_col)
+    group_cols = [c for c in dict.fromkeys(group_cols) if c in df.columns]
+    return group_cols if word_col in group_cols else []
+
+
+def words_with_several_boxes(df: pd.DataFrame, schema: dict[str, str | None]) -> int:
+    """How many words of a raw Words table have rows at different positions.
+
+    A word is what :func:`aggregate_char_boxes` would merge into one box (see
+    :func:`_char_box_group_columns`), and its rows are at different positions
+    when their box's left or top edges differ. A table with one row per
+    character reads this way, and so does a table of trials over several
+    screens whose Screen ID is not mapped. Rows that repeat one box, such as
+    one copy per reader with no Participant ID mapped, are not counted. ``0``
+    when the trial, the word id or the box's left and top are not mapped.
+    """
+    group_cols = _char_box_group_columns(df, schema)
+    left = schema.get("x") or schema.get("left")
+    top = schema.get("y") or schema.get("top")
+    if not group_cols or left not in df.columns or top not in df.columns:
+        return 0
+    positions = df[group_cols].assign(
+        _box_l=_to_number(df[left]), _box_t=_to_number(df[top])
+    )
+    spread = positions.groupby(group_cols, sort=False)[["_box_l", "_box_t"]].nunique()
+    return int((spread.max(axis=1) > 1).sum())
+
+
 def aggregate_char_boxes(
     df: pd.DataFrame, schema: dict[str, str | None]
 ) -> pd.DataFrame:
@@ -2016,27 +2067,10 @@ def aggregate_char_boxes(
     screen, which matters because a mapped word id can be authoritative for
     fixation assignment (see ``measures.assign_fixations_to_words``)."""
     word_col = schema.get("word_id")
-    trial = schema.get("trial")
-    if not word_col or not trial:
+    group_cols = _char_box_group_columns(df, schema)
+    if not group_cols:
         return df
     block_col = schema.get("block") or None
-    group_cols = list(trial_mapping_columns(trial))
-    # A mapped screen id must narrow the group like participant/text_id do —
-    # a multi-screen trial (multipart) commonly restarts word numbering per
-    # screen (e.g. MultiplEYE's reading pages), so without this a shared
-    # word id on two screens of the same trial would silently merge into one
-    # box, the same failure mode "block" fixes within a single screen.
-    for key in ("participant", "text_id", "screen_id"):
-        mapped = schema.get(key)
-        if mapped:
-            group_cols += trial_mapping_columns(mapped)
-    if block_col:
-        group_cols.append(block_col)
-    group_cols.append(word_col)
-    # De-dup, keep only columns actually present, and require the word id.
-    group_cols = [c for c in dict.fromkeys(group_cols) if c in df.columns]
-    if word_col not in group_cols:
-        return df
     if block_col not in group_cols:  # mapped, but not actually on this frame
         block_col = None
 

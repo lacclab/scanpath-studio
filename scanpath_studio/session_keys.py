@@ -125,6 +125,8 @@ GLOBAL_WORD_HOVER_MEASURE = "global_word_hover_measure"
 GLOBAL_WORD_HOVER_FIELDS = "global_word_hover_fields"
 GLOBAL_FIXATION_HOVER_FIELDS = "global_fixation_hover_fields"
 GLOBAL_ORDER_FONT_SIZE = "global_order_font_size"
+# Where the fixation index sits on its marker: above, inside or below.
+GLOBAL_ORDER_LABEL_POSITION = "global_order_label_position"
 GLOBAL_ANIM_GRID_STEP_MS = "global_anim_grid_step_ms"
 GLOBAL_ANIM_MAX_FRAMES = "global_anim_max_frames"
 GLOBAL_LINE_SPACING = "global_line_spacing"
@@ -596,6 +598,7 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "saccade_style": GLOBAL_SACCADE_STYLE,
         "saccade_render_mode": GLOBAL_SACCADE_RENDER_MODE,
         "marker_size_scale": GLOBAL_MARKER_SIZE_SCALE,
+        "order_label_position": GLOBAL_ORDER_LABEL_POSITION,
         "align_algorithm": GLOBAL_ALIGN_ALGORITHM,
         "fixation_symbol": GLOBAL_FIXATION_SYMBOL,
         "fixation_color": GLOBAL_FIXATION_COLOR,
@@ -1139,6 +1142,7 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_DURATION_SIZE_LEGEND,
         GLOBAL_ORDER_FONT_SIZE,
         GLOBAL_ORDER_FONT_COLOR,
+        GLOBAL_ORDER_LABEL_POSITION,
         GLOBAL_BASE_FONT_SIZE,
         # animation
         GLOBAL_ANIM_GRID_STEP_MS,

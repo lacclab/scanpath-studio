@@ -587,7 +587,7 @@ parameter.
 
 | setting (`viz_settings` name) | static | animation | compare | notes |
 | --- | :---: | :---: | :---: | --- |
-| `show_words`, `show_labels`, `show_saccades`, `show_order`, `order_font_size` | ✅ | ✅ | ✅ | |
+| `show_words`, `show_labels`, `show_saccades`, `show_order`, `order_font_size`, `order_label_position` | ✅ | ✅ | ✅ | |
 | `word_box_*` (colour, line / fill opacity) | ✅ | ✅ | fill only | Compare outlines each reading's boxes in its own `cmp{idx}_box_color` (its scanpath colour by default) |
 | `show_fix` | ✅ | ❌ | ✅ | The replay *is* the fixation trail |
 | `show_saccade_arrows`, `saccade_arrow_size`, `saccade_opacity` | ✅ | ✅ | ✅ | One figure-wide value in Compare |

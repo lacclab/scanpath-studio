@@ -327,6 +327,7 @@ class TestBuildShareQuery:
             "global_heatmap_norm": "Log",
             "global_marker_size_range": (10, 30),
             "global_order_font_size": 18,
+            "global_order_label_position": "inside",
             "global_line_spacing": 2.5,
             "global_scale_text_to_boxes": False,
         }
@@ -351,6 +352,7 @@ class TestBuildShareQuery:
         assert parsed["heatmap_norm"] == ["Log"]
         assert parsed["marker_size_range"] == ["10,30"]
         assert parsed["order_font_size"] == ["18"]
+        assert parsed["order_label_position"] == ["inside"]
         assert parsed["line_spacing"] == ["2.5"]
         assert parsed["scale_text_to_boxes"] == ["0"]
 
@@ -379,6 +381,7 @@ class TestBuildShareQuery:
         assert ss["global_heatmap_norm"] == "Log"
         assert ss["global_marker_size_range"] == (10, 30)
         assert ss["global_order_font_size"] == 18
+        assert ss["global_order_label_position"] == "inside"
         assert ss["global_line_spacing"] == 2.5
         assert ss["global_scale_text_to_boxes"] is False
 

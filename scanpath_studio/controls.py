@@ -46,6 +46,7 @@ from .constants import (
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
+    DEFAULT_ORDER_LABEL_POSITION,
     DEFAULT_PALETTE,
     DEFAULT_PLOT_FRAME_COLOR,
     DEFAULT_SACCADE_ARROW_SIZE,
@@ -66,6 +67,7 @@ from .constants import (
     LEGEND_POSITION_LABELS,
     MARKER_DURATION_BOUNDS,
     MARKER_SIZE_SCALES,
+    ORDER_LABEL_POSITIONS,
     OUT_OF_TEXT_COLOR,
     PALETTES,
     RAW_GAZE_LINK_FOR_KEY,
@@ -870,6 +872,7 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_coordinate_grid_spacing": 100.0,
     "global_order_font_color": "#111111",
     "global_order_font_size": 10,
+    "global_order_label_position": DEFAULT_ORDER_LABEL_POSITION,
     "global_fixation_colorscale": DEFAULT_FIXATION_COLORSCALE,
     "global_heatmap_colorscale": DEFAULT_HEATMAP_COLORSCALE,
     # Restorable by the settings file too, so seed here (no inline
@@ -6388,6 +6391,10 @@ def _collect_viz_settings(
         legend_layout=_collect_legend_layout(ss),
         order_font_size=ss.get("global_order_font_size"),
         order_font_color=ss.get("global_order_font_color"),
+        # A deselected segmented control stores None.
+        order_label_position=(
+            ss.get("global_order_label_position") or DEFAULT_ORDER_LABEL_POSITION
+        ),
         **{
             f"show_{bar}_colorbar": bool(ss.get(f"global_show_{bar}_colorbar"))
             for bar in ("fixation", "heatmap")
@@ -7651,6 +7658,23 @@ def render_plot_controls(
             max_value=72,
             step=1,
             on_change=_apply_index_size,
+            disabled=_dis,
+            help=_tip,
+            label_visibility="collapsed",
+        )
+        # Where the number sits on its fixation — its own row under the
+        # switch, since the switch's row has no width left. Every builder
+        # honours it, Compare and the replay included.
+        _dis, _tip = _layer_gate(
+            not show_order,
+            "Put each index number above its fixation, inside it, or below it.",
+        )
+        _sub_row("Position", caption_help=_tip).segmented_control(
+            "Index label position",
+            options=list(ORDER_LABEL_POSITIONS),
+            format_func=str.capitalize,
+            key="global_order_label_position",
+            persist_state="session",
             disabled=_dis,
             help=_tip,
             label_visibility="collapsed",

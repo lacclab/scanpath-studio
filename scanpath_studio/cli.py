@@ -1262,6 +1262,11 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Color of the fixation index numbers (default: #111111).",
     )
     viz.add_argument(
+        "--order-label-position",
+        choices=("above", "inside", "below"),
+        help="Where each fixation index number sits on its fixation (default: above).",
+    )
+    viz.add_argument(
         "--text-color",
         metavar="COLOR",
         help="Stimulus text color (default: #000000).",
@@ -1860,6 +1865,7 @@ _DIRECT_OPTION_FLAGS = (
     "saccade_opacity",
     "order_font_size",
     "order_font_color",
+    "order_label_position",
     "text_color",
     "highlight_text_color",
     "span_border_color",

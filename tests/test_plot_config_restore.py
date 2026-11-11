@@ -142,6 +142,7 @@ def _full_config() -> dict:
             "marker_size_range": [10, 30],
             "order_font_size": 40,
             "order_font_color": "#aa0000",
+            "order_label_position": "below",
             "base_font_size": 28,
         },
     }
@@ -171,6 +172,7 @@ class TestPlotConfigRestore:
         assert ss["global_marker_size_range"] == (10, 30)
         assert ss["global_order_font_size"] == 40
         assert ss["global_order_font_color"] == "#aa0000"
+        assert ss["global_order_label_position"] == "below"
         assert ss["global_base_font_size"] == 28
         # canvas / axes
         assert ss["global_canvas_width"] == 1920

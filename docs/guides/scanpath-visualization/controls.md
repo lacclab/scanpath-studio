@@ -144,6 +144,7 @@ The **Fixations** switch draws the fixation markers. Its **▾** holds:
 | **Color bar** → **Vertical** / **Horizontal**, **Angle**, **Size**, **Thickness**, **Length** | Set the bar's direction (right of the plot or below it), its tick-label angle and size, and its thickness and length. |
 | **Fixation index** → **Show** | Number each fixation in reading order. |
 | **Fixation index** → color, **Size** | Choose the numbers' color and size. |
+| **Fixation index** → **Position** | Put each number above its fixation, inside it, or below it. |
 | **Snap** → **To line** | Move each fixation up or down onto its line of text. This makes a schematic, labeled *Illustration*. |
 | **Snap** → **Position** | Choose where on its line a snapped fixation sits. |
 

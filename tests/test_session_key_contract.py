@@ -315,6 +315,7 @@ def test_deep_link_seeds_frozen_state_keys():
     validated["heatmap_style"] = "Smoothed"
     validated["heatmap_colorbar_orientation"] = "Horizontal"
     validated["marker_size_scale"] = "linear"
+    validated["order_label_position"] = "inside"
     for category in ("short", "long", "oob", "blink"):
         validated[f"fixclass_{category}_mode"] = "Hide"
         validated[f"fixclass_{category}_symbol"] = "x"
@@ -539,6 +540,7 @@ def _restore_config_app():
             "duration_size_legend": False,
             "order_font_size": 12,
             "order_font_color": "#000000",
+            "order_label_position": "below",
             "base_font_size": 14,
         },
         "animation": {"grid_step_ms": 100, "max_frames": 360, "playback_speed": 2.0},

@@ -1366,7 +1366,7 @@ def load_raw_gaze(
 
 
 def load_sample_raw_gaze(*, names: str = NAMES_SOURCE) -> pd.DataFrame:
-    """Load the bundled demo's raw gaze: what the app overlays on it.
+    """Load synthesized raw gaze samples for one trial in the bundled demo.
 
     OneStop ships no sample-level gaze, so this is **synthesized** from one of the
     demo's real trials, and covers that trial alone.
@@ -1386,7 +1386,7 @@ def check_data_health(
     fixations: pd.DataFrame | None = None,
     raw_gaze: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Find values that loaded as numbers but cannot be right: the app's *Data checks*.
+    """Check durations, positions and word boxes for data problems.
 
     The checks look for fixations lasting 0 ms or less or with an infinite duration or
     onset, fixations and raw-gaze samples whose position is missing or infinite, word
@@ -2376,7 +2376,7 @@ def _check_column_options(
 
 
 def figure_options(kind: str = "static", *, choices: bool = False) -> dict:
-    """List every figure keyword a builder takes, with the default it renders with.
+    """List figure options and their default values.
 
     The defaults are what a call actually renders with, the app's Scanpath design, so a
     script can diff its intended settings against what it would get. The *Figure
@@ -3784,7 +3784,7 @@ def save_figure(
     width_in: float | None = None,
     dpi: int | None = None,
 ) -> Path:
-    """Save a figure, in the format its file extension names.
+    """Save a figure as HTML, PNG, SVG or PDF.
 
     The file carries the citation of Scanpath Studio in its metadata — PNG text
     chunks, an SVG ``<metadata>`` element, the PDF's document properties, the
@@ -4170,7 +4170,7 @@ def clear_cache() -> dict:
 
 
 def version_info() -> BuildInfo:
-    """Say which build of Scanpath Studio this is, without using the network.
+    """Return version and installation details without a network request.
 
     The same is in the app's Help → About, and in ``scanpath-studio version``.
 
@@ -4191,7 +4191,7 @@ def version_info() -> BuildInfo:
 
 
 def check_for_updates(timeout: float = 5.0) -> UpdateCheck:
-    """Ask GitHub whether a newer release than this build is out.
+    """Check GitHub for a newer release.
 
     The one call here that uses the network, and only when made. It reads the latest
     release from ``api.github.com`` (drafts and pre-releases excluded), compares it with
@@ -4219,7 +4219,7 @@ def check_for_updates(timeout: float = 5.0) -> UpdateCheck:
 
 
 def cite(format: str = "bibtex", corpus: str | None = None) -> str:
-    """How to cite Scanpath Studio — and, optionally, the corpus you used.
+    """Return a citation for Scanpath Studio and, optionally, a public corpus.
 
     The same entries as the app's Help → About and *Cite* buttons, and
     ``scanpath-studio cite``. Every figure, replay and page `save_figure` writes

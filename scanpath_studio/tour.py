@@ -198,9 +198,10 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Check the column mapping",
                 f"The {ICONS['edit']} on a dataset's row opens its setup screen, "
-                "with the same parts as the add screen. Part **2 · Data tables & "
-                "column mapping** sets which columns the app reads. Rows marked ✨ "
-                "were auto-detected; change any that are wrong.",
+                "where you can review **2 · Data tables & column mapping**. "
+                "This tells the app which columns contain IDs, positions and "
+                "other values. Rows marked ✨ were detected automatically; "
+                "check them and change any that need correcting.",
                 ".st-key-tutorial_column_mapping",
                 view=_VIEW_DATA,
                 dataset_editor=True,
@@ -208,18 +209,18 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Check what was loaded",
                 f"**{ICONS['search']} What's in the … dataset** opens on "
-                f"{ICONS['stats']} Stats, with the counts and their spread. It is "
-                "the quickest check that the mapping worked. The six raw tables "
-                "and the annotations are in the tabs beside it.",
+                f"{ICONS['stats']} Stats. Review the counts and summary statistics "
+                "to check that the data loaded as you expected. The other tabs "
+                "show the data tables and annotations.",
                 ".st-key-tutorial_data_inspection",
                 view=_VIEW_DATA,
             ),
             TutorialStep(
-                "Check one trial id is one reading",
+                "Check that each trial ID identifies one reading",
                 "The **Trial identity** part checks the whole dataset before any "
-                "filtering. A warning means the Trial ID above is missing a "
-                "column, so several readings are drawn as one scanpath. That "
-                "looks like a single reading with many regressions.",
+                "filtering. If a trial ID groups several readings together, "
+                "the app draws them as one scanpath. Check the warning for "
+                "columns, such as a session or block ID, that distinguish them.",
                 ".st-key-tutorial_trial_identity",
                 view=_VIEW_DATA,
                 dataset_editor=True,
@@ -249,11 +250,10 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         docs_url=f"{DOCS_TUTORIALS_URL}data-filtering/",
         steps=(
             TutorialStep(
-                "Narrow the trials",
+                "Filter the trial list",
                 f"The {ICONS['trial_filter']} filter beside the trial picker, "
-                "opened here for you, holds the text and participant pickers "
-                "(*All texts* / *All participants* until you narrow), then the "
-                "condition and annotation filters (favorites, tags). This "
+                "opened here for you, lets you choose texts, participants, "
+                "conditions and annotations (favorites and tags). This "
                 "tutorial doesn't change any filter.",
                 ".st-key-tour_grp_narrow_by",
                 popover=FUNNEL_TRIGGER,
@@ -261,28 +261,29 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Review one trial at a time",
                 "Use the **Select trial** dropdown, the slider (it shows *index / "
-                "total*) or ◀ ▶ to step through the trials you just narrowed to.",
+                "total*) or ◀ ▶ to step through the filtered trial list.",
                 ".st-key-tour_grp_trial_picker",
             ),
             TutorialStep(
                 "Move between screens",
-                "A multipart trial (one reading spread over several screens) adds a "
-                "screen picker at the right end of the trial row. Each screen has its "
-                "own coordinates, so nothing is drawn across two screens.",
+                "If a reading spans several screens, a screen picker appears "
+                "at the right end of the trial row. Use it to view each screen "
+                "with its own text and fixations.",
                 ".st-key-tour_grp_screen_picker",
                 optional=True,
             ),
             TutorialStep(
-                "Annotate at the right scope",
-                "Star, tag, or note the parent trial. Multipart data can instead attach "
-                "a separate annotation to the active screen.",
+                "Annotate a trial or screen",
+                "Add a favorite, tags or notes to the whole trial. For trials "
+                "with several screens, you can annotate the current screen separately.",
                 ".st-key-tutorial_annotations",
                 subtab=SUBTAB_ANNOTATIONS,
             ),
             TutorialStep(
-                "Export the marked result",
-                "Open **Export** and choose the filtered scope and tabular files. "
-                "Multipart exports keep each row's screen.",
+                "Export your selected trials",
+                "Open **Export** and choose which trials and data tables to "
+                "include. For trials with several screens, exported rows "
+                "include their screen IDs.",
                 ".st-key-tutorial_export",
                 subtab=SUBTAB_EXPORT,
             ),
@@ -304,13 +305,13 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 ".st-key-tour_grp_viz_controls",
             ),
             TutorialStep(
-                "Decide static or animated",
+                "Choose a static figure or a replay",
                 "Turn on **Animate** to inspect fixation order and timing. "
                 "Multipart trials replay one screen at a time.",
                 ".st-key-tour_grp_view_modes",
             ),
             TutorialStep(
-                "Download and preserve settings",
+                "Save the figure and its settings",
                 "Open **Export** for this figure (PNG, SVG, PDF, HTML) or a bundle "
                 "of many. Include the settings file in a bundle so the figures can "
                 "be redrawn.",
@@ -320,7 +321,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Keep the figure reproducible",
                 f"**{ICONS['share']} Share** offers a **Link**, **Code** or a "
-                "**Settings file**. None of them holds the data, so keep the "
+                "**Settings file**. None of these includes the data, so keep the "
                 "original data too.",
                 ".st-key-tutorial_share",
                 subtab=SUBTAB_SHARE,
@@ -356,7 +357,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
     ),
     TutorialDefinition(
         id="explore_corpus",
-        title="Explore a corpus question",
+        title="Explore changes across trials",
         outcome="Inspect mean fixation duration across trials.",
         estimated_time="4 min",
         prerequisite="Variation across trials, participants, or texts",
@@ -367,9 +368,9 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         # a menu, not a tutorial.
         steps=(
             TutorialStep(
-                "Switch analysis level",
-                "Open **Corpus Analysis** to aggregate across trials instead of "
-                "inspecting one. It uses the same data and the filters you set on "
+                "Open Corpus Analysis",
+                "Open **Corpus Analysis** to summarize multiple trials. "
+                "It uses the same data and the filters you set on "
                 "the Scanpath view.",
                 NAV_SELECTOR,
             ),
@@ -382,24 +383,25 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Choose the participant and the view",
                 "Pick the participant on the left, then set **View** to **Per-trial trend**. "
-                "It plots one point per trial in presentation order, so the whole "
-                "experiment is on one axis.",
+                "It plots one point per trial across the experiment. Trial order "
+                "comes from your data; check any notice about an inferred order.",
                 ".st-key-tutorial_per_reader_view",
                 view=_VIEW_CORPUS,
                 corpus_subtab="Per participant",
             ),
             TutorialStep(
                 "Read average fixation duration across the experiment",
-                "Set the measure to **fixation duration**. Each point is a trial's "
-                "mean. The trend shows that it changes, not why.",
+                "Set the measure to **fixation duration**. Each point shows the "
+                "mean for one trial. Look for changes across trials, then return "
+                "to individual readings to investigate them.",
                 ".st-key-tutorial_corpus_analysis",
                 view=_VIEW_CORPUS,
             ),
             TutorialStep(
-                "Put it against the cohort",
-                "**Distribution vs cohort** shows whether this participant is "
-                "unusual or the whole cohort is like this. Read the sample size "
-                "with the effect, not the plotted mean alone.",
+                "Compare this participant with the others",
+                "Use **Distribution vs cohort** to compare this participant "
+                "with the others in the selection. Check the sample size "
+                "alongside the plotted values.",
                 ".st-key-tutorial_per_reader_view",
                 corpus_subtab="Per participant",
                 view=_VIEW_CORPUS,
@@ -646,9 +648,9 @@ _SPOTLIGHT_STEPS = [
         "title": f"{ICONS['app']} Welcome to Scanpath Studio",
         # The sentence naming the open dataset is added by `_welcome_body`,
         # from the dataset actually open.
-        "body": "Scanpath Studio draws **eye movements in reading** as "
-        "scanpaths, true to scale over the text. **Next** for a quick tour, or "
-        "**Skip tour** to start exploring.",
+        "body": "Explore **eye movements in reading** as scanpaths over the "
+        "text. **Next** starts a quick tour, or choose **Skip tour** to "
+        "explore on your own.",
     },
     {
         "selector": ".st-key-tour_grp_plot",
@@ -686,9 +688,8 @@ _SPOTLIGHT_STEPS = [
         # (`tabs._FILTER_ICON`) and its chevron — since "the funnel" in words
         # sent readers hunting for an emoji the app never draws.
         "body": f"The **{ICONS['trial_filter']} {ICONS['menu_arrow']}** "
-        "button by the trial picker, opened here for you, holds the filters: "
-        "text and participant pickers (*All texts* / *All participants*), then "
-        "condition and annotation filters.",
+        "button beside the trial picker opens filters for texts, participants, "
+        "conditions and annotations. It is open here so you can take a look.",
     },
     {
         "selector": ".st-key-tour_grp_chips",
@@ -696,8 +697,7 @@ _SPOTLIGHT_STEPS = [
         "title": f"{ICONS['chips']} Trial summary",
         "body": "This row shows the trial's **identity, conditions and "
         f"statistics**. The **{ICONS['edit']} {ICONS['menu_arrow']}** button "
-        "above its right end chooses which fields it shows and in what order, or "
-        "hides it.",
+        "at the right lets you choose and reorder the fields, or hide the summary.",
     },
     {
         "selector": ".st-key-tour_grp_view_modes",
@@ -720,7 +720,7 @@ _SPOTLIGHT_STEPS = [
     {
         "selector": ".st-key-tour_grp_subtabs",
         "dock": "top",
-        "title": f"{ICONS['panels']} Per-trial panels",
+        "title": f"{ICONS['panels']} More about this trial",
         "body": f"Below the plot: **{ICONS['annotations']} Annotations**, **{ICONS['stimulus']} Stimulus & context**, "
         f"**{ICONS['comparisons']} Comparisons**, **{ICONS['export']} Export**, and "
         f"**{ICONS['share']} Share** (link, code or settings file).",
@@ -755,16 +755,16 @@ _SIMPLE_SPOTLIGHT_STEPS = [
         "dock": "top",
         "title": f"{ICONS['view_scanpath']} The scanpath",
         "body": "Each circle is a **fixation**; its size shows how long it "
-        "lasted. The lines between them are **saccades**. When the replay plays, "
-        "the bar above the plot pauses or restarts it.",
+        "lasted. The lines between them are **saccades**. Use the controls "
+        "above the plot to pause or restart the replay.",
     },
     {
         "selector": ".st-key-tour_grp_simple_views",
         "dock": "left",
         "title": f"{ICONS['plot_controls']} Choose a view",
-        "body": "**Animation** replays the reading, **Scanpath** draws it "
-        "still, **Heatmap** shades each word by the time spent on it, and "
-        "**Illustration** is a clean figure for slides and papers. **Palette** "
+        "body": "**Animation** replays the reading, **Scanpath** shows a "
+        "static plot, **Heatmap** shades each word by fixation time, and "
+        "**Illustration** creates a schematic for slides and papers. **Palette** "
         "changes the colors.",
     },
     {
@@ -2079,8 +2079,8 @@ def _tutorial_library_dialog() -> None:
     context = st.session_state.get("_tutorial_context") or {}
     st.markdown("**Choose a tutorial.**")
     st.caption(
-        "Each one points at the real controls. Your data, filters and settings "
-        "stay as they are."
+        "Follow along in the app. Tutorials highlight the controls without "
+        "changing your data, filters or plot settings."
     )
     welcome = st.container(border=True)
     welcome_head, welcome_action = welcome.columns([3, 1], vertical_alignment="center")
@@ -2297,9 +2297,9 @@ _FAQ_ITEMS = [
     (
         "A column was mapped to the wrong field. Where do I fix it?",
         f"In {ICONS['view_data']} **Data Management → {ICONS['edit']} Edit dataset "
-        "→ 2 · Data tables & column mapping**, with no re-upload. It only offers "
-        "the columns kept at import, so a column that was dropped needs a "
-        "re-upload.",
+        "→ 2 · Data tables & column mapping**. You can change the mapping "
+        "without uploading again, using any column kept during import. "
+        "To use a column that was left out, add the dataset again from its files.",
     ),
     (
         "What counts as a “trial”?",
@@ -2313,17 +2313,15 @@ _FAQ_ITEMS = [
     (_WHERE_DATA_GOES, ""),
     (
         "My uploaded data vanished after a refresh.",
-        "Local and desktop runs normally recover uploaded datasets, settings and "
-        "annotations after a refresh. "
-        f"**{ICONS['view_data']} Data Management → Saved on this computer** shows "
-        "whether this is on and where the copy is saved. For a portable copy, "
-        f"export annotations from **{ICONS['view_data']} Data Management → "
-        "Annotations** and the figure's settings from "
-        f"**{ICONS['view_scanpath']} Scanpath → {ICONS['share']} Share → File**. "
-        "Neither file holds dataset rows.",
+        "Local and desktop installs normally restore datasets, settings and "
+        "annotations after a refresh. **Data Management → Saved on this "
+        "computer** shows whether saving is on. To keep copies you can move "
+        "elsewhere, export annotations from **Data Management → Annotations** "
+        "and plot settings from **Scanpath → Share → Settings file**. "
+        "Keep your source data separately.",
     ),
     (
-        "How do I turn the recovery copy off, or delete it?",
+        "How do I stop saving my work, or delete the saved copy?",
         "Start the app with `scanpath-studio run --no-persist` (or set "
         "`SCANPATH_STUDIO_PERSIST=0`) to save nothing. "
         "`scanpath-studio cache --clear` deletes what is already stored. To save "
@@ -2333,9 +2331,10 @@ _FAQ_ITEMS = [
         "PDF or video export fails but HTML works.",
         "The current figure's **PNG** and **SVG** are saved by your browser from "
         "the plot on screen. **PDF**, **GIF**/**MP4** and the images in the "
-        "export and Compare bundles are made by Kaleido, which needs Chrome, "
-        "Chromium or Edge installed. In a pip install, `plotly_get_chrome -y` "
-        "installs one. **HTML** export needs no browser.",
+        "export and comparison bundles need Chrome, Chromium or Edge on the "
+        "computer running the app. With a pip install, you can run "
+        "`plotly_get_chrome -y` to install Chrome. **HTML** export works "
+        "without an additional browser installation.",
     ),
     (
         "How do I cite Scanpath Studio?",
@@ -2375,13 +2374,13 @@ def _where_data_goes() -> str:
 
     if not server_bound_to_loopback():
         kept = (
-            "a recovery copy is kept there"  # opted in: SCANPATH_STUDIO_PERSIST=1
+            "a saved copy is kept there"  # opted in: SCANPATH_STUDIO_PERSIST=1
             if persistence_enabled()
             else "not kept"
         )
         return (
-            "To the server this app runs on, not your computer. A file you "
-            f"upload is processed there and {kept}. The app itself has no "
+            "Files you upload are processed on the server running this app "
+            f"and {kept}. The app itself has no "
             "accounts, database or analytics. The online demo runs on Streamlit "
             "Community Cloud, whose page around the app has its own analytics "
             f"([privacy policy]({STREAMLIT_PRIVACY_URL}) ↗). To keep your data "
@@ -2390,13 +2389,13 @@ def _where_data_goes() -> str:
             "`scanpath-studio`)."
         )
     answer = (
-        "Nowhere. It stays on your computer, and the app has no accounts, "
+        "Your files are processed on your computer. The app has no accounts, "
         "database or analytics."
     )
     if persistence_enabled():
         answer += (
-            " This run also keeps a **recovery copy** (datasets, mappings, "
-            "settings, annotations), so a refresh resumes where you left off. "
+            " The app also saves a **local copy** of your datasets, mappings, "
+            "settings and annotations, so you can resume after a refresh. "
             f"**{ICONS['view_data']} Data Management → Saved on this computer** "
             "shows what is stored and where."
         )
@@ -2591,10 +2590,10 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "3 · Recording setup",
         "body": (
-            "Give the screen, monitor width, text size and font used when the "
-            "data was recorded. Each line starts with an estimate or a default "
-            "value, and says which. Every figure is drawn with these values, so "
-            "choose *I know it* wherever you know the real value."
+            "Enter the screen resolution, monitor width, text size and font "
+            "used in the experiment. Estimated and default values are labeled. "
+            "Choose *I know it* to enter a recorded value. These settings "
+            "determine how the figures are drawn."
         ),
         "selector": ".st-key-wiz_part_setup",
         "step_id": "setup",
@@ -2604,9 +2603,9 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "4 · Stimulus images",
         "body": (
-            "Optional: a folder on this computer with a screenshot of each "
-            "text or trial, drawn under the scanpath. A filename pattern built "
-            "from your fields, such as `{text_id}.png`, finds each one."
+            "Optionally, choose a folder of stimulus screenshots to display "
+            "behind the scanpath. Use a filename pattern such as `{text_id}.png` "
+            "to match each image to a text or trial."
         ),
         "selector": ".st-key-wiz_part_images",
         "step_id": "images",
@@ -2617,11 +2616,10 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": f"{ICONS['confirm']} Save it",
         "body": (
-            f"**{ICONS['confirm']} Add dataset** saves the dataset, then offers "
-            f"**{ICONS['view_scanpath']} Open in Scanpath view** or **Add another**. "
-            f"**{ICONS['download']} Download setup file** saves this mapping and "
-            "recording setup as a file. Next time, *Start from* can reuse the "
-            "file or this dataset."
+            "Click **Add dataset**, then **Open in Scanpath view** or "
+            "**Add another**. Use **Download setup file** to save the mapping "
+            "and recording setup. When adding similar data, choose the saved "
+            "file or this dataset under *Start from*."
         ),
         "selector": ".st-key-wizard_footer_row",
         "step_id": None,

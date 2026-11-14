@@ -1363,7 +1363,7 @@ def designs_from_json(text: str, *, report: list[str] | None = None) -> dict[str
         raise ValueError("not a Scanpath Studio designs file")
     raw = data.get("designs")
     if not isinstance(raw, dict):
-        raise ValueError("the file holds no designs")
+        raise ValueError("the file contains no saved designs")
     try:
         schema = int(data.get("schema", 1))
     except (TypeError, ValueError, OverflowError):
@@ -1457,8 +1457,8 @@ def _render_design_file_row(host, saved: dict[str, dict]) -> None:
             max_upload_size=upload_limit_mb(),
         )
         st.caption(
-            "Pick a file saved with **Export**. A design in it replaces yours of "
-            "the same name; the others are added."
+            "Choose a file saved with **Export**. Imported designs replace "
+            "saved designs with the same name; other designs are added."
         )
 
 
@@ -2793,9 +2793,10 @@ WORD_FIELD_SPECS: list[dict] = [
         "key": "line",
         "label": "Line index",
         "required": False,
-        "help": "Line number of the word on screen, kept as metadata. Line "
-        "coloring and hover find lines from the word boxes' Y positions "
-        "instead.",
+        "help": (
+            "The recorded line number, kept as metadata. Text-line colors and "
+            "tooltips use lines identified from the Y positions of word boxes."
+        ),
     },
     # Only meaningful alongside "Merge character boxes into word
     # boxes" — a table whose rows are grouped into sub-blocks that each
@@ -2871,14 +2872,20 @@ FIX_FIELD_SPECS: list[dict] = [
         "key": "x",
         "label": "X coordinate",
         "required": False,
-        "help": "Fixation pixel X. For AOI-only data, leave empty and map "
-        "Word ID; those fixations are placed at word-box centers.",
+        "help": (
+            "Horizontal fixation position in pixels. If your data has word IDs but no"
+            " coordinates, leave X and Y empty and map Word ID to use word-box "
+            "centers."
+        ),
     },
     {
         "key": "y",
         "label": "Y coordinate",
         "required": False,
-        "help": "Fixation pixel Y. Leave empty for AOI-only data (map Word ID instead).",
+        "help": (
+            "Vertical fixation position in pixels. If your data has word IDs but no "
+            "coordinates, leave X and Y empty and map Word ID instead."
+        ),
     },
     {
         "key": "duration",
@@ -2923,10 +2930,12 @@ FIX_FIELD_SPECS: list[dict] = [
         "key": "word_id",
         "label": "Word ID",
         "required": False,
-        "help": "Which word/AOI each fixation landed on, as the Words table's Word "
-        "ID names it: the same number, or the same text. When mapped, it is used "
-        "instead of matching fixations to word boxes by position. For AOI-only "
-        "data, leave X/Y empty and map this.",
+        "help": (
+            "The fixated word's ID, matching the number or text in the Words table "
+            "exactly. When mapped, this determines word assignment instead of "
+            "position. If your data has no X/Y coordinates, map Word ID to place "
+            "fixations at word-box centers."
+        ),
     },
     {
         "key": "canvas_width",
@@ -3671,7 +3680,8 @@ def column_mapping_ui(
             st.markdown(f"**Column mapping — {table_label}**")
         if header:
             st.caption(
-                "Detected from your file's column names. Change any row that is wrong."
+                "Suggested from your file's column names. Check the suggestions and "
+                "change any that need correcting."
             )
         if problems:
             st.warning(
@@ -3692,8 +3702,8 @@ def column_mapping_ui(
                 expanded=any(proposed.get(key) for key in _MEASURE_MAPPING_KEYS),
             )
             hosts["measures"].caption(
-                "Per-AOI measures your report already has (FFD, TFD, …). "
-                "Corpus Analysis shows these and does not compute measures."
+                "Reading measures from your interest-area report (FFD, TFD, …). "
+                "Corpus Analysis uses these values; the app does not compute them."
             )
         if group_advanced and any(
             spec["key"] in _ADVANCED_MAPPING_KEYS for spec in field_specs
@@ -4678,13 +4688,13 @@ def render_pattern_help(host, fields: dict) -> None:
     ]
     with host.expander("Available fields", expanded=False):
         st.markdown(
-            "Type any of these in a pattern to insert the trial's value. The "
-            "list has the trial's IDs and counts, then each table's fields that "
-            "have one value per trial, as `{table.field}`. Fields that change "
-            "within a trial, such as a word's surprisal, are not listed.\n\n"
+            "Use a field in braces to insert the trial's value. The list includes "
+            "IDs, counts and table fields with one value per trial, written as "
+            "`{table.field}`. Fields that vary within a trial, such as word "
+            "surprisal, are not available.\n\n"
             + "\n".join(f"- `{{{name}}}`" for name in sorted(plain))
             + "".join(f"\n\n{section}" for section in sections)
-            + "\n\nAnything else is left as literal text."
+            + "\n\nOther text appears exactly as you type it."
         )
 
 
@@ -6095,18 +6105,26 @@ def _legends_drawn(
 
 #: What each Legends row places (📐 Figure & canvas → Legends).
 _LEGEND_ROW_HELP = {
-    "compare": "The A/B legend naming the two scanpaths. Edit its labels in "
-    "⚖️ Compare ▾ → Label A / Label B.",
-    "saccades": "The saccade-type legend. Edit its colors in ↗️ Saccades ▾ → "
-    "Color, set to By type.",
-    "colors": "The legend of a categorical Color by, and the Highlight entries. "
-    "Its entries come from 👁️ Fixations ▾ → Marker → Color and from the "
-    "Highlight filters in 🧹 Filters & highlights ▾.",
-    "size_key": "The duration size key. Its circles are drawn at the marker "
-    "sizes; edit the durations it shows in 👁️ Fixations ▾ → Durations.",
-    "highlight": "The note naming the highlighted words. Pick the words and "
-    "their color in 📄 Stimulus ▾ → Highlight words. It is one line, so it "
-    "has no arrangement.",
+    "compare": (
+        "Labels for scanpaths A and B. Edit them under Compare → Label A / Label B."
+    ),
+    "saccades": (
+        "Saccade types and their colors. Choose By type under Saccades → Line → Color."
+    ),
+    "colors": (
+        "Fixation color categories and highlighted fixations. Choose categories "
+        "under Fixations → Marker → Color and highlights under Filters & "
+        "highlights."
+    ),
+    "size_key": (
+        "Reference marker sizes labeled in milliseconds. Set the durations under "
+        "Fixations → Marker → Durations."
+    ),
+    "highlight": (
+        "The highlighted-word label. Choose words and colors under Stimulus → "
+        "Highlight words. This legend uses one line, so arrangement does not "
+        "apply."
+    ),
 }
 
 
@@ -8043,9 +8061,10 @@ def render_plot_controls(
             key="global_redact_text",
             persist_state="session",
             disabled=not show_labels,
-            help="A rounded block over each word's letters instead of the word, "
-            "and the word masked in the hovers: the figure keeps the layout of "
-            "the text but none of its words.",
+            help=(
+                "Replace each word with a rounded block and hide its text in tooltips. "
+                "This preserves the text layout while concealing the words."
+            ),
         )
         # The typography that draws this text lives beside the layer
         # that draws it. Reserved here and filled by the single
@@ -9077,7 +9096,7 @@ def render_plot_controls(
             format_func=fix_hover_labels.__getitem__,
             key="global_fixation_hover_fields",
             persist_state="session",
-            help="Fields shown when hovering a fixation, in this order.",
+            help=("Fields shown in each fixation tooltip, in this order."),
         )
 
     # Where each legend sits — and whether it is drawn at all: each row's *Show*
@@ -9095,10 +9114,9 @@ def render_plot_controls(
         )
         if not drawn:
             st.caption(
-                "This figure has no legend. These add one: Compare's A/B labels, "
-                "saccades colored by type, a categorical fixation color, a "
-                "Highlight filter, raw gaze, a fixed marker-size scale, or "
-                "highlighted words."
+                "This figure has no legend yet. Legends appear when you use features such"
+                " as A/B comparison labels, saccade types, categorical fixation colors, "
+                "highlights, raw gaze or a fixed marker-size scale."
             )
         else:
             weights = [0.14, 0.38, 0.28, 0.2]
@@ -9989,8 +10007,10 @@ def render_trial_chip_picker(
     host.button(
         f"{ICONS['refresh']} Refresh fields",
         key="trial_chip_refresh",
-        help="Re-scan which fields are trial-level. Use it if the list looks "
-        "wrong for the current data.",
+        help=(
+            "Refresh the list of fields with one value per trial. Use this if fields "
+            "are missing or the list does not match the current data."
+        ),
         on_click=lambda: st.session_state.pop("_trial_level_cache", None),
     )
 

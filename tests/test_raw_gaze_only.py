@@ -719,8 +719,8 @@ class TestScanpathView:
         at.run()
         assert not at.exception, at.exception
         text = " ".join(i.value for i in at.info)
-        assert "this dataset has no Words table" in text
-        assert "Raw gaze samples carry no reading measures" in text
+        assert "add a Words table with per-word measures" in text
+        assert "Raw gaze samples do not include per-word reading measures" in text
 
     def test_the_heatmap_greys_only_with_neither_fixations_nor_words(self, raw_gaze):
         """No fixations and no words: nothing for the heatmap to draw. Words

@@ -4,8 +4,8 @@ description: "Command-line reference for scanpath-studio: launch the app, or ren
 
 # CLI reference
 
-`scanpath-studio` launches the app. Its subcommands do the rest without opening
-it:
+`scanpath-studio` launches the app. Use these commands to create figures,
+check data and manage saved work without opening the app:
 
 | Command | What it does |
 | --- | --- |
@@ -18,8 +18,7 @@ it:
 | [`cite`](#cite) | Print how to cite Scanpath Studio |
 
 Each command takes `--help`, and `scanpath-studio --version` prints the version.
-A word that is not a command is an error that suggests the closest command. It
-is not passed on to Streamlit.
+If you mistype a command, the CLI suggests the closest match.
 
 ## Launch the app
 
@@ -51,8 +50,8 @@ them back on with `SCANPATH_LOCAL_FS=1`
 
 ## render
 
-`render` writes one trial to a file without opening the app. The extension
-picks the format: `.html` is interactive and needs nothing else, while `.png`,
+`render` writes one trial to a file without opening the app. The file extension
+sets the format: `.html` opens as an interactive figure in your browser, while `.png`,
 `.svg` and `.pdf` need Chrome, Chromium or Edge (or run `plotly_get_chrome -y`
 once; see the [FAQ](faq.md#export-fails)). The figure is the app's Scanpath
 design unless a flag changes it, and every [figure option](api.md#figure-options)

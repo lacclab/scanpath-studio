@@ -9,7 +9,7 @@ hide:
 # Redacted text
 
 Show where the text was without showing what it said. Each word is drawn as a
-rounded block over its letters, and the hovers hide the words too.
+rounded block over its letters. Words are also hidden in tooltips.
 
 ```python exec="true" html="true"
 from gallery_examples import gallery_figure

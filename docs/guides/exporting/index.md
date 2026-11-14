@@ -15,23 +15,21 @@ Save a figure, export many trials at once, or reuse a view in the app or in code
 | Share a view or copy its code | :material/share: **Share** → **Link** or **Code** |
 | Reuse the figure settings | :material/palette: **My designs**, or :material/share: **Share** → **Settings file** |
 
-In Essentials mode, **Export** holds **Current figure** only; **Export bundle** is
-in Full.
+To export multiple trials, switch to Full and open **Export bundle**.
+Essentials offers **Current figure** for the figure or replay on screen.
 
 For step-by-step instructions, see the [export tutorials](../../tutorials/exporting-figures/index.md).
 
 ## Cite what you export { #cite }
 
-Every file you export says how to cite Scanpath Studio in its own metadata:
-the PNG's text chunks, the SVG's `<metadata>`, the PDF's document properties,
-the HTML page's `<head>`, and the GIF's and MP4's comment. Nothing is drawn on
-the figure.
+Files saved through **Export** include citation information in their metadata.
+To add a visible credit to the figure, use **Figure & canvas** → **Credit**.
 
 - :material/format_quote: **Cite**, under each download and in
   :material/share: **Share** → **Code**, gives a one-line figure credit, the
   APA reference and BibTeX, and `.bib` and `.ris` files for Zotero, Mendeley or
   EndNote. For the bundled demo, OneStop or PoTeC, it cites the corpus too.
-- An export bundle has a `CITATION.bib`, and its `README.md` a *Cite* section.
+- Each export bundle includes `CITATION.bib` and citation instructions in `README.md`.
 - **Figure & canvas** → **Credit** adds a small *Made with Scanpath Studio*
   line under the plot, for a figure shared without its caption. In code, pass
   `show_credit=True`, or `--credit` to `render`.
@@ -50,7 +48,7 @@ says what the recipient needs.
 
 ## Reproduce a figure { #from-the-app-to-a-script }
 
-Open **Share** → **Code** and copy the Python or CLI code. It carries the
+Open **Share** → **Code** and copy the Python or CLI code. It includes the
 figure's settings and your column mapping. For a dataset you imported, replace
 the placeholder file paths with your own.
 [Render in code](../scanpath-visualization/index.md#render-in-code) shows a minimal example.

@@ -1274,9 +1274,11 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--redact-text",
         action="store_true",
-        help="Draw a rounded block in the text color in place of each word's "
-        "letters, and leave the words out of the hovers. The figure keeps the "
-        "text's layout but not its words (the app's Text → Redact).",
+        help=(
+            "Replace each word with a rounded block in the text color and hide its "
+            "text in tooltips. Preserves the text layout while concealing the words "
+            "(the app's Text → Redact)."
+        ),
     )
     viz.add_argument(
         "--highlight-text-color",
@@ -1732,13 +1734,15 @@ def _render_parser() -> argparse.ArgumentParser:
     cmp_group.add_argument(
         "--label-a",
         metavar="TEXT",
-        help="Name of scanpath A in the legend and hovers. Used by the "
-        "comparison and by --animate. Needs --label-b.",
+        help=(
+            "Name of scanpath A in the legend and tooltips. Applies to comparisons "
+            "and --animate. Requires --label-b."
+        ),
     )
     cmp_group.add_argument(
         "--label-b",
         metavar="TEXT",
-        help="Name of scanpath B in the legend and hovers. Needs --label-a.",
+        help=("Name of scanpath B in the legend and tooltips. Requires --label-a."),
     )
     cmp_group.add_argument(
         "--compare-legend",
@@ -2684,9 +2688,14 @@ def render(argv: list[str]) -> None:
     # A print width sizes a PNG; say so before the data loads.
     printed = args.width_mm is not None or args.width_in is not None
     if args.dpi is not None and not printed:
-        parser.error("--dpi is the resolution of --width-mm / --width-in; add one.")
+        parser.error(
+            "Use --dpi with --width-mm or --width-in to set the PNG print resolution."
+        )
     if printed and args.output and not str(args.output).lower().endswith(".png"):
-        parser.error("--width-mm / --width-in size a PNG; write to a .png file.")
+        parser.error(
+            "Print width applies to PNG files. Use an output filename ending in .png "
+            "with --width-mm or --width-in."
+        )
     # Validate everything derivable from argv before the (possibly minutes-long
     # on full corpora) data load.
     corpus_inputs = [

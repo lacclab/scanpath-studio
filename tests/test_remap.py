@@ -1097,9 +1097,9 @@ class TestEditorSetupExport:
         at = AppTest.from_function(_setup_file_editor_app, default_timeout=30).run()
         assert not at.exception
         said = " ".join(c.value for c in at.caption)
-        assert "Only columns kept when the dataset was added are available." in said
+        assert "Only columns kept during import are available." in said
         assert (
-            "To use a column that isn't listed, remove this dataset and add it "
+            "To use a column that is missing, remove the dataset and add it "
             "again from its files." in said
         )
 

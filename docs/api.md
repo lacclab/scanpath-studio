@@ -31,13 +31,13 @@ print(api_index())
 
 ## Column names
 
-Columns keep the names your files give them. The bundled demo's Words table
-calls its word ID column `IA_ID` and its total fixation duration
-`IA_DWELL_TIME`, and every function and option takes those names. A column
-Scanpath Studio made keeps its internal name.
-`load_scanpath_data(..., names="canonical")` gives the internal names, which are
-the same for every dataset. On the bundled demo, the first steps print this
-(run when the docs are built):
+The API preserves the column names from your files. For example, the bundled
+demo's Words table uses `IA_ID` for word IDs and `IA_DWELL_TIME` for total
+fixation duration. Use those names when selecting columns in functions and
+figure options. Columns created by Scanpath Studio use its internal names.
+
+Pass `names="canonical"` to `load_scanpath_data` to use the same internal names
+across datasets. The example below shows the names returned for the bundled demo:
 
 ```python exec="true" source="above" result="text" session="api"
 import scanpath_studio as sps

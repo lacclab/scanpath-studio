@@ -1275,12 +1275,11 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         "Derive columns from text",
         key="wizard_filename_split",
         help=(
-            "Use this when an id, such as a session or stimulus, appears only "
-            "inside a text value like the filename. Pick a table and one of its "
-            "columns (by default the uploaded filename, `source_file`). Then "
-            "split the text on a delimiter, or pull parts out with named regex "
-            "groups. The new columns can be mapped as ids below. "
-            f"{ICONS['add']} Add line derives from a second column."
+            "Extract IDs from filenames or another text column. Choose a table "
+            "and column, then split the values using a delimiter or a regular "
+            "expression with named groups. Click Apply to create the columns, "
+            "then select them in the mappings below. "
+            f"Use {ICONS['add']} Add line to extract from another column."
         ),
     )
     if not enabled:
@@ -1333,7 +1332,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             table_options,
             key=table_key,
             label_visibility="collapsed",
-            help="The uploaded table to derive from. Its columns are offered next.",
+            help="Choose the table containing the text you want to extract from.",
         )
         table_frame = frames[selected_table]
         table_columns = (
@@ -1352,15 +1351,15 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             table_columns,
             key=column_key,
             label_visibility="collapsed",
-            help="The column to derive from. Defaults to the filename "
-            "(`source_file`); pick another column if it holds the id as text.",
+            help="Choose the column containing the IDs. The default, "
+            "source_file, contains the uploaded filename.",
         )
         mode = mode_col.selectbox(
             "How",
             ["Split on a delimiter", "Extract with a regex"],
             key=mode_key,
             label_visibility="collapsed",
-            help="How to pull columns out of the chosen column's text.",
+            help="Choose how to extract values from the text.",
         )
         pattern = ""
         lower = False
@@ -1417,8 +1416,8 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         f"{ICONS['add']} Add line",
         key="wizard_filename_another",
         width="stretch",
-        help="Add another line, to derive from a second column or table, or "
-        "from the same column a second way.",
+        help="Extract values from another column or table, or use another "
+        "pattern on the same column.",
     ):
         # `line_count` was already read (and the lines above already drawn
         # with it) before this button was evaluated, so raising it here alone
@@ -1434,7 +1433,8 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         disabled=any(
             d["mode"] == "Extract with a regex" and not d["pattern"] for d in drafts
         ),
-        help="Derive the columns above and make them available to map below.",
+        help="Create the columns from these patterns, then choose them in the "
+        "column mappings below.",
     )
     if apply_clicked:
         st.session_state[_FILENAME_DERIVE_APPLIED_KEY] = drafts
@@ -2418,7 +2418,10 @@ def _wizard_restore_config(host) -> None:
     try:
         config = json.loads(uploaded.getvalue().decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
-        host.warning("That file isn't a saved setup (not valid JSON).")
+        host.warning(
+            "This file could not be read as a setup file. Choose a JSON file saved "
+            "with Download setup file."
+        )
         return
     _setup_sections = (
         "data_source",
@@ -2430,7 +2433,10 @@ def _wizard_restore_config(host) -> None:
     )
     if not isinstance(config, dict) or not any(k in config for k in _setup_sections):
         # An unrelated JSON must not report "Restored" with nothing restored.
-        host.warning("That file holds no saved setup, so nothing was restored.")
+        host.warning(
+            "No saved setup was found in this file. Choose a file saved with Download"
+            " setup file."
+        )
         return
     _apply_setup_config(config, source=uploaded.name, kind="file")
     st.rerun()
@@ -3032,7 +3038,9 @@ def _wizard_setup_step(
         )
         if not has_data:
             line.caption(
-                "Estimated from your data once a Fixations or Words table is in.",
+                (
+                    "An estimate will appear after you upload a Fixations or Words table."
+                ),
                 width="content",
             )
         else:
@@ -3354,10 +3362,10 @@ def _wizard_setup_step(
     if guessed:
         nudge.caption(
             f"{ICONS['warning']} **{' and '.join(guessed)}** "
-            + ("is" if len(guessed) == 1 else "are")
-            + " an estimate or a default. If you know the real "
+            + ("uses" if len(guessed) == 1 else "use")
+            + " an estimated or default value. If you know the recorded "
             + ("value" if len(guessed) == 1 else "values")
-            + ", choose *I know it*. Every figure is drawn with these values."
+            + ", choose *I know it*. These settings determine how figures are drawn."
             + (
                 " You can also add the dataset now and change them later."
                 if initial is None
@@ -3685,7 +3693,7 @@ def _multipleye_folder_field(host, active: bool) -> str:
         if chosen := app._pick_directory_dialog():
             st.session_state[f"{MULTIPLEYE_DIR_KEY}_picked"] = chosen
             st.rerun()
-        host.caption("No folder picker here. Type or paste the path.")
+        host.caption("Enter or paste the folder path.")
     resolved = app._resolve_data_dir(str(typed or ""))
     if resolved and resolved != str(typed).strip():
         host.caption(f"Full path: `{resolved}`")
@@ -4342,8 +4350,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "https://lacclab.github.io/scanpath-studio/guides/loading-data/",
                 icon=ICONS["docs"],
                 type="tertiary",
-                help="What your export needs, how this wizard maps it, and the "
-                "recording setup it asks for.",
+                help=(
+                    "Learn which tables you can import, how to map their columns, and how to "
+                    "enter the recording setup."
+                ),
             )
         # The way out, on the row that stays on screen.
         #

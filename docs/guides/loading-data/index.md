@@ -36,8 +36,8 @@ is available as four public datasets: **OneStop · Ordinary reading**,
 
 ## What your data needs
 
-A dataset needs at least one of the first three tables below. Add the others as
-you need them.
+Start with a Fixations, Words or Raw gaze table. You can add the other tables
+whenever you need them.
 
 | Table | Contents |
 | --- | --- |
@@ -48,7 +48,7 @@ you need them.
 | Trials | One row per trial, with metadata |
 | Texts | One row per text, with metadata |
 
-The app detects columns from common eye-tracker exports. Check and correct the
+The app recognizes column names from common eye-tracker exports. Check the
 mapping when you import. To keep condition labels and other columns, pick them
 under **Extra fields to keep**. You can filter, sort and group trials by any
 metadata field.
@@ -60,12 +60,12 @@ metadata field.
 - Times in milliseconds. A time column whose header names its unit, such as
   `[s]`, `[μs]` or `[ns]`, is converted.
 - Word boxes as `x/y/width/height` or EyeLink's `IA_LEFT/RIGHT/TOP/BOTTOM`
-- Word IDs as numbers, or as text such as `w1`. Spell text IDs the same way in
+- Word IDs as numbers, or as text such as `w1`. Text IDs must match exactly in
   the Fixations and Words tables. With text IDs, the order of the rows in the
   Words table sets the word order.
 - Several files for one table, such as one file per trial, are stacked into
   one table, with each file's name in a `source_file` column. When an ID is
-  only in the file name, **Derive columns from text** splits it out into a
+  only in the file name, use **Derive columns from text** to extract it into a
   column you can map. When you click **Apply**, a derived column named like an
   ID, such as `participant`, `trial` or `stimulus`, fills that ID field if it
   is empty.
@@ -80,7 +80,7 @@ metadata field.
 
 Map the **Screen ID** field in your tables. A column named `screen_index` sets
 the order of the screens. Without one, the screens are ordered by where they
-first appear, in the Fixations table when the dataset has one. The app draws one
+first appear, using the Fixations table if available. The app draws one
 screen at a time.
 
 ### Reading measures { #reading-measures }

@@ -4293,7 +4293,7 @@ def _render_share_body(
         if not visible:
             return
         if settings_file is None:
-            st.caption("Open a trial first; the settings file describes its figure.")
+            st.caption("Open a trial to save or restore its figure settings.")
         else:
             settings_file()
         return

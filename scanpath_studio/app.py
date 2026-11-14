@@ -990,7 +990,7 @@ def _render_empty_after_filtering(
     with st.container(border=True, key="empty_state_panel"):
         st.markdown(
             f"#### No trials match your filters\n"
-            f"**0** of the **{plural(total, 'trial')}** in this dataset get through."
+            f"**{plural(total, 'trial')}** before filtering; **0** after filtering."
         )
         rows = culprits or report
         if culprits:
@@ -1109,7 +1109,7 @@ def _render_download_folder_section(host) -> None:
         on_click=_pick_download_folder,
     )
     if st.session_state.pop(f"{DOWNLOAD_DIR_KEY}_no_picker", False):
-        host.caption("No folder picker here. Type or paste the path.")
+        host.caption("Enter or paste the folder path.")
     host.markdown(f"**Saving to:** `{download_folder()}`")
 
 
@@ -1369,8 +1369,8 @@ def _delete_download_dialog(choice: str) -> None:
     if row.shared:
         st.markdown(
             f"{plural(len(row.shared), 'file')} "
-            f"({human_size(_files_bytes(row.shared))}) that other downloaded "
-            "datasets use too stay."
+            f"({human_size(_files_bytes(row.shared))}) are also used by other "
+            "downloaded datasets and will be kept."
         )
     st.caption(
         "Anything else in the folder is not touched. You can download it again "
@@ -1479,8 +1479,10 @@ def _render_saved_here_section(app_url: str, host) -> None:
                 "**Turned off.** Scanpath Studio was started with saving "
                 "switched off, so your work is kept in memory only"
                 if turned_off
-                else "**Not available here.** This server keeps your work in "
-                "memory only"
+                else (
+                    "**Not saved between visits.** This server keeps your work only for the "
+                    "current session"
+                )
             )
             + ". Closing or refreshing the tab loses the datasets you uploaded, "
             "their column mappings, your annotations and designs. Export the "
@@ -2344,7 +2346,7 @@ def _dataset_dir_input(
             st.session_state[f"{dir_key}_picked"] = chosen
             st.rerun()
         else:
-            cfg.caption("No folder picker here. Type or paste the path.")
+            cfg.caption("Enter or paste the folder path.")
     resolved = _resolve_data_dir(raw)
     # A relative entry such as the default `data/PoTeC` resolves against the
     # checkout, or in an installed copy against the per-user data home — on
@@ -4631,8 +4633,8 @@ def _read_uploaded_frame(
     ):
         mb = uploaded_files_total_bytes(uploaded) / (1024 * 1024)
         messages.warning(
-            f"This upload is **{mb:.0f} MB**. On the hosted demo (~1 GB RAM), "
-            "a corpus this large can run out of memory and crash the app. "
+            f"This upload is **{mb:.0f} MB**. The online demo may run out "
+            "of memory while loading a file this large. "
             f"For large corpora, use the [desktop app]({CITATION['desktop_url']}) "
             "or `pip install scanpath-studio`, or upload a subset, such as a few "
             "participants."
@@ -4640,8 +4642,10 @@ def _read_uploaded_frame(
         if not messages.checkbox(
             "Load it anyway",
             key=f"{state_prefix}_load_large",
-            help="Read the upload anyway. It may crash the hosted demo, which "
-            "has little memory.",
+            help=(
+                "Try loading this file. Large uploads may exceed the online demo's "
+                "available memory."
+            ),
         ):
             return pd.DataFrame()
     # The header pass is cheap and its answer is what both the plan and the

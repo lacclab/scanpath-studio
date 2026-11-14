@@ -2,13 +2,12 @@
 description: "Find eye-tracking trials with particular fixation patterns — short or long fixations, fixations outside the text, or blinks — and tag them for an analysis."
 ---
 
-# Find the trials an analysis needs
+# Find trials with specific fixation patterns { #find-the-trials-an-analysis-needs }
 
 Locate trials containing particular fixation patterns.
 
-These steps use the **Full** mode: switch to it in the top bar of the
-:material/route: **Scanpath** view, or add `ui=full` to the app's
-address ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
+Before you start, switch to **Full** at the top of the :material/route:
+**Scanpath** view ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
 
 1. Open :material/filter_list: **Filters & highlights** ▾ → **Fixations**.
 2. Set the **Mode** of the category you need to **Highlight**:

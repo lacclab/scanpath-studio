@@ -6,9 +6,8 @@ description: "Apply your exclusion criteria to eye-tracking trials: tag rejected
 
 Apply your exclusion criteria and leave rejected trials out of the selection.
 
-These steps use the **Full** mode: switch to it in the top bar of the
-:material/route: **Scanpath** view, or add `ui=full` to the app's
-address ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
+Before you start, switch to **Full** at the top of the :material/route:
+**Scanpath** view ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
 
 1. [Review the session](../data-collection/check-a-session.md#2-inspect-a-trial).
    Judge each trial against your study's criteria. A scanpath pattern alone

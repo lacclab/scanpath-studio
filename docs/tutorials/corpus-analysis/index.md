@@ -14,7 +14,7 @@ description: "Analyze an eye-tracking reading corpus: compare participants on on
 
     Inspect group means and differences.
 
-- :material-chart-timeline-variant:{ .lg .middle } **[See progression over time](progression-over-time.md)**
+- :material-chart-timeline-variant:{ .lg .middle } **[Track changes over time](progression-over-time.md)**
 
     Inspect trends within or across trials.
 
@@ -31,8 +31,8 @@ trials of that text must share one text ID.
 
 **⬇ Download this table (CSV)** saves the values. **⬇ Download the recipe
 (JSON)** saves the dataset name, the trial filters, the analysis choices and the
-counts. The recipe names the dataset but holds none of its data, so keep the
-source data to reproduce the result.
+counts. Keep the source data as well: the recipe records the dataset name,
+but does not include the data itself.
 
 To draw a summary with Python or the CLI, see
 [Plot a summary in code](../../guides/corpus-workspace/index.md#plot-a-summary-in-code).

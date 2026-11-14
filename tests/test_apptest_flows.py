@@ -375,7 +375,7 @@ class TestTrialFilterFlow:
         body = " ".join(m.value for m in at.markdown)
         assert "No trials match your filters" in body
         # The count has to say what it counts — not a bare "(dataset has 1)".
-        assert "**0** of the **1 trial** in this dataset get through." in body
+        assert "**1 trial** before filtering; **0** after filtering." in body
         assert "★ Favorites only" in body
         assert _trial_ids(at) == []
         assert [b for b in at.button if b.key == "clear_all_trial_filters"], (
@@ -931,7 +931,7 @@ class TestRecoveryCachePanelFlow:
         at = _rerun(at, view=VIEW_DATA)
         _clean(at, "hosted cache panel:")
         captions = " ".join(str(c.value) for c in at.caption)
-        assert "Not available here." in captions
+        assert "Not saved between visits." in captions
         body = " ".join(str(m.value) for m in at.markdown)
         assert "**Session folder:**" not in body
 
@@ -948,7 +948,7 @@ class TestRecoveryCachePanelFlow:
         lead = next(c for c in captions if "**Turned off.**" in c)
         assert "SCANPATH_STUDIO_PERSIST" not in lead
         assert any("`SCANPATH_STUDIO_PERSIST=0`" in c for c in captions)
-        assert not any("Not available here." in c for c in captions)
+        assert not any("Not saved between visits." in c for c in captions)
 
 
 class TestAddDatasetMenu:

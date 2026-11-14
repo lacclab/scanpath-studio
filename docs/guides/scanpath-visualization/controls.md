@@ -5,9 +5,9 @@ description: "Every control on Scanpath Studio's Scanpath view and what it does:
 
 # All controls
 
-Every control in the :material/route: **Scanpath** view, where it is and what it
-does, in the order you meet them on screen. Search this page (++ctrl+f++, or
-++cmd+f++ on a Mac) for the thing you want to change, such as *colors*,
+Find every control in the :material/route: **Scanpath** view, in the order it
+appears on screen. Search this page (++ctrl+f++, or
+++cmd+f++ on a Mac) for what you want to change, such as *colors*,
 *legends* or *axes*.
 
 The view has two sets of controls:
@@ -17,8 +17,8 @@ The view has two sets of controls:
 - The **plot controls**, the column on the right, decide *how* it is drawn:
   each layer of the figure, its colors and sizes, and the figure as a whole.
 
-The tabs under the plot then work with the trial on screen: annotate it, read
-its context, compare it, export it or share it. For how the parts fit
+Use the tabs under the plot to annotate the current trial, read its context,
+compare readings, export a figure or share the view. For how the parts fit
 together, see the [Scanpath visualization](index.md) guide.
 
 For the corresponding Python keywords and CLI flags, use the
@@ -87,8 +87,8 @@ time slider above the plot. While it is on, the **Fixations**, **Heatmap** and
 | **Replay** → **Duration** | For information only: the trial's reading time, and how long the video runs at this speed. |
 | **Frames** → **Quality** | How smooth the video is: **Coarse**, **Standard** or **Fine**. More frames play more smoothly but take longer to build. Moving either slider below makes it **Custom**. |
 | **Frames** → **Every** | Reading time between frames, in ms. |
-| **Frames** → **Limit** | The most frames a video gets. A long trial gets wider frame steps to fit. |
-| **Frames** → **Result** | For information only: how many frames this trial's video has, and how far apart they ended up. |
+| **Frames** → **Limit** | The maximum number of frames in the replay. For long trials, frames are spaced farther apart to stay within this limit. |
+| **Frames** → **Result** | Shows the number of frames in this replay and the reading time between them. |
 
 ### :material/compare: Compare
 
@@ -116,7 +116,7 @@ saved:
 | Control | What it does |
 | --- | --- |
 | :material/timeline: **Scanpath** / :material/local_fire_department: **Heatmap** / :material/draw: **Illustration** | Ready-made designs: fixations and saccades over the text, a word-box heatmap, or a clean schematic. |
-| :material/build: **Custom** | Your most recent hand-made settings. |
+| :material/build: **Custom** | Your most recent custom settings. |
 | :material/palette: **My designs** | Your saved designs. Click one to apply it. :material/edit: renames it and :material/delete: deletes it. |
 | :material/palette: **My designs** → :material/save: | Save the settings on screen as a named design, to apply again later in one click. |
 | :material/palette: **My designs** → **Export** / **Import** | Download your designs as a file, or load a file of designs, to share a look with co-authors or move your designs to another computer. A design in the file replaces yours of the same name. |
@@ -178,7 +178,7 @@ Recording setup, and changes here apply to the figure only. Its **▾** holds:
 | Control | What it does |
 | --- | --- |
 | **Text** → **Show** | Show the stimulus text, the words the participant read, at their place on the screen. |
-| **Text** → **Redact** | Draw a rounded block over each word's letters instead of the word, in the text color, and hide the word in the hovers, so a figure shows where the text was without showing what it said. |
+| **Text** → **Redact** | Replace each word with a rounded block in the text color and hide its text in tooltips. This preserves the text layout while concealing the words. |
 | **Fit** → **Fit to word boxes** | Size the stimulus text from its word boxes, instead of a fixed font size. |
 | **Fit** → **Spacing** | With **Fit to word boxes** on: the distance between lines, in font sizes. The font size is that distance divided by this value, so 3 leaves a blank line above and below. |
 | **Size** | With **Fit to word boxes** on: the size of the axis and legend text, in px. Off: the stimulus text's size too, in px or pt. |

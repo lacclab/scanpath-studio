@@ -4776,13 +4776,14 @@ class TestRecordingSetupGate(TestSetupWizard):
         assert not finalize.disabled
         # The estimate is said to be one, with the ask for the real value.
         assert any(
-            "**Screen** is an estimate or a default" in c.value for c in at.caption
+            "**Screen** uses an estimated or default value" in c.value
+            for c in at.caption
         )
 
         # Entering the screen answers the ask.
         at.session_state[_SETUP_MODE_KEYS["screen"]] = _SCREEN_KNOW
         at.run(timeout=60)
-        assert not [c for c in at.caption if "an estimate or a default" in c.value]
+        assert not [c for c in at.caption if "an estimated or default value" in c.value]
 
         finalize = next(b for b in at.button if b.key == "wizard_finalize")
         finalize.click()

@@ -39,14 +39,14 @@ ROUTES: tuple[tuple[str, str, str, str, str], ...] = (
         "Suggest a feature",
         "feature_request",
         CITATION["feature_request_url"],
-        "Something the app should do.",
+        ("Suggest a feature you would find useful."),
     ),
     (
         "idea",
         "Share an idea",
         "comment",
         CITATION["ideas_url"],
-        "Anything else: what works, what is confusing.",
+        ("Tell us what works well or what you find confusing."),
     ),
     (
         "question",
@@ -102,7 +102,7 @@ def maybe_show_feedback() -> None:
 @guarded()
 def _feedback_dialog() -> None:
     """Four routes to GitHub, and the details to paste into a bug report."""
-    st.caption("Each link opens GitHub. The app sends nothing itself.")
+    st.caption("Each link opens GitHub, where you can write and submit your message.")
     for key, label, icon, url, purpose in ROUTES:
         st.link_button(
             f"{label} ↗",

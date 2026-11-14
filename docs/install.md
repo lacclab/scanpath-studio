@@ -37,7 +37,7 @@ description: "Download Scanpath Studio for Windows, macOS or Linux, install it w
 
 - :fontawesome-brands-python:{ .lg .middle } **Install with Python**
 
-    Requires Python 3.11–3.14. Runs on your computer and opens in your browser.
+    Requires Python 3.11–3.15. Runs on your computer and opens in your browser.
 
     ```bash
     pip install scanpath-studio

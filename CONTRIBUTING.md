@@ -13,7 +13,7 @@ uv sync --extra test --extra lint     # or: pip install -e ".[test,lint]"
 uv run streamlit run streamlit_app.py --server.address 127.0.0.1
 ```
 
-Python 3.11–3.14. Bind to `127.0.0.1`: the on-device recovery cache is off on a
+Python 3.11–3.15. Bind to `127.0.0.1`: the on-device recovery cache is off on a
 server other machines can reach.
 
 The architecture map, conventions and gotchas are in [AGENTS.md](AGENTS.md);

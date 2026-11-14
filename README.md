@@ -31,7 +31,7 @@ Download the desktop app. You don't need Python.
 A local install keeps your data on your computer. To try the app first, open the bundled demo [online](https://scanpath-studio.streamlit.app).
 
 <details>
-<summary>Prefer pip? Install with Python 3.11–3.14</summary>
+<summary>Prefer pip? Install with Python 3.11–3.15</summary>
 
 ```bash
 pip install scanpath-studio

@@ -305,7 +305,7 @@ printed example output, CLI and figure-option references, and the Cite page are
 generated at build time by `exec="true"` fences calling
 `scripts/docs_support.py` — see CONTRIBUTING.md → *Docs site*.
 
-CI (GitHub Actions) runs pytest on Python 3.11–3.14, ruff lint + format checks,
+CI (GitHub Actions) runs pytest on Python 3.11–3.15, ruff lint + format checks,
 `mkdocs build --strict`, and one `pytest --cov` leg that fails below
 `[tool.coverage.report] fail_under` in `pyproject.toml`. The HTML coverage
 report and the README badge are published with the docs site for each release

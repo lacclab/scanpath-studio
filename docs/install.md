@@ -31,13 +31,13 @@ description: "Download Scanpath Studio for Windows, macOS or Linux, install it w
 
 - :material-cloud-outline:{ .lg .middle } **Try online**
 
-    Explore the bundled demo. No installation.
+    Explore the bundled demo without installing anything.
 
     [Launch demo :material-arrow-right:](https://scanpath-studio.streamlit.app){ .md-button }
 
 - :fontawesome-brands-python:{ .lg .middle } **Install with Python**
 
-    Python 3.11–3.14. Opens in your browser.
+    Requires Python 3.11–3.14. Runs on your computer and opens in your browser.
 
     ```bash
     pip install scanpath-studio
@@ -49,7 +49,7 @@ description: "Download Scanpath Studio for Windows, macOS or Linux, install it w
 ## Your first figure { #explore }
 
 Start with the bundled demo, a subset of the [OneStop corpus](guides/loading-data/index.md#onestop).
-You don't need to prepare any files. Choose a look, then save an interactive figure.
+You can explore it without preparing any files. Choose a view, then save an interactive figure.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../assets/workflows/design-presets_poster.webp" data-autoplay
@@ -66,8 +66,9 @@ You don't need to prepare any files. Choose a look, then save an interactive fig
 
 - **2 · Choose a view**
 
-    In **Design presets**, click :material/local_fire_department: **Heatmap** to see where fixation time concentrates.
-    Click :material/timeline: **Scanpath** to follow the order of fixations.
+    Choose :material/local_fire_department: **Heatmap** to see where fixation time concentrates,
+    or :material/timeline: **Scanpath** to follow the order of fixations.
+    These are view tiles in Essentials and **Design presets** in Full.
 
 - **3 · Save your figure**
 

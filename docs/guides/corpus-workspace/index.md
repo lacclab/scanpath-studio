@@ -5,8 +5,8 @@ description: "Summarize eye-tracking reading measures by text, participant or gr
 # Corpus Analysis
 
 The :material/bar_chart: **Corpus Analysis** view summarizes reading measures
-by text, participant or group. It uses the selected dataset and the trials your
-filters keep.
+by text, participant or group. It uses the selected dataset and the trials
+that match your filters.
 
 <figure class="sps-screenshot" markdown>
 ![Corpus Analysis: total fixation duration by word and participant](../../assets/screenshots/corpus-analysis.webp)
@@ -20,12 +20,14 @@ Open a tab, then pick a figure in its **View** menu.
 | --- | --- |
 | **Per text** | Compare word-by-word reading across participants |
 | **Per participant** | Inspect one participant across trials |
-| **Groups** | Describe a group of trials, or compare two, such as two conditions |
+| **Groups** | Summarize a group of trials, or compare two groups or conditions |
 
-Choose the **Measure**, how to **Aggregate** it and, where a view draws a band,
-its **Spread**. For word profiles, set **Min participants per word**.
+Choose a **Measure** and use **Aggregate** to choose how values are combined.
+For views with a shaded band, **Spread** controls what the band shows.
+For word profiles, **Min participants per word** sets how many participants
+must have a value for a word to be included.
 
-## Supply reading measures
+## Include reading measures in your Words table { #supply-reading-measures }
 
 Word-level views use the [reading measures in your data](../loading-data/index.md#reading-measures),
 such as first fixation duration or total fixation duration. Map those columns
@@ -34,18 +36,19 @@ time**, use the Fixations table.
 
 ## Compare groups
 
-Under **Define groups by**, choose **Split a field** to pick a group by the
-values of one field, or **Independent filter sets** to build it from filters.
-Turn on **Compare a second group** to define a group B and see the two groups
-side by side, their means and their difference. These views are descriptive and run no
-significance tests.
+Under **Define groups by**, choose **Split a field** to group trials by the
+values of a column, or **Independent filter sets** to define a group using filters.
+Turn on **Compare a second group** to define group B. You can then compare
+the groups side by side, including their means and the difference between them.
+These views provide descriptive summaries; they do not run significance tests.
 
 ## Save results
 
 Under each result, **⬇ Download this table (CSV)** saves the table and
-**⬇ Download the recipe (JSON)** saves how it was made: the dataset, the trial
-filters, the analysis choices and the counts. The recipe holds no data rows and
-no figure settings. To inspect single trials, return to the Scanpath view.
+**⬇ Download the recipe (JSON)** saves a record of the analysis: the dataset name,
+trial filters, analysis choices and counts. Keep your source data separately;
+the recipe contains neither the data nor the figure settings. To inspect
+individual trials, return to the Scanpath view.
 
 ## Plot a summary in code
 

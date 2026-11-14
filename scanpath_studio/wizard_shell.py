@@ -133,7 +133,10 @@ EDITOR_STEPS: tuple[WizardStep, ...] = (
         "edit_setup",
         2,
         "Recording setup",
-        "Screen, physical geometry and reading-text setup for this dataset.",
+        (
+            "Screen resolution, monitor dimensions, and the size and font of the "
+            "reading text."
+        ),
         True,
     ),
     WizardStep(

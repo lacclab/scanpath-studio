@@ -397,7 +397,9 @@ class TestWhatTheOtherSurfacesSay:
         assert any(b.key == "remap_apply_Zurich demo" for b in at.button)
         downloads = [d.proto.id for d in at.get("download_button")]
         assert not any("remap_setup_download" in d for d in downloads)
-        assert any("read from a MultiplEYE session set" in c.value for c in at.caption)
+        assert any(
+            "created from a MultiplEYE session set" in c.value for c in at.caption
+        )
 
     def test_the_snippet_says_what_the_loader_cannot_replay(self):
         uploaded = cs.upload_source(

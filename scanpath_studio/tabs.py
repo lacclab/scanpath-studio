@@ -1621,9 +1621,11 @@ def _render_html_files_choice() -> None:
         value=False,
         key=HTML_SELF_CONTAINED_KEY,
         persist_state="session",
-        help="Tick to make the HTML file open without an internet connection. "
-        "It then includes the Plotly library, about 4.8 MB more. Unticked, it "
-        "loads the library from cdn.plot.ly when opened.",
+        help=(
+            "Include the plotting library so this HTML file opens offline (adds about"
+            " 4.8 MB). Otherwise, an internet connection is needed when you open the "
+            "file."
+        ),
     )
 
 
@@ -1722,9 +1724,9 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
         horizontal=True,
         key="anim_export_format",
         help=(
-            "HTML keeps the interactive Play button and slider, and doesn't "
-            "need Chrome. GIF and MP4 are self-playing clips for slides and "
-            "talks, drawn with Chrome. MP4 files are far smaller than GIFs."
+            "HTML opens in your browser with interactive playback controls. GIF and "
+            "MP4 are clips for slides and talks; creating them requires Chrome, "
+            "Chromium or Edge. MP4 usually produces smaller files than GIF."
         ),
     )
 
@@ -1773,8 +1775,11 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
         value=1.0,
         format_func=lambda s: f"{s:g}×",
         key="anim_export_scale",
-        help="Render scale: 1× matches the on-screen size. Lower is smaller/faster; "
-        "higher is crisper/larger.",
+        help=(
+            "At 1×, the export matches the on-screen size. Lower values make smaller "
+            "files and export faster; higher values make sharper images and larger "
+            "files."
+        ),
     )
 
     max_frames = None
@@ -3592,8 +3597,8 @@ def _render_stimulus_field_picker(host, span_options, qa_options) -> None:
         return
     with host.popover(f"{ICONS['settings']} Fields", width="content"):
         st.caption(
-            "The columns this panel highlights and lists. They are picked by "
-            "column name; change them here if a pick is wrong or missing."
+            "Choose which columns to show in this panel. Columns are selected "
+            "automatically by name; add or remove them here."
         )
         if span_options:
             labeled(
@@ -3604,8 +3609,8 @@ def _render_stimulus_field_picker(host, span_options, qa_options) -> None:
                 format_func=_field_label,
                 key=_STIMULUS_SPAN_KEY,
                 persist_state="session",
-                help="Per-word true/false columns. Each selected one tints its "
-                "words in the stimulus text and gets a summary line below it.",
+                help="Choose true/false word columns. Each column highlights "
+                "its matching words in the text and adds a summary below.",
             )
         if qa_options:
             labeled(
@@ -6601,7 +6606,7 @@ def render_single_trial_tab(
                     playback_speed = _sub_row(
                         "Speed",
                         section="Replay",
-                        section_help="How the replay plays.",
+                        section_help="Playback speed, autoplay and duration.",
                         caption_help=_gated_help(
                             "Playback speed relative to the recorded fixation timings.",
                             anim_gate,
@@ -9104,8 +9109,11 @@ def _download_tidy(
         mime="application/json",
         key=f"{key}_recipe",
         on_click="ignore",
-        help="The dataset, trial filters, choices and counts behind this table. "
-        "It holds no data rows or figure settings.",
+        help=(
+            "A record of the dataset name, trial filters, analysis choices and counts"
+            " used for this table. Keep your data separately; the recipe contains no "
+            "data rows or figure settings."
+        ),
     )
 
 
@@ -9596,9 +9604,9 @@ def _render_group_definition(words, fixations, *, key, two_groups, host=None):
         cols = _group_split_columns(words, fixations)
         if not cols:
             host.info(
-                "No field to split on: none of the known condition fields has "
-                "2 or more values in both the Words and the fixation table. Use "
-                "*Independent filter sets*."
+                "No suitable grouping field was found. Use *Independent filter sets*, or "
+                "choose a condition field with at least two values in both the Words and "
+                "Fixations tables."
             )
             return (None, None, "Group A", "Group B") if two_groups else (None, "Group")
         # Detaching a metadata table removes its `meta:` options; without
@@ -9729,7 +9737,7 @@ def _text_column(frame: pd.DataFrame) -> str | None:
 def _corpus_unavailable_notice(
     *, has_aoi_table: bool = True, has_raw_gaze: bool = False
 ) -> None:
-    """The Corpus Analysis page when the data brings no reading measures.
+    """The Corpus Analysis page when the dataset contains no reading measures.
 
     The page computes no measure of its own, so without an uploaded one there is
     nothing for any of its sections to show. It says so, points at where the
@@ -9747,15 +9755,15 @@ def _corpus_unavailable_notice(
             else f"Add a dataset that has one with {ICONS['add']} Add dataset"
         )
         samples = (
-            " Raw gaze samples carry no reading measures, and Scanpath Studio "
-            "doesn't detect fixations from them or compute measures."
+            " Raw gaze samples do not include per-word reading measures. "
+            "The app does not detect fixations from samples or compute these measures."
             if has_raw_gaze
             else ""
         )
         st.info(
-            f"{ICONS['info']} **No reading measures in this dataset.** Corpus "
-            "Analysis shows per-word measures from an interest-area report, such "
-            "as TFD, FFD, FPRT and RPD, and this dataset has no Words table."
+            f"{ICONS['info']} **No reading measures in this dataset.** "
+            "To use Corpus Analysis, add a Words table with per-word measures "
+            "such as total fixation duration (TFD) or first fixation duration (FFD)."
             f"{samples} {where}. An EyeLink interest-area report "
             "(`IA_DWELL_TIME`, `IA_FIRST_FIXATION_DURATION`, …) maps its measures "
             "automatically."
@@ -9770,9 +9778,10 @@ def _corpus_unavailable_notice(
             "**Reading measures** in its Words table"
         )
         st.info(
-            f"{ICONS['info']} **No reading measures in this dataset.** Corpus "
-            "Analysis shows the per-word measures in your report, such as TFD, "
-            f"FFD, FPRT and RPD, and doesn't compute them itself. {where}. An "
+            f"{ICONS['info']} **No reading measures in this dataset.** "
+            "Corpus Analysis uses per-word measures from your data, such as "
+            "total fixation duration (TFD) or first fixation duration (FFD). "
+            f"The app does not compute these measures. {where}. An "
             "EyeLink interest-area report (`IA_DWELL_TIME`, "
             "`IA_FIRST_FIXATION_DURATION`, …) maps them automatically."
         )
@@ -10426,8 +10435,8 @@ def render_per_text_tab(
 ) -> None:
     """*What does this text look like?* — one text, many readers."""
     st.caption(
-        "One **text**, all its participants. Pick a text, a view and a measure. "
-        "Uses the active trial filters."
+        "Compare participants on one **text**. Choose a text, a view and a "
+        "measure. Your current trial filters apply."
     )
     if words_filtered.empty or "word_id" not in words_filtered.columns:
         st.info("Per-text views need a Words table (word ids + reading measures).")
@@ -10944,10 +10953,10 @@ def render_per_reader_tab(
                 icon=icon,
             )
         st.caption(
-            f"Participant **{pid}** vs the others in scope. Each percentile is "
-            "the share of the other participants with a value for that measure "
-            "whose value is lower, out of the number shown. No percentile is "
-            "shown when no other participant has a value."
+            f"Participant **{pid}** compared with the others in the selection. "
+            "Each percentile shows the percentage of other participants with a "
+            "lower value for that measure. The count includes only participants "
+            "with a value; no percentile is shown when none are available."
         )
         trials = _c_trial_summary(
             words_filtered,
@@ -11491,8 +11500,9 @@ def render_group_comparison_tab(
 ) -> None:
     """*How do two groups differ?* — two cohorts side by side."""
     st.caption(
-        "Define **two groups** and compare their distributions, word profiles "
-        "and means. These views are descriptive and run no significance tests."
+        "Define **two groups** to compare their distributions, word profiles and "
+        "means. These are descriptive summaries; they do not run significance "
+        "tests."
     )
     if fixations_filtered.empty and words_filtered.empty:
         st.info("No data after filtering.")
@@ -15932,17 +15942,15 @@ def _render_remap_editor(
         )
     if is_multipleye_entry(stored):
         st.caption(
-            "This dataset was read from a MultiplEYE session set, so these are "
-            "the tables the app built from it, not files of your own. A change "
-            "here applies in the app; Share → Code reads the session set again "
-            "as it was added."
+            "These tables were created from a MultiplEYE session set. Changes here "
+            "apply within the app. Code copied from Share → Code reloads the original"
+            " session set."
         )
     else:
         st.caption(
-            "Change which of this dataset's columns fills each field the app "
-            "reads. Only columns kept when the dataset was added are available. "
-            "To use a column that isn't listed, remove this dataset and add it "
-            "again from its files."
+            "Choose which columns contain the IDs, positions and other values the app"
+            " needs. Only columns kept during import are available. To use a column "
+            "that is missing, remove the dataset and add it again from its files."
         )
     # The same wide option lists the add-dataset screen gets — this is
     # the same mapping, in the same shape.
@@ -15971,7 +15979,10 @@ def _render_remap_editor(
     if setup_host is None:
         st.divider()
         st.markdown("##### Recording setup")
-        st.caption("Screen, physical geometry and reading-text setup for this dataset.")
+        st.caption(
+            "Screen resolution, monitor dimensions, and the size and font of the "
+            "reading text."
+        )
     initial_setup = SetupSnapshot.from_dict(
         stored.get("setup") or {}, fallback=SetupSnapshot()
     )
@@ -16528,7 +16539,7 @@ def render_trial_identity_section() -> None:
     affected = int(report.get("affected_trials") or 0)
     if not affected:
         st.success(
-            f"{scope.capitalize()} checked; none looks like more than one reading.",
+            f"Checked {scope}. No signs of merged readings were found.",
             icon=ICONS["success"],
         )
     else:
@@ -16543,9 +16554,9 @@ def render_trial_identity_section() -> None:
         )
     if sampled_from:
         st.caption(
-            f"Checked {total:,} of this dataset's {int(sampled_from):,} trials. A "
-            "Trial ID that is missing a column usually shows up in a sample this "
-            "size. Run the full check for the exact count."
+            f"Checked {total:,} of this dataset's {int(sampled_from):,} trials. "
+            "Choose **Check every trial** to check the whole dataset and get "
+            "a complete count."
         )
         st.button(
             f"{ICONS['search']} Check every trial",
@@ -17155,7 +17166,7 @@ def render_data_health_notice(host, words, fixations, raw_gaze) -> None:
 
     box = host.container(key="data_health_notice")
     box.warning(
-        "This dataset fails the data checks, so the figure may be wrong.  \n"
+        "Data checks found problems that may affect this figure.  \n"
         + "  \n".join(lines)
         + "  \nSee **Data Management → Data checks** for the rows. If a field "
         "is mapped to the wrong column, change it under **Edit dataset**, or "

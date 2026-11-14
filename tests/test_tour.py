@@ -791,14 +791,14 @@ class TestFaq:
         monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "0")
         monkeypatch.setattr(persistence, "server_bound_to_loopback", lambda: False)
         hosted = answer()
-        assert hosted.startswith("To the server this app runs on")
+        assert "processed on the server running this app" in hosted
         assert "Nowhere" not in hosted and "not kept" in hosted
 
         monkeypatch.setattr(persistence, "server_bound_to_loopback", lambda: True)
         monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "1")
         local = answer()
-        assert local.startswith("Nowhere")
-        assert "recovery copy" in local and "server" not in local
+        assert "processed on your computer" in local
+        assert "local copy" in local and "server" not in local
 
     def test_about_says_where_data_goes_for_this_run(self):
         """About's privacy line is the short form of this answer, decided by

@@ -27,8 +27,8 @@ at the Technion and the University of Zurich.
 ## Cite Scanpath Studio
 
 Cite the software using its [Zenodo DOI](https://doi.org/10.5281/zenodo.22933884).
-`scanpath-studio cite` and [`cite`][scanpath_studio.api.cite] print the entry
-in Python or a terminal, also as RIS or CSL-JSON.
+Use `scanpath-studio cite` in a terminal or [`cite`][scanpath_studio.api.cite]
+in Python to get the citation. Both also offer RIS and CSL-JSON formats.
 
 ??? quote "Show BibTeX and APA"
 
@@ -63,26 +63,27 @@ computer, so a refresh or a restart picks up where you left off.
   copied, since they reload from their source.
 - **Where:** `~/.cache/scanpath-studio/session-v1` in your home folder
   (`C:\Users\<you>\.cache\scanpath-studio\session-v1` on Windows), or the
-  folder `SCANPATH_STUDIO_STATE_DIR` names. :material/database: **Data
+  folder set by `SCANPATH_STUDIO_STATE_DIR`. :material/database: **Data
   Management** → :material/history: **Saved on this computer** shows the
-  folder and what it holds, and so does `scanpath-studio cache`.
+  folder and its contents. You can also check with `scanpath-studio cache`.
 - **How long:** until you clear it. Removing a dataset from the app removes
   its saved copy.
 - **To clear it:** **Clear what is saved…** under **Saved on this computer**,
   or close the app and run `scanpath-studio cache --clear`.
 - **To turn it off:** start the app with `scanpath-studio --no-persist`, or
   set `SCANPATH_STUDIO_PERSIST=0`.
-- **Downloaded public datasets** stay in the folders you downloaded them to,
-  and clearing what is saved leaves them. **Saved on this computer** lists
+- **Downloaded public datasets** remain in their download folders when you
+  clear saved work. **Saved on this computer** lists
   them beside the datasets you added, each with its size and folder. Its
   :material/delete: button deletes that download's files, after a
   confirmation, and leaves anything else in the folder.
 
-The online demo saves nothing. A file you upload there is processed on
-Streamlit Community Cloud and not kept, so closing or refreshing the tab loses
-it. The app itself has no analytics, but Community Cloud's page around the app
-does; see its [privacy policy](https://streamlit.io/privacy-policy). Export your annotations and settings before you leave
+The online demo processes uploads on Streamlit Community Cloud and does not
+save your work between sessions. Before closing or refreshing the tab,
+export your annotations and settings, and keep your source files
 ([what to back up](guides/scanpath-visualization/index.md#back-up-your-work)).
+The app itself has no analytics. Community Cloud's surrounding page has its
+own analytics; see its [privacy policy](https://streamlit.io/privacy-policy).
 
 ## Questions and feedback
 

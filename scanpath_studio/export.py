@@ -1654,9 +1654,11 @@ def render_export_options(
                 selection_mode="multi",
                 default=["PDF"],
                 key=f"{key_prefix}_figfmts",
-                help="PDF and SVG are vector, PNG is raster, and HTML is "
-                "interactive. PDF, SVG and PNG need Chrome, Chromium or Edge; "
-                "HTML needs no browser.",
+                help=(
+                    "PDF and SVG are vector images, PNG is a pixel image, and HTML is "
+                    "interactive. Creating PDF, SVG or PNG files requires Chrome, Chromium or"
+                    " Edge. HTML needs no additional browser installation."
+                ),
             )
             or []
         )
@@ -1674,9 +1676,11 @@ def render_export_options(
                 value=False,
                 key=f"{key_prefix}_html_self_contained",
                 persist_state="session",
-                help="Tick to make the bundle's HTML figures open offline. Each "
-                "then includes the Plotly library, about 4.8 MB more. Unticked, "
-                "they load it from cdn.plot.ly when opened.",
+                help=(
+                    "Include the plotting library so the bundle's HTML figures open offline "
+                    "(adds about 4.8 MB per figure). Otherwise, an internet connection is "
+                    "needed when you open them."
+                ),
             )
         )
         # The bundle's static figures need a browser on the server,
@@ -1755,9 +1759,10 @@ def render_export_options(
                 selection_mode="multi",
                 default=[],
                 key=f"{key_prefix}_tabular",
-                help="Choose the data tables to include. Word measures are the "
-                "reading measures that came with the dataset; the app computes "
-                "none.",
+                help=(
+                    "Choose the data tables to include. Word measures are the reading "
+                    "measures provided in your dataset; the app does not compute them."
+                ),
             )
             or []
         )
@@ -1802,7 +1807,7 @@ def render_export_options(
         path_pattern = _render_naming_options(st, combos, key_prefix)
         if title_pattern or caption_pattern:
             st.caption(
-                "The figures use the title and caption set on the Scanpath rail's "
+                "The figures use the title and caption set in Plot controls under "
                 f"**{ICONS['figure']} Figure & canvas** → *Title* / *Caption*."
             )
 

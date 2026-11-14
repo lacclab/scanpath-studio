@@ -361,7 +361,7 @@ def render_hidden_settings_note(host: DeltaGenerator, reasons: list[str]) -> Non
         key="hidden_settings_note",
     )
     row.caption(
-        f"{ICONS['info']} Settings from Full are shaping this view: "
+        f"{ICONS['info']} Some settings from Full are still active: "
         f"{', '.join(reasons)}."
     )
     row.button(
@@ -477,8 +477,8 @@ def render_export_pointer(host: DeltaGenerator) -> None:
         key="export_advanced_note",
     )
     row.caption(
-        f"{ICONS['info']} Exporting many trials at once, with figures and "
-        "tables for every trial, is in Full."
+        f"{ICONS['info']} Switch to Full to export figures and tables "
+        "for multiple trials."
     )
     row.button(
         "Switch to Full",

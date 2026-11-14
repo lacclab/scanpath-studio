@@ -102,8 +102,7 @@ SOURCE_UNKNOWN = "unknown"
 #: the browser session, not at a path the server can quote back — writing a
 #: guessed path would produce a snippet that runs and loads the wrong thing.
 UNKNOWN_SOURCE_NOTE = (
-    "This dataset was uploaded in the app, so the snippet can't name its files. "
-    "Fill in the paths to your own tables."
+    "Replace the placeholder file paths in this code with paths to your source tables."
 )
 
 
@@ -388,8 +387,9 @@ UPLOAD_FIXATIONS_PLACEHOLDER = "fixations.csv"
 #: replay — step code (``source_recipe["steps"]``) → the caveat naming it.
 UPLOAD_STEP_NOTES = {
     "aggregate_char_boxes": (
-        "Its AOIs were character boxes, which the app joined into word boxes. "
-        "The snippet's loader doesn't, so join them in your words table first."
+        "The app merged character boxes into word boxes for this dataset. Merge "
+        "them in your Words table before running this code; the loader does not "
+        "perform that step."
     ),
 }
 

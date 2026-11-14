@@ -9,9 +9,9 @@ description: "Answers to common questions about Scanpath Studio: fixations that 
 ### The fixations don't line up with the text
 
 Words and fixations must use the same pixel coordinates and share trial IDs.
-If the fixations are shifted, mirrored or scaled against the words, the two
-tables use different coordinates: a different origin, unit or offset. No
-setting in the app fixes that, so convert one of the tables
+If the fixations are shifted, mirrored or scaled relative to the words, check
+that both tables use the same origin, units and offsets. Correct any coordinate
+differences before importing the tables
 ([What your data needs → Files and units](guides/loading-data/index.md#tables)).
 
 If the fixations sit on the words but the figure is framed or sized wrongly,
@@ -41,8 +41,8 @@ pass `word_schema` / `fix_schema` to
 Yes. A Words table alone shows the text and any reading measures it carries. A
 Fixations table alone shows the fixations without the text. A Raw gaze table
 can also be the only table. Most features need both words and fixations. When
-your tables cover different trials, every trial that any of them has is listed
-and drawn with the layers it has.
+your tables cover different trials, the app lists every trial found in any
+table and draws the layers available for it.
 
 ### Can I open PoTeC or OneStop in the online demo?
 
@@ -112,7 +112,7 @@ Not on a local or desktop install. When the app listens only on this computer,
 as `scanpath-studio` and the desktop app do, it saves your datasets and
 settings there. :material/database: **Data Management** → :material/history:
 **Saved on this computer** shows what it holds. The online demo keeps nothing
-and says so after your first upload, so export your annotations and settings
+and explains this after your first upload, so export your annotations and settings
 before you leave ([what to back up](guides/scanpath-visualization/index.md#back-up-your-work)).
 
 If the files of one saved dataset go missing or are damaged, the rest of the
@@ -138,8 +138,8 @@ See [Your data](about.md#your-data) and [Recovery cache](cli.md#cache).
 :material/help: **Help** → :material/feedback: **Send feedback** links each
 kind of feedback to its page on GitHub: **Report a bug**, **Suggest a
 feature**, **Share an idea** and **Ask a question**. It also shows the version
-and system details a bug report needs, ready to copy. The app sends nothing.
-You submit each one on GitHub yourself.
+and system details for a bug report, ready to copy. You can review and submit
+your message on GitHub.
 
 Ask questions in
 [Discussions → Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a).

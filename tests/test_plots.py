@@ -1801,7 +1801,7 @@ class TestDualScanpathAnimation:
             fixations_b=self._second_fixations(),
         )
         trails = [t for t in fig.data if t.name in ("Scanpath A", "Scanpath B")]
-        assert [t.marker.line.color for t in trails] == list(COMPARISON_PALETTE)
+        assert [t.marker.line.color for t in trails] == list(COMPARISON_PALETTE[:2])
         assert all(t.marker.colorscale for t in trails)
         assert len({(t.marker.cmin, t.marker.cmax) for t in trails}) == 1
 

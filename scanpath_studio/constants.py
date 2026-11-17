@@ -219,11 +219,17 @@ TRENDLINE_COLOR = "#dc3545"
 CURRENT_FIX_COLOR = "rgba(255, 127, 14, 0.6)"
 CURRENT_FIX_OUTLINE = "#ff7f0e"
 FIX_MARKER_OUTLINE = "#111"
-COMPARISON_PALETTE = ["#1f77b4", "#e45756"]
+#: One flat colour per comparison scanpath, A to D: blue and red, then a green
+#: and a purple that stay apart from both and from each other.
+COMPARISON_PALETTE = ["#1f77b4", "#e45756", "#2ca02c", "#9467bd"]
+#: The most scanpaths one comparison draws: A, B and up to two more.
+MAX_COMPARE_SCANPATHS = 4
+#: Each comparison scanpath's letter, by index.
+COMPARE_SIDE_LETTERS = "ABCD"
 
 
 def compare_palette_color(idx: int) -> str:
-    """Default A/B colour for comparison scanpath ``idx`` — the single source of
+    """Default colour for comparison scanpath ``idx`` — the single source of
     truth shared by the per-scanpath style controls (``controls._seed_compare_styles``
     / ``_collect_compare_styles``) and the figure builders
     (``plots._comparison_scanpath_style``), so the swatch shown in the controls can

@@ -27,6 +27,7 @@ from .constants import (
     CANVAS_PAD_FRACTION,
     CANVAS_PAD_MIN_PX,
     COMPARE_FIXATION_OPACITY,
+    COMPARE_SIDE_LETTERS,
     COMPARISON_PALETTE,
     CURRENT_FIX_COLOR,
     CURRENT_FIX_OUTLINE,
@@ -61,6 +62,7 @@ from .constants import (
     LEGEND_KINDS,
     LEGEND_POSITIONS,
     MARKER_SIZE_SCALES,
+    MAX_COMPARE_SCANPATHS,
     OUT_OF_TEXT_COLOR,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_LABELS,
@@ -295,6 +297,19 @@ class FigureSettings:
     # each panel owns its own stimulus, and hiding one panel's boxes would just
     # leave a blank half.
     compare_stimulus: str = "both"
+    #: The scanpaths after B (C, then D), each sequence aligned by position:
+    #: entry ``i`` is scanpath ``i + 2``'s, read as its B counterpart is.
+    #: ``labels_extra`` names a co-animation's trails (``label_b``),
+    #: ``styles_extra`` styles each (``style_b``), ``canvases_extra`` /
+    #: ``background_images_extra`` (``(path, size, origin)``) give a split
+    #: layout's panel its own screen and page (``canvas_b`` /
+    #: ``background_image*_b``), and ``fixation_flags_extra`` filters a
+    #: co-animation's trail (``fixation_flags_b``). A missing entry is unset.
+    labels_extra: tuple[str, ...] = ()
+    styles_extra: tuple[dict | None, ...] = ()
+    canvases_extra: tuple[tuple[int, int] | None, ...] = ()
+    background_images_extra: tuple[tuple | None, ...] = ()
+    fixation_flags_extra: tuple[dict | None, ...] = ()
     # The dataset's own names for the columns the figure's text names
     # (hover rows, colour-bar and legend titles, non-spatial axis titles),
     # canonical column → label. Built by the caller (`tabs`); not a figure
@@ -444,14 +459,19 @@ def palette_slug(name: str) -> str:
 
 def normalize_option_values(options: Mapping[str, Any]) -> dict[str, Any]:
     """``options`` with every enumerated value read by
-    `normalize_option_value` (inside ``style_a`` / ``style_b`` too)."""
+    `normalize_option_value` (inside each scanpath's style too)."""
     out = {name: normalize_option_value(name, value) for name, value in options.items()}
+
+    def normalized(style):
+        if not isinstance(style, Mapping):
+            return style
+        return {key: normalize_option_value(key, value) for key, value in style.items()}
+
     for side in ("style_a", "style_b"):
-        style = out.get(side)
-        if isinstance(style, Mapping):
-            out[side] = {
-                key: normalize_option_value(key, value) for key, value in style.items()
-            }
+        if side in out:
+            out[side] = normalized(out[side])
+    if out.get("styles_extra"):
+        out["styles_extra"] = tuple(normalized(style) for style in out["styles_extra"])
     return out
 
 
@@ -3712,20 +3732,21 @@ def _with_stimulus_pages(
     settings: FigureSettings,
     page: tuple[pd.DataFrame | None, pd.DataFrame | None],
     page_b: tuple[pd.DataFrame | None, pd.DataFrame | None] | None = None,
+    *,
+    pages_extra: Sequence[tuple[pd.DataFrame | None, pd.DataFrame | None]] = (),
 ) -> FigureSettings:
     """``settings`` with ``show_stimulus_image`` resolved: ``page``'s
-    reading fills ``background_image*`` and ``page_b``'s the split comparison's
-    ``background_image*_b``, each only where the caller left it empty.
+    reading fills ``background_image*``, ``page_b``'s the split comparison's
+    ``background_image*_b`` and each of ``pages_extra`` its panel's entry of
+    ``background_images_extra``, each only where the caller left it empty.
 
     A reading with no page draws none and says so in a ``UserWarning``, the
     way the loaders report what they could not read: a script cannot see a
     missing layer, and a batch over trials should not stop for one."""
     if not settings.show_stimulus_image:
         return settings
-    updates: dict[str, Any] = {}
-    for suffix, frames in (("", page), ("_b", page_b)):
-        if frames is None or getattr(settings, f"background_image{suffix}"):
-            continue
+
+    def found_page(frames) -> tuple | None:
         found = reading_stimulus_image(*frames)
         if found is None:
             warnings.warn(
@@ -3735,13 +3756,32 @@ def _with_stimulus_pages(
                 "(load_scanpath_data, attach_stimulus_images; render "
                 "--image-root), or pass the page as background_image=.",
                 UserWarning,
-                stacklevel=3,
+                stacklevel=4,
             )
-            continue
+            return None
         path, (width, height), (x0, y0) = found
+        return path, (float(width), float(height)), (float(x0), float(y0))
+
+    updates: dict[str, Any] = {}
+    for suffix, frames in (("", page), ("_b", page_b)):
+        if frames is None or getattr(settings, f"background_image{suffix}"):
+            continue
+        found = found_page(frames)
+        if found is None:
+            continue
+        path, size, origin = found
         updates[f"background_image{suffix}"] = path
-        updates[f"background_image_size{suffix}"] = (float(width), float(height))
-        updates[f"background_image_origin{suffix}"] = (float(x0), float(y0))
+        updates[f"background_image_size{suffix}"] = size
+        updates[f"background_image_origin{suffix}"] = origin
+    if pages_extra:
+        images = list(settings.background_images_extra)
+        images += [None] * (len(pages_extra) - len(images))
+        for position, frames in enumerate(pages_extra):
+            given = images[position]
+            if given is None or given[0] is None:
+                images[position] = found_page(frames)
+        if tuple(images) != tuple(settings.background_images_extra):
+            updates["background_images_extra"] = tuple(images)
     return settings.with_overrides(**updates) if updates else settings
 
 
@@ -6457,6 +6497,8 @@ def _render_scanpath_animation(
     settings: FigureSettings,
     fixations_b: pd.DataFrame | None = None,
     words_b: pd.DataFrame | None = None,
+    fixations_extra: Sequence[pd.DataFrame | None] = (),
+    words_extra: Sequence[pd.DataFrame | None] = (),
 ) -> tuple[go.Figure, float]:
     """Frame-by-frame scanpath replay on a real reading-time clock.
 
@@ -6464,7 +6506,9 @@ def _render_scanpath_animation(
     :func:`set_replay_clock` needs to re-time it.
 
     Pass ``fixations_b`` (and optionally ``words_b``) to overlay a SECOND
-    scanpath animated on the same clock. Every scanpath is rebased to its first
+    scanpath animated on the same clock, and ``fixations_extra`` /
+    ``words_extra`` for a third and fourth (C, D), each read as B is and
+    styled by the ``*_extra`` settings. Every scanpath is rebased to its first
     fixation's ``timestamp_ms``, so they share *real reading time* including the
     saccade/blink gaps between fixations; the frames sit on one uniform time
     grid across all scanpaths (:func:`_anim_timeline`), and the shorter reading
@@ -6571,13 +6615,34 @@ def _render_scanpath_animation(
     anim_max_frames = settings.anim_max_frames
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+    # Every scanpath's frames, A first; a missing extra words frame is A's.
+    all_fixations = [fixations, fixations_b, *fixations_extra]
+    n_scanpaths = len(all_fixations)
+    all_words = [
+        words,
+        words_b,
+        *(
+            words_extra[position] if position < len(words_extra) else None
+            for position in range(len(fixations_extra))
+        ),
+    ]
+    all_labels = [
+        label_a,
+        label_b,
+        *(
+            _plotly_literal(
+                _extra_entry(settings.labels_extra, idx)
+                or f"Scanpath {COMPARE_SIDE_LETTERS[idx]}"
+            )
+            for idx in range(2, n_scanpaths)
+        ),
+    ]
 
-    word_frames = [w for w in (words, words_b) if w is not None and not w.empty]
+    word_frames = [w for w in all_words if w is not None and not w.empty]
     x_range, y_range, *_ = _compute_axis_ranges(
         canvas_width,
         canvas_height,
-        (fixations, "x", "y"),
-        (fixations_b, "x", "y"),
+        *((frame, "x", "y") for frame in all_fixations),
         word_frames=word_frames,
         fit_to_monitor=fit_to_monitor,
         crop_margin=settings.crop_margin,
@@ -6599,16 +6664,15 @@ def _render_scanpath_animation(
 
     # Which reading's stimulus the replay draws. The replay has ONE stimulus
     # layer, so "both" means A's here rather than stacking a second identical
-    # set of rectangles onto a same-dataset co-animation. "b" is the one that
-    # matters: a cross-dataset co-animation would otherwise run B's trace over
-    # A's text.
+    # set of rectangles onto a same-dataset co-animation. Naming a later
+    # scanpath is the one that matters: a cross-dataset co-animation would
+    # otherwise run that scanpath's trace over A's text.
     stimulus_words = words
-    if (
-        _compare_stimulus_sides(settings.compare_stimulus) == (False, True)
-        and words_b is not None
-        and not words_b.empty
-    ):
-        stimulus_words = words_b
+    drawn = _compare_stimulus_sides(settings.compare_stimulus, n_scanpaths)
+    if drawn.count(True) == 1:
+        named = all_words[drawn.index(True)]
+        if named is not None and not named.empty:
+            stimulus_words = named
     shapes = (
         build_word_boxes(
             stimulus_words,
@@ -6641,39 +6705,51 @@ def _render_scanpath_animation(
     # AFTER the axis ranges above, exactly as in `make_scanpath_figure` — the view
     # is framed on the trial as recorded, not on what survives the filter.
     flags = fixation_flags or {}
-    # B is flagged against its own word boxes when it brought them, else against
-    # A's (the overlay draws A's boxes, and two readings of one text share them).
+    # A later scanpath is flagged against its own word boxes when it brought
+    # them, else against A's (the overlay draws A's boxes, and two readings of
+    # one text share them).
     entry_words = [
         words,
-        words_b if (words_b is not None and not words_b.empty) else words,
+        *(w if (w is not None and not w.empty) else words for w in all_words[1:]),
     ]
-    # B carries its own flags when it was given any — as
-    # `fixation_flags_b`, or (the comparison's spelling) on its `style_b`.
-    if fixation_flags_b is None and isinstance(settings.style_b, dict):
-        fixation_flags_b = settings.style_b.get("fixation_flags")
-    flags_b = flags if fixation_flags_b is None else (fixation_flags_b or {})
-    entry_flags = [flags, flags_b]
-    if flags:
-        fixations = _discard_flagged_fixations(fixations, entry_words[0], flags)
-    if flags_b and fixations_b is not None:
-        fixations_b = _discard_flagged_fixations(fixations_b, entry_words[1], flags_b)
+    style_overrides = _scanpath_styles(settings, n_scanpaths)
+    # A later scanpath carries its own flags when it was given any — as
+    # `fixation_flags_b` / `fixation_flags_extra`, or (the comparison's
+    # spelling) on its style.
+    own_flags = [
+        fixation_flags_b,
+        *(
+            _extra_entry(settings.fixation_flags_extra, idx)
+            for idx in range(2, n_scanpaths)
+        ),
+    ]
+    entry_flags = [flags]
+    for idx, given in enumerate(own_flags, start=1):
+        if given is None and isinstance(style_overrides[idx], dict):
+            given = style_overrides[idx].get("fixation_flags")
+        entry_flags.append(flags if given is None else (given or {}))
+    all_fixations = [
+        _discard_flagged_fixations(frame, entry_words[idx], entry_flags[idx])
+        if entry_flags[idx] and frame is not None
+        else frame
+        for idx, frame in enumerate(all_fixations)
+    ]
+    fixations = all_fixations[0]
 
     # The co-animation draws each scanpath in its own style, exactly as the
     # static comparison resolves it (`_comparison_scanpath_style`: the rail's
     # per-scanpath colour, size range, opacity, hollow and saccade line). A lone
     # scanpath keeps the figure-wide settings below.
-    dual_input = all(f is not None and not f.empty for f in (fixations, fixations_b))
+    dual_input = sum(f is not None and not f.empty for f in all_fixations) > 1
     styles = [
         _comparison_scanpath_style(
             idx, style, default_marker_size_range=marker_size_range
         )
-        for idx, style in enumerate((settings.style_a, settings.style_b))
+        for idx, style in enumerate(style_overrides)
     ]
     entries = [
         (frame, style["fix_color"], label)
-        for frame, style, label in zip(
-            (fixations, fixations_b), styles, (label_a, label_b)
-        )
+        for frame, style, label in zip(all_fixations, styles, all_labels)
     ]
     specs = _scanpath_anim_specs(
         entries,
@@ -8013,12 +8089,13 @@ def _comparison_heatmap_shapes(
     heatmap_norm: str,
     z_min: float,
     z_max: float,
-    half: str | None = None,
+    strip: tuple[int, int] | None = None,
     xref: str | None = None,
     yref: str | None = None,
     opacity: float | None = None,
 ) -> list[dict]:
-    """Tint full word boxes or their left/right half on a shared scale, at the
+    """Tint full word boxes, or with ``strip=(k, n)`` the ``k``-th of ``n``
+    equal vertical strips of each (from the left), on a shared scale, at the
     single figure's word-box heatmap opacity unless ``opacity`` is given."""
     if words.empty or not values:
         return []
@@ -8035,11 +8112,14 @@ def _comparison_heatmap_shapes(
         value = values.get(key, 0.0)
         if value <= 0:
             continue
-        midpoint = (x0 + x1) / 2.0
-        if half == "left":
-            x1 = midpoint
-        elif half == "right":
-            x0 = midpoint
+        if strip is not None:
+            part, parts = strip
+            left, right = x0, x1
+            # Interior cuts only, so the outer edges stay the box's own.
+            if part > 0:
+                x0 = left + (right - left) * part / parts
+            if part < parts - 1:
+                x1 = left + (right - left) * (part + 1) / parts
         transformed = float(_apply_heatmap_norm(value, heatmap_norm))
         position = max(0.0, min(1.0, (transformed - z_min) / z_span))
         shape = dict(
@@ -8100,13 +8180,25 @@ def _comparison_heatmap_colorbar_traces(
     colorbar_style: dict,
     overlay: bool,
 ) -> list[go.Scatter]:
-    """The comparison heatmap's colour bar(s): one while A and B share a colour
-    scale, else one per scanpath on the same range (`_arrange_colorbars` sets
-    them side by side). The overlay's titles say which half is whose."""
+    """The comparison heatmap's colour bar(s): one while the scanpaths share a
+    colour scale, else one per scanpath on the same range
+    (`_arrange_colorbars` sets them side by side). The overlay's titles say
+    which strip of each box is whose."""
     scales = [spec["heatmap_colorscale"] for spec in trial_specs]
-    sides = ("left A", "right B") if overlay else ("A", "B")
+    letters = COMPARE_SIDE_LETTERS[: len(trial_specs)]
+    if len(trial_specs) == 2:
+        strips = ("left", "right")
+        shared_note = " · A left half, B right"
+    else:
+        strips = tuple(f"strip {n}" for n in range(1, len(trial_specs) + 1))
+        shared_note = f" · {', '.join(letters)} left to right"
+    sides = (
+        tuple(f"{strip} {letter}" for strip, letter in zip(strips, letters))
+        if overlay
+        else tuple(letters)
+    )
     if len(set(scales)) == 1:
-        named = [(scales[0], " · A left half, B right" if overlay else "")]
+        named = [(scales[0], shared_note if overlay else "")]
     else:
         named = [(scale, f" · {side}") for scale, side in zip(scales, sides)]
     return [
@@ -8125,24 +8217,24 @@ def _comparison_heatmap_colorbar_traces(
 def _make_split_comparison_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    trial_a: tuple[str, str],
-    trial_b: tuple[str, str],
+    trials: Sequence[tuple[str, str]],
     *,
     settings: FigureSettings,
     orientation: str,
-    styles: tuple[dict, dict] | None = None,
+    styles: Sequence[dict | None] | None = None,
     raw_gaze: pd.DataFrame | None = None,
 ) -> go.Figure:
-    """Two-panel comparison, either horizontal (side-by-side) or vertical (stacked).
+    """One panel per scanpath, in a row (side-by-side) or a column (stacked).
 
     Each panel computes its **own** axis ranges from its trial's words +
-    fixations, which is what lets the two panels sit in different coordinate
+    fixations, which is what lets the panels sit in different coordinate
     spaces at all.
 
-    The stimulus-image background is added to both panels. B may come from
+    The stimulus-image background is added to every panel. B may come from
     another corpus, so B's panel takes ``background_image_b`` (and its
     size/origin) when given; otherwise it shows A's page on a same-dataset
-    comparison (``canvas_b`` unset) and none across datasets.
+    comparison (``canvas_b`` unset) and none across datasets. C and D read
+    ``background_images_extra`` / ``canvases_extra`` the same way.
 
     Likewise ``canvas_b``: B's screen, defaulting to A's. It feeds B's axis
     ranges *and* its label-fitting pair, so B's reading text stays true-to-scale
@@ -8214,59 +8306,63 @@ def _make_split_comparison_figure(
         length=colorbar_length,
     )
     is_stacked = orientation == "stacked"
-    # Per-panel canvas: B falls back to A's, which is every same-dataset
-    # comparison.
-    canvas_b = settings.canvas_b or (canvas_width, canvas_height)
-    panel_canvas = [(canvas_width, canvas_height), (int(canvas_b[0]), int(canvas_b[1]))]
+    n_panels = len(trials)
+    # Each panel's own screen, `None` where it shares A's — which is every
+    # same-dataset comparison.
+    own_canvases = [
+        None,
+        settings.canvas_b,
+        *(_extra_entry(settings.canvases_extra, idx) for idx in range(2, n_panels)),
+    ][:n_panels]
+    panel_canvas = [
+        (int(own[0]), int(own[1])) if own else (canvas_width, canvas_height)
+        for own in own_canvases
+    ]
     # Each panel's share of its screen, for the preliminary fit that picks the
     # figure's size. The word labels are *not* sized from it: they are sized
     # from the subplot space each panel finally gets.
-    panel_widths = [w if is_stacked else w // 2 for w, _ in panel_canvas]
-    # B's stimulus page. Inheriting A's is right for a same-dataset pair (two
-    # readings of the same text) and *wrong* across datasets — a PoTeC panel with
-    # a OneStop page under it is a picture of two different things. So when B has
-    # its own screen (`canvas_b`, i.e. a cross-dataset pair) B's panel draws only
-    # an image explicitly given for it, and otherwise draws none.
-    if settings.background_image_b is not None:
-        image_b = (
-            settings.background_image_b,
-            settings.background_image_size_b,
-            settings.background_image_origin_b,
-        )
-    elif settings.canvas_b is None:
-        image_b = (background_image, background_image_size, background_image_origin)
-    else:
-        image_b = (None, None, None)
+    panel_widths = [w if is_stacked else w // n_panels for w, _ in panel_canvas]
+    # Each later panel's stimulus page. Inheriting A's is right for a
+    # same-dataset pair (two readings of the same text) and *wrong* across
+    # datasets — a PoTeC panel with a OneStop page under it is a picture of two
+    # different things. So a panel with its own screen (a cross-dataset
+    # reading) draws only an image explicitly given for it, and otherwise none.
+    image_a = (background_image, background_image_size, background_image_origin)
+    own_images = [
+        image_a,
+        (
+            (
+                settings.background_image_b,
+                settings.background_image_size_b,
+                settings.background_image_origin_b,
+            )
+            if settings.background_image_b is not None
+            else None
+        ),
+        *(
+            _extra_entry(settings.background_images_extra, idx)
+            for idx in range(2, n_panels)
+        ),
+    ][:n_panels]
     panel_images = [
-        (background_image, background_image_size, background_image_origin),
-        image_b,
+        image_a
+        if idx == 0
+        else tuple(own)
+        if own is not None and own[0] is not None
+        else image_a
+        if own_canvases[idx] is None
+        else (None, None, None)
+        for idx, own in enumerate(own_images)
     ]
 
-    # Shared metric colour range across both panels (when colouring by a metric
-    # and no explicit range), so the two scanpaths use one comparable scale.
-    metric_range = fixation_color_range
-    if (
-        color_by
-        and color_by != "line"
-        and metric_range is None
-        and color_by in fixations.columns
-        and pd.api.types.is_numeric_dtype(fixations[color_by])
-    ):
-        both = fixations[
-            (
-                (fixations["participant_id"] == trial_a[0])
-                & (fixations["trial_id"] == trial_a[1])
-            )
-            | (
-                (fixations["participant_id"] == trial_b[0])
-                & (fixations["trial_id"] == trial_b[1])
-            )
-        ][color_by]
-        if len(both) and pd.notna(both.min()) and pd.notna(both.max()):
-            metric_range = (float(both.min()), float(both.max()))
+    # One metric colour range across every panel (when colouring by a metric
+    # and no explicit range), so the scanpaths use one comparable scale.
+    metric_range = _comparison_metric_range(
+        fixations, trials, color_by, fixation_color_range
+    )
 
     trial_specs = []
-    for idx, trial in enumerate([trial_a, trial_b]):
+    for idx, trial in enumerate(trials):
         participant, trial_id = trial
         trial_words = words[
             (words["participant_id"] == participant) & (words["trial_id"] == trial_id)
@@ -8349,7 +8445,8 @@ def _make_split_comparison_figure(
     # not — so the top band is reserved for the titles too (without it the
     # upper title is clipped off the canvas).
     subplot_titles = [
-        f"{side} · {spec['display_name']}" for side, spec in zip("AB", trial_specs)
+        f"{side} · {spec['display_name']}"
+        for side, spec in zip(COMPARE_SIDE_LETTERS, trial_specs)
     ]
 
     # Each panel's own axis ranges, from its trial's words + fixations.
@@ -8373,22 +8470,22 @@ def _make_split_comparison_figure(
         for idx, (x_range, y_range) in enumerate(panel_ranges)
     ]
 
-    # The figure's size, chosen before anything is sized against it. Two panels
-    # that share a screen reuse the last panel's fit. Two *different* screens
-    # can't be reconciled that way: the panels then get the widest / tallest fit
-    # of the pair, so neither is clipped. (Which is also why the caption in
+    # The figure's size, chosen before anything is sized against it. Panels
+    # that share a screen reuse the last panel's fit. *Different* screens can't
+    # be reconciled that way: the panels then get the widest / tallest fit of
+    # them all, so none is clipped. (Which is also why the caption in
     # `tabs._render_comparison_figure` says sizes are not comparable across
     # panels — each panel is true-to-scale on its own monitor.)
-    if settings.canvas_b is None:
+    if all(own is None for own in own_canvases):
         panel_w, panel_h = panel_fits[-1]
     else:
         panel_w = max(fit[0] for fit in panel_fits)
         panel_h = max(fit[1] for fit in panel_fits)
     if is_stacked:
         total_width = panel_w
-        total_height = panel_h * 2 + 40
+        total_height = panel_h * n_panels + 40 * (n_panels - 1)
     else:  # side-by-side
-        total_width = panel_w * 2
+        total_width = panel_w * n_panels
         total_height = panel_h
     # A colour bar gets its own reserved band — below the panels when horizontal,
     # to their right when vertical — so the figure grows by it rather
@@ -8419,16 +8516,17 @@ def _make_split_comparison_figure(
     )
     if is_stacked:
         fig = make_subplots(
-            rows=2,
+            rows=n_panels,
             cols=1,
-            vertical_spacing=0.08,
+            # The 40 px gap per panel reserved in `total_height` above.
+            vertical_spacing=0.08 if n_panels == 2 else 0.16 / n_panels,
             subplot_titles=subplot_titles,
         )
     else:
         fig = make_subplots(
             rows=1,
-            cols=2,
-            horizontal_spacing=0.04,
+            cols=n_panels,
+            horizontal_spacing=0.04 if n_panels == 2 else 0.08 / n_panels,
             subplot_titles=subplot_titles,
         )
 
@@ -8659,31 +8757,71 @@ def _make_split_comparison_figure(
     return fig
 
 
-def _compare_stimulus_sides(value: str | None) -> tuple[bool, bool]:
-    """``compare_stimulus`` → ``(draw A's stimulus, draw B's)``.
+def _compare_stimulus_sides(value: str | None, count: int = 2) -> tuple[bool, ...]:
+    """``compare_stimulus`` → whether each of ``count`` scanpaths draws its
+    stimulus: ``"a"`` … ``"d"`` names the one that does, anything else is all.
 
     Tolerant of an unrecognised value on purpose: this reads a share-link param
-    and a saved config, and drawing both sets of boxes is the honest fallback —
-    it shows what is there rather than silently hiding one reading's AOIs.
+    and a saved config, and drawing every set of boxes is the honest fallback —
+    it shows what is there rather than silently hiding one reading's AOIs. A
+    letter past ``count`` names no scanpath here, so it falls back the same way.
     """
     normalized = str(value or "both").strip().lower()
-    if normalized == "a":
-        return True, False
-    if normalized == "b":
-        return False, True
-    return True, True
+    letters = COMPARE_SIDE_LETTERS.lower()[:count]
+    if len(normalized) == 1 and normalized in letters:
+        return tuple(letter == normalized for letter in letters)
+    return (True,) * count
+
+
+def _scanpath_styles(settings: FigureSettings, count: int) -> list[dict | None]:
+    """Each of ``count`` comparison scanpaths' style override, A first."""
+    styles = [settings.style_a, settings.style_b, *settings.styles_extra]
+    return [styles[idx] if idx < len(styles) else None for idx in range(count)]
+
+
+def _extra_entry(values: Sequence, idx: int):
+    """Scanpath ``idx``'s entry in one of the ``*_extra`` settings (``idx`` ≥ 2
+    counts from C), ``None`` where the sequence stops short."""
+    position = idx - 2
+    return values[position] if 0 <= position < len(values) else None
+
+
+def _comparison_metric_range(
+    fixations: pd.DataFrame,
+    trials: Sequence[tuple[str, str]],
+    color_by: str | None,
+    explicit: tuple[float, float] | None,
+) -> tuple[float, float] | None:
+    """The fixation colour range every scanpath shares: ``explicit`` when set,
+    else the span of the ``color_by`` metric over all the compared readings, so
+    one colour means one value in every scanpath."""
+    if (
+        explicit is not None
+        or not color_by
+        or color_by == "line"
+        or color_by not in fixations.columns
+        or not pd.api.types.is_numeric_dtype(fixations[color_by])
+    ):
+        return explicit
+    keys = pd.MultiIndex.from_tuples(list(trials))
+    rows = pd.MultiIndex.from_arrays(
+        [fixations["participant_id"], fixations["trial_id"]]
+    ).isin(keys)
+    values = fixations.loc[rows, color_by]
+    if len(values) and pd.notna(values.min()) and pd.notna(values.max()):
+        return (float(values.min()), float(values.max()))
+    return explicit
 
 
 def _render_comparison_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    trial_a: tuple[str, str],
-    trial_b: tuple[str, str],
+    trials: Sequence[tuple[str, str]],
     *,
     settings: FigureSettings,
     raw_gaze: pd.DataFrame | None = None,
 ) -> go.Figure:
-    """Two scanpaths on one canvas — overlaid, side by side, or stacked.
+    """Two to four scanpaths on one canvas — overlaid, side by side, or stacked.
 
     The shared settings contract keeps marker shape, highlighted text, stimulus
     image, and colorbar styling consistent across all three layouts.
@@ -8697,8 +8835,6 @@ def _render_comparison_figure(
     trial_labels = settings.trial_labels
     layout = settings.layout
     marker_size_range = settings.marker_size_range
-    style_a = settings.style_a
-    style_b = settings.style_b
     show_fixations = settings.show_fixations
     show_saccades = settings.show_saccades
     show_saccade_arrows = settings.show_saccade_arrows
@@ -8708,7 +8844,6 @@ def _render_comparison_figure(
     color_by = settings.color_by
     color_by_line = settings.color_by_line
     fixation_colorscale = settings.fixation_colorscale
-    fixation_color_range = settings.fixation_color_range
     fixation_symbol = settings.fixation_symbol
     # The fixations' colour bar and the heatmap's, each with its own style.
     show_colorbars = settings.show_fixation_colorbar
@@ -8745,41 +8880,23 @@ def _render_comparison_figure(
     fit_to_monitor = settings.fit_to_monitor
     show_coordinate_grid = settings.show_coordinate_grid
     coordinate_grid_spacing = settings.coordinate_grid_spacing
+    overrides = _scanpath_styles(settings, len(trials))
     if layout in {"side_by_side", "stacked"}:
         return _make_split_comparison_figure(
             words,
             fixations,
-            trial_a,
-            trial_b,
+            trials,
             settings=settings,
             orientation=layout,
-            styles=(style_a, style_b),
+            styles=overrides,
             raw_gaze=raw_gaze,
         )
 
-    # Shared metric colour range across BOTH trials (when colouring by a numeric
-    # metric and the user didn't pin a range), so the two scanpaths use one
-    # comparable scale.
-    metric_range = fixation_color_range
-    if (
-        color_by
-        and color_by != "line"
-        and metric_range is None
-        and color_by in fixations.columns
-        and pd.api.types.is_numeric_dtype(fixations[color_by])
-    ):
-        both = fixations[
-            (
-                (fixations["participant_id"] == trial_a[0])
-                & (fixations["trial_id"] == trial_a[1])
-            )
-            | (
-                (fixations["participant_id"] == trial_b[0])
-                & (fixations["trial_id"] == trial_b[1])
-            )
-        ][color_by]
-        if len(both) and pd.notna(both.min()) and pd.notna(both.max()):
-            metric_range = (float(both.min()), float(both.max()))
+    # One metric colour range across every reading (when colouring by a numeric
+    # metric and the user didn't pin a range), so the scanpaths share a scale.
+    metric_range = _comparison_metric_range(
+        fixations, trials, color_by, settings.fixation_color_range
+    )
 
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
@@ -8790,8 +8907,7 @@ def _render_comparison_figure(
         thickness=colorbar_thickness,
         length=colorbar_length,
     )
-    overrides = (style_a, style_b)
-    # Stimulus-page background image, UNDER both scanpaths.
+    # Stimulus-page background image, UNDER every scanpath.
     _add_background_image(
         fig,
         background_image,
@@ -8801,7 +8917,7 @@ def _render_comparison_figure(
     )
 
     trial_specs = []
-    for idx, trial in enumerate([trial_a, trial_b]):
+    for idx, trial in enumerate(trials):
         participant, trial_id = trial
         trial_words = words[
             (words["participant_id"] == participant) & (words["trial_id"] == trial_id)
@@ -8877,16 +8993,18 @@ def _render_comparison_figure(
             ),
             pd.DataFrame(),
         )
-        for index, half in enumerate(("left", "right")):
+        # Each reading tints its own vertical strip of every word box, A's
+        # leftmost: halves for two scanpaths, thirds for three.
+        for index, spec in enumerate(trial_specs):
             layout_shapes.extend(
                 _comparison_heatmap_shapes(
                     reference_words,
                     heatmap_maps[index],
-                    heatmap_colorscale=trial_specs[index]["heatmap_colorscale"],
+                    heatmap_colorscale=spec["heatmap_colorscale"],
                     heatmap_norm=heatmap_norm,
                     z_min=heatmap_min,
                     z_max=heatmap_max,
-                    half=half,
+                    strip=(index, len(trial_specs)),
                     opacity=settings.heatmap_opacity,
                 )
             )
@@ -8935,9 +9053,9 @@ def _render_comparison_figure(
     category_label = "line" if (color_by_line or color_by == "line") else color_by
     legend_on = show_legend or bool(category_legend)
 
-    draws_stimulus = _compare_stimulus_sides(settings.compare_stimulus)
-    # Both readings' samples before either scanpath, so neither cloud covers the
-    # other reading's fixations.
+    draws_stimulus = _compare_stimulus_sides(settings.compare_stimulus, len(trials))
+    # Every reading's samples before any scanpath, so no cloud covers another
+    # reading's fixations.
     for spec in trial_specs:
         _add_comparison_raw_gaze_trace(
             fig,
@@ -10147,6 +10265,12 @@ STATIC_FIGURE_OPTIONS = _setting_names(
         "compare_stimulus",
         # B's flags in a co-animation; one trial has no B.
         "fixation_flags_b",
+        # Scanpaths C and D; one trial has none.
+        "labels_extra",
+        "styles_extra",
+        "canvases_extra",
+        "background_images_extra",
+        "fixation_flags_extra",
         # Names, not an option: read by `_labelled_columns`.
         "column_labels",
     }
@@ -10164,8 +10288,11 @@ COMPARISON_FIGURE_OPTIONS = _setting_names(
         "autoplay",
         "anim_grid_step_ms",
         "anim_max_frames",
-        # A comparison reads B's filters off `style_b` instead.
+        # A comparison reads B's filters off `style_b` instead, and C's and
+        # D's off theirs; its scanpaths are named by `trial_labels`.
         "fixation_flags_b",
+        "fixation_flags_extra",
+        "labels_extra",
         # Names, not an option: read by `_labelled_columns`.
         "column_labels",
     }
@@ -10206,6 +10333,8 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "background_image_b",
         "background_image_size_b",
         "background_image_origin_b",
+        "canvases_extra",
+        "background_images_extra",
         # Names, not an option: read by `_labelled_columns`.
         "column_labels",
     }
@@ -10260,15 +10389,23 @@ def make_scanpath_animation(
     settings: FigureSettings | Mapping[str, Any] | None = None,
     fixations_b: pd.DataFrame | None = None,
     words_b: pd.DataFrame | None = None,
+    fixations_extra: Sequence[pd.DataFrame | None] = (),
+    words_extra: Sequence[pd.DataFrame | None] = (),
     **overrides: Any,
 ) -> go.Figure:
-    """Build an animated replay from the shared rendering settings."""
+    """Build an animated replay from the shared rendering settings.
+
+    ``fixations_b`` co-animates a second scanpath on the same clock, and
+    ``fixations_extra`` up to two more (C, D); ``words_b`` / ``words_extra``
+    are their own word boxes, for a reading of another text."""
     fig, _frame_step_ms = build_scanpath_replay(
         words,
         fixations,
         settings=settings,
         fixations_b=fixations_b,
         words_b=words_b,
+        fixations_extra=fixations_extra,
+        words_extra=words_extra,
         **overrides,
     )
     return fig
@@ -10281,6 +10418,8 @@ def build_scanpath_replay(
     settings: FigureSettings | Mapping[str, Any] | None = None,
     fixations_b: pd.DataFrame | None = None,
     words_b: pd.DataFrame | None = None,
+    fixations_extra: Sequence[pd.DataFrame | None] = (),
+    words_extra: Sequence[pd.DataFrame | None] = (),
     **overrides: Any,
 ) -> tuple[go.Figure, float]:
     """:func:`make_scanpath_animation`, returning the grid step with the figure.
@@ -10288,6 +10427,15 @@ def build_scanpath_replay(
     ``(figure, frame_step_ms)``: pass the step to :func:`set_replay_clock` to
     re-time the replay at another speed or autoplay without rebuilding a
     frame."""
+    if 2 + len(fixations_extra) > MAX_COMPARE_SCANPATHS:
+        raise ValueError(
+            f"A co-animation replays at most {MAX_COMPARE_SCANPATHS} scanpaths; "
+            f"got {2 + len(fixations_extra)}."
+        )
+    words_extra = [
+        words_extra[position] if position < len(words_extra) else None
+        for position in range(len(fixations_extra))
+    ]
     resolved = _resolve_figure_settings(
         settings,
         overrides,
@@ -10299,22 +10447,29 @@ def build_scanpath_replay(
             "word_hover_measure": None,
         },
     )
-    # The replay draws one page, under the text it draws: B's when
-    # `compare_stimulus="b"` puts B's words on screen, else A's.
-    b_on_screen = (
-        resolved.compare_stimulus == "b"
-        and fixations_b is not None
-        and not fixations_b.empty
-    )
-    resolved = _with_stimulus_pages(
-        resolved, (words_b, fixations_b) if b_on_screen else (words, fixations)
-    )
+    # The replay draws one page, under the text it draws: the named
+    # scanpath's when `compare_stimulus` puts its words on screen, else A's.
+    pages = [
+        (words, fixations),
+        (words_b, fixations_b),
+        *zip(words_extra, fixations_extra),
+    ]
+    drawn = _compare_stimulus_sides(resolved.compare_stimulus, len(pages))
+    shown = drawn.index(True) if drawn.count(True) == 1 else 0
+    if pages[shown][1] is None or pages[shown][1].empty:
+        shown = 0
+    resolved = _with_stimulus_pages(resolved, pages[shown])
     words = _finite_for_plotting(words, drop_on=_WORD_BOX_COLUMNS)
     words_b = _finite_for_plotting(words_b, drop_on=_WORD_BOX_COLUMNS)
+    words_extra = [
+        _finite_for_plotting(frame, drop_on=_WORD_BOX_COLUMNS) for frame in words_extra
+    ]
     if resolved.redact_text:
         words, words_b = redact_word_text(words), redact_word_text(words_b)
+        words_extra = [redact_word_text(frame) for frame in words_extra]
     fixations = _finite_for_plotting(fixations)
     fixations_b = _finite_for_plotting(fixations_b)
+    fixations_extra = [_finite_for_plotting(frame) for frame in fixations_extra]
     with _labelled_columns(resolved.column_labels):
         fig, frame_step_ms = _render_scanpath_animation(
             words,
@@ -10322,17 +10477,22 @@ def build_scanpath_replay(
             settings=resolved,
             fixations_b=fixations_b,
             words_b=words_b,
+            fixations_extra=fixations_extra,
+            words_extra=words_extra,
         )
+    all_fixations = (fixations, fixations_b, *fixations_extra)
     apply_legend_layout(
         fig,
         resolved.legend_layout,
-        comparing=fixations_b is not None and not fixations_b.empty,
+        comparing=sum(f is not None and not f.empty for f in all_fixations) > 1,
         show_colors=resolved.show_color_legend,
         show_highlight=resolved.show_highlight_legend,
     )
-    size_range = replay_size_key_range(resolved, fixations, fixations_b)
+    size_range = replay_size_key_range(
+        resolved, fixations, fixations_b, fixations_extra=fixations_extra
+    )
     if size_range is not None:
-        _maybe_add_duration_key(fig, resolved, size_range, fixations, fixations_b)
+        _maybe_add_duration_key(fig, resolved, size_range, *all_fixations)
     return fig, frame_step_ms
 
 
@@ -10340,14 +10500,17 @@ def replay_size_key_range(
     settings: FigureSettings,
     fixations: pd.DataFrame | None,
     fixations_b: pd.DataFrame | None = None,
+    *,
+    fixations_extra: Sequence[pd.DataFrame | None] = (),
 ) -> tuple[int, int] | None:
     """The size range a replay's duration key draws, or ``None`` for no key.
 
     A lone replay's is the figure's ``marker_size_range``. A co-animation sizes
-    each scanpath in its own style's range, and one key serves both only while
-    those agree — as on the static comparison."""
-    dual = all(f is not None and not f.empty for f in (fixations, fixations_b))
-    if not dual:
+    each scanpath in its own style's range, and one key serves them all only
+    while those agree — as on the static comparison."""
+    all_fixations = (fixations, fixations_b, *fixations_extra)
+    drawn = [f is not None and not f.empty for f in all_fixations]
+    if sum(drawn) < 2:
         return tuple(settings.marker_size_range)
     ranges = {
         tuple(
@@ -10355,7 +10518,8 @@ def replay_size_key_range(
                 idx, style, default_marker_size_range=settings.marker_size_range
             )["marker_size_range"]
         )
-        for idx, style in enumerate((settings.style_a, settings.style_b))
+        for idx, style in enumerate(_scanpath_styles(settings, len(all_fixations)))
+        if drawn[idx]
     }
     return ranges.pop() if len(ranges) == 1 else None
 
@@ -10373,7 +10537,9 @@ def _require_one_screen_per_reading(
     screen first (`multipart.extract_part`); this is the guard that keeps a new
     caller from forgetting to.
     """
-    for label, (participant, trial) in zip(("A", "B"), readings, strict=False):
+    for label, (participant, trial) in zip(
+        COMPARE_SIDE_LETTERS, readings, strict=False
+    ):
         for frame in (fixations, words):
             if frame is None or frame.empty or SCREEN_ID not in frame.columns:
                 continue
@@ -10401,18 +10567,30 @@ def make_comparison_figure(
     *,
     settings: FigureSettings | Mapping[str, Any] | None = None,
     raw_gaze: pd.DataFrame | None = None,
+    extra_trials: Sequence[tuple[str, str]] = (),
     **overrides: Any,
 ) -> go.Figure:
-    """Build a two-scanpath comparison from the shared rendering settings.
+    """Build a comparison of scanpath A, B and up to two more from the shared
+    rendering settings.
 
-    ``raw_gaze`` holds either reading's samples, keyed like ``words``
+    ``extra_trials`` are scanpaths C and D, keyed like ``trial_a`` / ``trial_b``
+    into the same frames; their per-scanpath settings are the ``*_extra``
+    fields of :class:`FigureSettings`.
+
+    ``raw_gaze`` holds any reading's samples, keyed like ``words``
     and ``fixations``; with ``show_raw_gaze`` each reading's are drawn under its
     scanpath, in its colour.
 
     Each scanpath must be one screen: a frame holding several screens of one
     multipart reading raises ``ValueError`` rather than pooling coordinate
     spaces (and drawing saccades across page boundaries)."""
-    _require_one_screen_per_reading(words, fixations, (trial_a, trial_b))
+    trials = (trial_a, trial_b, *(tuple(trial) for trial in extra_trials))
+    if len(trials) > MAX_COMPARE_SCANPATHS:
+        raise ValueError(
+            f"A comparison draws at most {MAX_COMPARE_SCANPATHS} scanpaths; "
+            f"got {len(trials)}."
+        )
+    _require_one_screen_per_reading(words, fixations, trials)
     resolved = _resolve_figure_settings(
         settings,
         overrides,
@@ -10432,13 +10610,18 @@ def make_comparison_figure(
 
         if resolved.layout in {"side_by_side", "stacked"}:
             # Each split panel over its own reading's page.
-            resolved = _with_stimulus_pages(resolved, page(trial_a), page(trial_b))
+            resolved = _with_stimulus_pages(
+                resolved,
+                page(trial_a),
+                page(trial_b),
+                pages_extra=[page(trial) for trial in trials[2:]],
+            )
         else:
             # One page under the overlay's one stimulus layer: the reading
             # whose text is drawn (`compare_stimulus`), A's for "both".
-            resolved = _with_stimulus_pages(
-                resolved, page(trial_b if resolved.compare_stimulus == "b" else trial_a)
-            )
+            drawn = _compare_stimulus_sides(resolved.compare_stimulus, len(trials))
+            shown = trials[drawn.index(True)] if drawn.count(True) == 1 else trial_a
+            resolved = _with_stimulus_pages(resolved, page(shown))
     words = _finite_for_plotting(words, drop_on=_WORD_BOX_COLUMNS)
     if resolved.redact_text:
         words = redact_word_text(words)
@@ -10448,8 +10631,7 @@ def make_comparison_figure(
         fig = _render_comparison_figure(
             words,
             fixations,
-            trial_a,
-            trial_b,
+            trials,
             settings=resolved,
             raw_gaze=raw_gaze,
         )
@@ -10461,15 +10643,15 @@ def make_comparison_figure(
         show_colors=resolved.show_color_legend,
         show_highlight=resolved.show_highlight_legend,
     )
-    # One key serves both scanpaths only while they share a size range; with
-    # per-scanpath ranges (Compare's own Size) one duration is two sizes.
+    # One key serves every scanpath only while they share a size range; with
+    # per-scanpath ranges (Compare's own Size) one duration is several sizes.
     ranges = {
         tuple(
             _comparison_scanpath_style(
                 idx, style, default_marker_size_range=resolved.marker_size_range
             )["marker_size_range"]
         )
-        for idx, style in enumerate((resolved.style_a, resolved.style_b))
+        for idx, style in enumerate(_scanpath_styles(resolved, len(trials)))
     }
     if resolved.show_fixations and len(ranges) == 1:
         _maybe_add_duration_key(fig, resolved, ranges.pop(), fixations)

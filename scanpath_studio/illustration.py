@@ -22,6 +22,7 @@ def illustration_reasons(
     fixation_flags_b: dict | None = None,
     fix_index_range_b: Sequence[int] | None = None,
     full_fixation_range_b: Sequence[int] | None = None,
+    extra_filters: Sequence[tuple] = (),
     static: bool = True,
 ) -> list[str]:
     """Return visible, substantive transformations; ignore cosmetic styling.
@@ -35,7 +36,8 @@ def illustration_reasons(
     In Compare, scanpath B has filters of its own — ``fixation_flags_b`` and a
     window ``fix_index_range_b`` against B's ``full_fixation_range_b`` — and
     either one alters the figure as much as A's does, so it discloses the same
-    way.
+    way. Scanpaths C and D give theirs in ``extra_filters``, one
+    ``(fixation_flags, fix_index_range, full_fixation_range)`` each.
 
     Raw gaze is never a reason. The samples are drawn as recorded — nothing in
     the app derives fixations (or anything else) from them — so a figure of
@@ -56,7 +58,11 @@ def illustration_reasons(
     algorithm = settings.get("align_algorithm", "Off")
     if algorithm and algorithm != "Off":
         reasons.append(f"drift correction: {algorithm}")
-    flag_sets = [settings.get("fixation_flags") or {}, fixation_flags_b or {}]
+    flag_sets = [
+        settings.get("fixation_flags") or {},
+        fixation_flags_b or {},
+        *((flags or {}) for flags, _window, _full in extra_filters),
+    ]
     if any(
         (value or {}).get("mode") == "Hide"
         for flags in flag_sets
@@ -66,6 +72,7 @@ def illustration_reasons(
     windows = [
         (fix_index_range, full_fixation_range),
         (fix_index_range_b, full_fixation_range_b),
+        *((window, full) for _flags, window, full in extra_filters),
     ]
     if any(
         window is not None and full is not None and tuple(window) != tuple(full)

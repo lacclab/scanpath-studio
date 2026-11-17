@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 __all__ = [
+    "CompareScanpath",
     "ScanpathData",
     "__version__",
     "animate_scanpath",

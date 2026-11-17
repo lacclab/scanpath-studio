@@ -2040,24 +2040,29 @@ def qualify_for_compare(frame: pd.DataFrame, dataset: str) -> pd.DataFrame:
     return out
 
 
-def separate_self_compare(frame: pd.DataFrame, participant: str) -> pd.DataFrame:
-    """A copy of B's single-trial ``frame`` renamed apart from A's.
+def separate_self_compare(
+    frame: pd.DataFrame, participant: str, side: str = "B"
+) -> pd.DataFrame:
+    """A copy of a later scanpath's single-trial ``frame`` renamed apart from an
+    earlier one's.
 
-    B may be A's own trial. `plots.make_comparison_figure` slices its merged
-    frame by ``(participant_id, trial_id)``, so two copies of one trial would hand
-    *each* side both copies (and a duplicated index the word-line clustering
-    rejects). Giving B's copy `self_compare_participant`'s id keeps the halves
-    apart — the same trick `qualify_for_compare` plays across corpora, and just
-    as figure-only: labels, lookups, exports and links keep the real id.
+    B (or C, D) may be A's own trial. `plots.make_comparison_figure` slices its
+    merged frame by ``(participant_id, trial_id)``, so two copies of one trial
+    would hand *each* side both copies (and a duplicated index the word-line
+    clustering rejects). Giving the later copy `self_compare_participant`'s id,
+    which carries its letter, keeps them apart — the same trick
+    `qualify_for_compare` plays across corpora, and just as figure-only: labels,
+    lookups, exports and links keep the real id.
     """
     if frame.empty:
         return frame
-    return frame.assign(participant_id=self_compare_participant(participant))
+    return frame.assign(participant_id=self_compare_participant(participant, side))
 
 
-def self_compare_participant(participant: str) -> str:
-    """The id `separate_self_compare` gives B's copy of ``participant``."""
-    return f"{participant}{COMPARE_DATASET_SEP}B"
+def self_compare_participant(participant: str, side: str = "B") -> str:
+    """The id `separate_self_compare` gives scanpath ``side``'s copy of
+    ``participant``."""
+    return f"{participant}{COMPARE_DATASET_SEP}{side}"
 
 
 def qualified_participant(dataset: str, participant: str) -> str:
@@ -2097,13 +2102,26 @@ def align_compare_columns(
     and blank the other, and one numeric on one side only would be a scale on
     one panel and a palette on the other.
     """
-    union = list(dict.fromkeys([*a.columns, *b.columns]))
-    a_aligned = a.reindex(columns=union) if list(a.columns) != union else a
-    b_aligned = b.reindex(columns=union) if list(b.columns) != union else b
+    (a_aligned, b_aligned), shared = align_compare_frames(a, b)
+    return a_aligned, b_aligned, shared
+
+
+def align_compare_frames(
+    *frames: pd.DataFrame,
+) -> tuple[list[pd.DataFrame], frozenset]:
+    """`align_compare_columns` for any number of frames: each reindexed onto
+    the column union, and the columns every frame carries as the same kind."""
+    union = list(dict.fromkeys(col for frame in frames for col in frame.columns))
+    aligned = [
+        frame.reindex(columns=union) if list(frame.columns) != union else frame
+        for frame in frames
+    ]
+    common = set(union)
+    for frame in frames:
+        common &= set(frame.columns)
     shared = frozenset(
         col
-        for col in set(a.columns) & set(b.columns)
-        if pd.api.types.is_numeric_dtype(a[col])
-        == pd.api.types.is_numeric_dtype(b[col])
+        for col in common
+        if len({pd.api.types.is_numeric_dtype(frame[col]) for frame in frames}) == 1
     )
-    return a_aligned, b_aligned, shared
+    return aligned, shared

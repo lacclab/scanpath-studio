@@ -242,3 +242,207 @@ def test_co_animation_filters_a_later_scanpath_by_its_own_flags():
         return len(trail.x)
 
     assert c_points(hidden) == c_points(kept) - 1
+
+
+# -- The headless API ---------------------------------------------------------
+
+
+def _api_frames():
+    from scanpath_studio.experimental_setup import Provenance, SetupSnapshot
+
+    words, fixations = _frames(3)
+    setup = SetupSnapshot(
+        canvas_width=800, canvas_height=400, screen_provenance=Provenance.MEASURED
+    )
+    return words, fixations, setup
+
+
+def _trace_names(fig):
+    return [t.name for t in _markers(fig)]
+
+
+def test_api_compares_three_readings_of_one_dataset():
+    from scanpath_studio import api
+
+    words, fixations, setup = _api_frames()
+    fig = api.compare_scanpaths(
+        words,
+        fixations,
+        ("p1", "t1"),
+        ("p2", "t1"),
+        extra_scanpaths=[("p3", "t1")],
+        setup=setup,
+    )
+    assert [m.marker.color for m in _markers(fig)] == COMPARISON_PALETTE[:3]
+
+
+def test_api_draws_a_third_reading_from_another_dataset_namespaced():
+    from scanpath_studio import api
+
+    words, fixations, setup = _api_frames()
+    # The other dataset reuses A's own ids: only the namespace tells them apart.
+    other_words, other_fix = _words("p1"), _fixations("p1", shift=40.0)
+    fig = api.compare_scanpaths(
+        words,
+        fixations,
+        ("p1", "t1"),
+        ("p2", "t1"),
+        extra_scanpaths=[
+            api.CompareScanpath(
+                trial=("p1", "t1"),
+                words=other_words,
+                fixations=other_fix,
+                dataset="Corpus Z",
+                setup=setup,
+            )
+        ],
+        setup=setup,
+    )
+    markers = _markers(fig)
+    assert len(markers) == 3
+    assert "Corpus Z" in markers[2].name
+    # C is the other dataset's reading, shifted right, not A's drawn twice.
+    assert min(markers[2].x) == pytest.approx(min(markers[0].x) + 40.0)
+
+
+def test_api_keeps_a_repeated_reading_apart():
+    from scanpath_studio import api
+
+    words, fixations, setup = _api_frames()
+    fig = api.compare_scanpaths(
+        words,
+        fixations,
+        ("p1", "t1"),
+        ("p2", "t1"),
+        extra_scanpaths=[("p1", "t1")],
+        setup=setup,
+    )
+    markers = _markers(fig)
+    assert [len(m.x) for m in markers] == [3, 3, 3]
+    assert markers[0].name == markers[2].name
+
+
+def test_api_refuses_an_overlay_onto_a_later_reading_on_another_screen():
+    from scanpath_studio import api
+    from scanpath_studio.experimental_setup import (
+        IncomparableScreensError,
+        Provenance,
+        SetupSnapshot,
+    )
+
+    words, fixations, setup = _api_frames()
+    other = SetupSnapshot(
+        canvas_width=1920, canvas_height=1080, screen_provenance=Provenance.MEASURED
+    )
+    extra = api.CompareScanpath(
+        trial=("p9", "t1"),
+        words=_words("p9"),
+        fixations=_fixations("p9"),
+        setup=other,
+    )
+    with pytest.raises(IncomparableScreensError):
+        api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t1"),
+            extra_scanpaths=[extra],
+            setup=setup,
+        )
+    fig = api.compare_scanpaths(
+        words,
+        fixations,
+        ("p1", "t1"),
+        ("p2", "t1"),
+        extra_scanpaths=[extra],
+        setup=setup,
+        layout="side_by_side",
+    )
+    assert len(_markers(fig)) == 3
+
+
+def test_api_refuses_more_than_four():
+    from scanpath_studio import api
+
+    words, fixations, setup = _api_frames()
+    with pytest.raises(ValueError, match="at most"):
+        api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t1"),
+            extra_scanpaths=[("p3", "t1")] * 3,
+            setup=setup,
+        )
+
+
+def test_api_styles_and_labels_a_later_reading():
+    from scanpath_studio import api
+
+    words, fixations, setup = _api_frames()
+    fig = api.compare_scanpaths(
+        words,
+        fixations,
+        ("p1", "t1"),
+        ("p2", "t1"),
+        extra_scanpaths=[
+            api.CompareScanpath(trial=("p3", "t1"), style={"fix_color": "#00aa00"})
+        ],
+        labels=("first", "second", "third"),
+        setup=setup,
+    )
+    markers = _markers(fig)
+    assert [m.name for m in markers] == ["first", "second", "third"]
+    assert markers[2].marker.color == "#00aa00"
+
+
+def test_api_co_animates_three_readings():
+    from scanpath_studio import api
+
+    words, fixations, setup = _api_frames()
+    fig = api.animate_scanpath(
+        words,
+        fixations,
+        "p1",
+        "t1",
+        trial_b=("p2", "t1"),
+        extra_scanpaths=[api.CompareScanpath(trial=("p3", "t1"), label="Third")],
+        setup=setup,
+        show_legend=True,
+    )
+    names = {t.name for t in fig.data}
+    assert {"Scanpath A", "Scanpath B", "Third"} <= names
+
+
+def test_api_co_animation_needs_b_before_extras():
+    from scanpath_studio import api
+
+    words, fixations, setup = _api_frames()
+    with pytest.raises(ValueError, match="no scanpath B"):
+        api.animate_scanpath(
+            words,
+            fixations,
+            "p1",
+            "t1",
+            extra_scanpaths=[("p3", "t1")],
+            setup=setup,
+        )
+
+
+def test_api_co_animation_discloses_a_later_readings_window():
+    from scanpath_studio import api
+
+    words, fixations, setup = _api_frames()
+    fig = api.animate_scanpath(
+        words,
+        fixations,
+        "p1",
+        "t1",
+        trial_b=("p2", "t1"),
+        extra_scanpaths=[
+            api.CompareScanpath(trial=("p3", "t1"), fix_index_range=(1, 2))
+        ],
+        setup=setup,
+    )
+    texts = " ".join(a.text or "" for a in fig.layout.annotations)
+    assert "fixation subset" in texts

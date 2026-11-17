@@ -28,7 +28,7 @@ import difflib
 import logging
 from collections.abc import Iterable, Sequence
 from copy import deepcopy
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -57,11 +57,13 @@ from . import export as _export  # noqa: E402
 from .build_info import BuildInfo  # noqa: E402
 from .column_names import ColumnNames  # noqa: E402
 from .constants import (  # noqa: E402
+    COMPARE_SIDE_LETTERS,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_ORDER_FONT_COLOR,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
     EXPERIMENTAL_ENV_VAR,
     FONT_FAMILY,
+    MAX_COMPARE_SCANPATHS,
     PLOTLY_CONFIG,
     SACCADE_CLASS_ORDER,
     UNIFORM_COLOR_FIELD,
@@ -175,14 +177,28 @@ _FIGURE_CONTEXT_FIELDS = frozenset(
     {"canvas_width", "canvas_height", "base_font_size", "font_family"}
 )
 _STATIC_FIGURE_PARAMS = frozenset(STATIC_FIGURE_OPTIONS) - _FIGURE_CONTEXT_FIELDS
+#: Scanpaths C and D's own settings, which `extra_scanpaths` sets — one
+#: `CompareScanpath` each — so they are not also loose keywords.
+_EXTRA_SCANPATH_FIELDS = frozenset(
+    {
+        "labels_extra",
+        "styles_extra",
+        "canvases_extra",
+        "background_images_extra",
+        "fixation_flags_extra",
+    }
+)
 #: `layout`, `compare_stimulus`, `trial_labels` and `canvas_b` are named
 #: parameters of `compare_scanpaths`, so they are not also loose keywords.
 _COMPARISON_FIGURE_PARAMS = frozenset(COMPARISON_FIGURE_OPTIONS) - (
-    _FIGURE_CONTEXT_FIELDS | {"layout", "compare_stimulus", "trial_labels", "canvas_b"}
+    _FIGURE_CONTEXT_FIELDS
+    | _EXTRA_SCANPATH_FIELDS
+    | {"layout", "compare_stimulus", "trial_labels", "canvas_b"}
 )
 _ANIMATION_FIGURE_PARAMS = (
     frozenset(ANIMATION_FIGURE_OPTIONS)
     - _FIGURE_CONTEXT_FIELDS
+    - _EXTRA_SCANPATH_FIELDS
     - {"playback_speed", "autoplay"}
 ) | {"fixations_b", "words_b"}
 
@@ -2750,9 +2766,11 @@ def animate_scanpath(
     dataset_b: str | None = None,
     setup: SetupSnapshot | None = None,
     setup_b: SetupSnapshot | None = None,
+    extra_scanpaths: Sequence[CompareScanpath | tuple[str, str]] = (),
     **animation_overrides: Any,
 ) -> go.Figure:
-    """Build the animated replay of one trial's scanpath, or of two on one clock.
+    """Build the animated replay of one trial's scanpath, or of two to four on one
+    clock.
 
     Save it as interactive HTML with [`save_figure`][scanpath_studio.api.save_figure],
     whose page keeps the replay's timing, or render it to GIF or MP4 with
@@ -2773,6 +2791,11 @@ def animate_scanpath(
     them for ``--compare-with`` alone, and are not checked: two readings of one corpus
     can span different extents, and inferring a canvas from each would refuse pairs that
     shared a screen.
+
+    **More than two.** ``extra_scanpaths`` co-animates scanpaths C and D after B, each
+    a [`CompareScanpath`][scanpath_studio.api.CompareScanpath] or a
+    ``(participant, trial)`` pair in A's frames, checked and drawn as B is: one with
+    its own frames and a ``dataset`` or ``setup`` is held to A's screen.
 
     Args:
         words: As in [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
@@ -2812,6 +2835,8 @@ def animate_scanpath(
             trial, which rarely spans the whole screen, so state both when you know
             them.
         setup_b: B's.
+        extra_scanpaths: Scanpaths C and D (at most two), co-animated after B, which
+            they need.
         **animation_overrides: Any figure option the replay takes. Also:
 
             - ``words_b`` / ``fixations_b``: B's frames. Without ``trial_b`` they must
@@ -2867,8 +2892,25 @@ def animate_scanpath(
             f"animate_scanpath() does not support: {', '.join(sorted(unknown))}. "
             "figure_options('animation') lists the options it takes."
         )
-    for side in ("style_a", "style_b"):
-        style = animation_overrides.get(side)
+    if len(extra_scanpaths) > MAX_COMPARE_SCANPATHS - 2:
+        raise ValueError(
+            f"A co-animation replays at most {MAX_COMPARE_SCANPATHS} scanpaths, so "
+            f"extra_scanpaths takes at most {MAX_COMPARE_SCANPATHS - 2}; got "
+            f"{len(extra_scanpaths)}."
+        )
+    extra_scanpaths = [
+        _compare_scanpath(extra, position)
+        for position, extra in enumerate(extra_scanpaths)
+    ]
+    styles = [
+        ("style_a", animation_overrides.get("style_a")),
+        ("style_b", animation_overrides.get("style_b")),
+        *(
+            (f"extra_scanpaths[{position}].style", extra.style)
+            for position, extra in enumerate(extra_scanpaths)
+        ),
+    ]
+    for side, style in styles:
         if isinstance(style, dict) and style.get("saccade_classes") is not None:
             raise ValueError(
                 f"{side}['saccade_classes'] filters a comparison figure's "
@@ -2979,6 +3021,77 @@ def animate_scanpath(
             None if frame is None else qualify_for_compare(frame, dataset_b)
             for frame in (words_b, fixations_b)
         )
+    if extra_scanpaths and (fixations_b is None or fixations_b.empty):
+        raise ValueError(
+            "extra_scanpaths co-animates scanpaths after B, but there is no "
+            "scanpath B. Pass trial_b=(participant, trial) too."
+        )
+    words_extra: list[pd.DataFrame | None] = []
+    fixations_extra: list[pd.DataFrame] = []
+    extra_filters: list[tuple] = []
+    for position, extra in enumerate(extra_scanpaths):
+        param = f"extra_scanpaths[{position}]"
+        own_words = _cn.to_canonical_frame(extra.words)
+        own_fixations = _cn.to_canonical_frame(extra.fixations)
+        words_x, fixations_x = _second_reading(
+            words,
+            fixations,
+            own_words,
+            own_fixations,
+            extra.trial,
+            screen_b=extra.screen,
+            screen_param=f"{param}.screen",
+            which=f"scanpath {COMPARE_SIDE_LETTERS[position + 2]}",
+        )
+        own_dataset = (own_words is not None or own_fixations is not None) and (
+            extra.dataset is not None or extra.setup is not None
+        )
+        if own_dataset:
+            _refuse_co_animation_across_screens(
+                setup_a,
+                extra.setup,
+                words_x,
+                fixations_x,
+                a_inferred=setup is None and canvas_size is None,
+                side=COMPARE_SIDE_LETTERS[position + 2],
+                setup_param=f"{param}.setup",
+            )
+        else:
+            same = _same_dataset_setup_b(
+                setup_a,
+                extra.setup,
+                a_known=setup is not None or canvas_size is not None,
+                words_a=trial_words,
+                fixations_a=trial_fixations,
+                words_b=words_x,
+                fixations_b=fixations_x,
+            )
+            if same is not None:
+                _refuse_co_animation_across_screens(
+                    setup_a, same, words_x, fixations_x, a_inferred=False
+                )
+        full_range_x = None
+        order_x = pd.to_numeric(
+            fixations_x.get("order_in_trial", pd.Series(dtype=float)), errors="coerce"
+        ).dropna()
+        if not order_x.empty:
+            full_range_x = (int(order_x.min()), int(order_x.max()))
+        if extra.fix_index_range is not None:
+            fixations_x = _apply_fix_index_range(
+                fixations_x, extra.fix_index_range, *map(str, extra.trial)
+            )
+        if extra.dataset is not None:
+            from .utils import qualify_for_compare
+
+            words_x, fixations_x = (
+                None if frame is None else qualify_for_compare(frame, extra.dataset)
+                for frame in (words_x, fixations_x)
+            )
+        words_extra.append(words_x)
+        fixations_extra.append(fixations_x)
+        extra_filters.append(
+            (extra.fixation_flags, extra.fix_index_range, full_range_x)
+        )
     label_mode = str(illustration_label).capitalize()
     if label_mode not in {"Auto", "Show", "Hide"}:
         raise ValueError("illustration_label must be 'auto', 'show', or 'hide'.")
@@ -2997,6 +3110,7 @@ def animate_scanpath(
             else None,
             fix_index_range_b=fix_index_range_b,
             full_fixation_range_b=full_fix_range_b,
+            extra_filters=extra_filters,
         )
         animation_overrides["illustration_reasons"] = resolve_label_reasons(
             label_mode, reasons
@@ -3012,6 +3126,12 @@ def animate_scanpath(
         column_labels=_column_labels(
             names, trial_words, trial_fixations, words=word_side
         ),
+        labels_extra=tuple(
+            extra.label or f"Scanpath {COMPARE_SIDE_LETTERS[position + 2]}"
+            for position, extra in enumerate(extra_scanpaths)
+        ),
+        styles_extra=tuple(extra.style for extra in extra_scanpaths),
+        fixation_flags_extra=tuple(extra.fixation_flags for extra in extra_scanpaths),
     )
     fig = make_scanpath_animation(
         trial_words,
@@ -3019,6 +3139,8 @@ def animate_scanpath(
         settings=render_settings,
         fixations_b=fixations_b,
         words_b=words_b,
+        fixations_extra=fixations_extra,
+        words_extra=words_extra,
     )
     add_illustration_label(
         fig,
@@ -3039,8 +3161,11 @@ def _second_reading(
     trial_b: tuple[str, str] | None,
     *,
     screen_b: str | None = None,
+    screen_param: str = "screen_b",
+    which: str = "the second scanpath",
 ) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
-    """Scanpath B's frames for a co-animation, cut to one reading.
+    """Scanpath B's frames for a co-animation, cut to one reading — or C's or
+    D's, named in the messages by ``which`` and ``screen_param``.
 
     The animation builder draws every row it is handed, so frames passed the
     way `compare_scanpaths` takes them — B's whole corpus — drew every fixation
@@ -3084,21 +3209,22 @@ def _second_reading(
     trial_fix_b = one_reading(fixations_b, "fixations_b")
     if trial_b is not None and (trial_fix_b is None or trial_fix_b.empty):
         raise ValueError(
-            f"No fixations for the second scanpath participant={pid_b!r}, "
+            f"No fixations for {which} participant={pid_b!r}, "
             f"trial={tid_b!r}. list_trials() shows what the frames contain."
         )
     catalog = part_catalog(trial_words_b, trial_fix_b)
     if catalog.empty:
         if screen_b is not None:
             raise ValueError(
-                "screen_b= was supplied for a single-screen trial "
+                f"{screen_param}= was supplied for a single-screen trial "
                 f"(participant={pid_b!r}, trial={tid_b!r})."
             )
     else:
         available = catalog[SCREEN_ID].astype(str).tolist()
         if screen_b is not None and str(screen_b) not in available:
             raise ValueError(
-                f"Unknown screen_b={str(screen_b)!r} for participant={pid_b!r}, "
+                f"Unknown {screen_param}={str(screen_b)!r} for "
+                f"participant={pid_b!r}, "
                 f"trial={tid_b!r}. "
                 f"Available: {', '.join(repr(value) for value in available)}."
             )
@@ -3112,7 +3238,13 @@ def _second_reading(
     return trial_words_b, trial_fix_b
 
 
-def _inferred_screen_hint(*, a_inferred: bool, b_inferred: bool) -> str:
+def _inferred_screen_hint(
+    *,
+    a_inferred: bool,
+    b_inferred: bool,
+    side: str = "B",
+    setup_param: str = "setup_b",
+) -> str:
     """How to state a screen that a refusal only read off the data.
 
     `setups_comparable` says the readings were *recorded* on different screens,
@@ -3123,7 +3255,7 @@ def _inferred_screen_hint(*, a_inferred: bool, b_inferred: bool) -> str:
         return (
             " Neither screen was stated, so both were read off the data, which "
             "rarely spans the whole screen; if they were shown on one, pass it as "
-            "setup= and setup_b=."
+            f"setup= and {setup_param}=."
         )
     if a_inferred:
         return (
@@ -3132,8 +3264,8 @@ def _inferred_screen_hint(*, a_inferred: bool, b_inferred: bool) -> str:
         )
     if b_inferred:
         return (
-            " B's screen was read off its data, which rarely spans the whole "
-            "screen; if both were shown on one, pass B's as setup_b=."
+            f" {side}'s screen was read off its data, which rarely spans the whole "
+            f"screen; if both were shown on one, pass {side}'s as {setup_param}=."
         )
     return ""
 
@@ -3184,6 +3316,8 @@ def _refuse_co_animation_across_screens(
     fixations_b: pd.DataFrame,
     *,
     a_inferred: bool,
+    side: str = "B",
+    setup_param: str = "setup_b",
 ) -> None:
     """Refuse a co-animation of two datasets shown on different screens.
 
@@ -3199,11 +3333,16 @@ def _refuse_co_animation_across_screens(
         None,
         words_b if words_b is not None else pd.DataFrame(),
         fixations_b,
-        side="setup_b",
+        side=setup_param,
     )
     comparable, note = setups_comparable(setup_a, resolved_b)
     if not comparable:
-        hint = _inferred_screen_hint(a_inferred=a_inferred, b_inferred=setup_b is None)
+        hint = _inferred_screen_hint(
+            a_inferred=a_inferred,
+            b_inferred=setup_b is None,
+            side=side,
+            setup_param=setup_param,
+        )
         raise IncomparableScreensError(
             f"{note} A co-animation replays both trials on one clock in one "
             "coordinate space, so none was drawn; compare them with "
@@ -3397,9 +3536,10 @@ def compare_scanpaths(
     setup: SetupSnapshot | None = None,
     setup_b: SetupSnapshot | None = None,
     canvas_size: tuple[int, int] | None = None,
-    labels: tuple[str, str] | None = None,
+    labels: Sequence[str] | None = None,
     style_a: dict | None = None,
     style_b: dict | None = None,
+    extra_scanpaths: Sequence[CompareScanpath | tuple[str, str]] = (),
     base_font_size: int = 16,
     font_family: str = FONT_FAMILY,
     fix_index_range: tuple[int, int] | None = None,
@@ -3410,7 +3550,7 @@ def compare_scanpaths(
     column_names: dict | None = None,
     **figure_overrides: Any,
 ) -> go.Figure:
-    """Build a figure comparing two scanpaths: the app's **Compare** mode.
+    """Build a figure comparing two to four scanpaths: the app's **Compare** mode.
 
     **Multipart trials.** Each scanpath is one screen, never a whole multipart trial:
     every screen is its own coordinate space, so pooling them would draw saccades across
@@ -3447,6 +3587,12 @@ def compare_scanpaths(
     The box keys and ``raw_gaze_color`` are this figure's only: the co-animation draws
     one set of boxes and no raw gaze, and ignores them.
 
+    **More than two.** ``extra_scanpaths`` adds scanpaths C and D, each a
+    [`CompareScanpath`][scanpath_studio.api.CompareScanpath] or a bare
+    ``(participant, trial)`` pair from A's dataset. Each is read as B is: its own
+    frames make it another dataset's, its style takes the keys above, and an
+    overlay needs its screen to match A's too.
+
     Args:
         words: The words frame holding both trials, or A's when ``words_b`` is given.
         fixations: The fixations frame, likewise.
@@ -3466,17 +3612,21 @@ def compare_scanpaths(
         raw_gaze_b: B's samples, across datasets.
         layout: ``"overlay"``, ``"side_by_side"`` (``"side-by-side"`` also works) or
             ``"stacked"``.
-        compare_stimulus: Whose word boxes and text an overlay draws: ``"both"``,
-            ``"a"`` or ``"b"``. Two datasets' boxes coincide only when the text is
+        compare_stimulus: Whose word boxes and text an overlay draws: ``"both"``
+            (every scanpath's), or one scanpath's letter, ``"a"`` to ``"d"``. Two datasets' boxes coincide only when the text is
             identical. Split layouts ignore it, since each panel draws its own.
         setup: A's `experimental_setup.SetupSnapshot`, the screen the overlay gate
             reads.
         setup_b: B's.
         canvas_size: A's monitor size, when you only have a resolution. Left out with
             ``setup``, the canvas is read off the data.
-        labels: The two trace labels, when not the composed defaults.
+        labels: The trace labels, one per scanpath, when not the composed
+            defaults.
         style_a: A's style, with the keys above.
         style_b: B's style.
+        extra_scanpaths: Scanpaths C and D (at most two), each a
+            [`CompareScanpath`][scanpath_studio.api.CompareScanpath] or a
+            ``(participant, trial)`` pair in A's frames.
         base_font_size: The base font size in px.
         font_family: The font family.
         fix_index_range: ``(start, end)``: draw only that window of both scanpaths'
@@ -3515,7 +3665,7 @@ def compare_scanpaths(
     _check_canvas_size(canvas_size)
     from .experimental_setup import IncomparableScreensError, setups_comparable
     from .utils import (
-        align_compare_columns,
+        align_compare_frames,
         qualify_for_compare,
         self_compare_participant,
         separate_self_compare,
@@ -3533,9 +3683,18 @@ def compare_scanpaths(
         "compare_scanpaths",
     )
 
-    cross_dataset = words_b is not None or fixations_b is not None
+    if len(extra_scanpaths) > MAX_COMPARE_SCANPATHS - 2:
+        raise ValueError(
+            f"A comparison draws at most {MAX_COMPARE_SCANPATHS} scanpaths, so "
+            f"extra_scanpaths takes at most {MAX_COMPARE_SCANPATHS - 2}; got "
+            f"{len(extra_scanpaths)}."
+        )
+    extra_scanpaths = [
+        _compare_scanpath(extra, position)
+        for position, extra in enumerate(extra_scanpaths)
+    ]
     # A's names name the figure's text and its options; every frame,
-    # A's or B's, is processed under the internal names.
+    # A's or a later reading's, is processed under the internal names.
     carried = {
         table: found[1]
         for table, frame in (("fixations", fixations), ("words", words))
@@ -3544,109 +3703,197 @@ def compare_scanpaths(
     names = _call_names(column_names, **carried)
     word_side = _table_names(column_names, "words", carried.get("words"))
     figure_overrides = _canonical_options(figure_overrides, names, words=word_side)
-    words, fixations, words_b, fixations_b = (
-        _cn.to_canonical_frame(frame)
-        for frame in (words, fixations, words_b, fixations_b)
-    )
-    words_b = words if words_b is None else words_b
-    fixations_b = fixations if fixations_b is None else fixations_b
+    words, fixations = _cn.to_canonical_frame(words), _cn.to_canonical_frame(fixations)
     if raw_gaze is not None:
         raw_gaze = _require_normalized(raw_gaze, "raw_gaze")
-    if raw_gaze_b is not None:
-        raw_gaze_b = _require_normalized(raw_gaze_b, "raw_gaze_b")
-    if raw_gaze_b is None and not cross_dataset:
-        raw_gaze_b = raw_gaze
 
-    for side, pair in (("trial_a", trial_a), ("trial_b", trial_b)):
+    # Every reading, A first, as one record each. B and the extras read the
+    # same way: their own frames make them another dataset's, namespaced by
+    # its name; without them they are A's dataset's.
+    readings: list[dict] = [
+        dict(
+            letter="A",
+            trial=trial_a,
+            trial_param="trial_a",
+            words=words,
+            fixations=fixations,
+            cross=False,
+            dataset=None,
+            screen=screen,
+            screen_param="screen",
+            raw_gaze=raw_gaze,
+            setup=setup,
+            setup_param="setup",
+            fix_index_range=fix_index_range,
+        )
+    ]
+    others = [
+        dict(
+            letter="B",
+            trial=trial_b,
+            trial_param="trial_b",
+            words=words_b,
+            fixations=fixations_b,
+            dataset=dataset_b,
+            screen=screen_b,
+            screen_param="screen_b",
+            raw_gaze=raw_gaze_b,
+            raw_gaze_param="raw_gaze_b",
+            setup=setup_b,
+            setup_param="setup_b",
+            fix_index_range=fix_index_range_b,
+        )
+    ]
+    for position, extra in enumerate(extra_scanpaths):
+        letter = COMPARE_SIDE_LETTERS[position + 2]
+        param = f"extra_scanpaths[{position}]"
+        others.append(
+            dict(
+                letter=letter,
+                trial=extra.trial,
+                trial_param=f"{param}.trial",
+                words=extra.words,
+                fixations=extra.fixations,
+                dataset=extra.dataset or f"Dataset {letter}",
+                screen=extra.screen,
+                screen_param=f"{param}.screen",
+                raw_gaze=extra.raw_gaze,
+                raw_gaze_param=f"{param}.raw_gaze",
+                setup=extra.setup,
+                setup_param=f"{param}.setup",
+                fix_index_range=extra.fix_index_range,
+            )
+        )
+    for reading in others:
+        reading["cross"] = (
+            reading["words"] is not None or reading["fixations"] is not None
+        )
+        own_words = _cn.to_canonical_frame(reading["words"])
+        own_fixations = _cn.to_canonical_frame(reading["fixations"])
+        reading["words"] = words if own_words is None else own_words
+        reading["fixations"] = fixations if own_fixations is None else own_fixations
+        if reading["raw_gaze"] is not None:
+            reading["raw_gaze"] = _require_normalized(
+                reading["raw_gaze"], reading["raw_gaze_param"]
+            )
+        elif not reading["cross"]:
+            reading["raw_gaze"] = raw_gaze
+        if reading["fix_index_range"] is None:
+            reading["fix_index_range"] = fix_index_range
+        readings.append(reading)
+
+    for reading in readings:
+        pair = reading["trial"]
         if isinstance(pair, str) or len(tuple(pair)) != 2:
             raise ValueError(
-                f"{side} must be a (participant, trial) pair, e.g. "
-                f"('l37_1129', 'l37_1129_2_1_1_Ele'); got {pair!r}. "
+                f"{reading['trial_param']} must be a (participant, trial) pair, "
+                f"e.g. ('l37_1129', 'l37_1129_2_1_1_Ele'); got {pair!r}. "
                 "list_trials(words, fixations) lists the pairs."
             )
-    # Ids written before composite ids escaped a `_` inside a part still name
-    # their reading when that is unambiguous (`data.respell_reading`).
-    pid_a, tid_a = _data.respell_reading(*trial_a, _data.trial_keys(fixations))
-    pid_b, tid_b = _data.respell_reading(*trial_b, _data.trial_keys(fixations_b))
-    # One screen per side, each resolved in its own frames — the same contract
-    # as `plot_scanpath`'s `screen`. Extracting whole parent trials would pool
-    # every page of a multipart reading into one scanpath, saccades across pages
-    # and all.
-    trial_words_a, trial_fix_a, pid_a, tid_a, _screen_a = _select_part(
-        words, fixations, str(pid_a), str(tid_a), screen
-    )
-    trial_words_b, trial_fix_b, pid_b, tid_b, _screen_b = _select_part(
-        words_b,
-        fixations_b,
-        str(pid_b),
-        str(tid_b),
-        screen_b,
-        screen_param="screen_b",
-    )
-    trial_raw_a = _compare_raw_gaze(raw_gaze, pid_a, tid_a, trial_fix_a)
-    trial_raw_b = _compare_raw_gaze(raw_gaze_b, pid_b, tid_b, trial_fix_b)
-    for frame, (pid, tid) in ((trial_fix_a, trial_a), (trial_fix_b, trial_b)):
-        if frame.empty:
+    # One screen per reading, each resolved in its own frames — the same
+    # contract as `plot_scanpath`'s `screen`. Extracting whole parent trials
+    # would pool every page of a multipart reading into one scanpath, saccades
+    # across pages and all.
+    for reading in readings:
+        # Ids written before composite ids escaped a `_` inside a part still
+        # name their reading when that is unambiguous (`data.respell_reading`).
+        pid, tid = _data.respell_reading(
+            *reading["trial"], _data.trial_keys(reading["fixations"])
+        )
+        (
+            reading["trial_words"],
+            reading["trial_fix"],
+            reading["pid"],
+            reading["tid"],
+            _screen,
+        ) = _select_part(
+            reading["words"],
+            reading["fixations"],
+            str(pid),
+            str(tid),
+            reading["screen"],
+            screen_param=reading["screen_param"],
+        )
+        reading["trial_raw"] = _compare_raw_gaze(
+            reading["raw_gaze"], reading["pid"], reading["tid"], reading["trial_fix"]
+        )
+    for reading in readings:
+        if reading["trial_fix"].empty:
+            pid, tid = reading["trial"]
             raise ValueError(
                 f"No fixations for participant={pid!r}, trial={tid!r}: a "
-                "comparison draws two scanpaths, so each trial needs fixations. "
-                "list_trials() also lists the trials only the words or the raw "
-                "gaze has; draw one of those with plot_scanpath()."
+                "comparison draws a scanpath per reading, so each trial needs "
+                "fixations. list_trials() also lists the trials only the words or "
+                "the raw gaze has; draw one of those with plot_scanpath()."
             )
-    # Either reading may carry the column (two corpora need not share them), so
-    # it is looked for across both.
+    # Any reading may carry the column (two corpora need not share them), so
+    # it is looked for across all of them.
     _check_column_options(
         figure_overrides,
-        words=pd.concat([trial_words_a, trial_words_b], ignore_index=True),
-        fixations=pd.concat([trial_fix_a, trial_fix_b], ignore_index=True),
+        words=pd.concat([r["trial_words"] for r in readings], ignore_index=True),
+        fixations=pd.concat([r["trial_fix"] for r in readings], ignore_index=True),
     )
 
+    first = readings[0]
     setup_a = _compare_setup(
-        setup, canvas_size, trial_words_a, trial_fix_a, side="setup"
+        setup, canvas_size, first["trial_words"], first["trial_fix"], side="setup"
     )
-    resolved_setup_b = _compare_setup(
-        setup_b, None, trial_words_b, trial_fix_b, side="setup_b"
-    )
-    gate = cross_dataset
-    if not cross_dataset:
-        same_b = _same_dataset_setup_b(
-            setup_a,
-            setup_b,
-            a_known=setup is not None or canvas_size is not None,
-            words_a=trial_words_a,
-            fixations_a=trial_fix_a,
-            words_b=trial_words_b,
-            fixations_b=trial_fix_b,
+    first["resolved_setup"] = setup_a
+    a_known = setup is not None or canvas_size is not None
+    for reading in readings[1:]:
+        resolved = _compare_setup(
+            reading["setup"],
+            None,
+            reading["trial_words"],
+            reading["trial_fix"],
+            side=reading["setup_param"],
         )
-        gate = same_b is not None
-        if same_b is not None:
-            resolved_setup_b = same_b
-        elif setup_b is None:
-            # Not refused: B's split panel is drawn to its own screen's canvas,
-            # else A's known one, else (neither known) its own data's extent.
-            own_b = screen_canvas_size(trial_words_b) or screen_canvas_size(trial_fix_b)
-            if own_b is None and (
-                setup is not None
-                or canvas_size is not None
-                or screen_canvas_size(trial_words_a) is not None
-                or screen_canvas_size(trial_fix_a) is not None
-            ):
-                resolved_setup_b = setup_a
-            elif own_b is not None:
-                resolved_setup_b = replace(
-                    setup_a, canvas_width=int(own_b[0]), canvas_height=int(own_b[1])
+        gate = reading["cross"]
+        if not reading["cross"]:
+            same = _same_dataset_setup_b(
+                setup_a,
+                reading["setup"],
+                a_known=a_known,
+                words_a=first["trial_words"],
+                fixations_a=first["trial_fix"],
+                words_b=reading["trial_words"],
+                fixations_b=reading["trial_fix"],
+            )
+            gate = same is not None
+            if same is not None:
+                resolved = same
+            elif reading["setup"] is None:
+                # Not refused: its split panel is drawn to its own screen's
+                # canvas, else A's known one, else (neither known) its own
+                # data's extent.
+                own = screen_canvas_size(reading["trial_words"]) or screen_canvas_size(
+                    reading["trial_fix"]
                 )
-    if resolved_layout == "overlay" and gate:
-        comparable, note = setups_comparable(setup_a, resolved_setup_b)
+                if own is None and (
+                    a_known
+                    or screen_canvas_size(first["trial_words"]) is not None
+                    or screen_canvas_size(first["trial_fix"]) is not None
+                ):
+                    resolved = setup_a
+                elif own is not None:
+                    resolved = replace(
+                        setup_a, canvas_width=int(own[0]), canvas_height=int(own[1])
+                    )
+        reading["resolved_setup"] = resolved
+        if resolved_layout != "overlay" or not gate:
+            continue
+        comparable, note = setups_comparable(setup_a, resolved)
         if not comparable:
             # The reason says why; this says what happened here and how
             # to ask for the split in Python. `render` rewords it in its flags.
             hint = (
                 _inferred_screen_hint(
                     a_inferred=setup is None and canvas_size is None,
-                    b_inferred=setup_b is None,
+                    b_inferred=reading["setup"] is None,
+                    side=reading["letter"],
+                    setup_param=reading["setup_param"],
                 )
-                if cross_dataset
+                if reading["cross"]
                 else ""
             )
             raise IncomparableScreensError(
@@ -3662,23 +3909,21 @@ def compare_scanpaths(
             # to appear in a pipeline's output, quiet enough not to be an error.
             logging.getLogger(__name__).warning("compare_scanpaths: %s", note)
 
-    figure_pid_b = pid_b
-    if cross_dataset:
-        trial_words_b = qualify_for_compare(trial_words_b, dataset_b)
-        trial_fix_b = qualify_for_compare(trial_fix_b, dataset_b)
-        trial_raw_b = qualify_for_compare(trial_raw_b, dataset_b)
-        figure_pid_b = (
-            str(trial_fix_b["participant_id"].iloc[0])
-            if not trial_fix_b.empty
-            else pid_b
+    for reading in readings:
+        reading["figure_pid"] = reading["pid"]
+        if reading["cross"]:
+            for key in ("trial_words", "trial_fix", "trial_raw"):
+                reading[key] = qualify_for_compare(reading[key], reading["dataset"])
+            if not reading["trial_fix"].empty:
+                reading["figure_pid"] = str(
+                    reading["trial_fix"]["participant_id"].iloc[0]
+                )
+        reading["trial_fix"] = _apply_fix_index_range(
+            reading["trial_fix"],
+            reading["fix_index_range"],
+            reading["pid"],
+            reading["tid"],
         )
-    trial_fix_a = _apply_fix_index_range(trial_fix_a, fix_index_range, pid_a, tid_a)
-    trial_fix_b = _apply_fix_index_range(
-        trial_fix_b,
-        fix_index_range if fix_index_range_b is None else fix_index_range_b,
-        pid_b,
-        tid_b,
-    )
     if drift_correction:
         # Same contract as plot_scanpath — raise, don't silently skip.
         if not drift_correction_enabled():
@@ -3689,34 +3934,53 @@ def compare_scanpaths(
             )
         from .alignment import correct
 
-        trial_fix_a, _ = correct(trial_fix_a, trial_words_a, drift_correction)
-        trial_fix_b, _ = correct(trial_fix_b, trial_words_b, drift_correction)
-
-    if not cross_dataset and (pid_a, tid_a) == (pid_b, tid_b):
-        # A trial compared with itself — rename B's copy apart, or the
-        # figure's (participant, trial) slice hands each side both copies.
-        # The renamed id is for slicing only, so B's default legend name is
-        # resolved here from the real one.
-        if not labels:
-            labels = tuple(
-                _resolve_trial_display_name(pid_a, tid_a, trial_words_a, None, idx)
-                for idx in (0, 1)
+        for reading in readings:
+            reading["trial_fix"], _ = correct(
+                reading["trial_fix"], reading["trial_words"], drift_correction
             )
-        trial_words_b = separate_self_compare(trial_words_b, pid_b)
-        trial_fix_b = separate_self_compare(trial_fix_b, pid_b)
-        trial_raw_b = separate_self_compare(trial_raw_b, pid_b)
-        figure_pid_b = self_compare_participant(pid_b)
-    merged_words, merged_words_b, _ = align_compare_columns(
-        trial_words_a, trial_words_b
-    )
-    merged_fix, merged_fix_b, _ = align_compare_columns(trial_fix_a, trial_fix_b)
+
+    # A reading drawn twice — B is A's own trial, say — has its later copy
+    # renamed apart, or the figure's (participant, trial) slice hands each
+    # side both copies. The renamed id is for slicing only, so the default
+    # legend names are resolved here from the real ones.
+    default_labels = [
+        _resolve_trial_display_name(
+            r["figure_pid"], r["tid"], r["trial_words"], None, idx
+        )
+        for idx, r in enumerate(readings)
+    ]
+    seen: set[tuple[str, str]] = set()
+    renamed = False
+    for reading in readings:
+        key = (reading["figure_pid"], reading["tid"])
+        if key in seen:
+            for frame_key in ("trial_words", "trial_fix", "trial_raw"):
+                reading[frame_key] = separate_self_compare(
+                    reading[frame_key], reading["figure_pid"], reading["letter"]
+                )
+            reading["figure_pid"] = self_compare_participant(
+                reading["figure_pid"], reading["letter"]
+            )
+            renamed = True
+        seen.add((reading["figure_pid"], reading["tid"]))
+    if renamed and not labels:
+        labels = tuple(default_labels)
+
+    merged_words, _ = align_compare_frames(*(r["trial_words"] for r in readings))
+    merged_fix, _ = align_compare_frames(*(r["trial_fix"] for r in readings))
+    raws = [r["trial_raw"] for r in readings]
     merged_raw = None
-    if not (trial_raw_a.empty and trial_raw_b.empty):
-        merged_raw = pd.concat(align_compare_columns(trial_raw_a, trial_raw_b)[:2])
+    if not all(raw.empty for raw in raws):
+        merged_raw = pd.concat(align_compare_frames(*raws)[0])
     settings = _figure_kwargs(figure_overrides)
     settings.pop("illustration_reasons", None)
-    if raw_gaze is not None or raw_gaze_b is not None:
+    if (
+        raw_gaze is not None
+        or raw_gaze_b is not None
+        or any(extra.raw_gaze is not None for extra in extra_scanpaths)
+    ):
         settings.setdefault("show_raw_gaze", True)
+    extras = readings[2:]
     render_settings = FigureSettings.from_mapping(
         {k: v for k, v in settings.items() if k in _COMPARISON_FIGURE_PARAMS},
         canvas_width=int(setup_a.canvas_width),
@@ -3728,18 +3992,21 @@ def compare_scanpaths(
         trial_labels=tuple(labels) if labels else None,
         style_a=style_a,
         style_b=style_b,
+        styles_extra=tuple(extra.style for extra in extra_scanpaths),
         column_labels=_column_labels(
-            names, trial_words_a, trial_fix_a, words=word_side
+            names, first["trial_words"], first["trial_fix"], words=word_side
         ),
-        # Only the split layouts read this; an overlay that got here has two
-        # equal canvases anyway, so it is the same value either way.
-        canvas_b=resolved_setup_b.canvas,
+        # Only the split layouts read these; an overlay that got here has equal
+        # canvases anyway, so it is the same value either way.
+        canvas_b=readings[1]["resolved_setup"].canvas,
+        canvases_extra=tuple(r["resolved_setup"].canvas for r in extras),
     )
     fig = make_comparison_figure(
-        pd.concat([merged_words, merged_words_b], ignore_index=True),
-        pd.concat([merged_fix, merged_fix_b], ignore_index=True),
-        (pid_a, tid_a),
-        (figure_pid_b, tid_b),
+        pd.concat(merged_words, ignore_index=True),
+        pd.concat(merged_fix, ignore_index=True),
+        (first["pid"], first["tid"]),
+        (readings[1]["figure_pid"], readings[1]["tid"]),
+        extra_trials=[(r["figure_pid"], r["tid"]) for r in extras],
         settings=render_settings,
         raw_gaze=merged_raw,
     )
@@ -3747,6 +4014,58 @@ def compare_scanpaths(
         fig, title=title, caption=caption, **figure_text_style(render_settings)
     )
     return fig
+
+
+@dataclass(frozen=True)
+class CompareScanpath:
+    """A scanpath after B in
+    [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] and
+    [`animate_scanpath`][scanpath_studio.api.animate_scanpath] — C or D.
+
+    Each field reads as B's counterpart does. Without ``words`` / ``fixations``
+    the reading is looked up in A's frames; with them it is another dataset's,
+    its participant IDs prefixed with ``dataset`` inside the figure.
+
+    Attributes:
+        trial: The reading's ``(participant, trial)``.
+        words: Its dataset's words frame, when it is not A's dataset.
+        fixations: Its dataset's fixations frame, likewise.
+        dataset: The name its participant IDs are prefixed with across datasets;
+            ``"Dataset C"`` / ``"Dataset D"`` when left out.
+        screen: Its screen of a multipart trial, looked up in its own frames.
+        raw_gaze: Its samples, across datasets (one dataset's are ``raw_gaze``).
+        setup: Its `experimental_setup.SetupSnapshot`.
+        style: Its style, with the keys ``compare_scanpaths`` lists.
+        label: Its trace label (the co-animation's legend name), when not the
+            composed default.
+        fix_index_range: Its own ``(start, end)`` fixation window.
+        fixation_flags: Its own fixation flags in a co-animation.
+    """
+
+    trial: tuple[str, str]
+    words: pd.DataFrame | None = None
+    fixations: pd.DataFrame | None = None
+    dataset: str | None = None
+    screen: str | None = None
+    raw_gaze: pd.DataFrame | None = None
+    setup: SetupSnapshot | None = None
+    style: dict | None = None
+    label: str | None = None
+    fix_index_range: tuple[int, int] | None = None
+    fixation_flags: dict | None = None
+
+
+def _compare_scanpath(extra, position: int) -> CompareScanpath:
+    """``extra_scanpaths[position]`` as a `CompareScanpath`; a bare pair is a
+    reading in A's frames."""
+    if isinstance(extra, CompareScanpath):
+        return extra
+    if isinstance(extra, str) or not isinstance(extra, (tuple, list)):
+        raise TypeError(
+            f"extra_scanpaths[{position}] must be a CompareScanpath or a "
+            f"(participant, trial) pair; got {extra!r}."
+        )
+    return CompareScanpath(trial=tuple(extra))
 
 
 def _compare_raw_gaze(

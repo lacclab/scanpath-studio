@@ -1,0 +1,1 @@
+A multipart dataset whose Words table has screens with no fixations (screens the recording missed) now loads, with a warning naming them, instead of being refused; those screens show their word boxes with no fixations.

@@ -199,6 +199,44 @@ def test_the_open_wizard_survives_an_upload_the_pipeline_rejects(one_sided_uploa
     assert finalize and finalize[0].disabled
 
 
+def test_the_wizard_adds_a_dataset_whose_screen_has_no_fixations(monkeypatch):
+    """A screen the recording missed — word boxes on page p2, no fixations
+    there — is a gap in the data, not a mapping mistake: the wizard says which
+    screen, and ✅ Add dataset stays on."""
+    from scanpath_studio import app
+
+    words = _WIZARD_WORDS.assign(page=["p1", "p1", "p2"])
+    fixations = _WIZARD_FIXATIONS.assign(page=["p1"] * 3)
+    monkeypatch.setattr(
+        app,
+        "_read_uploaded_frame",
+        lambda **kw: {"col_map_words": words, "col_map_fix": fixations}.get(
+            kw["state_prefix"], pd.DataFrame()
+        ),
+    )
+    at = _upload_apptest(wizard_active=True)
+
+    assert not at.exception
+    assert not [e.value for e in at.error]
+    assert any("r0/t0/p2" in w.value for w in at.warning), [w.value for w in at.warning]
+    finalize = [b for b in at.button if b.key == "wizard_finalize"]
+    assert finalize and not finalize[0].disabled
+    payload = at.session_state["_wizard_finalize_payload"]
+    assert set(payload["words"]["screen_id"]) == {"p1", "p2"}
+    assert set(payload["fixations"]["screen_id"]) == {"p1"}
+
+    # Added, the screen is one step of the trial, drawn with no fixations.
+    finalize[0].click().run(timeout=180)
+    assert not at.exception
+    pin_view(at, _VIEW_SCANPATH)
+    at.run(timeout=180)
+    assert not at.exception
+    assert len(at.selectbox(key="single_screen_id").options) == 2
+    at.button(key="single_screen_next").click().run(timeout=180)
+    assert not at.exception
+    assert at.selectbox(key="single_screen_id").value == "p2"
+
+
 def _upload_text_word_ids(
     monkeypatch, *, word_ids, fixation_ids, keep_xy: bool = False
 ) -> AppTest:

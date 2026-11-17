@@ -15,11 +15,13 @@ import pandas as pd
 import pytest
 
 from scanpath_studio.multipart import (
+    ScreensWithoutFixationsWarning,
     apply_trial_parts_manifest,
     extract_part,
     normalize_screen_identity,
     part_catalog,
     screen_canvas_size,
+    screens_without_fixations,
     validate_matching_parts,
 )
 
@@ -134,6 +136,23 @@ class TestMatchingParts:
         fixations = normalize_screen_identity(_frame(screen_id=["a", "a", "c", "c"]))
         with pytest.raises(ValueError, match="one table only"):
             validate_matching_parts(words, fixations)
+
+    def test_fixations_on_a_screen_with_no_words_are_refused(self):
+        """Fixations need a stimulus to land on: a screen only the fixations
+        have means the two tables' Screen IDs don't line up."""
+        words = normalize_screen_identity(_frame(screen_id=["a", "a", "a", "a"]))
+        fixations = normalize_screen_identity(_frame())
+        with pytest.raises(ValueError, match="no words for p1/t1/b"):
+            validate_matching_parts(words, fixations)
+
+    def test_a_screen_with_no_fixations_loads_with_a_warning(self):
+        """A screen the recording missed is a gap in the data, not a mapping
+        mistake: it passes, and the warning names it."""
+        words = normalize_screen_identity(_frame())
+        fixations = normalize_screen_identity(_frame(screen_id=["a"] * 4))
+        with pytest.warns(ScreensWithoutFixationsWarning, match="p1/t1/b"):
+            validate_matching_parts(words, fixations)
+        assert screens_without_fixations(words, fixations) == [("p1", "t1", "b")]
 
     def test_matching_reports_pass(self):
         frame = normalize_screen_identity(_frame())

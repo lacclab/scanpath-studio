@@ -9933,8 +9933,9 @@ def _run_app() -> None:
                 "recording setup and any table you added are saved.",
                 icon=ICONS["success"],
             )
-            # A save whose word boxes reached only some readings says
-            # so here — its warning was raised inside the button's callback.
+            # A save whose word boxes reached only some readings, or left
+            # screens without fixations, says so here — its warning was raised
+            # inside the button's callback.
             for notice in join_notices or []:
                 dataset_table_slot.warning(notice, icon=ICONS["warning"])
         # Rendered *inside* the slot rather than handed it: the table is a

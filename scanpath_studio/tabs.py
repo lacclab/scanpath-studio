@@ -308,6 +308,7 @@ from scanpath_studio.illustration import illustration_reasons, resolve_label_rea
 from scanpath_studio.multipart import (
     SCREEN_ID,
     SCREEN_INDEX,
+    ScreensWithoutFixationsWarning,
     extract_part,
     has_screen_identity,
     part_catalog,
@@ -14674,10 +14675,11 @@ def _harmonize_noting_join(
     fixations: pd.DataFrame,
     rewrites: list | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """``harmonize_frames``, keeping its ``StimulusJoinWarning`` for the page.
+    """``harmonize_frames``, keeping its ``StimulusJoinWarning`` and
+    ``ScreensWithoutFixationsWarning`` for the page.
 
     ✅ Save changes runs in an ``on_click``, where a warning only reaches the
-    server's terminal; this parks its text under ``STIMULUS_JOIN_NOTICE_KEY``
+    server's terminal; this parks their text under ``STIMULUS_JOIN_NOTICE_KEY``
     instead. Any other warning is re-raised as it was. The columns
     whose values it changed (``data.Rewrite``) go into ``rewrites``."""
     with warnings.catch_warnings(record=True) as caught:
@@ -14688,7 +14690,9 @@ def _harmonize_noting_join(
         rewrites.extend(changed)
     notices = []
     for record in caught:
-        if issubclass(record.category, StimulusJoinWarning):
+        if issubclass(
+            record.category, (StimulusJoinWarning, ScreensWithoutFixationsWarning)
+        ):
             notices.append(str(record.message))
         else:
             warnings.warn_explicit(

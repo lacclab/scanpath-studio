@@ -2256,11 +2256,11 @@ def _multipleye_words_per_reader(
 
     The stimulus-level boxes are replicated onto the ``(reader, stimulus, page)``
     triples present in that reader's fixations — an **inner** join, so a page the
-    reader skipped never becomes an orphan screen for
-    ``multipart.validate_matching_parts`` to reject. That reader's pre-aggregated
-    reading measures merge on ``(participant, stimulus, page, word_idx)``
-    (``word_idx`` restarts per page, so page MUST be in the key). Question-screen
-    boxes are already per reader and are appended as they are."""
+    reader skipped never becomes a screen with boxes and no fixations. That
+    reader's pre-aggregated reading measures merge on
+    ``(participant, stimulus, page, word_idx)`` (``word_idx`` restarts per page,
+    so page MUST be in the key). Question-screen boxes are already per reader
+    and are appended as they are."""
     if stim_boxes.empty:
         words = stim_boxes
     else:

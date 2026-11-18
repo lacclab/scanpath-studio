@@ -7270,7 +7270,10 @@ def render_single_trial_tab(
     # Resolve, don't rewrite: `single_compare_layout` is left alone,
     # so switching back to a same-dataset pair restores the user's Overlay.
     compare_layout = requested_layout
-    if compare_layout == "overlay" and not compare_comparable:
+    # Only a figure in screen pixels needs one screen: a static chart (X / Y
+    # other than x / y) overlays any two readings.
+    spatial_compare = animate or (x_field, y_field) == ("x", "y")
+    if compare_layout == "overlay" and not compare_comparable and spatial_compare:
         compare_layout = "side_by_side"
     # Widget label -> the wire/settings vocabulary the builders take.
     compare_stimulus = {"Both": "both", "A": "a", "B": "b"}.get(

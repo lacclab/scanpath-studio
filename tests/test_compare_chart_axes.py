@@ -287,3 +287,41 @@ def test_compare_scanpaths_draws_the_chart():
     assert fig.layout.xaxis.range == fig.layout.xaxis2.range
     assert len(_lines(fig)) == 2
     assert list(fig.layout.yaxis.ticktext)[:2] == ["0 The", "1 cat"]
+
+
+def test_a_chart_overlay_needs_no_common_screen():
+    """Two corpora on different screens cannot share an overlay in screen
+    pixels — but a chart places nothing in pixels, so it overlays them."""
+    from scanpath_studio.experimental_setup import (
+        IncomparableScreensError,
+        Provenance,
+        SetupSnapshot,
+    )
+
+    words, fixations = _pair()
+    a = words["participant_id"] == "real"
+    fa = fixations["participant_id"] == "real"
+
+    def screen(width: int, height: int) -> SetupSnapshot:
+        return SetupSnapshot(
+            canvas_width=width,
+            canvas_height=height,
+            screen_provenance=Provenance.MEASURED,
+        )
+
+    kwargs = dict(
+        words_b=words[~a],
+        fixations_b=fixations[~fa],
+        dataset_b="Model",
+        layout="overlay",
+        setup=screen(1920, 1080),
+        setup_b=screen(1680, 1050),
+    )
+    reading_a, reading_b = ("real", "t"), ("model", "t")
+    with pytest.raises(IncomparableScreensError):
+        api.compare_scanpaths(words[a], fixations[fa], reading_a, reading_b, **kwargs)
+    fig = api.compare_scanpaths(
+        words[a], fixations[fa], reading_a, reading_b, **kwargs, **CHART
+    )
+    assert "xaxis2" not in fig.layout.to_plotly_json()
+    assert len(_markers(fig)) == 2

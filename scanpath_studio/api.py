@@ -3653,7 +3653,13 @@ def compare_scanpaths(
                 resolved_setup_b = replace(
                     setup_a, canvas_width=int(own_b[0]), canvas_height=int(own_b[1])
                 )
-    if resolved_layout == "overlay" and gate:
+    # A chart (X / Y other than x / y) places nothing in screen pixels, so
+    # its overlay needs no common screen.
+    chart_axes = (
+        figure_overrides.get("x_field", "x"),
+        figure_overrides.get("y_field", "y"),
+    ) != ("x", "y")
+    if resolved_layout == "overlay" and gate and not chart_axes:
         comparable, note = setups_comparable(setup_a, resolved_setup_b)
         if not comparable:
             # The reason says why; this says what happened here and how

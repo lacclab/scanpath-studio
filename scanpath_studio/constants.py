@@ -84,8 +84,12 @@ def benchmark_corpora_enabled() -> bool:
     `render`'s ``--eyegenbench`` / ``--eyegenbench-dataset`` flags from
     ``--help``. Hidden, not removed: those flags still parse, and
     `eyegenbench.load_eyegenbench` is untouched.
+
+    ``SCANPATH_EYEGENBENCH_DIR`` (the bundle to list at launch) turns them on
+    too, on its own: naming a bundle is the choice to see it, and it leaves the
+    other experimental features off.
     """
-    return experimental_features_enabled()
+    return experimental_features_enabled() or bool(os.environ.get(EYEGENBENCH_DIR_ENV))
 
 
 def preprocessing_enabled() -> bool:

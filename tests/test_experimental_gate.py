@@ -402,6 +402,22 @@ class TestTheHarmonisedBenchmarkCorporaAreExperimental:
         monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
         assert self._label() in app.public_dataset_registry()
 
+    def test_the_bundle_folder_alone_brings_it_back(self, monkeypatch, bundle):
+        """Naming a bundle at launch lists its corpora and nothing else
+        experimental: no line assignment, no NLD, no computed measures."""
+        from scanpath_studio import app
+
+        monkeypatch.delenv(constants.EXPERIMENTAL_ENV_VAR, raising=False)
+        monkeypatch.setenv(constants.EYEGENBENCH_DIR_ENV, str(bundle))
+        assert self._label() in app.public_dataset_registry()
+        assert not constants.drift_correction_enabled()
+        assert not constants.similarity_enabled()
+        assert not constants.computed_measures_enabled()
+        assert not constants.preprocessing_enabled()
+        assert not constants.sentence_analysis_enabled()
+        assert not constants.derived_analysis_tables_enabled()
+        assert not constants.multipleye_format_enabled()
+
     def test_compare_does_not_offer_it_as_scanpath_b(self, monkeypatch):
         from scanpath_studio import app, compare_source
 

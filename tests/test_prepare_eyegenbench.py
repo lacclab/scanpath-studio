@@ -563,3 +563,36 @@ def test_model_run_without_the_required_columns_is_refused(tmp_path):
     FIX.drop(columns="ia_index").to_csv(run / "model_fixations.csv", index=False)
     with pytest.raises(ValueError, match="ia_index"):
         prep.build_model_bundle("CopCo", "M", run, real, out)
+
+
+def test_combined_corpus_puts_each_model_reading_beside_its_real_trial(tmp_path):
+    """`<Name> + models` holds the real readings and every model's, the model
+    readers renamed `<reader> · <model>` so no two readings merge, all keyed
+    by the original trial id (the Comparisons grid's match field) and tagged
+    with where each reading came from."""
+    out = tmp_path / "out"
+    real = prep.build_bundle("CopCo", FIX, TEXTS, PARTS, None, out)
+    models = []
+    for label in ("EZ-Reader", "SWIFT"):
+        run = tmp_path / label
+        run.mkdir()
+        FIX.to_csv(run / "model_fixations.csv", index=False)
+        models.append(prep.build_model_bundle("CopCo", label, run, real, out))
+    entry = prep.build_combined_bundle(real, models, out)
+    assert entry["name"] == "CopCo + models"
+    fixations = pd.read_parquet(out / entry["name"] / "fixations.parquet")
+    readers = fixations.groupby("scanpath_source")["unique_participant_id"].unique()
+    assert {k: list(v) for k, v in readers.items()} == {
+        "Human": ["r1"],
+        "EZ-Reader": ["r1 · EZ-Reader"],
+        "SWIFT": ["r1 · SWIFT"],
+    }
+    assert set(fixations["eyegenbench_trial_id"]) == {"t1"}
+    assert len(fixations) == 3 * len(FIX)
+    assert entry["n_readers"] == 3 and entry["n_fixations"] == 6
+    participants = pd.read_parquet(out / entry["name"] / "participants.parquet")
+    assert set(participants["unique_participant_id"]) == {
+        "r1",
+        "r1 · EZ-Reader",
+        "r1 · SWIFT",
+    }

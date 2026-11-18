@@ -6458,6 +6458,9 @@ FIX_OPTIONAL_FIELDS = [
     # own `unique_trial_id` is the mapped trial id, so a source column of that
     # name would not survive.
     ("eyegenbench_trial_id", "eyegenbench_trial_id", "passthrough", "meta"),
+    # Where a reading of a combined EyeGenBench corpus came from: "Human" or
+    # the model that generated it (`scripts/prepare_eyegenbench.py`).
+    ("scanpath_source", "scanpath_source", "string", "meta"),
 ]
 
 

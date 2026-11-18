@@ -705,6 +705,73 @@ def build_model_bundle(
     return entry
 
 
+#: Fixation column naming where a reading of the combined corpus came from:
+#: ``"Human"`` or the model's label. Registered in `data.py` as a field.
+SOURCE_COLUMN = "scanpath_source"
+HUMAN_SOURCE = "Human"
+
+
+def build_combined_bundle(
+    real_entry: dict, model_entries: list[dict], out_root: Path
+) -> dict:
+    """Write ``"<Name> + models"``: the real readings and every model's together.
+
+    One corpus is what the Comparisons grid draws its matches from, so this is
+    the corpus where a real reading and the models' readings of the same trial
+    sit side by side: match on ``eyegenbench_trial_id`` (the original trial)
+    for exactly those, or on the text for every reading of it. A model's
+    reader is renamed ``"<reader> · <model>"`` so its reading never merges
+    with the real one, and ``scanpath_source`` says which it is. Model readers
+    get their real reader's participant row under the new id.
+    """
+    out_root = Path(out_root)
+    real_dir = out_root / real_entry["name"]
+    frames = [
+        pd.read_parquet(real_dir / "fixations.parquet").assign(
+            **{SOURCE_COLUMN: HUMAN_SOURCE}
+        )
+    ]
+    real_participants = pd.read_parquet(real_dir / "participants.parquet")
+    participants = [real_participants]
+    for entry in model_entries:
+        label = entry["model"]
+        fixations = pd.read_parquet(out_root / entry["name"] / "fixations.parquet")
+        renamed = {
+            reader: f"{reader} · {label}"
+            for reader in fixations["unique_participant_id"].unique()
+        }
+        fixations["unique_participant_id"] = fixations["unique_participant_id"].map(
+            renamed
+        )
+        frames.append(fixations.assign(**{SOURCE_COLUMN: label}))
+        rows = real_participants[
+            real_participants["unique_participant_id"].isin(renamed)
+        ].copy()
+        rows["unique_participant_id"] = rows["unique_participant_id"].map(renamed)
+        participants.append(rows)
+    fixations = pd.concat(frames, ignore_index=True)
+
+    name = f"{real_entry['name']} + models"
+    directory = out_root / name
+    directory.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(real_dir / "words.parquet", directory / "words.parquet")
+    fixations.to_parquet(directory / "fixations.parquet", index=False)
+    pd.concat(participants, ignore_index=True).to_parquet(
+        directory / "participants.parquet", index=False
+    )
+    entry = {
+        k: v for k, v in real_entry.items() if k not in {"name", "repeated_readings"}
+    }
+    entry.update(
+        name=name,
+        n_readers=int(fixations["unique_participant_id"].nunique()),
+        n_fixations=len(fixations),
+        models=[e["model"] for e in model_entries],
+        generated_from=real_entry["name"],
+    )
+    return entry
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", action="append", help="Repeatable.")
@@ -785,6 +852,16 @@ def main(argv=None) -> int:
         except Exception as exc:
             skipped.append((f"{names[0]} ({label})", str(exc)))
             print(f"[skip] {names[0]} ({label}): {exc}")
+
+    model_entries = [e for e in entries if "model" in e]
+    if model_entries:
+        entry = build_combined_bundle(entries[0], model_entries, out_root)
+        write_manifest(out_root, [entry])
+        entries.append(entry)
+        print(
+            f"[ok]   {entry['name']}: {entry['n_fixations']} fixations, "
+            f"{entry['n_readers']} readers"
+        )
 
     print(f"\nPrepared {len(entries)}; skipped {len(skipped)}.")
     for name, reason in skipped:

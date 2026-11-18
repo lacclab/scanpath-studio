@@ -538,3 +538,109 @@ def test_no_chip_fields_no_table():
     at.run(timeout=60)
     assert not at.exception, at.exception
     assert not _chip_tables(at)
+
+
+# --- The grid on chart axes ---------------------------------------------------
+
+
+def _chart_comparisons_app() -> None:
+    """The look-alike grid with the rail's Axes on fixation order x word id,
+    the matches' scanpaths of different lengths."""
+    import pandas as pd
+
+    from scanpath_studio import tabs
+    from tests.test_mode_parity import _viz
+    from tests.test_multiple_comparison_ui import _lookalike_frames
+
+    words, fixations = _lookalike_frames()
+    fixations["word_id"] = fixations["fixation_id"]
+    longer = fixations[fixations["participant_id"] == "p9"].assign(
+        order_in_trial=lambda f: f["order_in_trial"] + 5, word_id=0
+    )
+    fixations = pd.concat([fixations, longer], ignore_index=True)
+    tabs.render_multiple_comparison_tab(
+        words[words["participant_id"] == "p0"],
+        fixations[fixations["participant_id"] == "p0"],
+        words,
+        fixations,
+        selected_participant="p0",
+        selected_trial="base",
+        canvas_width=400,
+        canvas_height=200,
+        base_font_size=14,
+        font_family="Arial",
+        viz_settings={**_viz(), "x_field": "order_in_trial", "y_field": "word_id"},
+    )
+
+
+def test_the_grid_follows_the_rail_axes_with_one_x_range_per_page(monkeypatch):
+    """With the rail on chart axes every panel is that chart, and the page's
+    panels share one X range, so the longer scanpath reads as longer."""
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import tabs
+
+    built = []
+    real_make = tabs.make_scanpath_figure
+
+    def recording_make(words, fix, **kwargs):
+        built.append((kwargs["x_field"], kwargs["y_field"]))
+        return real_make(words, fix, **kwargs)
+
+    shown = []
+    real_render = tabs._render_true_scale_chart
+
+    def recording_render(fig, **kwargs):
+        shown.append(fig.layout.xaxis.range)
+        return real_render(fig, **kwargs)
+
+    monkeypatch.setattr(tabs, "make_scanpath_figure", recording_make)
+    monkeypatch.setattr(tabs, "_render_true_scale_chart", recording_render)
+    at = AppTest.from_function(_chart_comparisons_app).run(timeout=60)
+    assert not at.exception, at.exception
+    assert built and set(built) == {("order_in_trial", "word_id")}
+    assert len(shown) == 3
+    assert len({tuple(r) for r in shown}) == 1, shown
+    low, high = shown[0]
+    assert low < 1 and high > 7  # orders 1..2 and the longer reading's 6..7
+
+
+def test_shared_chart_range_pads_and_ignores_frames_without_the_field():
+    from scanpath_studio.tabs import _shared_chart_range
+
+    frames = [
+        pd.DataFrame({"order_in_trial": [1, 2]}),
+        pd.DataFrame({"order_in_trial": [1, 40, np.nan]}),
+        pd.DataFrame({"x": [3.0]}),
+    ]
+    low, high = _shared_chart_range(frames, "order_in_trial")
+    assert low < 1 and high > 40
+    assert _shared_chart_range([pd.DataFrame({"x": [1.0]})], "order_in_trial") is None
+
+
+def test_condition_matches_on_one_trial_are_captioned_by_participant():
+    """Matching a combined corpus on the original trial id puts every panel on
+    the same trial; each is then named by its reader, not by that trial."""
+    from scanpath_studio.tabs import _panel_captions, _reading_labels
+
+    panels = {
+        (p, "T"): pd.DataFrame(
+            {"participant_id": [p], "trial_id": ["T"], "text_id": ["A"]}
+        )
+        for p in ("r1 · EZ-Reader", "r1 · SWIFT")
+    }
+    captions = _panel_captions(
+        "eyegenbench_trial_id", panels, "text_id", _reading_labels(panels)
+    )
+    assert captions == {
+        ("r1 · EZ-Reader", "T"): "Participant r1 · EZ-Reader",
+        ("r1 · SWIFT", "T"): "Participant r1 · SWIFT",
+    }
+    # Different trials keep the trial caption.
+    mixed = {
+        ("r1", t): pd.DataFrame({"participant_id": ["r1"], "trial_id": [t]})
+        for t in ("T1", "T2")
+    }
+    assert set(
+        _panel_captions("model", mixed, "text_id", _reading_labels(mixed)).values()
+    ) == {"T1", "T2"}

@@ -573,6 +573,138 @@ def run_prepare_data(dataset: str, eyegenbench_root: Path):
     return fix_df, text_df, participant_df, raw
 
 
+def _read_processed_csv(path: Path) -> pd.DataFrame:
+    """One processed CSV, read the way EyeGenBench's `read_processed_csv` does.
+
+    Only an empty cell is missing, so a word such as ``NA`` or ``None`` stays a
+    word, and the id columns stay strings. ``ia_list`` is still a JSON string
+    here; the caller decodes it.
+    """
+    ids = ("unique_trial_id", "unique_participant_id", "unique_paragraph_id")
+    return pd.read_csv(
+        path,
+        keep_default_na=False,
+        na_values=[""],
+        dtype={c: str for c in (*ids, "ia_label", "text", "ia_list")},
+    )
+
+
+def read_processed(dataset: str, eyegenbench_root: Path):
+    """``(fix, text, participant, raw_fix)`` from the processed tables, read-only.
+
+    The same tables EyeGenBench's models are trained and evaluated on, read
+    straight off ``<root>/data/<Name>/processed/`` instead of through
+    `load_dataset`, which may rebuild those shared files in place when its
+    loader code differs from what built them. Nothing under ``<root>`` is
+    written. The raw interim files are still read (never written) for the
+    corpora whose real boxes come from them.
+    """
+    name = _canonical_name(dataset)
+    directory = eyegenbench_root / "data" / name / "processed"
+    fixations = directory / "fixations.feather"
+    if not fixations.is_file():
+        raise FileNotFoundError(f"no processed tables at {directory}")
+    fix_df = pd.read_feather(fixations)
+    text_df = _read_processed_csv(directory / "texts.csv")
+    text_df["ia_list"] = text_df["ia_list"].map(json.loads)
+    participant_df = _read_processed_csv(directory / "participants.csv")
+    interim = eyegenbench_root / "data" / name / "interim"
+    raw = load_raw_geometry(dataset, interim) if interim.is_dir() else None
+    return fix_df, text_df, participant_df, raw
+
+
+#: Columns a model's ``model_fixations.csv`` must carry (EyeGenBench's
+#: `SimulationOutputSchema`, plus the trial id every model writes).
+_MODEL_COLUMNS = (
+    "fix_index",
+    "fix_duration",
+    "ia_index",
+    "unique_paragraph_id",
+    "unique_participant_id",
+)
+
+
+def build_model_bundle(
+    dataset: str, label: str, run_dir: Path, real_entry: dict, out_root: Path
+) -> dict:
+    """Write one model's generated scanpaths as a corpus beside ``dataset``.
+
+    The model's readings sit on the real corpus' own word boxes (copied from
+    its bundle) and keep the real participant and paragraph ids, so Compare
+    can put a real reading as A and the model's reading of that same trial
+    as B. EyeGenBench writes one generated scanpath per real test trial, under
+    that trial's id and reader (for a simulator the reader is only the label of
+    the trial its draw stands for). A repeated reading is split the way
+    `_disambiguate_repeated_readings` splits the real one, which matches the
+    real keys when the model covers every reading of that text by that reader.
+    Fixations land at their word's centre (or at ``fix_landing_position`` when
+    the model writes one).
+    """
+    real_dir = Path(out_root) / real_entry["name"]
+    words = pd.read_parquet(real_dir / "words.parquet")
+    fix_df = pd.read_csv(run_dir / "model_fixations.csv")
+    missing = [c for c in _MODEL_COLUMNS if c not in fix_df.columns]
+    if missing:
+        raise ValueError(f"{run_dir / 'model_fixations.csv'} lacks {missing}")
+    # One generated scanpath per real test trial, under that trial's id and
+    # reader (`draw` only says which of the text's draws it was), so the
+    # trial id goes through the same repeated-reading split as the real data.
+    fix_df = fix_df.rename(columns={"unique_trial_id": "eyegenbench_trial_id"})
+    capped = fix_df.get("capped", pd.Series(False, index=fix_df.index))
+    capped_trials = int(
+        fix_df.loc[
+            capped.astype(bool), ["unique_participant_id", "unique_paragraph_id"]
+        ]
+        .drop_duplicates()
+        .shape[0]
+    )
+    real_words = words[
+        ~words["unique_paragraph_id"].str.contains(_REPEATED_READING_SUFFIX)
+    ]
+    fix_df, words, _ = _disambiguate_repeated_readings(fix_df, real_words)
+    fixations = place_fixations(fix_df, words)
+    paragraph_geometry = words.drop_duplicates("unique_paragraph_id").set_index(
+        "unique_paragraph_id"
+    )["geometry_source"]
+    fixations["geometry_source"] = fixations["unique_paragraph_id"].map(
+        paragraph_geometry
+    )
+    used = set(fixations["unique_paragraph_id"])
+    words = words[words["unique_paragraph_id"].isin(used)]
+
+    name = f"{real_entry['name']} ({label})"
+    directory = Path(out_root) / name
+    directory.mkdir(parents=True, exist_ok=True)
+    words.to_parquet(directory / "words.parquet", index=False)
+    fixations.to_parquet(directory / "fixations.parquet", index=False)
+    participants = pd.read_parquet(real_dir / "participants.parquet")
+    participants.to_parquet(directory / "participants.parquet", index=False)
+    entry = {
+        key: real_entry[key]
+        for key in (
+            "language",
+            "monitor",
+            "monitor_source",
+            "geometry_source",
+            "license",
+            "citation",
+        )
+        if key in real_entry
+    }
+    entry.update(
+        name=name,
+        n_readers=int(fixations["unique_participant_id"].nunique()),
+        n_texts=int(fixations["unique_paragraph_id"].nunique()),
+        n_fixations=len(fixations),
+        model=label,
+        model_run=str(Path(run_dir).resolve()),
+        generated_from=real_entry["name"],
+        capped_readings=capped_trials,
+        dropped_fixations=len(fix_df) - len(fixations),
+    )
+    return entry
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", action="append", help="Repeatable.")
@@ -584,11 +716,33 @@ def main(argv=None) -> int:
         "in its data/ directory and are kept, never deleted.",
     )
     parser.add_argument("--out", default="data/EyeGenBench")
+    parser.add_argument(
+        "--from-processed",
+        action="store_true",
+        help="Read <root>/data/<Name>/processed/ as it is instead of running "
+        "EyeGenBench's prepare_data (which may rebuild it).",
+    )
+    parser.add_argument(
+        "--model-run",
+        action="append",
+        default=[],
+        metavar="LABEL=DIR",
+        help="Repeatable, with exactly one --dataset: add DIR/model_fixations.csv "
+        "as the corpus '<Name> (LABEL)' on that dataset's word boxes.",
+    )
     args = parser.parse_args(argv)
 
     names = DATASETS if args.all else (args.dataset or [])
     if not names:
         parser.error("pass --dataset NAME (repeatable) or --all")
+    if args.model_run and len(names) != 1:
+        parser.error("--model-run needs exactly one --dataset")
+    model_runs = []
+    for spec in args.model_run:
+        label, sep, run_dir = spec.partition("=")
+        if not sep or not label.strip() or not run_dir:
+            parser.error(f"--model-run expects LABEL=DIR, got {spec!r}")
+        model_runs.append((label.strip(), Path(run_dir)))
 
     eyegenbench_root = Path(args.eyegenbench_root).resolve()
     if not (eyegenbench_root / "eyegenbench").is_dir():
@@ -598,7 +752,8 @@ def main(argv=None) -> int:
     for name in names:
         try:
             check_free_space(eyegenbench_root)
-            fix, text, parts, raw = run_prepare_data(name, eyegenbench_root)
+            read = read_processed if args.from_processed else run_prepare_data
+            fix, text, parts, raw = read(name, eyegenbench_root)
             entry = build_bundle(name, fix, text, parts, raw, out_root)
             # Manifest contract: a skipped or failed dataset must not get a
             # manifest entry -- write_manifest only ever sees a dataset whose
@@ -616,6 +771,20 @@ def main(argv=None) -> int:
         except Exception as exc:
             skipped.append((name, str(exc)))
             print(f"[skip] {name}: {exc}")
+
+    for label, run_dir in model_runs if entries else []:
+        try:
+            entry = build_model_bundle(names[0], label, run_dir, entries[0], out_root)
+            write_manifest(out_root, [entry])
+            entries.append(entry)
+            print(
+                f"[ok]   {entry['name']}: {entry['n_fixations']} fixations, "
+                f"{entry['n_readers']} readers, {entry['capped_readings']} capped, "
+                f"{entry['dropped_fixations']} unplaced"
+            )
+        except Exception as exc:
+            skipped.append((f"{names[0]} ({label})", str(exc)))
+            print(f"[skip] {names[0]} ({label}): {exc}")
 
     print(f"\nPrepared {len(entries)}; skipped {len(skipped)}.")
     for name, reason in skipped:

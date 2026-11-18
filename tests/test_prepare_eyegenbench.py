@@ -491,3 +491,75 @@ def test_git_over_https_restores_a_preexisting_value(monkeypatch):
         assert os.environ["GIT_TERMINAL_PROMPT"] == "0"
 
     assert os.environ["GIT_TERMINAL_PROMPT"] == "1"
+
+
+def _write_processed(root: Path, name: str = "CopCo") -> Path:
+    """A processed EyeGenBench corpus as `processed_io` writes it to disk."""
+    directory = root / "data" / name / "processed"
+    directory.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "text": ["NA cd"],
+            "text_language": ["da"],
+            # One JSON array per cell, as `processed_io` stores list columns.
+            "ia_list": [json.dumps(["NA", "cd"])],
+        }
+    ).to_csv(directory / "texts.csv", index=False)
+    FIX.reset_index(drop=True).to_feather(directory / "fixations.feather")
+    PARTS.to_csv(directory / "participants.csv", index=False)
+    return root
+
+
+def test_read_processed_decodes_word_lists_and_keeps_na_words(tmp_path):
+    """The words are a list, not the JSON string's characters, and the word
+    "NA" stays a word rather than turning into a missing value."""
+    root = _write_processed(tmp_path)
+    fix, text, parts, raw = prep.read_processed("CopCo", root)
+    assert text.loc[0, "ia_list"] == ["NA", "cd"]
+    assert len(fix) == 2 and list(parts["unique_participant_id"]) == ["r1"]
+    assert raw is None
+    entry = prep.build_bundle("CopCo", fix, text, parts, raw, tmp_path / "out")
+    words = pd.read_parquet(tmp_path / "out" / "CopCo" / "words.parquet")
+    assert list(words["ia_label"]) == ["NA", "cd"]
+    assert entry["n_fixations"] == 2
+
+
+def test_read_processed_names_the_missing_directory(tmp_path):
+    with pytest.raises(FileNotFoundError, match="processed"):
+        prep.read_processed("CopCo", tmp_path)
+
+
+def test_model_run_lands_on_the_real_corpus_words_under_the_real_ids(tmp_path):
+    """A model's corpus reuses the real corpus' boxes and keeps the real
+    reader and paragraph ids, so Compare can pair the two readings."""
+    out = tmp_path / "out"
+    real = prep.build_bundle("CopCo", FIX, TEXTS, PARTS, None, out)
+    run = tmp_path / "run"
+    run.mkdir()
+    FIX.assign(draw=0, capped=[False, True]).drop(
+        columns="fix_landing_position"
+    ).to_csv(run / "model_fixations.csv", index=False)
+    entry = prep.build_model_bundle("CopCo", "EZ-Reader", run, real, out)
+    assert entry["name"] == "CopCo (EZ-Reader)"
+    assert entry["generated_from"] == "CopCo"
+    assert entry["capped_readings"] == 1 and entry["dropped_fixations"] == 0
+    fixations = pd.read_parquet(out / entry["name"] / "fixations.parquet")
+    assert set(fixations["unique_participant_id"]) == {"r1"}
+    assert set(fixations["unique_paragraph_id"]) == {"p1"}
+    assert "unique_trial_id" not in fixations.columns
+    real_words = pd.read_parquet(out / "CopCo" / "words.parquet")
+    model_words = pd.read_parquet(out / entry["name"] / "words.parquet")
+    pd.testing.assert_frame_equal(
+        real_words.reset_index(drop=True), model_words.reset_index(drop=True)
+    )
+
+
+def test_model_run_without_the_required_columns_is_refused(tmp_path):
+    out = tmp_path / "out"
+    real = prep.build_bundle("CopCo", FIX, TEXTS, PARTS, None, out)
+    run = tmp_path / "run"
+    run.mkdir()
+    FIX.drop(columns="ia_index").to_csv(run / "model_fixations.csv", index=False)
+    with pytest.raises(ValueError, match="ia_index"):
+        prep.build_model_bundle("CopCo", "M", run, real, out)

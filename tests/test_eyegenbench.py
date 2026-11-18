@@ -581,3 +581,40 @@ def test_a_malformed_count_does_not_take_the_picker_down(bundle, monkeypatch):
     assert "some but not all texts" in app.geometry_badge(
         {"geometry_source": "real", "n_texts": 12, "paragraphs_without_real_boxes": "?"}
     )
+
+
+@pytest.mark.parametrize("name", ["..", ".", "../outside", "a/b", "a\\b", "/abs"])
+def test_a_manifest_name_that_is_not_one_path_segment_is_skipped(bundle, name):
+    """A crafted manifest must not point the loader outside the bundle: a name
+    that is not a single plain path segment reads as no name at all."""
+    outside = bundle.parent / "outside"
+    shutil.copytree(bundle / "PoTeC", outside)
+    (bundle / "manifest.json").write_text(
+        json.dumps({"datasets": [{"name": name}]}), encoding="utf-8"
+    )
+    assert eyegenbench.entry_name({"name": name}) == ""
+    assert eyegenbench.eyegenbench_present(bundle) is False
+    assert eyegenbench.eyegenbench_present(bundle, name) is False
+    with pytest.raises(ValueError):
+        eyegenbench.eyegenbench_raw_frames(bundle, dataset=name)
+
+
+def test_a_plain_name_with_dots_is_still_a_name():
+    assert eyegenbench.entry_name({"name": "CopCo.v2"}) == "CopCo.v2"
+    assert eyegenbench.entry_name({"name": " PoTeC "}) == "PoTeC"
+
+
+def test_the_launch_variable_adds_every_corpus_in_its_bundle(bundle, monkeypatch):
+    """`SCANPATH_EYEGENBENCH_DIR` names the folder at launch: that is the choice,
+    so its corpora are added; unset, nothing is."""
+    from scanpath_studio import app, constants
+
+    monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
+    monkeypatch.delenv(constants.EYEGENBENCH_DIR_ENV, raising=False)
+    assert app.added_benchmark_datasets() == ()
+    monkeypatch.setenv(constants.EYEGENBENCH_DIR_ENV, str(bundle))
+    assert [eyegenbench.entry_name(e) for e in app.added_benchmark_datasets()] == [
+        "PoTeC"
+    ]
+    (bundle / "manifest.json").unlink()
+    assert app.added_benchmark_datasets() == ()

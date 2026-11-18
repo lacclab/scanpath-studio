@@ -115,6 +115,7 @@ from scanpath_studio.constants import (
     DOWNLOAD_DIR_ENV,
     DOWNLOAD_DIR_KEY,
     EYEGENBENCH_DEFAULT_DIR,
+    EYEGENBENCH_DIR_ENV,
     FOCUS_MAPPING_KEY,
     FONT_FAMILY,
     ICONS,
@@ -2908,17 +2909,30 @@ _MANIFEST_ERRORS = (FileNotFoundError, ValueError, OSError, KeyError)
 
 
 def added_benchmark_datasets() -> tuple:
-    """Manifest entries for the benchmark corpora the user added — none yet.
+    """Manifest entries for the benchmark corpora the user added.
 
     Nothing is discovered automatically: listing every corpus in a bundle found
     on disk would put data in the picker that nobody had chosen, so a corpus is
     listed only because someone added it. The flow that adds one — choose a
-    folder, scan it, pick the corpora — is not built yet, so this is empty, and
-    the per-corpus machinery it feeds (the registry entry, the loader, the
-    geometry badge, the share-link slug, Compare and the code snippet) is
-    reached only by tests, which replace this function.
+    folder, scan it, pick the corpora — is not built yet. Until it is, starting
+    the app with ``SCANPATH_EYEGENBENCH_DIR=<bundle>`` adds every corpus in
+    that bundle: naming the folder at launch is the choice. Without it this is
+    empty, and tests replace this function.
     """
-    return ()
+    from scanpath_studio.eyegenbench import eyegenbench_datasets
+
+    if not os.environ.get(EYEGENBENCH_DIR_ENV):
+        return ()
+    try:
+        return tuple(eyegenbench_datasets(EYEGENBENCH_DEFAULT_DIR))
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        logging.getLogger(__name__).warning(
+            "%s=%s holds no readable bundle: %s",
+            EYEGENBENCH_DIR_ENV,
+            EYEGENBENCH_DEFAULT_DIR,
+            exc,
+        )
+        return ()
 
 
 # geometry_source values are eyegenbench_geometry.py's GEOMETRY_REAL /

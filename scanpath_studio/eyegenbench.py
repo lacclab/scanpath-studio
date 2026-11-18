@@ -108,10 +108,17 @@ def entry_name(entry) -> str:
     are unusable by definition — nothing can address them — so every reader
     skips them here rather than each remembering to catch a third exception
     type.
+
+    The name is also a directory under the bundle root, so a name that is not
+    one plain path segment (``"../x"``, ``"a/b"``, ``".."``) is unusable in the
+    same way: a crafted manifest must not point the loader outside the bundle.
     """
     if not isinstance(entry, dict):
         return ""
-    return str(entry.get("name") or "").strip()
+    name = str(entry.get("name") or "").strip()
+    if name in {".", ".."} or Path(name).name != name or "\\" in name:
+        return ""
+    return name
 
 
 def entry_count(entry, key: str) -> int | None:
@@ -233,7 +240,9 @@ def _dataset_dir(root, dataset: str) -> Path:
     entry = _find_entry(root, dataset)
     if entry is None:
         raise ValueError(f"{dataset!r} is not in the bundle at {root!s}")
-    return root / entry["name"]
+    # `entry_name`, not `entry["name"]`: it is the check that keeps a crafted
+    # name from climbing out of the bundle (`_find_entry` matched on it too).
+    return root / entry_name(entry)
 
 
 def eyegenbench_raw_frames(root, *, dataset: str) -> tuple[pd.DataFrame, pd.DataFrame]:

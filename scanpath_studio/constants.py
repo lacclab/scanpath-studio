@@ -751,7 +751,10 @@ SYNTHETIC_CHOICE = "Synthetic test trial"
 PUBLIC_DATASETS_CHOICE = "Public datasets"
 POTEC_CHOICE = "PoTeC — Potsdam Textbook Corpus"
 POTEC_DEFAULT_DIR = "data/PoTeC"
-EYEGENBENCH_DEFAULT_DIR = "data/EyeGenBench"
+#: Set to a prepared bundle to add every corpus in it (stand-in for the
+#: add-from-a-folder flow, which is not built; see `app.added_benchmark_datasets`).
+EYEGENBENCH_DIR_ENV = "SCANPATH_EYEGENBENCH_DIR"
+EYEGENBENCH_DEFAULT_DIR = os.environ.get(EYEGENBENCH_DIR_ENV) or "data/EyeGenBench"
 # Every prepared benchmark corpus is its own top-level entry in the flat
 # data-source picker, exactly like PoTeC / OneStop — there is no
 # "EyeGenBench" source fronting them. **"EyeGenBench" is provenance, not a

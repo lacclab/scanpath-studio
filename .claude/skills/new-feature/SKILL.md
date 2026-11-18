@@ -65,6 +65,11 @@ reproduce it; `tests/test_render_every_option.py` fails on one it cannot.
 
 - [ ] All four surfaces wired (or explicitly agreed out of scope with the user)
 - [ ] Tests added (`tests/`), suite passes: `pytest -n auto`
+- [ ] Seen working on all four surfaces: `/verify` with the option's spelling
+      on each (`scripts/verify_change.py --query … --render-args … --api-kwargs …`),
+      and a screenshot when it is visible
+- [ ] A row in `.claude/skills/verify/feature-map.md`
+- [ ] `diff-reviewer` run (`REVIEW.md` from `origin/main`); Important findings fixed
 - [ ] `ruff check .` + `ruff format .`
 - [ ] A changelog fragment, `changelog.d/<issue>.<group>.md` (or
       `<slug>.<group>.md` with no issue), one line of plain text — never an edit to `CHANGELOG.md` (`changelog.d/README.md`)

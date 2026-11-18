@@ -8667,11 +8667,11 @@ def render_plot_controls(
     # framing switch and the grid are `label | ☑ Show | …` rows carrying what
     # they govern (greyed while off), the monitor size and the two axis fields
     # one row each.
-    # The static figure takes any X / Y field, but only screen x / y is a
-    # screen. On other axes it draws a plain chart of the fixations, so the
-    # framing and the grid have nothing to act on: they grey, saying why.
-    # (Animate and Compare always plot x / y, whatever the fields say.)
-    chart_axes = not (animating or comparing) and (
+    # The static and Compare figures take any X / Y field, but only screen
+    # x / y is a screen. On other axes they draw a plain chart of the
+    # fixations, so the framing and the grid have nothing to act on: they
+    # grey, saying why. (Animate always plots x / y, whatever the fields say.)
+    chart_axes = not animating and (
         st.session_state.get("global_x_field", "x"),
         st.session_state.get("global_y_field", "y"),
     ) != ("x", "y")
@@ -8837,21 +8837,19 @@ def render_plot_controls(
             ),
         )
 
-        # The animation and the comparison figures always plot spatial x/y —
-        # only `make_scanpath_figure` takes `x_field`/`y_field`. The
+        # The replay always plots spatial x/y — the static and the comparison
+        # figures take `x_field`/`y_field`, the animation does not. The
         # greyed fields' hover says so, and what turns them back on.
-        axis_disabled, _ = _mode_gate(animating, comparing, **_static_only)
-        modes = " and ".join(
-            name for name, on in (("Animate", animating), ("Compare", comparing)) if on
-        )
+        axis_disabled, _ = _mode_gate(animating, comparing, in_animation=False)
         axis_disabled, axis_help = _layer_gate(
             axis_disabled,
-            f"{ICONS['warning']} {modes} always plots screen x / y. Turn "
-            f"**{modes}** off to choose other fields; your choices are kept."
+            f"{ICONS['warning']} Animate always plots screen x / y. Turn "
+            "**Animate** off to choose other fields; your choices are kept."
             if axis_disabled
             else "The fixation fields on the X and Y axes. Anything other than "
-            "x / y draws a chart of the fixations only, with no text, word boxes, "
-            "saccades, heatmap or grid.",
+            "x / y draws a chart of the fixations and the saccades between them, "
+            "with no text, word boxes, heatmap or grid; a Word ID axis is "
+            "labelled with the words.",
         )
         label_w = _label_w()
         rest = 1.0 - label_w
@@ -8887,8 +8885,8 @@ def render_plot_controls(
         if chart_axes:
             st.caption(
                 f"{ICONS['warning']} Limited support: the plot shows only "
-                "fixation markers, with no word boxes, text, saccades, heatmap or "
-                "coordinate grid."
+                "fixation markers and straight saccade lines, with no word boxes, "
+                "text, heatmap or coordinate grid."
             )
 
     # Title/caption on the figure — set here, so it's visible live rather than

@@ -3456,6 +3456,14 @@ def compare_scanpaths(
     The box keys and ``raw_gaze_color`` are this figure's only: the co-animation draws
     one set of boxes and no raw gaze, and ignores them.
 
+    **Chart axes.** ``x_field`` / ``y_field`` other than ``"x"`` / ``"y"``
+    (``x_field="order_in_trial", y_field="word_id"``) draw each reading's fixations as
+    a chart: markers sized by duration in the scanpath's color, joined by straight
+    saccade lines, on value axes both readings share — one axes for an overlay, two
+    panels on identical ranges for a split layout. Nothing spatial is drawn (word boxes,
+    text, heatmap, raw gaze, stimulus image, grid), and a ``word_id`` axis is labelled
+    with the words.
+
     Args:
         words: The words frame holding both trials, or A's when ``words_b`` is given.
         fixations: The fixations frame, likewise.

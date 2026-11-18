@@ -8726,7 +8726,10 @@ def _render_comparison_figure(
     )
     if text_note:
         st.warning(text_note, icon=ICONS["warning"])
-    if cross_dataset:
+    # On chart axes nothing is placed in screen pixels, so the screens' sizes
+    # (the captions below) say nothing about the figure.
+    chart_axes = (settings.x_field, settings.y_field) != ("x", "y")
+    if cross_dataset and not chart_axes:
         # The one thing a cross-dataset figure must never be is silent
         # about its own geometry. Each panel is true-to-scale on its *own*
         # monitor, so a box twice the size of the one beside it may be the same
@@ -8763,7 +8766,7 @@ def _render_comparison_figure(
                 f"a {canvas_a[0]}×{canvas_a[1]} screen."
                 + (f" {setup_note}" if setup_note else "")
             )
-    elif canvas_b is not None and canvas_b != canvas_a:
+    elif not chart_axes and canvas_b is not None and canvas_b != canvas_a:
         # One dataset, two screen sizes: each panel is drawn to its own screen,
         # and `setup_note` says why an Overlay could not be drawn.
         st.caption(

@@ -273,6 +273,24 @@ def test_every_colour_choice_changes_the_comparison(color_by, layout):
     assert coloured != uniform
 
 
+@pytest.mark.parametrize("layout", LAYOUTS)
+def test_compare_draws_the_rails_chart_axes(layout):
+    """The rail's X / Y fields reach the comparison: fixation index against
+    word ID is a chart of both readings, its word axis named by the words."""
+    at = _rail(
+        single_compare_toggle=True,
+        global_x_field="order_in_trial",
+        global_y_field="word_id",
+    )
+    viz = at.session_state["_viz"]
+    fig = _compare(viz, layout, x_field=viz["x_field"], y_field=viz["y_field"])
+    a, b = _scanpath_markers(fig)
+    assert list(a.x) == list(b.x) == [1, 2, 3, 4]
+    assert list(a.y) == list(b.y) == [1, 1, 2, 3]
+    assert list(fig.layout.yaxis.ticktext) == ["1 One", "2 Two", "3 Three"]
+    assert not [s for s in fig.layout.shapes or () if s.yref != "paper"]
+
+
 def test_leaving_compare_keeps_the_static_choice():
     at = _rail(global_color_by="eye", single_compare_toggle=True)
     at.session_state["single_compare_toggle"] = False

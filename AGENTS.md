@@ -613,7 +613,7 @@ parameter.
 | `redact_text` | ✅ | ✅ | ✅ | `plots.redact_word_text` masks the words at each builder's entry; the blocks take the text / highlight colour |
 | `word_hover_measure` | ✅ | ✅ | ❌ | |
 | colour bars (`{fixation,heatmap}_colorbar_*`) | ✅ | ✅ fixation only | ✅ | Through `plots._colorbar_dict` |
-| `x_field` / `y_field` | ✅ | ❌ | ❌ | Animation and comparison always plot spatial `x` / `y` |
+| `x_field` / `y_field` | ✅ | ❌ | ✅ | Any other pair is a chart: fixation markers + straight saccade lines, a `word_id` axis labelled with the words; Compare's split panels share one range (`plots._make_chart_comparison_figure`). The replay always plots spatial `x` / `y` |
 | `fit_to_monitor`, `crop_margin`, coordinate grid + font size, title / caption styling, `show_credit`, `background_color`, `show_plot_frame` / `plot_frame_color` | ✅ | ✅ | ✅ | |
 | `fixation_outline_width` / `_color` | ✅ | ✅ | ✅ | |
 | `show_compare_legend`, `compare_stimulus` | ❌ | ✅ (co-animation) | ✅ | Widgets in `tabs.py` (⚙ Compare options) |

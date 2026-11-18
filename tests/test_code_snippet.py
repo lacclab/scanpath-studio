@@ -2122,3 +2122,49 @@ def test_render_args_hand_their_schemas_to_the_snippet_source():
     assert source.kind == cs.SOURCE_FILES
     assert source.options["word_schema"] == {"trial": "TRIAL"}
     assert "fix_schema" not in source.options
+
+
+@pytest.mark.parametrize("layout", ["overlay", "side_by_side"])
+def test_a_chart_comparison_rebuilds_from_both_recipes(
+    layout, demo_trial, tmp_path, monkeypatch
+):
+    """Compare on chart axes (fixation index × word ID): the Python recipe and
+    the `render --compare-with` command both carry the fields and draw the
+    same chart the app draws."""
+    words, fixations, participant, trial = demo_trial
+    combos = api.list_trials(words, fixations)
+    other = combos[combos["trial_id"] != trial].iloc[0]
+    chart = {"x_field": "order_in_trial", "y_field": "word_id"}
+    state = cs.FigureState(
+        kind="comparison",
+        settings={**api.figure_options("comparison"), **chart},
+        participant=participant,
+        trial=trial,
+        compare=cs.CompareTarget(
+            participant=str(other["participant_id"]),
+            trial=str(other["trial_id"]),
+            layout=layout,
+        ),
+    )
+    code = cs.reproduction_code(DEMO, state, output=str(tmp_path / "chart.html"))
+    assert "x_field='order_in_trial'" in code.python
+    assert "y_field='word_id'" in code.python
+    command = _one_line(code.cli)
+    assert "--x-field order_in_trial" in command
+    assert "--y-field word_id" in command
+    assert not {"x_field", "y_field"} & set(code.cli_unsupported)
+
+    figures: list = []
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **_: figures.append(fig))
+    exec(compile(code.python, "<snippet>", "exec"), {})  # noqa: S102
+    cli.main(shlex.split(command)[1:])
+    python_fig, cli_fig = figures
+    assert _figure_fingerprint(python_fig) == _figure_fingerprint(cli_fig)
+    for fig in (python_fig, cli_fig):
+        # A chart: no word boxes, both readings joined by saccade lines, and
+        # the word-ID axis labelled with the words.
+        assert not [s for s in fig.layout.shapes or () if s.yref != "paper"]
+        assert len([t for t in fig.data if t.mode == "lines"]) == 2
+        assert fig.layout.yaxis.ticktext
+        if layout == "side_by_side":
+            assert fig.layout.xaxis.range == fig.layout.xaxis2.range

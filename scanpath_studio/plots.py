@@ -4685,6 +4685,21 @@ def _render_scanpath_figure(
             arrow_size=settings.saccade_arrow_size,
         ):
             legend_active = True
+    elif show_saccades and len(render_fix) > 1:
+        # A chart's saccades: straight lines joining consecutive fixations, in
+        # the saccade colour and line style. Arcs, arrowheads and the reading
+        # classes are read off screen geometry, which a chart's axes are not.
+        _add_saccade_layer(
+            fig,
+            render_fix,
+            x_field=x_field,
+            y_field=y_field,
+            color=saccade_color,
+            width=saccade_width,
+            style=saccade_style,
+            show_arrows=False,
+            opacity=settings.saccade_opacity,
+        )
 
     # Drift connectors: one faint grey vertical segment per fixation from
     # its original y (`connector_y`) to its drift-corrected y (the already-snapped
@@ -4974,10 +4989,16 @@ def _render_scanpath_figure(
         )
     else:
         xaxis_cfg.update(
-            showticklabels=True, showgrid=True, title=_column_title(x_field)
+            showticklabels=True,
+            showgrid=True,
+            title=_column_title(x_field),
+            **_word_axis_ticks(words, x_field, fitted_w),
         )
         yaxis_cfg.update(
-            showticklabels=True, showgrid=True, title=_column_title(y_field)
+            showticklabels=True,
+            showgrid=True,
+            title=_column_title(y_field),
+            **_word_axis_ticks(words, y_field, fitted_h),
         )
 
     if spatial_axes and settings.show_plot_frame:
@@ -7739,6 +7760,8 @@ def _add_comparison_fixation_trace(
     saccade_classes: Iterable[str] | None = None,
     duration_scale: dict | None = None,
     category_colors: Sequence[str] | None = None,
+    x_field: str = "x",
+    y_field: str = "y",
 ) -> None:
     """Add one scanpath's saccades + fixation markers to a comparison figure.
 
@@ -7781,9 +7804,15 @@ def _add_comparison_fixation_trace(
     ``duration_scale`` is the figure's (``_settings_size_scale``): both
     scanpaths share it, so under a fixed scale one duration draws at one size
     on either side; only the size *range* is per scanpath.
+
+    ``x_field`` / ``y_field`` are the plotted columns. On any pair other than
+    screen x / y (the chart, `_make_chart_comparison_figure`) no arrowheads are
+    drawn — their angle is measured in data units, which a chart's two axes do
+    not share — and no fixation counts as outside the text.
     """
     if trial_fix.empty:
         return
+    spatial_axes = (x_field, y_field) == ("x", "y")
     if category_colors is not None:
         # Positional, before *Hide* drops rows, so the two stay aligned.
         trial_fix = trial_fix.assign(_category_color=list(category_colors))
@@ -7815,7 +7844,7 @@ def _add_comparison_fixation_trace(
     if show_saccades and len(trial_fix) > 1:
         if class_series is not None:
             segs = _saccade_segments_by_class(
-                trial_fix, "x", "y", class_series, arch_frac
+                trial_fix, x_field, y_field, class_series, arch_frac
             )
             sx, sy = [], []
             for cls_name, (cx, cy) in segs.items():
@@ -7823,7 +7852,7 @@ def _add_comparison_fixation_trace(
                     sx.extend(cx)
                     sy.extend(cy)
         else:
-            sx, sy = _saccade_segments(trial_fix, "x", "y", arch_frac)
+            sx, sy = _saccade_segments(trial_fix, x_field, y_field, arch_frac)
         if sx:
             _add(
                 go.Scatter(
@@ -7840,8 +7869,10 @@ def _add_comparison_fixation_trace(
                     hoverinfo="skip",
                 )
             )
-    if show_saccade_arrows and len(trial_fix) > 1:
-        amx, amy, aang, aseg = _saccade_arrow_rows(trial_fix, "x", "y", arch_frac)
+    if show_saccade_arrows and spatial_axes and len(trial_fix) > 1:
+        amx, amy, aang, aseg = _saccade_arrow_rows(
+            trial_fix, x_field, y_field, arch_frac
+        )
         if amx and class_series is not None:
             mask = _arrow_class_mask(trial_fix, class_series, keep, aseg)
             amx = [v for v, m in zip(amx, mask) if m]
@@ -7879,7 +7910,9 @@ def _add_comparison_fixation_trace(
         if isinstance(spec, dict) and str(spec.get("mode") or "Off") != "Off"
     }
     if flags:
-        trial_fix = _discard_flagged_fixations(trial_fix, words_for_flags, flags)
+        trial_fix = _discard_flagged_fixations(
+            trial_fix, words_for_flags, flags, spatial_axes=spatial_axes
+        )
         if trial_fix.empty:
             return
     sizes = _compute_marker_sizes(
@@ -7961,8 +7994,8 @@ def _add_comparison_fixation_trace(
         # ♥ as text, as on the static figure (`_glyph_scatter_traces`);
         # the index labels and a numeric colour bar get traces of their own.
         for trace in _glyph_scatter_traces(
-            trial_fix["x"],
-            trial_fix["y"],
+            trial_fix[x_field],
+            trial_fix[y_field],
             marker,
             glyph,
             name=display_name,
@@ -7975,8 +8008,8 @@ def _add_comparison_fixation_trace(
         if show_order:
             _add(
                 go.Scatter(
-                    x=trial_fix["x"],
-                    y=trial_fix["y"],
+                    x=trial_fix[x_field],
+                    y=trial_fix[y_field],
                     mode="text",
                     text=trial_fix["order_in_trial"],
                     textposition=_order_textposition(order_label_position),
@@ -7993,8 +8026,8 @@ def _add_comparison_fixation_trace(
     else:
         _add(
             go.Scatter(
-                x=trial_fix["x"],
-                y=trial_fix["y"],
+                x=trial_fix[x_field],
+                y=trial_fix[y_field],
                 mode="markers+text" if show_order else "markers",
                 marker=marker,
                 name=display_name,
@@ -8030,7 +8063,9 @@ def _add_comparison_fixation_trace(
             )
         )
     if flags:
-        overlay = _fixation_flag_masks(trial_fix, words_for_flags, flags)
+        overlay = _fixation_flag_masks(
+            trial_fix, words_for_flags, flags, spatial_axes=spatial_axes
+        )
         for cat in _FIX_FLAG_CATEGORIES:
             spec = flags.get(cat, {})
             if spec.get("mode") != "Highlight" or cat not in overlay:
@@ -8041,8 +8076,8 @@ def _add_comparison_fixation_trace(
             name = _FIX_FLAG_LABELS[cat]
             _add(
                 go.Scatter(
-                    x=hits["x"],
-                    y=hits["y"],
+                    x=hits[x_field],
+                    y=hits[y_field],
                     mode="markers",
                     marker=dict(
                         symbol=spec.get("symbol") or "x",
@@ -8805,6 +8840,290 @@ def _make_split_comparison_figure(
     return fig
 
 
+#: The screen px one word label takes on a ``word_id`` axis. Plotly draws every
+#: tick an array axis names, so past this density `_word_axis_ticks` labels
+#: every n-th word instead of letting the labels overlap.
+_WORD_TICK_PX = 16
+
+
+def _word_axis_ticks(words: pd.DataFrame | None, field: str, length_px: float) -> dict:
+    """A chart axis' tick settings naming the words, when it plots ``word_id``.
+
+    Each tick reads "id word", from ``words`` (one reading's text, after any
+    redaction). ``length_px`` is the axis' length on screen; it sets the stride
+    that keeps a long text's labels apart. ``{}`` for any other field, or when
+    ``words`` carries no text."""
+    if (
+        field != "word_id"
+        or words is None
+        or words.empty
+        or not {"word_id", "text"} <= set(words.columns)
+    ):
+        return {}
+    table = words[["word_id", "text"]].assign(
+        word_id=pd.to_numeric(words["word_id"], errors="coerce")
+    )
+    table = (
+        table.dropna(subset=["word_id"])
+        .drop_duplicates("word_id")
+        .sort_values("word_id")
+    )
+    if table.empty:
+        return {}
+    stride = max(1, math.ceil(len(table) * _WORD_TICK_PX / max(length_px, 1.0)))
+    shown = table.iloc[::stride]
+    return dict(
+        tickmode="array",
+        tickvals=shown["word_id"].tolist(),
+        ticktext=[
+            f"{int(wid) if float(wid).is_integer() else wid} "
+            + ("" if pd.isna(text) else _plotly_literal(str(text)))
+            for wid, text in zip(shown["word_id"], shown["text"])
+        ],
+    )
+
+
+def _chart_range(*columns: pd.Series) -> list[float] | None:
+    """One padded ``[low, high]`` over every finite value in ``columns``, so
+    the panels of a chart comparison share their scale; ``None`` without any."""
+    values = (
+        pd.concat(
+            [pd.to_numeric(column, errors="coerce") for column in columns],
+            ignore_index=True,
+        )
+        if columns
+        else pd.Series(dtype=float)
+    )
+    values = values[np.isfinite(values.astype(float))]
+    if values.empty:
+        return None
+    low, high = float(values.min()), float(values.max())
+    pad = max((high - low) * 0.04, 0.5)
+    return [low - pad, high + pad]
+
+
+def _make_chart_comparison_figure(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    trial_a: tuple[str, str],
+    trial_b: tuple[str, str],
+    *,
+    settings: FigureSettings,
+) -> go.Figure:
+    """Two scanpaths on value axes: ``x_field`` / ``y_field`` other than x / y.
+
+    Each reading's fixations are markers in its Compare colour and style, sized
+    by duration on the scale both share, joined in fixation order by straight
+    saccade lines while saccades are shown (`_add_comparison_fixation_trace`).
+    Nothing spatial is drawn — no word boxes, text, heatmap, raw gaze, stimulus
+    image, frame or coordinate grid. ``overlay`` is one axes; ``side_by_side``
+    and ``stacked`` are two panels on identical ranges, so the readings line
+    up, titled "A · …" / "B · …" as the spatial split titles them. A
+    ``word_id`` axis names the words (`_word_axis_ticks`): each panel from its
+    own reading, an overlay from the text it would draw (``compare_stimulus``).
+    """
+    from plotly.subplots import make_subplots
+
+    x_field, y_field = settings.x_field, settings.y_field
+    split = settings.layout in {"side_by_side", "stacked"}
+    is_stacked = settings.layout == "stacked"
+    color_by = settings.color_by
+    font_settings = dict(
+        family=settings.font_family or FONT_FAMILY, size=settings.base_font_size
+    )
+    specs = []
+    for idx, (participant, trial_id) in enumerate((trial_a, trial_b)):
+        trial_words = words[
+            (words["participant_id"] == participant) & (words["trial_id"] == trial_id)
+        ]
+        trial_fix = fixations[
+            (fixations["participant_id"] == participant)
+            & (fixations["trial_id"] == trial_id)
+        ].sort_values("timestamp_ms")
+        if not {x_field, y_field} <= set(trial_fix.columns):
+            # A reading without the plotted column has nothing to place.
+            trial_fix = trial_fix.iloc[0:0]
+        style = _comparison_scanpath_style(
+            idx,
+            (settings.style_a, settings.style_b)[idx],
+            default_marker_size_range=settings.marker_size_range,
+        )
+        specs.append(
+            dict(
+                trial_words=trial_words,
+                trial_fix=trial_fix,
+                style=style,
+                display_name=_plotly_literal(
+                    _resolve_trial_display_name(
+                        participant, trial_id, trial_words, settings.trial_labels, idx
+                    )
+                ),
+            )
+        )
+
+    # One colour scale and one category mapping for both readings, as in the
+    # spatial layouts.
+    metric_range = settings.fixation_color_range
+    if metric_range is None and color_by and color_by != "line":
+        coloured = [
+            spec["trial_fix"][color_by]
+            for spec in specs
+            if color_by in spec["trial_fix"].columns
+        ]
+        if coloured and pd.api.types.is_numeric_dtype(coloured[0]):
+            both = pd.concat(coloured, ignore_index=True)
+            if both.notna().any():
+                metric_range = (float(both.min()), float(both.max()))
+    category_colors, category_legend = _shared_category_colors(
+        [
+            _fixation_category_labels(
+                spec["trial_fix"], spec["trial_words"], color_by, settings.color_by_line
+            )
+            for spec in specs
+        ],
+        avoid=[spec["style"]["fix_color"] for spec in specs],
+    )
+
+    def axis_range(field: str) -> list[float] | None:
+        columns = [s["trial_fix"][field] for s in specs if field in s["trial_fix"]]
+        if field == "word_id":
+            # The whole text, so the words no one fixated have their place too.
+            columns += [
+                s["trial_words"][field] for s in specs if field in s["trial_words"]
+            ]
+        return _chart_range(*columns)
+
+    x_range, y_range = axis_range(x_field), axis_range(y_field)
+    # A chart's shape owes nothing to the screen's: the largest box the
+    # spatial figures fit to, its height split between stacked panels.
+    width = _DISPLAY_MAX_WIDTH
+    height = 2 * round(_DISPLAY_MAX_HEIGHT * 0.7) if is_stacked else _DISPLAY_MAX_HEIGHT
+    panels = 2 if split else 1
+    if split:
+        fig = make_subplots(
+            rows=2 if is_stacked else 1,
+            cols=1 if is_stacked else 2,
+            vertical_spacing=0.12,
+            horizontal_spacing=0.12,
+            subplot_titles=[
+                f"{side} · {spec['display_name']}" for side, spec in zip("AB", specs)
+            ],
+        )
+        fig.update_annotations(name=_PANEL_NAME)
+    else:
+        fig = go.Figure()
+    show_legend = settings.show_legend
+    for idx, spec in enumerate(specs):
+        cell = (
+            {"row": idx + 1, "col": 1}
+            if is_stacked
+            else {"row": 1, "col": idx + 1}
+            if split
+            else {}
+        )
+        _add_comparison_fixation_trace(
+            fig,
+            spec["trial_fix"],
+            spec["display_name"],
+            spec["style"],
+            font_settings,
+            show_fixations=settings.show_fixations,
+            show_saccades=settings.show_saccades,
+            saccade_opacity=settings.saccade_opacity,
+            outline_width=settings.fixation_outline_width,
+            outline_color=settings.fixation_outline_color,
+            show_order=settings.show_order,
+            order_font_size=settings.order_font_size,
+            order_label_position=settings.order_label_position,
+            show_legend=show_legend,
+            color_by=color_by,
+            colorscale=settings.fixation_colorscale,
+            color_range=metric_range,
+            show_colorbar=settings.show_fixation_colorbar and idx == 0,
+            colorbar_style=dict(
+                orientation=settings.fixation_colorbar_orientation,
+                tickangle=settings.fixation_colorbar_tickangle,
+                tickfont_size=settings.fixation_colorbar_tickfont_size,
+                thickness=settings.fixation_colorbar_thickness,
+                length=settings.fixation_colorbar_length,
+            ),
+            fixation_symbol=settings.fixation_symbol,
+            fixation_hover_fields=settings.fixation_hover_fields,
+            trial_words=spec["trial_words"],
+            **_comparison_filters(spec["style"], settings),
+            duration_scale=_settings_size_scale(settings),
+            category_colors=category_colors[idx],
+            x_field=x_field,
+            y_field=y_field,
+            **cell,
+        )
+    _add_category_legend(
+        fig,
+        category_legend,
+        "line" if (settings.color_by_line or color_by == "line") else color_by or "",
+    )
+
+    # Each panel's own words name a word-id axis; an overlay's are the text
+    # it would draw.
+    label_words = (
+        [spec["trial_words"] for spec in specs]
+        if split
+        else [specs[1 if settings.compare_stimulus == "b" else 0]["trial_words"]]
+    )
+    panel_w = width / (1 if is_stacked or not split else 2)
+    panel_h = height / (2 if is_stacked else 1)
+    for idx in range(panels):
+        suffix = "" if idx == 0 else str(idx + 1)
+        common = dict(showgrid=True, zeroline=False, automargin=True)
+        fig.update_layout(
+            {
+                f"xaxis{suffix}": dict(
+                    common,
+                    title=_column_title(x_field),
+                    range=x_range,
+                    **_word_axis_ticks(label_words[idx], x_field, panel_w),
+                ),
+                f"yaxis{suffix}": dict(
+                    common,
+                    title=_column_title(y_field),
+                    range=y_range,
+                    **_word_axis_ticks(label_words[idx], y_field, panel_h),
+                ),
+            }
+        )
+
+    legend_on = show_legend or bool(category_legend)
+    fig.update_layout(
+        width=width,
+        height=height,
+        autosize=False,
+        showlegend=legend_on,
+        margin=dict(l=10, r=10, t=0, b=10),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            xanchor="right",
+            x=1,
+            y=1.02,
+            font=_compare_legend_font(settings.base_font_size, settings.font_family),
+        ),
+        template="plotly_white",
+        plot_bgcolor=settings.background_color,
+        paper_bgcolor=settings.background_color,
+        font=font_settings,
+    )
+    # The panel names, then the legend's row, above the plot — the figure
+    # grows by them rather than giving up plot height.
+    names_row_px = _panel_names_px(fig)
+    top_px = names_row_px + (_default_legend_height(fig) if legend_on else 0.0)
+    fig.update_layout(
+        height=height + top_px + 10,
+        margin_t=top_px + 10,
+        legend_y=1.0 + names_row_px / max(height - 10, 1),
+    )
+    return fig
+
+
 def _compare_stimulus_sides(value: str | None) -> tuple[bool, bool]:
     """``compare_stimulus`` → ``(draw A's stimulus, draw B's)``.
 
@@ -8891,6 +9210,11 @@ def _render_comparison_figure(
     fit_to_monitor = settings.fit_to_monitor
     show_coordinate_grid = settings.show_coordinate_grid
     coordinate_grid_spacing = settings.coordinate_grid_spacing
+    if (settings.x_field, settings.y_field) != ("x", "y"):
+        # Any other axes are a chart of the fixations, in every layout.
+        return _make_chart_comparison_figure(
+            words, fixations, trial_a, trial_b, settings=settings
+        )
     if layout in {"side_by_side", "stacked"}:
         return _make_split_comparison_figure(
             words,
@@ -10560,7 +10884,10 @@ def make_comparison_figure(
 
     Each scanpath must be one screen: a frame holding several screens of one
     multipart reading raises ``ValueError`` rather than pooling coordinate
-    spaces (and drawing saccades across page boundaries)."""
+    spaces (and drawing saccades across page boundaries).
+
+    ``x_field`` / ``y_field`` other than ``"x"`` / ``"y"`` draw the two readings
+    as a chart instead (`_make_chart_comparison_figure`)."""
     _require_one_screen_per_reading(words, fixations, (trial_a, trial_b))
     resolved = _resolve_figure_settings(
         settings,
@@ -10591,7 +10918,7 @@ def make_comparison_figure(
     words = _finite_for_plotting(words, drop_on=_WORD_BOX_COLUMNS)
     if resolved.redact_text:
         words, fixations = redact_word_text(words), without_word_keys(fixations)
-    fixations = _finite_for_plotting(fixations)
+    fixations = _finite_for_plotting(fixations, (resolved.x_field, resolved.y_field))
     raw_gaze = _finite_for_plotting(raw_gaze)
     with _labelled_columns(resolved.column_labels):
         fig = _render_comparison_figure(

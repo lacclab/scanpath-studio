@@ -1365,7 +1365,8 @@ def _render_parser() -> argparse.ArgumentParser:
         "--x-field",
         metavar="FIELD",
         help="Fixations table column on the x axis (default: x). A non-spatial "
-        "one draws a chart of the fixations instead of the scanpath.",
+        "one draws a chart of the fixations instead of the scanpath, one "
+        "reading's or --compare-with's two; --animate always plots x / y.",
     )
     viz.add_argument(
         "--y-field",

@@ -16,6 +16,10 @@
 #                       two blocks in one session the next commit goes through,
 #                       so a session can't get stuck on the gate.
 #   off               — does nothing.
+#
+# It is a convention check, not a security boundary: the agent writes the
+# trailer itself, and enforce mode lets the third try through on purpose. So it
+# fails open — no jq, unreadable input — rather than wedging a session.
 
 mode=${SCANPATH_COMMIT_GATE:-observe}
 [ "$mode" = off ] && exit 0
@@ -32,7 +36,10 @@ case "$cmd" in
   *"--no-edit"*) exit 0 ;;
 esac
 
-session=$(printf '%s' "$input" | jq -r '.session_id // "unknown"' 2>/dev/null)
+# The id names this session's lines in the logs; keep it to safe characters,
+# since it is matched as text below.
+session=$(printf '%s' "$input" | jq -r '.session_id // "unknown"' 2>/dev/null | tr -cd 'A-Za-z0-9_-')
+session=${session:-unknown}
 transcript=$(printf '%s' "$input" | jq -r '.transcript_path // empty' 2>/dev/null)
 root=${CLAUDE_PROJECT_DIR:-.}
 
@@ -43,7 +50,8 @@ if [ -n "$file" ] && [ -f "$file" ]; then
   message=$(cat "$file")
 fi
 
-if printf '%s' "$message" | grep -q 'Verified:'; then
+# A trailer is a line of its own that starts with `Verified:`.
+if printf '%s\n' "$message" | grep -Eq '^[[:space:]]*Verified:'; then
   trailer=yes
 else
   trailer=no
@@ -67,7 +75,7 @@ printf '%s\t%s\tmode=%s\ttrailer=%s\tran=%s\n' \
 [ "$trailer" = yes ] && exit 0
 
 # Let the third attempt through, so the gate can't wedge a session.
-blocks=$(grep -c "^$session	" "$root/.claude/commit-gate-blocks.log" 2>/dev/null)
+blocks=$(cut -f1 "$root/.claude/commit-gate-blocks.log" 2>/dev/null | grep -cxF -- "$session")
 if [ "${blocks:-0}" -ge 2 ]; then
   exit 0
 fi

@@ -792,6 +792,36 @@ def test_a_co_animation_keeps_the_single_style_when_a_filter_can_hide_all_of_b(
     assert original.to_json() == reproduced.to_json()
 
 
+def test_a_words_only_first_screen_in_caller_frames_keeps_the_single_replay_style():
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+
+    words, fixations = api.load_scanpath_data(
+        *make_multipart_synthetic_data(), names="canonical"
+    )
+    a, b = ("synthetic", "multipart_demo"), ("b", "multipart_demo")
+    words_b = words.assign(participant_id=b[0])
+    fix_b = fixations[fixations["screen_id"] == "question"].assign(participant_id=b[0])
+    options = {
+        "words_b": words_b,
+        "fixations_b": fix_b,
+        "show_order": True,
+        "order_font_color": "#654321",
+    }
+    compact = cs.figure_kwargs(
+        options, "animation", compare=cs.CompareTarget(participant=b[0], trial=b[1])
+    )
+    assert compact["order_font_color"] == "#654321"
+
+    original = api.animate_scanpath(words, fixations, *a, trial_b=b, **options)
+    reproduced = api.animate_scanpath(
+        words, fixations, *a, trial_b=b, words_b=words_b, fixations_b=fix_b, **compact
+    )
+    assert original.to_json() == reproduced.to_json()
+    assert any(
+        t.mode == "text" and t.textfont.color == "#654321" for t in reproduced.data
+    )
+
+
 def test_a_palette_with_one_class_colour_changed_round_trips(monkeypatch):
     """A palette with one class colour changed: the command spells the
     colours out, and `render` draws the same figure from it."""

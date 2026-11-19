@@ -866,10 +866,19 @@ def _snippet_options(settings, kind, compare, *, explicit):
         flags_b = settings.get("fixation_flags_b")
         if flags_b is None:
             flags_b = (settings.get("style_b") or {}).get("fixation_flags")
-        if compare.screen is not None or any(
-            isinstance(rule, dict) and rule.get("mode") == "Hide"
-            for flags in (settings.get("fixation_flags"), flags_b)
-            for rule in (flags or {}).values()
+        # Caller-supplied frames can omit a screen present in the Words table,
+        # including the implicit first screen. File loaders require matching parts.
+        supplied_frames = any(
+            settings.get(key) is not None for key in ("words_b", "fixations_b")
+        )
+        if (
+            compare.screen is not None
+            or supplied_frames
+            or any(
+                isinstance(rule, dict) and rule.get("mode") == "Hide"
+                for flags in (settings.get("fixation_flags"), flags_b)
+                for rule in (flags or {}).values()
+            )
         ):
             names.update(STYLE_KEYS_FOR_TWO_SCANPATHS)
     return (

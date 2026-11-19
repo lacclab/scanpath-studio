@@ -104,7 +104,7 @@ from .controls import (
     numeric_field_options,
     palette_state,
 )
-from .data import composite_respelling_map, respell_reading
+from .data import composite_respelling_map, respell_reading, share_dataset_fingerprint
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .export import PRINT_DPI_BOUNDS, PRINT_WIDTH_BOUNDS
 from .session_keys import (
@@ -122,6 +122,7 @@ from .session_keys import (
     LINK_SETUP_STATE_KEY,
     PARAM_CORPUS,
     PARAM_DATASET,
+    PARAM_DATASET_DIGEST,
     PARAM_SHOW_TITLE_CAPTION,
     PENDING_COMPARE_STATE_KEY,
     PUBLIC_DATASET_CHOICE,
@@ -1542,7 +1543,8 @@ def missing_dataset_message(
 def resolve_link_dataset(seeded: Iterable[str], current: str | None) -> str | None:
     """Open the added dataset a link names (`?dataset=`).
 
-    Returns the dataset to open when this session holds one of that name. When
+    New links require a matching digest of the recording tables. Older links
+    match by name alone. Returns the matched name when available. When
     it doesn't, the link's view is **not** applied to whatever else is open:
     every key ``_apply_url_preset`` seeded this run (``seeded``) is dropped, the
     link's params are cleared so the next run does not seed them again, and a
@@ -1557,11 +1559,21 @@ def resolve_link_dataset(seeded: Iterable[str], current: str | None) -> str | No
         return None
     if not name or params.get("source"):
         return None
-    if name in (st.session_state.get("_datasets") or {}):
+    entry = (st.session_state.get("_datasets") or {}).get(name)
+    digest = params.get(PARAM_DATASET_DIGEST)
+    if entry is not None and (
+        digest is None or share_dataset_fingerprint(entry) == digest
+    ):
         return str(name)
-    message = missing_dataset_message(
-        str(name), params.get("participant"), params.get("trial_id")
-    )
+    if entry is None:
+        message = missing_dataset_message(
+            str(name), params.get("participant"), params.get("trial_id")
+        )
+    else:
+        message = (
+            f"Your copy of **{md_literal(str(name))}** contains different data. The shared view "
+            "was not opened. Ask the sender for their data files and setup file."
+        )
     for key in seeded:
         st.session_state.pop(key, None)
     params.clear()
@@ -3540,6 +3552,7 @@ def _build_share_query(
         stored = (st.session_state.get("_datasets") or {}).get(data_choice)
         if stored is not None:
             params[PARAM_DATASET] = str(data_choice)
+            params[PARAM_DATASET_DIGEST] = share_dataset_fingerprint(stored)
         if is_multipleye_entry(stored):
             # A session set is read as it is laid out, with no mapping to
             # send: the recipient adds the same session set.

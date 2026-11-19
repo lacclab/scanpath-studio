@@ -3,6 +3,7 @@ from __future__ import annotations
 import glob
 import hashlib
 import io
+import json
 import logging
 import os
 import re
@@ -603,7 +604,7 @@ def frame_fingerprint(df: pd.DataFrame | None) -> tuple:
     results downstream.
 
     ``hash_pandas_object`` raises on columns of unhashable objects (lists/arrays —
-    e.g. parquet-preserved span-index fields). We stringify and retry rather than
+    e.g. parquet-preserved span-index fields). We hash their Arrow encoding rather than
     drop the content signal entirely: zeroing the hash would collapse every frame
     of the same shape + columns to one fingerprint, serving stale cached results
     when switching between two such frames. If even that fails the key becomes
@@ -643,24 +644,59 @@ def frame_fingerprint(df: pd.DataFrame | None) -> tuple:
     return value
 
 
+def share_dataset_fingerprint(entry: dict) -> str:
+    """Portable identity for the three recording tables of an added dataset."""
+    tables = tuple(entry.get(k) for k in ("words", "fixations", "raw_gaze"))
+    keys = tuple(frame_fingerprint(table) for table in tables)
+    return _share_dataset_digest(keys, tables)
+
+
+@st.cache_data(show_spinner=False, max_entries=128)
+def _share_dataset_digest(keys: tuple, _tables: tuple) -> str:
+    # A cache key may describe a local loader or path. Only table contents
+    # belong on a link another installation must be able to verify.
+    parts = [
+        _compute_frame_fingerprint(table.reset_index(drop=True))
+        if table is not None and not table.empty
+        else None
+        for table in _tables
+    ]
+    return (
+        "v1-" + hashlib.blake2b(json.dumps(parts).encode(), digest_size=16).hexdigest()
+    )
+
+
 def _compute_frame_fingerprint(df: pd.DataFrame) -> tuple:
     """The actual hash behind :func:`frame_fingerprint`, memo aside."""
     cols = tuple(map(str, df.columns))
     n = len(df)
 
     def _hash(frame: pd.DataFrame) -> str:
+        logical_types = [
+            pd.api.types.infer_dtype(frame[col], skipna=True) for col in frame
+        ]
+        digest = hashlib.blake2b(json.dumps(logical_types).encode(), digest_size=16)
         try:
             per_row = pd.util.hash_pandas_object(frame, index=True)
         except TypeError:
-            # Unhashable cell objects — stringify so content still drives the key.
-            per_row = pd.util.hash_pandas_object(frame.astype(str), index=True)
+            # Parquet restores a list cell as an ndarray. Preserve its full
+            # contents, including long arrays whose printable repr is truncated.
+            import pyarrow as pa
+
+            table = pa.Table.from_pandas(
+                frame, preserve_index=True
+            ).replace_schema_metadata(None)
+            digest.update(table.schema.serialize())
+            for offset in range(0, len(table), 65536):
+                for batch in table.slice(offset, 65536).combine_chunks().to_batches():
+                    digest.update(batch.serialize())
+            return digest.hexdigest()
         # Digest the per-row hashes in ORDER. Summing them is order-invariant,
         # so a frame and a `sort_values` of itself — same rows, same index
         # labels, different order — would share a key while yielding different
         # results downstream.
-        return hashlib.blake2b(
-            per_row.to_numpy(dtype="uint64").tobytes(), digest_size=16
-        ).hexdigest()
+        digest.update(per_row.to_numpy(dtype="uint64").tobytes())
+        return digest.hexdigest()
 
     try:
         return (n, cols, _hash(df))

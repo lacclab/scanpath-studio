@@ -42,7 +42,7 @@ To add a visible credit to the figure, use **Figure & canvas** → **Credit**.
   <source src="../../assets/workflows/share-link.mp4" type="video/mp4">
 </video>
 
-A link reopens the trial and its settings for anyone who has the same dataset.
+For an imported dataset, the recipient needs the same dataset name and matching recording tables. The link checks the tables before opening the shared view. Older links match by name and ask the recipient to confirm they have the sender’s data.
 [All controls → Under the plot](../scanpath-visualization/controls.md#under-the-plot)
 says what the recipient needs.
 

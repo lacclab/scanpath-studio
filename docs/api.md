@@ -91,6 +91,8 @@ print(words[columns].head(3))
 
 ::: scanpath_studio.api.check_data_health
 
+::: scanpath_studio.api.run_analysis_recipe
+
 ## Plot
 
 ::: scanpath_studio.api.plot_scanpath
@@ -108,15 +110,17 @@ print(words[columns].head(3))
 Set layers, colors, sizes and legends with keyword arguments to `plot_scanpath`,
 `animate_scanpath` or `compare_scanpaths`. The tables below list each option's
 default and matching CLI `render` flag, under the section names of the app's
-:material/tune: **Plot controls**. A description ends by naming the builders an
-option is limited to, if any.
+:material/tune: **Plot controls**. If an option applies to fewer than four views,
+its row names them. **Single plot** and **Single replay** show one scanpath.
+**Compare** shows two scanpaths together or in separate panels, and
+**Compare + Animate** replays two scanpaths.
 
 For options with a fixed set of values, case, spaces, `-` and `_` are ignored;
 other values raise a `ValueError`. A `--no-…` flag turns off an option that is
 on by default.
 
-`figure_options()` returns the defaults in code; `figure_options(choices=True)`
-also lists the accepted values.
+`figure_options()` returns the keywords a builder accepts and their defaults.
+`figure_options(choices=True)` also lists the accepted values.
 
 ::: scanpath_studio.api.figure_options
 

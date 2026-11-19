@@ -153,6 +153,35 @@ def test_new_dataset_starts_with_empty_history():
     assert at.button(key="viz_undo").disabled and at.button(key="viz_redo").disabled
 
 
+def test_renaming_an_upload_preserves_undo_and_redo(monkeypatch):
+    from scanpath_studio import controls
+    from scanpath_studio.constants import DATASET_ALIASES_KEY
+    from scanpath_studio.dataset_identity import forget_dataset_identity
+
+    state = {
+        "_datasets": {"local-key": {}},
+        "data_source_choice": "local-key",
+        DATASET_ALIASES_KEY: {"local-key": "First name"},
+        "global_show_order": False,
+    }
+    monkeypatch.setattr(controls.st, "session_state", state)
+    monkeypatch.setattr(controls.st, "query_params", {})
+    controls._record_plot_edit()
+    state["global_show_order"] = True
+    controls._record_plot_edit()
+    state[DATASET_ALIASES_KEY]["local-key"] = "New name"
+    controls._record_plot_edit()
+    controls._step_plot_history(redo=False)
+    assert state["global_show_order"] is False
+    controls._step_plot_history(redo=True)
+    assert state["global_show_order"] is True
+    # Remove the upload and import a replacement under the same key and label.
+    forget_dataset_identity(state, "local-key")
+    state["_datasets"]["local-key"] = {}
+    state[DATASET_ALIASES_KEY]["local-key"] = "New name"
+    assert not controls._record_plot_edit().past
+
+
 def test_enabling_all_trials_does_not_make_past_local_edits_global():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
 

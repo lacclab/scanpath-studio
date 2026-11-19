@@ -44,7 +44,7 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | Comparisons | Full only; NLD similarity scores only with `SCANPATH_EXPERIMENTAL=1` |
 | Line assignment | Experimental only |
 | Export | Figures + tables for the filtered trials; every file carries the citation |
-| Share → Link / Code / File | The link reopens the same figure; the code reproduces it (`test_render_every_option`); the file restores it |
+| Share → Link / Code / File | The link reopens both readings from uploads or locally available public corpora. Missing B leaves A open with recovery instructions. The code reproduces the figure (`test_render_every_option`) and the settings file restores it |
 
 ## Corpus Analysis
 
@@ -59,7 +59,7 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | --- | --- |
 | ➕ Add dataset wizard | Upload → map columns → validate → the dataset opens; `*` fields block only when missing |
 | ✏️ Edit dataset | A change re-normalizes and keeps the column-name map |
-| 📂 Available datasets | Lists every dataset; rename and remove act on the one chosen |
+| 📂 Available datasets | Lists every dataset; renaming an upload preserves its annotations, saved selection and comparison identity |
 | Metadata tables | Their columns appear as trial filters, chips and in the export bundle |
 | Data checks | Each check that found rows says how many, where, and what happens to them |
 
@@ -67,5 +67,6 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 
 | Surface | Smoke check |
 | --- | --- |
+| Cohort recipe | `recipe profile.recipe.json --sample -o profile.csv` reproduces the CSV downloaded for a demo Per text cohort profile |
 | CLI | `scanpath-studio render --sample -o out.html` writes a figure; `--list-trials` lists 24 |
 | API | `load_sample_data()` → `plot_scanpath(..., participant=, trial=)` → `save_figure` |

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import copy
 import json
+from urllib.parse import parse_qsl
 
 import numpy as np
 import pandas as pd
@@ -109,6 +110,71 @@ def test_compare_link_value_round_trips(participant, trial):
     colons and backslashes included."""
     value = url_state.compare_value(participant, trial)
     assert url_state.parse_compare_value(value) == (participant, trial)
+
+
+@given(*(st.text(min_size=1, max_size=20) for _ in range(3)))
+def test_compare_upload_link_recovers_display_name_and_reading(
+    name, participant, trial
+):
+    from scanpath_studio.constants import DATASET_ALIASES_KEY, DEMO_CHOICE
+    from scanpath_studio.session_keys import PENDING_COMPARE_STATE_KEY
+
+    sender = {
+        "_datasets": {"sender key": {}},
+        DATASET_ALIASES_KEY: {"sender key": name},
+        "_share_selection": {
+            "compare": {
+                "source": "sender key",
+                "participant_id": participant,
+                "trial_id": trial,
+            }
+        },
+    }
+    recipient = {
+        "_datasets": {"recipient key": {}},
+        DATASET_ALIASES_KEY: {"recipient key": name},
+    }
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(url_state.st, "session_state", sender)
+        query, _ = url_state._build_share_query(DEMO_CHOICE)
+        patch.setattr(url_state.st, "session_state", recipient)
+        patch.setattr(url_state.st, "query_params", dict(parse_qsl(query)))
+        assert url_state.resolve_link_compare_source(DEMO_CHOICE) is None
+    assert recipient["cmp_dataset"] == "recipient key"
+    assert recipient[PENDING_COMPARE_STATE_KEY] == {
+        "participant_id": participant,
+        "trial_id": trial,
+    }
+
+
+@given(st.from_regex(r"[A-Za-z][A-Za-z0-9_-]{0,25}", fullmatch=True))
+def test_shared_public_b_survives_a_catalogue_label_change(short):
+    from scanpath_studio import app, compare_source
+    from scanpath_studio.constants import DEMO_CHOICE
+
+    state = {
+        "_share_selection": {
+            "compare": {"source": "Old label", "participant_id": "p", "trial_id": "t"}
+        }
+    }
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(url_state.st, "session_state", state)
+        patch.setattr(app, "public_datasets_enabled", lambda: True)
+        patch.setattr(
+            app, "public_dataset_registry", lambda: {"Old label": {"short": short}}
+        )
+        query, _ = url_state._build_share_query(DEMO_CHOICE)
+        patch.setattr(url_state.st, "query_params", dict(parse_qsl(query)))
+        patch.setattr(
+            app, "public_dataset_registry", lambda: {"New label": {"short": short}}
+        )
+        patch.setattr(
+            compare_source,
+            "public_dataset_readiness",
+            lambda label, *, refresh: (True, ""),
+        )
+        assert url_state.resolve_link_compare_source(DEMO_CHOICE) is None
+    assert state["cmp_dataset"] == "New label"
 
 
 @given(
@@ -262,3 +328,19 @@ def test_tiling_boxes_hold_each_point_exactly_once(widths, left, height, draw):
 def test_non_finite_range_is_refused(value):
     with pytest.raises(ValueError):
         url_state._parse_float_range(f"0,{value}")
+
+
+@given(st.text(min_size=1), st.text(min_size=1))
+def test_upload_reference_survives_a_new_label_and_name_reuse(old, new):
+    from scanpath_studio.constants import DATASET_ALIASES_KEY
+    from scanpath_studio.dataset_identity import (
+        dataset_share_id,
+        resolve_dataset_reference,
+    )
+
+    session = {"_datasets": {"first": {}}}
+    identifier = dataset_share_id(session, "first")
+    session[DATASET_ALIASES_KEY] = {"first": new, "second": old}
+    session["_datasets"]["second"] = {}
+    assert resolve_dataset_reference(session, old, identifier) == "first"
+    assert dataset_share_id(session, "first") == identifier

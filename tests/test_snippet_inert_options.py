@@ -75,3 +75,19 @@ def test_explicit_still_writes_everything():
         explicit=True,
     )
     assert kwargs["heatmap_colorscale"] == "Greens"
+
+
+def test_show_every_option_keeps_accepted_comparison_settings():
+    for kind in ("comparison", "animation"):
+        state = cs.FigureState(
+            kind=kind,
+            compare=cs.CompareTarget(participant="b", trial="t"),
+            settings={
+                **api.figure_options(kind),
+                "show_order": True,
+                "order_font_color": "#ae2345",
+            },
+        )
+        full = cs.reproduction_code(DEMO, state, explicit=True)
+        assert "order_font_color='#ae2345'" in full.python
+        assert "--order-font-color '#ae2345'" in full.cli

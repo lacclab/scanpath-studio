@@ -127,9 +127,9 @@ from scanpath_studio.constants import (
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
-    DEFAULT_ORDER_LABEL_POSITION,
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
+    FIXATION_LABEL_OPTIONS,
     FOCUS_MAPPING_KEY,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
@@ -303,6 +303,7 @@ from scanpath_studio.fields import (
     row_label,
     switch,
 )
+from scanpath_studio.figure_views import STATIC_COMPARISON_LAYER_STYLES
 from scanpath_studio.file_citation import png_text_chunks, stamp_html, svg_metadata
 from scanpath_studio.html_embed import embed_html_iframe, plotlyjs_script
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
@@ -2064,11 +2065,10 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         ),
         duration_size_legend=viz_settings.get("duration_size_legend", True),
         legend_layout=viz_settings.get("legend_layout"),
-        order_font_size=viz_settings["order_font_size"],
-        order_font_color=viz_settings["order_font_color"],
-        order_label_position=viz_settings.get(
-            "order_label_position", DEFAULT_ORDER_LABEL_POSITION
-        ),
+        **{
+            name: viz_settings.get(name, option.default)
+            for name, option in FIXATION_LABEL_OPTIONS.items()
+        },
         **{
             key: viz_settings.get(key, default)
             for key, default in COLORBAR_DEFAULTS.items()
@@ -2712,7 +2712,7 @@ def _resolve_compare_source(
             title=f"Loading {_dataset_label(chosen)} for scanpath B",
             task_key=task_key,
             cancel=loading.Cancel(
-                f"Compare within {md_literal(_dataset_label(current_dataset_name()))}",
+                f"Compare within {md_literal(current_dataset_name())}",
                 _cancel_compare_source,
                 args=(task_key,),
             ),
@@ -2751,6 +2751,22 @@ def _render_compare_dataset_cell(
     """
     # Lazy, like every other `app` reach from this module: app imports tabs, so
     # a module-level import would close the cycle.
+    labels = {
+        token: _dataset_label(token)
+        if ready_by_name.get(token, True)
+        else f"{_dataset_label(token)} (needs setup)"
+        for token in names
+        if token != THIS_DATASET
+    }
+    same_label = "This dataset"
+    if same_label in labels.values():
+        same_label = "Same dataset as A"
+        index = 2
+        while same_label in labels.values():
+            same_label = f"Same dataset as A ({index})"
+            index += 1
+    labels[THIS_DATASET] = same_label
+
     host.selectbox(
         "Dataset B",
         options=names,
@@ -2763,23 +2779,11 @@ def _render_compare_dataset_cell(
         # Streamlit has no per-option disabling, so an unready corpus is marked
         # in the label and explains itself below once picked — offered but
         # honest, rather than absent and mysterious.
-        format_func=lambda name: (
-            _dataset_label(name)
-            if ready_by_name.get(name, True)
-            else f"{_dataset_label(name)} (needs setup)"
-        ),
+        format_func=labels.__getitem__,
         help="The dataset scanpath B comes from. A trial from another dataset is "
         "drawn on that dataset's screen.",
     )
-    widen_menu(
-        COMPARE_SOURCE_KEY,
-        [
-            _dataset_label(name)
-            if ready_by_name.get(name, True)
-            else f"{_dataset_label(name)} (needs setup)"
-            for name in names
-        ],
-    )
+    widen_menu(COMPARE_SOURCE_KEY, [labels[name] for name in names])
 
 
 def _compare_label_display(
@@ -4340,7 +4344,7 @@ def _build_studio_config(
         base_font_size=base_font_size,
         trial_raw_gaze=trial_raw_gaze,
         font_family=font_family,
-        data_source=data_source,
+        data_source=_dataset_label(data_source) if data_source else None,
         app_version=app_version,
         exported_at=exported_at,
         compare_styles=compare_styles,
@@ -4678,7 +4682,9 @@ def _build_compare_meta(
             label_primary = (
                 f"{primary_dataset}{_COMPARE_DATASET_SEP}{selected_participant}"
             )
-        label_compare = f"{source.name}{_COMPARE_DATASET_SEP}{compare_participant}"
+        label_compare = (
+            f"{_dataset_label(source.name)}{_COMPARE_DATASET_SEP}{compare_participant}"
+        )
     elif str(selected_participant) != str(compare_participant):
         label_primary = str(selected_participant)
         label_compare = str(compare_participant)
@@ -5107,7 +5113,7 @@ def _shown_dataset_name(token: str | None = None) -> str:
     not the stored token — a renamed or public dataset reads the same."""
     from scanpath_studio.app import _dataset_display_name
 
-    return _dataset_display_name(token or current_dataset_name())
+    return _dataset_display_name(token) if token else current_dataset_name()
 
 
 def _compare_dataset_name(compare_meta: dict | None) -> str:
@@ -5234,15 +5240,7 @@ def _replay_style(style: dict | None) -> dict | None:
         k: v
         for k, v in style.items()
         if k not in COMPARE_FILTER_STYLE_KEYS
-        and k
-        not in (
-            "box_color",
-            "box_fill_color",
-            "box_line_opacity",
-            "box_fill_opacity",
-            "raw_gaze_color",
-            "heatmap_colorscale",
-        )
+        and k not in STATIC_COMPARISON_LAYER_STYLES
     }
 
 
@@ -5662,6 +5660,7 @@ def _render_export_panel(
         }
     )
     bulk_settings["data_source"] = st.session_state.get("data_source_choice")
+    bulk_settings["data_source_label"] = current_dataset_name()
     bulk_settings["synthetic_source"] = bulk_settings["data_source"] in (
         AUTHOR_CHOICE,
         MANUAL_SAMPLE_CHOICE,
@@ -7218,7 +7217,7 @@ def render_single_trial_tab(
         selected_compare_screen,
         source=compare_source,
         # A's corpus, so a cross-dataset pair names both sides.
-        primary_dataset=str(st.session_state.get("data_source_choice") or ""),
+        primary_dataset=current_dataset_name(),
         # Only the static comparison draws B's samples, so nothing is cut for
         # them while the switch is off or the replay runs. The *unfiltered*
         # samples: B's pool ignores A's filters, so A's `raw_gaze` can lack B.
@@ -7251,10 +7250,19 @@ def render_single_trial_tab(
     share_selection = st.session_state.get("_share_selection")
     if isinstance(share_selection, dict):
         if comparing and compare_meta is not None:
+            from .dataset_identity import dataset_share_id
+
+            source = compare_meta.get("dataset")
+            source_id = dataset_share_id(st.session_state, source)
             share_selection["compare"] = {
                 "participant_id": compare_meta["raw_participant"],
                 "trial_id": compare_meta["trial"],
-                "source": compare_meta.get("dataset"),
+                "source": source,
+                **(
+                    {"source_id": source_id, "source_name": _dataset_label(source)}
+                    if source_id
+                    else {}
+                ),
                 # B's own screen (`cmp_screen=`), from its own navigator.
                 "screen_id": selected_compare_screen,
             }
@@ -7639,7 +7647,9 @@ def render_single_trial_tab(
                 screen=selected_compare_screen,
                 layout=str(compare_layout),
                 compare_stimulus=str(compare_stimulus),
-                dataset=str(compare_meta.get("dataset") or ""),
+                dataset=_dataset_label(compare_meta["dataset"])
+                if compare_meta.get("dataset")
+                else "",
                 # B's own screen, which a second dataset's snippet
                 # states (`setup_b=` / `--compare-canvas`).
                 canvas=(
@@ -7849,7 +7859,7 @@ def render_single_trial_tab(
                     selected_participant,
                     selected_trial,
                     selected_text,
-                    figure_compare_participant,
+                    compare_participant,
                     compare_trial,
                     render_settings,
                     viz_settings,
@@ -7867,7 +7877,8 @@ def render_single_trial_tab(
                     ),
                     primary_combo_row=primary_combo_row,
                     download_name=f"scanpath_{_safe_filename(save_slug)}",
-                    figure_participant_b=self_compare_figure_id,
+                    figure_participant_b=self_compare_figure_id
+                    or figure_compare_participant,
                     raw_gaze=cmp_raw_gaze,
                 )
         else:
@@ -8543,9 +8554,8 @@ def _render_comparison_figure(
     frames, or ``None`` when the layer is off or neither reading has any.
 
     ``figure_participant_b`` is the id B's rows carry in the merged
-    frames when it differs from ``compare_participant`` — a trial compared with
-    itself, renamed apart by `separate_self_compare`. It is used only to slice
-    the figure; labels and lookups keep the real id.
+    frames. Cross-dataset and self-comparisons qualify that id so the two
+    readings can be sliced independently. Labels keep the reader's own id.
 
     ``fixations_filtered`` carries both scanpaths, already resolved by the
     caller: each scanpath's own fixation-index window is applied upstream, and
@@ -8613,8 +8623,14 @@ def _render_comparison_figure(
     primary_label = friendly_trial_label(
         selected_participant, selected_trial, primary_text_id, label_pool
     )
+    dataset_b = _compare_dataset_name(compare_meta)
+    frame_participant_b = figure_participant_b or compare_participant
     compare_label = friendly_trial_label(
-        compare_participant, compare_trial, compare_text_id, label_pool
+        compare_participant,
+        compare_trial,
+        compare_text_id,
+        label_pool,
+        prefix=f"{dataset_b}{_COMPARE_DATASET_SEP}" if cross_dataset else "",
     )
     # An explicit cmp{idx}_label_pattern overrides the auto label above.
     if st.session_state.get("cmp0_label_pattern"):
@@ -8631,9 +8647,9 @@ def _render_comparison_figure(
             1,
             compare_participant,
             compare_trial,
-            extract_trial(words_filtered, compare_participant, compare_trial),
-            extract_trial(fixations_filtered, compare_participant, compare_trial),
-            dataset_name=_compare_dataset_name(compare_meta),
+            extract_trial(words_filtered, frame_participant_b, compare_trial),
+            extract_trial(fixations_filtered, frame_participant_b, compare_trial),
+            dataset_name=dataset_b,
         )
 
     _amend_snippet_compare_labels((primary_label, compare_label))
@@ -8719,7 +8735,7 @@ def _render_comparison_figure(
         words_filtered,
         fixations_filtered,
         (selected_participant, selected_trial),
-        (figure_participant_b or compare_participant, compare_trial),
+        (frame_participant_b, compare_trial),
         settings=comparison_settings,
         raw_gaze=raw_gaze,
     )
@@ -8740,7 +8756,7 @@ def _render_comparison_figure(
         # Two readings in one figure, so `{dataset_name_b}` and friends
         # have a value to resolve against.
         compare_row={
-            "dataset_name": _compare_dataset_name(compare_meta),
+            "dataset_name": dataset_b,
             "participant_id": compare_participant,
             "trial_id": compare_trial,
             "text_id": compare_text_id,
@@ -8762,7 +8778,8 @@ def _render_comparison_figure(
         # about its own geometry. Each panel is true-to-scale on its *own*
         # monitor, so a box twice the size of the one beside it may be the same
         # physical size — naming both screens is what keeps that readable.
-        active = st.session_state.get("data_source_choice") or "this dataset"
+        active = md_literal(current_dataset_name() or "this dataset")
+        other = md_literal(_compare_dataset_name(compare_meta))
         if canvas_b is None:
             canvas_b = canvas_a
         if layout == "overlay":
@@ -8774,7 +8791,7 @@ def _render_comparison_figure(
             # can't say so), and the caveat is raised to a warning rather than
             # buried in the caption, because it qualifies what the figure means.
             st.caption(
-                f"Overlaying {active} and {compare_meta['dataset']}, both at "
+                f"Overlaying {active} and {other}, both at "
                 f"{canvas_a[0]}×{canvas_a[1]}. Positions are compared in screen "
                 "pixels, without rescaling."
             )
@@ -8784,13 +8801,13 @@ def _render_comparison_figure(
             st.caption(
                 "Each panel is drawn at its dataset's screen size: "
                 f"{active} {canvas_a[0]}×{canvas_a[1]}, "
-                f"{compare_meta['dataset']} {canvas_b[0]}×{canvas_b[1]}. "
+                f"{other} {canvas_b[0]}×{canvas_b[1]}. "
                 "Sizes are not comparable across panels."
                 + (f" {setup_note}" if setup_note else "")
             )
         else:
             st.caption(
-                f"Comparing {active} and {compare_meta['dataset']}, which share "
+                f"Comparing {active} and {other}, which share "
                 f"a {canvas_a[0]}×{canvas_a[1]} screen."
                 + (f" {setup_note}" if setup_note else "")
             )
@@ -9125,23 +9142,60 @@ def _download_tidy(
     # Written on click, not on every rerun: a words × readers table on a full
     # corpus takes most of a second to serialize. Under the dataset's own
     # names, as on screen — the map is read here, where the session is.
-    csv = partial(_tidy_csv, df, active_all(st.session_state).identity())
+    names = active_all(st.session_state).identity()
+    csv = partial(_tidy_csv, df, names)
     button = dict(data=csv, file_name=name, mime="text/csv", key=key, on_click="ignore")
     if recipe is None or context is None:
         host.download_button(label, **button)
         return
     recipe = dict(recipe)
     counts = result_counts(df, recipe.pop("counts", None))
+    cohort_csv = None
+    if recipe.get("view") == "Cohort profile":
+        entry = (st.session_state.get("_datasets") or {}).get(
+            context.get("dataset", {}).get("source")
+        )
+        inputs = (
+            stored_source_recipe(entry)
+            if entry
+            else {"schemas": st.session_state.get("_active_column_mapping") or {}}
+        )
+        # Only the mapping and file transformations travel. A local session-set path does not.
+        tables = ("words", "fixations")
+        mapping = {
+            t: inputs["schemas"][t]
+            for t in tables
+            if (inputs.get("schemas") or {}).get(t)
+        }
+        choices = (entry or {}).get("wizard_choices") or {}
+        derivations = choices.get("filename_derive") or {}
+        keep = (choices.get("keep_and_filter") or {}).get("wizard_keep_extra") or []
+        context = {
+            **context,
+            "inputs": {
+                "schemas": mapping,
+                "steps": inputs.get("steps") or [],
+                "derive": derivations.get("applied")
+                if (derivations.get("widgets") or {}).get("wizard_filename_split", True)
+                else None,
+                "keep_columns": keep,
+            },
+        }
+        cohort_csv = csv
+        # Record the app's headers even if the runner loads canonical tables.
+        counts["headers"] = as_written(df.iloc[:0], names).columns.tolist()
     row = host.container(horizontal=True, gap="small")
     row.download_button(label, **button)
     row.download_button(
         "⬇ Download the recipe (JSON)",
-        data=partial(_recipe_json, context, recipe, name, counts),
+        data=partial(_recipe_json, context, recipe, name, counts, cohort_csv),
         file_name=recipe_file_name(name),
         mime="application/json",
         key=f"{key}_recipe",
         on_click="ignore",
-        help=(
+        help="Rerun this cohort profile with scanpath-studio recipe and the same source tables."
+        if recipe.get("view") == "Cohort profile"
+        else (
             "A record of the dataset name, trial filters, analysis choices and counts"
             " used for this table. Keep your data separately; the recipe contains no "
             "data rows or figure settings."
@@ -9151,10 +9205,14 @@ def _download_tidy(
 
 def _tidy_csv(df: pd.DataFrame, names: ColumnNames) -> bytes:
     """A tidy table's CSV, built when its download button is clicked."""
-    return as_written(df, names).to_csv(index=False).encode("utf-8")
+    return (
+        as_written(df, names).to_csv(index=False, lineterminator="\n").encode("utf-8")
+    )
 
 
-def _recipe_json(context: dict, recipe: dict, name: str, counts: dict) -> str:
+def _recipe_json(
+    context: dict, recipe: dict, name: str, counts: dict, cohort_csv=None
+) -> str:
     """The recipe file's text, built when the button is clicked.
 
     ``recipe["groups"]`` holds ``(label, spec)`` pairs, resolved here: a
@@ -9169,14 +9227,20 @@ def _recipe_json(context: dict, recipe: dict, name: str, counts: dict) -> str:
     if recipe.get("groups"):
         recipe["groups"] = [group_definition(*pair) for pair in recipe["groups"]]
     analysis = analysis_choices(section=context.get("section"), **recipe)
+    if cohort_csv is not None:
+        counts = {**counts, "sha256": hashlib.sha256(cohort_csv()).hexdigest()}
 
     return json.dumps(
         build_analysis_recipe(
             app_version=__version__,
             dataset=context.get("dataset") or {},
+            inputs=context.get("inputs"),
             trial_filters=context.get("trial_filters") or [],
             pool=context.get("pool") or {},
             analysis=analysis,
+            selection=context.get("selection")
+            if analysis.get("view") == "Cohort profile"
+            else None,
             table_file=name,
             counts=counts,
             exported_at=datetime.now().isoformat(timespec="seconds"),
@@ -10015,7 +10079,11 @@ def render_analysis_pool_bar(
         width="content",
         help="Clear all trial filters, here and on the Scanpath view.",
     )
-    return {"trial_filters": items, "pool": pool}
+    return {
+        "trial_filters": items,
+        "pool": pool,
+        "selection": read_trial_filters().get("recipe_selection"),
+    }
 
 
 _POOL_POPOVER_KEY = "corpus_pool_popover"
@@ -10744,8 +10812,10 @@ def render_per_text_tab(
             marker_size_range=viz_settings.get(
                 "marker_size_range", DEFAULT_MARKER_SIZE_RANGE
             ),
-            order_font_size=viz_settings.get("order_font_size", 10),
-            order_font_color=viz_settings.get("order_font_color", "#111111"),
+            **{
+                name: viz_settings.get(name, option.default)
+                for name, option in FIXATION_LABEL_OPTIONS.items()
+            },
             **{
                 key: viz_settings.get(key, default)
                 for key, default in COLORBAR_DEFAULTS.items()
@@ -15029,19 +15099,14 @@ def _apply_remap() -> None:
             values := upload_setup_values(name)
         ):
             _apply_dataset_values(name, values)
-    # The description and the metadata tables are part of the
-    # same save; committed under the old name, which the rename below carries.
     from scanpath_studio.app import commit_editor_staging
 
     commit_editor_staging(name)
-    # And the name typed at the top of the screen. Applied last, after
-    # the entry is saved under the name its widgets were keyed by: every editor
-    # key carries the dataset's name, so renaming mid-edit would orphan them.
     requested = str(st.session_state.get(EDITOR_PENDING_NAME_KEY) or "").strip()
-    if requested and requested != name:
+    if requested:
         from scanpath_studio.wizard import rename_dataset
 
-        name = rename_dataset(name, requested) or name
+        rename_dataset(name, requested)
     st.session_state["_remap_applied"] = name
     # Saving *is* the moment the Trial ID mapping is decided, so ask for the
     # trial-identity check's verdict on the frames this just re-derived.
@@ -15970,7 +16035,7 @@ def _render_remap_editor(
     # and the mapping form is several screens down.
     if st.session_state.pop(FOCUS_MAPPING_KEY, None) == name:
         st.info(
-            f"Editing **{md_literal(name)}**. Its mapping and saved tables are below."
+            f"Editing **{md_literal(_dataset_label(name))}**. Its mapping and saved tables are below."
         )
     if is_multipleye_entry(stored):
         st.caption(
@@ -16054,9 +16119,11 @@ def _render_remap_editor(
     baseline = st.session_state.get(_REMAP_BASELINE_KEY)
     if baseline is None:
         st.session_state[_REMAP_BASELINE_KEY] = baseline = signature
-    renamed = str(st.session_state.get(EDITOR_PENDING_NAME_KEY) or name).strip()
+    renamed = str(st.session_state.get(EDITOR_PENDING_NAME_KEY) or "").strip()
     st.session_state[_REMAP_DIRTY_KEY] = (
-        bool(added) or signature != baseline or (bool(renamed) and renamed != name)
+        bool(added)
+        or signature != baseline
+        or (bool(renamed) and renamed != _dataset_label(name))
     )
 
     dropped = stored.get("dropped_columns") or {}
@@ -16448,7 +16515,7 @@ def _editor_setup_config(name: str) -> dict:
         "schema": PLOT_CONFIG_SCHEMA,
         "app": {"name": "Scanpath Studio", "version": __version__},
         "exported_at": datetime.now().isoformat(timespec="seconds"),
-        "data_source": name,
+        "data_source": _dataset_label(name),
         "column_mapping": mapping,
         "column_mapping_notes": notes,
         "experimental_setup": dict(setup) if isinstance(setup, dict) else None,

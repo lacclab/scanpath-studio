@@ -25,6 +25,7 @@ is the task-oriented guide to this module for scripted / agent use.
 from __future__ import annotations
 
 import difflib
+import json
 import logging
 from collections.abc import Iterable, Sequence
 from copy import deepcopy
@@ -60,9 +61,9 @@ from .build_info import BuildInfo  # noqa: E402
 from .column_names import ColumnNames  # noqa: E402
 from .constants import (  # noqa: E402
     DEFAULT_BACKGROUND_COLOR,
-    DEFAULT_ORDER_FONT_COLOR,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
     EXPERIMENTAL_ENV_VAR,
+    FIXATION_LABEL_OPTIONS,
     FONT_FAMILY,
     PLOTLY_CONFIG,
     SACCADE_CLASS_ORDER,
@@ -212,9 +213,7 @@ _CANONICAL_OPTION_NAMES = {
     "marker_duration_range",
     "duration_size_legend",
     "legend_layout",
-    "order_font_size",
-    "order_font_color",
-    "order_label_position",
+    *FIXATION_LABEL_OPTIONS,
     "show_fixation_colorbar",
     "fixation_colorbar_orientation",
     "fixation_colorbar_tickangle",
@@ -285,7 +284,6 @@ CANONICAL_FIGURE_DEFAULTS: dict = FigureSettings.defaults(
     show_order=False,
     show_heatmap=False,
     heatmap_metric="duration_ms",
-    order_font_color=DEFAULT_ORDER_FONT_COLOR,
     saccade_classes=list(SACCADE_CLASS_ORDER),
     fixation_opacity=0.7,
     background_color=DEFAULT_BACKGROUND_COLOR,
@@ -1712,6 +1710,79 @@ def _require_corpus_columns(data: pd.DataFrame, kind: str, value_col: str) -> No
     )
 
 
+def run_analysis_recipe(
+    recipe: dict | str | Path,
+    words: pd.DataFrame,
+    fixations: pd.DataFrame | None = None,
+    *,
+    participant_metadata: TablesLike | None = None,
+    trial_metadata: TablesLike | None = None,
+    text_metadata: TablesLike | None = None,
+    annotations: str | Path | None = None,
+    column_names: dict | None = None,
+) -> pd.DataFrame:
+    """Recreate a downloaded per-word cohort profile table.
+
+    Args:
+        recipe: The downloaded recipe JSON path or its decoded object.
+        words: Normalized Words table from `load_scanpath_data` or a corpus loader.
+        fixations: The matching normalized Fixations table, when present.
+        participant_metadata: The original participant metadata table for a reader filter.
+        trial_metadata: The original trial metadata table for a trial filter.
+        text_metadata: The original text metadata table for a text filter.
+        annotations: Path to the dataset's exported annotations JSON for a star or tag filter.
+        column_names: Source column maps when supplying canonical frames.
+
+    Returns:
+        The cohort profile under the dataset's own output column names.
+
+    Raises:
+        ValueError: Unsupported recipe, missing filter fields or mismatched result.
+    """
+    from .analysis_recipe import cohort_recipe_table
+
+    if isinstance(recipe, (str, Path)):
+        recipe = json.loads(Path(recipe).read_text(encoding="utf-8"))
+    words, word_names = _named_in(words, "words")
+    fixations, fix_names = _named_in(fixations, "fixations", optional=True)
+    table = cohort_recipe_table(
+        recipe,
+        words,
+        fixations,
+        metadata={
+            "participant": participant_metadata,
+            "trial": trial_metadata,
+            "text": text_metadata,
+        },
+        annotations=annotations,
+    )
+    headers = recipe["result"].get("headers")
+    if headers is not None:
+        if (
+            not isinstance(headers, list)
+            or len(headers) != len(table.columns)
+            or any(not isinstance(header, str) or not header for header in headers)
+            or len(set(headers)) != len(headers)
+        ):
+            raise ValueError(
+                "Invalid output column names in the cohort profile recipe."
+            )
+        table = table.set_axis(headers, axis="columns")
+    else:
+        names = _call_names(column_names, words=word_names, fixations=fix_names)
+        table = _cn.as_written(table, names.identity() if names else None)
+    expected = recipe["result"].get("sha256")
+    if expected is not None:
+        import hashlib
+
+        csv = table.to_csv(index=False, lineterminator="\n").encode("utf-8")
+        if hashlib.sha256(csv).hexdigest() != expected:
+            raise ValueError(
+                "The reproduced CSV differs from the original. Check the source tables, import mapping, filter inputs and app version."
+            )
+    return table
+
+
 def plot_corpus_figure(
     data: pd.DataFrame,
     *,
@@ -2383,10 +2454,11 @@ def _check_column_options(
 def figure_options(kind: str = "static", *, choices: bool = False) -> dict:
     """List figure options and their default values.
 
-    The defaults are what a call actually renders with, the app's Scanpath design, so a
-    script can diff its intended settings against what it would get. The *Figure
-    options* section of the API reference lists them by section, with their ``render``
-    flags.
+    The defaults follow the app's Scanpath design. Some accepted keywords affect
+    only certain views. For example, ``order_font_color`` sets the fixation index
+    color for a single scanpath. With two scanpaths, each index takes its
+    scanpath's fixation color. The *Figure options* table lists the views and
+    matching ``render`` flags.
 
     Args:
         kind: ``"static"`` for [`plot_scanpath`][scanpath_studio.api.plot_scanpath],
@@ -3461,8 +3533,10 @@ def compare_scanpaths(
 
     | Key | What it sets | Left out |
     | --- | --- | --- |
-    | ``fix_color``, ``saccade_color`` | The scanpath's colors | Its default |
-    | ``marker_size_range``, ``opacity``, ``hollow`` | Its fixation markers | Its default |
+    | ``fix_color`` | Fixation markers and index numbers | The scanpath's palette color |
+    | ``saccade_color`` | Saccade lines | The scanpath's palette color |
+    | ``marker_size_range`` | Smallest and largest fixation markers | The figure's ``marker_size_range`` |
+    | ``opacity``, ``hollow`` | Its fixation markers | Its default |
     | ``saccade_style``, ``saccade_width`` | Its saccade lines | Its default |
     | ``box_color`` | The outline of that reading's word boxes | Its ``fix_color`` |
     | ``box_fill_color`` | Their fill | ``word_box_fill_color`` |
@@ -3471,8 +3545,8 @@ def compare_scanpaths(
     | ``heatmap_colorscale`` | That reading's word-box heatmap color scale, on the range both share; two different scales get a color bar each | ``heatmap_colorscale`` |
     | ``fixation_flags``, ``saccade_classes`` | That scanpath's own filters, in place of the figure's | The figure's |
 
-    The box keys and ``raw_gaze_color`` are this figure's only: the co-animation draws
-    one set of boxes and no raw gaze, and ignores them.
+    For a replay of two scanpaths, see
+    [`animate_scanpath`][scanpath_studio.api.animate_scanpath] for the supported styles.
 
     Args:
         words: The words frame holding both trials, or A's when ``words_b`` is given.

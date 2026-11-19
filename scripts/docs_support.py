@@ -17,6 +17,14 @@ import json
 import re
 from pathlib import Path
 
+from scanpath_studio.constants import FIXATION_LABEL_OPTIONS
+from scanpath_studio.figure_views import (
+    HEATMAP_OPTIONS,
+    RAW_GAZE_OPTIONS,
+    STYLE_KEYS_FOR_TWO_SCANPATHS,
+    options_for_view,
+)
+
 ROOT = Path(__file__).resolve().parent.parent
 REPO_URL = "https://github.com/lacclab/scanpath-studio"
 BLOB_URL = f"{REPO_URL}/blob/main/"
@@ -80,6 +88,7 @@ def _parsers() -> dict:
         "render": cli._render_parser,
         "analyze": cli._analyze_parser,
         "corpus": cli._corpus_parser,
+        "recipe": cli._recipe_parser,
         "check": cli._check_parser,
         "cache": cli._cache_parser,
         "version": cli._version_parser,
@@ -243,9 +252,7 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "fixation_colorbar_tickangle",
         "fixation_colorbar_tickfont_size",
         "show_order",
-        "order_font_size",
-        "order_font_color",
-        "order_label_position",
+        *FIXATION_LABEL_OPTIONS,
         "fixation_snap_to_line",
         "fixation_snap_position",
     ),
@@ -285,30 +292,8 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "word_box_fill_color",
         "word_box_fill_opacity",
     ),
-    "Heatmap": (
-        "show_heatmap",
-        "heatmap_style",
-        "heatmap_metric",
-        "heatmap_colorscale",
-        "heatmap_norm",
-        "heatmap_range",
-        "heatmap_opacity",
-        "heatmap_sigma_px",
-        "word_heatmap_col",
-        "word_heatmap_title",
-        "show_heatmap_colorbar",
-        "heatmap_colorbar_orientation",
-        "heatmap_colorbar_length",
-        "heatmap_colorbar_thickness",
-        "heatmap_colorbar_tickangle",
-        "heatmap_colorbar_tickfont_size",
-    ),
-    "Raw gaze": (
-        "show_raw_gaze",
-        "raw_gaze_color",
-        "raw_gaze_marker_size",
-        "raw_gaze_opacity",
-    ),
+    "Heatmap": HEATMAP_OPTIONS,
+    "Raw gaze": RAW_GAZE_OPTIONS,
     "Filters & highlights": ("fixation_flags", "saccade_classes"),
     "Figure & canvas": (
         "fit_to_monitor",
@@ -361,8 +346,8 @@ _OPTION_NOTES = {
         "Why the figure is labeled an illustration. The builder works it out "
         "from `illustration_label`. Pass it only to word the label yourself."
     ),
-    "words_b": "Scanpath B's Words table, for a replay of two scanpaths.",
-    "fixations_b": "Scanpath B's Fixations table, for a replay of two scanpaths.",
+    "words_b": "Scanpath B's Words table when it comes from a second dataset.",
+    "fixations_b": "Scanpath B's Fixations table when it comes from a second dataset.",
     "show_connectors": (
         "Draw a line from each fixation's recorded height to its corrected "
         "one. Set by `plot_scanpath(drift_connectors=True)`."
@@ -425,6 +410,24 @@ def _figure_kinds() -> dict:
         "plot": api.figure_options("static"),
         "animate": api.figure_options("animation"),
         "compare": api.figure_options("comparison"),
+    }
+
+
+def _figure_views(kinds) -> dict[str, set[str]]:
+    """Include the named Python and CLI comparison arguments in the reference."""
+    from scanpath_studio import api
+
+    animation = kinds["animate"]
+    compare = set(kinds["compare"]) | (
+        set(inspect.signature(api.compare_scanpaths).parameters) & animation.keys()
+    )
+    # The CLI sends both labels through labels= and B's filters through style_b.
+    compare.update(("label_a", "label_b", "fixation_flags_b"))
+    return {
+        "Single plot": options_for_view(kinds["plot"], "static"),
+        "Single replay": options_for_view(animation, "animation"),
+        "Compare": options_for_view(compare, "comparison"),
+        "Compare + Animate": options_for_view(animation, "animation", comparing=True),
     }
 
 
@@ -533,7 +536,7 @@ def _describing_flag(flags: list[str], default):
 
 def figure_options_reference(*, heading: str = "##") -> str:
     """Every figure keyword, by section: its default, its ``render`` flag, what
-    it does, the values it takes, and the builders that accept it.
+    it does, the values it takes, and the views where it affects the figure.
 
     Built from `api.figure_options` (the defaults the builders render with), the
     CLI emitter table the Share tab's Code uses, and
@@ -545,6 +548,7 @@ def figure_options_reference(*, heading: str = "##") -> str:
     from scanpath_studio.plots import FIGURE_OPTION_CHOICES
 
     kinds = _figure_kinds()
+    views = _figure_views(kinds)
     parser = cli._render_parser()
     formatter = parser._get_formatter()
     action_of = {
@@ -584,9 +588,30 @@ def figure_options_reference(*, heading: str = "##") -> str:
             if choices:
                 values = ", ".join(f"`{c!r}`" for c in choices)
                 description += f" One of {values}."
-            builders = [kind for kind, options in kinds.items() if name in options]
-            if len(builders) < len(kinds):
-                description += f" *{' and '.join(builders).capitalize()} only.*"
+            if name in STYLE_KEYS_FOR_TWO_SCANPATHS:
+                key = STYLE_KEYS_FOR_TWO_SCANPATHS[name]
+                description += (
+                    f" For two scanpaths, set `{key}` in `style_a` or `style_b`."
+                )
+            elif name == "marker_size_range":
+                description += (
+                    " Each scanpath uses this range unless its style supplies one."
+                )
+            elif name == "raw_gaze_color":
+                description += (
+                    " In Compare, set `raw_gaze_color` in `style_a` or `style_b`."
+                )
+            elif name in ("label_a", "label_b"):
+                description += (
+                    " In Python, pass `labels=(a, b)` to `compare_scanpaths`."
+                )
+            elif name == "fixation_flags_b":
+                description += " In Python, pass `style_b={'fixation_flags': flags}` to `compare_scanpaths`."
+            active = [view for view, options in views.items() if name in options]
+            if not active:
+                raise RuntimeError(f"{name} has no render view")
+            if len(active) < len(views):
+                description += f"<br>*{', '.join(active)}.*"
             # The flags go under the name, so the description keeps the width.
             names_cell = "<br>".join([f"`{name}`", *(f"`{f}`" for f in flags)])
             out.append(f"| {names_cell} | {_default_cell(default)} | {description} |")

@@ -14,6 +14,7 @@ import math
 import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
+from functools import partial
 from urllib.parse import urlencode
 
 import pandas as pd
@@ -54,6 +55,7 @@ from .constants import (
     CUSTOM_PALETTE,
     DEFAULT_HEATMAP_SIGMA_PX,
     DEMO_CHOICE,
+    FIXATION_LABEL_OPTIONS,
     FIXATION_OUTLINE_WIDTH_BOUNDS,
     FIXATION_SYMBOLS,
     GRID_FONT_SIZE_BOUNDS,
@@ -72,7 +74,6 @@ from .constants import (
     ONESTOP_REGIME_LABELS,
     ONESTOP_REGIME_SOURCE_TOKENS,
     ONESTOP_VARIANT_LABELS,
-    ORDER_LABEL_POSITIONS,
     PALETTES,
     PUBLIC_DATASETS_CHOICE,
     SACCADE_ARROW_SIZE_BOUNDS,
@@ -105,10 +106,20 @@ from .controls import (
     palette_state,
 )
 from .data import composite_respelling_map, respell_reading, share_dataset_fingerprint
+from .dataset_identity import (
+    dataset_key_for_display_name,
+    dataset_share_id,
+    resolve_dataset_reference,
+)
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .export import PRINT_DPI_BOUNDS, PRINT_WIDTH_BOUNDS
 from .session_keys import (
+    COMPARE_CORPUS_PARAM,
+    COMPARE_DATASET_DIGEST_PARAM,
+    COMPARE_DATASET_ID_PARAM,
+    COMPARE_DATASET_PARAM,
     COMPARE_FIX_RANGE_PARAM,
+    COMPARE_IDENTITY_STATE_KEY,
     COMPARE_LAYOUT_PARAM,
     COMPARE_PARAM,
     COMPARE_SCREEN_PARAM,
@@ -123,9 +134,11 @@ from .session_keys import (
     PARAM_CORPUS,
     PARAM_DATASET,
     PARAM_DATASET_DIGEST,
+    PARAM_DATASET_ID,
     PARAM_SHOW_TITLE_CAPTION,
     PENDING_COMPARE_STATE_KEY,
     PUBLIC_DATASET_CHOICE,
+    SAME_DATASET,
     SETUP_PARAMS,
     SETUP_PROVENANCE_PARAM,
     SETUP_PROVENANCE_STATE_KEY,
@@ -265,10 +278,6 @@ def _parse_compare_stimulus(v) -> str:
 
 def _parse_marker_size_scale(v) -> str:
     return _parse_choice(v, tuple(MARKER_SIZE_SCALES), "marker size scale")
-
-
-def _parse_order_label_position(v) -> str:
-    return _parse_choice(v, tuple(ORDER_LABEL_POSITIONS), "index label position")
 
 
 #: The one colour spelling every `st.color_picker` holds and every figure
@@ -500,6 +509,14 @@ _DESIGN_PARAMS = {
 }
 
 
+def _fixation_label_params(*kinds: str) -> dict[str, str]:
+    return {
+        name: option.state_key
+        for name, option in FIXATION_LABEL_OPTIONS.items()
+        if option.kind in kinds
+    }
+
+
 def _design_params(kind: str) -> dict[str, str]:
     """The `_DESIGN_PARAMS` of one share group: "toggle", "color", "int" or
     "float" — param → session key."""
@@ -596,7 +613,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     # The duration scale: always emitted (it is seeded). A link carrying layer
     # toggles but no scale opens on the relative one — see `_apply_url_preset`.
     "marker_size_scale": "global_marker_size_scale",
-    "order_label_position": "global_order_label_position",
+    **_fixation_label_params("choice", "color"),
     "illustration_label": "global_illustration_label",
     "illustration_text": "global_illustration_text",
     # Vertical drift correction ("Off" or a Carr et al. (2021) algorithm). It
@@ -629,7 +646,6 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     # comma-separated list — the generic writer below already joins a list value,
     # and `_URL_PRESETS` overrides the read side with a validating parser.
     "saccade_classes": "global_saccade_classes",
-    "order_font_color": "global_order_font_color",
     "text_color": "global_text_color",
     "highlight_text_color": "global_highlight_text_color",
     "bg_choice": "global_bg_choice",
@@ -694,7 +710,7 @@ _SHARE_COLOR_PARAMS = (
     "saccade_color_refixation",
     "saccade_color_return_sweep",
     "saccade_color_regression",
-    "order_font_color",
+    *_fixation_label_params("color"),
     "text_color",
     "highlight_text_color",
     "bg_custom",
@@ -710,7 +726,7 @@ _SHARE_COLOR_PARAMS = (
 _SHARE_INT_PARAMS = {
     **_design_params("int"),
     "export_dpi": "export_figure_dpi",
-    "order_font_size": "global_order_font_size",
+    **_fixation_label_params("int"),
     # The animation frame grid. Worth sharing — a link that
     # says "look at this replay" should reproduce the same smoothness.
     "anim_grid_step_ms": "global_anim_grid_step_ms",
@@ -840,10 +856,14 @@ _URL_PRESETS = {
     "cmp_layout": ("single_compare_layout", _parse_compare_layout),
     "cmp_stimulus": ("single_compare_stimulus", _parse_compare_stimulus),
     "marker_size_scale": ("global_marker_size_scale", _parse_marker_size_scale),
-    "order_label_position": (
-        "global_order_label_position",
-        _parse_order_label_position,
-    ),
+    **{
+        name: (
+            option.state_key,
+            partial(_parse_choice, options=option.choices, what=name.replace("_", " ")),
+        )
+        for name, option in FIXATION_LABEL_OPTIONS.items()
+        if option.choices
+    },
     # And for every colour, which Plotly rejects outright.
     **{k: (_SHARE_VALUE_PARAMS[k], _parse_hex_color) for k in _SHARE_COLOR_PARAMS},
     # Figure text from a link is text, never markup.
@@ -921,7 +941,11 @@ _URL_BOUNDED = {
     "global_line_spacing": (1.0, 10.0),
     "global_saccade_width": SACCADE_WIDTH_BOUNDS,
     "global_saccade_opacity": (0.1, 1.0),
-    "global_order_font_size": (6, 72),
+    **{
+        option.state_key: option.bounds
+        for option in FIXATION_LABEL_OPTIONS.values()
+        if option.bounds
+    },
     "global_anim_grid_step_ms": (20, 500),
     "global_anim_max_frames": (30, 2000),
     "global_marker_size_range": (4, 40),
@@ -1025,10 +1049,9 @@ def _clamp_url_value(state_key: str, value):
 
 
 # data_choice → ?source= value, for the built-in sources a URL can fully rebuild.
-# Sources absent here (uploaded tables, stored datasets) can't be reconstructed
-# from a link — the Share panel warns and shares the view settings only. Public
-# corpora are covered by the generic `corpus` token below instead of one entry
-# each. Mirrors the `source` handling in `main()`.
+# Private uploads travel by reference to files the recipient already holds.
+# Public corpora are covered by the generic `corpus` token below instead of
+# one entry each. Mirrors the `source` handling in `main()`.
 _SHAREABLE_SOURCES = {
     AUTHOR_CHOICE: "author",
     MANUAL_SAMPLE_CHOICE: "author",
@@ -1049,9 +1072,7 @@ def _source_choice_for_param(value) -> str | None:
     """Invert `_SHAREABLE_SOURCES`: a ``?source=``-style token → the data choice.
 
     Used by `cmp_source`, which names scanpath **B's** corpus in the
-    same vocabulary. An unknown token returns ``None`` — the link then simply
-    doesn't move the comparison dataset, which is a safe degrade rather than a
-    wedged picker.
+    same vocabulary. An unknown token falls back to a same-dataset comparison.
     """
     if not value:
         return None
@@ -1247,6 +1268,12 @@ def _apply_url_preset() -> str | None:
                                    (applied after combos build — see
                                    _apply_url_trial_selection; emitted by Share)
         &screen=intro            → open this child screen of a multipart trial
+        &compare=p002:t37        → compare with this participant and trial
+        &cmp_dataset=Study&cmp_dataset_id=…
+                                 → find scanpath B in a local upload by ID
+                                   or in an independent import by name
+        &cmp_source=corpus&cmp_corpus=potec
+                                 → open B from an installed public corpus
         &tab=animation           → pre-tick the Animate toggle (legacy; Animate
                                    is a toggle, not a tab)
         &heatmap_colorscale=Greens
@@ -1411,10 +1438,10 @@ def _apply_url_preset() -> str | None:
     # the picker to consume once its candidate list exists (the picker's own
     # key holds a render-time *label*, so a link can't seed it directly — the
     # same reason `request_trial` parks a request). `cmp_source` names
-    # B's corpus; an unknown name is dropped rather than honoured, which falls
-    # back to "B is in this dataset" instead of wedging the picker.
+    # B's built-in corpus. Uploads and public corpora resolve after the
+    # recovery cache restores the local data and download-folder choice.
     compare_ids = parse_compare_value(qp.get(COMPARE_PARAM))
-    if compare_ids is not None:
+    if compare_ids is not None and _linked_compare_source_kind(qp) is None:
         participant_b, trial_b = compare_ids
         st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, True)
         st.session_state.setdefault(
@@ -1422,8 +1449,9 @@ def _apply_url_preset() -> str | None:
             {"participant_id": participant_b, "trial_id": trial_b},
         )
         source_b = _source_choice_for_param(qp.get(COMPARE_SOURCE_PARAM))
-        if source_b is not None:
-            st.session_state.setdefault(COMPARE_SOURCE_STATE_KEY, source_b)
+        # An older same-dataset link omits cmp_source. Seed that choice too,
+        # before the recovery cache can substitute the recipient's last B.
+        st.session_state.setdefault(COMPARE_SOURCE_STATE_KEY, source_b or SAME_DATASET)
         # B's own screen, for B's navigator — which keeps it only when B's
         # trial has that screen, as A's does with `screen=`.
         if qp.get(COMPARE_SCREEN_PARAM) not in (None, ""):
@@ -1543,9 +1571,9 @@ def missing_dataset_message(
 def resolve_link_dataset(seeded: Iterable[str], current: str | None) -> str | None:
     """Open the added dataset a link names (`?dataset=`).
 
-    New links require a matching digest of the recording tables. Older links
-    match by name alone. Returns the matched name when available. When
-    it doesn't, the link's view is **not** applied to whatever else is open:
+    Match the upload by its local ID or portable name, then verify its recording
+    tables if the link includes a digest. Return the matched local storage key.
+    If no recording matches, keep the recipient's current view:
     every key ``_apply_url_preset`` seeded this run (``seeded``) is dropped, the
     link's params are cleared so the next run does not seed them again, and a
     notice saying which dataset is missing — and how to get it — is parked
@@ -1559,13 +1587,25 @@ def resolve_link_dataset(seeded: Iterable[str], current: str | None) -> str | No
         return None
     if not name or params.get("source"):
         return None
-    entry = (st.session_state.get("_datasets") or {}).get(name)
+    state = st.session_state
+    share_id = params.get(PARAM_DATASET_ID)
+    token = resolve_dataset_reference(state, name, share_id)
     digest = params.get(PARAM_DATASET_DIGEST)
-    if entry is not None and (
-        digest is None or share_dataset_fingerprint(entry) == digest
-    ):
-        return str(name)
-    if entry is None:
+    if token is not None:
+        uploads = state["_datasets"]
+        if digest is None or share_dataset_fingerprint(uploads[token]) == digest:
+            return token
+        # Digest-only links predate stable IDs. The old store key and the name
+        # shown in the picker can now belong to different recordings.
+        if not share_id and token == name:
+            displayed = dataset_key_for_display_name(state, name)
+            if (
+                displayed is not None
+                and displayed != token
+                and share_dataset_fingerprint(uploads[displayed]) == digest
+            ):
+                return displayed
+    if token is None:
         message = missing_dataset_message(
             str(name), params.get("participant"), params.get("trial_id")
         )
@@ -1597,6 +1637,127 @@ def link_dataset_notice(current: str | None) -> str | None:
         st.session_state.pop(LINK_DATASET_MISSING_KEY, None)
         return None
     return str(held.get("message") or "") or None
+
+
+def _linked_compare_source_kind(params) -> str | None:
+    if COMPARE_DATASET_PARAM in params or COMPARE_DATASET_ID_PARAM in params:
+        return "upload"
+    source = str(params.get(COMPARE_SOURCE_PARAM) or "").lower()
+    if (
+        COMPARE_CORPUS_PARAM in params
+        or source == CORPUS_SOURCE_TOKEN
+        or source in ONESTOP_REGIME_SOURCE_TOKENS.values()
+    ):
+        return "public"
+    return None
+
+
+def _linked_public_comparison(source, slug) -> tuple[str | None, str | None]:
+    """Check B against this installation's catalogue and files, without downloading."""
+    from .app import public_dataset_registry, public_datasets_enabled
+    from .compare_source import public_dataset_readiness
+
+    if source in ("", CORPUS_SOURCE_TOKEN) and not slug:
+        return None, (
+            "Only scanpath A is open. The link doesn't name a public corpus for "
+            "scanpath B. Ask the sender for a new link."
+        )
+    label = (
+        corpus_choice_for_slug(slug)
+        if source in ("", CORPUS_SOURCE_TOKEN)
+        else _source_choice_for_param(source)
+    )
+    if not public_datasets_enabled() or label not in public_dataset_registry():
+        shown = md_literal(str(label or slug or source))
+        return None, (
+            f"Only scanpath A is open. This app doesn't offer **{shown}** for "
+            "scanpath B. Reopen the link in an installation that offers this corpus."
+        )
+    ready, reason = public_dataset_readiness(label, refresh=True)
+    if not ready:
+        return None, (
+            f"Only scanpath A is open. {md_literal(reason)} "
+            "Reopen the link when the corpus is available."
+        )
+    return label, None
+
+
+def resolve_link_compare_source(primary: str | None) -> str | None:
+    """Select a linked upload or public B after the local session is restored."""
+    params = st.query_params
+    kind = _linked_compare_source_kind(params)
+    if kind is None:
+        return None
+    ids = parse_compare_value(params.get(COMPARE_PARAM))
+    if ids is None:
+        return None
+    name = str(params.get(COMPARE_DATASET_PARAM) or "")
+    share_id = params.get(COMPARE_DATASET_ID_PARAM)
+    digest = params.get(COMPARE_DATASET_DIGEST_PARAM)
+    screen = params.get(COMPARE_SCREEN_PARAM)
+    source = str(params.get(COMPARE_SOURCE_PARAM) or "").lower()
+    slug = params.get(COMPARE_CORPUS_PARAM)
+    reference = (kind, name, share_id, digest, source, slug, ids, screen)
+    state = st.session_state
+    # A link opens a comparison once. A later rerun may reflect a manual
+    # change to either picker, which the original URL must not undo.
+    previous = state.get("_linked_compare_source")
+    if previous and previous["reference"] == reference:
+        chosen = state.get("_pending_source_choice") or state.get("data_source_choice")
+        if previous["notice"] and (
+            previous["primary"] != chosen or state.get(SINGLE_COMPARE_TOGGLE)
+        ):
+            state["_linked_compare_source"] = {**previous, "notice": None}
+            return None
+        return previous["notice"]
+    notice = None
+    if kind == "public":
+        token, notice = _linked_public_comparison(source, slug)
+    else:
+        token = resolve_dataset_reference(state, name, share_id)
+        if token is None or token == primary:
+            token = None
+            shown = md_literal(name)
+            dataset = f"**{shown}**" if shown else "the linked dataset"
+            notice = (
+                f"Only scanpath A is open. Scanpath B needs {dataset}. Ask the sender "
+                f"for the files, add the dataset under the same name with "
+                f"{ICONS['add']} Add dataset → Import files, then reopen the link."
+            )
+        elif (
+            digest is not None
+            and share_dataset_fingerprint(state["_datasets"][token]) != digest
+        ):
+            token = None
+            notice = (
+                f"Only scanpath A is open. Your copy of **{md_literal(name)}** contains "
+                "different data. Ask the sender for the recording used for scanpath B, "
+                "then reopen the link."
+            )
+    available = token is not None
+    state[SINGLE_COMPARE_TOGGLE] = available
+    state[COMPARE_SOURCE_STATE_KEY] = (
+        token if token and token != primary else SAME_DATASET
+    )
+    state.pop(COMPARE_IDENTITY_STATE_KEY, None)
+    state.pop("single_compare_trial", None)
+    state.pop(SINGLE_COMPARE_SCREEN_ID, None)
+    if available:
+        participant, trial = ids
+        state[PENDING_COMPARE_STATE_KEY] = {
+            "participant_id": participant,
+            "trial_id": trial,
+        }
+        if screen:
+            state[SINGLE_COMPARE_SCREEN_ID] = str(screen)
+    else:
+        state.pop(PENDING_COMPARE_STATE_KEY, None)
+    state["_linked_compare_source"] = {
+        "reference": reference,
+        "primary": primary,
+        "notice": notice,
+    }
+    return notice
 
 
 def scope_link_setup(choice: str | None) -> None:
@@ -1764,7 +1925,11 @@ _CHOICE_STATE_PARSERS = {
     },
     "global_illustration_label": _closed_choice(("Auto", "Show", "Hide")),
     "global_marker_size_scale": _closed_choice(tuple(MARKER_SIZE_SCALES)),
-    "global_order_label_position": _closed_choice(tuple(ORDER_LABEL_POSITIONS)),
+    **{
+        option.state_key: _closed_choice(option.choices)
+        for option in FIXATION_LABEL_OPTIONS.values()
+        if option.choices
+    },
     "global_preproc_short_policy": _closed_choice(
         ("Off", "Merge", "Merge then discard", "Discard")
     ),
@@ -1908,7 +2073,7 @@ def sanitize_session_value(key: str, value):
 # time. The field-by-field reader already tolerates *missing* sections, so a
 # migration is only needed when an old key must be *translated*, not merely when
 # new keys are added.
-PLOT_CONFIG_SCHEMA = 8
+PLOT_CONFIG_SCHEMA = 9
 
 
 def _detect_config_schema(config: dict) -> int:
@@ -2088,6 +2253,8 @@ _PLOT_CONFIG_MIGRATIONS = {
     5: _migrate_config_5_to_6,
     6: _migrate_config_6_to_7,
     7: _migrate_config_7_to_8,
+    # Without an upload ID, a saved name still resolves by its original store key.
+    8: dict,
 }
 
 
@@ -2863,23 +3030,18 @@ def _restore_plot_config(
                 spec["size"] = _legend_size(spec["size"])
             for key, value in _legend_state(kind, spec).items():
                 put(key, value)
-    if "order_font_size" in sizing:
-        put_int(
-            sizing["order_font_size"],
-            "global_order_font_size",
-            *_FONT_BOUNDS,
-            "order label size",
-        )
-    color = sizing.get("order_font_color")
-    if isinstance(color, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", color):
-        put("global_order_font_color", color)
-    if "order_label_position" in sizing:
-        put_valid(
-            sizing["order_label_position"] in tuple(ORDER_LABEL_POSITIONS),
-            "global_order_label_position",
-            sizing["order_label_position"],
-            "order label position",
-        )
+    for name, option in FIXATION_LABEL_OPTIONS.items():
+        if name not in sizing:
+            continue
+        value = sizing[name]
+        if option.bounds:
+            put_int(value, option.state_key, *option.bounds, name.replace("_", " "))
+        elif option.choices:
+            put_valid(
+                value in option.choices, option.state_key, value, name.replace("_", " ")
+            )
+        elif isinstance(value, str) and _HEX_COLOR.fullmatch(value):
+            put(option.state_key, value)
     if "base_font_size" in sizing:
         put_int(
             sizing["base_font_size"],
@@ -3364,6 +3526,16 @@ def _compare_b_problem(compare: object, combos: pd.DataFrame) -> tuple[str | Non
     if compare.get("participant_id") in (None, ""):
         return None, "the file's second trial has no participant"
     source = compare.get("source")
+    if source is not None and not isinstance(source, str):
+        return None, "the file has an invalid comparison dataset"
+    if source:
+        upload = resolve_dataset_reference(
+            st.session_state, source, compare.get("source_id")
+        )
+        if upload is not None:
+            source = upload
+        elif "source_id" in compare:
+            return None, f"its dataset {source} is not available here"
     if source in (None, "") or source == st.session_state.get("data_source_choice"):
         _row, reason = _match_selection(compare, combos)
         return None, reason
@@ -3553,7 +3725,10 @@ def _build_share_query(
         # that name and say which is missing when it has none.
         stored = (st.session_state.get("_datasets") or {}).get(data_choice)
         if stored is not None:
-            params[PARAM_DATASET] = str(data_choice)
+            from .app import _dataset_display_name
+
+            params[PARAM_DATASET] = _dataset_display_name(data_choice)
+            params[PARAM_DATASET_ID] = dataset_share_id(st.session_state, data_choice)
             params[PARAM_DATASET_DIGEST] = share_dataset_fingerprint(stored)
         if is_multipleye_entry(stored):
             # A session set is read as it is laid out, with no mapping to
@@ -3599,10 +3774,8 @@ def _build_share_query(
 
     # The second scanpath. Gated on `include_trial` for the same reason A's
     # trial is — lower-level callers may omit identity from a URL even though
-    # the app's Share panel always includes it. B's source rides along only
-    # when it is one a URL can rebuild; an uploaded dataset lives in session
-    # state, so the link says so rather than silently dropping half the
-    # comparison.
+    # the app's Share panel always includes it. A built-in B has a source
+    # token; an uploaded B uses the same local ID and portable name as A.
     compare = selection.get("compare") if include_trial else None
     if isinstance(compare, dict) and compare.get("trial_id") not in (None, ""):
         participant_b = compare.get("participant_id")
@@ -3619,16 +3792,39 @@ def _build_share_query(
                 "leaves out, so the link opens the first scanpath only."
             )
         source_b = compare.get("source")
-        if source_b:
+        if source_b and COMPARE_PARAM in params:
             token = _SHAREABLE_SOURCES.get(source_b)
-            if token and COMPARE_PARAM in params:
+            if token:
                 params[COMPARE_SOURCE_PARAM] = token
-            elif COMPARE_PARAM in params:
-                params.pop(COMPARE_PARAM)
-                caveats.append(
-                    f"The compared scanpath comes from **{source_b}**, which "
-                    "a link can't rebuild, so the link leaves it out."
-                )
+            else:
+                from .app import _dataset_display_name
+
+                name_b = _dataset_display_name(source_b)
+                if share_id := dataset_share_id(st.session_state, source_b):
+                    params[COMPARE_DATASET_PARAM] = name_b
+                    params[COMPARE_DATASET_ID_PARAM] = share_id
+                    params[COMPARE_DATASET_DIGEST_PARAM] = share_dataset_fingerprint(
+                        st.session_state["_datasets"][source_b]
+                    )
+                    files = (
+                        "MultiplEYE session set"
+                        if is_multipleye_entry(st.session_state["_datasets"][source_b])
+                        else "data files and setup file"
+                    )
+                    caveats.append(
+                        f"Scanpath B uses **{md_literal(name_b)}**. Send its "
+                        f"{files} so the recipient can import it under "
+                        "that name before opening the link."
+                    )
+                elif slug := registry_corpus_slugs().get(source_b):
+                    params[COMPARE_SOURCE_PARAM] = CORPUS_SOURCE_TOKEN
+                    params[COMPARE_CORPUS_PARAM] = slug
+                else:
+                    params.pop(COMPARE_PARAM)
+                    caveats.append(
+                        f"The compared scanpath comes from **{md_literal(name_b)}**, "
+                        "which a link can't rebuild, so the link leaves it out."
+                    )
         if COMPARE_PARAM in params and compare.get("screen_id") not in (None, ""):
             params[COMPARE_SCREEN_PARAM] = str(compare["screen_id"])
 
@@ -4224,8 +4420,8 @@ def _render_code_snippet_body(data_choice: str) -> None:
     explicit = explicit_col.checkbox(
         "Show every option",
         key=SNIPPET_EXPLICIT_KEY,
-        help="By default the code lists only the options you changed. Tick "
-        "this to list every figure option at its current value.",
+        help="The compact code lists changes that apply to this view. "
+        "Select this to include the other figure options at their current values.",
     )
     output = _SNIPPET_OUTPUT.get(state.kind, "scanpath.png")
     code = reproduction_code(

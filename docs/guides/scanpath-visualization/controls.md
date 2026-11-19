@@ -143,7 +143,7 @@ The **Fixations** switch draws the fixation markers. Its **▾** holds:
 | **Color bar** → **Show** | Show the color scale's bar, when markers are colored by a number. |
 | **Color bar** → **Vertical** / **Horizontal**, **Angle**, **Size**, **Thickness**, **Length** | Set the bar's direction (right of the plot or below it), its tick-label angle and size, and its thickness and length. |
 | **Fixation index** → **Show** | Number each fixation in reading order. |
-| **Fixation index** → color, **Size** | Choose the numbers' color and size. |
+| **Fixation index** → color, **Size** | Choose the numbers' size in every view. For one scanpath, choose their color here. When comparing two scanpaths, each number uses its scanpath’s fixation color, including during replay. |
 | **Fixation index** → **Position** | Put each number above its fixation, inside it, or below it. |
 | **Snap** → **To line** | Move each fixation up or down onto its line of text. This makes a schematic, labeled *Illustration*. |
 | **Snap** → **Position** | Choose where on its line a snapped fixation sits. |
@@ -311,7 +311,7 @@ several menus split into a **Scanpath A** and a **Scanpath B** group.
 
 | Control | What it does |
 | --- | --- |
-| **Dataset B** | Choose the dataset scanpath B comes from: this one, or another dataset. |
+| **Dataset B** | Choose the dataset scanpath B comes from. To reopen a shared comparison with PoTeC or OneStop, the recipient needs the corpus on their computer. If the link opens only A, open the named corpus as the main dataset to locate or download its files, then reopen the link. |
 | **Trial B**, slider, **◀ ▶** | Choose scanpath B's trial: 📄 marks the same text, 👤 the same participant. |
 | **Screen B** | On a trial recorded over several screens: B's screen to show. |
 | **⇅** on B's row | Sort scanpath B's trial list, apart from A's. The default, **Same text, then same participant**, lists trials of A's text first, then A's participant, then the rest. You can also sort by any field, as on A's row. |
@@ -347,6 +347,6 @@ The tabs under the figure. Essentials has **Export**, for the current figure, an
 | | **Annotations (JSON)** / **Settings file (JSON)** | **Settings file**: beside each trial's figure, a `plot_config.json` recording how it was drawn (layers, colors, sizes, screen, title and caption), so the figures are documented. **Annotations**: one `annotations.json` with the exported trials' favorites, tags and notes, which :material/database: **Data Management** → **Annotations** can import again. |
 | | **File path pattern** | Set the file names inside the export bundle. |
 | | **Build export** | Build the export bundle (a zip) to download. |
-| :material/share: **Share** | **Link** | Copy a share link that reopens this trial with these settings. The data doesn't travel in the link, so whoever opens it needs the same dataset. The bundled demo works anywhere. A public dataset has to be downloaded on their side. For your own dataset, send its files and setup file (:material/edit: **Edit dataset** → **Download setup file**) so they can add it first. A link made on your own computer (a `localhost` address) opens only where the app runs at that same address. |
+| :material/share: **Share** | **Link** | Copy a link that reopens this trial and its settings. The bundled demo works anywhere. A public dataset has to be downloaded on the recipient's side. For each dataset you imported, send its data files and setup file (:material/edit: **Edit dataset** → **Download setup file**) so they can add it under the same name. If they have A but still need B for a comparison, the link opens A and names the dataset to add. On your own computer the link still works after either dataset is renamed. A `localhost` link opens where the app runs at the same address. |
 | | **Code** → **Python** / **CLI**, **Show every option** | Get the Python or command-line code that redraws this figure, for scripts and reproduction. |
 | | **Settings file** → **Download settings** / **Restore settings** | Save the plot settings to a file, or load (restore) a saved settings file. |

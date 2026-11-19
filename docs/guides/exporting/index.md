@@ -42,14 +42,20 @@ To add a visible credit to the figure, use **Figure & canvas** → **Credit**.
   <source src="../../assets/workflows/share-link.mp4" type="video/mp4">
 </video>
 
-For an imported dataset, the recipient needs the same dataset name and matching recording tables. The link checks the tables before opening the shared view. Older links match by name and ask the recipient to confirm they have the sender’s data.
+A link can find an imported dataset on the same computer after you rename it.
+On another computer, import the sender’s data under the name in the link.
+The link checks that the recording tables match, including those for a second
+imported dataset in a comparison. Older links can open without checking the tables.
 [All controls → Under the plot](../scanpath-visualization/controls.md#under-the-plot)
 says what the recipient needs.
 
 ## Reproduce a figure { #from-the-app-to-a-script }
 
 Open **Share** → **Code** and copy the Python or CLI code. It includes the
-figure's settings and your column mapping. For a dataset you imported, replace
+figure's settings and your column mapping. The compact code includes changes
+that affect this view. For example, a comparison uses each scanpath's own
+fixation color for its index numbers. Select **Show every option** to include
+the other accepted figure settings. For a dataset you imported, replace
 the placeholder file paths with your own.
 [Render in code](../scanpath-visualization/index.md#render-in-code) shows a minimal example.
 

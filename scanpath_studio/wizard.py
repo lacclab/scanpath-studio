@@ -42,7 +42,6 @@ from .constants import (
     DEMO_CHOICE,
     FONT_FAMILY,
     ICONS,
-    SETUP_OVERRIDE_FOR_KEY,
     TRIAL_IDENTITY_CHECK_KEY,
     WIZARD_LEAVE_KEY,
     WORD_KEY,
@@ -100,7 +99,7 @@ from .data import (
     propose_raw_gaze_schema,
     propose_word_schema,
     source_file_regex_collisions,
-    split_source_file,
+    split_named_columns,
     stamp_source,
     text_word_id_issues,
     trial_id_series,
@@ -112,6 +111,7 @@ from .data import (
     word_ids_set_aside,
     words_with_several_boxes,
 )
+from .dataset_identity import dataset_share_id, forget_dataset_identity
 from .experimental_setup import (
     FONT_CHOICES,
     FONT_PT_RANGE,
@@ -131,8 +131,7 @@ from .experimental_setup import (
 )
 from .fields import row_label, switch, tooltip
 from .menu import view_label
-from .persistence import is_loopback_url, persistence_enabled, rename_cached_dataset
-from .session_keys import COMPARE_SOURCE_STATE_KEY
+from .persistence import is_loopback_url, persistence_enabled
 from .styles import mapping_menu_css
 from .tabs import _collect_column_mapping
 from .tour import (
@@ -259,42 +258,59 @@ def _default_dataset_name() -> str:
     return f"Dataset {n}"
 
 
+def _occupied_dataset_tokens() -> set[str]:
+    """Include held-back cache entries and owners of detached annotations or metadata."""
+    import scanpath_studio.annotations as annotations_mod
+
+    from . import metadata
+    from .dataset_identity import DATASET_IDS_KEY
+    from .persistence import failed_datasets
+
+    session = st.session_state
+    tokens = set(session.get("_datasets") or {}) | set(failed_datasets(session))
+    tokens.update(session.get(app.DATASET_ALIASES_KEY) or {})
+    tokens.update(session.get(DATASET_IDS_KEY) or {})
+    tokens.update(annotations_mod.dataset_names(session))
+    tokens.update(session.get(metadata.DATASET_STORE_KEY) or {})
+    if owner := session.get(metadata.OWNER_KEY):
+        tokens.add(owner)
+    return tokens
+
+
 def _safe_dataset_name(name: str | None, *, exclude: str | None = None) -> str:
-    """A non-empty dataset name that collides with neither a built-in source label
-    nor an already-stored dataset (suffixed ``(2)``, ``(3)``… rather than silently
-    overwriting an existing entry's frames).
-
-    Built-in labels are every token the picker can list
-    (``app.reserved_source_names`` — the demo, the samples, the server bundles
-    and every public corpus): a user dataset shadowing one gets a duplicate
-    option and hijacks the built-in's load branch. A name that still
-    holds another dataset's annotation store counts as taken too, so a new or
-    renamed dataset never inherits annotations that are not its own.
-
-    ``exclude`` drops one stored name from the collision check — a rename
-    must not read the dataset being renamed as a clash with itself and turn
-    "My corpus" into "My corpus (2)" on a capitalisation fix."""
-    import scanpath_studio.annotations as _annotations
-
+    """Choose a unique display name, including labels held by unavailable datasets."""
     # The fields stop typing at the limit; a name from a setup file is cut to it.
     name = (name or "").strip()[:DATASET_NAME_MAX_CHARS].rstrip()
     name = name or _default_dataset_name()
     if name in app.reserved_source_names():
         name = f"{name} (uploaded)"
+    aliases = st.session_state.get(app.DATASET_ALIASES_KEY) or {}
     existing = {
-        key: value
-        for key, value in st.session_state.get("_datasets", {}).items()
-        if key != exclude
+        str(aliases.get(key) or key).casefold()
+        for key in _occupied_dataset_tokens()
+        if key != exclude and key is not None
     }
-    existing.update(
-        dict.fromkeys(_annotations.dataset_names(st.session_state) - {exclude} - {None})
-    )
-    if name in existing:
-        base, n = name, 2
-        while f"{base} ({n})" in existing:
-            n += 1
-        name = f"{base} ({n})"
+    base, n = name, 2
+    while name.casefold() in existing:
+        suffix = f" ({n})"
+        name = base[: DATASET_NAME_MAX_CHARS - len(suffix)].rstrip() + suffix
+        n += 1
     return name
+
+
+def _new_dataset_token(label: str) -> str:
+    """Allocate an immutable store key, including when a rename freed this label."""
+    from uuid import uuid4
+
+    used = _occupied_dataset_tokens()
+    if label not in used:
+        return label
+    token = f"upload-{uuid4().hex}"
+    st.session_state[app.DATASET_ALIASES_KEY] = {
+        **(st.session_state.get(app.DATASET_ALIASES_KEY) or {}),
+        token: label,
+    }
+    return token
 
 
 def _wizard_finalize_metadata_pools(payload: dict) -> tuple:
@@ -403,7 +419,9 @@ def _finalize_wizard_dataset() -> None:
 
     participants, combos, texts = _wizard_finalize_metadata_pools(payload)
     commit_deferred_metadata(participants, combos, texts)
-    ds_name = _safe_dataset_name(st.session_state.get("wizard_dataset_name"))
+    ds_name = _new_dataset_token(
+        _safe_dataset_name(st.session_state.get("wizard_dataset_name"))
+    )
     # The sentence the 🗂️ Data page shows under its name. Kept
     # beside the store, not in its entry (see `DATASET_DESCRIPTIONS_KEY`).
     if description := str(
@@ -422,6 +440,7 @@ def _finalize_wizard_dataset() -> None:
         )
     store = st.session_state.setdefault("_datasets", {})
     store[ds_name] = payload
+    dataset_share_id(st.session_state, ds_name)
     # Its recording setup is applied when it opens, on the next run, as every
     # added dataset's is (`app.seed_canvas_state`), and leaving it puts back
     # what the figure held before. What that is excludes the answers this
@@ -499,6 +518,7 @@ def _remove_dataset(name: str) -> None:
     annotations_mod.forget_dataset(st.session_state, name)
     store = st.session_state.get("_datasets", {})
     store.pop(name, None)
+    forget_dataset_identity(st.session_state, name)
     # And its description, so a new dataset of that name starts without one.
     descriptions = dict(st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {})
     if descriptions.pop(name, None) is not None:
@@ -516,66 +536,18 @@ def _remove_dataset(name: str) -> None:
     app.clear_computation_cache()
 
 
-def rename_dataset(old: str, new: str) -> str | None:
-    """Rename a stored dataset. Returns the name it actually took.
-
-    The name is the **key** into the ``_datasets`` store, so a rename is a re-key,
-    and every other holder of that string has to move with it: the canonical
-    ``data_source_choice`` (through the pre-widget ``_pending_source_choice`` seam,
-    like `_remove_dataset`'s fallback — assigning the widget key inline is
-    unreliable in a browser), the wizard's ``_prev_source`` return address, and
-    ``cmp_dataset`` when the comparison draws scanpath B from it. The recovery
-    cache follows in :func:`persistence.rename_cached_dataset`, which re-keys its
-    manifest rather than re-encoding the Parquet files.
-
-    Returns ``None`` when there is nothing to rename (unknown dataset, or the new
-    name resolves to the one it already has). The store is rebuilt in order rather
-    than re-inserted, so the renamed dataset keeps its place in the source picker.
-    """
-    store = st.session_state.get("_datasets", {})
-    if old not in store:
+def rename_dataset(token: str, requested: str) -> str | None:
+    """Change an upload's display name. Its store key stays valid across restarts."""
+    if token not in (st.session_state.get("_datasets") or {}):
         return None
-    name = _safe_dataset_name(new, exclude=old)
-    if name == old:
+    label = _safe_dataset_name(requested, exclude=token)
+    if label == app._dataset_display_name(token):
         return None
-    # The annotations move first, and refuse a name that already
-    # holds a store. `_safe_dataset_name` never picks one, so this is a guard:
-    # if it ever did, renaming the frames without the annotations would strand
-    # them under the old name.
-    import scanpath_studio.annotations as _annotations
-
-    if not _annotations.rename_dataset(st.session_state, old, name):
-        return None
-    st.session_state["_datasets"] = {
-        (name if key == old else key): value for key, value in store.items()
+    st.session_state[app.DATASET_ALIASES_KEY] = {
+        **(st.session_state.get(app.DATASET_ALIASES_KEY) or {}),
+        token: label,
     }
-    if st.session_state.get("data_source_choice") == old:
-        st.session_state["_pending_source_choice"] = name
-    if st.session_state.get("_prev_source") == old:
-        st.session_state["_prev_source"] = name
-    if st.session_state.get(COMPARE_SOURCE_STATE_KEY) == old:
-        st.session_state[COMPARE_SOURCE_STATE_KEY] = name
-    # The figure holds its setup under its name: renamed, it is still the
-    # same visit, so a value tuned on the rail is not reset.
-    if st.session_state.get(SETUP_OVERRIDE_FOR_KEY) == old:
-        st.session_state[SETUP_OVERRIDE_FOR_KEY] = name
-    # And its description.
-    descriptions = dict(st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {})
-    if old in descriptions:
-        descriptions[name] = descriptions.pop(old)
-        st.session_state[DATASET_DESCRIPTIONS_KEY] = descriptions
-    # And its stimulus-image folder.
-    images = dict(st.session_state.get(DATASET_STIMULUS_IMAGES_KEY) or {})
-    if old in images:
-        images[name] = images.pop(old)
-        st.session_state[DATASET_STIMULUS_IMAGES_KEY] = images
-    # And its metadata tables, which are keyed by the name too (the
-    # annotations moved above).
-    from scanpath_studio import metadata as _metadata
-
-    _metadata.rename_dataset(st.session_state, old, name)
-    rename_cached_dataset(st.session_state, old, name)
-    return name
+    return label
 
 
 def _render_leave_prompt(host) -> None:
@@ -1197,27 +1169,6 @@ def _row_note(block, table: str, prefix: str):
 _DERIVE_LINE_W = (0.14, 0.16, 0.15, 0.24, 0.09, 0.11, 0.11)
 
 
-def _next_available_names(existing: set, base: str, count: int) -> list:
-    """The next ``count`` names ``<base>_<n>`` not already in ``existing``,
-    marking each as claimed as it is picked.
-
-    Splitting the same column a second time then continues past whatever the
-    first split already claimed (``source_file_7``, not another
-    ``source_file_1``) instead of colliding with — and silently
-    overwriting — it. ``existing`` is mutated in place so a caller reusing it
-    across several lines against the same table keeps accumulating names.
-    """
-    names = []
-    n = 1
-    while len(names) < count:
-        candidate = f"{base}_{n}"
-        if candidate not in existing:
-            names.append(candidate)
-            existing.add(candidate)
-        n += 1
-    return names
-
-
 #: The last derivation each Apply line made, per table: what it was made from
 #: and the frame it gave. A derivation is a pure function of its input frame and
 #: its settings, and the add screen reruns on every click — so without this a
@@ -1253,7 +1204,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     upload, not one shared value), so a line derives from exactly the one
     table named, never all three at once. Two modes per line: split into positional
     ``<column>_1``/``<column>_2``/… columns on a delimiter (collision-safe —
-    see :func:`_next_available_names`), or extract *named groups* with a
+    see :func:`split_named_columns`), or extract *named groups* with a
     regex (robust to variable-length parts, e.g. a stimulus name whose length
     varies). ➕ **Another** (beside Apply, on the first line) adds another
     mapping line — the same Table/Column/How/pattern/Lowercase controls, no
@@ -1485,15 +1436,9 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                 delimiter=config["delimiter"],
                 column=applied_column,
             ):
-                split = split_source_file(parent, delimiter=delimiter, column=column)
-                # `split_source_file` always names positionally
-                # (`file_part_N`) — rename to `<source column>_<n>` here, using
-                # the next names not already claimed in this table, rather than
-                # letting a second split of the same (or another) column
-                # collide with the first's `file_part_1`/`_2`/….
-                temp_cols = [c for c in split.columns if c not in parent.columns]
-                new_names = _next_available_names(set(existing), column, len(temp_cols))
-                derived = split.rename(columns=dict(zip(temp_cols, new_names)))
+                derived, new_names = split_named_columns(
+                    parent, column, delimiter, existing
+                )
                 # Named by what made it, so it is not re-hashed each rerun.
                 assign_derived(
                     derived,
@@ -2173,7 +2118,7 @@ def _dataset_setup_config(name: str) -> dict | None:
     choices = choices if isinstance(choices, dict) else {}
     setup = entry.get("setup")
     return {
-        "data_source": name,
+        "data_source": app._dataset_display_name(name),
         # An older stored upload with no `source_recipe` gets one rebuilt
         # from its stored mapping (`column_names.stored_source_recipe`).
         "column_mapping": _mapping_keys_from_schemas(
@@ -2390,7 +2335,9 @@ def _copy_dataset_setup() -> None:
     name = st.session_state.get(_COPY_FROM_KEY)
     config = _dataset_setup_config(name) if name else None
     if config is not None:
-        _apply_setup_config(config, source=str(name), kind="dataset")
+        _apply_setup_config(
+            config, source=app._dataset_display_name(name), kind="dataset"
+        )
 
 
 def _wizard_restore_config(host) -> None:
@@ -2486,6 +2433,7 @@ def _render_start_from(host) -> None:
         row.selectbox(
             "Dataset to copy from",
             uploads,
+            format_func=app._dataset_display_name,
             key=_COPY_FROM_KEY,
             label_visibility="collapsed",
             width=260,

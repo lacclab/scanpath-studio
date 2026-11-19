@@ -33,6 +33,7 @@ __all__ = [
     "plot_scanpath",
     "propose_schema",
     "render_parent_trial",
+    "run_analysis_recipe",
     "save_figure",
     "save_figure_layers",
     "version_info",

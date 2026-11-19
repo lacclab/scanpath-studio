@@ -4,6 +4,14 @@ from __future__ import annotations
 
 import os
 import re
+from dataclasses import dataclass
+from typing import Literal
+
+from .session_keys import (
+    GLOBAL_ORDER_FONT_COLOR,
+    GLOBAL_ORDER_FONT_SIZE,
+    GLOBAL_ORDER_LABEL_POSITION,
+)
 
 PACKAGE_NAME = "scanpath_studio"
 
@@ -218,6 +226,7 @@ LEGACY_MARKER_SIZE_SCALE = "relative"
 DEFAULT_MARKER_DURATION_RANGE = (50, 600)
 #: The duration-bounds widget's own limits (ms).
 MARKER_DURATION_BOUNDS = (10, 3000)
+DEFAULT_ORDER_FONT_SIZE = 10
 DEFAULT_ORDER_FONT_COLOR = "#111111"
 #: Where each fixation's index number sits relative to its marker → the
 #: Plotly ``textposition`` that puts it there. "inside" centres it on the
@@ -228,6 +237,54 @@ ORDER_LABEL_POSITIONS = {
     "below": "bottom center",
 }
 DEFAULT_ORDER_LABEL_POSITION = "above"
+
+
+@dataclass(frozen=True)
+class FixationLabelOption:
+    """One fixation-index setting on the rail, in a link or file, and on the CLI."""
+
+    state_key: str
+    default: int | str
+    kind: Literal["int", "color", "choice"]
+    description: str
+    metavar: str | None = None
+    bounds: tuple[int, int] | None = None
+    choices: tuple[str, ...] = ()
+
+    @property
+    def name(self) -> str:
+        return self.state_key.removeprefix("global_")
+
+    @property
+    def flag(self) -> str:
+        return "--" + self.name.replace("_", "-")
+
+
+INDEX_SIZE = FixationLabelOption(
+    GLOBAL_ORDER_FONT_SIZE,
+    DEFAULT_ORDER_FONT_SIZE,
+    "int",
+    "Size of the fixation index numbers",
+    metavar="PX",
+    bounds=(6, 72),
+)
+INDEX_COLOR = FixationLabelOption(
+    GLOBAL_ORDER_FONT_COLOR,
+    DEFAULT_ORDER_FONT_COLOR,
+    "color",
+    "Color of the fixation index numbers for a single scanpath",
+    metavar="COLOR",
+)
+INDEX_POSITION = FixationLabelOption(
+    GLOBAL_ORDER_LABEL_POSITION,
+    DEFAULT_ORDER_LABEL_POSITION,
+    "choice",
+    "Where each fixation index number sits on its fixation",
+    choices=tuple(ORDER_LABEL_POSITIONS),
+)
+FIXATION_LABEL_OPTIONS = {
+    option.name: option for option in (INDEX_SIZE, INDEX_COLOR, INDEX_POSITION)
+}
 
 WORD_BOX_COLOR = "#6c757d"
 #: The outline's opacity; 1 draws it solid.
@@ -805,6 +862,9 @@ _MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA]
 #: and `persistence` cannot import `app` (that is the cycle `app` already
 #: avoids by importing `persistence` one way).
 DATASET_COUNTS_STORE_KEY = "_dataset_counts_store"
+
+#: Display labels can change without moving a dataset or any of its attached tables.
+DATASET_ALIASES_KEY = "_dataset_display_aliases"
 
 #: ``{dataset token: description}``, every description the user
 #: wrote (on the add wizard or ✏️ Edit dataset), for any kind of dataset. One

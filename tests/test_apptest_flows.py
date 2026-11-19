@@ -1268,6 +1268,86 @@ class TestCrossDatasetCompareFlow:
             SYNTHETIC_SOURCE
         )
 
+    def test_upload_named_this_dataset_selects_its_own_reading(self):
+        from scanpath_studio.compare_source import COMPARE_SOURCE_KEY
+        from scanpath_studio.synthetic import (
+            make_synthetic_fixations,
+            make_synthetic_words,
+        )
+
+        at = _boot()
+        uploaded_trial = "only-in-upload"
+        at.session_state["_datasets"] = {
+            "This dataset": {
+                "words": make_synthetic_words().assign(trial_id=uploaded_trial),
+                "fixations": make_synthetic_fixations().assign(trial_id=uploaded_trial),
+                "raw_gaze": pd.DataFrame(),
+            }
+        }
+        at.session_state["single_compare_toggle"] = True
+        at.run(timeout=90)
+        picker = at.selectbox(key=COMPARE_SOURCE_KEY)
+        assert {"Same dataset as A", "This dataset"} <= set(picker.options)
+        picker.set_value("This dataset").run(timeout=90)
+        _clean(at, "comparing with the similarly named upload:")
+        selected = at.session_state["_share_selection"]["compare"]
+        assert selected["trial_id"] == uploaded_trial
+        assert selected["source"] == "This dataset"
+
+    @pytest.mark.parametrize("custom_labels", [False, True], ids=["default", "custom"])
+    def test_renamed_datasets_in_the_plotted_legend(self, monkeypatch, custom_labels):
+        from scanpath_studio import tabs
+        from scanpath_studio.compare_source import COMPARE_SOURCE_KEY
+        from scanpath_studio.constants import DATASET_ALIASES_KEY, DEMO_CHOICE
+        from scanpath_studio.synthetic import (
+            make_synthetic_fixations,
+            make_synthetic_words,
+        )
+
+        at = AppTest.from_file(APP_SCRIPT)
+        figures = {}
+        monkeypatch.setattr(
+            tabs,
+            "_render_true_scale_chart",
+            lambda fig, *, key, **kwargs: figures.update({key: fig}),
+        )
+        fixations = make_synthetic_fixations()
+        token = "original-upload-name"
+        at.session_state["_datasets"] = {
+            token: {
+                "words": make_synthetic_words(),
+                "fixations": fixations,
+                "raw_gaze": pd.DataFrame(),
+            }
+        }
+        at.session_state[DATASET_ALIASES_KEY] = {
+            DEMO_CHOICE: "Reader group A",
+            token: "Reader group B",
+        }
+        at.session_state["single_compare_toggle"] = True
+        at.session_state[COMPARE_SOURCE_KEY] = token
+        if custom_labels:
+            at.session_state["cmp0_label_pattern"] = "{dataset_name}"
+            at.session_state["cmp1_label_pattern"] = (
+                "{dataset_name} / {participant_id} / {n_fixations}"
+            )
+        at.run(timeout=90)
+        _clean(at, "rendering the comparison legend:")
+        traces = {
+            trace.name: trace for trace in figures["compare"].data if trace.showlegend
+        }
+        assert all(token not in name for name in traces)
+        if custom_labels:
+            assert "Reader group A" in traces
+            b_label = f"Reader group B / synthetic / {len(fixations)}"
+        else:
+            (b_label,) = [
+                name
+                for name in traces
+                if "Reader group B" in name and traces[name].mode.startswith("markers")
+            ]
+        assert list(traces[b_label].x) == fixations["x"].tolist()
+
     def test_overlay_resolves_to_a_split_layout_without_losing_the_choice(self):
         from scanpath_studio.compare_source import COMPARE_SOURCE_KEY
 

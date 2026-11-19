@@ -17,19 +17,20 @@ before `render_plot_controls`):
 | **Compare** | `plots.make_comparison_figure` (split layouts: `_make_split_comparison_figure`) | `tabs._render_comparison_figure` |
 | **Animate + Compare** | `make_scanpath_animation(fixations_b=…)` — the co-animation | same as Animate |
 
-A setting is honoured (✅) only where the builder takes the parameter **and**
-`tabs.py` passes it; everything else renders disabled with a reason via
-`controls._mode_gate`. Keep this table in sync when a builder gains or loses a
-parameter.
+The table below describes the app's controls. For the headless API and CLI,
+the [figure options reference](https://lacclab.github.io/scanpath-studio/api/#figure-options)
+lists the four render views. The reference and compact Share snippets use
+`figure_views.options_for_view`; `api.figure_options` lists accepted keywords.
 
 | setting (`viz_settings` name) | static | animation | compare | notes |
 | --- | :---: | :---: | :---: | --- |
 | `show_words`, `show_labels`, `show_saccades`, `show_order`, `order_font_size`, `order_label_position` | ✅ | ✅ | ✅ | |
-| `word_box_*` (colour, line / fill opacity) | ✅ | ✅ | fill only | Compare outlines each reading's boxes in its own `cmp{idx}_box_color` (its scanpath colour by default) |
+| `word_box_*` (colour, line / fill opacity) | ✅ | ✅ | fill and both opacities | Compare outlines each reading's boxes in its own `cmp{idx}_box_color` (its scanpath colour by default); each style can also override the fill and opacities |
 | `show_fix` | ✅ | ❌ | ✅ | The replay *is* the fixation trail |
 | `show_saccade_arrows`, `saccade_arrow_size`, `saccade_opacity` | ✅ | ✅ | ✅ | One figure-wide value in Compare |
 | `legend_layout` | ✅ | ✅ (not saccades) | ✅ (not saccades) | `plots.apply_legend_layout`; one `legend_<kind>=SPOT[,ARR][,SIZE]` link param per moved legend, `render --legend` |
-| `order_font_color`, `fixation_color`, `marker_size_range`, `fixation_opacity`, `hollow_fixations`, `saccade_color` / `_style` / `_width` | ✅ | ✅ (single only) | ❌ | Compare and the co-animation use the per-scanpath `cmp{idx}_*` styles |
+| Global fixation index color, marker color, opacity and hollow markers, saccade color / style / width | ✅ | ✅ (single only) | ❌ | Compare and the co-animation use the per-scanpath `cmp{idx}_*` styles; fixation indices use each scanpath's fixation color |
+| `marker_size_range` | ✅ | ✅ | ✅ | A/B controls set each scanpath's range. A style without a range inherits the figure-wide value. |
 | `color_by`, `fixation_colorscale`, `fixation_color_range` | ✅ | ✅ | ✅ | Compare colours the fill and makes the scanpath colour the outline; a range is present only when explicit (absent = scale to the data, A+B together) |
 | `fixation_symbol` | ✅ | ✅ | ✅ | Glyph shapes (♥) are drawn as text by `plots._glyph_scatter_traces` in every builder |
 | `marker_size_scale`, `marker_duration_range`, `duration_size_legend` | ✅ | ✅ | ✅ | One duration scale; the size key draws in Compare only while A and B share a px range |
@@ -45,7 +46,7 @@ parameter.
 | stimulus image (`background_image*`, opacity / offset / scale) | ✅ | ✅ | ✅ | Split layouts get one image per panel |
 | `highlight_column`, `highlight_text_color`, `text_color` | ✅ | ✅ | ✅ | Only *Mark text* reaches all three; *Mark border* (`span_border_color`) is static-only |
 | `redact_text` | ✅ | ✅ | ✅ | `plots.redact_word_text` masks the words at each builder's entry; the blocks take the text / highlight colour |
-| `word_hover_measure` | ✅ | ✅ | ❌ | |
+| `word_hover_measure` | ✅ | ✅ | ✅ | The measure appears when the word hover includes it. |
 | colour bars (`{fixation,heatmap}_colorbar_*`) | ✅ | ✅ fixation only | ✅ | Through `plots._colorbar_dict` |
 | `x_field` / `y_field` | ✅ | ❌ | ❌ | Index and elapsed-time presets set these same two fields. On a position chart, index supports a sequence line and elapsed seconds show fixation durations. Raw samples require both plotted fields. Animation and comparison use screen `x` / `y` |
 | `fit_to_monitor`, `crop_margin`, coordinate grid + font size, title / caption styling, `show_credit`, `background_color`, `show_plot_frame` / `plot_frame_color` | ✅ | ✅ | ✅ | |

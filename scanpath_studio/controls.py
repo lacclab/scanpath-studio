@@ -48,7 +48,6 @@ from .constants import (
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
-    DEFAULT_ORDER_LABEL_POSITION,
     DEFAULT_PALETTE,
     DEFAULT_PLOT_FRAME_COLOR,
     DEFAULT_SACCADE_ARROW_SIZE,
@@ -56,6 +55,7 @@ from .constants import (
     DEFAULT_SNAP_POSITION,
     DEFAULT_TITLE_FONT_SIZE,
     DEMO_CHOICE,
+    FIXATION_LABEL_OPTIONS,
     FIXATION_OUTLINE_WIDTH_BOUNDS,
     FIXATION_SYMBOLS,
     GRID_FONT_SIZE_BOUNDS,
@@ -63,13 +63,15 @@ from .constants import (
     HEATMAP_SIGMA_BOUNDS,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
+    INDEX_COLOR,
+    INDEX_POSITION,
+    INDEX_SIZE,
     LEGEND_ARRANGEMENT_LABELS,
     LEGEND_KIND_LABELS,
     LEGEND_KINDS,
     LEGEND_POSITION_LABELS,
     MARKER_DURATION_BOUNDS,
     MARKER_SIZE_SCALES,
-    ORDER_LABEL_POSITIONS,
     OUT_OF_TEXT_COLOR,
     PALETTES,
     RAW_GAZE_LINK_FOR_KEY,
@@ -903,9 +905,7 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_crop_margin_auto": True,
     "global_crop_margin_px": DEFAULT_CROP_MARGIN_PX,
     "global_coordinate_grid_spacing": 100.0,
-    "global_order_font_color": "#111111",
-    "global_order_font_size": 10,
-    "global_order_label_position": DEFAULT_ORDER_LABEL_POSITION,
+    **{option.state_key: option.default for option in FIXATION_LABEL_OPTIONS.values()},
     "global_fixation_colorscale": DEFAULT_FIXATION_COLORSCALE,
     "global_heatmap_colorscale": DEFAULT_HEATMAP_COLORSCALE,
     # Restorable by the settings file too, so seed here (no inline
@@ -4811,18 +4811,16 @@ def _selected_metadata_rows(trial_fixations: pd.DataFrame | None) -> dict:
 def current_dataset_name() -> str:
     """The name the dataset picker shows for the source now loaded.
 
-    ``data_source_choice`` is canonical: the stored value *is* the entry's
-    label — the user's own name for an upload, the registry label for a public
-    corpus — and renaming a dataset re-keys it, so a renamed dataset carries the
-    new name without anything else to update.
-
     Returns ``""`` rather than a placeholder when there is no session (headless
     render, import time): ``{dataset_name}`` then renders empty, which is the
     same thing an unnamed CLI render produces, instead of inventing a label
     that would disagree with the app.
     """
     try:
-        return str(st.session_state.get("data_source_choice") or "")
+        from .app import _dataset_display_name
+
+        token = st.session_state.get("data_source_choice")
+        return _dataset_display_name(token) if token else ""
     except Exception:  # no ScriptRunContext — headless import, tests, docs
         return ""
 
@@ -6047,7 +6045,8 @@ def _seed_viz_state(
     ss = st.session_state
     seeded = (
         "is_in_aspan"
-        if "is_in_aspan" in highlight_options and current_dataset_name() == DEMO_CHOICE
+        if "is_in_aspan" in highlight_options
+        and st.session_state.get("data_source_choice") == DEMO_CHOICE
         else None
     )
     current = ss.get("global_highlight_column")
@@ -6479,12 +6478,13 @@ def _collect_viz_settings(
         ),
         duration_size_legend=bool(ss.get("global_duration_size_legend", True)),
         legend_layout=_collect_legend_layout(ss),
-        order_font_size=ss.get("global_order_font_size"),
-        order_font_color=ss.get("global_order_font_color"),
-        # A deselected segmented control stores None.
-        order_label_position=(
-            ss.get("global_order_label_position") or DEFAULT_ORDER_LABEL_POSITION
-        ),
+        # A deselected position control stores None and draws at its default.
+        **{
+            name: (ss.get(option.state_key) or option.default)
+            if option.choices
+            else ss.get(option.state_key)
+            for name, option in FIXATION_LABEL_OPTIONS.items()
+        },
         **{
             f"show_{bar}_colorbar": bool(ss.get(f"global_show_{bar}_colorbar"))
             for bar in ("fixation", "heatmap")
@@ -6957,10 +6957,17 @@ def _reset_viz_confirmation_dialog() -> None:
 _PLOT_HISTORY = "_plot_edit_history"
 
 
+def _plot_history_owner(session) -> str:
+    from .dataset_identity import dataset_share_id
+
+    token = session.get("data_source_choice", "")
+    return dataset_share_id(session, token) or token
+
+
 def _record_plot_edit() -> PlotHistory:
     """Observe the settings that the rail has finished rendering on this run."""
     ss = st.session_state
-    dataset = current_dataset_name()
+    dataset = _plot_history_owner(ss)
     history = ss.get(_PLOT_HISTORY)
     if history is None or history.dataset != dataset:
         history = ss[_PLOT_HISTORY] = PlotHistory(dataset)
@@ -7001,7 +7008,7 @@ def _record_plot_edit() -> PlotHistory:
 def _step_plot_history(redo: bool) -> None:
     ss = st.session_state
     history = ss.get(_PLOT_HISTORY)
-    if history is None or history.dataset != current_dataset_name():
+    if history is None or history.dataset != _plot_history_owner(ss):
         return
     step = history.step(redo=redo)
     if step is None:
@@ -7827,7 +7834,7 @@ def render_plot_controls(
         )
         color_col.color_picker(
             "Index label color",
-            key="global_order_font_color",
+            key=INDEX_COLOR.state_key,
             persist_state="session",
             disabled=_dis,
             help=_tip,
@@ -7837,7 +7844,7 @@ def render_plot_controls(
         # the rail's CSS drops a `__num` box's steppers, and the canonical key is
         # what deep links, Share and restore read. Rounded, since a link or a
         # restored config can hand back a float and the box has int bounds.
-        size_key = "global_order_font_size"
+        size_key = INDEX_SIZE.state_key
         size_num_key = f"{size_key}__num"
         if size_key in st.session_state:
             st.session_state[size_num_key] = round(st.session_state[size_key])
@@ -7855,8 +7862,8 @@ def render_plot_controls(
         size_col.number_input(
             "Index label size",
             key=size_num_key,
-            min_value=6,
-            max_value=72,
+            min_value=INDEX_SIZE.bounds[0],
+            max_value=INDEX_SIZE.bounds[1],
             step=1,
             on_change=_apply_index_size,
             disabled=_dis,
@@ -7872,9 +7879,9 @@ def render_plot_controls(
         )
         _sub_row("Position", caption_help=_tip).segmented_control(
             "Index label position",
-            options=list(ORDER_LABEL_POSITIONS),
+            options=INDEX_POSITION.choices,
             format_func=str.capitalize,
-            key="global_order_label_position",
+            key=INDEX_POSITION.state_key,
             persist_state="session",
             disabled=_dis,
             help=_tip,
@@ -9804,6 +9811,7 @@ def has_active_trial_filters(prefix: str = "") -> bool:
         # `[]` is a narrowing that matched nobody — the *most* active a filter
         # can be. `None` is the no-constraint default.
         f.get("participants") is not None
+        or f.get("trial_keys") is not None
         or f.get("metadata")
         or f.get("ranges")
         or f.get("favorites_only")
@@ -10145,7 +10153,7 @@ def field_help(col: str, names: cn.ColumnNames | None = None) -> str:
     names = names if names is not None else _rail_names()
     note = (
         cn.DEMO_COLUMN_NOTES.get(col, "")
-        if current_dataset_name() == DEMO_CHOICE
+        if st.session_state.get("data_source_choice") == DEMO_CHOICE
         else ""
     )
     source = names.source_tooltip(col)
@@ -10799,7 +10807,7 @@ def _render_text_metadata_filters(host, *, prefix: str, on_change) -> None:
         )
 
 
-def _text_metadata_narrowing(prefix: str) -> tuple:
+def _text_metadata_narrowing(prefix: str, recipe: dict) -> tuple:
     """``(text ids | None, widget keys)`` for the active text-metadata filters.
 
     Flat-grain sibling of :func:`_participant_metadata_narrowing` — ``None``
@@ -10827,13 +10835,20 @@ def _text_metadata_narrowing(prefix: str) -> tuple:
         if chosen and len(chosen) < len(options):
             selections[field.name] = list(chosen)
             keys.append(key)
+    if keys:
+        recipe["text"] = {
+            "values": selections,
+            "ranges": ranges,
+            "keep_unknown": keep_unknown,
+            "id_column": list(attached.id_columns) or attached.text_column,
+        }
     return (
         md.texts_matching(attached, selections, ranges, keep_unknown=keep_unknown),
         tuple(keys),
     )
 
 
-def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
+def _trial_metadata_narrowing(prefix: str, keys, recipe: dict) -> tuple:
     """``((participant_id, trial_id) keys | None, widget keys)``.
 
     ``None`` means no constraint; an empty set means a constraint nothing
@@ -10864,6 +10879,14 @@ def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
         if chosen and len(chosen) < len(options):
             selections[field.name] = list(chosen)
             widget_keys.append(key)
+    if widget_keys:
+        recipe["trial"] = {
+            "values": selections,
+            "ranges": ranges,
+            "keep_unknown": keep_unknown,
+            "id_column": list(attached.id_columns) or attached.trial_column,
+            "participant_column": attached.participant_column,
+        }
     return (
         md.trials_matching(
             attached, selections, ranges, keys=keys(), keep_unknown=keep_unknown
@@ -10891,7 +10914,7 @@ def _seed_range_bounds(key: str, low: float, high: float, *, prefix: str) -> Non
         st.session_state[key] = (low, high)
 
 
-def _participant_metadata_narrowing(prefix: str) -> tuple:
+def _participant_metadata_narrowing(prefix: str, recipe: dict) -> tuple:
     """``(reader ids | None, widget keys)`` for the active metadata filters.
 
     ``None`` means no constraint; an **empty set** means a constraint nothing
@@ -10920,6 +10943,13 @@ def _participant_metadata_narrowing(prefix: str) -> tuple:
         if chosen and len(chosen) < len(options):
             selections[field.name] = list(chosen)
             keys.append(key)
+    if keys:
+        recipe["participant"] = {
+            "values": selections,
+            "ranges": ranges,
+            "keep_unknown": keep_unknown,
+            "id_column": attached.id_column,
+        }
     return (
         md.participants_matching(
             attached, selections, ranges, keep_unknown=keep_unknown
@@ -11049,7 +11079,9 @@ def _compute_trial_filters(
     # constraint, so it folds into the same slot rather than becoming a fourth
     # kind of filter every consumer would have to learn. Intersection, not
     # replacement: an explicit reader pick still wins over the table.
-    by_metadata, meta_keys = _participant_metadata_narrowing(prefix)
+    attachments = {}
+    picked_participants = result["participants"]
+    by_metadata, meta_keys = _participant_metadata_narrowing(prefix, attachments)
     if by_metadata is not None:
         chosen = result["participants"]
         keep = by_metadata if chosen is None else by_metadata & {str(p) for p in chosen}
@@ -11068,7 +11100,7 @@ def _compute_trial_filters(
     # trial, and so a numeric range keeps the trials the table never mentions
     # (the range filters' rule, one grain down).
     by_trial, trial_keys_used = _trial_metadata_narrowing(
-        prefix, lambda: _loaded_trial_keys(words, fixations)
+        prefix, lambda: _loaded_trial_keys(words, fixations), attachments
     )
     if by_trial is not None:
         result["trial_keys"] = by_trial
@@ -11076,6 +11108,7 @@ def _compute_trial_filters(
     # Text narrowing (the "Narrow by → Text" multiselect). Like a categorical
     # condition, but the text id isn't in the condition list, so handle it here.
     text_field, text_frame = _text_field_and_frame(words, fixations)
+    by_picker = None
     if text_field is not None:
         text_vals = _column_unique_strs(
             text_frame,
@@ -11091,7 +11124,7 @@ def _compute_trial_filters(
         # Text-grain metadata folds into the same slot, the same way
         # participant-grain metadata folds into `result["participants"]` — an
         # explicit pick still wins over (intersects with) the table.
-        by_text_meta, text_meta_keys = _text_metadata_narrowing(prefix)
+        by_text_meta, text_meta_keys = _text_metadata_narrowing(prefix, attachments)
         combined = None
         if by_picker is not None and by_text_meta is not None:
             combined = by_picker & by_text_meta
@@ -11161,6 +11194,35 @@ def _compute_trial_filters(
     result["excluded_tags"] = list(
         st.session_state.get(f"{prefix}filter_exc_tags") or []
     )
+    if not prefix and active_filter_keys(result):
+        conditions = dict(result["metadata"])
+        if "text" in attachments:
+            attachments["text"]["column"] = text_field
+            if by_picker is None:
+                conditions.pop(text_field, None)
+            else:
+                conditions[text_field] = by_picker
+        columns = set(conditions) | set(result["ranges"])
+        if "text" in attachments:
+            columns.add(text_field)
+        result["recipe_selection"] = {
+            "participants": picked_participants,
+            "conditions": conditions,
+            "ranges": result["ranges"],
+            "drop_unknown": result["ranges_drop_unknown"],
+            "metadata": attachments,
+            "word_fields": sorted(columns.intersection(words.columns))
+            if not words.empty
+            else [],
+            "fixation_fields": sorted(columns.intersection(fixations.columns))
+            if not fixations.empty
+            else [],
+            "annotations": {
+                k: result[k]
+                for k in ("favorites_only", "required_tags", "excluded_tags")
+                if result[k]
+            },
+        }
     return result
 
 

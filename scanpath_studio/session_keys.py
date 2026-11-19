@@ -460,6 +460,7 @@ PARAM_CORPUS = "corpus"
 # `corpus`; emitted only for an added dataset.
 PARAM_DATASET = "dataset"
 PARAM_DATASET_DIGEST = "dataset_digest"
+PARAM_DATASET_ID = "dataset_id"
 
 # Streamlit 1.65 `bind="query-params"` widgets: the widget key IS the URL param,
 # and its value is the option's label verbatim — so neither the key nor the
@@ -497,12 +498,16 @@ SETUP_PROVENANCE_STATE_KEY = "_setup_provenance_arrived"
 # (as `?tab=animation` is Animate's), and it names B's trial: a `cmp_source`
 # that named B's corpus without naming B's trial would restore nothing.
 #
-# `cmp_source` is the corpus B came from, using the same vocabulary as `source`
-# — emitted only when that corpus is in `url_state._SHAREABLE_SOURCES`, since an
-# uploaded dataset lives in session state and cannot travel. Absent means "B is
-# in the same dataset as A".
+# A built-in B uses `cmp_source` in the same vocabulary as `source`;
+# `cmp_source=corpus` names the catalogue entry by its unique `cmp_corpus` slug. An
+# uploaded B carries its displayed name and local ID. With neither source
+# reference B belongs to A's dataset.
 COMPARE_PARAM = "compare"
 COMPARE_SOURCE_PARAM = "cmp_source"
+COMPARE_CORPUS_PARAM = "cmp_corpus"
+COMPARE_DATASET_PARAM = "cmp_dataset"
+COMPARE_DATASET_ID_PARAM = "cmp_dataset_id"
+COMPARE_DATASET_DIGEST_PARAM = "cmp_dataset_digest"
 #: B's screen of a multipart trial — `screen=` is A's. Emitted only beside
 #: `compare=`, and seeded into B's own navigator (`single_compare_screen_id`).
 COMPARE_SCREEN_PARAM = "cmp_screen"
@@ -513,6 +518,8 @@ COMPARE_LAYOUT_PARAM = "cmp_layout"
 COMPARE_STIMULUS_PARAM = "cmp_stimulus"
 #: Widget key holding the picked comparison dataset (`tabs`/`compare_source`).
 COMPARE_SOURCE_STATE_KEY = "cmp_dataset"
+# Upload names are nonempty. The empty option always selects A’s source.
+SAME_DATASET = ""
 #: Scanpath B remembered as ``(participant_id, trial_id)`` — the picker's
 #: own key holds a label rebuilt relative to A, so this is B's stable name. Kept
 #: in the recovery cache with ``cmp_dataset``, so a refresh keeps B's trial.
@@ -804,8 +811,13 @@ URL_SELECTION_PARAMS = frozenset(
         PARAM_CORPUS,
         PARAM_DATASET,
         PARAM_DATASET_DIGEST,
+        PARAM_DATASET_ID,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
+        COMPARE_CORPUS_PARAM,
+        COMPARE_DATASET_PARAM,
+        COMPARE_DATASET_ID_PARAM,
+        COMPARE_DATASET_DIGEST_PARAM,
         COMPARE_SCREEN_PARAM,
     }
 )
@@ -899,10 +911,15 @@ URL_OPTIONAL_PARAMS = frozenset(
         SETUP_PROVENANCE_PARAM,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
+        COMPARE_CORPUS_PARAM,
+        COMPARE_DATASET_PARAM,
+        COMPARE_DATASET_ID_PARAM,
+        COMPARE_DATASET_DIGEST_PARAM,
         COMPARE_SCREEN_PARAM,
         PARAM_CORPUS,
         PARAM_DATASET,
         PARAM_DATASET_DIGEST,
+        PARAM_DATASET_ID,
         FIX_RANGE_PARAM,
         COMPARE_FIX_RANGE_PARAM,
         *SETUP_PARAMS,
@@ -1032,7 +1049,7 @@ URL_SEEDED_STATE_KEYS = frozenset(
 # The JSON schema version stamped by both writers and understood by the reader.
 # Bumping it in url_state without registering a migration (or without updating
 # this constant) is the failure the contract test catches.
-PLOT_CONFIG_SCHEMA_VERSION = 8
+PLOT_CONFIG_SCHEMA_VERSION = 9
 
 # `cmp{idx}_*` templates the config's `compare` list restores, per entry.
 COMPARE_STATE_KEY_TEMPLATES = frozenset(

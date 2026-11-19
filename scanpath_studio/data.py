@@ -1936,6 +1936,24 @@ def split_source_file(
     return df
 
 
+def split_named_columns(
+    frame, column: str, delimiter: str, existing: set
+) -> tuple[pd.DataFrame, list[str]]:
+    """Split a source column into the next available numbered columns."""
+    split = split_source_file(frame, delimiter=delimiter, column=column)
+    added = [name for name in split.columns if name not in frame.columns]
+    existing = set(existing)
+    names = []
+    n = 1
+    while len(names) < len(added):
+        candidate = f"{column}_{n}"
+        if candidate not in existing:
+            names.append(candidate)
+            existing.add(candidate)
+        n += 1
+    return split.rename(columns=dict(zip(added, names))), names
+
+
 def extract_columns_from_source_file(
     df: pd.DataFrame,
     pattern: str,

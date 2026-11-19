@@ -334,7 +334,9 @@ class TestPerDatasetStore:
             )
             == []
         )
-        session[COMPARE_SOURCE_STATE_KEY] = "This dataset"
+        from scanpath_studio.session_keys import SAME_DATASET
+
+        session[COMPARE_SOURCE_STATE_KEY] = SAME_DATASET
         assert "A tag" in annotations_mod.known_tags("cmp")
 
     def test_compare_constants_match_their_owners(self):

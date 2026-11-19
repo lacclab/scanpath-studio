@@ -44,6 +44,7 @@ from .constants import (
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
+    FIXATION_LABEL_OPTIONS,
     FIXATION_SYMBOLS,
     FONT_FAMILY,
     SACCADE_CLASS_COLORS,
@@ -1250,22 +1251,14 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar=("LO", "HI"),
         help="Fix the heatmap's color scale to LO..HI instead of the trial's range.",
     )
-    viz.add_argument(
-        "--order-font-size",
-        type=int,
-        metavar="PX",
-        help="Size of the fixation index numbers (default: 10).",
-    )
-    viz.add_argument(
-        "--order-font-color",
-        metavar="COLOR",
-        help="Color of the fixation index numbers (default: #111111).",
-    )
-    viz.add_argument(
-        "--order-label-position",
-        choices=("above", "inside", "below"),
-        help="Where each fixation index number sits on its fixation (default: above).",
-    )
+    for option in FIXATION_LABEL_OPTIONS.values():
+        viz.add_argument(
+            option.flag,
+            type=int if option.kind == "int" else str,
+            metavar=option.metavar,
+            choices=option.choices or None,
+            help=f"{option.description} (default: {option.default}).",
+        )
     viz.add_argument(
         "--text-color",
         metavar="COLOR",
@@ -1726,7 +1719,8 @@ def _render_parser() -> argparse.ArgumentParser:
         choices=["both", "a", "b"],
         default="both",
         help="On an overlay, whose word boxes and text to draw (default: both). "
-        "Two datasets' word boxes line up only when the text is the same.",
+        "Two datasets' word boxes line up only when the text is the same. "
+        "A two-scanpath replay shows B's text for 'b' and A's text for 'a' or 'both'.",
     )
     # Named `-a` / `-b` after the `style_a` / `style_b` pair rather
     # than `--label`, which would read as a sibling of `--no-labels` (the word
@@ -1735,8 +1729,8 @@ def _render_parser() -> argparse.ArgumentParser:
         "--label-a",
         metavar="TEXT",
         help=(
-            "Name of scanpath A in the legend and tooltips. Applies to comparisons "
-            "and --animate. Requires --label-b."
+            "Name of scanpath A in the legend and tooltips. Requires --compare-with "
+            "and --label-b."
         ),
     )
     cmp_group.add_argument(
@@ -1770,8 +1764,7 @@ def _render_parser() -> argparse.ArgumentParser:
             "box_line_opacity / box_fill_opacity (0–1; default "
             "--word-box-line-opacity / --word-box-fill-opacity), "
             f"hollow (true|false). E.g. --style-{side} fix_color=#D55E00,opacity=0.5. "
-            "--animate uses them too, except box_color, box_fill_color, the box "
-            "opacities and raw_gaze_color.",
+            "A two-scanpath replay uses the fixation and saccade styles.",
         )
     # Scanpath B's own filters — the app's "· B" blocks under 🧹 Filter.
     # A's are the ordinary --fixation-flag / --saccade-classes /
@@ -1867,9 +1860,7 @@ _DIRECT_OPTION_FLAGS = (
     "marker_size_scale",
     "fixation_opacity",
     "saccade_opacity",
-    "order_font_size",
-    "order_font_color",
-    "order_label_position",
+    *FIXATION_LABEL_OPTIONS,
     "text_color",
     "highlight_text_color",
     "span_border_color",
@@ -3902,6 +3893,89 @@ def analyze(argv: list[str]) -> None:
         )
 
 
+def _recipe_parser() -> argparse.ArgumentParser:
+    """Options for reproducing a downloaded Corpus Analysis table."""
+    parser = _ShortErrorParser(
+        prog="scanpath-studio recipe",
+        description="Rerun a Per text cohort profile recipe on its source tables.",
+    )
+    parser.add_argument(
+        "recipe",
+        metavar="RECIPE.json",
+        help="Cohort profile recipe from Corpus Analysis.",
+    )
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--sample", action="store_true", help="Use the bundled demo.")
+    source.add_argument("--words", nargs="+", help="Original Words table(s).")
+    parser.add_argument("--fixations", nargs="+", help="Original Fixations table(s).")
+    parser.add_argument(
+        "--trial-parts-manifest", help="Multipart trial manifest used at import."
+    )
+    _add_schema_flags(parser)
+    for grain in ("participant", "trial", "text"):
+        parser.add_argument(
+            f"--{grain}-metadata",
+            help=f"The {grain} metadata table used by the recipe's filters.",
+        )
+    parser.add_argument(
+        "--annotations", help="Annotations JSON used for favorites or tag filters."
+    )
+    parser.add_argument(
+        "-o", "--output", required=True, help="Where to write the reproduced CSV."
+    )
+    return parser
+
+
+def recipe(argv: list[str]) -> None:
+    """Rerun a cohort profile using the same inputs as its author."""
+    from . import api, data
+    from .analysis_recipe import load_recipe_sources
+
+    args = _recipe_parser().parse_args(argv)
+    if args.sample and any(
+        (
+            args.fixations,
+            args.word_schema,
+            args.fix_schema,
+            args.trial_parts_manifest,
+            args.keep_columns,
+        )
+    ):
+        raise SystemExit(
+            "--sample uses the bundled tables and their mappings. Pass --words to use your own."
+        )
+    try:
+        saved = json.loads(Path(args.recipe).read_text(encoding="utf-8"))
+        words, fixations = (
+            data.load_sample_data() if args.sample else (args.words, args.fixations)
+        )
+        manifest = (
+            json.loads(Path(args.trial_parts_manifest).read_text(encoding="utf-8"))
+            if args.trial_parts_manifest
+            else None
+        )
+        tables = load_recipe_sources(
+            saved,
+            words,
+            fixations,
+            word_schema=_parse_schema_arg(args.word_schema, "--word-schema"),
+            fix_schema=_parse_schema_arg(args.fix_schema, "--fix-schema"),
+            keep_columns=args.keep_columns,
+            trial_parts_manifest=manifest,
+        )
+        result = api.run_analysis_recipe(
+            saved,
+            *tables,
+            participant_metadata=args.participant_metadata,
+            trial_metadata=args.trial_metadata,
+            text_metadata=args.text_metadata,
+            annotations=args.annotations,
+        )
+        result.to_csv(args.output, index=False, lineterminator="\n")
+    except (ValueError, OSError) as exc:
+        raise SystemExit(str(exc)) from exc
+
+
 def _corpus_parser() -> argparse.ArgumentParser:
     """The `corpus` parser (see `_analyze_parser`)."""
     parser = _ShortErrorParser(
@@ -4352,6 +4426,7 @@ usage:
   scanpath-studio render …         render one trial to .html/.png/.svg/.pdf
                                    (see `scanpath-studio render --help`)
   scanpath-studio corpus …         render a corpus figure from a tidy CSV
+  scanpath-studio recipe …         reproduce a cohort profile CSV from its recipe
   scanpath-studio check …          run the Data checks on your tables
   scanpath-studio cache …          show / clear the on-device recovery cache
   scanpath-studio version [--check]
@@ -4376,6 +4451,7 @@ _COMMANDS = (
     "render",
     "analyze",
     "corpus",
+    "recipe",
     "check",
     "cache",
     "version",
@@ -4485,6 +4561,8 @@ def main(argv: list[str] | None = None) -> None:
                 f"been validated yet. Set {EXPERIMENTAL_ENV_VAR}=1 to use it anyway."
             )
         analyze(argv[1:])
+    elif argv[0] == "recipe":
+        recipe(argv[1:])
     elif argv[0] == "corpus":
         corpus(argv[1:])
     elif argv[0] == "check":

@@ -25,7 +25,7 @@ import pandas as pd
 import plotly.io as pio
 import streamlit as st
 
-from scanpath_studio import alignment, loading, progress, ui_mode
+from scanpath_studio import alignment, chart_axes, loading, progress, ui_mode
 from scanpath_studio import metadata as _metadata_mod
 from scanpath_studio.aggregation import (
     MEASURES,
@@ -1911,7 +1911,9 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
         )
 
 
-def _fix_window_note(window_a, full_a, window_b=None, full_b=None) -> str:
+def _fix_window_note(
+    window_a, full_a, window_b=None, full_b=None, *, essentials=False
+) -> str:
     """Say so when an index window hides some of a trial's fixations.
 
     The window lives in the Filters & highlights popover, out of sight, so without
@@ -1935,7 +1937,8 @@ def _fix_window_note(window_a, full_a, window_b=None, full_b=None) -> str:
         what = f"Scanpath B shows {b}"
     else:
         what = f"Scanpath A shows {a}, and B shows {b}"
-    return f"{what}. Change it with **Index range** in Filters & highlights."
+    action = "Switch to Full to change it" if essentials else "Change it"
+    return f"{what}. {action} with **Index range** in Filters & highlights."
 
 
 def _slice_fix_range(fix: pd.DataFrame, fix_range) -> pd.DataFrame:
@@ -6426,6 +6429,11 @@ def render_single_trial_tab(
     parent_fixations = extract_trial(
         fixations_filtered, selected_participant, selected_trial
     )
+    if chart_axes.ELAPSED in (
+        st.session_state.get("global_x_field"),
+        st.session_state.get("global_y_field"),
+    ):
+        parent_fixations = chart_axes.with_origin(parent_fixations)
     parent_raw_gaze = pd.DataFrame()
     if raw_gaze is not None and not raw_gaze.empty:
         parent_raw_gaze = extract_trial(raw_gaze, selected_participant, selected_trial)
@@ -7040,6 +7048,7 @@ def render_single_trial_tab(
             # The selected trial's fixations size the fixation-index window
             # slider (its max is this trial's fixation count).
             fix_range_fixations=trial_fixations,
+            trial_samples=trial_raw_gaze,
             # The canvas / text panel (monitor geometry, fonts, text colour,
             # background) renders inside the rail's group order. `app.main`
             # passes it in already bound to the frames + data source, since
@@ -7079,6 +7088,9 @@ def render_single_trial_tab(
             sorted_=trial_sort_is_set("single"),
             comparing=bool(compare_enabled),
             custom_view=st.session_state.get(SIMPLE_VIEW_LIT_KEY, "") is None,
+            axes=(viz_settings.get("x_field", "x"), viz_settings.get("y_field", "y"))
+            if not (animate or compare_enabled)
+            else ("x", "y"),
         )
         if ui_mode.is_simple()
         else [],
@@ -7164,7 +7176,12 @@ def render_single_trial_tab(
         compare_fixations_pool = fixations_filtered
 
     global_raw_toggle = bool(viz_settings.get("show_raw_gaze"))
-    effective_show_raw_gaze = bool(global_raw_toggle and trial_has_raw_gaze)
+    fields = (viz_settings.get("x_field", "x"), viz_settings.get("y_field", "y"))
+    if animate or compare_enabled:
+        fields = ("x", "y")
+    effective_show_raw_gaze = global_raw_toggle and chart_axes.raw_axes_available(
+        fields, trial_raw_gaze
+    )
     figure_settings = _build_figure_settings(viz_settings, effective_show_raw_gaze)
     figure_raw_gaze = trial_raw_gaze if trial_has_raw_gaze else None
     figure_settings.update(
@@ -7721,6 +7738,7 @@ def render_single_trial_tab(
             full_fix_range,
             window_b if comparing else None,
             full_b,
+            essentials=ui_mode.is_simple(),
         )
         if window_note:
             plot_notes_slot.info(window_note, icon=ICONS["plot_filter"])
@@ -7879,6 +7897,14 @@ def render_single_trial_tab(
                     build_inputs.pop(name, None)
                 _amend_snippet_settings(static_settings, "static")
                 build_inputs["raw_gaze"] = figure_raw_gaze
+                if chart_axes.ELAPSED in (
+                    static_settings.x_field,
+                    static_settings.y_field,
+                ):
+                    origin = chart_axes.origin_ms(plot_fixations)
+                    build_inputs["reading_origin_ms"] = (
+                        None if pd.isna(origin) else origin
+                    )
                 # Not an option, but the figure's text: a renamed column redraws.
                 build_inputs["column_labels"] = static_settings.column_labels
                 displayed_fig = _cached_scanpath_figure(
@@ -7914,7 +7940,10 @@ def render_single_trial_tab(
                     fit_window=True,
                 )
             note = _full_screen_note(viz_settings, canvas_width, canvas_height)
-            if note:
+            if note and (static_settings.x_field, static_settings.y_field) == (
+                "x",
+                "y",
+            ):
                 st.caption(note)
 
     # Per-trial panels sit directly BELOW the plot, in the next row's left

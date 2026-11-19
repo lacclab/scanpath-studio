@@ -47,7 +47,7 @@ parameter.
 | `redact_text` | ✅ | ✅ | ✅ | `plots.redact_word_text` masks the words at each builder's entry; the blocks take the text / highlight colour |
 | `word_hover_measure` | ✅ | ✅ | ❌ | |
 | colour bars (`{fixation,heatmap}_colorbar_*`) | ✅ | ✅ fixation only | ✅ | Through `plots._colorbar_dict` |
-| `x_field` / `y_field` | ✅ | ❌ | ❌ | Animation and comparison always plot spatial `x` / `y` |
+| `x_field` / `y_field` | ✅ | ❌ | ❌ | Index and elapsed-time presets set these same two fields. On a position chart, index supports a sequence line and elapsed seconds show fixation durations. Raw samples require both plotted fields. Animation and comparison use screen `x` / `y` |
 | `fit_to_monitor`, `crop_margin`, coordinate grid + font size, title / caption styling, `show_credit`, `background_color`, `show_plot_frame` / `plot_frame_color` | ✅ | ✅ | ✅ | |
 | `fixation_outline_width` / `_color` | ✅ | ✅ | ✅ | |
 | `show_compare_legend`, `compare_stimulus` | ❌ | ✅ (co-animation) | ✅ | Widgets in `tabs.py` (⚙ Compare options) |

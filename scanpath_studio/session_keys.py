@@ -459,6 +459,7 @@ PARAM_CORPUS = "corpus"
 # rather than apply the view to whatever else is open. Read in `app.main`, like
 # `corpus`; emitted only for an added dataset.
 PARAM_DATASET = "dataset"
+PARAM_DATASET_DIGEST = "dataset_digest"
 
 # Streamlit 1.65 `bind="query-params"` widgets: the widget key IS the URL param,
 # and its value is the option's label verbatim — so neither the key nor the
@@ -802,6 +803,7 @@ URL_SELECTION_PARAMS = frozenset(
         PARAM_ONESTOP_PARTS,
         PARAM_CORPUS,
         PARAM_DATASET,
+        PARAM_DATASET_DIGEST,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
         COMPARE_SCREEN_PARAM,
@@ -900,6 +902,7 @@ URL_OPTIONAL_PARAMS = frozenset(
         COMPARE_SCREEN_PARAM,
         PARAM_CORPUS,
         PARAM_DATASET,
+        PARAM_DATASET_DIGEST,
         FIX_RANGE_PARAM,
         COMPARE_FIX_RANGE_PARAM,
         *SETUP_PARAMS,

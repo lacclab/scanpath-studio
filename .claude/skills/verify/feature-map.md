@@ -18,6 +18,7 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Feature | Where | Drive it by | Works when |
 | --- | --- | --- | --- |
 | Pick a reading | Above the plot | `single_participant`, `single_trial_id` | The plot, title and chips follow; a share link reopens the same reading |
+| Fixation charts | Full → Figure & canvas → Axis preset | `global_x_field`, `global_y_field` | Index ticks are integers. Elapsed seconds stay relative to the complete reading. Screen Y increases downward. Raw samples appear only on supported coordinates. |
 | The spatial plot | Centre | — (drawn by `tabs._render_true_scale_chart`) | Word labels keep their px size at any column width; never `st.plotly_chart` |
 | Fixations | Rail → **Fixations** | `global_show_fix` + its popover's `global_*` keys | Markers sized by duration; colour-by / scale / range honoured |
 | Saccades | Rail → **Saccades** | `global_show_saccades` | One trace with `None` separators; arrows, colour, style, width |

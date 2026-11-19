@@ -40,15 +40,19 @@ def illustration_reasons(
     Raw gaze is never a reason. The samples are drawn as recorded — nothing in
     the app derives fixations (or anything else) from them — so a figure of
     raw gaze alone is the least transformed figure there is."""
+    spatial_static = static and (
+        settings.get("x_field", "x"),
+        settings.get("y_field", "y"),
+    ) == ("x", "y")
     reasons: list[str] = []
     if (
-        static
+        spatial_static
         and settings.get("show_fixations", True)
         and settings.get("fixation_snap_to_line")
     ):
         reasons.append("fixations snapped to lines")
     if (
-        static
+        spatial_static
         and settings.get("show_saccades", True)
         and settings.get("saccade_render_mode") == "Arc"
     ):

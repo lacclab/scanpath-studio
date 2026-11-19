@@ -48,7 +48,7 @@ import secrets
 import tempfile
 import threading
 import time
-from collections.abc import MutableMapping
+from collections.abc import Callable, MutableMapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -852,7 +852,10 @@ def _restore_manifest(
     # Only the names that were not already open actually *landed* — an
     # in-memory dataset of the same name shadows the stored one above.
     summary = {"datasets": len(set(restored_datasets) - set(existing))}
-    skip = set(skip_session_keys)
+    # A private link can only claim the view once its dataset has been recovered.
+    skip = set(
+        skip_session_keys() if callable(skip_session_keys) else skip_session_keys
+    )
     # Counted before the loop below writes it: `setdefault` means a
     # design library already in this session keeps its own, so the stored
     # one restored nothing.
@@ -931,6 +934,16 @@ def _read_dataset(root: Path, entry: Any) -> dict:
         payload[frame_key] = pd.read_parquet(_frame_path(root, relative))
     for frame_key in _FRAME_KEYS:
         payload.setdefault(frame_key, pd.DataFrame())
+    # Older imports assigned a screen-local row count to this clock when the
+    # user mapped no screen onset. The saved mapping identifies those counts.
+    schema = (payload.get("schemas") or {}).get("fixations")
+    fixations = payload["fixations"]
+    if (
+        isinstance(schema, dict)
+        and not schema.get("screen_timestamp")
+        and "screen_timestamp_ms" in fixations
+    ):
+        payload["fixations"] = fixations.drop(columns="screen_timestamp_ms")
     return payload
 
 
@@ -1380,13 +1393,15 @@ def restore_local_state(
     url: str,
     *,
     protect_data_source: bool = False,
-    protect_view: bool = False,
+    protect_view: bool | Callable[[], bool] = False,
 ) -> bool:
     """Restore this machine's cached session, once, and say whether to announce it.
 
     ``protect_data_source`` keeps the stored dataset choice out (a link named
     its own), and ``protect_view`` the stored view (a link opens on the view it
-    was made for, not on whichever one this machine used last).
+    was made for, not on whichever one this machine used last). A callable
+    decides that after this machine’s datasets have been recovered and before
+    its saved view settings are applied.
 
     The return value is **not** "a manifest was applied" — that is
     :func:`restore_state`'s answer. Every rerun writes the cache, so a session
@@ -1430,10 +1445,15 @@ def restore_local_state(
             session[_RESTORE_PENDING_KEY] = str(marker)
         except OSError:
             pass  # a cache we cannot write to simply goes without the breaker
-    protected = {"data_source_choice"} if protect_data_source else set()
-    if protect_view:
-        protected.add("main_nav")
-    if not restore_state(session, root, skip_session_keys=protected):
+
+    def protected_keys():
+        protected = {"data_source_choice"} if protect_data_source else set()
+        view_claimed = protect_view() if callable(protect_view) else protect_view
+        if view_claimed:
+            protected.add("main_nav")
+        return protected
+
+    if not restore_state(session, root, skip_session_keys=protected_keys):
         _finish_restore(session)
         return False
     return restored_from_cache(session)

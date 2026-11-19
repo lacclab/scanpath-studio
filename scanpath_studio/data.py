@@ -3,6 +3,7 @@ from __future__ import annotations
 import glob
 import hashlib
 import io
+import json
 import logging
 import os
 import re
@@ -603,7 +604,7 @@ def frame_fingerprint(df: pd.DataFrame | None) -> tuple:
     results downstream.
 
     ``hash_pandas_object`` raises on columns of unhashable objects (lists/arrays —
-    e.g. parquet-preserved span-index fields). We stringify and retry rather than
+    e.g. parquet-preserved span-index fields). We hash their Arrow encoding rather than
     drop the content signal entirely: zeroing the hash would collapse every frame
     of the same shape + columns to one fingerprint, serving stale cached results
     when switching between two such frames. If even that fails the key becomes
@@ -643,24 +644,59 @@ def frame_fingerprint(df: pd.DataFrame | None) -> tuple:
     return value
 
 
+def share_dataset_fingerprint(entry: dict) -> str:
+    """Portable identity for the three recording tables of an added dataset."""
+    tables = tuple(entry.get(k) for k in ("words", "fixations", "raw_gaze"))
+    keys = tuple(frame_fingerprint(table) for table in tables)
+    return _share_dataset_digest(keys, tables)
+
+
+@st.cache_data(show_spinner=False, max_entries=128)
+def _share_dataset_digest(keys: tuple, _tables: tuple) -> str:
+    # A cache key may describe a local loader or path. Only table contents
+    # belong on a link another installation must be able to verify.
+    parts = [
+        _compute_frame_fingerprint(table.reset_index(drop=True))
+        if table is not None and not table.empty
+        else None
+        for table in _tables
+    ]
+    return (
+        "v1-" + hashlib.blake2b(json.dumps(parts).encode(), digest_size=16).hexdigest()
+    )
+
+
 def _compute_frame_fingerprint(df: pd.DataFrame) -> tuple:
     """The actual hash behind :func:`frame_fingerprint`, memo aside."""
     cols = tuple(map(str, df.columns))
     n = len(df)
 
     def _hash(frame: pd.DataFrame) -> str:
+        logical_types = [
+            pd.api.types.infer_dtype(frame[col], skipna=True) for col in frame
+        ]
+        digest = hashlib.blake2b(json.dumps(logical_types).encode(), digest_size=16)
         try:
             per_row = pd.util.hash_pandas_object(frame, index=True)
         except TypeError:
-            # Unhashable cell objects — stringify so content still drives the key.
-            per_row = pd.util.hash_pandas_object(frame.astype(str), index=True)
+            # Parquet restores a list cell as an ndarray. Preserve its full
+            # contents, including long arrays whose printable repr is truncated.
+            import pyarrow as pa
+
+            table = pa.Table.from_pandas(
+                frame, preserve_index=True
+            ).replace_schema_metadata(None)
+            digest.update(table.schema.serialize())
+            for offset in range(0, len(table), 65536):
+                for batch in table.slice(offset, 65536).combine_chunks().to_batches():
+                    digest.update(batch.serialize())
+            return digest.hexdigest()
         # Digest the per-row hashes in ORDER. Summing them is order-invariant,
         # so a frame and a `sort_values` of itself — same rows, same index
         # labels, different order — would share a key while yielding different
         # results downstream.
-        return hashlib.blake2b(
-            per_row.to_numpy(dtype="uint64").tobytes(), digest_size=16
-        ).hexdigest()
+        digest.update(per_row.to_numpy(dtype="uint64").tobytes())
+        return digest.hexdigest()
 
     try:
         return (n, cols, _hash(df))
@@ -4882,8 +4918,8 @@ INTERNAL_COLUMNS = frozenset(
 def timestamps_synthesized(fixations: pd.DataFrame | None) -> bool:
     """Whether any of these fixations has a made-up ``timestamp_ms``.
 
-    True when normalization had no onset column to read and numbered the
-    fixations instead (:data:`TIMESTAMP_SYNTHESIZED`). A frame without the
+    True for an unmapped onset, or for a missing or nonfinite value in a
+    mapped onset column (:data:`TIMESTAMP_SYNTHESIZED`). A frame without the
     column — one built by hand, or stored by an older version — counts as
     recorded."""
     if fixations is None or TIMESTAMP_SYNTHESIZED not in fixations.columns:
@@ -4918,7 +4954,11 @@ def shareable_frame(frame: pd.DataFrame) -> pd.DataFrame:
     numbers are a sort order, and a file that carried them under that name
     would read back as recorded milliseconds."""
     if timestamps_synthesized(frame) and "timestamp_ms" in frame.columns:
-        frame = frame.drop(columns="timestamp_ms")
+        synthesized = frame[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
+        if synthesized.all():
+            frame = frame.drop(columns="timestamp_ms")
+        else:
+            frame = frame.assign(timestamp_ms=frame["timestamp_ms"].mask(synthesized))
     return drop_internal_columns(frame)
 
 
@@ -6693,7 +6733,10 @@ def _copy_screen_fields(
         if not column:
             continue
         values = source[column]
-        df[destination] = _to_number(values) if numeric else values
+        if schema_key == "screen_timestamp":
+            df[destination] = _as_ms(_to_number(values), column)
+        else:
+            df[destination] = _to_number(values) if numeric else values
     # This function rebuilds the frame from the mapping, so a `screen_index`
     # the public corpora stamp onto their frames would otherwise be dropped and
     # screen order re-derived from row order: AOI-file order on the words, each
@@ -7081,8 +7124,6 @@ def normalize_fixations(
 
     if SCREEN_ID in df.columns:
         part_keys = grouping_columns(df)
-        if SCREEN_TIMESTAMP not in df.columns:
-            df[SCREEN_TIMESTAMP] = df.groupby(part_keys, sort=False).cumcount()
         if SCREEN_FIXATION_ID not in df.columns:
             df[SCREEN_FIXATION_ID] = df.groupby(part_keys, sort=False).cumcount().add(1)
 
@@ -7124,10 +7165,9 @@ def normalize_fixations(
     if SCREEN_ID in df.columns:
         df["order_in_screen"] = (
             df.sort_values([SCREEN_INDEX, SCREEN_TIMESTAMP, "duration_ms"])
-            .groupby(grouping_columns(df), sort=False)
-            .cumcount()
-            + 1
-        )
+            if SCREEN_TIMESTAMP in df
+            else df
+        ).groupby(grouping_columns(df), sort=False).cumcount() + 1
     return df
 
 
@@ -7238,7 +7278,8 @@ def _synthesized_timestamps(
 ) -> pd.Series | None:
     """The :data:`TIMESTAMP_SYNTHESIZED` flags for a normalized fixations frame.
 
-    Every row when no onset is mapped. A remap that keeps the stored
+    Every row when no onset is mapped, otherwise the missing or nonfinite cells.
+    A remap that keeps the stored
     ``timestamp_ms`` as the onset keeps the stored flags — those numbers are
     still the ones normalization made up. ``None`` when the timestamps are
     the data's own."""
@@ -7250,8 +7291,11 @@ def _synthesized_timestamps(
         and onset == "timestamp_ms"
         and TIMESTAMP_SYNTHESIZED in fixations.columns
     ):
-        return fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
-    return None
+        previous = fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
+    else:
+        previous = False
+    missing = ~np.isfinite(_to_number(fixations[onset])) | previous
+    return missing if missing.any() else None
 
 
 def remap_normalized_frame(

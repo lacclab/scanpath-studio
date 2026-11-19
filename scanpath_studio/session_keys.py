@@ -459,6 +459,7 @@ PARAM_CORPUS = "corpus"
 # rather than apply the view to whatever else is open. Read in `app.main`, like
 # `corpus`; emitted only for an added dataset.
 PARAM_DATASET = "dataset"
+PARAM_DATASET_ID = "dataset_id"
 
 # Streamlit 1.65 `bind="query-params"` widgets: the widget key IS the URL param,
 # and its value is the option's label verbatim — so neither the key nor the
@@ -512,6 +513,8 @@ COMPARE_LAYOUT_PARAM = "cmp_layout"
 COMPARE_STIMULUS_PARAM = "cmp_stimulus"
 #: Widget key holding the picked comparison dataset (`tabs`/`compare_source`).
 COMPARE_SOURCE_STATE_KEY = "cmp_dataset"
+# Upload names are nonempty. The empty option always selects A’s source.
+SAME_DATASET = ""
 #: Scanpath B remembered as ``(participant_id, trial_id)`` — the picker's
 #: own key holds a label rebuilt relative to A, so this is B's stable name. Kept
 #: in the recovery cache with ``cmp_dataset``, so a refresh keeps B's trial.
@@ -802,6 +805,7 @@ URL_SELECTION_PARAMS = frozenset(
         PARAM_ONESTOP_PARTS,
         PARAM_CORPUS,
         PARAM_DATASET,
+        PARAM_DATASET_ID,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
         COMPARE_SCREEN_PARAM,
@@ -900,6 +904,7 @@ URL_OPTIONAL_PARAMS = frozenset(
         COMPARE_SCREEN_PARAM,
         PARAM_CORPUS,
         PARAM_DATASET,
+        PARAM_DATASET_ID,
         FIX_RANGE_PARAM,
         COMPARE_FIX_RANGE_PARAM,
         *SETUP_PARAMS,
@@ -1029,7 +1034,7 @@ URL_SEEDED_STATE_KEYS = frozenset(
 # The JSON schema version stamped by both writers and understood by the reader.
 # Bumping it in url_state without registering a migration (or without updating
 # this constant) is the failure the contract test catches.
-PLOT_CONFIG_SCHEMA_VERSION = 8
+PLOT_CONFIG_SCHEMA_VERSION = 9
 
 # `cmp{idx}_*` templates the config's `compare` list restores, per entry.
 COMPARE_STATE_KEY_TEMPLATES = frozenset(

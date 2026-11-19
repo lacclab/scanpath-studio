@@ -36,11 +36,11 @@ from .constants import (
 )
 from .data import adopt_source, stamp_source, vouch_for_frames
 from .experimental_setup import Provenance, SetupSnapshot
-from .session_keys import COMPARE_SOURCE_STATE_KEY
+from .session_keys import COMPARE_SOURCE_STATE_KEY, SAME_DATASET
 
 #: The picker's "stay in this dataset" entry — B out of A's own pool, the
 #: default.
-THIS_DATASET = "This dataset"
+THIS_DATASET = SAME_DATASET
 
 #: Session key holding the picked secondary source name. Re-exported from
 #: `session_keys` rather than spelled again: it is a deep-link-seeded key, and

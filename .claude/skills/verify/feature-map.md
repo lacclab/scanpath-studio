@@ -57,7 +57,7 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | --- | --- |
 | ➕ Add dataset wizard | Upload → map columns → validate → the dataset opens; `*` fields block only when missing |
 | ✏️ Edit dataset | A change re-normalizes and keeps the column-name map |
-| 📂 Available datasets | Lists every dataset; rename and remove act on the one chosen |
+| 📂 Available datasets | Lists every dataset; renaming an upload preserves its annotations, saved selection and comparison identity |
 | Metadata tables | Their columns appear as trial filters, chips and in the export bundle |
 | Data checks | Each check that found rows says how many, where, and what happens to them |
 

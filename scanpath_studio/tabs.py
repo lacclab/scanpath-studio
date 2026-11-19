@@ -2707,7 +2707,7 @@ def _resolve_compare_source(
             title=f"Loading {_dataset_label(chosen)} for scanpath B",
             task_key=task_key,
             cancel=loading.Cancel(
-                f"Compare within {md_literal(_dataset_label(current_dataset_name()))}",
+                f"Compare within {md_literal(current_dataset_name())}",
                 _cancel_compare_source,
                 args=(task_key,),
             ),
@@ -2746,6 +2746,22 @@ def _render_compare_dataset_cell(
     """
     # Lazy, like every other `app` reach from this module: app imports tabs, so
     # a module-level import would close the cycle.
+    labels = {
+        token: _dataset_label(token)
+        if ready_by_name.get(token, True)
+        else f"{_dataset_label(token)} (needs setup)"
+        for token in names
+        if token != THIS_DATASET
+    }
+    same_label = "This dataset"
+    if same_label in labels.values():
+        same_label = "Same dataset as A"
+        index = 2
+        while same_label in labels.values():
+            same_label = f"Same dataset as A ({index})"
+            index += 1
+    labels[THIS_DATASET] = same_label
+
     host.selectbox(
         "Dataset B",
         options=names,
@@ -2758,23 +2774,11 @@ def _render_compare_dataset_cell(
         # Streamlit has no per-option disabling, so an unready corpus is marked
         # in the label and explains itself below once picked — offered but
         # honest, rather than absent and mysterious.
-        format_func=lambda name: (
-            _dataset_label(name)
-            if ready_by_name.get(name, True)
-            else f"{_dataset_label(name)} (needs setup)"
-        ),
+        format_func=labels.__getitem__,
         help="The dataset scanpath B comes from. A trial from another dataset is "
         "drawn on that dataset's screen.",
     )
-    widen_menu(
-        COMPARE_SOURCE_KEY,
-        [
-            _dataset_label(name)
-            if ready_by_name.get(name, True)
-            else f"{_dataset_label(name)} (needs setup)"
-            for name in names
-        ],
-    )
+    widen_menu(COMPARE_SOURCE_KEY, [labels[name] for name in names])
 
 
 def _compare_label_display(
@@ -4335,7 +4339,7 @@ def _build_studio_config(
         base_font_size=base_font_size,
         trial_raw_gaze=trial_raw_gaze,
         font_family=font_family,
-        data_source=data_source,
+        data_source=_dataset_label(data_source) if data_source else None,
         app_version=app_version,
         exported_at=exported_at,
         compare_styles=compare_styles,
@@ -4673,7 +4677,9 @@ def _build_compare_meta(
             label_primary = (
                 f"{primary_dataset}{_COMPARE_DATASET_SEP}{selected_participant}"
             )
-        label_compare = f"{source.name}{_COMPARE_DATASET_SEP}{compare_participant}"
+        label_compare = (
+            f"{_dataset_label(source.name)}{_COMPARE_DATASET_SEP}{compare_participant}"
+        )
     elif str(selected_participant) != str(compare_participant):
         label_primary = str(selected_participant)
         label_compare = str(compare_participant)
@@ -5102,7 +5108,7 @@ def _shown_dataset_name(token: str | None = None) -> str:
     not the stored token — a renamed or public dataset reads the same."""
     from scanpath_studio.app import _dataset_display_name
 
-    return _dataset_display_name(token or current_dataset_name())
+    return _dataset_display_name(token) if token else current_dataset_name()
 
 
 def _compare_dataset_name(compare_meta: dict | None) -> str:
@@ -5657,6 +5663,7 @@ def _render_export_panel(
         }
     )
     bulk_settings["data_source"] = st.session_state.get("data_source_choice")
+    bulk_settings["data_source_label"] = current_dataset_name()
     bulk_settings["synthetic_source"] = bulk_settings["data_source"] in (
         AUTHOR_CHOICE,
         MANUAL_SAMPLE_CHOICE,
@@ -7200,7 +7207,7 @@ def render_single_trial_tab(
         selected_compare_screen,
         source=compare_source,
         # A's corpus, so a cross-dataset pair names both sides.
-        primary_dataset=str(st.session_state.get("data_source_choice") or ""),
+        primary_dataset=current_dataset_name(),
         # Only the static comparison draws B's samples, so nothing is cut for
         # them while the switch is off or the replay runs. The *unfiltered*
         # samples: B's pool ignores A's filters, so A's `raw_gaze` can lack B.
@@ -7233,10 +7240,19 @@ def render_single_trial_tab(
     share_selection = st.session_state.get("_share_selection")
     if isinstance(share_selection, dict):
         if comparing and compare_meta is not None:
+            from .dataset_identity import dataset_share_id
+
+            source = compare_meta.get("dataset")
+            source_id = dataset_share_id(st.session_state, source)
             share_selection["compare"] = {
                 "participant_id": compare_meta["raw_participant"],
                 "trial_id": compare_meta["trial"],
-                "source": compare_meta.get("dataset"),
+                "source": source,
+                **(
+                    {"source_id": source_id, "source_name": _dataset_label(source)}
+                    if source_id
+                    else {}
+                ),
                 # B's own screen (`cmp_screen=`), from its own navigator.
                 "screen_id": selected_compare_screen,
             }
@@ -7618,7 +7634,9 @@ def render_single_trial_tab(
                 screen=selected_compare_screen,
                 layout=str(compare_layout),
                 compare_stimulus=str(compare_stimulus),
-                dataset=str(compare_meta.get("dataset") or ""),
+                dataset=_dataset_label(compare_meta["dataset"])
+                if compare_meta.get("dataset")
+                else "",
                 # B's own screen, which a second dataset's snippet
                 # states (`setup_b=` / `--compare-canvas`).
                 canvas=(
@@ -7827,7 +7845,7 @@ def render_single_trial_tab(
                     selected_participant,
                     selected_trial,
                     selected_text,
-                    figure_compare_participant,
+                    compare_participant,
                     compare_trial,
                     render_settings,
                     viz_settings,
@@ -7845,7 +7863,8 @@ def render_single_trial_tab(
                     ),
                     primary_combo_row=primary_combo_row,
                     download_name=f"scanpath_{_safe_filename(save_slug)}",
-                    figure_participant_b=self_compare_figure_id,
+                    figure_participant_b=self_compare_figure_id
+                    or figure_compare_participant,
                     raw_gaze=cmp_raw_gaze,
                 )
         else:
@@ -8510,9 +8529,8 @@ def _render_comparison_figure(
     frames, or ``None`` when the layer is off or neither reading has any.
 
     ``figure_participant_b`` is the id B's rows carry in the merged
-    frames when it differs from ``compare_participant`` — a trial compared with
-    itself, renamed apart by `separate_self_compare`. It is used only to slice
-    the figure; labels and lookups keep the real id.
+    frames. Cross-dataset and self-comparisons qualify that id so the two
+    readings can be sliced independently. Labels keep the reader's own id.
 
     ``fixations_filtered`` carries both scanpaths, already resolved by the
     caller: each scanpath's own fixation-index window is applied upstream, and
@@ -8580,8 +8598,14 @@ def _render_comparison_figure(
     primary_label = friendly_trial_label(
         selected_participant, selected_trial, primary_text_id, label_pool
     )
+    dataset_b = _compare_dataset_name(compare_meta)
+    frame_participant_b = figure_participant_b or compare_participant
     compare_label = friendly_trial_label(
-        compare_participant, compare_trial, compare_text_id, label_pool
+        compare_participant,
+        compare_trial,
+        compare_text_id,
+        label_pool,
+        prefix=f"{dataset_b}{_COMPARE_DATASET_SEP}" if cross_dataset else "",
     )
     # An explicit cmp{idx}_label_pattern overrides the auto label above.
     if st.session_state.get("cmp0_label_pattern"):
@@ -8598,9 +8622,9 @@ def _render_comparison_figure(
             1,
             compare_participant,
             compare_trial,
-            extract_trial(words_filtered, compare_participant, compare_trial),
-            extract_trial(fixations_filtered, compare_participant, compare_trial),
-            dataset_name=_compare_dataset_name(compare_meta),
+            extract_trial(words_filtered, frame_participant_b, compare_trial),
+            extract_trial(fixations_filtered, frame_participant_b, compare_trial),
+            dataset_name=dataset_b,
         )
 
     _amend_snippet_compare_labels((primary_label, compare_label))
@@ -8686,7 +8710,7 @@ def _render_comparison_figure(
         words_filtered,
         fixations_filtered,
         (selected_participant, selected_trial),
-        (figure_participant_b or compare_participant, compare_trial),
+        (frame_participant_b, compare_trial),
         settings=comparison_settings,
         raw_gaze=raw_gaze,
     )
@@ -8707,7 +8731,7 @@ def _render_comparison_figure(
         # Two readings in one figure, so `{dataset_name_b}` and friends
         # have a value to resolve against.
         compare_row={
-            "dataset_name": _compare_dataset_name(compare_meta),
+            "dataset_name": dataset_b,
             "participant_id": compare_participant,
             "trial_id": compare_trial,
             "text_id": compare_text_id,
@@ -8729,7 +8753,8 @@ def _render_comparison_figure(
         # about its own geometry. Each panel is true-to-scale on its *own*
         # monitor, so a box twice the size of the one beside it may be the same
         # physical size — naming both screens is what keeps that readable.
-        active = st.session_state.get("data_source_choice") or "this dataset"
+        active = md_literal(current_dataset_name() or "this dataset")
+        other = md_literal(_compare_dataset_name(compare_meta))
         if canvas_b is None:
             canvas_b = canvas_a
         if layout == "overlay":
@@ -8741,7 +8766,7 @@ def _render_comparison_figure(
             # can't say so), and the caveat is raised to a warning rather than
             # buried in the caption, because it qualifies what the figure means.
             st.caption(
-                f"Overlaying {active} and {compare_meta['dataset']}, both at "
+                f"Overlaying {active} and {other}, both at "
                 f"{canvas_a[0]}×{canvas_a[1]}. Positions are compared in screen "
                 "pixels, without rescaling."
             )
@@ -8751,13 +8776,13 @@ def _render_comparison_figure(
             st.caption(
                 "Each panel is drawn at its dataset's screen size: "
                 f"{active} {canvas_a[0]}×{canvas_a[1]}, "
-                f"{compare_meta['dataset']} {canvas_b[0]}×{canvas_b[1]}. "
+                f"{other} {canvas_b[0]}×{canvas_b[1]}. "
                 "Sizes are not comparable across panels."
                 + (f" {setup_note}" if setup_note else "")
             )
         else:
             st.caption(
-                f"Comparing {active} and {compare_meta['dataset']}, which share "
+                f"Comparing {active} and {other}, which share "
                 f"a {canvas_a[0]}×{canvas_a[1]} screen."
                 + (f" {setup_note}" if setup_note else "")
             )
@@ -14998,19 +15023,14 @@ def _apply_remap() -> None:
             values := upload_setup_values(name)
         ):
             _apply_dataset_values(name, values)
-    # The description and the metadata tables are part of the
-    # same save; committed under the old name, which the rename below carries.
     from scanpath_studio.app import commit_editor_staging
 
     commit_editor_staging(name)
-    # And the name typed at the top of the screen. Applied last, after
-    # the entry is saved under the name its widgets were keyed by: every editor
-    # key carries the dataset's name, so renaming mid-edit would orphan them.
     requested = str(st.session_state.get(EDITOR_PENDING_NAME_KEY) or "").strip()
-    if requested and requested != name:
+    if requested:
         from scanpath_studio.wizard import rename_dataset
 
-        name = rename_dataset(name, requested) or name
+        rename_dataset(name, requested)
     st.session_state["_remap_applied"] = name
     # Saving *is* the moment the Trial ID mapping is decided, so ask for the
     # trial-identity check's verdict on the frames this just re-derived.
@@ -15939,7 +15959,7 @@ def _render_remap_editor(
     # and the mapping form is several screens down.
     if st.session_state.pop(FOCUS_MAPPING_KEY, None) == name:
         st.info(
-            f"Editing **{md_literal(name)}**. Its mapping and saved tables are below."
+            f"Editing **{md_literal(_dataset_label(name))}**. Its mapping and saved tables are below."
         )
     if is_multipleye_entry(stored):
         st.caption(
@@ -16023,9 +16043,11 @@ def _render_remap_editor(
     baseline = st.session_state.get(_REMAP_BASELINE_KEY)
     if baseline is None:
         st.session_state[_REMAP_BASELINE_KEY] = baseline = signature
-    renamed = str(st.session_state.get(EDITOR_PENDING_NAME_KEY) or name).strip()
+    renamed = str(st.session_state.get(EDITOR_PENDING_NAME_KEY) or "").strip()
     st.session_state[_REMAP_DIRTY_KEY] = (
-        bool(added) or signature != baseline or (bool(renamed) and renamed != name)
+        bool(added)
+        or signature != baseline
+        or (bool(renamed) and renamed != _dataset_label(name))
     )
 
     dropped = stored.get("dropped_columns") or {}
@@ -16417,7 +16439,7 @@ def _editor_setup_config(name: str) -> dict:
         "schema": PLOT_CONFIG_SCHEMA,
         "app": {"name": "Scanpath Studio", "version": __version__},
         "exported_at": datetime.now().isoformat(timespec="seconds"),
-        "data_source": name,
+        "data_source": _dataset_label(name),
         "column_mapping": mapping,
         "column_mapping_notes": notes,
         "experimental_setup": dict(setup) if isinstance(setup, dict) else None,

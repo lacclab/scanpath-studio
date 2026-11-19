@@ -16,7 +16,6 @@ from scanpath_studio.persistence import (
     is_loopback_url,
     persistence_enabled,
     persistence_paused,
-    rename_cached_dataset,
     restore_local_state,
     restore_state,
     restored_from_cache,
@@ -732,75 +731,63 @@ def test_a_cache_written_before_the_setup_key_still_restores(tmp_path):
     assert SetupSnapshot.from_dict(entry.get("setup"), fallback=fallback) == fallback
 
 
-# A rename re-keys the cached dataset without re-encoding its Parquet files,
-# so the cache never accumulates orphans under the old name.
-
-
-def test_rename_rekeys_the_cache_and_keeps_the_restore(tmp_path):
-    """The files are not named after the dataset, so a rename moves none —
-    one manifest replacement, never a half-moved cache."""
-    session = {"_datasets": {"Corpus": _dataset()}, "data_source_choice": "Corpus"}
-    assert save_state(session, tmp_path)
-    files = _frame_files(tmp_path, "Corpus")
-    stamps = {key: path.stat().st_mtime_ns for key, path in files.items()}
-
-    session["_datasets"] = {"Renamed": session["_datasets"].pop("Corpus")}
-    session["data_source_choice"] = "Renamed"
-    assert rename_cached_dataset(session, "Corpus", "Renamed", tmp_path)
-
-    assert _frame_files(tmp_path, "Renamed") == files
-    assert {key: path.stat().st_mtime_ns for key, path in files.items()} == stamps
-    manifest = _manifest(tmp_path)
-    assert set(manifest["datasets"]) == {"Renamed"}
-    assert manifest["session"]["data_source_choice"] == "Renamed"
-
-    restored = {}
-    assert restore_state(restored, tmp_path)
-    assert set(restored["_datasets"]) == {"Renamed"}
-    pd.testing.assert_frame_equal(
-        restored["_datasets"]["Renamed"]["words"],
-        _dataset()["words"],
+def test_legacy_upload_gains_a_stable_id_and_renames_without_rewriting_frames(tmp_path):
+    from scanpath_studio.constants import DATASET_ALIASES_KEY
+    from scanpath_studio.dataset_identity import (
+        dataset_share_id,
+        resolve_dataset_reference,
     )
 
-
-def test_the_save_after_a_rename_does_not_rewrite_the_frames(tmp_path):
-    """The whole point of moving the files: the next save is manifest-only."""
-    session = {"_datasets": {"Corpus": _dataset()}}
+    session = {"_datasets": {"Corpus": _dataset()}, "data_source_choice": "Corpus"}
     assert save_state(session, tmp_path)
-
-    session["_datasets"] = {"Renamed": session["_datasets"].pop("Corpus")}
-    assert rename_cached_dataset(session, "Corpus", "Renamed", tmp_path)
-    frame_path = next((tmp_path / "datasets").glob("*-words.parquet"))
-    before = frame_path.stat().st_mtime_ns
-
-    assert save_state(session, tmp_path)
-    assert frame_path.stat().st_mtime_ns == before
-    # Words and fixations; the dataset has no raw gaze, so no file for it.
-    assert len(list((tmp_path / "datasets").glob("*.parquet"))) == 2
-
-
-def test_rename_without_a_cache_on_disk_is_a_no_op_not_an_error(tmp_path):
-    session = {"_datasets": {"Renamed": _dataset()}}
-    assert rename_cached_dataset(session, "Corpus", "Renamed", tmp_path)
-    assert not (tmp_path / "manifest.json").exists()
-
-
-def test_a_failed_rename_forces_a_full_rewrite_next_save(tmp_path):
-    """A half-moved cache must never be trusted — drop the reuse bookkeeping."""
-    session = {"_datasets": {"Corpus": _dataset()}}
-    assert save_state(session, tmp_path)
-    (tmp_path / "manifest.json").write_text("{not json", encoding="utf-8")
-
-    session["_datasets"] = {"Renamed": session["_datasets"].pop("Corpus")}
-    assert not rename_cached_dataset(session, "Corpus", "Renamed", tmp_path)
-    assert persistence._LAST_DATASET_ENTRIES_KEY not in session
-
-    assert save_state(session, tmp_path)
-    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
-    assert set(manifest["datasets"]) == {"Renamed"}
     restored = {}
     assert restore_state(restored, tmp_path)
-    assert set(restored["_datasets"]) == {"Renamed"}
+    identifier = dataset_share_id(restored, "Corpus")
+    original_files = _frame_files(tmp_path, "Corpus")
+    restored[DATASET_ALIASES_KEY] = {"Corpus": "Renamed"}
+    assert save_state(restored, tmp_path)
+    assert _frame_files(tmp_path, "Corpus") == original_files
+    reopened = {}
+    assert restore_state(reopened, tmp_path)
+    assert dataset_share_id(reopened, "Corpus") == identifier
+    assert resolve_dataset_reference(reopened, "Renamed", identifier) == "Corpus"
+    assert reopened[DATASET_ALIASES_KEY] == {"Corpus": "Renamed"}
+    assert persistence.cache_status(root=tmp_path)["datasets"][0]["name"] == "Renamed"
+    original_files["words"].unlink()
+    assert persistence.cache_status(root=tmp_path)["damaged"][0]["name"] == "Renamed"
+
+
+def test_discarding_a_damaged_upload_without_attachments_releases_its_label(tmp_path):
+    from scanpath_studio.constants import DATASET_ALIASES_KEY
+    from scanpath_studio.dataset_identity import DATASET_IDS_KEY
+
+    saved = {
+        "_datasets": {"original": _dataset()},
+        DATASET_ALIASES_KEY: {"original": "New label"},
+        DATASET_IDS_KEY: {"original": "abcd"},
+    }
+    assert save_state(saved, tmp_path)
+    _frame_files(tmp_path, "original")["words"].unlink()
+    session = {}
+    assert restore_state(session, tmp_path)
+    assert persistence.discard_failed_dataset(session, "original", tmp_path)
+    assert not session[DATASET_ALIASES_KEY]
+    assert not session[DATASET_IDS_KEY]
+
+
+def test_same_dataset_cache_choice_is_distinct_from_an_upload_with_that_name(tmp_path):
+    from scanpath_studio.session_keys import COMPARE_SOURCE_STATE_KEY, SAME_DATASET
+
+    legacy = {COMPARE_SOURCE_STATE_KEY: "This dataset"}
+    assert (
+        persistence._restorable_session(legacy)[COMPARE_SOURCE_STATE_KEY]
+        == SAME_DATASET
+    )
+    session = {"_datasets": {"This dataset": _dataset()}, **legacy}
+    assert save_state(session, tmp_path)
+    reopened = {}
+    assert restore_state(reopened, tmp_path)
+    assert reopened[COMPARE_SOURCE_STATE_KEY] == "This dataset"
 
 
 class TestRememberedDatasetCounts:

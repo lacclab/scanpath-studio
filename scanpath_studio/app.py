@@ -98,6 +98,7 @@ from scanpath_studio.constants import (
     DATA_PAGE_KEY,
     DATA_PAGE_OFFSCREEN_KEY,
     DATASET_ADDED_KEY,
+    DATASET_ALIASES_KEY,
     DATASET_COUNTS_STORE_KEY,
     DATASET_DESCRIPTIONS_KEY,
     DATASET_EDITOR_OPEN_KEY,
@@ -382,6 +383,8 @@ from scanpath_studio.utils import (
 from scanpath_studio.utils import (  # noqa: F401
     build_comparison_options as _build_comparison_options,
 )
+
+from .dataset_identity import dataset_share_id
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from streamlit.delta_generator import DeltaGenerator
@@ -1228,7 +1231,7 @@ def render_cache_recovery_notice(host, app_url: str, *, key: str) -> bool:
     )
     for index, (name, reason) in enumerate(sorted(failed.items())):
         row = box.container(horizontal=True, vertical_alignment="center")
-        row.markdown(f"**{md_literal(name)}**: {reason}")
+        row.markdown(f"**{md_literal(_dataset_display_name(name))}**: {reason}")
         row.button(
             "Retry",
             icon=ICONS["refresh"],
@@ -5192,7 +5195,7 @@ def _reset_author_fixations(source: str, words: pd.DataFrame) -> None:
 
 
 def _save_authored_dataset(name_key: str) -> None:
-    from scanpath_studio.wizard import _safe_dataset_name
+    from scanpath_studio.wizard import _new_dataset_token, _safe_dataset_name
 
     payload = st.session_state.pop("_author_save_payload", None)
     if payload is None:
@@ -5200,8 +5203,9 @@ def _save_authored_dataset(name_key: str) -> None:
     requested = str(st.session_state.get(name_key) or "My saved scanpath").strip()
     if requested in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
         requested += " (saved)"
-    name = _safe_dataset_name(requested)
+    name = _new_dataset_token(_safe_dataset_name(requested))
     st.session_state.setdefault("_datasets", {})[name] = payload
+    dataset_share_id(st.session_state, name)
     # The draft's annotations were made on the scanpath being saved,
     # so they become the saved dataset's. The name is safe, so it holds none.
     if st.session_state.get("data_source_choice") == AUTHOR_CHOICE:
@@ -5388,11 +5392,6 @@ _DATASET_KIND_ICONS = {
     "Public": ICONS["public"],
 }
 
-# Built-in and public dataset tokens are load-path identifiers, so changing
-# them would break deep links and loader dispatch. Their table rename is a
-# display alias; removing one hides it from this browser session. Uploaded
-# datasets keep using the real store re-key/delete operations in `wizard.py`.
-DATASET_ALIASES_KEY = "_dataset_display_aliases"
 HIDDEN_DATASETS_KEY = "_hidden_dataset_tokens"
 
 
@@ -6212,9 +6211,7 @@ def render_name_field(host, token: str) -> None:
     """✏️ Edit dataset's **Name**.
 
     Applied by ✅ Save changes with the rest of the edit, and an unsaved change
-    until then. An upload's name is the key its every editor widget is filed
-    under, so `tabs._apply_remap` re-keys it last; any other dataset's name is
-    a display alias (`_apply_builtin_name`).
+    until then. The editor stores the label under the dataset’s immutable key.
     """
     uploaded = token in (st.session_state.get("_datasets") or {})
     if EDITOR_NAME_FIELD_KEY not in st.session_state:
@@ -6507,9 +6504,8 @@ def commit_editor_staging(token: str) -> None:
     """✅ Save changes' share of the edit: the description, the stimulus
     images, a built-in's name, and the metadata tables as they now stand.
 
-    Called by both Saves — an upload's (`tabs._apply_remap`, before it re-keys
-    the dataset under a new name) and a built-in's — once they know the save
-    goes ahead.
+    Both the upload editor and the built-in dataset editor call this after
+    validating the pending changes.
     """
     if (text := _description_draft(token)) is not None:
         set_dataset_description(token, text)
@@ -10366,7 +10362,9 @@ def _run_app() -> None:
         # takes the run's one dialog when it has something to say, and any
         # other dialog already open wins too; the counts then go to a toast,
         # and **Open in Scanpath view** under the list is the way on.
-        message = dataset_added_message(str(added), words_all, fixations_all)
+        message = dataset_added_message(
+            _dataset_display_name(str(added)), words_all, fixations_all
+        )
         offered = False
         if not identity_modal:
             try:

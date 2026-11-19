@@ -100,3 +100,68 @@ def test_a_missing_dataset_is_named_and_the_view_is_not_applied():
     # The notice stays on the next run (the link's params are gone by then).
     at.run(timeout=120)
     assert any("Dataset 1" in w.value for w in at.warning)
+
+
+def test_shared_upload_opens_after_rename_or_independent_import(monkeypatch):
+    import streamlit as st
+
+    from scanpath_studio import url_state
+    from scanpath_studio.constants import DATASET_ALIASES_KEY
+    from scanpath_studio.dataset_identity import dataset_share_id
+
+    session = {
+        "_datasets": {"Original": {}},
+        DATASET_ALIASES_KEY: {"Original": "Study"},
+    }
+    monkeypatch.setattr(st, "session_state", session)
+    encoded, _ = url_state._build_share_query("Original")
+    params = {k: v[0] for k, v in parse_qs(encoded).items()}
+    assert params["dataset"] == "Study"
+    assert params["dataset_id"] == dataset_share_id(session, "Original")
+    monkeypatch.setattr(st, "query_params", params)
+    # The sender renamed the study again and reused its old label for a new upload.
+    session["_datasets"]["Other"] = {}
+    session[DATASET_ALIASES_KEY] = {"Original": "Follow-up", "Other": "Study"}
+    assert url_state.resolve_link_dataset(set(), None) == "Original"
+    # A colleague has a different dataset under the sender's original store key.
+    recipient = {
+        "_datasets": {"Original": {}, "Independent": {}},
+        DATASET_ALIASES_KEY: {"Independent": "Study"},
+    }
+    monkeypatch.setattr(st, "session_state", recipient)
+    assert url_state.resolve_link_dataset(set(), None) == "Independent"
+
+
+def test_compare_settings_resolve_named_upload_across_sessions(monkeypatch):
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio import url_state
+    from scanpath_studio.constants import DATASET_ALIASES_KEY
+
+    session = {
+        "_datasets": {"A": {}, "Recipient B": {}},
+        "data_source_choice": "A",
+        DATASET_ALIASES_KEY: {"Recipient B": "Named B"},
+    }
+    monkeypatch.setattr(st, "session_state", session)
+    from scanpath_studio import compare_source
+
+    monkeypatch.setattr(
+        compare_source,
+        "secondary_dataset_options",
+        lambda **kw: [("Recipient B", True, "")],
+    )
+    selection = {
+        "source": "Named B",
+        "source_id": "42" * 16,
+        "participant_id": "p",
+        "trial_id": "t",
+    }
+    assert url_state._compare_b_problem(selection, pd.DataFrame()) == (
+        "Recipient B",
+        "",
+    )
+    session[DATASET_ALIASES_KEY].clear()
+    source, reason = url_state._compare_b_problem(selection, pd.DataFrame())
+    assert source is None and "not available" in reason

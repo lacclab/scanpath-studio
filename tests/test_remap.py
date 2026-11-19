@@ -532,9 +532,9 @@ class TestStimulusLevelWordsRemap:
         st.session_state[tabs.EDITOR_PENDING_NAME_KEY] = "Pilot study"
         tabs._apply_remap()
         assert not st.session_state.get("_remap_problems")
-        assert set(st.session_state["_datasets"]) == {"Pilot study"}
-        assert st.session_state["_pending_source_choice"] == "Pilot study"
-        assert st.session_state["_remap_applied"] == "Pilot study"
+        assert set(st.session_state["_datasets"]) == {"study"}
+        assert tabs._dataset_label("study") == "Pilot study"
+        assert st.session_state["_remap_applied"] == "study"
         # The edit is over: the staged name goes with the rest of it.
         assert tabs.EDITOR_PENDING_NAME_KEY not in st.session_state
 

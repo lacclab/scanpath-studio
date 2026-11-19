@@ -4742,18 +4742,16 @@ def _selected_metadata_rows(trial_fixations: pd.DataFrame | None) -> dict:
 def current_dataset_name() -> str:
     """The name the dataset picker shows for the source now loaded.
 
-    ``data_source_choice`` is canonical: the stored value *is* the entry's
-    label — the user's own name for an upload, the registry label for a public
-    corpus — and renaming a dataset re-keys it, so a renamed dataset carries the
-    new name without anything else to update.
-
     Returns ``""`` rather than a placeholder when there is no session (headless
     render, import time): ``{dataset_name}`` then renders empty, which is the
     same thing an unnamed CLI render produces, instead of inventing a label
     that would disagree with the app.
     """
     try:
-        return str(st.session_state.get("data_source_choice") or "")
+        from .app import _dataset_display_name
+
+        token = st.session_state.get("data_source_choice")
+        return _dataset_display_name(token) if token else ""
     except Exception:  # no ScriptRunContext — headless import, tests, docs
         return ""
 
@@ -5978,7 +5976,8 @@ def _seed_viz_state(
     ss = st.session_state
     seeded = (
         "is_in_aspan"
-        if "is_in_aspan" in highlight_options and current_dataset_name() == DEMO_CHOICE
+        if "is_in_aspan" in highlight_options
+        and st.session_state.get("data_source_choice") == DEMO_CHOICE
         else None
     )
     current = ss.get("global_highlight_column")
@@ -9901,7 +9900,7 @@ def field_help(col: str, names: cn.ColumnNames | None = None) -> str:
     names = names if names is not None else _rail_names()
     note = (
         cn.DEMO_COLUMN_NOTES.get(col, "")
-        if current_dataset_name() == DEMO_CHOICE
+        if st.session_state.get("data_source_choice") == DEMO_CHOICE
         else ""
     )
     source = names.source_tooltip(col)

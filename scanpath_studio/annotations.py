@@ -32,7 +32,7 @@ import streamlit as st
 from .constants import ICONS, md_literal, upload_limit_mb
 from .data import respell_reading
 from .fields import PANEL_LABEL_W, panel_field, row_label
-from .session_keys import COMPARE_SOURCE_STATE_KEY
+from .session_keys import COMPARE_SOURCE_STATE_KEY, SAME_DATASET
 
 ANNOTATIONS_STATE_KEY = "trial_annotations"
 #: The annotations file (🗂️ Data → Annotations, an Export bundle's
@@ -315,7 +315,7 @@ PENDING_DATASET = "\x00pending"
 #: and the picker's "same dataset" answer (``compare_source.THIS_DATASET``).
 #: Pinned equal by a test; not imported, since both modules import this one.
 _COMPARE_PREFIX = "cmp"
-_COMPARE_SAME_DATASET = "This dataset"
+_COMPARE_SAME_DATASET = SAME_DATASET
 
 
 def _stored(session) -> dict[str, dict[Key, Entry]]:

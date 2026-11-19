@@ -245,3 +245,19 @@ def test_tiling_boxes_hold_each_point_exactly_once(widths, left, height, draw):
 def test_non_finite_range_is_refused(value):
     with pytest.raises(ValueError):
         url_state._parse_float_range(f"0,{value}")
+
+
+@given(st.text(min_size=1), st.text(min_size=1))
+def test_upload_reference_survives_a_new_label_and_name_reuse(old, new):
+    from scanpath_studio.constants import DATASET_ALIASES_KEY
+    from scanpath_studio.dataset_identity import (
+        dataset_share_id,
+        resolve_dataset_reference,
+    )
+
+    session = {"_datasets": {"first": {}}}
+    identifier = dataset_share_id(session, "first")
+    session[DATASET_ALIASES_KEY] = {"first": new, "second": old}
+    session["_datasets"]["second"] = {}
+    assert resolve_dataset_reference(session, old, identifier) == "first"
+    assert dataset_share_id(session, "first") == identifier

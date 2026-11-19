@@ -60,6 +60,7 @@ import scanpath_studio.annotations as annotations_mod
 
 from . import progress
 from .constants import (
+    DATASET_ALIASES_KEY,
     DATASET_COUNTS_STORE_KEY,
     DATASET_DESCRIPTIONS_KEY,
     DATASET_SETUP_OVERRIDES_KEY,
@@ -71,6 +72,7 @@ from .constants import (
     SETUP_OVERRIDE_RESTORE_KEY,
     SETUP_OVERRIDE_SESSION_KEYS,
 )
+from .dataset_identity import DATASET_IDS_KEY, dataset_share_id, forget_dataset_identity
 from .session_keys import (
     COLUMN_MAPPING_PREFIX,
     COMPARE_IDENTITY_STATE_KEY,
@@ -199,6 +201,8 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     # The descriptions the user wrote: their own words, like the design
     # library. A plain session key so editing one never touches the stored
     # frames (see `constants.DATASET_DESCRIPTIONS_KEY`).
+    DATASET_ALIASES_KEY,
+    DATASET_IDS_KEY,
     DATASET_DESCRIPTIONS_KEY,
     # Each dataset's stimulus-image folder and pattern, kept the same way and
     # for the same reason. A local path in a local cache.
@@ -514,6 +518,9 @@ def _manifest_for(
         datasets.setdefault(name, record["entry"])
 
     values = {key: _json_safe(session[key]) for key in _SESSION_KEYS if key in session}
+    if values.get(COMPARE_SOURCE_STATE_KEY) == "This dataset":
+        # A literal upload ID. Older manifests used this text for A's source.
+        values[COMPARE_SOURCE_STATE_KEY] = {"dataset": "This dataset"}
     values.update(
         {
             key: _json_safe(value)
@@ -862,8 +869,17 @@ def _restore_manifest(
         else 0
     )
     for key, value in stored_session.items():
-        if key not in skip:
+        if key in skip:
+            continue
+        if key in (DATASET_ALIASES_KEY, DATASET_IDS_KEY):
+            restored = {
+                token: item for token, item in value.items() if token not in existing
+            }
+            session[key] = {**restored, **(session.get(key) or {})}
+        else:
             session.setdefault(key, value)
+    for token in restored_datasets:
+        dataset_share_id(session, token)
     # Per dataset, `{"datasets": {name: [records]}}`. An older manifest
     # holds one flat list naming no dataset; `restore_payload` files it
     # under the datasets it belongs to, once — see its docstring. A
@@ -1003,6 +1019,8 @@ def retry_failed_datasets(session, root: Path | None = None) -> dict[str, str]:
             failed.pop(name)
         if recovered:
             session["_datasets"] = live
+            for token in recovered:
+                dataset_share_id(session, token)
             if reusable:
                 session[_LAST_DATASET_ENTRIES_KEY] = {**entries, **recovered}
                 session[_LAST_DATASET_IDENTITY_KEY] = _dataset_identity(session)
@@ -1014,8 +1032,7 @@ def discard_failed_dataset(session, name: str, root: Path | None = None) -> bool
     """Remove one held-back dataset from the cache: its entry and its files.
 
     The next save writes the manifest without it. Its annotations and metadata
-    tables are kept — they are filed by name, like every dataset's, and are the
-    user's own work — so a dataset added again under that name finds them.
+    tables keep their owner so another upload cannot inherit them.
     """
     directory = state_directory() if root is None else root
     failed = _failed(session)
@@ -1038,6 +1055,16 @@ def discard_failed_dataset(session, name: str, root: Path | None = None) -> bool
                 continue  # never delete outside the cache folder
         for path in paths:
             _unlink_quietly(path)
+        from . import metadata
+
+        if (
+            name not in (session.get("_datasets") or {})
+            and name not in annotations_mod.dataset_names(session)
+            and name not in (session.get(metadata.DATASET_STORE_KEY) or {})
+            and name != session.get(metadata.OWNER_KEY)
+            and not failed_metadata(session)
+        ):
+            forget_dataset_identity(session, name)
         _set_failed(session, failed)
     return True
 
@@ -1084,7 +1111,7 @@ def _restorable_session(stored: Any) -> dict:
             key in _SESSION_KEYS or key.startswith(COLUMN_MAPPING_PREFIX)
         ):
             continue
-        if key == DATASET_DESCRIPTIONS_KEY:
+        if key in (DATASET_DESCRIPTIONS_KEY, DATASET_ALIASES_KEY, DATASET_IDS_KEY):
             # ``{dataset: sentence}``; anything else is dropped.
             if isinstance(value, dict):
                 clean[key] = {
@@ -1121,6 +1148,12 @@ def _restorable_session(stored: Any) -> dict:
                     for name, setup in value.items()
                     if isinstance(setup, dict)
                 }
+            continue
+        if key == COMPARE_SOURCE_STATE_KEY:
+            if isinstance(value, str):
+                clean[key] = "" if value == "This dataset" else value
+            elif value == {"dataset": "This dataset"}:
+                clean[key] = "This dataset"
             continue
         if key == COMPARE_IDENTITY_STATE_KEY:
             # ``[participant_id, trial_id]`` in JSON; the picker reads a tuple.
@@ -1310,69 +1343,6 @@ def forget_state(root: Path) -> None:
                 frames_dir.rmdir()
             except OSError:
                 pass
-
-
-def rename_cached_dataset(
-    session: MutableMapping[str, Any],
-    old: str,
-    new: str,
-    root: Path | None = None,
-) -> bool:
-    """Follow a dataset rename through the cache instead of rewriting it.
-
-    A dataset's Parquet files are not named after the dataset (a token per
-    write; an older cache names them after the old name's slug, and keeps
-    those names), so a rename moves no file: re-keying
-    ``manifest.json`` — one atomic replacement — and this session's reuse
-    bookkeeping keeps the next :func:`save_state` on the cheap reuse path, which
-    rewrites the manifest only and leaves no orphan behind.
-
-    Call it **after** the store itself has been re-keyed: the new reuse identity is
-    read from the live ``session["_datasets"]``. Best-effort like the rest of this
-    module — on any failure the session's bookkeeping is dropped so the next save
-    rebuilds the cache in full rather than trusting it.
-    """
-    if old == new:
-        return False
-    directory = state_directory() if root is None else root
-    with _STATE_LOCK:
-        try:
-            manifest_path = directory / "manifest.json"
-            if manifest_path.is_file():
-                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                datasets = dict(manifest.get("datasets", {}))
-                if old in datasets:
-                    datasets[new] = datasets.pop(old)
-                    manifest["datasets"] = datasets
-                    values = dict(manifest.get("session", {}))
-                    if values.get("data_source_choice") == old:
-                        values["data_source_choice"] = new
-                        manifest["session"] = values
-                    _atomic_text(
-                        json.dumps(
-                            manifest, ensure_ascii=False, sort_keys=True, indent=2
-                        ),
-                        manifest_path,
-                    )
-            entries = session.get(_LAST_DATASET_ENTRIES_KEY)
-            if isinstance(entries, dict) and old in entries:
-                entries = dict(entries)
-                entries[new] = entries.pop(old)
-                session[_LAST_DATASET_ENTRIES_KEY] = entries
-                session[_LAST_DATASET_IDENTITY_KEY] = _dataset_identity(session)
-            return True
-        except (OSError, ValueError, TypeError, KeyError):
-            for key in (
-                _LAST_FINGERPRINT_KEY,
-                _LAST_DATASET_IDENTITY_KEY,
-                _LAST_DATASET_ENTRIES_KEY,
-            ):
-                session.pop(key, None)
-            _LOGGER.warning(
-                "Could not follow a dataset rename through the local cache.",
-                exc_info=True,
-            )
-            return False
 
 
 def restore_local_state(
@@ -1658,15 +1628,20 @@ def cache_status(
         # back. A stat per file, never a Parquet read: this runs on every
         # render of the Data page. (A file that is present but corrupt shows
         # only when the app tries to read it.)
+        stored_session = dict(manifest.get("session", {}))
+        aliases = stored_session.get(DATASET_ALIASES_KEY)
+        aliases = aliases if isinstance(aliases, dict) else {}
         good, damaged = [], []
         for name, entry in sorted(datasets.items()):
+            label = aliases.get(name)
+            label = label if isinstance(label, str) and label else str(name)
             reason = _entry_problem(directory, entry)
             if reason:
-                damaged.append({"name": str(name), "reason": reason})
+                damaged.append({"name": label, "reason": reason})
                 continue
             good.append(
                 {
-                    "name": str(name),
+                    "name": label,
                     "rows": {
                         key: int(value)
                         for key, value in dict(entry.get("rows") or {}).items()
@@ -1686,7 +1661,6 @@ def cache_status(
         status["annotations"] = annotations_mod.payload_count(
             manifest.get("annotations")
         )
-        stored_session = dict(manifest.get("session", {}))
         status["designs"] = len(dict(stored_session.get(DESIGN_PRESETS, {})))
         pointer = dict(manifest.get("metadata") or {})
         status["metadata"] = len(list(pointer.get("tables") or []))

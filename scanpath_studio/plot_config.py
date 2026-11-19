@@ -89,7 +89,12 @@ def build_plot_config(
         {
             "participant_id": str(published["participant_id"]),
             "trial_id": str(published["trial_id"]),
-            "source": published.get("source") or None,
+            "source": published.get("source_name") or published.get("source") or None,
+            **(
+                {"source_id": published["source_id"]}
+                if published.get("source_id")
+                else {}
+            ),
             "screen_id": (
                 str(published["screen_id"])
                 if published.get("screen_id") not in (None, "")
@@ -510,7 +515,7 @@ def render_plot_config(
         base_font_size=base_font_size,
         font_family=font_family,
         trial_raw_gaze=pd.DataFrame(),
-        data_source=settings.get("data_source"),
+        data_source=settings.get("data_source_label", settings.get("data_source")),
         app_version=build_info().version,
         exported_at="",
         state=state,

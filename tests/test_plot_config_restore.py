@@ -829,7 +829,7 @@ class TestConfigMigration:
         # forces a matching migration + this assertion to move together.
         from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
 
-        assert PLOT_CONFIG_SCHEMA == 8
+        assert PLOT_CONFIG_SCHEMA == 9
 
     def test_schema1_config_still_restores_end_to_end(self):
         # A schema-1 file (no `schema` key) applies its plot settings through the
@@ -919,6 +919,37 @@ def _build_config_app():
 
 @pytest.mark.timeout(60)
 class TestSavedStateCoverage:
+    def test_compared_upload_restores_by_id_after_its_name_changes(self):
+        from scanpath_studio.constants import DATASET_ALIASES_KEY
+        from scanpath_studio.dataset_identity import DATASET_IDS_KEY
+
+        identifier = "24" * 16
+        at = _run(
+            _build_config_app,
+            _figure_settings=_minimal_figure_settings(),
+            _viz_settings={"heatmap_metric": "duration_ms"},
+            _clear=["cmp_dataset"],
+            _datasets={"store-key": {}, "other": {}},
+            _share_selection={
+                "compare": {
+                    "participant_id": "r",
+                    "trial_id": "reading",
+                    "source": "store-key",
+                    "source_name": "Study",
+                    "source_id": identifier,
+                }
+            },
+            single_compare_toggle=True,
+            **{
+                DATASET_IDS_KEY: {"store-key": identifier},
+                DATASET_ALIASES_KEY: {"store-key": "Renamed study", "other": "Study"},
+            },
+        )
+        saved = at.session_state["_config"]["selection"]["compare"]
+        assert saved["source"] == "Study"
+        assert saved["source_id"] == identifier
+        assert at.session_state["cmp_dataset"] == "store-key"
+
     def test_the_raw_gaze_layer_is_saved_as_its_switch(self):
         """Saving on a trial without raw gaze records the layer's switch, not
         the figure's *effective* value (switch AND samples), which reads off."""

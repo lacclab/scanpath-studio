@@ -863,6 +863,9 @@ _MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA]
 #: avoids by importing `persistence` one way).
 DATASET_COUNTS_STORE_KEY = "_dataset_counts_store"
 
+#: Display labels can change without moving a dataset or any of its attached tables.
+DATASET_ALIASES_KEY = "_dataset_display_aliases"
+
 #: ``{dataset token: description}``, every description the user
 #: wrote (on the add wizard or ✏️ Edit dataset), for any kind of dataset. One
 #: small dict persisted as a recovery-cache session key, *not* a field on an

@@ -63,7 +63,7 @@ from .data import (
     trial_mapping_columns,
     zero_padding_map,
 )
-from .session_keys import COMPARE_SOURCE_STATE_KEY
+from .session_keys import COMPARE_SOURCE_STATE_KEY, SAME_DATASET
 
 
 def _with_data_candidates(data_candidates: list[str], *extras: str) -> tuple[str, ...]:
@@ -1792,7 +1792,7 @@ def activate_dataset(session, dataset: str) -> bool:
 #: answer (``compare_source.THIS_DATASET`` — not imported: `compare_source`
 #: imports `app`, which imports this).
 _COMPARE_PREFIX = "cmp"
-_COMPARE_SAME_DATASET = "This dataset"
+_COMPARE_SAME_DATASET = SAME_DATASET
 _BUILT_KEY = "_metadata_built_for_compare"
 
 

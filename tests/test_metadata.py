@@ -1327,5 +1327,7 @@ class TestTablesBelongToADataset:
         assert md.attached_for("participant").source_name == "a.csv"
         assert md.attached_for("participant", "cmp").source_name == "b.csv"
         assert md.attached_for("trial", "cmp") is None
-        session["cmp_dataset"] = "This dataset"
+        from scanpath_studio.session_keys import SAME_DATASET
+
+        session["cmp_dataset"] = SAME_DATASET
         assert md.attached_for("participant", "cmp").source_name == "a.csv"

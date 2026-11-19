@@ -106,6 +106,7 @@ from .controls import (
     palette_state,
 )
 from .data import composite_respelling_map, respell_reading
+from .dataset_identity import dataset_share_id, resolve_dataset_reference
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .export import PRINT_DPI_BOUNDS, PRINT_WIDTH_BOUNDS
 from .session_keys import (
@@ -123,6 +124,7 @@ from .session_keys import (
     LINK_SETUP_STATE_KEY,
     PARAM_CORPUS,
     PARAM_DATASET,
+    PARAM_DATASET_ID,
     PARAM_SHOW_TITLE_CAPTION,
     PENDING_COMPARE_STATE_KEY,
     PUBLIC_DATASET_CHOICE,
@@ -1554,7 +1556,7 @@ def missing_dataset_message(
 def resolve_link_dataset(seeded: Iterable[str], current: str | None) -> str | None:
     """Open the added dataset a link names (`?dataset=`).
 
-    Returns the dataset to open when this session holds one of that name. When
+    Matches an upload by its ID here, or its displayed name on another computer. When
     it doesn't, the link's view is **not** applied to whatever else is open:
     every key ``_apply_url_preset`` seeded this run (``seeded``) is dropped, the
     link's params are cleared so the next run does not seed them again, and a
@@ -1569,8 +1571,11 @@ def resolve_link_dataset(seeded: Iterable[str], current: str | None) -> str | No
         return None
     if not name or params.get("source"):
         return None
-    if name in (st.session_state.get("_datasets") or {}):
-        return str(name)
+    token = resolve_dataset_reference(
+        st.session_state, name, params.get(PARAM_DATASET_ID)
+    )
+    if token is not None:
+        return token
     message = missing_dataset_message(
         str(name), params.get("participant"), params.get("trial_id")
     )
@@ -1910,7 +1915,7 @@ def sanitize_session_value(key: str, value):
 # time. The field-by-field reader already tolerates *missing* sections, so a
 # migration is only needed when an old key must be *translated*, not merely when
 # new keys are added.
-PLOT_CONFIG_SCHEMA = 8
+PLOT_CONFIG_SCHEMA = 9
 
 
 def _detect_config_schema(config: dict) -> int:
@@ -2090,6 +2095,8 @@ _PLOT_CONFIG_MIGRATIONS = {
     5: _migrate_config_5_to_6,
     6: _migrate_config_6_to_7,
     7: _migrate_config_7_to_8,
+    # Without an upload ID, a saved name still resolves by its original store key.
+    8: dict,
 }
 
 
@@ -3361,6 +3368,16 @@ def _compare_b_problem(compare: object, combos: pd.DataFrame) -> tuple[str | Non
     if compare.get("participant_id") in (None, ""):
         return None, "the file's second trial has no participant"
     source = compare.get("source")
+    if source is not None and not isinstance(source, str):
+        return None, "the file has an invalid comparison dataset"
+    if source:
+        upload = resolve_dataset_reference(
+            st.session_state, source, compare.get("source_id")
+        )
+        if upload is not None:
+            source = upload
+        elif "source_id" in compare:
+            return None, f"its dataset {source} is not available here"
     if source in (None, "") or source == st.session_state.get("data_source_choice"):
         _row, reason = _match_selection(compare, combos)
         return None, reason
@@ -3550,7 +3567,10 @@ def _build_share_query(
         # that name and say which is missing when it has none.
         stored = (st.session_state.get("_datasets") or {}).get(data_choice)
         if stored is not None:
-            params[PARAM_DATASET] = str(data_choice)
+            from .app import _dataset_display_name
+
+            params[PARAM_DATASET] = _dataset_display_name(data_choice)
+            params[PARAM_DATASET_ID] = dataset_share_id(st.session_state, data_choice)
         if is_multipleye_entry(stored):
             # A session set is read as it is laid out, with no mapping to
             # send: the recipient adds the same session set.
@@ -3620,9 +3640,11 @@ def _build_share_query(
             if token and COMPARE_PARAM in params:
                 params[COMPARE_SOURCE_PARAM] = token
             elif COMPARE_PARAM in params:
+                from .app import _dataset_display_name
+
                 params.pop(COMPARE_PARAM)
                 caveats.append(
-                    f"The compared scanpath comes from **{source_b}**, which "
+                    f"The compared scanpath comes from **{md_literal(_dataset_display_name(source_b))}**, which "
                     "a link can't rebuild, so the link leaves it out."
                 )
         if COMPARE_PARAM in params and compare.get("screen_id") not in (None, ""):

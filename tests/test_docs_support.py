@@ -70,6 +70,30 @@ def test_the_figure_option_reference_describes_every_option():
         assert row.rstrip("| ").split(" | ")[-1].strip(), row
 
 
+def test_figure_reference_names_the_views_that_draw_the_option():
+    rows = {
+        line.split("`")[1]: line
+        for line in docs_support.figure_options_reference().splitlines()
+        if line.startswith("| `")
+    }
+    assert "*Single plot, Single replay.*" in rows["order_font_color"]
+    assert "`fix_color` in `style_a` or `style_b`" in rows["order_font_color"]
+    assert "<br>*" not in rows["order_font_size"]
+    assert "<br>*" not in rows["order_label_position"]
+    assert "unless its style supplies one" in rows["marker_size_range"]
+    assert "*Single plot.*" in rows["heatmap_style"]
+    assert "*Single plot, Compare.*" in rows["heatmap_colorbar_length"]
+    assert "*Single plot, Compare.*" in rows["raw_gaze_marker_size"]
+    for name in (
+        "compare_stimulus",
+        "label_b",
+        "fixation_flags_b",
+        "style_a",
+        "words_b",
+    ):
+        assert "*Compare, Compare + Animate.*" in rows[name]
+
+
 def test_a_figure_option_without_a_section_fails_the_build():
     names = set().union(*docs_support._figure_kinds().values())
     with pytest.raises(RuntimeError, match="unplaced"):

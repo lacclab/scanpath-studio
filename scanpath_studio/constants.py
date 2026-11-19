@@ -272,7 +272,7 @@ INDEX_COLOR = FixationLabelOption(
     GLOBAL_ORDER_FONT_COLOR,
     DEFAULT_ORDER_FONT_COLOR,
     "color",
-    "Color of the fixation index numbers",
+    "Color of the fixation index numbers for a single scanpath",
     metavar="COLOR",
 )
 INDEX_POSITION = FixationLabelOption(

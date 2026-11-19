@@ -362,8 +362,8 @@ _OPTION_NOTES = {
         "Why the figure is labeled an illustration. The builder works it out "
         "from `illustration_label`. Pass it only to word the label yourself."
     ),
-    "words_b": "Scanpath B's Words table, for a replay of two scanpaths.",
-    "fixations_b": "Scanpath B's Fixations table, for a replay of two scanpaths.",
+    "words_b": "Scanpath B's Words table when it comes from a second dataset.",
+    "fixations_b": "Scanpath B's Fixations table when it comes from a second dataset.",
     "show_connectors": (
         "Draw a line from each fixation's recorded height to its corrected "
         "one. Set by `plot_scanpath(drift_connectors=True)`."
@@ -426,6 +426,77 @@ def _figure_kinds() -> dict:
         "plot": api.figure_options("static"),
         "animate": api.figure_options("animation"),
         "compare": api.figure_options("comparison"),
+    }
+
+
+# Two-scanpath figures take these values from each scanpath's style.
+_STYLE_KEYS_FOR_TWO_SCANPATHS = {
+    "order_font_color": "fix_color",
+    "fixation_color": "fix_color",
+    "fixation_opacity": "opacity",
+    "hollow_fixations": "hollow",
+    "saccade_color": "saccade_color",
+    "saccade_style": "saccade_style",
+    "saccade_width": "saccade_width",
+}
+
+
+def _figure_views(kinds) -> dict[str, set[str]]:
+    """Where an option affects the figure, including named comparison arguments."""
+    from scanpath_studio import api
+
+    plot = set(kinds["plot"])
+    replay = set(kinds["animate"]).difference(
+        OPTION_TOPICS["Raw gaze"], OPTION_TOPICS["Heatmap"]
+    )
+    compare = set(kinds["compare"]) | (
+        set(inspect.signature(api.compare_scanpaths).parameters) & replay
+    )
+    # The CLI sends both labels through labels= and B's filters through style_b.
+    compare.update(("label_a", "label_b", "fixation_flags_b"))
+    # Compare always draws spatial coordinates and word-box heatmaps. Its
+    # raw gaze and box outlines use each scanpath's colors.
+    compare.difference_update(
+        _STYLE_KEYS_FOR_TWO_SCANPATHS,
+        {
+            "x_field",
+            "y_field",
+            "raw_gaze_color",
+            "word_box_color",
+            "critical_span_style",
+            "span_border_color",
+            "saccade_render_mode",
+            "saccade_color_mode",
+            "saccade_class_colors",
+            "saccade_type_legend",
+            "fixation_snap_to_line",
+            "fixation_snap_position",
+            "heatmap_style",
+            "heatmap_sigma_px",
+            "word_heatmap_col",
+            "word_heatmap_title",
+            "illustration_reasons",
+            "illustration_text",
+            "show_connectors",
+            "connector_y",
+        },
+    )
+    second_scanpath = {
+        "label_a",
+        "label_b",
+        "words_b",
+        "fixations_b",
+        "fixation_flags_b",
+        "show_legend",
+        "style_a",
+        "style_b",
+        "compare_stimulus",
+    }
+    return {
+        "Single plot": plot,
+        "Single replay": replay - second_scanpath,
+        "Compare": compare,
+        "Compare + Animate": replay.difference(_STYLE_KEYS_FOR_TWO_SCANPATHS),
     }
 
 
@@ -534,7 +605,7 @@ def _describing_flag(flags: list[str], default):
 
 def figure_options_reference(*, heading: str = "##") -> str:
     """Every figure keyword, by section: its default, its ``render`` flag, what
-    it does, the values it takes, and the builders that accept it.
+    it does, the values it takes, and the views where it affects the figure.
 
     Built from `api.figure_options` (the defaults the builders render with), the
     CLI emitter table the Share tab's Code uses, and
@@ -546,6 +617,7 @@ def figure_options_reference(*, heading: str = "##") -> str:
     from scanpath_studio.plots import FIGURE_OPTION_CHOICES
 
     kinds = _figure_kinds()
+    views = _figure_views(kinds)
     parser = cli._render_parser()
     formatter = parser._get_formatter()
     action_of = {
@@ -585,9 +657,30 @@ def figure_options_reference(*, heading: str = "##") -> str:
             if choices:
                 values = ", ".join(f"`{c!r}`" for c in choices)
                 description += f" One of {values}."
-            builders = [kind for kind, options in kinds.items() if name in options]
-            if len(builders) < len(kinds):
-                description += f" *{' and '.join(builders).capitalize()} only.*"
+            if name in _STYLE_KEYS_FOR_TWO_SCANPATHS:
+                key = _STYLE_KEYS_FOR_TWO_SCANPATHS[name]
+                description += (
+                    f" For two scanpaths, set `{key}` in `style_a` or `style_b`."
+                )
+            elif name == "marker_size_range":
+                description += (
+                    " Each scanpath uses this range unless its style supplies one."
+                )
+            elif name == "raw_gaze_color":
+                description += (
+                    " In Compare, set `raw_gaze_color` in `style_a` or `style_b`."
+                )
+            elif name in ("label_a", "label_b"):
+                description += (
+                    " In Python, pass `labels=(a, b)` to `compare_scanpaths`."
+                )
+            elif name == "fixation_flags_b":
+                description += " In Python, pass `style_b={'fixation_flags': flags}` to `compare_scanpaths`."
+            active = [view for view, options in views.items() if name in options]
+            if not active:
+                raise RuntimeError(f"{name} has no render view")
+            if len(active) < len(views):
+                description += f"<br>*{', '.join(active)}.*"
             # The flags go under the name, so the description keeps the width.
             names_cell = "<br>".join([f"`{name}`", *(f"`{f}`" for f in flags)])
             out.append(f"| {names_cell} | {_default_cell(default)} | {description} |")

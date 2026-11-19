@@ -2449,10 +2449,11 @@ def _check_column_options(
 def figure_options(kind: str = "static", *, choices: bool = False) -> dict:
     """List figure options and their default values.
 
-    The defaults are what a call actually renders with, the app's Scanpath design, so a
-    script can diff its intended settings against what it would get. The *Figure
-    options* section of the API reference lists them by section, with their ``render``
-    flags.
+    The defaults follow the app's Scanpath design. Some accepted keywords affect
+    only certain views. For example, ``order_font_color`` sets the fixation index
+    color for a single scanpath. With two scanpaths, each index takes its
+    scanpath's fixation color. The *Figure options* table lists the views and
+    matching ``render`` flags.
 
     Args:
         kind: ``"static"`` for [`plot_scanpath`][scanpath_studio.api.plot_scanpath],
@@ -3514,8 +3515,10 @@ def compare_scanpaths(
 
     | Key | What it sets | Left out |
     | --- | --- | --- |
-    | ``fix_color``, ``saccade_color`` | The scanpath's colors | Its default |
-    | ``marker_size_range``, ``opacity``, ``hollow`` | Its fixation markers | Its default |
+    | ``fix_color`` | Fixation markers and index numbers | The scanpath's palette color |
+    | ``saccade_color`` | Saccade lines | The scanpath's palette color |
+    | ``marker_size_range`` | Smallest and largest fixation markers | The figure's ``marker_size_range`` |
+    | ``opacity``, ``hollow`` | Its fixation markers | Its default |
     | ``saccade_style``, ``saccade_width`` | Its saccade lines | Its default |
     | ``box_color`` | The outline of that reading's word boxes | Its ``fix_color`` |
     | ``box_fill_color`` | Their fill | ``word_box_fill_color`` |
@@ -3524,8 +3527,8 @@ def compare_scanpaths(
     | ``heatmap_colorscale`` | That reading's word-box heatmap color scale, on the range both share; two different scales get a color bar each | ``heatmap_colorscale`` |
     | ``fixation_flags``, ``saccade_classes`` | That scanpath's own filters, in place of the figure's | The figure's |
 
-    The box keys and ``raw_gaze_color`` are this figure's only: the co-animation draws
-    one set of boxes and no raw gaze, and ignores them.
+    For a replay of two scanpaths, see
+    [`animate_scanpath`][scanpath_studio.api.animate_scanpath] for the supported styles.
 
     Args:
         words: The words frame holding both trials, or A's when ``words_b`` is given.

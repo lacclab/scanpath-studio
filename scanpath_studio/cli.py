@@ -1719,7 +1719,8 @@ def _render_parser() -> argparse.ArgumentParser:
         choices=["both", "a", "b"],
         default="both",
         help="On an overlay, whose word boxes and text to draw (default: both). "
-        "Two datasets' word boxes line up only when the text is the same.",
+        "Two datasets' word boxes line up only when the text is the same. "
+        "A two-scanpath replay shows B's text for 'b' and A's text for 'a' or 'both'.",
     )
     # Named `-a` / `-b` after the `style_a` / `style_b` pair rather
     # than `--label`, which would read as a sibling of `--no-labels` (the word
@@ -1728,8 +1729,8 @@ def _render_parser() -> argparse.ArgumentParser:
         "--label-a",
         metavar="TEXT",
         help=(
-            "Name of scanpath A in the legend and tooltips. Applies to comparisons "
-            "and --animate. Requires --label-b."
+            "Name of scanpath A in the legend and tooltips. Requires --compare-with "
+            "and --label-b."
         ),
     )
     cmp_group.add_argument(
@@ -1763,8 +1764,7 @@ def _render_parser() -> argparse.ArgumentParser:
             "box_line_opacity / box_fill_opacity (0–1; default "
             "--word-box-line-opacity / --word-box-fill-opacity), "
             f"hollow (true|false). E.g. --style-{side} fix_color=#D55E00,opacity=0.5. "
-            "--animate uses them too, except box_color, box_fill_color, the box "
-            "opacities and raw_gaze_color.",
+            "A two-scanpath replay uses the fixation and saccade styles.",
         )
     # Scanpath B's own filters — the app's "· B" blocks under 🧹 Filter.
     # A's are the ordinary --fixation-flag / --saccade-classes /

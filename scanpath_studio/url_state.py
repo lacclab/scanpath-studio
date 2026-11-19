@@ -105,12 +105,17 @@ from .controls import (
     numeric_field_options,
     palette_state,
 )
-from .data import composite_respelling_map, respell_reading
-from .dataset_identity import dataset_share_id, resolve_dataset_reference
+from .data import composite_respelling_map, respell_reading, share_dataset_fingerprint
+from .dataset_identity import (
+    dataset_key_for_display_name,
+    dataset_share_id,
+    resolve_dataset_reference,
+)
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .export import PRINT_DPI_BOUNDS, PRINT_WIDTH_BOUNDS
 from .session_keys import (
     COMPARE_CORPUS_PARAM,
+    COMPARE_DATASET_DIGEST_PARAM,
     COMPARE_DATASET_ID_PARAM,
     COMPARE_DATASET_PARAM,
     COMPARE_FIX_RANGE_PARAM,
@@ -128,6 +133,7 @@ from .session_keys import (
     LINK_SETUP_STATE_KEY,
     PARAM_CORPUS,
     PARAM_DATASET,
+    PARAM_DATASET_DIGEST,
     PARAM_DATASET_ID,
     PARAM_SHOW_TITLE_CAPTION,
     PENDING_COMPARE_STATE_KEY,
@@ -1565,8 +1571,9 @@ def missing_dataset_message(
 def resolve_link_dataset(seeded: Iterable[str], current: str | None) -> str | None:
     """Open the added dataset a link names (`?dataset=`).
 
-    Matches an upload by its ID here, or its displayed name on another computer. When
-    it doesn't, the link's view is **not** applied to whatever else is open:
+    Match the upload by its local ID or portable name, then verify its recording
+    tables if the link includes a digest. Return the matched local storage key.
+    If no recording matches, keep the recipient's current view:
     every key ``_apply_url_preset`` seeded this run (``seeded``) is dropped, the
     link's params are cleared so the next run does not seed them again, and a
     notice saying which dataset is missing — and how to get it — is parked
@@ -1580,14 +1587,33 @@ def resolve_link_dataset(seeded: Iterable[str], current: str | None) -> str | No
         return None
     if not name or params.get("source"):
         return None
-    token = resolve_dataset_reference(
-        st.session_state, name, params.get(PARAM_DATASET_ID)
-    )
+    state = st.session_state
+    share_id = params.get(PARAM_DATASET_ID)
+    token = resolve_dataset_reference(state, name, share_id)
+    digest = params.get(PARAM_DATASET_DIGEST)
     if token is not None:
-        return token
-    message = missing_dataset_message(
-        str(name), params.get("participant"), params.get("trial_id")
-    )
+        uploads = state["_datasets"]
+        if digest is None or share_dataset_fingerprint(uploads[token]) == digest:
+            return token
+        # Digest-only links predate stable IDs. The old store key and the name
+        # shown in the picker can now belong to different recordings.
+        if not share_id and token == name:
+            displayed = dataset_key_for_display_name(state, name)
+            if (
+                displayed is not None
+                and displayed != token
+                and share_dataset_fingerprint(uploads[displayed]) == digest
+            ):
+                return displayed
+    if token is None:
+        message = missing_dataset_message(
+            str(name), params.get("participant"), params.get("trial_id")
+        )
+    else:
+        message = (
+            f"Your copy of **{md_literal(str(name))}** contains different data. The shared view "
+            "was not opened. Ask the sender for their data files and setup file."
+        )
     for key in seeded:
         st.session_state.pop(key, None)
     params.clear()
@@ -1667,10 +1693,11 @@ def resolve_link_compare_source(primary: str | None) -> str | None:
         return None
     name = str(params.get(COMPARE_DATASET_PARAM) or "")
     share_id = params.get(COMPARE_DATASET_ID_PARAM)
+    digest = params.get(COMPARE_DATASET_DIGEST_PARAM)
     screen = params.get(COMPARE_SCREEN_PARAM)
     source = str(params.get(COMPARE_SOURCE_PARAM) or "").lower()
     slug = params.get(COMPARE_CORPUS_PARAM)
-    reference = (kind, name, share_id, source, slug, ids, screen)
+    reference = (kind, name, share_id, digest, source, slug, ids, screen)
     state = st.session_state
     # A link opens a comparison once. A later rerun may reflect a manual
     # change to either picker, which the original URL must not undo.
@@ -1696,6 +1723,16 @@ def resolve_link_compare_source(primary: str | None) -> str | None:
                 f"Only scanpath A is open. Scanpath B needs {dataset}. Ask the sender "
                 f"for the files, add the dataset under the same name with "
                 f"{ICONS['add']} Add dataset → Import files, then reopen the link."
+            )
+        elif (
+            digest is not None
+            and share_dataset_fingerprint(state["_datasets"][token]) != digest
+        ):
+            token = None
+            notice = (
+                f"Only scanpath A is open. Your copy of **{md_literal(name)}** contains "
+                "different data. Ask the sender for the recording used for scanpath B, "
+                "then reopen the link."
             )
     available = token is not None
     state[SINGLE_COMPARE_TOGGLE] = available
@@ -1817,7 +1854,9 @@ _TEXT_STATE_KEYS = frozenset(
     }
 )
 #: A data field the rail heals against the loaded data: a string, or unset.
-_FIELD_STATE_KEYS = frozenset({"global_word_hover_measure"})
+_FIELD_STATE_KEYS = frozenset(
+    {"global_word_hover_measure", "global_x_field", "global_y_field"}
+)
 #: Two-number ranges with no widget bound of their own: the colour ranges are
 #: drawn as given by the rail (its slider widens to hold them), so they only
 #: have to be numbers.
@@ -3690,6 +3729,7 @@ def _build_share_query(
 
             params[PARAM_DATASET] = _dataset_display_name(data_choice)
             params[PARAM_DATASET_ID] = dataset_share_id(st.session_state, data_choice)
+            params[PARAM_DATASET_DIGEST] = share_dataset_fingerprint(stored)
         if is_multipleye_entry(stored):
             # A session set is read as it is laid out, with no mapping to
             # send: the recipient adds the same session set.
@@ -3763,6 +3803,9 @@ def _build_share_query(
                 if share_id := dataset_share_id(st.session_state, source_b):
                     params[COMPARE_DATASET_PARAM] = name_b
                     params[COMPARE_DATASET_ID_PARAM] = share_id
+                    params[COMPARE_DATASET_DIGEST_PARAM] = share_dataset_fingerprint(
+                        st.session_state["_datasets"][source_b]
+                    )
                     files = (
                         "MultiplEYE session set"
                         if is_multipleye_entry(st.session_state["_datasets"][source_b])

@@ -846,9 +846,15 @@ def test_b_dataset_reference_params_are_pinned():
     params = {
         sk.COMPARE_DATASET_PARAM,
         sk.COMPARE_DATASET_ID_PARAM,
+        sk.COMPARE_DATASET_DIGEST_PARAM,
         sk.COMPARE_CORPUS_PARAM,
     }
-    assert params == {"cmp_dataset", "cmp_dataset_id", "cmp_corpus"}
+    assert params == {
+        "cmp_dataset",
+        "cmp_dataset_id",
+        "cmp_dataset_digest",
+        "cmp_corpus",
+    }
     assert params <= sk.URL_SELECTION_PARAMS
     assert params <= sk.URL_OPTIONAL_PARAMS
 

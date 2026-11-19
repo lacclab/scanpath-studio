@@ -271,7 +271,8 @@ The figure as a whole:
 | **Grid** → **Show** | Show a grid of screen coordinates, in px. |
 | **Grid** → **Auto**, interval | Set the grid spacing (interval), in px, or let **Auto** choose it. |
 | **Labels** | Set the grid label (tick label) font size. |
-| **Axes** → **X** / **Y** | Choose the x and y axis fields. **X** / **Y** draws the reading on the screen. Any other pair turns the figure into a scatter plot (chart) of the fixations, with no text, word boxes, saccades, heatmap or grid. Animate and Compare always plot **X** / **Y**. For example: **Time (ms)** against **X** for a time course of the reading, where regressions show as dips; **Time (ms)** against **Word #** for reading progress through the text; **Fixation #** against **Duration (ms)** for fixation durations over the trial. |
+| **Axis preset** | Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. **Connect fixations** traces the index sequence. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window. |
+| **Axes** → **X** / **Y** | Choose any two numeric fixation fields. Try fixation order against duration, or recorded onset against word number. Screen Y increases downward. Raw samples can appear when they supply both plotted quantities. **Screen X and Y** restores the stimulus view. Animate and Compare use screen coordinates. |
 | **Illustration** → **Label** | Choose when the figure carries an *Illustration* note, saying it does not show the recorded positions. **Auto** adds it when a setting changes the geometry or the data (such as snapping fixations to a line or drawing saccades as arcs), **Show** always, **Hide** never. |
 | **Illustration** → **Text** | Write the *Illustration* label's text. Empty writes "Illustration ·" followed by the reasons. |
 | **Title** → **Show**, text, **Size** | Add a figure title above the plot, and set its font size. `{field}` inserts a value of the trial. |
@@ -283,15 +284,23 @@ The figure as a whole:
 | **Legends** → **Arrangement** | Choose the legend arrangement: **Stacked** or **Side by side**. |
 | **Legends** → **Text size** | Set the legend text (font) size, in px. Empty uses the figure's text size. |
 
+![Vertical screen position by elapsed time for a bundled demo reading](../../assets/screenshots/elapsed-reading-chart.jpg)
+
+Each dot is a fixation. The clusters step down as the reader looks lower on the screen. Around 39 seconds, the reader looks back near the top.
+
 ### :material/restart_alt: Reset visualization
 
-<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/reset.webp" title="Open full size"><img src="../../../assets/screenshots/controls/reset.webp" alt="The Plot controls column, with Reset visualization circled at its foot" loading="lazy"></a>
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/reset.webp" title="Open full size"><img src="../../../assets/screenshots/controls/reset.webp" alt="Undo and Redo arrows beside Reset visualization" loading="lazy"></a>
 
-The button at the foot of the column.
+At the foot of **Full** plot controls, use the arrows beside **Reset visualization** to step through your last 30 plot changes. Presets and a confirmed reset each count as one change.
 
 | Control | What it does |
 | --- | --- |
+| **Undo** | Restore the previous plot settings for the current dataset. Switching trials keeps you on the newly selected trial. |
+| **Redo** | Reapply the change you undid. Making a new plot edit clears the redo list. |
 | **Reset visualization** | After you confirm, reset every plot setting to its default, **Filters & highlights** included. Annotations, trial filters, data and the selected trial stay. |
+
+Changing datasets starts a fresh history. A trial-specific fixation window drops out of history when you leave that reading.
 
 ## In Compare
 

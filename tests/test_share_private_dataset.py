@@ -36,6 +36,7 @@ def test_the_link_names_the_added_dataset():
     assert not at.exception, at.exception
     query = parse_qs(at.session_state["_query"])
     assert query["dataset"] == ["Dataset 1"]
+    assert query["dataset_digest"][0].startswith("v1-")
     assert "source" not in query
     (caveat,) = at.session_state["_caveats"]
     # The sender is pointed at where Download setup file lives for an existing dataset.
@@ -130,6 +131,30 @@ def test_shared_upload_opens_after_rename_or_independent_import(monkeypatch):
     }
     monkeypatch.setattr(st, "session_state", recipient)
     assert url_state.resolve_link_dataset(set(), None) == "Independent"
+
+
+def test_digest_only_link_checks_the_display_name_when_the_old_key_has_other_data(
+    monkeypatch,
+):
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio import url_state
+    from scanpath_studio.constants import DATASET_ALIASES_KEY
+    from scanpath_studio.data import share_dataset_fingerprint
+
+    recording = {"fixations": pd.DataFrame({"x": [1.0]})}
+    state = {
+        "_datasets": {"Study": {}, "other-key": recording},
+        DATASET_ALIASES_KEY: {"Study": "Pilot", "other-key": "Study"},
+    }
+    monkeypatch.setattr(st, "session_state", state)
+    monkeypatch.setattr(
+        st,
+        "query_params",
+        {"dataset": "Study", "dataset_digest": share_dataset_fingerprint(recording)},
+    )
+    assert url_state.resolve_link_dataset(set(), None) == "other-key"
 
 
 def test_compare_settings_resolve_named_upload_across_sessions(monkeypatch):
@@ -249,6 +274,16 @@ def test_comparison_link_reopens_both_uploads_from_the_recovery_cache(
         assert selected["source"] == expected
         assert selected["trial_id"] == "reading B"
         assert selected["participant_id"] == "synthetic"
+
+    wrong_recording = {**b, "fixations": b["fixations"].assign(duration_ms=9999)}
+    mismatch = open_link(
+        "mismatched", {**uploads, "other": wrong_recording}, aliases, {}
+    )
+    assert mismatch.session_state["single_compare_toggle"] is False
+    assert "compare" not in mismatch.session_state["_share_selection"]
+    assert any(
+        "different data" in w.value and "Corpus B" in w.value for w in mismatch.warning
+    )
 
     missing = open_link("missing", {"recipient-a": a}, aliases, {})
     assert missing.session_state["single_compare_toggle"] is False

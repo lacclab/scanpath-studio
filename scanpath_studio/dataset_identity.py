@@ -35,6 +35,12 @@ def resolve_dataset_reference(
             return matches[0] if len(matches) == 1 and matches[0] in uploads else None
     elif name in uploads:
         return name
+    return dataset_key_for_display_name(session, name)
+
+
+def dataset_key_for_display_name(session, name: str) -> str | None:
+    """Look up an upload by the name shown in the picker."""
+    uploads = session.get("_datasets") or {}
     aliases = session.get(DATASET_ALIASES_KEY) or {}
     matches = [token for token in uploads if aliases.get(token, token) == name]
     return matches[0] if len(matches) == 1 else None

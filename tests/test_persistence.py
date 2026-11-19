@@ -748,7 +748,15 @@ def test_legacy_upload_gains_a_stable_id_and_renames_without_rewriting_frames(tm
     assert save_state(restored, tmp_path)
     assert _frame_files(tmp_path, "Corpus") == original_files
     reopened = {}
-    assert restore_state(reopened, tmp_path)
+
+    def check_link_before_restoring_settings():
+        assert resolve_dataset_reference(reopened, "Old name", identifier) == "Corpus"
+        assert resolve_dataset_reference(reopened, "Renamed") == "Corpus"
+        return {"main_nav"}
+
+    assert restore_state(
+        reopened, tmp_path, skip_session_keys=check_link_before_restoring_settings
+    )
     assert dataset_share_id(reopened, "Corpus") == identifier
     assert resolve_dataset_reference(reopened, "Renamed", identifier) == "Corpus"
     assert reopened[DATASET_ALIASES_KEY] == {"Corpus": "Renamed"}

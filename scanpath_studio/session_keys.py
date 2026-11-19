@@ -459,6 +459,7 @@ PARAM_CORPUS = "corpus"
 # rather than apply the view to whatever else is open. Read in `app.main`, like
 # `corpus`; emitted only for an added dataset.
 PARAM_DATASET = "dataset"
+PARAM_DATASET_DIGEST = "dataset_digest"
 PARAM_DATASET_ID = "dataset_id"
 
 # Streamlit 1.65 `bind="query-params"` widgets: the widget key IS the URL param,
@@ -506,6 +507,7 @@ COMPARE_SOURCE_PARAM = "cmp_source"
 COMPARE_CORPUS_PARAM = "cmp_corpus"
 COMPARE_DATASET_PARAM = "cmp_dataset"
 COMPARE_DATASET_ID_PARAM = "cmp_dataset_id"
+COMPARE_DATASET_DIGEST_PARAM = "cmp_dataset_digest"
 #: B's screen of a multipart trial — `screen=` is A's. Emitted only beside
 #: `compare=`, and seeded into B's own navigator (`single_compare_screen_id`).
 COMPARE_SCREEN_PARAM = "cmp_screen"
@@ -808,12 +810,14 @@ URL_SELECTION_PARAMS = frozenset(
         PARAM_ONESTOP_PARTS,
         PARAM_CORPUS,
         PARAM_DATASET,
+        PARAM_DATASET_DIGEST,
         PARAM_DATASET_ID,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
         COMPARE_CORPUS_PARAM,
         COMPARE_DATASET_PARAM,
         COMPARE_DATASET_ID_PARAM,
+        COMPARE_DATASET_DIGEST_PARAM,
         COMPARE_SCREEN_PARAM,
     }
 )
@@ -910,9 +914,11 @@ URL_OPTIONAL_PARAMS = frozenset(
         COMPARE_CORPUS_PARAM,
         COMPARE_DATASET_PARAM,
         COMPARE_DATASET_ID_PARAM,
+        COMPARE_DATASET_DIGEST_PARAM,
         COMPARE_SCREEN_PARAM,
         PARAM_CORPUS,
         PARAM_DATASET,
+        PARAM_DATASET_DIGEST,
         PARAM_DATASET_ID,
         FIX_RANGE_PARAM,
         COMPARE_FIX_RANGE_PARAM,

@@ -50,6 +50,27 @@ trial filters, analysis choices and counts. Keep your source data separately;
 the recipe contains neither the data nor the figure settings. To inspect
 individual trials, return to the Scanpath view.
 
+### Rerun a cohort profile
+
+For **Per text → Cohort profile**, save the recipe and keep the source tables.
+New recipes save the column mappings, filename-derived columns and character-box
+merges used at import. Supply the original files to reproduce the CSV.
+
+```bash
+scanpath-studio recipe profile.recipe.json --words words.csv --fixations fixations.csv -o profile.csv
+```
+
+For the bundled demo, use `--sample` in place of the table paths. If you
+filtered by participant, trial or text metadata, supply the original table with
+`--participant-metadata`, `--trial-metadata` or `--text-metadata`. For a star
+or tag filter, supply the dataset’s exported annotations with `--annotations`.
+New recipes also record a checksum of the CSV. If the rows or values differ,
+the command reports the mismatch before writing the output. Older recipes
+have no checksum. Supply their original mappings if needed, and download a
+fresh recipe when one of their filter labels is ambiguous. In Python, pass
+the decoded recipe or its path and the normalized frames to
+[`run_analysis_recipe`][scanpath_studio.api.run_analysis_recipe].
+
 ## Plot a summary in code
 
 Start from a tidy summary table, such as a **Cohort profile** table downloaded

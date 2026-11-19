@@ -291,6 +291,23 @@ from docs_support import cli_reference
 print(cli_reference("corpus"))
 ```
 
+## recipe
+
+Recreate a **Per text → Cohort profile** CSV from its downloaded JSON recipe
+and source tables. New recipes include the original column mappings.
+The command identifies any missing metadata or annotation input and verifies
+the regenerated CSV against the checksum in the recipe when available.
+
+```bash
+scanpath-studio recipe profile.recipe.json --words words.csv --fixations fixations.csv -o profile.csv
+```
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("recipe"))
+```
+
 ## check
 
 `check` runs the **:material/database: Data Management** page's **Data checks**

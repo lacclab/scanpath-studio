@@ -9559,6 +9559,7 @@ def has_active_trial_filters(prefix: str = "") -> bool:
         # `[]` is a narrowing that matched nobody — the *most* active a filter
         # can be. `None` is the no-constraint default.
         f.get("participants") is not None
+        or f.get("trial_keys") is not None
         or f.get("metadata")
         or f.get("ranges")
         or f.get("favorites_only")
@@ -10554,7 +10555,7 @@ def _render_text_metadata_filters(host, *, prefix: str, on_change) -> None:
         )
 
 
-def _text_metadata_narrowing(prefix: str) -> tuple:
+def _text_metadata_narrowing(prefix: str, recipe: dict) -> tuple:
     """``(text ids | None, widget keys)`` for the active text-metadata filters.
 
     Flat-grain sibling of :func:`_participant_metadata_narrowing` — ``None``
@@ -10582,13 +10583,20 @@ def _text_metadata_narrowing(prefix: str) -> tuple:
         if chosen and len(chosen) < len(options):
             selections[field.name] = list(chosen)
             keys.append(key)
+    if keys:
+        recipe["text"] = {
+            "values": selections,
+            "ranges": ranges,
+            "keep_unknown": keep_unknown,
+            "id_column": list(attached.id_columns) or attached.text_column,
+        }
     return (
         md.texts_matching(attached, selections, ranges, keep_unknown=keep_unknown),
         tuple(keys),
     )
 
 
-def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
+def _trial_metadata_narrowing(prefix: str, keys, recipe: dict) -> tuple:
     """``((participant_id, trial_id) keys | None, widget keys)``.
 
     ``None`` means no constraint; an empty set means a constraint nothing
@@ -10619,6 +10627,14 @@ def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
         if chosen and len(chosen) < len(options):
             selections[field.name] = list(chosen)
             widget_keys.append(key)
+    if widget_keys:
+        recipe["trial"] = {
+            "values": selections,
+            "ranges": ranges,
+            "keep_unknown": keep_unknown,
+            "id_column": list(attached.id_columns) or attached.trial_column,
+            "participant_column": attached.participant_column,
+        }
     return (
         md.trials_matching(
             attached, selections, ranges, keys=keys(), keep_unknown=keep_unknown
@@ -10646,7 +10662,7 @@ def _seed_range_bounds(key: str, low: float, high: float, *, prefix: str) -> Non
         st.session_state[key] = (low, high)
 
 
-def _participant_metadata_narrowing(prefix: str) -> tuple:
+def _participant_metadata_narrowing(prefix: str, recipe: dict) -> tuple:
     """``(reader ids | None, widget keys)`` for the active metadata filters.
 
     ``None`` means no constraint; an **empty set** means a constraint nothing
@@ -10675,6 +10691,13 @@ def _participant_metadata_narrowing(prefix: str) -> tuple:
         if chosen and len(chosen) < len(options):
             selections[field.name] = list(chosen)
             keys.append(key)
+    if keys:
+        recipe["participant"] = {
+            "values": selections,
+            "ranges": ranges,
+            "keep_unknown": keep_unknown,
+            "id_column": attached.id_column,
+        }
     return (
         md.participants_matching(
             attached, selections, ranges, keep_unknown=keep_unknown
@@ -10804,7 +10827,9 @@ def _compute_trial_filters(
     # constraint, so it folds into the same slot rather than becoming a fourth
     # kind of filter every consumer would have to learn. Intersection, not
     # replacement: an explicit reader pick still wins over the table.
-    by_metadata, meta_keys = _participant_metadata_narrowing(prefix)
+    attachments = {}
+    picked_participants = result["participants"]
+    by_metadata, meta_keys = _participant_metadata_narrowing(prefix, attachments)
     if by_metadata is not None:
         chosen = result["participants"]
         keep = by_metadata if chosen is None else by_metadata & {str(p) for p in chosen}
@@ -10823,7 +10848,7 @@ def _compute_trial_filters(
     # trial, and so a numeric range keeps the trials the table never mentions
     # (the range filters' rule, one grain down).
     by_trial, trial_keys_used = _trial_metadata_narrowing(
-        prefix, lambda: _loaded_trial_keys(words, fixations)
+        prefix, lambda: _loaded_trial_keys(words, fixations), attachments
     )
     if by_trial is not None:
         result["trial_keys"] = by_trial
@@ -10831,6 +10856,7 @@ def _compute_trial_filters(
     # Text narrowing (the "Narrow by → Text" multiselect). Like a categorical
     # condition, but the text id isn't in the condition list, so handle it here.
     text_field, text_frame = _text_field_and_frame(words, fixations)
+    by_picker = None
     if text_field is not None:
         text_vals = _column_unique_strs(
             text_frame,
@@ -10846,7 +10872,7 @@ def _compute_trial_filters(
         # Text-grain metadata folds into the same slot, the same way
         # participant-grain metadata folds into `result["participants"]` — an
         # explicit pick still wins over (intersects with) the table.
-        by_text_meta, text_meta_keys = _text_metadata_narrowing(prefix)
+        by_text_meta, text_meta_keys = _text_metadata_narrowing(prefix, attachments)
         combined = None
         if by_picker is not None and by_text_meta is not None:
             combined = by_picker & by_text_meta
@@ -10916,6 +10942,35 @@ def _compute_trial_filters(
     result["excluded_tags"] = list(
         st.session_state.get(f"{prefix}filter_exc_tags") or []
     )
+    if not prefix and active_filter_keys(result):
+        conditions = dict(result["metadata"])
+        if "text" in attachments:
+            attachments["text"]["column"] = text_field
+            if by_picker is None:
+                conditions.pop(text_field, None)
+            else:
+                conditions[text_field] = by_picker
+        columns = set(conditions) | set(result["ranges"])
+        if "text" in attachments:
+            columns.add(text_field)
+        result["recipe_selection"] = {
+            "participants": picked_participants,
+            "conditions": conditions,
+            "ranges": result["ranges"],
+            "drop_unknown": result["ranges_drop_unknown"],
+            "metadata": attachments,
+            "word_fields": sorted(columns.intersection(words.columns))
+            if not words.empty
+            else [],
+            "fixation_fields": sorted(columns.intersection(fixations.columns))
+            if not fixations.empty
+            else [],
+            "annotations": {
+                k: result[k]
+                for k in ("favorites_only", "required_tags", "excluded_tags")
+                if result[k]
+            },
+        }
     return result
 
 

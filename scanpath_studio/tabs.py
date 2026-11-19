@@ -9117,23 +9117,60 @@ def _download_tidy(
     # Written on click, not on every rerun: a words × readers table on a full
     # corpus takes most of a second to serialize. Under the dataset's own
     # names, as on screen — the map is read here, where the session is.
-    csv = partial(_tidy_csv, df, active_all(st.session_state).identity())
+    names = active_all(st.session_state).identity()
+    csv = partial(_tidy_csv, df, names)
     button = dict(data=csv, file_name=name, mime="text/csv", key=key, on_click="ignore")
     if recipe is None or context is None:
         host.download_button(label, **button)
         return
     recipe = dict(recipe)
     counts = result_counts(df, recipe.pop("counts", None))
+    cohort_csv = None
+    if recipe.get("view") == "Cohort profile":
+        entry = (st.session_state.get("_datasets") or {}).get(
+            context.get("dataset", {}).get("source")
+        )
+        inputs = (
+            stored_source_recipe(entry)
+            if entry
+            else {"schemas": st.session_state.get("_active_column_mapping") or {}}
+        )
+        # Only the mapping and file transformations travel. A local session-set path does not.
+        tables = ("words", "fixations")
+        mapping = {
+            t: inputs["schemas"][t]
+            for t in tables
+            if (inputs.get("schemas") or {}).get(t)
+        }
+        choices = (entry or {}).get("wizard_choices") or {}
+        derivations = choices.get("filename_derive") or {}
+        keep = (choices.get("keep_and_filter") or {}).get("wizard_keep_extra") or []
+        context = {
+            **context,
+            "inputs": {
+                "schemas": mapping,
+                "steps": inputs.get("steps") or [],
+                "derive": derivations.get("applied")
+                if (derivations.get("widgets") or {}).get("wizard_filename_split", True)
+                else None,
+                "keep_columns": keep,
+            },
+        }
+        cohort_csv = csv
+        # Record the app's headers even if the runner loads canonical tables.
+        counts["headers"] = as_written(df.iloc[:0], names).columns.tolist()
     row = host.container(horizontal=True, gap="small")
     row.download_button(label, **button)
     row.download_button(
         "⬇ Download the recipe (JSON)",
-        data=partial(_recipe_json, context, recipe, name, counts),
+        data=partial(_recipe_json, context, recipe, name, counts, cohort_csv),
         file_name=recipe_file_name(name),
         mime="application/json",
         key=f"{key}_recipe",
         on_click="ignore",
-        help=(
+        help="Rerun this cohort profile with scanpath-studio recipe and the same source tables."
+        if recipe.get("view") == "Cohort profile"
+        else (
             "A record of the dataset name, trial filters, analysis choices and counts"
             " used for this table. Keep your data separately; the recipe contains no "
             "data rows or figure settings."
@@ -9143,10 +9180,14 @@ def _download_tidy(
 
 def _tidy_csv(df: pd.DataFrame, names: ColumnNames) -> bytes:
     """A tidy table's CSV, built when its download button is clicked."""
-    return as_written(df, names).to_csv(index=False).encode("utf-8")
+    return (
+        as_written(df, names).to_csv(index=False, lineterminator="\n").encode("utf-8")
+    )
 
 
-def _recipe_json(context: dict, recipe: dict, name: str, counts: dict) -> str:
+def _recipe_json(
+    context: dict, recipe: dict, name: str, counts: dict, cohort_csv=None
+) -> str:
     """The recipe file's text, built when the button is clicked.
 
     ``recipe["groups"]`` holds ``(label, spec)`` pairs, resolved here: a
@@ -9161,14 +9202,20 @@ def _recipe_json(context: dict, recipe: dict, name: str, counts: dict) -> str:
     if recipe.get("groups"):
         recipe["groups"] = [group_definition(*pair) for pair in recipe["groups"]]
     analysis = analysis_choices(section=context.get("section"), **recipe)
+    if cohort_csv is not None:
+        counts = {**counts, "sha256": hashlib.sha256(cohort_csv()).hexdigest()}
 
     return json.dumps(
         build_analysis_recipe(
             app_version=__version__,
             dataset=context.get("dataset") or {},
+            inputs=context.get("inputs"),
             trial_filters=context.get("trial_filters") or [],
             pool=context.get("pool") or {},
             analysis=analysis,
+            selection=context.get("selection")
+            if analysis.get("view") == "Cohort profile"
+            else None,
             table_file=name,
             counts=counts,
             exported_at=datetime.now().isoformat(timespec="seconds"),
@@ -10007,7 +10054,11 @@ def render_analysis_pool_bar(
         width="content",
         help="Clear all trial filters, here and on the Scanpath view.",
     )
-    return {"trial_filters": items, "pool": pool}
+    return {
+        "trial_filters": items,
+        "pool": pool,
+        "selection": read_trial_filters().get("recipe_selection"),
+    }
 
 
 _POOL_POPOVER_KEY = "corpus_pool_popover"

@@ -25,6 +25,7 @@ is the task-oriented guide to this module for scripted / agent use.
 from __future__ import annotations
 
 import difflib
+import json
 import logging
 from collections.abc import Iterable, Sequence
 from copy import deepcopy
@@ -1705,6 +1706,79 @@ def _require_corpus_columns(data: pd.DataFrame, kind: str, value_col: str) -> No
         f"{', '.join(repr(column) for column in missing)}, which the table doesn't "
         f"have. Columns present ({len(data.columns)}): {_column_preview(data)}.{hint}"
     )
+
+
+def run_analysis_recipe(
+    recipe: dict | str | Path,
+    words: pd.DataFrame,
+    fixations: pd.DataFrame | None = None,
+    *,
+    participant_metadata: TablesLike | None = None,
+    trial_metadata: TablesLike | None = None,
+    text_metadata: TablesLike | None = None,
+    annotations: str | Path | None = None,
+    column_names: dict | None = None,
+) -> pd.DataFrame:
+    """Recreate a downloaded per-word cohort profile table.
+
+    Args:
+        recipe: The downloaded recipe JSON path or its decoded object.
+        words: Normalized Words table from `load_scanpath_data` or a corpus loader.
+        fixations: The matching normalized Fixations table, when present.
+        participant_metadata: The original participant metadata table for a reader filter.
+        trial_metadata: The original trial metadata table for a trial filter.
+        text_metadata: The original text metadata table for a text filter.
+        annotations: Path to the dataset's exported annotations JSON for a star or tag filter.
+        column_names: Source column maps when supplying canonical frames.
+
+    Returns:
+        The cohort profile under the dataset's own output column names.
+
+    Raises:
+        ValueError: Unsupported recipe, missing filter fields or mismatched result.
+    """
+    from .analysis_recipe import cohort_recipe_table
+
+    if isinstance(recipe, (str, Path)):
+        recipe = json.loads(Path(recipe).read_text(encoding="utf-8"))
+    words, word_names = _named_in(words, "words")
+    fixations, fix_names = _named_in(fixations, "fixations", optional=True)
+    table = cohort_recipe_table(
+        recipe,
+        words,
+        fixations,
+        metadata={
+            "participant": participant_metadata,
+            "trial": trial_metadata,
+            "text": text_metadata,
+        },
+        annotations=annotations,
+    )
+    headers = recipe["result"].get("headers")
+    if headers is not None:
+        if (
+            not isinstance(headers, list)
+            or len(headers) != len(table.columns)
+            or any(not isinstance(header, str) or not header for header in headers)
+            or len(set(headers)) != len(headers)
+        ):
+            raise ValueError(
+                "Invalid output column names in the cohort profile recipe."
+            )
+        table = table.set_axis(headers, axis="columns")
+    else:
+        names = _call_names(column_names, words=word_names, fixations=fix_names)
+        table = _cn.as_written(table, names.identity() if names else None)
+    expected = recipe["result"].get("sha256")
+    if expected is not None:
+        import hashlib
+
+        csv = table.to_csv(index=False, lineterminator="\n").encode("utf-8")
+        if hashlib.sha256(csv).hexdigest() != expected:
+            raise ValueError(
+                "The reproduced CSV differs from the original. Check the source tables, import mapping, filter inputs and app version."
+            )
+    return table
 
 
 def plot_corpus_figure(

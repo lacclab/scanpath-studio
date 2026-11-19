@@ -269,6 +269,7 @@ class TrialMetadata:
     trial_column: str
     participant_column: str | None = None
     report: JoinReport = JoinReport()
+    id_columns: tuple[str, ...] = ()
 
     @property
     def keyed_by_participant(self) -> bool:
@@ -350,6 +351,7 @@ class TextMetadata:
     source_name: str
     text_column: str
     report: JoinReport = JoinReport()
+    id_columns: tuple[str, ...] = ()
 
     @property
     def names(self) -> tuple[str, ...]:
@@ -591,6 +593,7 @@ def build_trial_metadata(
         source_name,
         label,
         str(participant_column) if participant_column else None,
+        id_columns=tuple(trial_cols),
     )
     if (
         frame is None
@@ -666,6 +669,7 @@ def build_trial_metadata(
             conflicting=tuple(sorted(conflicting_set, key=str)),
             combined_rows=combined,
         ),
+        id_columns=tuple(trial_cols),
     )
     if keys is None:
         return metadata
@@ -695,13 +699,9 @@ def rejoin_trials(metadata: TrialMetadata, keys: Iterable) -> TrialMetadata:
             )
     table_keys = set(metadata.key_series()) | set(metadata.report.conflicting)
     usable = set(metadata.key_series())
-    return TrialMetadata(
-        metadata.frame,
-        metadata.fields,
-        metadata.source_name,
-        metadata.trial_column,
-        metadata.participant_column,
-        JoinReport(
+    return replace(
+        metadata,
+        report=JoinReport(
             matched=tuple(sorted(usable & data_keys, key=str)),
             only_in_table=tuple(sorted(table_keys - data_keys, key=str)),
             only_in_data=tuple(sorted(data_keys - table_keys, key=str)),
@@ -864,6 +864,7 @@ def trial_to_payload(metadata: TrialMetadata | None) -> dict | None:
     return {
         "source_name": metadata.source_name,
         "trial_column": metadata.trial_column,
+        "id_columns": list(metadata.id_columns),
         "participant_column": metadata.participant_column,
         "rows": metadata.frame.to_dict("records"),
     }
@@ -875,19 +876,25 @@ def trial_from_payload(payload: dict | None) -> TrialMetadata | None:
         return None
     frame = pd.DataFrame(payload["rows"])
     trial_column = str(payload.get("trial_column") or "trial_id")
+    id_columns = tuple(payload.get("id_columns") or ())
     participant_column = payload.get("participant_column")
     if "trial_id" in frame.columns:
         # The payload holds the *clean* frame, whose key columns are already
         # canonical — rebuild against those rather than the original names.
-        return build_trial_metadata(
-            frame,
-            "trial_id",
-            "participant_id" if participant_column else None,
-            source_name=str(payload.get("source_name") or "trial metadata"),
+        return replace(
+            build_trial_metadata(
+                frame,
+                "trial_id",
+                "participant_id" if participant_column else None,
+                source_name=str(payload.get("source_name") or "trial metadata"),
+            ),
+            trial_column=trial_column,
+            participant_column=participant_column,
+            id_columns=id_columns,
         )
     return build_trial_metadata(
         frame,
-        trial_column,
+        list(id_columns) or trial_column,
         participant_column,
         source_name=str(payload.get("source_name") or "trial metadata"),
     )
@@ -952,7 +959,13 @@ def build_text_metadata(
     """
     text_cols = trial_mapping_columns(text_column)
     label = _text_column_label(text_column)
-    empty = TextMetadata(pd.DataFrame(columns=["text_id"]), (), source_name, label)
+    empty = TextMetadata(
+        pd.DataFrame(columns=["text_id"]),
+        (),
+        source_name,
+        label,
+        id_columns=tuple(text_cols),
+    )
     if (
         frame is None
         or frame.empty
@@ -1013,7 +1026,9 @@ def build_text_metadata(
             conflicting=tuple(sorted(conflicting_set)),
             combined_rows=combined,
         )
-    return TextMetadata(clean, tuple(fields), source_name, label, report)
+    return TextMetadata(
+        clean, tuple(fields), source_name, label, report, tuple(text_cols)
+    )
 
 
 def texts_matching(
@@ -1122,6 +1137,7 @@ def text_to_payload(metadata: TextMetadata | None) -> dict | None:
     return {
         "source_name": metadata.source_name,
         "text_column": metadata.text_column,
+        "id_columns": list(metadata.id_columns),
         "rows": metadata.frame.to_dict("records"),
     }
 
@@ -1132,17 +1148,22 @@ def text_from_payload(payload: dict | None) -> TextMetadata | None:
         return None
     frame = pd.DataFrame(payload["rows"])
     text_column = str(payload.get("text_column") or "text_id")
+    id_columns = tuple(payload.get("id_columns") or ())
     if "text_id" in frame.columns:
         # The payload holds the *clean* frame, whose key column is already
         # canonical — rebuild against that rather than the original name.
-        return build_text_metadata(
-            frame,
-            "text_id",
-            source_name=str(payload.get("source_name") or "text metadata"),
+        return replace(
+            build_text_metadata(
+                frame,
+                "text_id",
+                source_name=str(payload.get("source_name") or "text metadata"),
+            ),
+            text_column=text_column,
+            id_columns=id_columns,
         )
     return build_text_metadata(
         frame,
-        text_column,
+        list(id_columns) or text_column,
         source_name=str(payload.get("source_name") or "text metadata"),
     )
 
@@ -1502,10 +1523,13 @@ def from_payload(payload: dict | None) -> ParticipantMetadata | None:
     frame = pd.DataFrame(payload["records"])
     if "participant_id" not in frame.columns:
         return None
-    return build_participant_metadata(
-        frame,
-        "participant_id",
-        source_name=str(payload.get("source_name") or "participant metadata"),
+    return replace(
+        build_participant_metadata(
+            frame,
+            "participant_id",
+            source_name=str(payload.get("source_name") or "participant metadata"),
+        ),
+        id_column=str(payload.get("id_column") or "participant_id"),
     )
 
 

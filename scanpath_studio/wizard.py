@@ -99,7 +99,7 @@ from .data import (
     propose_raw_gaze_schema,
     propose_word_schema,
     source_file_regex_collisions,
-    split_source_file,
+    split_named_columns,
     stamp_source,
     text_word_id_issues,
     trial_id_series,
@@ -1169,27 +1169,6 @@ def _row_note(block, table: str, prefix: str):
 _DERIVE_LINE_W = (0.14, 0.16, 0.15, 0.24, 0.09, 0.11, 0.11)
 
 
-def _next_available_names(existing: set, base: str, count: int) -> list:
-    """The next ``count`` names ``<base>_<n>`` not already in ``existing``,
-    marking each as claimed as it is picked.
-
-    Splitting the same column a second time then continues past whatever the
-    first split already claimed (``source_file_7``, not another
-    ``source_file_1``) instead of colliding with — and silently
-    overwriting — it. ``existing`` is mutated in place so a caller reusing it
-    across several lines against the same table keeps accumulating names.
-    """
-    names = []
-    n = 1
-    while len(names) < count:
-        candidate = f"{base}_{n}"
-        if candidate not in existing:
-            names.append(candidate)
-            existing.add(candidate)
-        n += 1
-    return names
-
-
 #: The last derivation each Apply line made, per table: what it was made from
 #: and the frame it gave. A derivation is a pure function of its input frame and
 #: its settings, and the add screen reruns on every click — so without this a
@@ -1225,7 +1204,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     upload, not one shared value), so a line derives from exactly the one
     table named, never all three at once. Two modes per line: split into positional
     ``<column>_1``/``<column>_2``/… columns on a delimiter (collision-safe —
-    see :func:`_next_available_names`), or extract *named groups* with a
+    see :func:`split_named_columns`), or extract *named groups* with a
     regex (robust to variable-length parts, e.g. a stimulus name whose length
     varies). ➕ **Another** (beside Apply, on the first line) adds another
     mapping line — the same Table/Column/How/pattern/Lowercase controls, no
@@ -1457,15 +1436,9 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                 delimiter=config["delimiter"],
                 column=applied_column,
             ):
-                split = split_source_file(parent, delimiter=delimiter, column=column)
-                # `split_source_file` always names positionally
-                # (`file_part_N`) — rename to `<source column>_<n>` here, using
-                # the next names not already claimed in this table, rather than
-                # letting a second split of the same (or another) column
-                # collide with the first's `file_part_1`/`_2`/….
-                temp_cols = [c for c in split.columns if c not in parent.columns]
-                new_names = _next_available_names(set(existing), column, len(temp_cols))
-                derived = split.rename(columns=dict(zip(temp_cols, new_names)))
+                derived, new_names = split_named_columns(
+                    parent, column, delimiter, existing
+                )
                 # Named by what made it, so it is not re-hashed each rerun.
                 assign_derived(
                     derived,

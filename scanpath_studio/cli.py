@@ -3893,6 +3893,89 @@ def analyze(argv: list[str]) -> None:
         )
 
 
+def _recipe_parser() -> argparse.ArgumentParser:
+    """Options for reproducing a downloaded Corpus Analysis table."""
+    parser = _ShortErrorParser(
+        prog="scanpath-studio recipe",
+        description="Rerun a Per text cohort profile recipe on its source tables.",
+    )
+    parser.add_argument(
+        "recipe",
+        metavar="RECIPE.json",
+        help="Cohort profile recipe from Corpus Analysis.",
+    )
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--sample", action="store_true", help="Use the bundled demo.")
+    source.add_argument("--words", nargs="+", help="Original Words table(s).")
+    parser.add_argument("--fixations", nargs="+", help="Original Fixations table(s).")
+    parser.add_argument(
+        "--trial-parts-manifest", help="Multipart trial manifest used at import."
+    )
+    _add_schema_flags(parser)
+    for grain in ("participant", "trial", "text"):
+        parser.add_argument(
+            f"--{grain}-metadata",
+            help=f"The {grain} metadata table used by the recipe's filters.",
+        )
+    parser.add_argument(
+        "--annotations", help="Annotations JSON used for favorites or tag filters."
+    )
+    parser.add_argument(
+        "-o", "--output", required=True, help="Where to write the reproduced CSV."
+    )
+    return parser
+
+
+def recipe(argv: list[str]) -> None:
+    """Rerun a cohort profile using the same inputs as its author."""
+    from . import api, data
+    from .analysis_recipe import load_recipe_sources
+
+    args = _recipe_parser().parse_args(argv)
+    if args.sample and any(
+        (
+            args.fixations,
+            args.word_schema,
+            args.fix_schema,
+            args.trial_parts_manifest,
+            args.keep_columns,
+        )
+    ):
+        raise SystemExit(
+            "--sample uses the bundled tables and their mappings. Pass --words to use your own."
+        )
+    try:
+        saved = json.loads(Path(args.recipe).read_text(encoding="utf-8"))
+        words, fixations = (
+            data.load_sample_data() if args.sample else (args.words, args.fixations)
+        )
+        manifest = (
+            json.loads(Path(args.trial_parts_manifest).read_text(encoding="utf-8"))
+            if args.trial_parts_manifest
+            else None
+        )
+        tables = load_recipe_sources(
+            saved,
+            words,
+            fixations,
+            word_schema=_parse_schema_arg(args.word_schema, "--word-schema"),
+            fix_schema=_parse_schema_arg(args.fix_schema, "--fix-schema"),
+            keep_columns=args.keep_columns,
+            trial_parts_manifest=manifest,
+        )
+        result = api.run_analysis_recipe(
+            saved,
+            *tables,
+            participant_metadata=args.participant_metadata,
+            trial_metadata=args.trial_metadata,
+            text_metadata=args.text_metadata,
+            annotations=args.annotations,
+        )
+        result.to_csv(args.output, index=False, lineterminator="\n")
+    except (ValueError, OSError) as exc:
+        raise SystemExit(str(exc)) from exc
+
+
 def _corpus_parser() -> argparse.ArgumentParser:
     """The `corpus` parser (see `_analyze_parser`)."""
     parser = _ShortErrorParser(
@@ -4343,6 +4426,7 @@ usage:
   scanpath-studio render …         render one trial to .html/.png/.svg/.pdf
                                    (see `scanpath-studio render --help`)
   scanpath-studio corpus …         render a corpus figure from a tidy CSV
+  scanpath-studio recipe …         reproduce a cohort profile CSV from its recipe
   scanpath-studio check …          run the Data checks on your tables
   scanpath-studio cache …          show / clear the on-device recovery cache
   scanpath-studio version [--check]
@@ -4367,6 +4451,7 @@ _COMMANDS = (
     "render",
     "analyze",
     "corpus",
+    "recipe",
     "check",
     "cache",
     "version",
@@ -4476,6 +4561,8 @@ def main(argv: list[str] | None = None) -> None:
                 f"been validated yet. Set {EXPERIMENTAL_ENV_VAR}=1 to use it anyway."
             )
         analyze(argv[1:])
+    elif argv[0] == "recipe":
+        recipe(argv[1:])
     elif argv[0] == "corpus":
         corpus(argv[1:])
     elif argv[0] == "check":

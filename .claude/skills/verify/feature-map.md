@@ -65,5 +65,6 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 
 | Surface | Smoke check |
 | --- | --- |
+| Cohort recipe | `recipe profile.recipe.json --sample -o profile.csv` reproduces the CSV downloaded for a demo Per text cohort profile |
 | CLI | `scanpath-studio render --sample -o out.html` writes a figure; `--list-trials` lists 24 |
 | API | `load_sample_data()` → `plot_scanpath(..., participant=, trial=)` → `save_figure` |

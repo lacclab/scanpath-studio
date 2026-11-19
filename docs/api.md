@@ -91,6 +91,8 @@ print(words[columns].head(3))
 
 ::: scanpath_studio.api.check_data_health
 
+::: scanpath_studio.api.run_analysis_recipe
+
 ## Plot
 
 ::: scanpath_studio.api.plot_scanpath

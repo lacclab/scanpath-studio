@@ -161,8 +161,6 @@ def source_canvas(kind: str) -> tuple[int, int] | None:
         return tuple(DEFAULT_FIGURE_SIZE)
     if kind == SOURCE_POTEC:
         return (1680, 1050)  # PoTeC monitor (DELL P2210)
-    if kind == SOURCE_AUTHOR:
-        return (1200, 800)
     # MultiplEYE stamps each session set's own monitor on its fixations, so it
     # is read off the data like any other dataset's.
     return None
@@ -1711,11 +1709,8 @@ def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]
     # The disclosure is a rail choice, not a derived value: `illustration_reasons`
     # (what the app resolved it to) is in `_DERIVED_SETTINGS`, so without the
     # *label mode* the snippet would silently re-derive at "auto" and disagree
-    # with the figure on screen. `compare_scanpaths` has no such parameter —
-    # `state_caveats` says so rather than passing a keyword it would reject.
-    if state.kind != "comparison" and (
-        explicit or str(state.illustration_label).lower() != "auto"
-    ):
+    # with the figure on screen.
+    if explicit or str(state.illustration_label).lower() != "auto":
         out.append(("illustration_label", str(state.illustration_label).lower()))
     if state.title:
         out.append(("title", str(state.title)))
@@ -2071,12 +2066,7 @@ def cli_snippet(
         argv += ["--font-size", str(int(state.base_font_size))]
     if state.font_family and (explicit or _non_default_font(state.font_family)):
         argv += ["--font-family", str(state.font_family)]
-    # `render`'s compare branch passes neither to `compare_scanpaths` (which has
-    # no parameter for either), so emitting them beside a Python form that
-    # correctly omits them would be the two flavours contradicting each other.
-    if state.kind != "comparison" and (
-        explicit or str(state.illustration_label).lower() != "auto"
-    ):
+    if explicit or str(state.illustration_label).lower() != "auto":
         argv += ["--illustration-label", str(state.illustration_label).lower()]
     if state.title:
         argv += ["--title", str(state.title)]
@@ -2317,12 +2307,6 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
                 "Without it, B's screen is read from its data and may not match."
             )
         notes.append(note)
-    if state.kind == "comparison" and str(state.illustration_label).lower() != "auto":
-        notes.append(
-            "`compare_scanpaths` has no `illustration_label` parameter, so the "
-            "snippet leaves out your Illustration label (**"
-            f"{str(state.illustration_label).capitalize()}**)."
-        )
     return notes
 
 

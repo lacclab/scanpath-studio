@@ -57,6 +57,7 @@ for _name in (
 from . import column_names as _cn  # noqa: E402
 from . import data as _data  # noqa: E402
 from . import export as _export  # noqa: E402
+from .authoring import is_authored  # noqa: E402
 from .build_info import BuildInfo  # noqa: E402
 from .column_names import ColumnNames  # noqa: E402
 from .constants import (  # noqa: E402
@@ -120,17 +121,29 @@ def build_authored_scanpath(
             ``x``, ``y``, ``duration_ms``). Left out, each word gets one fixation at its
             center.
         **layout_options: Passed to `authoring.layout_text` (``canvas_width``,
-            ``margin``, ``character_width``, ``word_height``, ``line_height``).
+            ``margin``, ``character_width``, ``word_height``, ``line_height``, ``right_to_left``).
 
     Returns:
         The ``(words, fixations)`` frames, ready to plot.
     """
-    from .authoring import authored_fixations, default_events, layout_text
+    from .authoring import (
+        AUTHORED_ATTR,
+        DEFAULT_LAYOUT,
+        authored_fixations,
+        canvas_size,
+        default_events,
+        layout_text,
+    )
 
     words = layout_text(text, **layout_options)
     if events is None:
         events = default_events(words)
-    return words, authored_fixations(words, events)
+    fixations = authored_fixations(words, events)
+    screen = canvas_size(words, {**DEFAULT_LAYOUT, **layout_options})
+    for frame in (words, fixations):
+        frame.attrs[AUTHORED_ATTR] = True
+        frame.attrs[RECORDED_SCREEN_ATTR] = screen
+    return words, fixations
 
 
 def load_authored_scanpath(
@@ -1308,6 +1321,12 @@ def _recorded_screen(*frames) -> tuple[int, int] | None:
     for frame in frames:
         screen = getattr(frame, "attrs", {}).get(RECORDED_SCREEN_ATTR)
         if screen:
+            if is_authored(frame):
+                for candidate in frames:
+                    if candidate is not None and (
+                        size := screen_canvas_size(candidate)
+                    ):
+                        return size
             return int(screen[0]), int(screen[1])
     return None
 
@@ -2784,6 +2803,7 @@ def plot_scanpath(
 
         reasons = illustration_reasons(
             settings,
+            synthetic=is_authored(words, fixations),
             fix_index_range=fix_index_range,
             full_fixation_range=full_fix_range,
         )
@@ -3086,6 +3106,7 @@ def animate_scanpath(
 
         reasons = illustration_reasons(
             {**animation_overrides, "playback_speed": playback_speed},
+            synthetic=is_authored(words, fixations, *passed_b),
             # The replay draws neither the snap nor the arcs.
             static=False,
             fix_index_range=fix_index_range,
@@ -3506,6 +3527,7 @@ def compare_scanpaths(
     drift_correction: str | None = None,
     title: str = "",
     caption: str = "",
+    illustration_label: str = "auto",
     column_names: dict | None = None,
     **figure_overrides: Any,
 ) -> go.Figure:
@@ -3585,6 +3607,7 @@ def compare_scanpaths(
         fix_index_range_b: B's own window, as the app's B slider sets it.
         drift_correction: Experimental, as in
             [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
+        illustration_label: As in [`plot_scanpath`][scanpath_studio.api.plot_scanpath]. An authored reading on either side labels the comparison.
         title: As in [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
         caption: As in [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
         column_names: As in [`plot_scanpath`][scanpath_studio.api.plot_scanpath]. A's
@@ -3815,7 +3838,21 @@ def compare_scanpaths(
     if not (trial_raw_a.empty and trial_raw_b.empty):
         merged_raw = pd.concat(align_compare_columns(trial_raw_a, trial_raw_b)[:2])
     settings = _figure_kwargs(figure_overrides)
-    settings.pop("illustration_reasons", None)
+    from .illustration import illustration_reasons, resolve_label_reasons
+
+    label_mode = str(illustration_label).capitalize()
+    if label_mode not in {"Auto", "Show", "Hide"}:
+        raise ValueError("illustration_label must be 'auto', 'show', or 'hide'.")
+    reasons = settings.pop("illustration_reasons", None)
+    if reasons is None:
+        reasons = resolve_label_reasons(
+            label_mode,
+            illustration_reasons(
+                settings,
+                static=False,
+                synthetic=is_authored(words, fixations, words_b, fixations_b),
+            ),
+        )
     if raw_gaze is not None or raw_gaze_b is not None:
         settings.setdefault("show_raw_gaze", True)
     render_settings = FigureSettings.from_mapping(
@@ -3847,6 +3884,7 @@ def compare_scanpaths(
     annotate_figure(
         fig, title=title, caption=caption, **figure_text_style(render_settings)
     )
+    add_illustration_label(fig, reasons, text=render_settings.illustration_text)
     return fig
 
 

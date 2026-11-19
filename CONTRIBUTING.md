@@ -75,6 +75,10 @@ reference comes from the `api.py` docstrings, so keep those current.
 - **Dependencies** are declared only in `pyproject.toml`. Don't commit a
   `uv.lock`: the hosted demo would silently switch onto it.
 - **Releasing:** AGENTS.md → *Releasing* (or the `/release` skill).
+- **Reviewing a change:** [REVIEW.md](REVIEW.md) — what to check, by what the
+  diff touches.
+- **Which figure settings reach which view** (static, Animate, Compare):
+  [RENDER_PATHS.md](RENDER_PATHS.md).
 
 By contributing, you agree your contributions are licensed under the
 [MIT License](LICENSE).

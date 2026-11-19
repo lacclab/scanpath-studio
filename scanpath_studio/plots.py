@@ -10301,8 +10301,8 @@ STATIC_FIGURE_OPTIONS = _setting_names(
 #: What `make_comparison_figure` accepts. Only the animation-only fields are
 #: excluded — this is a typo-catcher for `api.compare_scanpaths`, not a
 #: semantic filter, so it still admits settings the comparison builders ignore.
-#: Which settings actually reach a comparison figure is the table in AGENTS.md
-#: → *Which viz settings apply in which render path*.
+#: Which settings actually reach a comparison figure is the table in
+#: `RENDER_PATHS.md`.
 COMPARISON_FIGURE_OPTIONS = _setting_names(
     {
         "playback_speed",

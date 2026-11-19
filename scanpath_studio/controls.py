@@ -2340,6 +2340,7 @@ def _apply_simple_view(name: str) -> None:
     animation = name == _SIMPLE_ANIMATION
     _apply_view_preset("scanpath" if animation else name)
     st.session_state["single_animate"] = animation
+    st.session_state[SINGLE_COMPARE_TOGGLE] = False
     if palette is not None and _active_palette() != palette:
         st.session_state["global_palette"] = palette
         _on_palette_change()

@@ -18,6 +18,12 @@ import re
 from pathlib import Path
 
 from scanpath_studio.constants import FIXATION_LABEL_OPTIONS
+from scanpath_studio.figure_views import (
+    HEATMAP_OPTIONS,
+    RAW_GAZE_OPTIONS,
+    STYLE_KEYS_FOR_TWO_SCANPATHS,
+    options_for_view,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 REPO_URL = "https://github.com/lacclab/scanpath-studio"
@@ -286,30 +292,8 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "word_box_fill_color",
         "word_box_fill_opacity",
     ),
-    "Heatmap": (
-        "show_heatmap",
-        "heatmap_style",
-        "heatmap_metric",
-        "heatmap_colorscale",
-        "heatmap_norm",
-        "heatmap_range",
-        "heatmap_opacity",
-        "heatmap_sigma_px",
-        "word_heatmap_col",
-        "word_heatmap_title",
-        "show_heatmap_colorbar",
-        "heatmap_colorbar_orientation",
-        "heatmap_colorbar_length",
-        "heatmap_colorbar_thickness",
-        "heatmap_colorbar_tickangle",
-        "heatmap_colorbar_tickfont_size",
-    ),
-    "Raw gaze": (
-        "show_raw_gaze",
-        "raw_gaze_color",
-        "raw_gaze_marker_size",
-        "raw_gaze_opacity",
-    ),
+    "Heatmap": HEATMAP_OPTIONS,
+    "Raw gaze": RAW_GAZE_OPTIONS,
     "Filters & highlights": ("fixation_flags", "saccade_classes"),
     "Figure & canvas": (
         "fit_to_monitor",
@@ -429,74 +413,21 @@ def _figure_kinds() -> dict:
     }
 
 
-# Two-scanpath figures take these values from each scanpath's style.
-_STYLE_KEYS_FOR_TWO_SCANPATHS = {
-    "order_font_color": "fix_color",
-    "fixation_color": "fix_color",
-    "fixation_opacity": "opacity",
-    "hollow_fixations": "hollow",
-    "saccade_color": "saccade_color",
-    "saccade_style": "saccade_style",
-    "saccade_width": "saccade_width",
-}
-
-
 def _figure_views(kinds) -> dict[str, set[str]]:
-    """Where an option affects the figure, including named comparison arguments."""
+    """Include the named Python and CLI comparison arguments in the reference."""
     from scanpath_studio import api
 
-    plot = set(kinds["plot"])
-    replay = set(kinds["animate"]).difference(
-        OPTION_TOPICS["Raw gaze"], OPTION_TOPICS["Heatmap"]
-    )
+    animation = kinds["animate"]
     compare = set(kinds["compare"]) | (
-        set(inspect.signature(api.compare_scanpaths).parameters) & replay
+        set(inspect.signature(api.compare_scanpaths).parameters) & animation.keys()
     )
     # The CLI sends both labels through labels= and B's filters through style_b.
     compare.update(("label_a", "label_b", "fixation_flags_b"))
-    # Compare always draws spatial coordinates and word-box heatmaps. Its
-    # raw gaze and box outlines use each scanpath's colors.
-    compare.difference_update(
-        _STYLE_KEYS_FOR_TWO_SCANPATHS,
-        {
-            "x_field",
-            "y_field",
-            "raw_gaze_color",
-            "word_box_color",
-            "critical_span_style",
-            "span_border_color",
-            "saccade_render_mode",
-            "saccade_color_mode",
-            "saccade_class_colors",
-            "saccade_type_legend",
-            "fixation_snap_to_line",
-            "fixation_snap_position",
-            "heatmap_style",
-            "heatmap_sigma_px",
-            "word_heatmap_col",
-            "word_heatmap_title",
-            "illustration_reasons",
-            "illustration_text",
-            "show_connectors",
-            "connector_y",
-        },
-    )
-    second_scanpath = {
-        "label_a",
-        "label_b",
-        "words_b",
-        "fixations_b",
-        "fixation_flags_b",
-        "show_legend",
-        "style_a",
-        "style_b",
-        "compare_stimulus",
-    }
     return {
-        "Single plot": plot,
-        "Single replay": replay - second_scanpath,
-        "Compare": compare,
-        "Compare + Animate": replay.difference(_STYLE_KEYS_FOR_TWO_SCANPATHS),
+        "Single plot": options_for_view(kinds["plot"], "static"),
+        "Single replay": options_for_view(animation, "animation"),
+        "Compare": options_for_view(compare, "comparison"),
+        "Compare + Animate": options_for_view(animation, "animation", comparing=True),
     }
 
 
@@ -657,8 +588,8 @@ def figure_options_reference(*, heading: str = "##") -> str:
             if choices:
                 values = ", ".join(f"`{c!r}`" for c in choices)
                 description += f" One of {values}."
-            if name in _STYLE_KEYS_FOR_TWO_SCANPATHS:
-                key = _STYLE_KEYS_FOR_TWO_SCANPATHS[name]
+            if name in STYLE_KEYS_FOR_TWO_SCANPATHS:
+                key = STYLE_KEYS_FOR_TWO_SCANPATHS[name]
                 description += (
                     f" For two scanpaths, set `{key}` in `style_a` or `style_b`."
                 )

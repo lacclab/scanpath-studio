@@ -4377,8 +4377,8 @@ def _render_code_snippet_body(data_choice: str) -> None:
     explicit = explicit_col.checkbox(
         "Show every option",
         key=SNIPPET_EXPLICIT_KEY,
-        help="By default the code lists only the options you changed. Tick "
-        "this to list every figure option at its current value.",
+        help="The compact code lists changes that apply to this view. "
+        "Select this to include the other figure options at their current values.",
     )
     output = _SNIPPET_OUTPUT.get(state.kind, "scanpath.png")
     code = reproduction_code(

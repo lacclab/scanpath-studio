@@ -49,7 +49,10 @@ says what the recipient needs.
 ## Reproduce a figure { #from-the-app-to-a-script }
 
 Open **Share** → **Code** and copy the Python or CLI code. It includes the
-figure's settings and your column mapping. For a dataset you imported, replace
+figure's settings and your column mapping. The compact code includes changes
+that affect this view. For example, a comparison uses each scanpath's own
+fixation color for its index numbers. Select **Show every option** to include
+the other accepted figure settings. For a dataset you imported, replace
 the placeholder file paths with your own.
 [Render in code](../scanpath-visualization/index.md#render-in-code) shows a minimal example.
 

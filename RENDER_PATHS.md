@@ -19,8 +19,8 @@ before `render_plot_controls`):
 
 The table below describes the app's controls. For the headless API and CLI,
 the [figure options reference](https://lacclab.github.io/scanpath-studio/api/#figure-options)
-lists the four render views. Its mode labels come from
-`scripts.docs_support._figure_views`; `api.figure_options` lists accepted keywords.
+lists the four render views. The reference and compact Share snippets use
+`figure_views.options_for_view`; `api.figure_options` lists accepted keywords.
 
 | setting (`viz_settings` name) | static | animation | compare | notes |
 | --- | :---: | :---: | :---: | --- |

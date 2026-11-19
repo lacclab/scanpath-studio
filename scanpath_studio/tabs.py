@@ -302,6 +302,7 @@ from scanpath_studio.fields import (
     row_label,
     switch,
 )
+from scanpath_studio.figure_views import STATIC_COMPARISON_LAYER_STYLES
 from scanpath_studio.file_citation import png_text_chunks, stamp_html, svg_metadata
 from scanpath_studio.html_embed import embed_html_iframe, plotlyjs_script
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
@@ -5235,15 +5236,7 @@ def _replay_style(style: dict | None) -> dict | None:
         k: v
         for k, v in style.items()
         if k not in COMPARE_FILTER_STYLE_KEYS
-        and k
-        not in (
-            "box_color",
-            "box_fill_color",
-            "box_line_opacity",
-            "box_fill_opacity",
-            "raw_gaze_color",
-            "heatmap_colorscale",
-        )
+        and k not in STATIC_COMPARISON_LAYER_STYLES
     }
 
 

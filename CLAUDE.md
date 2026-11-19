@@ -23,6 +23,10 @@ Contributor setup is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
   `changelog.d/README.md`.
 - **Never add a `Co-Authored-By: Claude …` trailer** (or any AI co-author line)
   to commit messages.
+- **Say how the commit was verified.** End the message with a `Verified:`
+  trailer naming what ran — `Verified: harness, apptest, browser`,
+  `Verified: tests`, or `Verified: none` with the reason (docs only). The
+  commit-gate hook logs commits without one (see *Repo automation*).
 
 ## Building features
 
@@ -52,6 +56,28 @@ Contributor setup is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
   the constraint, the quirk, the invariant. No issue numbers, dates, review
   rounds or "used to" history in comments, docstrings or docs: that belongs in
   the commit message, the PR and the issue.
+
+## Verifying a change
+
+- **See it work before calling it done.** Run `/verify` on every change a user
+  can observe: `scripts/verify_change.py` boots the app headless and renders
+  through the CLI and the API, and a visible change gets looked at in a browser.
+  Tests passing is not the same as the feature working.
+- **Three rounds, then ask.** If a check still fails after three attempts at
+  fixing it, stop and tell the user what fails, what you tried, and what you
+  suspect.
+- **Flaky tests get fixed, not quieted.** Never add a `sleep`, a retry, a
+  `skip` or a looser assertion to get a test green. Find the cause; if it can't
+  be found, delete the test and give the reason in the commit message. A flaky
+  test teaches everyone to rerun instead of reading the failure.
+- **State invariants as property tests.** A round-trip (a link value written
+  and read back), an idempotent step (a migration, a normalization) or a rule
+  that must hold for every input goes in `tests/test_properties.py` as a
+  Hypothesis test, not as three hand-picked examples.
+- **Turn a miss into a check.** A bug that review should have caught and that
+  has happened twice becomes a `REVIEW.md` item (a trigger readable from a
+  diff, the check, the PRs behind it) — or better, a test. Prune items a test
+  now covers.
 
 ## Dev loop
 
@@ -151,14 +177,24 @@ See *Releasing* in `@AGENTS.md`: bump `__release__` in
 
 ## Repo automation (`.claude/`)
 
-- **Skills** — `/release`, `/track`, `/new-feature` and `/preflight` package the
-  workflows above; invoke them instead of re-deriving the steps.
-- **Hook** — every edited `.py` file is auto-run through `ruff format` +
+- **Skills** — `/release`, `/track`, `/new-feature`, `/preflight` and `/verify`
+  package the workflows above; invoke them instead of re-deriving the steps.
+  `/verify` keeps a feature map (`.claude/skills/verify/feature-map.md`) — add
+  a row when a feature lands.
+- **Hooks** — every edited `.py` file is auto-run through `ruff format` +
   `ruff check` (`.claude/hooks/ruff-on-edit.sh`); fix what it reports
-  immediately rather than batching.
-- **Subagents** — `surface-parity-reviewer` (four-surface rule, wire-format
-  keys, true-scale chart path) and `perf-reviewer` (`@st.cache_data` +
-  `frame_fingerprint` conventions) review a diff; run both before setting an
-  issue to *Review*.
+  immediately rather than batching. `git commit` goes through
+  `.claude/hooks/commit-gate.sh`, which logs to `.claude/commit-gate.log`
+  whether the message has a `Verified:` trailer. It only observes by default;
+  `SCANPATH_COMMIT_GATE=enforce` blocks a commit without one (letting the third
+  try through), `off` disables it.
+- **Subagents** — `diff-reviewer` is the primary reviewer: it applies the
+  `REVIEW.md` items the diff triggers, reading the checklist from `origin/main`
+  so a change can't weaken its own checks. `surface-parity-reviewer`
+  (four-surface rule, wire-format keys, true-scale chart path) and
+  `perf-reviewer` (`@st.cache_data` + `frame_fingerprint` conventions) go
+  deeper on their areas. Run `diff-reviewer` before setting an issue to
+  *Review*, plus the specialist whose area the diff touches; give a later round
+  the earlier round's findings, so it checks those and what changed since.
 - **Guardrails** — edits to `uv.lock`, `site/`, and `*.egg-info` are denied
   in `.claude/settings.json`; they are generated artifacts.

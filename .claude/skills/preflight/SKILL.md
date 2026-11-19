@@ -28,7 +28,11 @@ output). Fix trivial failures (formatting) directly; report anything else.
    (`changelog.d/README.md`). If missing, write it. `CHANGELOG.md` itself must
    **not** be in the diff — only a release edits it. Then
    `python scripts/changelog_fragments.py check`.
-5. **Issue** — if the pending work corresponds to a GitHub issue
+5. **Seen working** — for a change a user can observe, run
+   `uv run --extra test python scripts/verify_change.py` (the `/verify` skill;
+   pass the option's link / flag / keyword when it is a feature option). Report
+   its PASS/FAIL lines.
+6. **Issue** — if the pending work corresponds to a GitHub issue
    (`gh issue list`), check its board Status and body write-up are current.
    Finished work goes to Status **Review** with the review ask in its
    *⚖ Waiting on you* checklist — **never** close the issue yourself; that is
@@ -37,5 +41,7 @@ output). Fix trivial failures (formatting) directly; report anything else.
 ## Reminders for the commit itself
 
 - Never add a `Co-Authored-By: Claude …` (or any AI co-author) trailer.
+- End the message with a `Verified:` trailer naming what ran (e.g.
+  `Verified: harness, tests`), or `Verified: none` and why.
 - Commit only when the user asked to commit.
 - `main` is protected: commit on a branch and land it through a PR.

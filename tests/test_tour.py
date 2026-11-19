@@ -1319,12 +1319,12 @@ class TestSpotlightSelectorsResolve:
         assert (
             "st.markdown(f\"## {ICONS['plot_controls']} Plot controls\")" in tab_source
         )
-        assert 'st.container(key="plot_reset_footer"),' in tab_source
-        assert "render_viz_reset(st)" in tab_source
+        assert 'st.container(key="plot_reset_footer")' in tab_source
+        assert "render_viz_reset(plot_footer)" in tab_source
         # No second column in the heading row, and no reset above the controls.
         assert "rail_heading, rail_reset = st.columns(" not in tab_source
         assert tab_source.index("render_plot_controls(") < tab_source.index(
-            "render_viz_reset(st)"
+            "render_viz_reset(plot_footer)"
         )
 
         # Full width, one label, no compact pill.

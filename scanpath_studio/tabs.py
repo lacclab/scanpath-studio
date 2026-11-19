@@ -200,6 +200,7 @@ from scanpath_studio.controls import (
     format_filter_item,
     has_active_trial_filters,
     inline_field_label,
+    plot_popover_on_change,
     read_trial_filters,
     render_compare_filters,
     render_narrow_by,
@@ -6604,6 +6605,7 @@ def render_single_trial_tab(
                         "Replay settings",
                         width="content",
                         key="split_mode_animate_popover",
+                        on_change=plot_popover_on_change(),
                         help="Replay settings. Playback controls appear above the plot.",
                     ),
                     _popover_rows("animate"),
@@ -6835,6 +6837,7 @@ def render_single_trial_tab(
                         "Compare settings",  # named for screen readers, as Animate's
                         width="content",
                         key="split_mode_compare_popover",
+                        on_change=plot_popover_on_change(),
                         help="Compare settings. "
                         + (
                             "Replay scanpath B in step with A."
@@ -7071,11 +7074,8 @@ def render_single_trial_tab(
         # resets, rather than sharing the heading row. It is last in creation
         # order, so it lands at the foot of the rail's own scroll area.
         # Full-only: Essentials' View tiles are its way back to a preset.
-        with (
-            ui_mode.advanced_only(rail, "rail_reset"),
-            st.container(key="plot_reset_footer"),
-        ):
-            render_viz_reset(st)
+        with ui_mode.advanced_only(rail, "rail_reset"):
+            plot_footer = st.container(key="plot_reset_footer")
 
     # Essentials hides the controls that Full sets, but they keep shaping the
     # figure; say which are in play. The container is drawn on every run, in
@@ -7272,6 +7272,9 @@ def render_single_trial_tab(
     # window. Everything below reads them in this same run.
     if comparing:
         render_compare_filters(rail_slots.get("compare_filter"), compare_fix)
+    # Record the completed edit after both readings and their fixation windows
+    # have resolved, in the slot already placed at the foot of the rail.
+    render_viz_reset(plot_footer)
     # The one predicate both gates below consult. Computed here because
     # this is the first point B's screen is known.
     # The *trial's* frames, not the filtered corpus: A's canvas is overwritten with

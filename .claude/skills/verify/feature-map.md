@@ -31,6 +31,7 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Animate | Rail toggle | `single_animate` | The replay player draws its own toolbar row; the plot keeps the static figure's size |
 | Compare | Rail toggle | `single_compare_toggle`, `single_compare_layout`, `?compare=` | Overlay / side by side / stacked; B from another dataset resolves to side by side on unequal canvases |
 | Fixation index | Rail → Fixations popover | `global_show_order`, `global_order_label_position` | Numbers above / inside / below each fixation, on every builder |
+| Undo and Redo | Full → foot of Plot controls, beside Reset visualization | `viz_undo`, `viz_redo` | Undo a confirmed reset, redo it, then undo and edit again on the current reading |
 
 ### Subtabs under the plot
 

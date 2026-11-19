@@ -322,6 +322,14 @@ def test_chart_controls_survive_navigation_presets_and_reset(app_url, browser):
         first = chart()
         assert first["axes"] == ["Fixation order", "Seconds since first fixation onset"]
         assert first["mode"] == "markers+text"
+        click("viz_undo")
+        assert chart()["mode"] == "markers"
+        click("split_mode_rail_fix_popover")
+        page.locator(".st-key-global_show_order label").click()
+        _settle(page)
+        page.keyboard.press("Escape")
+        assert chart() == first
+        assert page.locator(".st-key-viz_redo button").first.is_disabled()
 
         switch("Essentials")
         assert chart() == first
@@ -346,6 +354,10 @@ def test_chart_controls_survive_navigation_presets_and_reset(app_url, browser):
         assert chart() == first
         click("reset_viz_settings_btn")
         click("reset_viz_confirm")
+        assert chart() == default
+        click("viz_undo")
+        assert chart() == first
+        click("viz_redo")
         assert chart() == default
         switch("Essentials")
         assert chart() == default

@@ -41,6 +41,23 @@ _ID_TEXT = st.text(
 # --- Round-trips -----------------------------------------------------------
 
 
+@given(st.lists(st.integers(), min_size=1, max_size=50, unique=True))
+def test_plot_history_round_trips_the_last_thirty_edits(values):
+    from scanpath_studio.viz_history import Design, PlotHistory
+
+    history = PlotHistory("demo")
+    states = [{}] + [{"value": v} for v in values]
+    for state in states:
+        history.observe(state, Design(), ())
+    states = states[-31:]
+    for redo, targets in ((False, reversed(states[:-1])), (True, states[1:])):
+        for expected in targets:
+            keys, restored, _ = history.step(redo=redo)
+            assert keys == {"value"} and restored == expected
+            history.observe(restored, Design(), ())
+        assert history.step(redo=redo) is None
+
+
 @given(st.lists(_ID_TEXT, min_size=1, max_size=5))
 def test_composite_id_round_trips(parts):
     """``split_composite_id`` reads back exactly the parts ``compose_id``

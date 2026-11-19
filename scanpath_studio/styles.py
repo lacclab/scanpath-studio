@@ -2158,6 +2158,10 @@ def get_app_css() -> str:
         min-height: 2.6rem;
         padding-inline: 0.2rem;
     }
+    /* Keep the spoken label out of the flex row so its gap doesn't shift the arrow. */
+    :is(.st-key-viz_undo, .st-key-viz_redo) button [data-testid="stMarkdownContainer"] {
+        position: absolute;
+    }
     /* The rail is deliberately narrow — keep its short headers + toggle labels on
        one line so they don't break mid-word (e.g. "Anima\nte") when it's tight. */
     .st-key-scanpath_rail h5,

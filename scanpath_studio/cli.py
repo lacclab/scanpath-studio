@@ -28,7 +28,6 @@ import pandas as pd
 from . import __version__
 from . import column_names as _cn
 from .code_snippet import (
-    SOURCE_AUTHOR,
     SOURCE_DEMO,
     SOURCE_MULTIPLEYE,
     SOURCE_ONESTOP,
@@ -2863,7 +2862,7 @@ def render(argv: list[str]) -> None:
             raise SystemExit(f"--authoring: file not found: {args.authoring}") from None
         except (ValueError, OSError) as exc:
             raise SystemExit(str(exc)) from exc
-        canvas = canvas or source_canvas(SOURCE_AUTHOR)
+        canvas = canvas or api._recorded_screen(words, fixations)
     elif args.potec:
         from .data import split_composite_id
         from .datasets import load_potec
@@ -3608,6 +3607,7 @@ def render(argv: list[str]) -> None:
                     fixations_b=fixations_b,
                     dataset_b=args.compare_dataset_name,
                     layout=args.compare_layout,
+                    illustration_label=args.illustration_label,
                     compare_stimulus=args.compare_stimulus,
                     labels=_compare_labels(args),
                     setup=_compare_setup_snapshot(canvas),

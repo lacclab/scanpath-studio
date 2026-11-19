@@ -1208,17 +1208,25 @@ def test_the_animation_frame_budget_reaches_the_command():
     assert not {"anim_grid_step_ms", "anim_max_frames"} & set(code.cli_unsupported)
 
 
-def test_a_comparison_command_omits_the_flags_its_render_path_ignores():
-    """`render`'s compare branch does not pass it to `compare_scanpaths`, and
-    the Python form correctly omits it — so emitting it would be the two
-    flavours of one recipe contradicting each other."""
+def test_a_comparison_keeps_the_illustration_override_in_both_forms():
     state = _state(
         kind="comparison",
         illustration_label="hide",
         compare=cs.CompareTarget(participant="p2", trial="t2"),
     )
-    command = cs.reproduction_code(DEMO, state).cli
-    assert "--illustration-label" not in command
+    code = cs.reproduction_code(DEMO, state)
+    assert "--illustration-label hide" in code.cli
+    assert "illustration_label='hide'" in code.python
+
+    labeled = _state(
+        kind="comparison",
+        compare=state.compare,
+        illustration_label="show",
+        figure={"illustration_text": "Class example"},
+    )
+    visible = cs.reproduction_code(DEMO, labeled)
+    assert "--illustration-text 'Class example'" in visible.cli
+    assert "illustration_text='Class example'" in visible.python
 
 
 @pytest.mark.parametrize("kind", ["comparison", "animation"])

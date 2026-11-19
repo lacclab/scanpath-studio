@@ -7366,6 +7366,9 @@ def render_single_trial_tab(
     # figure's cache key is unchanged.
     if comparing:
         figure_settings["fixation_flags_b"] = compare_b_filters()["fixation_flags"]
+    source_names = [st.session_state.get("data_source_choice")]
+    if comparing and compare_source is not None:
+        source_names.append(compare_source.name)
     detected_reasons = illustration_reasons(
         {
             **viz_settings,
@@ -7378,10 +7381,10 @@ def render_single_trial_tab(
         # …and only on the static figure, the one that draws them.
         static=not (animate or comparing),
         data_source=st.session_state.get("_active_data_source"),
-        synthetic=bool(
-            st.session_state.get("_datasets", {})
-            .get(st.session_state.get("data_source_choice"), {})
-            .get("authoring")
+        synthetic=any(
+            source in (SYNTHETIC_CHOICE, MANUAL_SAMPLE_CHOICE, AUTHOR_CHOICE)
+            or st.session_state.get("_datasets", {}).get(source, {}).get("authoring")
+            for source in source_names
         ),
         fix_index_range=fix_range,
         full_fixation_range=full_fix_range,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
-from .constants import AUTHOR_CHOICE, SYNTHETIC_CHOICE
+from .constants import AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE, SYNTHETIC_CHOICE
 
 #: The reason recorded when *Show* labels a figure nothing was detected on; the
 #: figure draws "Illustration" alone for it.
@@ -78,7 +78,11 @@ def illustration_reasons(
         reasons.append("fixation subset")
     # The app's own made-up sources only, never a user's dataset whose name
     # happens to contain "synthetic" or "author".
-    if synthetic or data_source in (SYNTHETIC_CHOICE, AUTHOR_CHOICE):
+    if synthetic or data_source in (
+        SYNTHETIC_CHOICE,
+        AUTHOR_CHOICE,
+        MANUAL_SAMPLE_CHOICE,
+    ):
         reasons.append("synthetic data")
     playback_speed = settings.get("playback_speed", 1.0)
     try:

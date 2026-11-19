@@ -58,8 +58,6 @@ _INACTIVE_IN_COMPARISON = frozenset(
         "heatmap_sigma_px",
         "word_heatmap_col",
         "word_heatmap_title",
-        "illustration_reasons",
-        "illustration_text",
         "show_connectors",
         "connector_y",
         *STYLE_KEYS_FOR_TWO_SCANPATHS,

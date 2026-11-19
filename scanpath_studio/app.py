@@ -5063,21 +5063,22 @@ def _remember_authoring_return() -> None:
 #: active, so coming back to the sample shows it rather than reopening the editor.
 _AUTHOR_EDITING_KEY = "_author_editing"
 
-#: The synthetic sample's stimulus until it has been edited.
-_MANUAL_SAMPLE_TEXT = "The cat sat\non the mat."
-
 
 def _authoring_editor_open(data_choice: str) -> bool:
     """Whether ``data_choice`` renders the authoring editor instead of a view."""
-    return data_choice == AUTHOR_CHOICE or (
-        data_choice == MANUAL_SAMPLE_CHOICE
-        and st.session_state.get(_AUTHOR_EDITING_KEY) == MANUAL_SAMPLE_CHOICE
+    return data_choice == AUTHOR_CHOICE or bool(
+        st.session_state.get(_AUTHOR_EDITING_KEY) == data_choice
+        and (data_choice == MANUAL_SAMPLE_CHOICE or _stored_authoring(data_choice))
     )
 
 
-def _edit_manual_sample() -> None:
-    """Open the authoring editor on the synthetic sample (its ✏️ Edit button)."""
-    st.session_state[_AUTHOR_EDITING_KEY] = MANUAL_SAMPLE_CHOICE
+def _stored_authoring(name: str) -> str | None:
+    return st.session_state.get("_datasets", {}).get(name, {}).get("authoring")
+
+
+def _edit_authored_scanpath(token: str = MANUAL_SAMPLE_CHOICE) -> None:
+    """Open an authored dataset on its drawing canvas."""
+    st.session_state[_AUTHOR_EDITING_KEY] = token
     st.session_state["main_nav"] = _VIEW_SCANPATH
 
 
@@ -5087,15 +5088,13 @@ def _manual_sample_document() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     The seed text until it has been edited, the draft afterwards — the same
     document the editor shows, so viewing the sample never needs the editor.
     """
-    from scanpath_studio.authoring import DEFAULT_LAYOUT, default_events, layout_text
+    from scanpath_studio.authoring import DEFAULT_LAYOUT, layout_text, sample_draft
 
     draft = st.session_state.get("_manual_scanpath_drafts", {}).get(
         MANUAL_SAMPLE_CHOICE
     )
     if draft is None:
-        layout = dict(DEFAULT_LAYOUT)
-        words = layout_text(_MANUAL_SAMPLE_TEXT, **layout)
-        return words, default_events(words), layout
+        draft = sample_draft()
     text, layout, events = draft
     layout = {**DEFAULT_LAYOUT, **layout}
     return layout_text(text, **layout), events, layout
@@ -5115,19 +5114,17 @@ def _manual_sample_canvas() -> tuple[int, int]:
     The sample declares its own screen: without it the figure inherits the
     previous source's (the demo's 2560 × 1440) and six words sit in a corner.
     """
+    from scanpath_studio.authoring import canvas_size
+
     words, _events, layout = _manual_sample_document()
-    height = 480
-    if not words.empty:
-        height = max(
-            height,
-            int(words["y"].max() + words["height"].max() + layout["margin"]),
-        )
-    return int(layout["canvas_width"]), height
+
+    return canvas_size(words, layout)
 
 
 def _cancel_authoring() -> None:
-    if st.session_state.get(_AUTHOR_EDITING_KEY) == MANUAL_SAMPLE_CHOICE:
-        # Back out of the sample's editor to the sample itself.
+    if source := st.session_state.get(_AUTHOR_EDITING_KEY):
+        if _stored_authoring(source):
+            _forget_author_draft(source)
         st.session_state.pop(_AUTHOR_EDITING_KEY, None)
         st.session_state["main_nav"] = _VIEW_SCANPATH
         return
@@ -5141,16 +5138,23 @@ def _cancel_authoring() -> None:
 #: left out of date (`authoring.stale_target_words`). Flagged on the editor,
 #: never rewritten.
 _AUTHOR_STALE_TARGETS_KEY = "_author_stale_targets"
-#: ``{source: (text, layout, events)}`` — the draft before the last change that
-#: removed, moved or retimed fixations (`authoring.destructive_change`). One
-#: step, swapped with the current draft by **Restore previous draft**.
-_AUTHOR_PREVIOUS_DRAFT_KEY = "_author_previous_drafts"
 #: What the downloaded draft file is called — the name Share → Code's
 #: snippet reads it by (`url_state._snippet_source`).
 AUTHORING_FILE_NAME = "scanpath.json"
 
 
-def _load_author_draft(source: str, draft: tuple) -> None:
+def _forget_author_draft(source: str) -> None:
+    for key in (
+        "_manual_scanpath_drafts",
+        "_author_history",
+        "_author_draft_flags",
+        _AUTHOR_STALE_TARGETS_KEY,
+        "_author_saved_base",
+    ):
+        st.session_state.get(key, {}).pop(source, None)
+
+
+def _load_author_draft(source: str, draft: tuple, stale: dict | None = None) -> None:
     """Put ``draft`` — ``(text, layout, events)`` — on the authoring screen.
 
     Written before the widgets render (a callback), and the table remounts from
@@ -5158,35 +5162,48 @@ def _load_author_draft(source: str, draft: tuple) -> None:
     text, layout, events = draft
     st.session_state["author_text"] = text
     st.session_state["_author_layout"] = dict(layout)
+    st.session_state["author_right_to_left"] = bool(layout.get("right_to_left"))
     st.session_state["_authored_events_frame"] = events.copy()
     st.session_state["_author_text_for_events"] = text
     st.session_state["_author_selected_fixation"] = None
     st.session_state["_author_events_editor_revision"] = (
         int(st.session_state.get("_author_events_editor_revision", 0)) + 1
     )
-    st.session_state.setdefault(_AUTHOR_STALE_TARGETS_KEY, {}).pop(source, None)
+    st.session_state.setdefault(_AUTHOR_STALE_TARGETS_KEY, {})[source] = dict(
+        stale or {}
+    )
 
 
-def _restore_previous_author_draft(source: str) -> None:
-    """Swap the current draft with the one before the last destructive edit.
+def _step_author_history(source: str, redo: bool = False) -> None:
+    undo, forward = st.session_state["_author_history"][source]
+    before, after = (forward, undo) if redo else (undo, forward)
+    if before:
+        drafts = st.session_state["_manual_scanpath_drafts"]
+        flags = st.session_state.setdefault("_author_draft_flags", {})
+        after.append((drafts[source], flags.get(source, {})))
+        drafts[source], flags[source] = before.pop()
+        _load_author_draft(source, drafts[source], flags[source])
 
-    Pressing it again swaps back, so a restore is never itself a loss."""
-    previous = st.session_state.get(_AUTHOR_PREVIOUS_DRAFT_KEY, {}).get(source)
-    drafts = st.session_state.setdefault("_manual_scanpath_drafts", {})
-    if previous is None:
+
+def _upload_author_draft(source: str) -> None:
+    from scanpath_studio.authoring import parse_authoring_document
+
+    uploaded = st.session_state.get(f"author_restore_upload_{source}")
+    st.session_state.pop("_author_upload_error", None)
+    if uploaded is None:
         return
-    current = drafts.get(source)
-    _load_author_draft(source, previous)
-    drafts[source] = previous
-    if current is not None:
-        st.session_state[_AUTHOR_PREVIOUS_DRAFT_KEY][source] = current
+    try:
+        document = parse_authoring_document(uploaded.getvalue().decode("utf-8"))
+    except (ValueError, OverflowError) as exc:
+        st.session_state["_author_upload_error"] = str(exc)
+        return
+    _load_author_draft(source, (document.text, document.layout, document.events))
 
 
 def _reset_author_fixations(source: str, words: pd.DataFrame) -> None:
     """Replace the fixations with one per word — the explicit regeneration.
 
-    The draft it replaces becomes the previous draft at the end of the run
-    (a destructive change), so **Restore previous draft** brings it back."""
+    Undo restores the draft it replaces."""
     from scanpath_studio.authoring import default_events
 
     st.session_state["_authored_events_frame"] = default_events(words)
@@ -5197,7 +5214,8 @@ def _reset_author_fixations(source: str, words: pd.DataFrame) -> None:
     st.session_state.setdefault(_AUTHOR_STALE_TARGETS_KEY, {}).pop(source, None)
 
 
-def _save_authored_dataset(name_key: str) -> None:
+def _save_authored_dataset(name_key: str, *, as_copy: bool = False) -> None:
+    from scanpath_studio.authoring import canvas_size, parse_authoring_document
     from scanpath_studio.wizard import _new_dataset_token, _safe_dataset_name
 
     payload = st.session_state.pop("_author_save_payload", None)
@@ -5206,9 +5224,32 @@ def _save_authored_dataset(name_key: str) -> None:
     requested = str(st.session_state.get(name_key) or "My saved scanpath").strip()
     if requested in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
         requested += " (saved)"
-    name = _new_dataset_token(_safe_dataset_name(requested))
-    st.session_state.setdefault("_datasets", {})[name] = payload
+    source = st.session_state.get("data_source_choice")
+    stored = st.session_state.setdefault("_datasets", {})
+    if _stored_authoring(source) and not as_copy:
+        name = source
+        previous = stored[name]
+        changes = {k: payload[k] for k in ("words", "fixations", "authoring")}
+        # Follow the new drawing's dimensions if the screen still matches the
+        # old drawing. Keep any independently configured screen or other table.
+        if not previous.get("setup"):
+            changes["setup"] = payload["setup"]
+        else:
+            screen = SetupSnapshot.from_dict(previous["setup"]).canvas
+            if screen != SetupSnapshot.from_dict(payload["setup"]).canvas:
+                original = parse_authoring_document(previous["authoring"])
+                if screen == canvas_size(previous["words"], original.layout):
+                    changes["setup"] = payload["setup"]
+        stored[name] = {**previous, **changes}
+    else:
+        name = _new_dataset_token(_safe_dataset_name(requested))
+        stored[name] = payload
     dataset_share_id(st.session_state, name)
+    if source != MANUAL_SAMPLE_CHOICE:
+        _forget_author_draft(source)
+        for key in ("_author_text_for_events", "_authored_events_frame", "author_text"):
+            st.session_state.pop(key, None)
+    st.session_state.pop(_AUTHOR_EDITING_KEY, None)
     # The draft's annotations were made on the scanpath being saved,
     # so they become the saved dataset's. The name is safe, so it holds none.
     if st.session_state.get("data_source_choice") == AUTHOR_CHOICE:
@@ -6170,6 +6211,14 @@ def render_dataset_inspection_head(token: str) -> None:
     label = md_literal(dataset_table.short_name(_dataset_display_name(token)))
     st.subheader(f"{ICONS['search']} What's in **{label}**")
     _render_dataset_overview(token, registry=public_dataset_registry())
+    if _stored_authoring(token):
+        st.button(
+            "Dataset settings",
+            key="author_dataset_settings",
+            on_click=_edit_open_dataset,
+            args=(token,),
+            kwargs={"settings_only": True},
+        )
 
 
 def _builtin_name_draft(token: str) -> str | None:
@@ -6962,7 +7011,7 @@ def _open_dataset_row(token: str) -> None:
     _select_dataset(token)
 
 
-def _edit_open_dataset(token: str) -> None:
+def _edit_open_dataset(token: str, *, settings_only: bool = False) -> None:
     """✏️ **Edit dataset**, under the open dataset's overview.
 
     Raises ✏️ Edit dataset on it — the description, the column mapping, the
@@ -6971,8 +7020,10 @@ def _edit_open_dataset(token: str) -> None:
     for the mapping editor's "editing <name>". The manual sample has no mapping
     to edit: its editor is the authoring canvas.
     """
-    if token == MANUAL_SAMPLE_CHOICE:
-        _edit_manual_sample()
+    if not settings_only and (
+        token == MANUAL_SAMPLE_CHOICE or _stored_authoring(token)
+    ):
+        _edit_authored_scanpath(token)
         return
     if not st.session_state.get(DATASET_EDITOR_OPEN_KEY):
         # The Name and Description fields (and the stimulus-image fields)
@@ -7250,7 +7301,7 @@ def _render_dataset_table_row(grid, row: DatasetRow) -> None:
         on_click=_edit_dataset_row,
         args=(row.token,),
         help="Open the editor to change the text, drag fixations, or edit their timing."
-        if row.token == MANUAL_SAMPLE_CHOICE
+        if row.token == MANUAL_SAMPLE_CHOICE or _stored_authoring(row.token)
         else f"Edit {short}: its name, description, column mapping, "
         "recording setup, location and metadata tables.",
     )
@@ -8441,13 +8492,15 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         apply_authoring_event,
         authored_fixations,
         authoring_json,
+        canvas_size,
         default_events,
-        destructive_change,
+        draft_filename,
         event_problems,
         layout_problems,
         layout_text,
         parse_authoring_document,
         reconcile_event_table,
+        sample_draft,
         stale_target_words,
         unresolved_targets,
         unusable_event_rows,
@@ -8458,80 +8511,86 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     drafts = st.session_state.setdefault("_manual_scanpath_drafts", {})
     previous = st.session_state.get("_author_editor_source")
     if previous != source:
-        document = drafts.get(source)
-        if document is None and (
-            source == MANUAL_SAMPLE_CHOICE or previous is not None
-        ):
-            seed_text = (
-                _MANUAL_SAMPLE_TEXT
-                if source == MANUAL_SAMPLE_CHOICE
-                else "Reading unfolds through a sequence of careful eye movements."
-            )
-            document = (
-                seed_text,
-                dict(DEFAULT_LAYOUT),
-                default_events(layout_text(seed_text)),
-            )
-        if document is not None:
-            seed_text, seed_layout, seed_events = document
-            st.session_state["author_text"] = seed_text
-            st.session_state["_author_layout"] = seed_layout
-            st.session_state["_authored_events_frame"] = seed_events
-            st.session_state["_author_text_for_events"] = seed_text
-            st.session_state["_author_selected_fixation"] = None
-            st.session_state["_author_events_editor_revision"] = (
-                int(st.session_state.get("_author_events_editor_revision", 0)) + 1
-            )
-        st.session_state["_author_editor_source"] = source
-    header = st.container(horizontal=True, vertical_alignment="center")
-    header.subheader(
-        f"{ICONS['author']} "
-        + (
-            "Edit the hand-drawn sample"
-            if source == MANUAL_SAMPLE_CHOICE
-            else "Draw a scanpath"
+        saved = _stored_authoring(source)
+        draft = drafts.get(source)
+        saved_base = st.session_state.setdefault("_author_saved_base", {})
+        reload_saved = saved and (draft is None or saved_base.get(source) != saved)
+        if reload_saved:
+            saved_base[source] = saved
+            restored = parse_authoring_document(saved)
+            draft = (restored.text, restored.layout, restored.events)
+            drafts[source] = draft
+            st.session_state.setdefault("_author_history", {}).pop(source, None)
+        elif draft is None and source == MANUAL_SAMPLE_CHOICE:
+            draft = sample_draft()
+        elif draft is None:
+            draft = ("", dict(DEFAULT_LAYOUT), default_events(pd.DataFrame()))
+        flags = (
+            {}
+            if reload_saved
+            else st.session_state.get("_author_draft_flags", {}).get(source)
         )
+        _load_author_draft(source, draft, flags)
+        st.session_state.pop("_author_upload_error", None)
+        st.session_state["_author_editor_source"] = source
+    named = bool(_stored_authoring(source))
+    display_name = _dataset_display_name(source) if named else source
+    header = st.container(horizontal=True, vertical_alignment="center")
+    title = "Draw a scanpath"
+    if named:
+        title = f"Edit {display_name}"
+    elif source == MANUAL_SAMPLE_CHOICE:
+        title = "Edit the hand-drawn sample"
+    header.subheader(f"{ICONS['author']} {title}")
+    header.button(
+        "Cancel" if named else "Back",
+        key="cancel_authoring",
+        on_click=_cancel_authoring,
+        help="Return to the scanpath. This draft stays in the session."
+        if not named
+        else "Discard edits to this drawing.",
     )
-    header.button("Cancel", key="cancel_authoring", on_click=_cancel_authoring)
-    st.caption(
-        "Write the stimulus, then click or drag on the canvas to place "
-        "fixations. A fixation is drawn at its X/Y, and its optional target word "
-        "does not move it. The **Fixation table** edits the same fixations from "
-        "the keyboard."
-    )
-    restored = st.file_uploader(
-        "Load a saved draft",
-        type=["json"],
-        key=f"author_restore_upload_{source}",
-        help="Load a draft file (JSON) saved earlier from this screen.",
-        max_upload_size=upload_limit_mb(),
-    )
-    if restored is not None:
-        identity = (source, restored.name, restored.size)
-        if st.session_state.get("_author_restore_identity") != identity:
-            try:
-                document = parse_authoring_document(restored.getvalue().decode("utf-8"))
-            except (ValueError, UnicodeDecodeError) as exc:
-                st.error(f"Couldn't restore this file: {exc}")
-            else:
-                # The draft it replaces becomes the previous draft at the end
-                # of this run, so Restore previous draft brings it back.
-                _load_author_draft(
-                    source, (document.text, document.layout, document.events)
-                )
-                st.session_state["_author_restore_identity"] = identity
-
-    st.session_state.setdefault(
-        "author_text", "Reading unfolds through a sequence of careful eye movements."
-    )
+    with st.expander("Load a saved draft"):
+        st.file_uploader(
+            "Draft file (JSON)",
+            type=["json"],
+            key=f"author_restore_upload_{source}",
+            max_upload_size=upload_limit_mb(),
+            on_change=_upload_author_draft,
+            args=(source,),
+        )
+    if error := st.session_state.get("_author_upload_error"):
+        st.error(f"Couldn't restore this file: {error}")
+    st.session_state.setdefault("author_text", "")
     text = st.text_area(
         "Stimulus text",
         key="author_text",
+        placeholder="Type or paste the passage you want to draw on.",
         persist_state="session",
         height=100,
     )
     layout = {**DEFAULT_LAYOUT, **st.session_state.get("_author_layout", {})}
+    st.session_state.setdefault(
+        "author_right_to_left", bool(layout.get("right_to_left"))
+    )
+    layout["right_to_left"] = int(
+        st.checkbox(
+            "Right-to-left text",
+            key="author_right_to_left",
+            help="Lay words out from right to left. Existing X/Y coordinates stay where you placed them.",
+        )
+    )
+    st.session_state["_author_layout"] = layout
     words = layout_text(text, **layout)
+    tools = st.container(horizontal=True, vertical_alignment="center")
+    tools.button(
+        "Reset to one fixation per word",
+        key=f"author_reset_fixations_{source}",
+        disabled=words.empty,
+        on_click=_reset_author_fixations,
+        args=(source, words),
+        help="Place one 220 ms fixation at the center of each word.",
+    )
     with st.expander("Word boxes", expanded=False):
         if words.empty:
             st.info(
@@ -8695,19 +8754,19 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
             st.session_state[_AUTHOR_STALE_TARGETS_KEY].pop(source, None)
             st.rerun()
 
-    canvas_height = max(
-        480,
-        int(words["y"].max() + words["height"].max() + layout["margin"])
-        if not words.empty
-        else 480,
-    )
+    fixations = authored_fixations(words, effective_events)
+    _, canvas_height = canvas_size(words, layout)
     with canvas_panel:
         canvas_event = render_authoring_canvas(
             words,
-            effective_events,
+            fixations,
             canvas_width=layout["canvas_width"],
             canvas_height=canvas_height,
             selected_fixation_id=selected,
+            revision=editor_revision,
+            editable=events_valid,
+            source=source,
+            right_to_left=bool(layout["right_to_left"]),
         )
     if canvas_event:
         try:
@@ -8729,11 +8788,12 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
             st.session_state["_author_events_editor_revision"] = editor_revision + 1
             st.rerun()
 
-    fixations = authored_fixations(words, effective_events)
     name_key = f"author_dataset_name_{source}"
     st.text_input(
-        "Dataset name",
-        value="Hand-drawn sample (edited)"
+        "Name for a copy" if named else "Dataset name",
+        value=f"{display_name} (copy)"
+        if named
+        else "Hand-drawn sample (edited)"
         if source == MANUAL_SAMPLE_CHOICE
         else "My saved scanpath",
         key=name_key,
@@ -8742,19 +8802,30 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         # Read only by the Save dataset callback.
         on_change="ignore",
     )
-    can_save = events_valid and not words.empty and not fixations.empty and not dropped
+    can_save = events_valid and not fixations.empty and not dropped
     if can_save:
+        setup = SetupSnapshot.from_dict(
+            st.session_state.get("_datasets", {}).get(source, {}).get("setup") or {},
+            fallback=SetupSnapshot(),
+        )
+        setup = replace(
+            setup,
+            canvas_width=layout["canvas_width"],
+            canvas_height=canvas_height,
+            screen_provenance=Provenance.MEASURED,
+        )
         st.session_state["_author_save_payload"] = {
             "words": words,
             "fixations": fixations,
             "raw_gaze": pd.DataFrame(),
             "authoring": authoring_json(text, effective_events, layout=layout),
+            "setup": setup.to_dict(),
         }
     else:
         st.session_state.pop("_author_save_payload", None)
     actions = st.container(horizontal=True, vertical_alignment="center")
     actions.button(
-        "Save dataset",
+        "Save changes" if named else "Save dataset",
         icon=ICONS["save"],
         key="save_authored_dataset",
         type="primary",
@@ -8762,10 +8833,18 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         on_click=_save_authored_dataset,
         args=(name_key,),
     )
+    if named:
+        actions.button(
+            "Save as copy",
+            disabled=not can_save,
+            on_click=_save_authored_dataset,
+            args=(name_key,),
+            kwargs={"as_copy": True},
+        )
     actions.download_button(
         "Download draft (JSON)",
         data=authoring_json(text, effective_events, layout=layout),
-        file_name=AUTHORING_FILE_NAME,
+        file_name=draft_filename(display_name) if named else AUTHORING_FILE_NAME,
         mime="application/json",
         icon=ICONS["download"],
         key=f"author_download_{source}",
@@ -8777,35 +8856,32 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
             "draft**, or in a script with `load_authored_scanpath`."
         ),
     )
-    previous = st.session_state.get(_AUTHOR_PREVIOUS_DRAFT_KEY, {}).get(source)
-    actions.button(
-        "Restore previous draft",
-        icon=ICONS["undo"],
-        key=f"author_restore_previous_{source}",
-        disabled=previous is None,
-        on_click=_restore_previous_author_draft,
-        args=(source,),
-        help=(
-            "Go back one step, to the draft before the last change that removed, "
-            "moved or retimed fixations. Press again to switch back."
-        ),
-    )
-    actions.button(
-        "Reset to one fixation per word",
-        key=f"author_reset_fixations_{source}",
-        disabled=words.empty,
-        on_click=_reset_author_fixations,
-        args=(source, words),
-        help=(
-            "Replace every fixation with one per word, 220 ms each. "
-            "**Restore previous draft** brings the current ones back."
-        ),
-    )
     draft = (text, dict(layout), effective_events.copy())
     last = drafts.get(source)
-    if events_valid and last is not None and destructive_change(last[2], draft[2]):
-        st.session_state.setdefault(_AUTHOR_PREVIOUS_DRAFT_KEY, {})[source] = last
-    drafts[source] = draft
+    undo, redo = st.session_state.setdefault("_author_history", {}).setdefault(
+        source, ([], [])
+    )
+    if events_valid:
+        if last is not None and (last[:2] != draft[:2] or not last[2].equals(draft[2])):
+            undo.append(
+                (last, st.session_state.get("_author_draft_flags", {}).get(source, {}))
+            )
+            del undo[:-30]
+            redo.clear()
+        drafts[source] = draft
+        st.session_state.setdefault("_author_draft_flags", {})[source] = dict(
+            st.session_state.get(_AUTHOR_STALE_TARGETS_KEY, {}).get(source, {})
+        )
+    tools.button(
+        "Undo",
+        icon=ICONS["undo"],
+        disabled=not undo,
+        on_click=_step_author_history,
+        args=(source,),
+    )
+    tools.button(
+        "Redo", disabled=not redo, on_click=_step_author_history, args=(source, True)
+    )
     return words, fixations
 
 
@@ -9394,6 +9470,10 @@ def _run_app() -> None:
     elif url_source == "synthetic":
         linked_choice = st.session_state.setdefault(
             "data_source_choice", SYNTHETIC_CHOICE
+        )
+    elif url_source == "manual_sample":
+        linked_choice = st.session_state.setdefault(
+            "data_source_choice", MANUAL_SAMPLE_CHOICE
         )
     elif url_source == "author":
         linked_choice = st.session_state.setdefault("data_source_choice", AUTHOR_CHOICE)
@@ -10054,7 +10134,7 @@ def _run_app() -> None:
         raw_words_df, raw_fixations_df = words_df, fixations_df
         raw_gaze_df = pd.DataFrame()
         mapping_problems = []
-    elif data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+    elif _authoring_editor_open(data_choice):
         with view_notices:
             words_df, fixations_df = _render_authoring_source()
         if active_view == _VIEW_SCANPATH:
@@ -10553,12 +10633,23 @@ def _run_app() -> None:
     # (words-only / fixations-only / raw-gaze-only datasets); all empty means the
     # filters removed everything.
     if words_filtered.empty and fixations_filtered.empty and raw_gaze_filtered.empty:
-        _render_empty_after_filtering(
-            words_all,
-            fixations_all,
-            trial_filters,
-            pool_filter_frames(words_all, fixations_all, raw_gaze_all),
-        )
+        if (
+            data_choice == AUTHOR_CHOICE
+            and active_view == _VIEW_CORPUS
+            and words_all.empty
+            and fixations_all.empty
+        ):
+            render_data_source_picker(host=view_notices)
+            view_notices.info(
+                "The drawing is empty. Choose another dataset or add fixations on the Scanpath page."
+            )
+        else:
+            _render_empty_after_filtering(
+                words_all,
+                fixations_all,
+                trial_filters,
+                pool_filter_frames(words_all, fixations_all, raw_gaze_all),
+            )
         _finish_page()
         _render_datasets_table(words_all, fixations_all, raw_gaze_all)
         _end_loading()

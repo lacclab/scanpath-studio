@@ -25,6 +25,24 @@ the :material/database: **Data Management** page:
 - **+** → :material/draw: **Draw a scanpath**: write a text and place its
   fixations by hand.
 
+### Draw a scanpath
+
+Choose **+ → Draw a scanpath**, then type your passage. In **Draw** mode, click
+the words in reading order. Click a word twice for two visits, or click the
+space between words for a fixation without a target. For a regular sequence,
+**Reset to one fixation per word** places a 220 ms fixation on each word.
+
+Use **Select & move** to drag a marker. The **Fixation** list lets you select
+visits that land on top of one another. Change **Duration (ms)** and use
+**Play preview** to check the timing. The **Fixation table** also accepts
+keyboard edits. Leaving both coordinates empty places the fixation at the
+center of its target word.
+
+**Save dataset** opens the figure. To revise it, go to **Data Management** and
+click **Edit** on its row. **Save changes** updates the drawing, and **Save as
+copy** keeps a separate version. For another computer, download the editable
+draft from **Share** and open it with **Load a saved draft** in the drawing editor.
+
 ### OneStop { #onestop }
 
 The bundled demo comes from [OneStop Eye Movements](https://github.com/lacclab/OneStop-Eye-Movements)

@@ -975,6 +975,9 @@ class TestAddDatasetMenu:
         )
         assert not any(t.key == "author_text" for t in at.text_area)
         _open_editor()
+        if source == AUTHOR_CHOICE:
+            at.text_area(key="author_text").set_value("My example text").run()
+            at.button(key=f"author_reset_fixations_{source}").click().run()
         at.text_input(key=f"author_dataset_name_{source}").set_value("My example").run(
             timeout=60
         )
@@ -1100,6 +1103,10 @@ class TestAuthoringEditorFlow:
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = AUTHOR_CHOICE
         at.run(timeout=60)
+        at.text_area(key="author_text").set_value(
+            "Reading unfolds through several words."
+        ).run()
+        at.button(key=f"author_reset_fixations_{AUTHOR_CHOICE}").click().run()
         return at
 
     @staticmethod

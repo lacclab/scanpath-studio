@@ -23,7 +23,15 @@ import streamlit as st
 from scanpath_studio.cite_button import render_cite_button
 from scanpath_studio.html_embed import embed_html_iframe
 
-from .authoring import event_records_frame
+from .authoring import (
+    DEFAULT_LAYOUT,
+    authoring_json,
+    default_events,
+    draft_filename,
+    layout_text,
+    parse_authoring_document,
+    sample_draft,
+)
 from .code_snippet import (
     INSTALL_COMMAND,
     SNIPPET_STATE_KEY,
@@ -1054,7 +1062,7 @@ def _clamp_url_value(state_key: str, value):
 # one entry each. Mirrors the `source` handling in `main()`.
 _SHAREABLE_SOURCES = {
     AUTHOR_CHOICE: "author",
-    MANUAL_SAMPLE_CHOICE: "author",
+    MANUAL_SAMPLE_CHOICE: "manual_sample",
     DEMO_CHOICE: "demo",
     ONESTOP_CHOICE: "onestop",
     SYNTHETIC_CHOICE: "synthetic",
@@ -1473,26 +1481,48 @@ def _apply_url_preset() -> str | None:
         if parts:
             st.session_state.setdefault("onestop_parts", parts)
 
-    if (qp.get("source") or "").lower() == "author":
-        if "author_text" in qp:
-            st.session_state.setdefault("author_text", str(qp["author_text"]))
-        if "author_events" in qp:
-            # The whole build — parse, shape check, table, normalization — sits
-            # inside the boundary: a hand-edited `[{"x":100},1]` passes a list
-            # check and raises from `pd.DataFrame`, which would stop the app
-            # before it drew anything. The text is kept either way.
+    author_source = (qp.get("source") or "").lower()
+    if author_source in {"author", "manual_sample"} and any(
+        key in qp for key in ("author_text", "author_events", "author_layout")
+    ):
+        text = str(qp.get("author_text", ""))
+        signature = (
+            author_source,
+            text,
+            qp.get("author_layout"),
+            qp.get("author_events"),
+        )
+        if signature != st.session_state.get("_author_link_seen"):
+            st.session_state["_author_link_seen"] = signature
+            source_key = (
+                AUTHOR_CHOICE if author_source == "author" else MANUAL_SAMPLE_CHOICE
+            )
+            drafts = st.session_state.setdefault("_manual_scanpath_drafts", {})
             try:
-                events = event_records_frame(json.loads(str(qp["author_events"])))
-            except (ValueError, TypeError, RecursionError):
-                st.warning("Ignored the link's unreadable authored scanpath.")
-            else:
-                st.session_state.setdefault("_authored_events_frame", events)
-                # Prevent the authoring widget's text-change initializer from
-                # replacing the just-restored events on its first render.
-                st.session_state.setdefault(
-                    "_author_text_for_events",
-                    str(qp.get("author_text", st.session_state.get("author_text", ""))),
+                document = parse_authoring_document(
+                    json.dumps(
+                        {
+                            "schema": 2,
+                            "text": text,
+                            "layout": json.loads(str(qp.get("author_layout", "{}"))),
+                            "fixations": json.loads(str(qp.get("author_events", "[]"))),
+                        }
+                    )
                 )
+            except (ValueError, TypeError, OverflowError, RecursionError):
+                st.warning("Ignored the link's unreadable authored scanpath.")
+                if author_source == "author":
+                    drafts.setdefault(
+                        source_key,
+                        (text, dict(DEFAULT_LAYOUT), default_events(layout_text(text))),
+                    )
+            else:
+                events = (
+                    document.events
+                    if "author_events" in qp
+                    else default_events(layout_text(text, **document.layout))
+                )
+                drafts.setdefault(source_key, (text, document.layout, events))
 
     source = qp.get("source")
     return source.lower() if source else None
@@ -3730,7 +3760,19 @@ def _build_share_query(
             params[PARAM_DATASET] = _dataset_display_name(data_choice)
             params[PARAM_DATASET_ID] = dataset_share_id(st.session_state, data_choice)
             params[PARAM_DATASET_DIGEST] = share_dataset_fingerprint(stored)
-        if is_multipleye_entry(stored):
+        if stored and stored.get("authoring"):
+            gaze = stored.get("raw_gaze")
+            restore_gaze = (
+                " Attach the same raw gaze table before opening the link."
+                if gaze is not None and not gaze.empty
+                else ""
+            )
+            caveats.append(
+                "Send the editable draft with this link. Before opening the link, load the draft in "
+                f"**Draw a scanpath** and save it as **{md_literal(params[PARAM_DATASET])}**."
+                + restore_gaze
+            )
+        elif is_multipleye_entry(stored):
             # A session set is read as it is laid out, with no mapping to
             # send: the recipient adds the same session set.
             caveats.append(
@@ -3751,15 +3793,15 @@ def _build_share_query(
             )
 
     if data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
-        params["author_text"] = str(st.session_state.get("author_text", ""))
-        events = st.session_state.get("_authored_events_frame")
         draft = st.session_state.get("_manual_scanpath_drafts", {}).get(data_choice)
         if draft is not None:
-            events = draft[2]
-        if isinstance(events, pd.DataFrame):
-            params["author_events"] = json.dumps(
-                events.to_dict("records"), separators=(",", ":")
+            text, layout, events = draft
+            params["author_text"] = text
+            params["author_events"] = events.to_json(
+                orient="records", double_precision=15
             )
+            if layout != DEFAULT_LAYOUT:
+                params["author_layout"] = json.dumps(layout, separators=(",", ":"))
 
     selection = st.session_state.get("_share_selection") or {}
     participant = selection.get("participant_id")
@@ -4271,17 +4313,16 @@ def _snippet_source(data_choice: str) -> SnippetSource:
         return SnippetSource(kind=SOURCE_DEMO, label=shown)
     if data_choice == SYNTHETIC_CHOICE:
         return SnippetSource(kind=SOURCE_SYNTHETIC, label=shown)
-    if data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+    stored = (st.session_state.get("_datasets") or {}).get(data_choice)
+    if data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE) or (
+        stored and stored.get("authoring")
+    ):
+        path = draft_filename(shown) if stored else "scanpath.json"
         return SnippetSource(
             kind=SOURCE_AUTHOR,
             label=shown,
-            options={"path": "scanpath.json"},
-            note=(
-                "An authored scanpath exists only in the app. Save it first with "
-                "**Download draft (JSON)** on *Draw a scanpath* (the file is "
-                "`scanpath.json`, which the snippet reads), then run the snippet "
-                "in the same folder."
-            ),
+            options={"path": path},
+            note=f"Download the editable draft as `{path}` and run the snippet in the same folder.",
         )
 
     corpus_label, spec = _selected_corpus(data_choice)
@@ -4497,6 +4538,29 @@ def _render_share_body(
         )
         or SHARE_LINK
     )
+    stored = st.session_state.get("_datasets", {}).get(data_choice, {})
+    if visible and choice in (SHARE_LINK, SHARE_CODE):
+        payload = stored.get("authoring")
+        if data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):
+            draft = st.session_state.get("_manual_scanpath_drafts", {}).get(data_choice)
+            if draft is None and data_choice == MANUAL_SAMPLE_CHOICE:
+                draft = sample_draft()
+            if draft is not None:
+                text, layout, events = draft
+                payload = authoring_json(text, events, layout=layout)
+        if payload:
+            from .app import _dataset_display_name
+
+            st.download_button(
+                "Download editable draft",
+                data=payload,
+                file_name=draft_filename(_dataset_display_name(data_choice))
+                if stored
+                else "scanpath.json",
+                mime="application/json",
+                key="share_authored_draft",
+                on_click="ignore",
+            )
     if choice == SHARE_CODE:
         _render_code_snippet_body(data_choice)
         return

@@ -36,7 +36,7 @@ lists the four render views. The reference and compact Share snippets use
 | `marker_size_scale`, `marker_duration_range`, `duration_size_legend` | ✅ | ✅ | ✅ | One duration scale; the size key draws in Compare only while A and B share a px range |
 | `fix_index_range` | ✅ | ✅ | ✅ | Sliced in `tabs._slice_fix_range`; Compare's B has its own window (`single_compare_fix_range`) |
 | `fixation_flags` (short / long / out-of-bounds) | ✅ | ✅ | ✅ | Compare applies each scanpath's own (B: `cmp1_fixclass_*`) |
-| `illustration_label` / `illustration_text` | ✅ | ✅ | ❌ | `compare_scanpaths` takes no label; the app stamps it itself |
+| `illustration_label` / `illustration_text` | ✅ | ✅ | ✅ | An authored drawing on either side of a comparison qualifies for the automatic label |
 | drift correction (`align_algorithm`) | ✅ | ✅ | ✅ | Experimental; `tabs._drift_corrected` runs once above the mode split; "Off" returns the same frame object |
 | drift connectors (`align_connectors`) | ✅ | ❌ | ❌ | Only the static figure has the original→corrected layer |
 | `fixation_snap_to_line` / `_position`, Arc saccades | ✅ | ❌ | ❌ | The linear-reading schematic |

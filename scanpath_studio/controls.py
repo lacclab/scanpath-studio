@@ -1589,13 +1589,16 @@ def _apply_view_preset(name: str) -> None:
         for key in list(ss)
         if _is_design_key(key) or _is_restorable_global(key)
     }
+    # Callbacks receive the browser's values before the script reconciles
+    # closed popovers. Snapshot the design that was actually on screen.
+    reassert_pending_writes()
     try:
         _apply_view_preset_state(ss, name, saved)
     finally:
         _hold_view_writes(ss, before)
 
 
-def _hold_view_writes(ss, before: dict) -> None:
+def _hold_view_writes(ss, before: dict, *, after_reset: bool = False) -> None:
     """Hold every value a design preset changed in a popover (see `write_through`).
 
     A popover widget the user has opened keeps echoing the value it last
@@ -1611,10 +1614,16 @@ def _hold_view_writes(ss, before: dict) -> None:
     hold would read the user flipping one back as that echo and undo it.
     """
     for key, old in before.items():
-        if key in _SEEDED_VIEW_KEYS or key in _MOUNTED_VIEW_KEYS or key not in ss:
+        if key in _MOUNTED_VIEW_KEYS or key not in ss:
             continue
+        if key in _SEEDED_VIEW_KEYS and not after_reset:
+            continue  # a design callback has not re-seeded from the dataset yet
         if _write_match_key(ss[key]) != _write_match_key(old):
-            write_through(key, ss[key], shown=old)
+            write_through(key, ss[key], shown=old, in_callback=not after_reset)
+        elif key in (pending := ss.get(_PENDING_WRITES_KEY, {})):
+            # The new design agrees with the browser. A hold for the
+            # previous design would overwrite it when the script starts.
+            pending.pop(key)
 
 
 #: Keys `app.seed_canvas_state` / the font and raw-gaze seeding refill after a
@@ -2540,7 +2549,9 @@ def _write_match_key(value):
     return _palette_match_key(value)
 
 
-def write_through(key: str, value, *, shown=_SHOWN_IN_STATE) -> None:
+def write_through(
+    key: str, value, *, shown=_SHOWN_IN_STATE, in_callback: bool = True
+) -> None:
     """Write ``value`` to a widget's key so that a closed popover cannot undo it.
 
     A widget inside an ``st.popover`` is mounted in the browser only
@@ -2560,7 +2571,8 @@ def write_through(key: str, value, *, shown=_SHOWN_IN_STATE) -> None:
     once the widget took the write. A pick of exactly the old value reads as
     the echo, since nothing the browser sends tells the two apart — which is
     why a widget that is always on screen is written plainly instead.
-    Call it from a callback, like any write to a widget key.
+    A reset can resolve dataset defaults only in the script, before the
+    widgets render. In that case the next run is already the browser's reply.
     """
     ss = st.session_state
     pending = dict(ss.get(_PENDING_WRITES_KEY) or {})
@@ -2574,7 +2586,7 @@ def write_through(key: str, value, *, shown=_SHOWN_IN_STATE) -> None:
     else:
         stale = deepcopy(ss[key]) if key in ss else _ECHO_UNKNOWN
     ss[key] = value
-    pending[key] = [deepcopy(value), stale, True]
+    pending[key] = [deepcopy(value), stale, in_callback]
     ss[_PENDING_WRITES_KEY] = pending
 
 
@@ -6040,6 +6052,9 @@ def _seed_viz_state(
                 if field in fix_hover_options
             ],
         )
+    before_reset = ss.pop("_viz_before_reset", None)
+    if before_reset is not None:
+        _hold_view_writes(ss, before_reset, after_reset=True)
     return color_fields, numeric_fields, highlight_options
 
 
@@ -8925,9 +8940,15 @@ def render_plot_controls(
             "Vertical position over time": (charts.ELAPSED, "y"),
         }
 
+        # This picker applies a command. Remount it after a selection so a
+        # closed popover cannot send the last command again on later reruns.
+        generation = st.session_state.get("_axis_preset_generation", 0)
+        picker_key = f"_axis_chart_preset_{generation}"
+
         def apply_axis_preset():
-            choice = st.session_state.pop("_axis_chart_preset", None)
+            choice = st.session_state.get(picker_key)
             if choice in presets:
+                st.session_state["_axis_preset_generation"] = generation + 1
                 x, y = presets[choice]
                 write_through("global_x_field", x)
                 write_through("global_y_field", y)
@@ -8941,7 +8962,7 @@ def render_plot_controls(
             ],
             index=None,
             placeholder="Choose a chart",
-            key="_axis_chart_preset",
+            key=picker_key,
             on_change=apply_axis_preset,
             disabled=axis_disabled,
         )
@@ -9591,7 +9612,16 @@ def reset_viz_settings() -> None:
     # the *view* back to defaults; the user's saved designs are a library, not
     # a view, and losing them to a reset button would be the kind of undoless
     # deletion nothing here offers.
+    # The reset dialog reruns the app. Once its dataset defaults are seeded,
+    # send them to closed popovers as well, superseding older design writes.
+    st.session_state["_viz_before_reset"] = {
+        key: deepcopy(st.session_state[key])
+        for key in keys
+        if _is_design_key(key) and key in st.session_state
+    }
+    pending = st.session_state.get(_PENDING_WRITES_KEY, {})
     for key in keys:
+        pending.pop(key, None)
         st.session_state.pop(key, None)
     # Re-seeding is source-driven for these two (see app.seed_canvas_state);
     # dropping the guard makes the canvas / font snap back to the source's

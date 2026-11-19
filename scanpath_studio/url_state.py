@@ -1693,7 +1693,9 @@ _TEXT_STATE_KEYS = frozenset(
     }
 )
 #: A data field the rail heals against the loaded data: a string, or unset.
-_FIELD_STATE_KEYS = frozenset({"global_word_hover_measure"})
+_FIELD_STATE_KEYS = frozenset(
+    {"global_word_hover_measure", "global_x_field", "global_y_field"}
+)
 #: Two-number ranges with no widget bound of their own: the colour ranges are
 #: drawn as given by the rail (its slider widens to hold them), so they only
 #: have to be numbers.

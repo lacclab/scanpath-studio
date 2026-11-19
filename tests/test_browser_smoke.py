@@ -282,6 +282,92 @@ def test_no_script_error_reached_the_page(page):
     assert page.errors == []
 
 
+def test_chart_controls_survive_navigation_presets_and_reset(app_url, browser):
+    page = _open(browser, f"{app_url}/?ui=full")
+
+    def click(key):
+        page.locator(f".st-key-{key} button").first.click()
+        _settle(page)
+
+    def switch(mode):
+        page.locator(".st-key-ui_mode_switch").get_by_text(mode, exact=True).click()
+        _settle(page)
+
+    def chart():
+        frame = _plot_frame(page, "single")
+        frame.locator("#truescale-single .main-svg").first.wait_for()
+        return frame.locator("#truescale-single").evaluate(
+            """plot => {
+                const fix = plot._fullData.find(t => t.name === "Fixations");
+                return {
+                    axes: [plot.layout.xaxis.title?.text, plot.layout.yaxis.title?.text],
+                    layers: plot.data.map(t => t.name),
+                    points: fix ? Array.from(fix.x, (x, i) => [x, fix.y[i]]) : [],
+                    mode: fix?.mode,
+                };
+            }"""
+        )
+
+    try:
+        default = chart()
+        click("split_mode_rail_figure_popover")
+        page.get_by_role("combobox", name="Axis preset").click()
+        page.get_by_role("option", name="Elapsed time by fixation index").click()
+        _settle(page)
+        page.keyboard.press("Escape")
+        click("split_mode_rail_fix_popover")
+        page.locator(".st-key-global_show_order label").click()
+        _settle(page)
+        page.keyboard.press("Escape")
+        first = chart()
+        assert first["axes"] == ["Fixation order", "Seconds since first fixation onset"]
+        assert first["mode"] == "markers+text"
+
+        switch("Essentials")
+        assert chart() == first
+        click("single_next_trial")
+        second = chart()
+        assert second["points"] != first["points"]
+        click("hidden_note_to_advanced")
+        assert chart() == second
+
+        click("viz_view_heatmap")
+        heatmap = chart()
+        assert "heatmap colorbar" in heatmap["layers"]
+        switch("Essentials")
+        assert chart() == heatmap
+        switch("Full")
+        click("viz_view_custom")
+        assert chart() == second
+        click("single_prev_trial")
+        assert chart() == first
+        click("reset_viz_settings_btn")
+        click("reset_viz_cancel")
+        assert chart() == first
+        click("reset_viz_settings_btn")
+        click("reset_viz_confirm")
+        assert chart() == default
+        switch("Essentials")
+        assert chart() == default
+        click("simple_view_heatmap")
+        assert "heatmap colorbar" in chart()["layers"]
+        switch("Full")
+        click("viz_view_illustration")
+        click("single_next_trial")
+        click("reset_viz_settings_btn")
+        click("reset_viz_confirm")
+        reset_second = chart()
+        assert reset_second["layers"] == default["layers"]
+        assert len(reset_second["points"]) == len(second["points"])
+        click("reset_viz_settings_btn")
+        click("reset_viz_confirm")
+        assert chart() == reset_second
+        assert not page.locator('[data-testid="stException"]').count()
+        assert page.errors == []
+    finally:
+        page.context.close()
+
+
 def test_simple_opens_on_the_replay_with_its_own_controls(simple_page):
     """A first visit opens in Essentials: the replay draws, the ＋ More list
     opens, the switch shows, and a Full-only rail popover is hidden."""

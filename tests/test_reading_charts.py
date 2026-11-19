@@ -285,7 +285,7 @@ def test_mode_round_trip_keeps_export_scope_and_artifacts():
 
 def test_axis_preset_and_compare_survive_mode_switch_until_a_tile_is_selected():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
-    at.selectbox(key="_axis_chart_preset").set_value(
+    next(box for box in at.selectbox if box.label == "Axis preset").set_value(
         "Vertical position over time"
     ).run()
     assert (at.session_state["global_x_field"], at.session_state["global_y_field"]) == (
@@ -305,3 +305,67 @@ def test_axis_preset_and_compare_survive_mode_switch_until_a_tile_is_selected():
         "x",
         "y",
     )
+
+
+@pytest.mark.parametrize("all_trials", [False, True], ids=["per-trial", "all-trials"])
+def test_saved_reading_design_after_trial_mode_changes_and_reset(all_trials):
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
+    next(box for box in at.selectbox if box.label == "Axis preset").set_value(
+        "Elapsed time by fixation index"
+    ).run()
+    at.checkbox(key="global_show_order").check().run()
+    if all_trials:
+        at.checkbox(key="single_fix_range_all_trials").check().run()
+    window = next(
+        slider for slider in at.slider if slider.label == "Fixation index range"
+    )
+    window.set_range(5, 12).run()
+    at.button(key="design_save").click().run()
+    at.text_input(key="design_new_name").set_value("Reading clock")
+    at.button(key="design_save_go").click().run()
+
+    def check_clock():
+        assert not at.exception
+        assert at.selectbox(key="global_x_field").value == "order_in_trial"
+        assert at.selectbox(key="global_y_field").value == chart_axes.ELAPSED
+        assert at.checkbox(key="global_show_order").value
+
+    check_clock()
+    trial = at.selectbox(key="single_trial_id").value
+    at.segmented_control(key="ui_mode_switch").set_value("essentials").run()
+    assert tuple(at.session_state["single_fix_range"]) == (5, 12)
+    at.button(key="single_next_trial").click().run()
+    other_trial = at.selectbox(key="single_trial_id").value
+    assert other_trial != trial
+    check_clock()
+    full_window = (
+        1,
+        next(s for s in at.slider if s.label == "Fixation index range").max,
+    )
+    assert tuple(at.session_state["single_fix_range"]) == (
+        (5, 12) if all_trials else full_window
+    )
+    at.button(key="hidden_note_to_advanced").click().run()
+    at.button(key="viz_view_illustration").click().run()
+    assert at.selectbox(key="global_x_field").value == "x"
+    assert at.checkbox(key="global_fixation_snap_to_line").value
+    at.button(key="design_apply_Reading clock").click().run()
+    check_clock()
+    assert tuple(at.session_state["single_fix_range"]) == (5, 12)
+
+    at.button(key="reset_viz_settings_btn").click().run()
+    at.button(key="reset_viz_cancel").click().run()
+    check_clock()
+    assert tuple(at.session_state["single_fix_range"]) == (5, 12)
+    at.button(key="reset_viz_settings_btn").click().run()
+    at.button(key="reset_viz_confirm").click().run()
+    assert not at.exception
+    assert at.selectbox(key="single_trial_id").value == other_trial
+    assert at.selectbox(key="global_x_field").value == "x"
+    assert at.selectbox(key="global_y_field").value == "y"
+    assert not at.checkbox(key="global_show_order").value
+    assert not at.checkbox(key="single_fix_range_all_trials").value
+    assert tuple(at.session_state["single_fix_range"]) == full_window
+    at.button(key="design_apply_Reading clock").click().run()
+    check_clock()
+    assert tuple(at.session_state["single_fix_range"]) == (5, 12)

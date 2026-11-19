@@ -2707,13 +2707,11 @@ _BOX_ROW_W = (0.26, 0.185, 0.185, 0.185, 0.185)
 def _default_box_format(proposed: dict[str, str | None]) -> str:
     """Which box encoding to show first, from what auto-detect found.
 
-    Edges if all four edge columns were detected, else origin+size if those four
-    were, else edges."""
-    if all(proposed.get(k) for k in ("left", "right", "top", "bottom")):
-        return BOX_FORMAT_EDGES
-    if all(proposed.get(k) for k in ("x", "y", "width", "height")):
-        return BOX_FORMAT_ORIGIN
-    return BOX_FORMAT_EDGES
+    Prefer the format with the most recognized fields. Edges wins a tie."""
+    return max(
+        _BOX_SUBFIELDS,
+        key=lambda fmt: sum(bool(proposed.get(k)) for k, _ in _BOX_SUBFIELDS[fmt]),
+    )
 
 
 # Mapping fields that only a **multipart** dataset needs (one logical trial
@@ -3636,6 +3634,18 @@ def column_mapping_ui(
         wrong_column = wrong_column_caption(
             df, field_key, chosen, fixations=not words_table
         )
+        if words_table and field_key in _ALL_BOX_KEYS and not chosen:
+            coordinate = {
+                "x": "horizontal position",
+                "y": "vertical position",
+                "width": "width",
+                "height": "height",
+                "left": "left edge",
+                "right": "right edge",
+                "top": "top edge",
+                "bottom": "bottom edge",
+            }[field_key]
+            field_col.caption(f"Choose the {coordinate} column for the Words table.")
         if wrong_column:
             state = "invalid"
             field_col.caption(f"{ICONS['warning']} {wrong_column}")

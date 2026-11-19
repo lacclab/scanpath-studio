@@ -1342,13 +1342,13 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--x-field",
         metavar="FIELD",
-        help="Fixations table column on the x axis (default: x). A non-spatial "
-        "one draws a chart of the fixations instead of the scanpath.",
+        help="Horizontal axis of the static chart (default: x). Choose a numeric fixation "
+        "column, order_in_trial for fixation index, or @elapsed_seconds for time since the first recorded fixation.",
     )
     viz.add_argument(
         "--y-field",
         metavar="FIELD",
-        help="Fixations table column on the y axis (default: y).",
+        help="Vertical axis of the static chart (default: y). Takes the same fields as --x-field.",
     )
     viz.add_argument(
         "--crop-to-data",

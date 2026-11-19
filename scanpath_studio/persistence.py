@@ -934,6 +934,16 @@ def _read_dataset(root: Path, entry: Any) -> dict:
         payload[frame_key] = pd.read_parquet(_frame_path(root, relative))
     for frame_key in _FRAME_KEYS:
         payload.setdefault(frame_key, pd.DataFrame())
+    # Older imports assigned a screen-local row count to this clock when the
+    # user mapped no screen onset. The saved mapping identifies those counts.
+    schema = (payload.get("schemas") or {}).get("fixations")
+    fixations = payload["fixations"]
+    if (
+        isinstance(schema, dict)
+        and not schema.get("screen_timestamp")
+        and "screen_timestamp_ms" in fixations
+    ):
+        payload["fixations"] = fixations.drop(columns="screen_timestamp_ms")
     return payload
 
 

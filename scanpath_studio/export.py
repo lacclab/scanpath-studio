@@ -41,6 +41,7 @@ from time import perf_counter
 
 import pandas as pd
 
+from . import chart_axes
 from .aggregation import reader_summary_table, trial_summary_table
 from .citation import CORPORA, CREDIT_LINE, cite, corpus_for, software_apa
 from .column_names import (
@@ -2907,6 +2908,8 @@ def bulk_export(
             # miss rows the view finds.
             trial_words = extract_trial(words, participant, trial)
             trial_fix = extract_trial(fixations, participant, trial)
+            if chart_axes.ELAPSED in (x_field, y_field):
+                trial_fix = chart_axes.with_origin(trial_fix)
             trial_raw_gaze = (
                 extract_trial(raw_gaze, participant, trial)
                 if raw_gaze is not None and not raw_gaze.empty
@@ -2972,7 +2975,7 @@ def bulk_export(
                 # Never retry an app-refused server path in the builder.
                 unit_settings["show_stimulus_image"] = False
             reasons = illustration_reasons(
-                unit_settings,
+                {**unit_settings, "x_field": x_field, "y_field": y_field},
                 data_source=settings.get("data_source"),
                 synthetic=bool(settings.get("synthetic_source")),
                 static=True,

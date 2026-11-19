@@ -4918,8 +4918,8 @@ INTERNAL_COLUMNS = frozenset(
 def timestamps_synthesized(fixations: pd.DataFrame | None) -> bool:
     """Whether any of these fixations has a made-up ``timestamp_ms``.
 
-    True when normalization had no onset column to read and numbered the
-    fixations instead (:data:`TIMESTAMP_SYNTHESIZED`). A frame without the
+    True for an unmapped onset, or for a missing or nonfinite value in a
+    mapped onset column (:data:`TIMESTAMP_SYNTHESIZED`). A frame without the
     column — one built by hand, or stored by an older version — counts as
     recorded."""
     if fixations is None or TIMESTAMP_SYNTHESIZED not in fixations.columns:
@@ -4954,7 +4954,11 @@ def shareable_frame(frame: pd.DataFrame) -> pd.DataFrame:
     numbers are a sort order, and a file that carried them under that name
     would read back as recorded milliseconds."""
     if timestamps_synthesized(frame) and "timestamp_ms" in frame.columns:
-        frame = frame.drop(columns="timestamp_ms")
+        synthesized = frame[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
+        if synthesized.all():
+            frame = frame.drop(columns="timestamp_ms")
+        else:
+            frame = frame.assign(timestamp_ms=frame["timestamp_ms"].mask(synthesized))
     return drop_internal_columns(frame)
 
 
@@ -6729,7 +6733,10 @@ def _copy_screen_fields(
         if not column:
             continue
         values = source[column]
-        df[destination] = _to_number(values) if numeric else values
+        if schema_key == "screen_timestamp":
+            df[destination] = _as_ms(_to_number(values), column)
+        else:
+            df[destination] = _to_number(values) if numeric else values
     # This function rebuilds the frame from the mapping, so a `screen_index`
     # the public corpora stamp onto their frames would otherwise be dropped and
     # screen order re-derived from row order: AOI-file order on the words, each
@@ -7117,8 +7124,6 @@ def normalize_fixations(
 
     if SCREEN_ID in df.columns:
         part_keys = grouping_columns(df)
-        if SCREEN_TIMESTAMP not in df.columns:
-            df[SCREEN_TIMESTAMP] = df.groupby(part_keys, sort=False).cumcount()
         if SCREEN_FIXATION_ID not in df.columns:
             df[SCREEN_FIXATION_ID] = df.groupby(part_keys, sort=False).cumcount().add(1)
 
@@ -7160,10 +7165,9 @@ def normalize_fixations(
     if SCREEN_ID in df.columns:
         df["order_in_screen"] = (
             df.sort_values([SCREEN_INDEX, SCREEN_TIMESTAMP, "duration_ms"])
-            .groupby(grouping_columns(df), sort=False)
-            .cumcount()
-            + 1
-        )
+            if SCREEN_TIMESTAMP in df
+            else df
+        ).groupby(grouping_columns(df), sort=False).cumcount() + 1
     return df
 
 
@@ -7274,7 +7278,8 @@ def _synthesized_timestamps(
 ) -> pd.Series | None:
     """The :data:`TIMESTAMP_SYNTHESIZED` flags for a normalized fixations frame.
 
-    Every row when no onset is mapped. A remap that keeps the stored
+    Every row when no onset is mapped, otherwise the missing or nonfinite cells.
+    A remap that keeps the stored
     ``timestamp_ms`` as the onset keeps the stored flags — those numbers are
     still the ones normalization made up. ``None`` when the timestamps are
     the data's own."""
@@ -7286,8 +7291,11 @@ def _synthesized_timestamps(
         and onset == "timestamp_ms"
         and TIMESTAMP_SYNTHESIZED in fixations.columns
     ):
-        return fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
-    return None
+        previous = fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
+    else:
+        previous = False
+    missing = ~np.isfinite(_to_number(fixations[onset])) | previous
+    return missing if missing.any() else None
 
 
 def remap_normalized_frame(

@@ -15,6 +15,7 @@ import streamlit as st
 from streamlit.errors import StreamlitAPIException
 from streamlit_sortables import sort_items
 
+from . import chart_axes as charts
 from . import column_names as cn
 from .alignment import ALGORITHMS as ALIGN_ALGORITHMS
 from .alignment import method_label as align_method_label
@@ -731,6 +732,8 @@ _VIZ_WIDGET_DEFAULTS = {
     # and the reading text — so a new user lands on a legible picture instead of
     # seven stacked encodings. The bounding-box grid and the density heatmap are
     # analytical overlays, off by default and one click (or one design preset) away.
+    "global_x_field": "x",
+    "global_y_field": "y",
     "global_show_words": False,
     "global_show_labels": True,
     "global_redact_text": False,
@@ -4151,13 +4154,23 @@ def hover_field_options(
     return result
 
 
+@st.cache_data(show_spinner=False, max_entries=32)
+def _axis_clock_available(_fixations: pd.DataFrame, cache_key: tuple) -> bool:
+    return charts.has_clock(_fixations)
+
+
 def numeric_field_options(trial_fixations: pd.DataFrame) -> list[str]:
-    """Numeric columns offered as X/Y axis fields."""
-    return [
+    """Numeric columns and supported derived axes for fixation charts."""
+    fields = [
         col
         for col in user_columns(trial_fixations)
-        if pd.api.types.is_numeric_dtype(trial_fixations[col])
+        if col != charts.ELAPSED and pd.api.types.is_numeric_dtype(trial_fixations[col])
     ]
+    if _axis_clock_available(trial_fixations, frame_fingerprint(trial_fixations)):
+        fields.append(charts.ELAPSED)
+    elif "timestamp_ms" in fields:
+        fields.remove("timestamp_ms")
+    return fields
 
 
 # Word columns that look like a per-word boolean flag the user might want to
@@ -6923,6 +6936,7 @@ def render_plot_controls(
     host=None,
     has_raw_gaze: bool = False,
     has_stimulus_image: bool = False,
+    trial_samples: pd.DataFrame | None = None,
     words: pd.DataFrame | None = None,
     fix_range_fixations: pd.DataFrame | None = None,
     canvas_renderer=None,
@@ -7126,6 +7140,13 @@ def render_plot_controls(
             "_resolved_animating", st.session_state.get("single_animate")
         )
     )
+    fields = (
+        st.session_state.get("global_x_field", "x"),
+        st.session_state.get("global_y_field", "y"),
+    )
+    chart_axes = not (animating or comparing) and fields != ("x", "y")
+    sequence = chart_axes and charts.position_chart(fields, "order_in_trial")
+    screen_help = "Choose screen X and Y to draw this layer."
     # Handy shorthands for the two recurring gates.
     _static_only = dict(in_animation=False, in_compare=False)
     _no_compare = dict(in_compare=False)
@@ -7193,13 +7214,17 @@ def render_plot_controls(
     )
     show_saccades, sac_grp = _rail_section(
         advanced_only(viz, "rail_sac"),
-        f"{ICONS['saccades']} **Saccades**",
+        f"{ICONS['saccades']} **{'Connect fixations' if sequence else 'Saccades'}**",
         slug="sac",
         name="Saccade",
         key="global_show_saccades",
         persist_state="session",
-        disabled=not has_fixations,
-        help=_greyed_help((not has_fixations, "This trial has no fixations.")),
+        disabled=not has_fixations or (chart_axes and not sequence),
+        help=_greyed_help(
+            (not has_fixations, "This trial has no fixations."),
+            (chart_axes and not sequence, screen_help),
+            (sequence, "Connect successive fixation indices in reading order."),
+        ),
     )
     # A master switch for the section's layers (text, image), matching
     # Fixations/Saccades. It never touches `global_show_labels` /
@@ -7214,6 +7239,8 @@ def render_plot_controls(
         name="Stimulus",
         key="global_show_stimulus",
         persist_state="session",
+        disabled=chart_axes,
+        help=screen_help if chart_axes else None,
     )
     # Word boxes are a section of their own, with a style (outline + fill) that
     # the Stimulus popover has no room for. Its switch is `global_show_words`,
@@ -7226,8 +7253,10 @@ def render_plot_controls(
         key="global_show_words",
         persist_state="session",
         # No word boxes: the popover body's own `_layer_off` caption says it.
-        disabled=not has_words,
-        help=_greyed_help((not has_words, "This trial has no word boxes.")),
+        disabled=not has_words or chart_axes,
+        help=_greyed_help(
+            (not has_words, "This trial has no word boxes."), (chart_axes, screen_help)
+        ),
     )
     # Heatmap and Raw gaze are peer sections,
     # each with exactly one thing to switch, so each carries its own toggle
@@ -7252,8 +7281,9 @@ def render_plot_controls(
         name="Heatmap",
         key="global_show_heatmap",
         persist_state="session",
-        disabled=heat_disabled or heat_nothing,
+        disabled=heat_disabled or heat_nothing or chart_axes,
         help=_greyed_help(
+            (chart_axes, screen_help),
             (heat_nothing, "This trial has no fixations and no word boxes."),
             (heat_disabled, _ANIMATE_GREYS["heatmap"]),
         ),
@@ -7263,6 +7293,8 @@ def render_plot_controls(
     # The comparison builder draws each reading's samples; the replay
     # has no raw-gaze layer.
     raw_disabled, raw_reason = _mode_gate(animating, comparing, in_animation=False)
+    raw_axis_off = chart_axes and not charts.raw_axes_available(fields, trial_samples)
+    raw_axis_help = "Raw samples need both plotted coordinates. Choose screen position or recorded time."
     show_raw_gaze, raw_gaze_grp = _rail_section(
         advanced_only(viz, "rail_rawgaze"),
         f"{ICONS['raw_gaze']} **Raw gaze**",
@@ -7270,8 +7302,9 @@ def render_plot_controls(
         name="Raw gaze",
         key="global_show_raw_gaze",
         persist_state="session",
-        disabled=not has_raw_gaze or raw_disabled,
+        disabled=not has_raw_gaze or raw_disabled or raw_axis_off,
         help=_greyed_help(
+            (raw_axis_off, raw_axis_help),
             (not has_raw_gaze, "This trial has no raw gaze samples."),
             (raw_disabled, _ANIMATE_GREYS["rawgaze"]),
         ),
@@ -7715,23 +7748,25 @@ def render_plot_controls(
         # `make_scanpath_figure`-only, unlike the drift correction — hence its
         # own gate. It sits at the bottom of the panel: it is a schematic mode,
         # not marker styling.
+        snap_disabled = static_disabled or chart_axes
+        snap_reason = screen_help if chart_axes else static_reason
         snapped, _ = _check_row(
             "Snap",
             key="global_fixation_snap_to_line",
             check_label="To line",
             check_share=0.4,
             persist_state="session",
-            disabled=static_disabled,
+            disabled=snap_disabled,
             help=_gated_help(
                 "Move each fixation up or down onto its text line, keeping its "
                 "x. It goes to its word's line, or else the nearest line.",
-                static_reason,
+                snap_reason,
             ),
         )
         position_help = _gated_help(
             "Where on its line a snapped fixation sits, in line heights: 0 is "
             "the middle, −0.5 the top edge, 0.5 the bottom edge.",
-            static_reason,
+            snap_reason,
         )
         _numeric_slider(
             st,
@@ -7742,7 +7777,7 @@ def render_plot_controls(
             max_value=SNAP_POSITION_BOUNDS[1],
             step=0.05,
             slider_format="%.2f",
-            disabled=static_disabled or not snapped,
+            disabled=snap_disabled or not snapped,
             help=position_help,
             field_host=_sub_row(
                 "Position", caption_help=_layer_gate(False, position_help)[1]
@@ -7788,8 +7823,12 @@ def render_plot_controls(
         sac_grp,
         _layer_off(
             f"{ICONS['saccades']} Saccades",
-            off=not show_saccades or not has_fixations,
-            reason=no_fixations_note or None,
+            off=chart_axes or not show_saccades or not has_fixations,
+            reason=(
+                "Saccade styles apply to screen X and Y."
+                if chart_axes
+                else no_fixations_note or None
+            ),
         ),
         _popover_rows("sac"),
     ):
@@ -8018,8 +8057,12 @@ def render_plot_controls(
         ),
         _layer_off(
             f"{ICONS['saccades']} Saccades",
-            off=not show_saccades or not has_fixations,
-            reason=no_fixations_note or None,
+            off=chart_axes or not show_saccades or not has_fixations,
+            reason=(
+                "Saccade styles apply to screen X and Y."
+                if chart_axes
+                else no_fixations_note or None
+            ),
             caption=has_fixations,
         ),
         _popover_rows("filter_sac"),
@@ -8053,7 +8096,11 @@ def render_plot_controls(
     # section's master switch is off, so a user can set up what they want shown
     # before turning it back on — nothing here mutates them; `_collect_viz_
     # settings` only ANDs the master into what reaches the figure.
-    with stim_grp, _popover_rows("stim"):
+    with (
+        stim_grp,
+        _layer_off("Stimulus", off=chart_axes, reason=screen_help),
+        _popover_rows("stim"),
+    ):
         if not show_stimulus:
             st.caption(
                 f"{ICONS['warning']} **{ICONS['stimulus']} Stimulus** is off, so "
@@ -8311,8 +8358,12 @@ def render_plot_controls(
         heatmap_grp,
         _layer_off(
             f"{ICONS['heatmap']} Heatmap",
-            off=not show_heatmap or heat_nothing,
-            reason=heat_nothing_note if heat_nothing else None,
+            off=chart_axes or not show_heatmap or heat_nothing,
+            reason=screen_help
+            if chart_axes
+            else heat_nothing_note
+            if heat_nothing
+            else None,
         ),
         _popover_rows("heatmap"),
     ):
@@ -8508,7 +8559,11 @@ def render_plot_controls(
     # 👁️ Fixations.
     with (
         raw_gaze_grp,
-        _layer_off(f"{ICONS['raw_gaze']} Raw gaze", off=not show_raw_gaze),
+        _layer_off(
+            f"{ICONS['raw_gaze']} Raw gaze",
+            off=not show_raw_gaze or raw_axis_off,
+            reason=raw_axis_help if raw_axis_off else None,
+        ),
         _popover_rows("rawgaze"),
     ):
         if comparing:
@@ -8579,8 +8634,10 @@ def render_plot_controls(
         boxes_grp,
         _layer_off(
             f"{ICONS['word_boxes']} Word boxes",
-            off=not show_word_boxes or not has_words,
-            reason=None
+            off=chart_axes or not show_word_boxes or not has_words,
+            reason=screen_help
+            if chart_axes
+            else None
             if has_words
             else f"{ICONS['warning']} This trial has no word boxes to draw.",
         ),
@@ -8682,10 +8739,6 @@ def render_plot_controls(
     # screen. On other axes it draws a plain chart of the fixations, so the
     # framing and the grid have nothing to act on: they grey, saying why.
     # (Animate and Compare always plot x / y, whatever the fields say.)
-    chart_axes = not (animating or comparing) and (
-        st.session_state.get("global_x_field", "x"),
-        st.session_state.get("global_y_field", "y"),
-    ) != ("x", "y")
     chart_reason = (
         f"{ICONS['warning']} This needs screen x / y on the axes. Set **Axes** "
         "back to x / y to use it."
@@ -8860,9 +8913,37 @@ def render_plot_controls(
             f"{ICONS['warning']} {modes} always plots screen x / y. Turn "
             f"**{modes}** off to choose other fields; your choices are kept."
             if axis_disabled
-            else "The fixation fields on the X and Y axes. Anything other than "
-            "x / y draws a chart of the fixations only, with no text, word boxes, "
-            "saccades, heatmap or grid.",
+            else "Choose screen X and Y for the spatial scanpath, or select two numeric fields to chart the reading.",
+        )
+        presets = {
+            "Screen X and Y": ("x", "y"),
+            "Horizontal position by fixation index": ("order_in_trial", "x"),
+            "Vertical position by fixation index": ("order_in_trial", "y"),
+            "Elapsed time by fixation index": ("order_in_trial", charts.ELAPSED),
+            "Duration by fixation index": ("order_in_trial", "duration_ms"),
+            "Horizontal position over time": (charts.ELAPSED, "x"),
+            "Vertical position over time": (charts.ELAPSED, "y"),
+        }
+
+        def apply_axis_preset():
+            choice = st.session_state.pop("_axis_chart_preset", None)
+            if choice in presets:
+                x, y = presets[choice]
+                write_through("global_x_field", x)
+                write_through("global_y_field", y)
+
+        st.selectbox(
+            "Axis preset",
+            [
+                name
+                for name, pair in presets.items()
+                if all(f in numeric_fields for f in pair)
+            ],
+            index=None,
+            placeholder="Choose a chart",
+            key="_axis_chart_preset",
+            on_change=apply_axis_preset,
+            disabled=axis_disabled,
         )
         label_w = _label_w()
         rest = 1.0 - label_w
@@ -8874,6 +8955,7 @@ def render_plot_controls(
         _row_label(axes_cols[0], "Axes", axis_help)
         _sub_caption(axes_cols[1], "X", axis_help if axis_disabled else None)
         axis_labels = _rail_names().option_labels(numeric_fields, roles=True)
+        axis_labels[charts.ELAPSED] = charts.ELAPSED_LABEL
         axes_cols[2].selectbox(
             "X axis field",
             options=numeric_fields,
@@ -8895,11 +8977,9 @@ def render_plot_controls(
             help=axis_help,
             label_visibility="collapsed",
         )
-        if chart_axes:
+        if chart_axes and fields == ("order_in_trial", "order_in_trial"):
             st.caption(
-                f"{ICONS['warning']} Limited support: the plot shows only "
-                "fixation markers, with no word boxes, text, saccades, heatmap or "
-                "coordinate grid."
+                "Both axes show fixation order. Choose Duration or Word ID on one axis to see how it changes over the reading."
             )
 
     # Title/caption on the figure — set here, so it's visible live rather than

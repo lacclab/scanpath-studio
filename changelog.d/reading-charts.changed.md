@@ -1,0 +1,1 @@
+Full adds fixation-index and elapsed-time charts for horizontal and vertical screen position. Switching between Essentials and Full keeps export choices. Shared links check imported recording tables before opening a view, and the import wizard identifies missing word-box fields.

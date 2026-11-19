@@ -1099,6 +1099,7 @@ ICONS: dict[str, str] = {
     "delete": ":material/delete:",
     "reset": ":material/restart_alt:",
     "undo": ":material/undo:",
+    "redo": ":material/redo:",
     "edit": ":material/edit:",
     "add": ":material/add:",
     "confirm": ":material/check:",

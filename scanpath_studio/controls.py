@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from streamlit.errors import StreamlitAPIException
+from streamlit.runtime.scriptrunner import get_script_run_ctx
 from streamlit_sortables import sort_items
 
 from . import chart_axes as charts
@@ -132,18 +133,23 @@ from .fields import (
 )
 from .session_keys import (
     COMPARE_B_FILTER_STATE_KEYS,
+    COMPARE_IDENTITY_STATE_KEY,
+    COMPARE_SOURCE_STATE_KEY,
+    LEGEND_PARAMS,
     SHARE_FLOAT_RANGE_PARAMS,
     SINGLE_COMPARE_FIX_RANGE,
     SINGLE_COMPARE_LAYOUT,
     SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
     SINGLE_PLAYBACK_SPEED,
+    URL_PRESET_PARAMS,
     compare_state_keys,
     keep_legacy_marker_scale,
     rename_legacy_keys,
 )
 from .session_keys import DESIGN_PRESETS as _DESIGN_PRESETS_WIRE_KEY
 from .ui_mode import advanced_only, render_more_popover, simple_only
+from .viz_history import Design, PlotHistory
 
 NONE_OPTION = "(none)"
 
@@ -224,8 +230,32 @@ def _popover_rows(slug: str):
     ``rail_rows_<slug>``, that `styles.py` spaces the rows of apart — the same
     for every popover.
     """
+    # A closed popover needs its programmatic values held against stale
+    # browser echoes. Once it opens, the widgets it actually renders have
+    # taken the new values: release just those so the first edit can undo one.
+    pending = st.session_state.get(_PENDING_WRITES_KEY)
+    ctx = None
+    if pending:
+        section = slug.split("_", 1)[0]
+        if section == "fig":
+            section = "figure"
+        prefix = (
+            "split_mode" if section in ("animate", "compare") else "split_mode_rail"
+        )
+        if st.session_state.get(f"{prefix}_{section}_popover"):
+            ctx = get_script_run_ctx()
+    drawn = ctx.shared.widget_user_keys_this_run if ctx else None
+    waiting = [key for key in pending if key not in drawn] if drawn is not None else []
     with _rail_label_width(_POPOVER_LABEL_W), st.container(key=f"rail_rows_{slug}"):
         yield
+    for key in waiting:
+        if key in drawn:
+            pending.pop(key, None)
+
+
+def plot_popover_on_change() -> str:
+    """Track the open panel once this session uses Undo or Redo."""
+    return "rerun" if st.session_state.get("_plot_history_used") else "ignore"
 
 
 #: Tighter than the 1rem default: these rows are dense and the width is scarce.
@@ -1598,7 +1628,9 @@ def _apply_view_preset(name: str) -> None:
         _hold_view_writes(ss, before)
 
 
-def _hold_view_writes(ss, before: dict, *, after_reset: bool = False) -> None:
+def _hold_view_writes(
+    ss, before: dict, *, defaults_pending: bool = True, in_callback: bool = True
+) -> None:
     """Hold every value a design preset changed in a popover (see `write_through`).
 
     A popover widget the user has opened keeps echoing the value it last
@@ -1616,10 +1648,10 @@ def _hold_view_writes(ss, before: dict, *, after_reset: bool = False) -> None:
     for key, old in before.items():
         if key in _MOUNTED_VIEW_KEYS or key not in ss:
             continue
-        if key in _SEEDED_VIEW_KEYS and not after_reset:
+        if key in _SEEDED_VIEW_KEYS and defaults_pending:
             continue  # a design callback has not re-seeded from the dataset yet
         if _write_match_key(ss[key]) != _write_match_key(old):
-            write_through(key, ss[key], shown=old, in_callback=not after_reset)
+            write_through(key, ss[key], shown=old, in_callback=in_callback)
         elif key in (pending := ss.get(_PENDING_WRITES_KEY, {})):
             # The new design agrees with the browser. A hold for the
             # previous design would overwrite it when the script starts.
@@ -1647,6 +1679,7 @@ _SEEDED_VIEW_KEYS = frozenset(
 #: checks the set against the widgets the app draws.
 _MOUNTED_VIEW_KEYS = frozenset(
     {
+        "single_animate",
         "global_show_fix",
         "global_show_saccades",
         "global_show_stimulus",
@@ -6054,7 +6087,7 @@ def _seed_viz_state(
         )
     before_reset = ss.pop("_viz_before_reset", None)
     if before_reset is not None:
-        _hold_view_writes(ss, before_reset, after_reset=True)
+        _hold_view_writes(ss, before_reset, defaults_pending=False, in_callback=False)
     return color_fields, numeric_fields, highlight_options
 
 
@@ -6839,6 +6872,7 @@ def _rail_section(host, label: str, *, slug: str, name: str | None = None, **tog
         width="content",
         wrap=True,
         key=f"split_mode_rail_{slug}_popover",
+        on_change=plot_popover_on_change(),
     )
     # ...and the popover trigger carries no `help=` either: it would only
     # restate the section's own name. What is worth saying -- why
@@ -6920,19 +6954,109 @@ def _reset_viz_confirmation_dialog() -> None:
         st.rerun(scope="app")
 
 
+_PLOT_HISTORY = "_plot_edit_history"
+
+
+def _record_plot_edit() -> PlotHistory:
+    """Observe the settings that the rail has finished rendering on this run."""
+    ss = st.session_state
+    dataset = current_dataset_name()
+    history = ss.get(_PLOT_HISTORY)
+    if history is None or history.dataset != dataset:
+        history = ss[_PLOT_HISTORY] = PlotHistory(dataset)
+    settings = {
+        key: value
+        for key, value in _capture_quick_view_state().items()
+        if not _is_drift_mirror(key)
+    }
+    settings["single_animate"] = bool(ss.get("single_animate"))
+    # Presets and Reset remove their incoming URL options. Record only those
+    # plot parameters so undoing a change leaves the address's reading intact.
+    for param in st.query_params:
+        if param in URL_PRESET_PARAMS or param in LEGEND_PARAMS:
+            settings[f"?{param}"] = st.query_params[param]
+    selected = ss.get(_QUICK_VIEW_SELECTION_KEY)
+    design = Design(
+        selected,
+        ss.get(_QUICK_VIEW_CUSTOM_STATE) if selected != _CUSTOM_VIEW else None,
+        ss.get(_QUICK_VIEW_DRIFTED_FROM),
+    )
+    readings = (
+        (ss.get("single_trial_id"), ss.get("single_screen_id")),
+        (
+            ss.get(COMPARE_SOURCE_STATE_KEY),
+            ss.get(COMPARE_IDENTITY_STATE_KEY),
+            ss.get("single_compare_screen_id"),
+        ),
+    )
+    history.observe(settings, design, readings)
+    # Keep the transient Custom slot in step with the new reading too.
+    if history.design.custom is not design.custom:
+        ss[_QUICK_VIEW_CUSTOM_STATE] = history.design.custom
+    if history.design.drifted_from != design.drifted_from:
+        ss[_QUICK_VIEW_DRIFTED_FROM] = history.design.drifted_from
+    return history
+
+
+def _step_plot_history(redo: bool) -> None:
+    ss = st.session_state
+    history = ss.get(_PLOT_HISTORY)
+    if history is None or history.dataset != current_dataset_name():
+        return
+    step = history.step(redo=redo)
+    if step is None:
+        return
+    # Changing tracking mode changes a popover's widget identity. Keep it
+    # stable after the first history click so reopening a panel stays open.
+    ss["_plot_history_used"] = True
+    keys, values, design = step
+    for key in tuple(keys):
+        if key.startswith("?"):
+            param = key[1:]
+            if key in values:
+                st.query_params[param] = values[key]
+            else:
+                st.query_params.pop(param, None)
+            keys.remove(key)
+    shown = {key: ss.get(key) for key in keys}
+    reassert_pending_writes()
+    for key in keys:
+        if key in values:
+            ss[key] = deepcopy(values[key])
+        else:
+            ss.pop(key, None)
+            ss.get(_PENDING_WRITES_KEY, {}).pop(key, None)
+    for window, user_set in _FIX_WINDOWS:
+        if window in keys:
+            ss[user_set] = window in values
+    for key, value in (
+        (_QUICK_VIEW_SELECTION_KEY, design.selection),
+        (_QUICK_VIEW_CUSTOM_STATE, design.custom),
+        (_QUICK_VIEW_DRIFTED_FROM, design.drifted_from),
+    ):
+        if value is not None:
+            ss[key] = deepcopy(value)
+        else:
+            ss.pop(key, None)
+    ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
+    _hold_view_writes(ss, shown, defaults_pending=False)
+
+
 def render_viz_reset(host) -> None:
-    """Render the scoped visualization reset into ``host`` — a plain button.
-
-    Full width, like every other control in the rail, and at its foot, below
-    everything it resets. A plain button rather than a popover, so the rail's
-    one escape hatch is not itself a click deep; its explanation is the
-    button's tooltip.
-
-    The click arms a confirmation dialog rather than firing
-    ``reset_viz_settings`` straight away — a Share link's settings ride on this
-    too, so an accidental click could lose more than it looks like.
-    """
-    if host.button(
+    """Undo, redo, or reset the plot from the foot of the Full rail."""
+    history = _record_plot_edit()
+    row = host.container(horizontal=True, gap="xsmall", key="plot_history_actions")
+    for action, stack in (("Undo", history.past), ("Redo", history.future)):
+        row.button(
+            spoken(action),
+            icon=ICONS[action.lower()],
+            key=f"viz_{action.lower()}",
+            help=f"{action} the last plot change",
+            disabled=not stack,
+            on_click=_step_plot_history,
+            args=(action == "Redo",),
+        )
+    if row.button(
         f"{ICONS['reset']} Reset visualization",
         key="reset_viz_settings_btn",
         width="stretch",

@@ -290,13 +290,17 @@ Each dot is a fixation. The clusters step down as the reader looks lower on the 
 
 ### :material/restart_alt: Reset visualization
 
-<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/reset.webp" title="Open full size"><img src="../../../assets/screenshots/controls/reset.webp" alt="The Plot controls column, with Reset visualization circled at its foot" loading="lazy"></a>
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/reset.webp" title="Open full size"><img src="../../../assets/screenshots/controls/reset.webp" alt="Undo and Redo arrows beside Reset visualization" loading="lazy"></a>
 
-The button at the foot of the column.
+At the foot of **Full** plot controls, use the arrows beside **Reset visualization** to step through your last 30 plot changes. Presets and a confirmed reset each count as one change.
 
 | Control | What it does |
 | --- | --- |
+| **Undo** | Restore the previous plot settings for the current dataset. Switching trials keeps you on the newly selected trial. |
+| **Redo** | Reapply the change you undid. Making a new plot edit clears the redo list. |
 | **Reset visualization** | After you confirm, reset every plot setting to its default, **Filters & highlights** included. Annotations, trial filters, data and the selected trial stay. |
+
+Changing datasets starts a fresh history. A trial-specific fixation window drops out of history when you leave that reading.
 
 ## In Compare
 

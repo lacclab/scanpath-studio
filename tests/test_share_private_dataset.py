@@ -165,3 +165,138 @@ def test_compare_settings_resolve_named_upload_across_sessions(monkeypatch):
     session[DATASET_ALIASES_KEY].clear()
     source, reason = url_state._compare_b_problem(selection, pd.DataFrame())
     assert source is None and "not available" in reason
+
+
+def test_comparison_link_reopens_both_uploads_from_the_recovery_cache(
+    monkeypatch, tmp_path
+):
+    import pandas as pd
+
+    from scanpath_studio.constants import DATASET_ALIASES_KEY
+    from scanpath_studio.dataset_identity import DATASET_IDS_KEY
+    from scanpath_studio.persistence import (
+        PERSIST_ENV_VAR,
+        STATE_DIR_ENV_VAR,
+        save_state,
+    )
+    from scanpath_studio.synthetic import make_synthetic_fixations, make_synthetic_words
+
+    def dataset(trial):
+        return {
+            "words": make_synthetic_words().assign(trial_id=trial),
+            "fixations": make_synthetic_fixations().assign(trial_id=trial),
+            "raw_gaze": pd.DataFrame(),
+        }
+
+    monkeypatch.setenv(PERSIST_ENV_VAR, "1")
+    monkeypatch.setenv(STATE_DIR_ENV_VAR, str(tmp_path / "sender"))
+    a, b = dataset("reading A"), dataset("reading B")
+    sender = AppTest.from_file(APP_SCRIPT)
+    sender.session_state["_datasets"] = {"local-a": a, "local-b": b}
+    sender.session_state["data_source_choice"] = "local-a"
+    sender.session_state[DATASET_ALIASES_KEY] = {
+        "local-a": "Corpus A",
+        "local-b": "Corpus B",
+    }
+    sender.session_state["single_compare_toggle"] = True
+    sender.session_state["cmp_dataset"] = "local-b"
+    sender.run(timeout=90)
+    assert not sender.exception, sender.exception
+    query, notes = sender.session_state["_share_query_current"]
+    params = {key: values[0] for key, values in parse_qs(query).items()}
+    assert params["dataset"] == "Corpus A"
+    assert params["cmp_dataset"] == "Corpus B"
+    assert params["dataset_id"] != params["cmp_dataset_id"]
+    assert any("Corpus B" in note and "import" in note for note in notes)
+
+    def open_link(case, uploads, aliases, identifiers):
+        root = tmp_path / case
+        # Another comparison was active the last time this app closed.
+        assert save_state(
+            {
+                "_datasets": uploads,
+                DATASET_ALIASES_KEY: aliases,
+                DATASET_IDS_KEY: identifiers,
+                "data_source_choice": "Synthetic test trial",
+                "single_compare_toggle": True,
+                "cmp_dataset": "Bundled demo",
+                "_compare_selected_identity": ("synthetic", "reading A"),
+                "single_compare_screen_id": "old screen",
+            },
+            root,
+        )
+        monkeypatch.setenv(STATE_DIR_ENV_VAR, str(root))
+        at = AppTest.from_file(APP_SCRIPT)
+        at.query_params.update(params)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        assert not at.error, at.error
+        assert at.session_state["data_source_choice"] == "recipient-a"
+        assert at.session_state["_share_selection"]["trial_id"] == "reading A"
+        return at
+
+    aliases = {"recipient-a": "Corpus A", "other": "Corpus B"}
+    uploads = {"recipient-a": a, "other": b}
+    by_id = open_link(
+        "renamed",
+        {**uploads, "renamed": b},
+        {**aliases, "renamed": "Renamed on this computer"},
+        {"renamed": params["cmp_dataset_id"]},
+    )
+    by_name = open_link("independent", uploads, aliases, {})
+    for recipient, expected in [(by_id, "renamed"), (by_name, "other")]:
+        selected = recipient.session_state["_share_selection"]["compare"]
+        assert selected["source"] == expected
+        assert selected["trial_id"] == "reading B"
+        assert selected["participant_id"] == "synthetic"
+
+    missing = open_link("missing", {"recipient-a": a}, aliases, {})
+    assert missing.session_state["single_compare_toggle"] is False
+    assert "compare" not in missing.session_state["_share_selection"]
+    warnings = [w.value for w in missing.warning if "Corpus B" in w.value]
+    assert len(warnings) == 1
+    assert "Add dataset → Import files" in warnings[0]
+    assert "reopen the link" in warnings[0]
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("_pending_source_choice", "Another dataset"), ("single_compare_toggle", True)],
+)
+def test_missing_b_notice_retires_after_a_manual_selection(monkeypatch, key, value):
+    import streamlit as st
+
+    from scanpath_studio.url_state import resolve_link_compare_upload
+
+    state = {"data_source_choice": "A", "single_compare_toggle": True}
+    monkeypatch.setattr(st, "session_state", state)
+    monkeypatch.setattr(
+        st, "query_params", {"compare": "p:t", "cmp_dataset": "Missing"}
+    )
+    assert resolve_link_compare_upload("A")
+    assert resolve_link_compare_upload("A")
+    state[key] = value
+    assert resolve_link_compare_upload("A") is None
+    state.pop("_pending_source_choice", None)
+    state["single_compare_toggle"] = False
+    assert resolve_link_compare_upload("A") is None
+
+
+def test_legacy_same_dataset_comparison_overrides_the_previous_b(monkeypatch, tmp_path):
+    from scanpath_studio.persistence import (
+        PERSIST_ENV_VAR,
+        STATE_DIR_ENV_VAR,
+        save_state,
+    )
+    from scanpath_studio.synthetic import TRIAL
+
+    monkeypatch.setenv(PERSIST_ENV_VAR, "1")
+    monkeypatch.setenv(STATE_DIR_ENV_VAR, str(tmp_path))
+    assert save_state({"cmp_dataset": "Bundled demo"}, tmp_path)
+    at = AppTest.from_file(APP_SCRIPT)
+    at.query_params.update({"source": "synthetic", "compare": f"synthetic:{TRIAL}"})
+    at.run(timeout=90)
+    assert not at.exception, at.exception
+    selection = at.session_state["_share_selection"]["compare"]
+    assert selection["source"] is None
+    assert selection["trial_id"] == TRIAL

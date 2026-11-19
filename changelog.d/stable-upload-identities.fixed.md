@@ -1,1 +1,1 @@
-Renaming an uploaded dataset keeps its annotations, comparison selection and saved data together. An upload named “This dataset” can be selected independently in Compare.
+Renaming an uploaded dataset keeps its annotations, comparison selection and saved data together. An upload named “This dataset” can be selected independently in Compare. Share links reopen comparisons between two uploads and tell recipients which files to add if scanpath B is missing.

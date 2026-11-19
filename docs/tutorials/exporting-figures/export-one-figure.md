@@ -51,8 +51,10 @@ Click the download button for the chosen format, such as **⬇ Download PNG**.
 - :material/share: **Share** → **Link** reopens the trial and its settings.
   For data you imported, send the source files and tell the recipient the
   dataset name shown in the link. They can open the link after importing
-  the files under that name. Your own copy of the link still works if you
-  rename the dataset later.
+  the files under that name. If a comparison uses two imported datasets,
+  send both. Someone who has only A can open its trial and return to the
+  link after adding B. Your own copy of the link still works if you rename
+  either dataset later.
 - [**Share** → **Code**](../../guides/exporting/index.md#from-the-app-to-a-script)
   gives Python or CLI code that redraws the figure.
 - **Share** → **Settings file** → **Download settings** saves the settings,

@@ -42,7 +42,7 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | Comparisons | Full only; NLD similarity scores only with `SCANPATH_EXPERIMENTAL=1` |
 | Line assignment | Experimental only |
 | Export | Figures + tables for the filtered trials; every file carries the citation |
-| Share → Link / Code / File | The link reopens the same figure; the code reproduces it (`test_render_every_option`); the file restores it |
+| Share → Link / Code / File | The link reopens both readings of a comparison, including uploaded datasets; with B missing it opens A and names the dataset to import. The code reproduces the figure (`test_render_every_option`); the file restores it |
 
 ## Corpus Analysis
 

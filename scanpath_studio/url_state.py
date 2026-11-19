@@ -110,7 +110,10 @@ from .dataset_identity import dataset_share_id, resolve_dataset_reference
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .export import PRINT_DPI_BOUNDS, PRINT_WIDTH_BOUNDS
 from .session_keys import (
+    COMPARE_DATASET_ID_PARAM,
+    COMPARE_DATASET_PARAM,
     COMPARE_FIX_RANGE_PARAM,
+    COMPARE_IDENTITY_STATE_KEY,
     COMPARE_LAYOUT_PARAM,
     COMPARE_PARAM,
     COMPARE_SCREEN_PARAM,
@@ -128,6 +131,7 @@ from .session_keys import (
     PARAM_SHOW_TITLE_CAPTION,
     PENDING_COMPARE_STATE_KEY,
     PUBLIC_DATASET_CHOICE,
+    SAME_DATASET,
     SETUP_PARAMS,
     SETUP_PROVENANCE_PARAM,
     SETUP_PROVENANCE_STATE_KEY,
@@ -1038,10 +1042,9 @@ def _clamp_url_value(state_key: str, value):
 
 
 # data_choice → ?source= value, for the built-in sources a URL can fully rebuild.
-# Sources absent here (uploaded tables, stored datasets) can't be reconstructed
-# from a link — the Share panel warns and shares the view settings only. Public
-# corpora are covered by the generic `corpus` token below instead of one entry
-# each. Mirrors the `source` handling in `main()`.
+# Private uploads travel by reference to files the recipient already holds.
+# Public corpora are covered by the generic `corpus` token below instead of
+# one entry each. Mirrors the `source` handling in `main()`.
 _SHAREABLE_SOURCES = {
     AUTHOR_CHOICE: "author",
     MANUAL_SAMPLE_CHOICE: "author",
@@ -1062,9 +1065,7 @@ def _source_choice_for_param(value) -> str | None:
     """Invert `_SHAREABLE_SOURCES`: a ``?source=``-style token → the data choice.
 
     Used by `cmp_source`, which names scanpath **B's** corpus in the
-    same vocabulary. An unknown token returns ``None`` — the link then simply
-    doesn't move the comparison dataset, which is a safe degrade rather than a
-    wedged picker.
+    same vocabulary. An unknown token falls back to a same-dataset comparison.
     """
     if not value:
         return None
@@ -1260,6 +1261,10 @@ def _apply_url_preset() -> str | None:
                                    (applied after combos build — see
                                    _apply_url_trial_selection; emitted by Share)
         &screen=intro            → open this child screen of a multipart trial
+        &compare=p002:t37        → compare with this participant and trial
+        &cmp_dataset=Study&cmp_dataset_id=…
+                                 → find scanpath B in a local upload by ID
+                                   or in an independent import by name
         &tab=animation           → pre-tick the Animate toggle (legacy; Animate
                                    is a toggle, not a tab)
         &heatmap_colorscale=Greens
@@ -1424,10 +1429,12 @@ def _apply_url_preset() -> str | None:
     # the picker to consume once its candidate list exists (the picker's own
     # key holds a render-time *label*, so a link can't seed it directly — the
     # same reason `request_trial` parks a request). `cmp_source` names
-    # B's corpus; an unknown name is dropped rather than honoured, which falls
-    # back to "B is in this dataset" instead of wedging the picker.
+    # B's built-in corpus. Uploaded B references resolve after the recovery
+    # cache restores their data and local IDs.
     compare_ids = parse_compare_value(qp.get(COMPARE_PARAM))
-    if compare_ids is not None:
+    if compare_ids is not None and not (
+        COMPARE_DATASET_PARAM in qp or COMPARE_DATASET_ID_PARAM in qp
+    ):
         participant_b, trial_b = compare_ids
         st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, True)
         st.session_state.setdefault(
@@ -1435,8 +1442,9 @@ def _apply_url_preset() -> str | None:
             {"participant_id": participant_b, "trial_id": trial_b},
         )
         source_b = _source_choice_for_param(qp.get(COMPARE_SOURCE_PARAM))
-        if source_b is not None:
-            st.session_state.setdefault(COMPARE_SOURCE_STATE_KEY, source_b)
+        # An older same-dataset link omits cmp_source. Seed that choice too,
+        # before the recovery cache can substitute the recipient's last B.
+        st.session_state.setdefault(COMPARE_SOURCE_STATE_KEY, source_b or SAME_DATASET)
         # B's own screen, for B's navigator — which keeps it only when B's
         # trial has that screen, as A's does with `screen=`.
         if qp.get(COMPARE_SCREEN_PARAM) not in (None, ""):
@@ -1602,6 +1610,63 @@ def link_dataset_notice(current: str | None) -> str | None:
         st.session_state.pop(LINK_DATASET_MISSING_KEY, None)
         return None
     return str(held.get("message") or "") or None
+
+
+def resolve_link_compare_upload(primary: str | None) -> str | None:
+    """Select the linked B after local uploads and the previous Compare state return."""
+    params = st.query_params
+    if COMPARE_DATASET_PARAM not in params and COMPARE_DATASET_ID_PARAM not in params:
+        return None
+    ids = parse_compare_value(params.get(COMPARE_PARAM))
+    if ids is None:
+        return None
+    name = str(params.get(COMPARE_DATASET_PARAM) or "")
+    share_id = params.get(COMPARE_DATASET_ID_PARAM)
+    screen = params.get(COMPARE_SCREEN_PARAM)
+    reference = (name, share_id, ids, screen)
+    state = st.session_state
+    # A link opens a comparison once. A later rerun may reflect a manual
+    # change to either picker, which the original URL must not undo.
+    previous = state.get("_linked_compare_upload")
+    if previous and previous["reference"] == reference:
+        chosen = state.get("_pending_source_choice") or state.get("data_source_choice")
+        if previous["notice"] and (
+            previous["primary"] != chosen or state.get(SINGLE_COMPARE_TOGGLE)
+        ):
+            state["_linked_compare_upload"] = {**previous, "notice": None}
+            return None
+        return previous["notice"]
+    token = resolve_dataset_reference(state, name, share_id)
+    available = token is not None and token != primary
+    state[SINGLE_COMPARE_TOGGLE] = available
+    state[COMPARE_SOURCE_STATE_KEY] = token if available else SAME_DATASET
+    state.pop(COMPARE_IDENTITY_STATE_KEY, None)
+    state.pop("single_compare_trial", None)
+    state.pop(SINGLE_COMPARE_SCREEN_ID, None)
+    notice = None
+    if available:
+        participant, trial = ids
+        state[PENDING_COMPARE_STATE_KEY] = {
+            "participant_id": participant,
+            "trial_id": trial,
+        }
+        if screen:
+            state[SINGLE_COMPARE_SCREEN_ID] = str(screen)
+    else:
+        state.pop(PENDING_COMPARE_STATE_KEY, None)
+        shown = md_literal(name)
+        dataset = f"**{shown}**" if shown else "the linked dataset"
+        notice = (
+            f"Only scanpath A is open. Scanpath B needs {dataset}. Ask the sender "
+            f"for the files, add the dataset under the same name with "
+            f"{ICONS['add']} Add dataset → Import files, then reopen the link."
+        )
+    state["_linked_compare_upload"] = {
+        "reference": reference,
+        "primary": primary,
+        "notice": notice,
+    }
+    return notice
 
 
 def scope_link_setup(choice: str | None) -> None:
@@ -3615,10 +3680,8 @@ def _build_share_query(
 
     # The second scanpath. Gated on `include_trial` for the same reason A's
     # trial is — lower-level callers may omit identity from a URL even though
-    # the app's Share panel always includes it. B's source rides along only
-    # when it is one a URL can rebuild; an uploaded dataset lives in session
-    # state, so the link says so rather than silently dropping half the
-    # comparison.
+    # the app's Share panel always includes it. A built-in B has a source
+    # token; an uploaded B uses the same local ID and portable name as A.
     compare = selection.get("compare") if include_trial else None
     if isinstance(compare, dict) and compare.get("trial_id") not in (None, ""):
         participant_b = compare.get("participant_id")
@@ -3635,18 +3698,33 @@ def _build_share_query(
                 "leaves out, so the link opens the first scanpath only."
             )
         source_b = compare.get("source")
-        if source_b:
+        if source_b and COMPARE_PARAM in params:
             token = _SHAREABLE_SOURCES.get(source_b)
-            if token and COMPARE_PARAM in params:
+            if token:
                 params[COMPARE_SOURCE_PARAM] = token
-            elif COMPARE_PARAM in params:
+            else:
                 from .app import _dataset_display_name
 
-                params.pop(COMPARE_PARAM)
-                caveats.append(
-                    f"The compared scanpath comes from **{md_literal(_dataset_display_name(source_b))}**, which "
-                    "a link can't rebuild, so the link leaves it out."
-                )
+                name_b = _dataset_display_name(source_b)
+                if share_id := dataset_share_id(st.session_state, source_b):
+                    params[COMPARE_DATASET_PARAM] = name_b
+                    params[COMPARE_DATASET_ID_PARAM] = share_id
+                    files = (
+                        "MultiplEYE session set"
+                        if is_multipleye_entry(st.session_state["_datasets"][source_b])
+                        else "data files and setup file"
+                    )
+                    caveats.append(
+                        f"Scanpath B uses **{md_literal(name_b)}**. Send its "
+                        f"{files} so the recipient can import it under "
+                        "that name before opening the link."
+                    )
+                else:
+                    params.pop(COMPARE_PARAM)
+                    caveats.append(
+                        f"The compared scanpath comes from **{md_literal(name_b)}**, "
+                        "which a link can't rebuild, so the link leaves it out."
+                    )
         if COMPARE_PARAM in params and compare.get("screen_id") not in (None, ""):
             params[COMPARE_SCREEN_PARAM] = str(compare["screen_id"])
 

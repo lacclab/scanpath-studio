@@ -807,7 +807,7 @@ def test_compare_selection_round_trips_through_the_share_link():
 
 
 def _compare_share_unshareable_app():
-    """A stored upload as B can't travel — the link must say so, not drop it."""
+    """A stale selection naming a removed source cannot be shared."""
     import streamlit as st
 
     from scanpath_studio.constants import DEMO_CHOICE
@@ -837,7 +837,16 @@ def test_an_unshareable_compare_source_is_declared_not_dropped():
     # the recipient on a trial id looked up in the *wrong* corpus.
     assert sk.COMPARE_PARAM not in emitted
     assert sk.COMPARE_SOURCE_PARAM not in emitted
+    assert sk.COMPARE_DATASET_PARAM not in emitted
+    assert sk.COMPARE_DATASET_ID_PARAM not in emitted
     assert any("My upload" in caveat for caveat in at.session_state["_caveats"])
+
+
+def test_uploaded_b_reference_params_are_pinned():
+    params = {sk.COMPARE_DATASET_PARAM, sk.COMPARE_DATASET_ID_PARAM}
+    assert params == {"cmp_dataset", "cmp_dataset_id"}
+    assert params <= sk.URL_SELECTION_PARAMS
+    assert params <= sk.URL_OPTIONAL_PARAMS
 
 
 def test_url_bound_widget_keys_frozen():

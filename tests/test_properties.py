@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import copy
 import json
+from urllib.parse import parse_qsl
 
 import numpy as np
 import pandas as pd
@@ -92,6 +93,41 @@ def test_compare_link_value_round_trips(participant, trial):
     colons and backslashes included."""
     value = url_state.compare_value(participant, trial)
     assert url_state.parse_compare_value(value) == (participant, trial)
+
+
+@given(*(st.text(min_size=1, max_size=20) for _ in range(3)))
+def test_compare_upload_link_recovers_display_name_and_reading(
+    name, participant, trial
+):
+    from scanpath_studio.constants import DATASET_ALIASES_KEY, DEMO_CHOICE
+    from scanpath_studio.session_keys import PENDING_COMPARE_STATE_KEY
+
+    sender = {
+        "_datasets": {"sender key": {}},
+        DATASET_ALIASES_KEY: {"sender key": name},
+        "_share_selection": {
+            "compare": {
+                "source": "sender key",
+                "participant_id": participant,
+                "trial_id": trial,
+            }
+        },
+    }
+    recipient = {
+        "_datasets": {"recipient key": {}},
+        DATASET_ALIASES_KEY: {"recipient key": name},
+    }
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(url_state.st, "session_state", sender)
+        query, _ = url_state._build_share_query(DEMO_CHOICE)
+        patch.setattr(url_state.st, "session_state", recipient)
+        patch.setattr(url_state.st, "query_params", dict(parse_qsl(query)))
+        assert url_state.resolve_link_compare_upload(DEMO_CHOICE) is None
+    assert recipient["cmp_dataset"] == "recipient key"
+    assert recipient[PENDING_COMPARE_STATE_KEY] == {
+        "participant_id": participant,
+        "trial_id": trial,
+    }
 
 
 @given(

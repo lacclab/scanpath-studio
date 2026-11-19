@@ -497,11 +497,13 @@ SETUP_PROVENANCE_STATE_KEY = "_setup_provenance_arrived"
 # (as `?tab=animation` is Animate's), and it names B's trial: a `cmp_source`
 # that named B's corpus without naming B's trial would restore nothing.
 #
-# A built-in B uses `cmp_source` in the same vocabulary as `source`. An
+# A built-in B uses `cmp_source` in the same vocabulary as `source`;
+# `cmp_source=corpus` names the catalogue entry by its unique `cmp_corpus` slug. An
 # uploaded B carries its displayed name and local ID. With neither source
 # reference B belongs to A's dataset.
 COMPARE_PARAM = "compare"
 COMPARE_SOURCE_PARAM = "cmp_source"
+COMPARE_CORPUS_PARAM = "cmp_corpus"
 COMPARE_DATASET_PARAM = "cmp_dataset"
 COMPARE_DATASET_ID_PARAM = "cmp_dataset_id"
 #: B's screen of a multipart trial — `screen=` is A's. Emitted only beside
@@ -809,6 +811,7 @@ URL_SELECTION_PARAMS = frozenset(
         PARAM_DATASET_ID,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
+        COMPARE_CORPUS_PARAM,
         COMPARE_DATASET_PARAM,
         COMPARE_DATASET_ID_PARAM,
         COMPARE_SCREEN_PARAM,
@@ -904,6 +907,7 @@ URL_OPTIONAL_PARAMS = frozenset(
         SETUP_PROVENANCE_PARAM,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
+        COMPARE_CORPUS_PARAM,
         COMPARE_DATASET_PARAM,
         COMPARE_DATASET_ID_PARAM,
         COMPARE_SCREEN_PARAM,

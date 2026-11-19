@@ -266,20 +266,20 @@ def test_comparison_link_reopens_both_uploads_from_the_recovery_cache(
 def test_missing_b_notice_retires_after_a_manual_selection(monkeypatch, key, value):
     import streamlit as st
 
-    from scanpath_studio.url_state import resolve_link_compare_upload
+    from scanpath_studio.url_state import resolve_link_compare_source
 
     state = {"data_source_choice": "A", "single_compare_toggle": True}
     monkeypatch.setattr(st, "session_state", state)
     monkeypatch.setattr(
         st, "query_params", {"compare": "p:t", "cmp_dataset": "Missing"}
     )
-    assert resolve_link_compare_upload("A")
-    assert resolve_link_compare_upload("A")
+    assert resolve_link_compare_source("A")
+    assert resolve_link_compare_source("A")
     state[key] = value
-    assert resolve_link_compare_upload("A") is None
+    assert resolve_link_compare_source("A") is None
     state.pop("_pending_source_choice", None)
     state["single_compare_toggle"] = False
-    assert resolve_link_compare_upload("A") is None
+    assert resolve_link_compare_source("A") is None
 
 
 def test_legacy_same_dataset_comparison_overrides_the_previous_b(monkeypatch, tmp_path):

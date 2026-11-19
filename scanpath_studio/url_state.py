@@ -110,6 +110,7 @@ from .dataset_identity import dataset_share_id, resolve_dataset_reference
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .export import PRINT_DPI_BOUNDS, PRINT_WIDTH_BOUNDS
 from .session_keys import (
+    COMPARE_CORPUS_PARAM,
     COMPARE_DATASET_ID_PARAM,
     COMPARE_DATASET_PARAM,
     COMPARE_FIX_RANGE_PARAM,
@@ -1265,6 +1266,8 @@ def _apply_url_preset() -> str | None:
         &cmp_dataset=Study&cmp_dataset_id=…
                                  → find scanpath B in a local upload by ID
                                    or in an independent import by name
+        &cmp_source=corpus&cmp_corpus=potec
+                                 → open B from an installed public corpus
         &tab=animation           → pre-tick the Animate toggle (legacy; Animate
                                    is a toggle, not a tab)
         &heatmap_colorscale=Greens
@@ -1429,12 +1432,10 @@ def _apply_url_preset() -> str | None:
     # the picker to consume once its candidate list exists (the picker's own
     # key holds a render-time *label*, so a link can't seed it directly — the
     # same reason `request_trial` parks a request). `cmp_source` names
-    # B's built-in corpus. Uploaded B references resolve after the recovery
-    # cache restores their data and local IDs.
+    # B's built-in corpus. Uploads and public corpora resolve after the
+    # recovery cache restores the local data and download-folder choice.
     compare_ids = parse_compare_value(qp.get(COMPARE_PARAM))
-    if compare_ids is not None and not (
-        COMPARE_DATASET_PARAM in qp or COMPARE_DATASET_ID_PARAM in qp
-    ):
+    if compare_ids is not None and _linked_compare_source_kind(qp) is None:
         participant_b, trial_b = compare_ids
         st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, True)
         st.session_state.setdefault(
@@ -1612,10 +1613,54 @@ def link_dataset_notice(current: str | None) -> str | None:
     return str(held.get("message") or "") or None
 
 
-def resolve_link_compare_upload(primary: str | None) -> str | None:
-    """Select the linked B after local uploads and the previous Compare state return."""
+def _linked_compare_source_kind(params) -> str | None:
+    if COMPARE_DATASET_PARAM in params or COMPARE_DATASET_ID_PARAM in params:
+        return "upload"
+    source = str(params.get(COMPARE_SOURCE_PARAM) or "").lower()
+    if (
+        COMPARE_CORPUS_PARAM in params
+        or source == CORPUS_SOURCE_TOKEN
+        or source in ONESTOP_REGIME_SOURCE_TOKENS.values()
+    ):
+        return "public"
+    return None
+
+
+def _linked_public_comparison(source, slug) -> tuple[str | None, str | None]:
+    """Check B against this installation's catalogue and files, without downloading."""
+    from .app import public_dataset_registry, public_datasets_enabled
+    from .compare_source import public_dataset_readiness
+
+    if source in ("", CORPUS_SOURCE_TOKEN) and not slug:
+        return None, (
+            "Only scanpath A is open. The link doesn't name a public corpus for "
+            "scanpath B. Ask the sender for a new link."
+        )
+    label = (
+        corpus_choice_for_slug(slug)
+        if source in ("", CORPUS_SOURCE_TOKEN)
+        else _source_choice_for_param(source)
+    )
+    if not public_datasets_enabled() or label not in public_dataset_registry():
+        shown = md_literal(str(label or slug or source))
+        return None, (
+            f"Only scanpath A is open. This app doesn't offer **{shown}** for "
+            "scanpath B. Reopen the link in an installation that offers this corpus."
+        )
+    ready, reason = public_dataset_readiness(label, refresh=True)
+    if not ready:
+        return None, (
+            f"Only scanpath A is open. {md_literal(reason)} "
+            "Reopen the link when the corpus is available."
+        )
+    return label, None
+
+
+def resolve_link_compare_source(primary: str | None) -> str | None:
+    """Select a linked upload or public B after the local session is restored."""
     params = st.query_params
-    if COMPARE_DATASET_PARAM not in params and COMPARE_DATASET_ID_PARAM not in params:
+    kind = _linked_compare_source_kind(params)
+    if kind is None:
         return None
     ids = parse_compare_value(params.get(COMPARE_PARAM))
     if ids is None:
@@ -1623,27 +1668,43 @@ def resolve_link_compare_upload(primary: str | None) -> str | None:
     name = str(params.get(COMPARE_DATASET_PARAM) or "")
     share_id = params.get(COMPARE_DATASET_ID_PARAM)
     screen = params.get(COMPARE_SCREEN_PARAM)
-    reference = (name, share_id, ids, screen)
+    source = str(params.get(COMPARE_SOURCE_PARAM) or "").lower()
+    slug = params.get(COMPARE_CORPUS_PARAM)
+    reference = (kind, name, share_id, source, slug, ids, screen)
     state = st.session_state
     # A link opens a comparison once. A later rerun may reflect a manual
     # change to either picker, which the original URL must not undo.
-    previous = state.get("_linked_compare_upload")
+    previous = state.get("_linked_compare_source")
     if previous and previous["reference"] == reference:
         chosen = state.get("_pending_source_choice") or state.get("data_source_choice")
         if previous["notice"] and (
             previous["primary"] != chosen or state.get(SINGLE_COMPARE_TOGGLE)
         ):
-            state["_linked_compare_upload"] = {**previous, "notice": None}
+            state["_linked_compare_source"] = {**previous, "notice": None}
             return None
         return previous["notice"]
-    token = resolve_dataset_reference(state, name, share_id)
-    available = token is not None and token != primary
+    notice = None
+    if kind == "public":
+        token, notice = _linked_public_comparison(source, slug)
+    else:
+        token = resolve_dataset_reference(state, name, share_id)
+        if token is None or token == primary:
+            token = None
+            shown = md_literal(name)
+            dataset = f"**{shown}**" if shown else "the linked dataset"
+            notice = (
+                f"Only scanpath A is open. Scanpath B needs {dataset}. Ask the sender "
+                f"for the files, add the dataset under the same name with "
+                f"{ICONS['add']} Add dataset → Import files, then reopen the link."
+            )
+    available = token is not None
     state[SINGLE_COMPARE_TOGGLE] = available
-    state[COMPARE_SOURCE_STATE_KEY] = token if available else SAME_DATASET
+    state[COMPARE_SOURCE_STATE_KEY] = (
+        token if token and token != primary else SAME_DATASET
+    )
     state.pop(COMPARE_IDENTITY_STATE_KEY, None)
     state.pop("single_compare_trial", None)
     state.pop(SINGLE_COMPARE_SCREEN_ID, None)
-    notice = None
     if available:
         participant, trial = ids
         state[PENDING_COMPARE_STATE_KEY] = {
@@ -1654,14 +1715,7 @@ def resolve_link_compare_upload(primary: str | None) -> str | None:
             state[SINGLE_COMPARE_SCREEN_ID] = str(screen)
     else:
         state.pop(PENDING_COMPARE_STATE_KEY, None)
-        shown = md_literal(name)
-        dataset = f"**{shown}**" if shown else "the linked dataset"
-        notice = (
-            f"Only scanpath A is open. Scanpath B needs {dataset}. Ask the sender "
-            f"for the files, add the dataset under the same name with "
-            f"{ICONS['add']} Add dataset → Import files, then reopen the link."
-        )
-    state["_linked_compare_upload"] = {
+    state["_linked_compare_source"] = {
         "reference": reference,
         "primary": primary,
         "notice": notice,
@@ -3719,6 +3773,9 @@ def _build_share_query(
                         f"{files} so the recipient can import it under "
                         "that name before opening the link."
                     )
+                elif slug := registry_corpus_slugs().get(source_b):
+                    params[COMPARE_SOURCE_PARAM] = CORPUS_SOURCE_TOKEN
+                    params[COMPARE_CORPUS_PARAM] = slug
                 else:
                     params.pop(COMPARE_PARAM)
                     caveats.append(

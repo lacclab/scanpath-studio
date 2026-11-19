@@ -122,12 +122,42 @@ def test_compare_upload_link_recovers_display_name_and_reading(
         query, _ = url_state._build_share_query(DEMO_CHOICE)
         patch.setattr(url_state.st, "session_state", recipient)
         patch.setattr(url_state.st, "query_params", dict(parse_qsl(query)))
-        assert url_state.resolve_link_compare_upload(DEMO_CHOICE) is None
+        assert url_state.resolve_link_compare_source(DEMO_CHOICE) is None
     assert recipient["cmp_dataset"] == "recipient key"
     assert recipient[PENDING_COMPARE_STATE_KEY] == {
         "participant_id": participant,
         "trial_id": trial,
     }
+
+
+@given(st.from_regex(r"[A-Za-z][A-Za-z0-9_-]{0,25}", fullmatch=True))
+def test_shared_public_b_survives_a_catalogue_label_change(short):
+    from scanpath_studio import app, compare_source
+    from scanpath_studio.constants import DEMO_CHOICE
+
+    state = {
+        "_share_selection": {
+            "compare": {"source": "Old label", "participant_id": "p", "trial_id": "t"}
+        }
+    }
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(url_state.st, "session_state", state)
+        patch.setattr(app, "public_datasets_enabled", lambda: True)
+        patch.setattr(
+            app, "public_dataset_registry", lambda: {"Old label": {"short": short}}
+        )
+        query, _ = url_state._build_share_query(DEMO_CHOICE)
+        patch.setattr(url_state.st, "query_params", dict(parse_qsl(query)))
+        patch.setattr(
+            app, "public_dataset_registry", lambda: {"New label": {"short": short}}
+        )
+        patch.setattr(
+            compare_source,
+            "public_dataset_readiness",
+            lambda label, *, refresh: (True, ""),
+        )
+        assert url_state.resolve_link_compare_source(DEMO_CHOICE) is None
+    assert state["cmp_dataset"] == "New label"
 
 
 @given(

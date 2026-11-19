@@ -842,9 +842,13 @@ def test_an_unshareable_compare_source_is_declared_not_dropped():
     assert any("My upload" in caveat for caveat in at.session_state["_caveats"])
 
 
-def test_uploaded_b_reference_params_are_pinned():
-    params = {sk.COMPARE_DATASET_PARAM, sk.COMPARE_DATASET_ID_PARAM}
-    assert params == {"cmp_dataset", "cmp_dataset_id"}
+def test_b_dataset_reference_params_are_pinned():
+    params = {
+        sk.COMPARE_DATASET_PARAM,
+        sk.COMPARE_DATASET_ID_PARAM,
+        sk.COMPARE_CORPUS_PARAM,
+    }
+    assert params == {"cmp_dataset", "cmp_dataset_id", "cmp_corpus"}
     assert params <= sk.URL_SELECTION_PARAMS
     assert params <= sk.URL_OPTIONAL_PARAMS
 

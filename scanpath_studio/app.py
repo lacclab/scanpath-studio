@@ -360,7 +360,7 @@ from scanpath_studio.url_state import (
     link_dataset_notice,
     link_sets,
     link_setup_keys_for,
-    resolve_link_compare_upload,
+    resolve_link_compare_source,
     resolve_link_dataset,
     scope_link_setup,
 )
@@ -9435,7 +9435,7 @@ def _run_app() -> None:
                 st.session_state["_pending_source_choice"] = name
     if notice := link_dataset_notice(st.session_state.get("data_source_choice")):
         page_notices.warning(notice, icon=ICONS["warning"])
-    if notice := resolve_link_compare_upload(
+    if notice := resolve_link_compare_source(
         linked_choice or st.session_state.get("data_source_choice")
     ):
         page_notices.warning(notice, icon=ICONS["warning"])

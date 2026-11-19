@@ -302,7 +302,7 @@ several menus split into a **Scanpath A** and a **Scanpath B** group.
 
 | Control | What it does |
 | --- | --- |
-| **Dataset B** | Choose the dataset scanpath B comes from: this one, or another dataset. |
+| **Dataset B** | Choose the dataset scanpath B comes from. To reopen a shared comparison with PoTeC or OneStop, the recipient needs the corpus on their computer. If the link opens only A, open the named corpus as the main dataset to locate or download its files, then reopen the link. |
 | **Trial B**, slider, **◀ ▶** | Choose scanpath B's trial: 📄 marks the same text, 👤 the same participant. |
 | **Screen B** | On a trial recorded over several screens: B's screen to show. |
 | **⇅** on B's row | Sort scanpath B's trial list, apart from A's. The default, **Same text, then same participant**, lists trials of A's text first, then A's participant, then the rest. You can also sort by any field, as on A's row. |

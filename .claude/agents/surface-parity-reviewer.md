@@ -26,8 +26,8 @@ present/missing:
    `CANONICAL_FIGURE_DEFAULTS`.
 
 A missing surface is a finding unless the diff/commit message explicitly
-scopes it out. Also check: new viz settings appear in the "Which viz settings
-apply in which render path" table in `AGENTS.md`, mode gating
+scopes it out. Also check: new viz settings appear in the table in
+`RENDER_PATHS.md`, mode gating
 (`controls._mode_gate`) covers builders that ignore the setting, and a new
 figure option has a `code_snippet` emitter (`tests/test_render_every_option.py`).
 

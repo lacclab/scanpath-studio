@@ -12,8 +12,8 @@ output). Fix trivial failures (formatting) directly; report anything else.
 
 ## Checks
 
-1. **Lint** — `ruff check .`
-2. **Format** — `ruff format .` (CI gates on both; this
+1. **Lint** — `uv run --extra lint ruff check .`
+2. **Format** — `uv run --extra lint ruff format .` (CI gates on both; this
    one rewrites files — if it changed anything, say which files). Run these
    even for "docs-only" changes — repo rule.
 3. **Tests** — `pytest -n auto`, in the project's environment (e.g.

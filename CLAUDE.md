@@ -9,9 +9,10 @@ Contributor setup is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Before every commit / push
 
-- **Run ruff first — always.** `ruff check .` and `ruff format .`. CI's Lint
-  job gates on **both**, so a missed format fails the build, even for a
-  docs-only change.
+- **Run ruff first — always.** `uv run --extra lint ruff check .` and
+  `uv run --extra lint ruff format .` — the pinned ruff; the one on PATH may be
+  older. CI's Lint job gates on **both**, so a missed format fails the build,
+  even for a docs-only change.
 - **Add a changelog fragment, never edit `CHANGELOG.md`.** Each item is one
   file, `changelog.d/<issue>.<group>.md` (`341.fixed.md`; several issues join
   with `+`), or `changelog.d/<slug>.<group>.md` when there is no issue — the
@@ -79,105 +80,33 @@ Contributor setup is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
   diff, the check, the PRs behind it) — or better, a test. Prune items a test
   now covers.
 
-## Dev loop
-
-- **Code change not showing? Restart the server.** Streamlit doesn't reload
-  imported modules on rerun, and `st.cache_data` doesn't hash transitively-called
-  helpers — a rerun / "Clear cache" isn't enough. See CONTRIBUTING →
-  *If a code change doesn't show up*.
-- Prefer headless `AppTest.from_file("streamlit_app.py")` for verifying behavior;
-  the live preview is slow to spin up.
-- **The spatial plot must stay on `tabs._render_true_scale_chart`** (never
-  `st.plotly_chart`; the cached replay uses its two halves,
-  `_true_scale_plot_html` + `_render_true_scale_plot`), and deep-link / restore
-  relies on the `global_*` / `single_*` / `filter_*` widget keys — don't rename
-  them. More under *Gotchas* in `@AGENTS.md`.
-
 ## Tracking work
 
-- **Work lives in [GitHub Issues](https://github.com/lacclab/scanpath-studio/issues)**,
-  arranged on the **[Scanpath Studio board](https://github.com/orgs/lacclab/projects/5)**
-  (project 5). `gh issue view <n>`, `gh issue create`,
-  `gh project item-list 5 --owner lacclab`.
-- **GitHub's own `#N` is the ID.** Issues get a plain title, and commits, PRs
-  and changelog fragments cite `#N`. Older issues and git history also carry
-  `[VIZ-37]`-style IDs from an earlier tracker; never mint a new one, and
-  `gh issue list --state all --search "VIZ-37"` still finds the issue.
-- **Not every change gets an issue.** Work picked up and finished inside one
-  session, whose reasoning fits in its PR description, is cited by its PR
-  number — its changelog fragment takes a slug name and the release fills the
-  PR number in. Open an issue when an item needs what an issue is *for*: when it
-  reaches **Review** (the approval gate — the sign-off needs somewhere to
-  happen), when it is blocked on a decision only the user can make
-  (`waiting-on-you`), or when it is carried across sessions and needs a place to
-  hold the brief. If you are unsure, open the issue.
-- **Prefer GitHub's structured fields to labels.** Status, priority and kind are
-  native — the board's `Status` and `Priority` single-selects and the org's
-  issue types — so they are *not* also labels. Only two labels remain, for the
-  two things GitHub has no field for: `area:*` and `waiting-on-you`.
-- **Where each fact lives.**
-  - **Status** → the board's `Status` column: `Backlog · Planned · In progress ·
-    On hold · Review`. Closing the issue is the sixth state. Move it on the board,
-    or with `gh project item-edit` (needs the `project` token scope —
-    `gh auth refresh -s project` once).
-  - **Priority** → the board's `Priority` column: `Urgent · High · Medium · Low`.
-    Medium is the default.
-  - **Kind** → the native issue type: `Bug` · `Feature` (a capability) · `Task`
-    (a chore, a validation pass, infrastructure). `gh` has no flag for it; set it
-    with `gh api -X PATCH repos/lacclab/scanpath-studio/issues/<n> -f type=Task`.
-  - **Area** → an `area:*` label (`ux`, `compare`, `viz`, `data`, `perf`,
-    `analysis`, `preprocessing`, `export`, `validation`, `bug`, `engineering`).
-  - **Blocking the user** → the `waiting-on-you` label; see below.
-- **Approval gate.** Finishing implementation means board Status **Review** with
-  the issue **open** — never close it yourself. Closing *is* the sign-off, and it
-  is the user's to make. An issue closed without being implemented says why in a
-  closing comment and uses `--reason "not planned"`.
-- **Claim it and move it to *In progress* when you pick it up**, not when you
-  finish: `gh issue edit <n> --add-assignee @me`, and set the board's Status.
-  Several people and sessions share this repo; an unassigned issue reads as
-  unclaimed work.
+Work lives in [GitHub Issues](https://github.com/lacclab/scanpath-studio/issues),
+on the [Scanpath Studio board](https://github.com/orgs/lacclab/projects/5)
+(project 5). **Use `/track`** to open, update or move one; it holds the
+conventions — the board's Status and Priority, issue types, `area:*` labels,
+the four-section body and the *⚖ Waiting on you* checklist.
 
-**Write-up shape.** The issue body has four sections, as markdown headings, in
-this order:
-
-1. `## Request` — what was asked for, in the asker's terms. **Required.**
-2. `## What was done` — what actually shipped.
-3. `## What's left` — **the developer's** remaining work only; link the
-   follow-up issue when the remainder was split out. On a finished item this
-   honestly says "Nothing." — the review is not developer work.
-4. `## Background` — anchors, design calls, gotchas, related issues.
-
-An optional `> blockquote` lede above them carries the current status. A backlog
-issue has only *Request* (+ *Background*); the middle two are required once it
-reaches *In progress* or *Review*. Link code with full blob URLs
-(`https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/plots.py#L339`)
-— a relative path renders dead in an issue.
-
-**Waiting on you.** Everything only the *user* can decide goes in one place: a
-`### ⚖ Waiting on you` checklist at the top of the body, plus the
-`waiting-on-you` label, so `gh issue list --label waiting-on-you` answers "what
-is holding on me" without a project call. That covers the design calls that
-block the work *and*, once it is built, the ask to review — name the judgement
-calls you made and the surfaces to click. An issue in *Review* always has at
-least that entry. Clear an item the moment it is answered — tick the box, and
-record the call under *Background* in the same edit — including when you
-settled it yourself.
-
-**Keep it current *while* you work.** One commit per feature or fix, not one per
-session, with the issue in the commit subject — `(#341)` — so the issue and the
-code stay findable from each other (with no issue, the PR's squash-merge subject
-carries its own number). Notice an unrelated problem? Fix it on the spot if it
-is small, otherwise `gh issue create` so it does not get lost.
-
-## On release
-
-See *Releasing* in `@AGENTS.md`: bump `__release__` in
-`scanpath_studio/__init__.py` **and** `version` + `date-released` in
-`CITATION.cff` (a test enforces version parity).
+- **GitHub's `#N` is the ID.** Commits, PRs and changelog fragments cite it;
+  never mint a `[VIZ-37]`-style one (older history has them, and
+  `gh issue list --state all --search "VIZ-37"` still finds the issue).
+- **Not every change gets an issue.** One finished inside a session is cited by
+  its PR. Open an issue when the item reaches **Review**, is blocked on a
+  decision only the user can make, or is carried across sessions. If unsure,
+  open it.
+- **Claim it when you pick it up** (`gh issue edit <n> --add-assignee @me`, board
+  Status *In progress*) — several people and sessions share this repo.
+- **Approval gate.** Finished means Status **Review** with the issue **open**.
+  Never close it yourself: closing is the user's sign-off.
+- **One commit per feature or fix**, with `(#N)` in the subject. Notice an
+  unrelated problem? Fix it on the spot if it is small, otherwise
+  `gh issue create` so it does not get lost.
 
 ## Repo automation (`.claude/`)
 
-- **Skills** — `/release`, `/track`, `/new-feature`, `/preflight` and `/verify`
+- **Skills** — `/release` (cutting a release, including the `__release__` +
+  `CITATION.cff` bump), `/track`, `/new-feature`, `/preflight` and `/verify`
   package the workflows above; invoke them instead of re-deriving the steps.
   `/verify` keeps a feature map (`.claude/skills/verify/feature-map.md`) — add
   a row when a feature lands.

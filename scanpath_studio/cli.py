@@ -44,6 +44,7 @@ from .constants import (
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
+    FIXATION_LABEL_OPTIONS,
     FIXATION_SYMBOLS,
     FONT_FAMILY,
     SACCADE_CLASS_COLORS,
@@ -1250,22 +1251,14 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar=("LO", "HI"),
         help="Fix the heatmap's color scale to LO..HI instead of the trial's range.",
     )
-    viz.add_argument(
-        "--order-font-size",
-        type=int,
-        metavar="PX",
-        help="Size of the fixation index numbers (default: 10).",
-    )
-    viz.add_argument(
-        "--order-font-color",
-        metavar="COLOR",
-        help="Color of the fixation index numbers (default: #111111).",
-    )
-    viz.add_argument(
-        "--order-label-position",
-        choices=("above", "inside", "below"),
-        help="Where each fixation index number sits on its fixation (default: above).",
-    )
+    for option in FIXATION_LABEL_OPTIONS.values():
+        viz.add_argument(
+            option.flag,
+            type=int if option.kind == "int" else str,
+            metavar=option.metavar,
+            choices=option.choices or None,
+            help=f"{option.description} (default: {option.default}).",
+        )
     viz.add_argument(
         "--text-color",
         metavar="COLOR",
@@ -1867,9 +1860,7 @@ _DIRECT_OPTION_FLAGS = (
     "marker_size_scale",
     "fixation_opacity",
     "saccade_opacity",
-    "order_font_size",
-    "order_font_color",
-    "order_label_position",
+    *FIXATION_LABEL_OPTIONS,
     "text_color",
     "highlight_text_color",
     "span_border_color",

@@ -14,6 +14,7 @@ import math
 import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
+from functools import partial
 from urllib.parse import urlencode
 
 import pandas as pd
@@ -54,6 +55,7 @@ from .constants import (
     CUSTOM_PALETTE,
     DEFAULT_HEATMAP_SIGMA_PX,
     DEMO_CHOICE,
+    FIXATION_LABEL_OPTIONS,
     FIXATION_OUTLINE_WIDTH_BOUNDS,
     FIXATION_SYMBOLS,
     GRID_FONT_SIZE_BOUNDS,
@@ -72,7 +74,6 @@ from .constants import (
     ONESTOP_REGIME_LABELS,
     ONESTOP_REGIME_SOURCE_TOKENS,
     ONESTOP_VARIANT_LABELS,
-    ORDER_LABEL_POSITIONS,
     PALETTES,
     PUBLIC_DATASETS_CHOICE,
     SACCADE_ARROW_SIZE_BOUNDS,
@@ -264,10 +265,6 @@ def _parse_compare_stimulus(v) -> str:
 
 def _parse_marker_size_scale(v) -> str:
     return _parse_choice(v, tuple(MARKER_SIZE_SCALES), "marker size scale")
-
-
-def _parse_order_label_position(v) -> str:
-    return _parse_choice(v, tuple(ORDER_LABEL_POSITIONS), "index label position")
 
 
 #: The one colour spelling every `st.color_picker` holds and every figure
@@ -499,6 +496,14 @@ _DESIGN_PARAMS = {
 }
 
 
+def _fixation_label_params(*kinds: str) -> dict[str, str]:
+    return {
+        name: option.state_key
+        for name, option in FIXATION_LABEL_OPTIONS.items()
+        if option.kind in kinds
+    }
+
+
 def _design_params(kind: str) -> dict[str, str]:
     """The `_DESIGN_PARAMS` of one share group: "toggle", "color", "int" or
     "float" — param → session key."""
@@ -595,7 +600,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     # The duration scale: always emitted (it is seeded). A link carrying layer
     # toggles but no scale opens on the relative one — see `_apply_url_preset`.
     "marker_size_scale": "global_marker_size_scale",
-    "order_label_position": "global_order_label_position",
+    **_fixation_label_params("choice", "color"),
     "illustration_label": "global_illustration_label",
     "illustration_text": "global_illustration_text",
     # Vertical drift correction ("Off" or a Carr et al. (2021) algorithm). It
@@ -628,7 +633,6 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     # comma-separated list — the generic writer below already joins a list value,
     # and `_URL_PRESETS` overrides the read side with a validating parser.
     "saccade_classes": "global_saccade_classes",
-    "order_font_color": "global_order_font_color",
     "text_color": "global_text_color",
     "highlight_text_color": "global_highlight_text_color",
     "bg_choice": "global_bg_choice",
@@ -693,7 +697,7 @@ _SHARE_COLOR_PARAMS = (
     "saccade_color_refixation",
     "saccade_color_return_sweep",
     "saccade_color_regression",
-    "order_font_color",
+    *_fixation_label_params("color"),
     "text_color",
     "highlight_text_color",
     "bg_custom",
@@ -709,7 +713,7 @@ _SHARE_COLOR_PARAMS = (
 _SHARE_INT_PARAMS = {
     **_design_params("int"),
     "export_dpi": "export_figure_dpi",
-    "order_font_size": "global_order_font_size",
+    **_fixation_label_params("int"),
     # The animation frame grid. Worth sharing — a link that
     # says "look at this replay" should reproduce the same smoothness.
     "anim_grid_step_ms": "global_anim_grid_step_ms",
@@ -839,10 +843,14 @@ _URL_PRESETS = {
     "cmp_layout": ("single_compare_layout", _parse_compare_layout),
     "cmp_stimulus": ("single_compare_stimulus", _parse_compare_stimulus),
     "marker_size_scale": ("global_marker_size_scale", _parse_marker_size_scale),
-    "order_label_position": (
-        "global_order_label_position",
-        _parse_order_label_position,
-    ),
+    **{
+        name: (
+            option.state_key,
+            partial(_parse_choice, options=option.choices, what=name.replace("_", " ")),
+        )
+        for name, option in FIXATION_LABEL_OPTIONS.items()
+        if option.choices
+    },
     # And for every colour, which Plotly rejects outright.
     **{k: (_SHARE_VALUE_PARAMS[k], _parse_hex_color) for k in _SHARE_COLOR_PARAMS},
     # Figure text from a link is text, never markup.
@@ -920,7 +928,11 @@ _URL_BOUNDED = {
     "global_line_spacing": (1.0, 10.0),
     "global_saccade_width": SACCADE_WIDTH_BOUNDS,
     "global_saccade_opacity": (0.1, 1.0),
-    "global_order_font_size": (6, 72),
+    **{
+        option.state_key: option.bounds
+        for option in FIXATION_LABEL_OPTIONS.values()
+        if option.bounds
+    },
     "global_anim_grid_step_ms": (20, 500),
     "global_anim_max_frames": (30, 2000),
     "global_marker_size_range": (4, 40),
@@ -1750,7 +1762,11 @@ _CHOICE_STATE_PARSERS = {
     },
     "global_illustration_label": _closed_choice(("Auto", "Show", "Hide")),
     "global_marker_size_scale": _closed_choice(tuple(MARKER_SIZE_SCALES)),
-    "global_order_label_position": _closed_choice(tuple(ORDER_LABEL_POSITIONS)),
+    **{
+        option.state_key: _closed_choice(option.choices)
+        for option in FIXATION_LABEL_OPTIONS.values()
+        if option.choices
+    },
     "global_preproc_short_policy": _closed_choice(
         ("Off", "Merge", "Merge then discard", "Discard")
     ),
@@ -2849,23 +2865,18 @@ def _restore_plot_config(
                 spec["size"] = _legend_size(spec["size"])
             for key, value in _legend_state(kind, spec).items():
                 put(key, value)
-    if "order_font_size" in sizing:
-        put_int(
-            sizing["order_font_size"],
-            "global_order_font_size",
-            *_FONT_BOUNDS,
-            "order label size",
-        )
-    color = sizing.get("order_font_color")
-    if isinstance(color, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", color):
-        put("global_order_font_color", color)
-    if "order_label_position" in sizing:
-        put_valid(
-            sizing["order_label_position"] in tuple(ORDER_LABEL_POSITIONS),
-            "global_order_label_position",
-            sizing["order_label_position"],
-            "order label position",
-        )
+    for name, option in FIXATION_LABEL_OPTIONS.items():
+        if name not in sizing:
+            continue
+        value = sizing[name]
+        if option.bounds:
+            put_int(value, option.state_key, *option.bounds, name.replace("_", " "))
+        elif option.choices:
+            put_valid(
+                value in option.choices, option.state_key, value, name.replace("_", " ")
+            )
+        elif isinstance(value, str) and _HEX_COLOR.fullmatch(value):
+            put(option.state_key, value)
     if "base_font_size" in sizing:
         put_int(
             sizing["base_font_size"],

@@ -127,9 +127,9 @@ from scanpath_studio.constants import (
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
-    DEFAULT_ORDER_LABEL_POSITION,
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
+    FIXATION_LABEL_OPTIONS,
     FOCUS_MAPPING_KEY,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
@@ -2060,11 +2060,10 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         ),
         duration_size_legend=viz_settings.get("duration_size_legend", True),
         legend_layout=viz_settings.get("legend_layout"),
-        order_font_size=viz_settings["order_font_size"],
-        order_font_color=viz_settings["order_font_color"],
-        order_label_position=viz_settings.get(
-            "order_label_position", DEFAULT_ORDER_LABEL_POSITION
-        ),
+        **{
+            name: viz_settings.get(name, option.default)
+            for name, option in FIXATION_LABEL_OPTIONS.items()
+        },
         **{
             key: viz_settings.get(key, default)
             for key, default in COLORBAR_DEFAULTS.items()
@@ -10712,8 +10711,10 @@ def render_per_text_tab(
             marker_size_range=viz_settings.get(
                 "marker_size_range", DEFAULT_MARKER_SIZE_RANGE
             ),
-            order_font_size=viz_settings.get("order_font_size", 10),
-            order_font_color=viz_settings.get("order_font_color", "#111111"),
+            **{
+                name: viz_settings.get(name, option.default)
+                for name, option in FIXATION_LABEL_OPTIONS.items()
+            },
             **{
                 key: viz_settings.get(key, default)
                 for key, default in COLORBAR_DEFAULTS.items()

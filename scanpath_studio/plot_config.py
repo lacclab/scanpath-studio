@@ -15,10 +15,10 @@ from .constants import (
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
-    DEFAULT_ORDER_LABEL_POSITION,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
+    FIXATION_LABEL_OPTIONS,
     HIGHLIGHTED_TEXT_COLOR,
     SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
@@ -317,13 +317,12 @@ def build_plot_config(
             "duration_size_legend": bool(
                 figure_settings.get("duration_size_legend", True)
             ),
-            "order_font_size": int(figure_settings["order_font_size"]),
-            "order_font_color": figure_settings["order_font_color"],
-            "order_label_position": str(
-                figure_settings.get(
-                    "order_label_position", DEFAULT_ORDER_LABEL_POSITION
-                )
-            ),
+            **{
+                name: int(figure_settings[name])
+                if option.kind == "int"
+                else figure_settings.get(name, option.default)
+                for name, option in FIXATION_LABEL_OPTIONS.items()
+            },
             "base_font_size": int(base_font_size),
         },
         # Figure & canvas → Legends: every legend, Auto included, so a file

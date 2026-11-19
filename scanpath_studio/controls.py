@@ -46,7 +46,6 @@ from .constants import (
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
-    DEFAULT_ORDER_LABEL_POSITION,
     DEFAULT_PALETTE,
     DEFAULT_PLOT_FRAME_COLOR,
     DEFAULT_SACCADE_ARROW_SIZE,
@@ -54,6 +53,7 @@ from .constants import (
     DEFAULT_SNAP_POSITION,
     DEFAULT_TITLE_FONT_SIZE,
     DEMO_CHOICE,
+    FIXATION_LABEL_OPTIONS,
     FIXATION_OUTLINE_WIDTH_BOUNDS,
     FIXATION_SYMBOLS,
     GRID_FONT_SIZE_BOUNDS,
@@ -61,13 +61,15 @@ from .constants import (
     HEATMAP_SIGMA_BOUNDS,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
+    INDEX_COLOR,
+    INDEX_POSITION,
+    INDEX_SIZE,
     LEGEND_ARRANGEMENT_LABELS,
     LEGEND_KIND_LABELS,
     LEGEND_KINDS,
     LEGEND_POSITION_LABELS,
     MARKER_DURATION_BOUNDS,
     MARKER_SIZE_SCALES,
-    ORDER_LABEL_POSITIONS,
     OUT_OF_TEXT_COLOR,
     PALETTES,
     RAW_GAZE_LINK_FOR_KEY,
@@ -870,9 +872,7 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_crop_margin_auto": True,
     "global_crop_margin_px": DEFAULT_CROP_MARGIN_PX,
     "global_coordinate_grid_spacing": 100.0,
-    "global_order_font_color": "#111111",
-    "global_order_font_size": 10,
-    "global_order_label_position": DEFAULT_ORDER_LABEL_POSITION,
+    **{option.state_key: option.default for option in FIXATION_LABEL_OPTIONS.values()},
     "global_fixation_colorscale": DEFAULT_FIXATION_COLORSCALE,
     "global_heatmap_colorscale": DEFAULT_HEATMAP_COLORSCALE,
     # Restorable by the settings file too, so seed here (no inline
@@ -6407,12 +6407,13 @@ def _collect_viz_settings(
         ),
         duration_size_legend=bool(ss.get("global_duration_size_legend", True)),
         legend_layout=_collect_legend_layout(ss),
-        order_font_size=ss.get("global_order_font_size"),
-        order_font_color=ss.get("global_order_font_color"),
-        # A deselected segmented control stores None.
-        order_label_position=(
-            ss.get("global_order_label_position") or DEFAULT_ORDER_LABEL_POSITION
-        ),
+        # A deselected position control stores None and draws at its default.
+        **{
+            name: (ss.get(option.state_key) or option.default)
+            if option.choices
+            else ss.get(option.state_key)
+            for name, option in FIXATION_LABEL_OPTIONS.items()
+        },
         **{
             f"show_{bar}_colorbar": bool(ss.get(f"global_show_{bar}_colorbar"))
             for bar in ("fixation", "heatmap")
@@ -7644,7 +7645,7 @@ def render_plot_controls(
         )
         color_col.color_picker(
             "Index label color",
-            key="global_order_font_color",
+            key=INDEX_COLOR.state_key,
             persist_state="session",
             disabled=_dis,
             help=_tip,
@@ -7654,7 +7655,7 @@ def render_plot_controls(
         # the rail's CSS drops a `__num` box's steppers, and the canonical key is
         # what deep links, Share and restore read. Rounded, since a link or a
         # restored config can hand back a float and the box has int bounds.
-        size_key = "global_order_font_size"
+        size_key = INDEX_SIZE.state_key
         size_num_key = f"{size_key}__num"
         if size_key in st.session_state:
             st.session_state[size_num_key] = round(st.session_state[size_key])
@@ -7672,8 +7673,8 @@ def render_plot_controls(
         size_col.number_input(
             "Index label size",
             key=size_num_key,
-            min_value=6,
-            max_value=72,
+            min_value=INDEX_SIZE.bounds[0],
+            max_value=INDEX_SIZE.bounds[1],
             step=1,
             on_change=_apply_index_size,
             disabled=_dis,
@@ -7689,9 +7690,9 @@ def render_plot_controls(
         )
         _sub_row("Position", caption_help=_tip).segmented_control(
             "Index label position",
-            options=list(ORDER_LABEL_POSITIONS),
+            options=INDEX_POSITION.choices,
             format_func=str.capitalize,
-            key="global_order_label_position",
+            key=INDEX_POSITION.state_key,
             persist_state="session",
             disabled=_dis,
             help=_tip,

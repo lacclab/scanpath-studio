@@ -44,6 +44,8 @@ from .constants import (
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
+    DEFAULT_ORDER_FONT_COLOR,
+    DEFAULT_ORDER_FONT_SIZE,
     DEFAULT_ORDER_LABEL_POSITION,
     DEFAULT_PLOT_FRAME_COLOR,
     DEFAULT_SACCADE_ARROW_SIZE,
@@ -153,8 +155,8 @@ class FigureSettings:
     #: throughout, is drawn in its default place; whether it is drawn at all is
     #: still its own layer's switch. See :func:`normalize_legend_layout`.
     legend_layout: dict | None = None
-    order_font_size: int | None = 10
-    order_font_color: str = "#111111"
+    order_font_size: int | None = DEFAULT_ORDER_FONT_SIZE
+    order_font_color: str = DEFAULT_ORDER_FONT_COLOR
     #: Where the index number sits on its fixation: "above", "inside" or
     #: "below" (``constants.ORDER_LABEL_POSITIONS``).
     order_label_position: str = DEFAULT_ORDER_LABEL_POSITION

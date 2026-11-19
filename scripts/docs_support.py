@@ -17,6 +17,8 @@ import json
 import re
 from pathlib import Path
 
+from scanpath_studio.constants import FIXATION_LABEL_OPTIONS
+
 ROOT = Path(__file__).resolve().parent.parent
 REPO_URL = "https://github.com/lacclab/scanpath-studio"
 BLOB_URL = f"{REPO_URL}/blob/main/"
@@ -243,9 +245,7 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "fixation_colorbar_tickangle",
         "fixation_colorbar_tickfont_size",
         "show_order",
-        "order_font_size",
-        "order_font_color",
-        "order_label_position",
+        *FIXATION_LABEL_OPTIONS,
         "fixation_snap_to_line",
         "fixation_snap_position",
     ),

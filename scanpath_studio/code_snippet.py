@@ -37,6 +37,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from .constants import FIXATION_LABEL_OPTIONS
+
 #: Where ``tabs._publish_snippet_state`` parks the :class:`FigureState` the
 #: Share subtab writes its snippet from. Session-local and never serialized —
 #: it is derived from state that *is* on the wire, so it carries no contract of
@@ -899,7 +901,7 @@ _LAYER_OPTIONS = {
         "word_box_fill_color",
         "word_box_fill_opacity",
     ),
-    "show_order": ("order_font_size", "order_font_color", "order_label_position"),
+    "show_order": tuple(FIXATION_LABEL_OPTIONS),
     "show_heatmap": (
         "heatmap_metric",
         "heatmap_style",
@@ -1505,9 +1507,10 @@ _CLI_EMITTERS: dict[str, Any] = {
     "color_by_line": _flag_when("--color-by-line", True),
     "fixation_color_range": _two_numbers("--fixation-color-range"),
     "heatmap_range": _two_numbers("--heatmap-range"),
-    "order_font_size": _int_valued("--order-font-size"),
-    "order_font_color": _valued("--order-font-color"),
-    "order_label_position": _valued("--order-label-position"),
+    **{
+        name: _int_valued(option.flag) if option.kind == "int" else _valued(option.flag)
+        for name, option in FIXATION_LABEL_OPTIONS.items()
+    },
     "text_color": _valued("--text-color"),
     "redact_text": _flag_when("--redact-text", True),
     "highlight_text_color": _valued("--highlight-text-color"),

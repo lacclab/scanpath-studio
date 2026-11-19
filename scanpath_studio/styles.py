@@ -2145,6 +2145,23 @@ def get_app_css() -> str:
     .st-key-scanpath_rail .st-key-reset_viz_settings_btn button {
         min-height: 2.6rem;
     }
+    .st-key-plot_history_actions {
+        display: grid;
+        grid-template-columns: 2rem 2rem minmax(0, 1fr);
+        align-items: center;
+        gap: 0.25rem;
+    }
+    .st-key-plot_history_actions > * { min-width: 0; }
+    .st-key-plot_history_actions button {
+        width: 100%;
+        min-width: 0;
+        min-height: 2.6rem;
+        padding-inline: 0.2rem;
+    }
+    /* Keep the spoken label out of the flex row so its gap doesn't shift the arrow. */
+    :is(.st-key-viz_undo, .st-key-viz_redo) button [data-testid="stMarkdownContainer"] {
+        position: absolute;
+    }
     /* The rail is deliberately narrow — keep its short headers + toggle labels on
        one line so they don't break mid-word (e.g. "Anima\nte") when it's tight. */
     .st-key-scanpath_rail h5,

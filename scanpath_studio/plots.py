@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from . import progress
+from . import chart_axes, progress
 from .constants import (
     APP_THEME,
     CANVAS_PAD_FRACTION,
@@ -886,11 +886,10 @@ def _fit_display_size(
     aspect ratio, leaving large blank vertical strips when the figure box is
     the full monitor height. We match the figure box to the actual plot
     domain — and additionally clamp both dims so the whole plot fits in one
-    viewport without scrolling. Falls back to (canvas_w, canvas_h) when axes
-    aren't spatial or the data range is degenerate.
+    viewport without scrolling. Numeric charts have their own readable display size.
     """
     if not spatial_axes:
-        return canvas_width, canvas_height
+        return _DISPLAY_MAX_WIDTH, 540
     x_span = x_range[1] - x_range[0]
     y_span = y_range[0] - y_range[1]  # y_range is inverted [y_max, y_min]
     if x_span <= 0 or y_span <= 0:
@@ -3040,7 +3039,7 @@ def _trace_layer(trace) -> str:
         return "heatmap"
     if name == "Raw gaze":
         return "raw_gaze"
-    if name in ("saccades", "saccade direction") or name in set(
+    if name in ("saccades", "saccade direction", "Fixation sequence") or name in set(
         SACCADE_CLASS_LABELS.values()
     ):
         return "saccades"
@@ -3141,10 +3140,43 @@ def _column_name(column: str) -> str:
     return labels.get(column, str(column))
 
 
+def _chart_axis_title(field: str) -> str:
+    label = _column_title(field)
+    if field in chart_axes.POSITION_FIELDS:
+        direction = "Horizontal" if field == "x" else "Vertical"
+        return (
+            f"{direction} screen position (px)"
+            if label.lower() == field
+            else f"{label} ({direction.lower()} position, px)"
+        )
+    return label
+
+
+def _chart_axis_range(traces, coordinate: str, reverse: bool):
+    """One numeric extent shared by the chart and each separately saved layer."""
+    bounds = []
+    for trace in traces:
+        values = getattr(trace, coordinate, None)
+        if values is None:
+            continue
+        array = pd.to_numeric(np.asarray(values), errors="coerce")
+        finite = array[np.isfinite(array)]
+        if len(finite):
+            bounds.extend((float(finite.min()), float(finite.max())))
+    if not bounds:
+        return None
+    low, high = min(bounds), max(bounds)
+    pad = (high - low) * 0.06 if high > low else max(abs(low) * 0.01, 0.5)
+    limits = (low - pad, high + pad)
+    return limits[::-1] if reverse else limits
+
+
 def _column_title(column: str) -> str:
     """A column's name in a figure's titles: the dataset's own, else
     the column humanized."""
     labels = _COLUMN_LABELS.get() or {}
+    if column == chart_axes.ELAPSED:
+        return chart_axes.ELAPSED_LABEL
     return labels[column] if column in labels else _humanize_column(column)
 
 
@@ -3175,6 +3207,7 @@ def _hover_label(field: str, table: str | None = None) -> str:
         "order_in_trial": "Fixation #",
         "duration_ms": "Duration",
         "timestamp_ms": "Timestamp",
+        chart_axes.ELAPSED: chart_axes.ELAPSED_LABEL,
     }
     return aliases.get(
         field,
@@ -3380,6 +3413,8 @@ def _hover_payload(
             if field == "line_idx" and line_display is not None
             else frame[field]
         )
+        if fixation and field == "timestamp_ms":
+            series = chart_axes.recorded_onsets(frame)
         values.append(_hover_cells(_plotly_literal_values(series)))
         suffix = " ms" if field.endswith("_ms") else ""
         rows.append(f"{_hover_label(field, table)}: %{{customdata[{idx}]}}{suffix}")
@@ -4131,6 +4166,7 @@ def _add_raw_gaze_layer(
     raw_gaze: pd.DataFrame | None,
     *,
     show_raw_gaze: bool,
+    fields: tuple[str, str] = ("x", "y"),
     raw_gaze_color: str = "#888888",
     raw_gaze_marker_size: float = 4.0,
     raw_gaze_opacity: float = 0.6,
@@ -4146,7 +4182,7 @@ def _add_raw_gaze_layer(
     ``sample_index`` instead: coloured by that order, with the legend titled
     *Sample order* and the hover saying ``sample n`` — never milliseconds.
     """
-    if not (show_raw_gaze and raw_gaze is not None and not raw_gaze.empty):
+    if not show_raw_gaze or not chart_axes.raw_axes_available(fields, raw_gaze):
         return False
     legend_title = None
     if "timestamp_ms" in raw_gaze.columns:
@@ -4169,8 +4205,8 @@ def _add_raw_gaze_layer(
         when = ""
     fig.add_trace(
         go.Scatter(
-            x=raw_gaze["x"],
-            y=raw_gaze["y"],
+            x=raw_gaze[fields[0]],
+            y=raw_gaze[fields[1]],
             mode="markers",
             marker=dict(
                 size=raw_gaze_marker_size,
@@ -4180,7 +4216,10 @@ def _add_raw_gaze_layer(
                 showscale=False,
             ),
             hovertemplate=(
-                "Raw gaze<br>x: %{x:.1f}<br>y: %{y:.1f}" + when + "<extra></extra>"
+                f"Raw gaze<br>{html.escape(_column_title(fields[0]))}: %{{x:.2f}}"
+                f"<br>{html.escape(_column_title(fields[1]))}: %{{y:.2f}}"
+                + when
+                + "<extra></extra>"
             ),
             customdata=customdata,
             legendgroup="raw_gaze" if legend_title else None,
@@ -4210,13 +4249,11 @@ def _fixation_flag_masks(
     fixations: pd.DataFrame,
     words: pd.DataFrame,
     flags: dict | None,
-    *,
-    spatial_axes: bool = True,
 ) -> dict[str, pd.Series]:
     """Boolean mask per fixation-flag category, over ``fixations``' index.
 
     ``{"short": …, "long": …, "oob": …, "blink": …}``, or ``{}`` when nothing
-    is flagged. Outside-the-text needs word boxes on spatial axes — without them
+    is flagged. Outside-the-text uses the fixation's screen coordinates — without word boxes
     no fixation counts as outside the text. Shared by the static figure and the
     animated replay so the two classify identically.
     """
@@ -4224,7 +4261,7 @@ def _fixation_flag_masks(
         return {}
     dur = pd.to_numeric(fixations.get("duration_ms"), errors="coerce")
     oob = pd.Series(False, index=fixations.index)
-    if spatial_axes and not words.empty:
+    if not words.empty:
         from .measures import fixation_in_text_mask
 
         oob = ~fixation_in_text_mask(fixations, words)
@@ -4246,8 +4283,6 @@ def _discard_flagged_fixations(
     fixations: pd.DataFrame,
     words: pd.DataFrame,
     flags: dict | None,
-    *,
-    spatial_axes: bool = True,
 ) -> pd.DataFrame:
     """Drop the fixations whose flag mode is *Hide* (viz-only).
 
@@ -4255,7 +4290,7 @@ def _discard_flagged_fixations(
     fixation-index labels and the marker-size scaling; reading measures and
     exports are untouched. Returns ``fixations`` itself when nothing is dropped.
     """
-    masks = _fixation_flag_masks(fixations, words, flags, spatial_axes=spatial_axes)
+    masks = _fixation_flag_masks(fixations, words, flags)
     if not masks:
         return fixations
     drop = pd.Series(False, index=fixations.index)
@@ -4351,7 +4386,36 @@ def _render_scanpath_figure(
     connector_y = settings.connector_y
     illustration_reasons = settings.illustration_reasons
     fig = go.Figure()
-    spatial_axes = x_field == "x" and y_field == "y"
+    fields = (x_field, y_field)
+    spatial_axes = fields == ("x", "y")
+    if any(f in chart_axes.CLOCK_FIELDS for f in fields):
+        origin = chart_axes.origin_ms(fixations)
+        if not fixations.empty and pd.isna(origin):
+            fig.add_annotation(
+                x=0.5,
+                y=0.95,
+                xref="paper",
+                yref="paper",
+                text="This reading has no recorded fixation onsets.",
+                showarrow=False,
+            )
+            fixations = fixations.iloc[:0]
+        if "timestamp_ms" in fixations:
+            onsets = chart_axes.recorded_onsets(fixations)
+            fixations = fixations.assign(timestamp_ms=onsets)
+            if chart_axes.ELAPSED in fields:
+                fixations[chart_axes.ELAPSED] = (onsets - origin) / 1000
+        if (
+            chart_axes.ELAPSED in fields
+            and show_raw_gaze
+            and chart_axes.raw_axes_available(fields, raw_gaze)
+        ):
+            if pd.isna(origin):
+                show_raw_gaze = False
+            else:
+                raw_gaze = raw_gaze.assign(
+                    **{chart_axes.ELAPSED: (raw_gaze["timestamp_ms"] - origin) / 1000}
+                )
     # Track whether a colorbar / legend will render, to reserve margin for them
     # below (so they don't shrink the equal-aspect plot). See _decoration_margins.
     legend_active = False
@@ -4524,6 +4588,7 @@ def _render_scanpath_figure(
         fig,
         raw_gaze,
         show_raw_gaze=show_raw_gaze,
+        fields=fields,
         raw_gaze_color=raw_gaze_color,
         raw_gaze_marker_size=raw_gaze_marker_size,
         raw_gaze_opacity=raw_gaze_opacity,
@@ -4727,24 +4792,55 @@ def _render_scanpath_figure(
     if show_fixations and not fixations.empty:
         # ``render_fix`` == fixations unless Snap to line is on, in which case
         # the markers, order labels and colour-by-line use the snapped y.
-        ordered = render_fix.sort_values("timestamp_ms")
-        # Fixation classification (viz-only): SHORT / LONG / OUTSIDE-THE-TEXT /
-        # BLINK-ADJACENT, each Off / Highlight / Hide. Apply Hide here —
-        # drop those rows from `ordered` so they vanish from the markers,
-        # fixation-index labels and marker-size scaling (the saccade layer above
-        # still bridges across them).
-        # This changes only what's DRAWN; reading measures and exports are untouched.
+        # Classify the recorded positions, then select the same rows of the
+        # displayed frame. Positional selection also works with duplicate indices.
         flags = fixation_flags or {}
-        if flags:
-            ordered = _discard_flagged_fixations(
-                ordered, words, flags, spatial_axes=spatial_axes
+        masks = _fixation_flag_masks(fixations, words, flags)
+        positions = fixations["timestamp_ms"].reset_index(drop=True).sort_values().index
+        for category, mask in masks.items():
+            if flags.get(category, {}).get("mode") == "Hide":
+                positions = positions[~mask.to_numpy()[positions]]
+        ordered = render_fix.iloc[positions]
+        if chart_axes.position_chart(fields, "order_in_trial") and show_saccades:
+            path = ordered.sort_values("order_in_trial", kind="stable")
+            fig.add_trace(
+                go.Scatter(
+                    x=path[x_field],
+                    y=path[y_field],
+                    mode="lines",
+                    line=dict(color=saccade_color, width=1),
+                    name="Fixation sequence",
+                    showlegend=False,
+                    hoverinfo="skip",
+                )
+            )
+        if chart_axes.position_chart(fields, chart_axes.ELAPSED):
+            onset = ordered[chart_axes.ELAPSED].to_numpy(dtype=float)
+            duration = ordered["duration_ms"].to_numpy(dtype=float)
+            end = onset + np.where(duration >= 0, duration / 1000, np.nan)
+            position_field = y_field if x_field == chart_axes.ELAPSED else x_field
+            pos = ordered[position_field].to_numpy(dtype=float)
+            gaps = np.full(len(ordered), np.nan)
+            time_segments = np.column_stack((onset, end, gaps)).ravel()
+            positions = np.column_stack((pos, pos, gaps)).ravel()
+            horizontal = x_field == chart_axes.ELAPSED
+            fig.add_trace(
+                go.Scatter(
+                    x=time_segments if horizontal else positions,
+                    y=positions if horizontal else time_segments,
+                    mode="lines",
+                    line=dict(width=3, color=fixation_color),
+                    name="Fixation duration",
+                    hoverinfo="skip",
+                    showlegend=False,
+                )
             )
         # "Color by line" overrides the chosen color field: each fixation is
         # tinted by the text line it lands on (lines inferred from word
         # geometry). Rendered as discrete categories so the legend reads
         # "line: Line 1", "line: Line 2", …  A snapped fixation is tinted by the
         # line it was snapped to.
-        if color_by_line and spatial_axes and not words.empty:
+        if color_by_line and not words.empty:
             from .measures import assign_fixation_lines
 
             line_ids = (
@@ -4812,6 +4908,17 @@ def _render_scanpath_figure(
             if fixation_hover_fields is None
             else list(fixation_hover_fields)
         )
+        if not spatial_axes and (
+            fixation_hover_fields is None
+            or tuple(hover_fields) == _FIXATION_HEAD_FIELDS
+        ):
+            # Add chart coordinates to the default hover. A custom selection
+            # keeps exactly the fields the reader asked for.
+            hover_fields = list(
+                dict.fromkeys([*hover_fields, x_field, y_field, "x", "y"])
+            )
+            if chart_axes.has_clock(ordered):
+                hover_fields = list(dict.fromkeys([*hover_fields, "timestamp_ms"]))
         customdata, hovertemplate = _hover_payload(
             ordered, hover_fields, fixation=True, words=words
         )
@@ -4912,20 +5019,14 @@ def _render_scanpath_figure(
                 )
             )
 
-        # Highlight overlays: mark the flagged fixations in the chosen marker +
-        # colour, on top of the regular markers. Masks are recomputed on the
-        # (post-hide) `ordered`; outside-the-text needs word boxes + spatial
-        # axes, short/long are duration-based and apply anywhere.
+        # Highlight visible rows with the same recorded-position classification.
         if flags:
-            _overlay = _fixation_flag_masks(
-                ordered, words, flags, spatial_axes=spatial_axes
-            )
             for _cat in _FIX_FLAG_CATEGORIES:
                 _spec = flags.get(_cat, {})
                 if _spec.get("mode") != "Highlight":
                     continue
                 _name = _FIX_FLAG_LABELS[_cat]
-                hits = ordered[_overlay[_cat]]
+                hits = ordered.iloc[masks[_cat].to_numpy()[positions]]
                 if hits.empty:
                     continue
                 legend_active = True
@@ -4943,7 +5044,8 @@ def _render_scanpath_figure(
                         name=_name,
                         showlegend=True,
                         hovertemplate=(
-                            f"{_name} fixation<br>x %{{x:.0f}}, y %{{y:.0f}}"
+                            f"{_name} fixation<br>{_plotly_literal(_column_title(x_field))}: %{{x:.5g}}"
+                            f"<br>{_plotly_literal(_column_title(y_field))}: %{{y:.5g}}"
                             "<extra></extra>"
                         ),
                     )
@@ -4975,12 +5077,25 @@ def _render_scanpath_figure(
             rendered_height=fitted_h,
         )
     else:
-        xaxis_cfg.update(
-            showticklabels=True, showgrid=True, title=_column_title(x_field)
-        )
-        yaxis_cfg.update(
-            showticklabels=True, showgrid=True, title=_column_title(y_field)
-        )
+        for coordinate, field, axis in zip(
+            ("x", "y"), fields, (xaxis_cfg, yaxis_cfg), strict=True
+        ):
+            axis.update(
+                showticklabels=True,
+                showgrid=True,
+                title=_chart_axis_title(field),
+                range=_chart_axis_range(
+                    fig.data, coordinate, coordinate == "y" and field == "y"
+                ),
+            )
+            if (
+                field in {"order_in_trial", "order_in_screen", "fixation_id"}
+                and not fixations.empty
+            ):
+                span = pd.to_numeric(fixations[field], errors="coerce")
+                extent = span.max() - span.min()
+                if pd.notna(extent) and np.isfinite(extent):
+                    axis.update(tick0=1, dtick=max(1, math.ceil(extent / 10)))
 
     if spatial_axes and settings.show_plot_frame:
         layout_shapes.append(
@@ -5014,7 +5129,11 @@ def _render_scanpath_figure(
             coordinate_grid_font_size=settings.coordinate_grid_font_size,
         )
         if spatial_axes
-        else {"width": fitted_w, "height": fitted_h, "margin": dict(l=0, r=0, t=0, b=0)}
+        else {
+            "width": fitted_w,
+            "height": fitted_h,
+            "margin": dict(l=78, r=32, t=28, b=68),
+        }
     )
     fig.update_layout(
         height=decoration["height"],

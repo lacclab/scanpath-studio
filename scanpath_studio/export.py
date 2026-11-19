@@ -41,6 +41,7 @@ from time import perf_counter
 
 import pandas as pd
 
+from . import chart_axes
 from .aggregation import reader_summary_table, trial_summary_table
 from .citation import CORPORA, CREDIT_LINE, cite, corpus_for, software_apa
 from .column_names import (
@@ -1312,7 +1313,7 @@ def _render_scope_picker(
         options=list(options_map),
         index=default_index,
         key=f"{key_prefix}_scope",
-        # The stored value stays "All"; only what the radio shows says more.
+        persist_state="session",  # The stored value stays "All"; only what the radio shows says more.
         format_func=lambda label: (
             "All trials, ignoring filters" if label == "All" else label
         ),
@@ -1347,6 +1348,7 @@ def _render_scope_picker(
                 "Participant",
                 options=participants,
                 key=f"{key_prefix}_scope_pid",
+                persist_state="session",
             )
             trials_for_pid = (
                 active.loc[
@@ -1362,6 +1364,7 @@ def _render_scope_picker(
                 "Trial",
                 options=sorted(trials_for_pid),
                 key=f"{key_prefix}_scope_trial",
+                persist_state="session",
             )
     elif scope == "participant" and not active.empty:
         participants = sorted(active["participant_id"].dropna().astype(str).unique())
@@ -1371,6 +1374,7 @@ def _render_scope_picker(
             "Participant",
             options=participants,
             key=f"{key_prefix}_scope_pid",
+            persist_state="session",
         )
     elif scope == "text" and not active.empty:
         if text_col is None:
@@ -1383,6 +1387,7 @@ def _render_scope_picker(
                 "Text",
                 options=texts,
                 key=f"{key_prefix}_scope_text",
+                persist_state="session",
             )
 
     # Close the Scope section with a live count of what will be exported.
@@ -1559,7 +1564,13 @@ def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
 
     def _pattern_input(label: str, default: str, key: str, help_text: str) -> str:
         value = panel_field(
-            st, "text_input", label, value=default, key=key, help=help_text
+            st,
+            "text_input",
+            label,
+            value=default,
+            key=key,
+            help=help_text,
+            persist_state="session",
         )
         error = pattern_error(value, fields) or path_structure_error(value)
         if error:
@@ -1653,6 +1664,7 @@ def render_export_options(
                 selection_mode="multi",
                 default=["PDF"],
                 key=f"{key_prefix}_figfmts",
+                persist_state="session",
                 help=(
                     "PDF and SVG are vector images, PNG is a pixel image, and HTML is "
                     "interactive. Creating PDF, SVG or PNG files requires Chrome, Chromium or"
@@ -1700,6 +1712,7 @@ def render_export_options(
                 value=2,
                 width=140,
                 key=f"{key_prefix}_scale",
+                persist_state="session",
                 help="Higher values give sharper images and larger files.",
             )
         else:
@@ -1713,6 +1726,7 @@ def render_export_options(
             "Layers as separate files",
             value=False,
             key=f"{key_prefix}_layers",
+            persist_state="session",
             help="Export each visual layer as a separate file.",
         )
         # Layers are static vectors/rasters — HTML can't be split. When no
@@ -1730,6 +1744,7 @@ def render_export_options(
             "Settings file (JSON)",
             value=True,
             key=f"{key_prefix}_cfg",
+            persist_state="session",
             help="Include the figure's settings file.",
         )
         include_annotations = panel_field(
@@ -1738,6 +1753,7 @@ def render_export_options(
             "Annotations (JSON)",
             value=False,
             key=f"{key_prefix}_annotations",
+            persist_state="session",
             help="Include the exported trials' favorites, tags and notes as "
             "annotations.json. You can import it on "
             f"{ICONS['view_data']} Data Management → Annotations.",
@@ -1758,6 +1774,7 @@ def render_export_options(
                 selection_mode="multi",
                 default=[],
                 key=f"{key_prefix}_tabular",
+                persist_state="session",
                 help=(
                     "Choose the data tables to include. Word measures are the reading "
                     "measures provided in your dataset; the app does not compute them."
@@ -1784,6 +1801,7 @@ def render_export_options(
                     }[value],
                     default="csv",
                     key=f"{key_prefix}_fmt",
+                    persist_state="session",
                 )
                 or "csv"
             )
@@ -1793,6 +1811,7 @@ def render_export_options(
                 "Combine all trials into one file per table",
                 value=False,
                 key=f"{key_prefix}_combine",
+                persist_state="session",
                 help="Write each table once under aggregate/, with all exported "
                 "trials in it, instead of one file per trial.",
             )
@@ -1867,6 +1886,7 @@ def _render_screen_picker(
             "Screens",
             options=screen_options,
             key=key,
+            persist_state="session",
             placeholder="All screens",
             help="Export only these screens of each trial. Leave empty for all "
             "screens. Trials that show none of the picked screens are left out.",
@@ -2874,6 +2894,8 @@ def bulk_export(
             # miss rows the view finds.
             trial_words = extract_trial(words, participant, trial)
             trial_fix = extract_trial(fixations, participant, trial)
+            if chart_axes.ELAPSED in (x_field, y_field):
+                trial_fix = chart_axes.with_origin(trial_fix)
             trial_raw_gaze = (
                 extract_trial(raw_gaze, participant, trial)
                 if raw_gaze is not None and not raw_gaze.empty
@@ -2939,7 +2961,7 @@ def bulk_export(
                 # Never retry an app-refused server path in the builder.
                 unit_settings["show_stimulus_image"] = False
             reasons = illustration_reasons(
-                unit_settings,
+                {**unit_settings, "x_field": x_field, "y_field": y_field},
                 data_source=settings.get("data_source"),
                 synthetic=bool(settings.get("synthetic_source")),
                 static=True,

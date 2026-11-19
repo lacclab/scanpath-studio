@@ -648,7 +648,11 @@ def _design_keys_outside_popovers(at) -> set[str]:
         ):
             in_popover = True
         key = getattr(node, "key", None)
-        if key and not in_popover and controls._is_design_key(key):
+        if (
+            key
+            and not in_popover
+            and (controls._is_design_key(key) or key == "single_animate")
+        ):
             found.add(key)
         for child in getattr(node, "children", {}).values():
             walk(child, in_popover)

@@ -46,6 +46,8 @@ import plotly.io as pio
 # import time). Inside the app a runtime exists and these warnings never fire.
 import streamlit as _st  # noqa: F401  (imported for its logging side effect)
 
+from . import chart_axes
+
 for _name in (
     "streamlit.runtime.caching.cache_data_api",
     "streamlit.runtime.scriptrunner_utils.script_run_context",
@@ -2110,6 +2112,7 @@ def _select_part(
     *,
     raw_gaze: pd.DataFrame | None = None,
     screen_param: str = "screen",
+    elapsed_axis: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame, str, str, str | None]:
     """Resolve one logical trial and, for multipart data, exactly one screen.
 
@@ -2118,6 +2121,8 @@ def _select_part(
     trial_words, trial_fixations, pid, tid = _select_trial(
         words, fixations, participant, trial, raw_gaze=raw_gaze
     )
+    if elapsed_axis:
+        trial_fixations = chart_axes.with_origin(trial_fixations)
     catalog = part_catalog(trial_words, trial_fixations)
     if (
         catalog.empty
@@ -2618,7 +2623,9 @@ def plot_scanpath(
     [`figure_options`][scanpath_studio.api.figure_options] lists them with their
     defaults. An option naming a column takes either name: frames under the dataset's
     own column names, as ``load_scanpath_data`` returns them by default, are read
-    through the map they carry.
+    through the map they carry. Use ``x_field="@elapsed_seconds"`` with
+    ``y_field="x"`` or ``"y"`` to draw fixation durations against time since the
+    reading's first recorded onset. Selecting a screen or index window keeps that origin.
 
     Args:
         words: A normalized words frame from
@@ -2721,13 +2728,24 @@ def plot_scanpath(
     )
     word_side = _table_names(column_names, "words", word_names)
     figure_overrides = _canonical_options(figure_overrides, names, words=word_side)
+    axes = (figure_overrides.get("x_field", "x"), figure_overrides.get("y_field", "y"))
     trial_words, trial_fixations, pid, tid, selected_screen = _select_part(
-        words, fixations, participant, trial, screen, raw_gaze=raw_gaze
+        words,
+        fixations,
+        participant,
+        trial,
+        screen,
+        raw_gaze=raw_gaze,
+        elapsed_axis=chart_axes.ELAPSED in axes,
     )
     if raw_gaze is not None:
         raw_gaze = _data.filter_raw_gaze(raw_gaze, [pid], [tid])
-        if selected_screen is not None and SCREEN_ID in raw_gaze.columns:
-            raw_gaze = extract_part(raw_gaze, pid, tid, selected_screen)
+        if selected_screen is not None:
+            raw_gaze = (
+                extract_part(raw_gaze, pid, tid, selected_screen)
+                if SCREEN_ID in raw_gaze.columns
+                else raw_gaze.iloc[:0]
+            )
     _check_column_options(
         figure_overrides, words=trial_words, fixations=trial_fixations
     )

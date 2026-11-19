@@ -36,6 +36,7 @@ def test_the_link_names_the_added_dataset():
     assert not at.exception, at.exception
     query = parse_qs(at.session_state["_query"])
     assert query["dataset"] == ["Dataset 1"]
+    assert query["dataset_digest"][0].startswith("v1-")
     assert "source" not in query
     (caveat,) = at.session_state["_caveats"]
     # The sender is pointed at where Download setup file lives for an existing dataset.

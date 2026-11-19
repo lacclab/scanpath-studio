@@ -187,12 +187,14 @@ def _loader_columns() -> frozenset:
     """Every column ``load_scanpath_data`` hands back without being asked — the
     canonical ones, the recognized optional ones, and the per-fixation fields
     the builders compute — plus the two non-column ``color_by`` values."""
+    from .chart_axes import ELAPSED
     from .constants import UNIFORM_COLOR_FIELD
     from .data import FIX_OPTIONAL_FIELDS, WORD_OPTIONAL_FIELDS, empty_fixations_frame
 
     return frozenset(
         {
             *empty_fixations_frame().columns,
+            ELAPSED,
             *(entry[1] for entry in (*FIX_OPTIONAL_FIELDS, *WORD_OPTIONAL_FIELDS)),
             "order_in_trial",
             "pass_index",

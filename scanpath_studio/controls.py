@@ -13,8 +13,10 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from streamlit.errors import StreamlitAPIException
+from streamlit.runtime.scriptrunner import get_script_run_ctx
 from streamlit_sortables import sort_items
 
+from . import chart_axes as charts
 from . import column_names as cn
 from .alignment import ALGORITHMS as ALIGN_ALGORITHMS
 from .alignment import method_label as align_method_label
@@ -133,18 +135,23 @@ from .fields import (
 )
 from .session_keys import (
     COMPARE_B_FILTER_STATE_KEYS,
+    COMPARE_IDENTITY_STATE_KEY,
+    COMPARE_SOURCE_STATE_KEY,
+    LEGEND_PARAMS,
     SHARE_FLOAT_RANGE_PARAMS,
     SINGLE_COMPARE_FIX_RANGE,
     SINGLE_COMPARE_LAYOUT,
     SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
     SINGLE_PLAYBACK_SPEED,
+    URL_PRESET_PARAMS,
     compare_state_keys,
     keep_legacy_marker_scale,
     rename_legacy_keys,
 )
 from .session_keys import DESIGN_PRESETS as _DESIGN_PRESETS_WIRE_KEY
 from .ui_mode import advanced_only, render_more_popover, simple_only
+from .viz_history import Design, PlotHistory
 
 NONE_OPTION = "(none)"
 
@@ -225,8 +232,32 @@ def _popover_rows(slug: str):
     ``rail_rows_<slug>``, that `styles.py` spaces the rows of apart — the same
     for every popover.
     """
+    # A closed popover needs its programmatic values held against stale
+    # browser echoes. Once it opens, the widgets it actually renders have
+    # taken the new values: release just those so the first edit can undo one.
+    pending = st.session_state.get(_PENDING_WRITES_KEY)
+    ctx = None
+    if pending:
+        section = slug.split("_", 1)[0]
+        if section == "fig":
+            section = "figure"
+        prefix = (
+            "split_mode" if section in ("animate", "compare") else "split_mode_rail"
+        )
+        if st.session_state.get(f"{prefix}_{section}_popover"):
+            ctx = get_script_run_ctx()
+    drawn = ctx.shared.widget_user_keys_this_run if ctx else None
+    waiting = [key for key in pending if key not in drawn] if drawn is not None else []
     with _rail_label_width(_POPOVER_LABEL_W), st.container(key=f"rail_rows_{slug}"):
         yield
+    for key in waiting:
+        if key in drawn:
+            pending.pop(key, None)
+
+
+def plot_popover_on_change() -> str:
+    """Track the open panel once this session uses Undo or Redo."""
+    return "rerun" if st.session_state.get("_plot_history_used") else "ignore"
 
 
 #: Tighter than the 1rem default: these rows are dense and the width is scarce.
@@ -733,6 +764,8 @@ _VIZ_WIDGET_DEFAULTS = {
     # and the reading text — so a new user lands on a legible picture instead of
     # seven stacked encodings. The bounding-box grid and the density heatmap are
     # analytical overlays, off by default and one click (or one design preset) away.
+    "global_x_field": "x",
+    "global_y_field": "y",
     "global_show_words": False,
     "global_show_labels": True,
     "global_redact_text": False,
@@ -1586,13 +1619,18 @@ def _apply_view_preset(name: str) -> None:
         for key in list(ss)
         if _is_design_key(key) or _is_restorable_global(key)
     }
+    # Callbacks receive the browser's values before the script reconciles
+    # closed popovers. Snapshot the design that was actually on screen.
+    reassert_pending_writes()
     try:
         _apply_view_preset_state(ss, name, saved)
     finally:
         _hold_view_writes(ss, before)
 
 
-def _hold_view_writes(ss, before: dict) -> None:
+def _hold_view_writes(
+    ss, before: dict, *, defaults_pending: bool = True, in_callback: bool = True
+) -> None:
     """Hold every value a design preset changed in a popover (see `write_through`).
 
     A popover widget the user has opened keeps echoing the value it last
@@ -1608,10 +1646,16 @@ def _hold_view_writes(ss, before: dict) -> None:
     hold would read the user flipping one back as that echo and undo it.
     """
     for key, old in before.items():
-        if key in _SEEDED_VIEW_KEYS or key in _MOUNTED_VIEW_KEYS or key not in ss:
+        if key in _MOUNTED_VIEW_KEYS or key not in ss:
             continue
+        if key in _SEEDED_VIEW_KEYS and defaults_pending:
+            continue  # a design callback has not re-seeded from the dataset yet
         if _write_match_key(ss[key]) != _write_match_key(old):
-            write_through(key, ss[key], shown=old)
+            write_through(key, ss[key], shown=old, in_callback=in_callback)
+        elif key in (pending := ss.get(_PENDING_WRITES_KEY, {})):
+            # The new design agrees with the browser. A hold for the
+            # previous design would overwrite it when the script starts.
+            pending.pop(key)
 
 
 #: Keys `app.seed_canvas_state` / the font and raw-gaze seeding refill after a
@@ -1635,6 +1679,7 @@ _SEEDED_VIEW_KEYS = frozenset(
 #: checks the set against the widgets the app draws.
 _MOUNTED_VIEW_KEYS = frozenset(
     {
+        "single_animate",
         "global_show_fix",
         "global_show_saccades",
         "global_show_stimulus",
@@ -2340,6 +2385,7 @@ def _apply_simple_view(name: str) -> None:
     animation = name == _SIMPLE_ANIMATION
     _apply_view_preset("scanpath" if animation else name)
     st.session_state["single_animate"] = animation
+    st.session_state[SINGLE_COMPARE_TOGGLE] = False
     if palette is not None and _active_palette() != palette:
         st.session_state["global_palette"] = palette
         _on_palette_change()
@@ -2536,7 +2582,9 @@ def _write_match_key(value):
     return _palette_match_key(value)
 
 
-def write_through(key: str, value, *, shown=_SHOWN_IN_STATE) -> None:
+def write_through(
+    key: str, value, *, shown=_SHOWN_IN_STATE, in_callback: bool = True
+) -> None:
     """Write ``value`` to a widget's key so that a closed popover cannot undo it.
 
     A widget inside an ``st.popover`` is mounted in the browser only
@@ -2556,7 +2604,8 @@ def write_through(key: str, value, *, shown=_SHOWN_IN_STATE) -> None:
     once the widget took the write. A pick of exactly the old value reads as
     the echo, since nothing the browser sends tells the two apart — which is
     why a widget that is always on screen is written plainly instead.
-    Call it from a callback, like any write to a widget key.
+    A reset can resolve dataset defaults only in the script, before the
+    widgets render. In that case the next run is already the browser's reply.
     """
     ss = st.session_state
     pending = dict(ss.get(_PENDING_WRITES_KEY) or {})
@@ -2570,7 +2619,7 @@ def write_through(key: str, value, *, shown=_SHOWN_IN_STATE) -> None:
     else:
         stale = deepcopy(ss[key]) if key in ss else _ECHO_UNKNOWN
     ss[key] = value
-    pending[key] = [deepcopy(value), stale, True]
+    pending[key] = [deepcopy(value), stale, in_callback]
     ss[_PENDING_WRITES_KEY] = pending
 
 
@@ -2707,13 +2756,11 @@ _BOX_ROW_W = (0.26, 0.185, 0.185, 0.185, 0.185)
 def _default_box_format(proposed: dict[str, str | None]) -> str:
     """Which box encoding to show first, from what auto-detect found.
 
-    Edges if all four edge columns were detected, else origin+size if those four
-    were, else edges."""
-    if all(proposed.get(k) for k in ("left", "right", "top", "bottom")):
-        return BOX_FORMAT_EDGES
-    if all(proposed.get(k) for k in ("x", "y", "width", "height")):
-        return BOX_FORMAT_ORIGIN
-    return BOX_FORMAT_EDGES
+    Prefer the format with the most recognized fields. Edges wins a tie."""
+    return max(
+        _BOX_SUBFIELDS,
+        key=lambda fmt: sum(bool(proposed.get(k)) for k, _ in _BOX_SUBFIELDS[fmt]),
+    )
 
 
 # Mapping fields that only a **multipart** dataset needs (one logical trial
@@ -3636,6 +3683,18 @@ def column_mapping_ui(
         wrong_column = wrong_column_caption(
             df, field_key, chosen, fixations=not words_table
         )
+        if words_table and field_key in _ALL_BOX_KEYS and not chosen:
+            coordinate = {
+                "x": "horizontal position",
+                "y": "vertical position",
+                "width": "width",
+                "height": "height",
+                "left": "left edge",
+                "right": "right edge",
+                "top": "top edge",
+                "bottom": "bottom edge",
+            }[field_key]
+            field_col.caption(f"Choose the {coordinate} column for the Words table.")
         if wrong_column:
             state = "invalid"
             field_col.caption(f"{ICONS['warning']} {wrong_column}")
@@ -4140,13 +4199,23 @@ def hover_field_options(
     return result
 
 
+@st.cache_data(show_spinner=False, max_entries=32)
+def _axis_clock_available(_fixations: pd.DataFrame, cache_key: tuple) -> bool:
+    return charts.has_clock(_fixations)
+
+
 def numeric_field_options(trial_fixations: pd.DataFrame) -> list[str]:
-    """Numeric columns offered as X/Y axis fields."""
-    return [
+    """Numeric columns and supported derived axes for fixation charts."""
+    fields = [
         col
         for col in user_columns(trial_fixations)
-        if pd.api.types.is_numeric_dtype(trial_fixations[col])
+        if col != charts.ELAPSED and pd.api.types.is_numeric_dtype(trial_fixations[col])
     ]
+    if _axis_clock_available(trial_fixations, frame_fingerprint(trial_fixations)):
+        fields.append(charts.ELAPSED)
+    elif "timestamp_ms" in fields:
+        fields.remove("timestamp_ms")
+    return fields
 
 
 # Word columns that look like a per-word boolean flag the user might want to
@@ -6015,6 +6084,9 @@ def _seed_viz_state(
                 if field in fix_hover_options
             ],
         )
+    before_reset = ss.pop("_viz_before_reset", None)
+    if before_reset is not None:
+        _hold_view_writes(ss, before_reset, defaults_pending=False, in_callback=False)
     return color_fields, numeric_fields, highlight_options
 
 
@@ -6800,6 +6872,7 @@ def _rail_section(host, label: str, *, slug: str, name: str | None = None, **tog
         width="content",
         wrap=True,
         key=f"split_mode_rail_{slug}_popover",
+        on_change=plot_popover_on_change(),
     )
     # ...and the popover trigger carries no `help=` either: it would only
     # restate the section's own name. What is worth saying -- why
@@ -6881,19 +6954,109 @@ def _reset_viz_confirmation_dialog() -> None:
         st.rerun(scope="app")
 
 
+_PLOT_HISTORY = "_plot_edit_history"
+
+
+def _record_plot_edit() -> PlotHistory:
+    """Observe the settings that the rail has finished rendering on this run."""
+    ss = st.session_state
+    dataset = ss.get("data_source_choice", "")
+    history = ss.get(_PLOT_HISTORY)
+    if history is None or history.dataset != dataset:
+        history = ss[_PLOT_HISTORY] = PlotHistory(dataset)
+    settings = {
+        key: value
+        for key, value in _capture_quick_view_state().items()
+        if not _is_drift_mirror(key)
+    }
+    settings["single_animate"] = bool(ss.get("single_animate"))
+    # Presets and Reset remove their incoming URL options. Record only those
+    # plot parameters so undoing a change leaves the address's reading intact.
+    for param in st.query_params:
+        if param in URL_PRESET_PARAMS or param in LEGEND_PARAMS:
+            settings[f"?{param}"] = st.query_params[param]
+    selected = ss.get(_QUICK_VIEW_SELECTION_KEY)
+    design = Design(
+        selected,
+        ss.get(_QUICK_VIEW_CUSTOM_STATE) if selected != _CUSTOM_VIEW else None,
+        ss.get(_QUICK_VIEW_DRIFTED_FROM),
+    )
+    readings = (
+        (ss.get("single_trial_id"), ss.get("single_screen_id")),
+        (
+            ss.get(COMPARE_SOURCE_STATE_KEY),
+            ss.get(COMPARE_IDENTITY_STATE_KEY),
+            ss.get("single_compare_screen_id"),
+        ),
+    )
+    history.observe(settings, design, readings)
+    # Keep the transient Custom slot in step with the new reading too.
+    if history.design.custom is not design.custom:
+        ss[_QUICK_VIEW_CUSTOM_STATE] = history.design.custom
+    if history.design.drifted_from != design.drifted_from:
+        ss[_QUICK_VIEW_DRIFTED_FROM] = history.design.drifted_from
+    return history
+
+
+def _step_plot_history(redo: bool) -> None:
+    ss = st.session_state
+    history = ss.get(_PLOT_HISTORY)
+    if history is None or history.dataset != ss.get("data_source_choice", ""):
+        return
+    step = history.step(redo=redo)
+    if step is None:
+        return
+    # Changing tracking mode changes a popover's widget identity. Keep it
+    # stable after the first history click so reopening a panel stays open.
+    ss["_plot_history_used"] = True
+    keys, values, design = step
+    for key in tuple(keys):
+        if key.startswith("?"):
+            param = key[1:]
+            if key in values:
+                st.query_params[param] = values[key]
+            else:
+                st.query_params.pop(param, None)
+            keys.remove(key)
+    shown = {key: ss.get(key) for key in keys}
+    reassert_pending_writes()
+    for key in keys:
+        if key in values:
+            ss[key] = deepcopy(values[key])
+        else:
+            ss.pop(key, None)
+            ss.get(_PENDING_WRITES_KEY, {}).pop(key, None)
+    for window, user_set in _FIX_WINDOWS:
+        if window in keys:
+            ss[user_set] = window in values
+    for key, value in (
+        (_QUICK_VIEW_SELECTION_KEY, design.selection),
+        (_QUICK_VIEW_CUSTOM_STATE, design.custom),
+        (_QUICK_VIEW_DRIFTED_FROM, design.drifted_from),
+    ):
+        if value is not None:
+            ss[key] = deepcopy(value)
+        else:
+            ss.pop(key, None)
+    ss.pop(_QUICK_VIEW_APPLIED_STATE, None)
+    _hold_view_writes(ss, shown, defaults_pending=False)
+
+
 def render_viz_reset(host) -> None:
-    """Render the scoped visualization reset into ``host`` — a plain button.
-
-    Full width, like every other control in the rail, and at its foot, below
-    everything it resets. A plain button rather than a popover, so the rail's
-    one escape hatch is not itself a click deep; its explanation is the
-    button's tooltip.
-
-    The click arms a confirmation dialog rather than firing
-    ``reset_viz_settings`` straight away — a Share link's settings ride on this
-    too, so an accidental click could lose more than it looks like.
-    """
-    if host.button(
+    """Undo, redo, or reset the plot from the foot of the Full rail."""
+    history = _record_plot_edit()
+    row = host.container(horizontal=True, gap="xsmall", key="plot_history_actions")
+    for action, stack in (("Undo", history.past), ("Redo", history.future)):
+        row.button(
+            spoken(action),
+            icon=ICONS[action.lower()],
+            key=f"viz_{action.lower()}",
+            help=f"{action} the last plot change",
+            disabled=not stack,
+            on_click=_step_plot_history,
+            args=(action == "Redo",),
+        )
+    if row.button(
         f"{ICONS['reset']} Reset visualization",
         key="reset_viz_settings_btn",
         width="stretch",
@@ -6912,6 +7075,7 @@ def render_plot_controls(
     host=None,
     has_raw_gaze: bool = False,
     has_stimulus_image: bool = False,
+    trial_samples: pd.DataFrame | None = None,
     words: pd.DataFrame | None = None,
     fix_range_fixations: pd.DataFrame | None = None,
     canvas_renderer=None,
@@ -7115,6 +7279,13 @@ def render_plot_controls(
             "_resolved_animating", st.session_state.get("single_animate")
         )
     )
+    fields = (
+        st.session_state.get("global_x_field", "x"),
+        st.session_state.get("global_y_field", "y"),
+    )
+    chart_axes = not (animating or comparing) and fields != ("x", "y")
+    sequence = chart_axes and charts.position_chart(fields, "order_in_trial")
+    screen_help = "Choose screen X and Y to draw this layer."
     # Handy shorthands for the two recurring gates.
     _static_only = dict(in_animation=False, in_compare=False)
     _no_compare = dict(in_compare=False)
@@ -7182,13 +7353,17 @@ def render_plot_controls(
     )
     show_saccades, sac_grp = _rail_section(
         advanced_only(viz, "rail_sac"),
-        f"{ICONS['saccades']} **Saccades**",
+        f"{ICONS['saccades']} **{'Connect fixations' if sequence else 'Saccades'}**",
         slug="sac",
         name="Saccade",
         key="global_show_saccades",
         persist_state="session",
-        disabled=not has_fixations,
-        help=_greyed_help((not has_fixations, "This trial has no fixations.")),
+        disabled=not has_fixations or (chart_axes and not sequence),
+        help=_greyed_help(
+            (not has_fixations, "This trial has no fixations."),
+            (chart_axes and not sequence, screen_help),
+            (sequence, "Connect successive fixation indices in reading order."),
+        ),
     )
     # A master switch for the section's layers (text, image), matching
     # Fixations/Saccades. It never touches `global_show_labels` /
@@ -7203,6 +7378,8 @@ def render_plot_controls(
         name="Stimulus",
         key="global_show_stimulus",
         persist_state="session",
+        disabled=chart_axes,
+        help=screen_help if chart_axes else None,
     )
     # Word boxes are a section of their own, with a style (outline + fill) that
     # the Stimulus popover has no room for. Its switch is `global_show_words`,
@@ -7215,8 +7392,10 @@ def render_plot_controls(
         key="global_show_words",
         persist_state="session",
         # No word boxes: the popover body's own `_layer_off` caption says it.
-        disabled=not has_words,
-        help=_greyed_help((not has_words, "This trial has no word boxes.")),
+        disabled=not has_words or chart_axes,
+        help=_greyed_help(
+            (not has_words, "This trial has no word boxes."), (chart_axes, screen_help)
+        ),
     )
     # Heatmap and Raw gaze are peer sections,
     # each with exactly one thing to switch, so each carries its own toggle
@@ -7241,8 +7420,9 @@ def render_plot_controls(
         name="Heatmap",
         key="global_show_heatmap",
         persist_state="session",
-        disabled=heat_disabled or heat_nothing,
+        disabled=heat_disabled or heat_nothing or chart_axes,
         help=_greyed_help(
+            (chart_axes, screen_help),
             (heat_nothing, "This trial has no fixations and no word boxes."),
             (heat_disabled, _ANIMATE_GREYS["heatmap"]),
         ),
@@ -7252,6 +7432,8 @@ def render_plot_controls(
     # The comparison builder draws each reading's samples; the replay
     # has no raw-gaze layer.
     raw_disabled, raw_reason = _mode_gate(animating, comparing, in_animation=False)
+    raw_axis_off = chart_axes and not charts.raw_axes_available(fields, trial_samples)
+    raw_axis_help = "Raw samples need both plotted coordinates. Choose screen position or recorded time."
     show_raw_gaze, raw_gaze_grp = _rail_section(
         advanced_only(viz, "rail_rawgaze"),
         f"{ICONS['raw_gaze']} **Raw gaze**",
@@ -7259,8 +7441,9 @@ def render_plot_controls(
         name="Raw gaze",
         key="global_show_raw_gaze",
         persist_state="session",
-        disabled=not has_raw_gaze or raw_disabled,
+        disabled=not has_raw_gaze or raw_disabled or raw_axis_off,
         help=_greyed_help(
+            (raw_axis_off, raw_axis_help),
             (not has_raw_gaze, "This trial has no raw gaze samples."),
             (raw_disabled, _ANIMATE_GREYS["rawgaze"]),
         ),
@@ -7704,23 +7887,25 @@ def render_plot_controls(
         # `make_scanpath_figure`-only, unlike the drift correction — hence its
         # own gate. It sits at the bottom of the panel: it is a schematic mode,
         # not marker styling.
+        snap_disabled = static_disabled or chart_axes
+        snap_reason = screen_help if chart_axes else static_reason
         snapped, _ = _check_row(
             "Snap",
             key="global_fixation_snap_to_line",
             check_label="To line",
             check_share=0.4,
             persist_state="session",
-            disabled=static_disabled,
+            disabled=snap_disabled,
             help=_gated_help(
                 "Move each fixation up or down onto its text line, keeping its "
                 "x. It goes to its word's line, or else the nearest line.",
-                static_reason,
+                snap_reason,
             ),
         )
         position_help = _gated_help(
             "Where on its line a snapped fixation sits, in line heights: 0 is "
             "the middle, −0.5 the top edge, 0.5 the bottom edge.",
-            static_reason,
+            snap_reason,
         )
         _numeric_slider(
             st,
@@ -7731,7 +7916,7 @@ def render_plot_controls(
             max_value=SNAP_POSITION_BOUNDS[1],
             step=0.05,
             slider_format="%.2f",
-            disabled=static_disabled or not snapped,
+            disabled=snap_disabled or not snapped,
             help=position_help,
             field_host=_sub_row(
                 "Position", caption_help=_layer_gate(False, position_help)[1]
@@ -7777,8 +7962,12 @@ def render_plot_controls(
         sac_grp,
         _layer_off(
             f"{ICONS['saccades']} Saccades",
-            off=not show_saccades or not has_fixations,
-            reason=no_fixations_note or None,
+            off=chart_axes or not show_saccades or not has_fixations,
+            reason=(
+                "Saccade styles apply to screen X and Y."
+                if chart_axes
+                else no_fixations_note or None
+            ),
         ),
         _popover_rows("sac"),
     ):
@@ -8007,8 +8196,12 @@ def render_plot_controls(
         ),
         _layer_off(
             f"{ICONS['saccades']} Saccades",
-            off=not show_saccades or not has_fixations,
-            reason=no_fixations_note or None,
+            off=chart_axes or not show_saccades or not has_fixations,
+            reason=(
+                "Saccade styles apply to screen X and Y."
+                if chart_axes
+                else no_fixations_note or None
+            ),
             caption=has_fixations,
         ),
         _popover_rows("filter_sac"),
@@ -8042,7 +8235,11 @@ def render_plot_controls(
     # section's master switch is off, so a user can set up what they want shown
     # before turning it back on — nothing here mutates them; `_collect_viz_
     # settings` only ANDs the master into what reaches the figure.
-    with stim_grp, _popover_rows("stim"):
+    with (
+        stim_grp,
+        _layer_off("Stimulus", off=chart_axes, reason=screen_help),
+        _popover_rows("stim"),
+    ):
         if not show_stimulus:
             st.caption(
                 f"{ICONS['warning']} **{ICONS['stimulus']} Stimulus** is off, so "
@@ -8300,8 +8497,12 @@ def render_plot_controls(
         heatmap_grp,
         _layer_off(
             f"{ICONS['heatmap']} Heatmap",
-            off=not show_heatmap or heat_nothing,
-            reason=heat_nothing_note if heat_nothing else None,
+            off=chart_axes or not show_heatmap or heat_nothing,
+            reason=screen_help
+            if chart_axes
+            else heat_nothing_note
+            if heat_nothing
+            else None,
         ),
         _popover_rows("heatmap"),
     ):
@@ -8497,7 +8698,11 @@ def render_plot_controls(
     # 👁️ Fixations.
     with (
         raw_gaze_grp,
-        _layer_off(f"{ICONS['raw_gaze']} Raw gaze", off=not show_raw_gaze),
+        _layer_off(
+            f"{ICONS['raw_gaze']} Raw gaze",
+            off=not show_raw_gaze or raw_axis_off,
+            reason=raw_axis_help if raw_axis_off else None,
+        ),
         _popover_rows("rawgaze"),
     ):
         if comparing:
@@ -8568,8 +8773,10 @@ def render_plot_controls(
         boxes_grp,
         _layer_off(
             f"{ICONS['word_boxes']} Word boxes",
-            off=not show_word_boxes or not has_words,
-            reason=None
+            off=chart_axes or not show_word_boxes or not has_words,
+            reason=screen_help
+            if chart_axes
+            else None
             if has_words
             else f"{ICONS['warning']} This trial has no word boxes to draw.",
         ),
@@ -8671,10 +8878,6 @@ def render_plot_controls(
     # screen. On other axes it draws a plain chart of the fixations, so the
     # framing and the grid have nothing to act on: they grey, saying why.
     # (Animate and Compare always plot x / y, whatever the fields say.)
-    chart_axes = not (animating or comparing) and (
-        st.session_state.get("global_x_field", "x"),
-        st.session_state.get("global_y_field", "y"),
-    ) != ("x", "y")
     chart_reason = (
         f"{ICONS['warning']} This needs screen x / y on the axes. Set **Axes** "
         "back to x / y to use it."
@@ -8849,9 +9052,43 @@ def render_plot_controls(
             f"{ICONS['warning']} {modes} always plots screen x / y. Turn "
             f"**{modes}** off to choose other fields; your choices are kept."
             if axis_disabled
-            else "The fixation fields on the X and Y axes. Anything other than "
-            "x / y draws a chart of the fixations only, with no text, word boxes, "
-            "saccades, heatmap or grid.",
+            else "Choose screen X and Y for the spatial scanpath, or select two numeric fields to chart the reading.",
+        )
+        presets = {
+            "Screen X and Y": ("x", "y"),
+            "Horizontal position by fixation index": ("order_in_trial", "x"),
+            "Vertical position by fixation index": ("order_in_trial", "y"),
+            "Elapsed time by fixation index": ("order_in_trial", charts.ELAPSED),
+            "Duration by fixation index": ("order_in_trial", "duration_ms"),
+            "Horizontal position over time": (charts.ELAPSED, "x"),
+            "Vertical position over time": (charts.ELAPSED, "y"),
+        }
+
+        # This picker applies a command. Remount it after a selection so a
+        # closed popover cannot send the last command again on later reruns.
+        generation = st.session_state.get("_axis_preset_generation", 0)
+        picker_key = f"_axis_chart_preset_{generation}"
+
+        def apply_axis_preset():
+            choice = st.session_state.get(picker_key)
+            if choice in presets:
+                st.session_state["_axis_preset_generation"] = generation + 1
+                x, y = presets[choice]
+                write_through("global_x_field", x)
+                write_through("global_y_field", y)
+
+        st.selectbox(
+            "Axis preset",
+            [
+                name
+                for name, pair in presets.items()
+                if all(f in numeric_fields for f in pair)
+            ],
+            index=None,
+            placeholder="Choose a chart",
+            key=picker_key,
+            on_change=apply_axis_preset,
+            disabled=axis_disabled,
         )
         label_w = _label_w()
         rest = 1.0 - label_w
@@ -8863,6 +9100,7 @@ def render_plot_controls(
         _row_label(axes_cols[0], "Axes", axis_help)
         _sub_caption(axes_cols[1], "X", axis_help if axis_disabled else None)
         axis_labels = _rail_names().option_labels(numeric_fields, roles=True)
+        axis_labels[charts.ELAPSED] = charts.ELAPSED_LABEL
         axes_cols[2].selectbox(
             "X axis field",
             options=numeric_fields,
@@ -8884,11 +9122,9 @@ def render_plot_controls(
             help=axis_help,
             label_visibility="collapsed",
         )
-        if chart_axes:
+        if chart_axes and fields == ("order_in_trial", "order_in_trial"):
             st.caption(
-                f"{ICONS['warning']} Limited support: the plot shows only "
-                "fixation markers, with no word boxes, text, saccades, heatmap or "
-                "coordinate grid."
+                "Both axes show fixation order. Choose Duration or Word ID on one axis to see how it changes over the reading."
             )
 
     # Title/caption on the figure — set here, so it's visible live rather than
@@ -9500,7 +9736,16 @@ def reset_viz_settings() -> None:
     # the *view* back to defaults; the user's saved designs are a library, not
     # a view, and losing them to a reset button would be the kind of undoless
     # deletion nothing here offers.
+    # The reset dialog reruns the app. Once its dataset defaults are seeded,
+    # send them to closed popovers as well, superseding older design writes.
+    st.session_state["_viz_before_reset"] = {
+        key: deepcopy(st.session_state[key])
+        for key in keys
+        if _is_design_key(key) and key in st.session_state
+    }
+    pending = st.session_state.get(_PENDING_WRITES_KEY, {})
     for key in keys:
+        pending.pop(key, None)
         st.session_state.pop(key, None)
     # Re-seeding is source-driven for these two (see app.seed_canvas_state);
     # dropping the guard makes the canvas / font snap back to the source's

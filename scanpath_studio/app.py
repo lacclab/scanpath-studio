@@ -305,6 +305,8 @@ from scanpath_studio.session_keys import (
     COLUMN_MAPPING_PREFIX,
     PARAM_CORPUS,
     PARAM_DATASET,
+    PARAM_DATASET_DIGEST,
+    PARAM_DATASET_ID,
 )
 from scanpath_studio.styles import compact_css, get_app_css, widen_menu
 from scanpath_studio.tabs import (
@@ -9276,12 +9278,26 @@ def _run_app() -> None:
     # for the full URL schema. External tools can deep-link into this app with
     # `?source=...&participant=...&trial=...&...` to land on a specific trial
     # with the reviewer's preferred viz settings.
-    keys_before_link = set(st.session_state.keys())
-    url_source = _apply_url_preset()
-    # What the link seeded, to take back if it names a dataset that
-    # isn't here (`resolve_link_dataset`, after the recovery cache restores).
-    link_seeded = set(st.session_state.keys()) - keys_before_link
-    links_dataset = bool(st.query_params.get(PARAM_DATASET))
+    private_link = bool(
+        st.query_params.get(PARAM_DATASET) and not st.query_params.get("source")
+    )
+    url_source = None if private_link else _apply_url_preset()
+    private_choice = None
+    checked = False
+
+    def open_private_link() -> bool:
+        # Called once the registry is available and before saved settings are
+        # restored. Only a matching link takes precedence over the saved view.
+        nonlocal checked, private_choice
+        if not checked:
+            checked = True
+            private_choice = resolve_link_dataset(
+                (), st.session_state.get("data_source_choice")
+            )
+            if private_choice is not None:
+                _apply_url_preset()
+        return private_choice is not None
+
     # Desktop/localhost installs remember uploaded datasets, annotations,
     # mappings and view settings across browser refreshes and process restarts.
     # Public deployments never opt in implicitly (there is no user identity with
@@ -9314,8 +9330,12 @@ def _run_app() -> None:
             # resumes the view this machine was on last. The app never writes
             # query parameters itself, so any here came with the link — except
             # `?ui=`, which names the interface mode and no view.
-            protect_view=ui_mode.has_link_params(st.query_params),
+            protect_view=open_private_link
+            if private_link
+            else ui_mode.has_link_params(st.query_params),
         )
+    if private_link:
+        open_private_link()  # Also handles a session without a recovery cache.
     # Before any view renders, so a fresh Essentials session opens on the replay:
     # `tabs` seeds `single_animate` later with a `setdefault`, which this wins.
     ui_mode.seed_simple_start(
@@ -9422,17 +9442,22 @@ def _run_app() -> None:
             )
     elif url_source == "upload":
         st.session_state.setdefault("_show_upload_wizard", True)
-    elif links_dataset:
-        # `?dataset=` names a dataset the sender added. Opened when
-        # this session holds one of that name — once, on the run that read the
-        # link, so the picker stays the user's afterwards — and otherwise the
-        # link is set aside whole, with a notice naming what is missing.
-        current = st.session_state.get("data_source_choice")
-        if (name := resolve_link_dataset(link_seeded, current)) is not None:
-            linked_choice = name
-            if st.session_state.get(_LINK_DATASET_OPENED_KEY) != name:
-                st.session_state[_LINK_DATASET_OPENED_KEY] = name
-                st.session_state["_pending_source_choice"] = name
+    elif private_choice is not None:
+        linked_choice = private_choice
+        if st.session_state.get(_LINK_DATASET_OPENED_KEY) != private_choice:
+            st.session_state[_LINK_DATASET_OPENED_KEY] = private_choice
+            st.session_state["_pending_source_choice"] = private_choice
+        if not st.query_params.get(PARAM_DATASET_DIGEST) and private_choice in (
+            st.session_state.get("_pending_source_choice"),
+            st.session_state.get("data_source_choice"),
+        ):
+            name = md_literal(_dataset_display_name(private_choice))
+            match = (
+                f"This older link opened **{name}** without checking the recording tables."
+                if st.query_params.get(PARAM_DATASET_ID)
+                else f"This older link matched **{name}** by name alone."
+            )
+            page_notices.info(f"{match} Check that you have the sender’s data.")
     if notice := link_dataset_notice(st.session_state.get("data_source_choice")):
         page_notices.warning(notice, icon=ICONS["warning"])
     if notice := resolve_link_compare_upload(

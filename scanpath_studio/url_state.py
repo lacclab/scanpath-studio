@@ -105,7 +105,7 @@ from .controls import (
     numeric_field_options,
     palette_state,
 )
-from .data import composite_respelling_map, respell_reading
+from .data import composite_respelling_map, respell_reading, share_dataset_fingerprint
 from .dataset_identity import dataset_share_id, resolve_dataset_reference
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .export import PRINT_DPI_BOUNDS, PRINT_WIDTH_BOUNDS
@@ -127,6 +127,7 @@ from .session_keys import (
     LINK_SETUP_STATE_KEY,
     PARAM_CORPUS,
     PARAM_DATASET,
+    PARAM_DATASET_DIGEST,
     PARAM_DATASET_ID,
     PARAM_SHOW_TITLE_CAPTION,
     PENDING_COMPARE_STATE_KEY,
@@ -1564,7 +1565,8 @@ def missing_dataset_message(
 def resolve_link_dataset(seeded: Iterable[str], current: str | None) -> str | None:
     """Open the added dataset a link names (`?dataset=`).
 
-    Matches an upload by its ID here, or its displayed name on another computer. When
+    Match the upload by its local ID or portable name, then verify its recording
+    tables if the link includes a digest. Return its local storage key. When
     it doesn't, the link's view is **not** applied to whatever else is open:
     every key ``_apply_url_preset`` seeded this run (``seeded``) is dropped, the
     link's params are cleared so the next run does not seed them again, and a
@@ -1582,11 +1584,21 @@ def resolve_link_dataset(seeded: Iterable[str], current: str | None) -> str | No
     token = resolve_dataset_reference(
         st.session_state, name, params.get(PARAM_DATASET_ID)
     )
-    if token is not None:
+    digest = params.get(PARAM_DATASET_DIGEST)
+    if token is not None and (
+        digest is None
+        or share_dataset_fingerprint(st.session_state["_datasets"][token]) == digest
+    ):
         return token
-    message = missing_dataset_message(
-        str(name), params.get("participant"), params.get("trial_id")
-    )
+    if token is None:
+        message = missing_dataset_message(
+            str(name), params.get("participant"), params.get("trial_id")
+        )
+    else:
+        message = (
+            f"Your copy of **{md_literal(str(name))}** contains different data. The shared view "
+            "was not opened. Ask the sender for their data files and setup file."
+        )
     for key in seeded:
         st.session_state.pop(key, None)
     params.clear()
@@ -1763,7 +1775,9 @@ _TEXT_STATE_KEYS = frozenset(
     }
 )
 #: A data field the rail heals against the loaded data: a string, or unset.
-_FIELD_STATE_KEYS = frozenset({"global_word_hover_measure"})
+_FIELD_STATE_KEYS = frozenset(
+    {"global_word_hover_measure", "global_x_field", "global_y_field"}
+)
 #: Two-number ranges with no widget bound of their own: the colour ranges are
 #: drawn as given by the rail (its slider widens to hold them), so they only
 #: have to be numbers.
@@ -3636,6 +3650,7 @@ def _build_share_query(
 
             params[PARAM_DATASET] = _dataset_display_name(data_choice)
             params[PARAM_DATASET_ID] = dataset_share_id(st.session_state, data_choice)
+            params[PARAM_DATASET_DIGEST] = share_dataset_fingerprint(stored)
         if is_multipleye_entry(stored):
             # A session set is read as it is laid out, with no mapping to
             # send: the recipient adds the same session set.

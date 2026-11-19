@@ -18,6 +18,7 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Feature | Where | Drive it by | Works when |
 | --- | --- | --- | --- |
 | Pick a reading | Above the plot | `single_participant`, `single_trial_id` | The plot, title and chips follow; a share link reopens the same reading |
+| Fixation charts | Full → Figure & canvas → Axis preset | `global_x_field`, `global_y_field` | Index ticks are integers. Elapsed seconds stay relative to the complete reading. Screen Y increases downward. Raw samples appear only on supported coordinates. |
 | The spatial plot | Centre | — (drawn by `tabs._render_true_scale_chart`) | Word labels keep their px size at any column width; never `st.plotly_chart` |
 | Fixations | Rail → **Fixations** | `global_show_fix` + its popover's `global_*` keys | Markers sized by duration; colour-by / scale / range honoured |
 | Saccades | Rail → **Saccades** | `global_show_saccades` | One trace with `None` separators; arrows, colour, style, width |
@@ -30,6 +31,7 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Animate | Rail toggle | `single_animate` | The replay player draws its own toolbar row; the plot keeps the static figure's size |
 | Compare | Rail toggle | `single_compare_toggle`, `single_compare_layout`, `?compare=` | Overlay / side by side / stacked; B from another dataset resolves to side by side on unequal canvases |
 | Fixation index | Rail → Fixations popover | `global_show_order`, `global_order_label_position` | Numbers above / inside / below each fixation, on every builder |
+| Undo and Redo | Full → foot of Plot controls, beside Reset visualization | `viz_undo`, `viz_redo` | Undo a confirmed reset, redo it, then undo and edit again on the current reading |
 
 ### Subtabs under the plot
 

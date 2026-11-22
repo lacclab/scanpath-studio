@@ -39,6 +39,7 @@
 
 ### Fixed
 
+- Static figure exports now require Kaleido 1.5.2 or later to prevent intermittent failures while the browser loads its plotting scripts.
 - Cohort figures use finite observations, weight repeated readings consistently, distinguish stimulus versions, and show gaps and units for the selected estimate.
 - Setting a reading’s fixation opacity to zero now makes its markers transparent in comparisons and two-reading replays.
 - Single and comparison heatmaps use the same word assignments and label log scales in their original units. Relative marker sizing uses both visible readings in Compare. Heart outlines respond to the selected width, and a category containing “heatmap” stays in the fixation export layer.

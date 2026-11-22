@@ -29,6 +29,58 @@ def _render(tmp_path, *extra):
     cli.main(["render", "--sample", "-o", str(tmp_path / "out.html"), *extra])
 
 
+def test_metadata_reports_and_trial_listing_use_all_recording_tables(tmp_path, capsys):
+    tables = {
+        "words": "participant_id,trial_id,text_id,word_id,word,x,y,width,height\np1,t1,a,1,One,10,10,20,10\n",
+        "fixations": "participant_id,trial_id,text_id,x,y,duration_ms\np2,t2,b,10,20,200\n",
+        "raw-gaze": "participant_id,trial_id,text_id,x,y,timestamp_ms\np3,t3,c,10,20,0\n",
+        "participant-metadata": "participant_id,cohort\np1,A\np2,B\np3,C\n",
+        "trial-metadata": "trial_id,session\nt1,s1\nt2,s2\nt3,s3\n",
+        "text-metadata": "text_id,genre\na,poem\nb,story\nc,essay\n",
+    }
+    args = ["render", "--list-trials"]
+    for flag, csv in tables.items():
+        path = tmp_path / f"{flag}.csv"
+        path.write_text(csv, encoding="utf-8")
+        args.extend([f"--{flag}", str(path)])
+
+    cli.main(args)
+    out, err = capsys.readouterr()
+    assert "for 3 participants" in err
+    assert "for 3 trials" in err
+    assert "for 3 texts" in err
+    assert [line.split() for line in out.splitlines()] == [
+        ["participant_id", "trial_id", "cohort", "session", "text_id", "genre"],
+        ["p1", "t1", "A", "s1", "a", "poem"],
+        ["p2", "t2", "B", "s2", "b", "story"],
+        ["p3", "t3", "C", "s3", "c", "essay"],
+    ]
+
+
+def test_mapped_text_owns_the_join_even_if_other_tables_supply_text_ids(
+    tmp_path, capsys
+):
+    tables = {
+        "words": "participant_id,trial_id,text_id,word_id,word,x,y,width,height\np1,t1,recorded,1,One,10,10,20,10\n",
+        "fixations": "participant_id,trial_id,x,y,duration_ms\np1,t1,10,20,200\n",
+        "raw-gaze": "participant_id,trial_id,x,y,timestamp_ms\np1,t1,10,20,0\n",
+        "participant-metadata": "participant_id,text_id\np1,survey\n",
+        "text-metadata": "text_id,genre\nrecorded,poem\n",
+    }
+    args = ["render", "--list-trials"]
+    for flag, csv in tables.items():
+        path = tmp_path / f"{flag}.csv"
+        path.write_text(csv, encoding="utf-8")
+        args.extend([f"--{flag}", str(path)])
+    cli.main(args)
+    out, err = capsys.readouterr()
+    assert "in the data, not the table" not in err
+    assert [line.split() for line in out.splitlines()] == [
+        ["participant_id", "trial_id", "text_id", "genre"],
+        ["p1", "t1", "recorded", "poem"],
+    ]
+
+
 class TestParticipantMetadata:
     def test_a_clean_join_reports_its_fields_and_readers(
         self, tmp_path, sample, capsys

@@ -2054,18 +2054,96 @@ def _compare_second_dataset(api, args, words, fixations):
         )
 
 
-def _trial_text_ids(*frames) -> pd.DataFrame | None:
-    """``[participant_id, trial_id, text_id]``, one row per trial, from the
-    first of ``frames`` that has it — ``None`` when none carries a text id."""
-    columns = ["participant_id", "trial_id", "text_id"]
-    parts = [
-        f[columns].drop_duplicates(columns[:2])
-        for f in frames
-        if f is not None and not f.empty and set(columns) <= set(f.columns)
-    ]
-    if not parts:
-        return None
-    return pd.concat(parts, ignore_index=True).drop_duplicates(columns[:2])
+def _report_render_metadata(args, words, fixations, raw_gaze, column_names) -> None:
+    """Check metadata against all loaded readings and print the requested trial list."""
+    from . import api
+    from . import metadata as _metadata
+
+    readings = _metadata.recording_keys(fixations, words, raw_gaze)
+    if args.participant_metadata:
+        try:
+            attached = api.load_participant_metadata(
+                args.participant_metadata, participants=readings
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        report = attached.report
+        print(
+            f"Participant metadata: {_count(len(attached.fields), 'field')} "
+            f"({', '.join(attached.names)}) for "
+            f"{_count(len(report.matched), 'participant')}.",
+            file=sys.stderr,
+        )
+        _print_join_details(report)
+
+    attached_trials = None
+    if args.trial_metadata:
+        try:
+            attached_trials = api.load_trial_metadata(
+                args.trial_metadata,
+                participant_column=args.trial_metadata_reader_column,
+                trials=readings,
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        report = attached_trials.report
+        keyed = (
+            "participant + trial"
+            if attached_trials.keyed_by_participant
+            else "trial id"
+        )
+        print(
+            f"Trial metadata: {_count(len(attached_trials.fields), 'field')} "
+            f"({', '.join(attached_trials.names)}) for "
+            f"{_count(len(report.matched), 'trial')}, keyed by {keyed}.",
+            file=sys.stderr,
+        )
+        _print_join_details(report, limit=20)
+    elif args.trial_metadata_reader_column:
+        raise SystemExit(
+            "--trial-metadata-participant-column needs --trial-metadata: it names a "
+            "column in that table."
+        )
+
+    attached_texts = None
+    if args.text_metadata:
+        try:
+            attached_texts = api.load_text_metadata(
+                args.text_metadata,
+                texts=readings,
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        report = attached_texts.report
+        print(
+            f"Text metadata: {_count(len(attached_texts.fields), 'field')} "
+            f"({', '.join(attached_texts.names)}) for "
+            f"{_count(len(report.matched), 'text')}.",
+            file=sys.stderr,
+        )
+        _print_join_details(report)
+
+    if not args.list_trials:
+        return
+
+    identity = ["participant_id", "trial_id"]
+    combos = _metadata.unambiguous_readings(readings).sort_values(identity)
+    if args.participant_metadata:
+        combos = _metadata.project(attached, combos)
+    if attached_trials is not None:
+        combos = _metadata.project_trials(attached_trials, combos)
+    # Keep the listing's column order: reader/trial fields, then text ID and fields.
+    combos["text_id"] = combos.pop("text_id")
+    if attached_texts is not None:
+        combos = _metadata.project_texts(attached_texts, combos)
+    print(
+        f"{len(combos)} trial{'' if len(combos) == 1 else 's'}. Pass the "
+        "participant as -p and the trial as -t; the app shows a trial by "
+        "its participant and text.",
+        file=sys.stderr,
+    )
+    # The ids under the dataset's own names.
+    print(_listed(combos, column_names).to_string(index=False))
 
 
 def _listed(table: pd.DataFrame, column_names: dict) -> pd.DataFrame:
@@ -2166,8 +2244,18 @@ def _compare_setup_snapshot(canvas: tuple | None):
     )
 
 
-def _print_combined_rows(report) -> None:
-    """Say how many duplicate rows a metadata table folded together."""
+def _print_join_details(report, *, limit: int | None = None) -> None:
+    """Print unmatched IDs, conflicts and compatible duplicates for any metadata table."""
+    for label, keys in (
+        ("in the data, not the table", report.only_in_data),
+        ("in the table, not the data", report.only_in_table),
+        ("rows that disagree (left empty)", report.conflicting),
+    ):
+        if keys:
+            shown = ", ".join(_format_trial_key(key) for key in keys[:limit])
+            remaining = len(keys) - len(keys[:limit])
+            suffix = f", ... (+{remaining})" if remaining else ""
+            print(f"  {len(keys)} {label}: {shown}{suffix}", file=sys.stderr)
     combined = int(getattr(report, "combined_rows", 0) or 0)
     if combined:
         print(
@@ -2983,148 +3071,15 @@ def render(argv: list[str]) -> None:
             column_names[found[0]] = found[1]
         raw_gaze = _cn.to_canonical_frame(raw_gaze)
 
-    # What the metadata tables are joined against — the samples, when
-    # they are the only table, or every join would report "0 matched".
-    join_frame = (
-        raw_gaze
-        if raw_gaze is not None and fixations.empty and words.empty
-        else fixations
-    )
-
-    # Attaching a participant table headlessly is worth doing for the
-    # join report alone — a mistyped id column or a cohort file from the wrong
-    # study is exactly what you want to hear about before rendering 300 figures.
-    if args.participant_metadata:
-        try:
-            attached = api.load_participant_metadata(
-                args.participant_metadata, participants=join_frame
-            )
-        except (ValueError, FileNotFoundError, OSError) as exc:
-            raise SystemExit(str(exc))
-        report = attached.report
-        print(
-            f"Participant metadata: {_count(len(attached.fields), 'field')} "
-            f"({', '.join(attached.names)}) for "
-            f"{_count(len(report.matched), 'participant')}.",
-            file=sys.stderr,
-        )
-        for label, ids in (
-            ("in the data, not the table", report.only_in_data),
-            ("in the table, not the data", report.only_in_table),
-            ("rows that disagree (left empty)", report.conflicting),
-        ):
-            if ids:
-                print(f"  {len(ids)} {label}: {', '.join(ids)}", file=sys.stderr)
-        _print_combined_rows(report)
-
-    # The same, one grain down. A trial table's report is worth more
-    # than the participant one, not less: getting the *key* wrong is silent
-    # (a table keyed by trial alone still joins, it just means something else),
-    # and "0 matched" here is the one thing that says so out loud.
-    attached_trials = None
-    if args.trial_metadata:
-        try:
-            attached_trials = api.load_trial_metadata(
-                args.trial_metadata,
-                participant_column=args.trial_metadata_reader_column,
-                trials=join_frame,
-            )
-        except (ValueError, FileNotFoundError, OSError) as exc:
-            raise SystemExit(str(exc))
-        report = attached_trials.report
-        keyed = (
-            "participant + trial"
-            if attached_trials.keyed_by_participant
-            else "trial id"
-        )
-        print(
-            f"Trial metadata: {_count(len(attached_trials.fields), 'field')} "
-            f"({', '.join(attached_trials.names)}) for "
-            f"{_count(len(report.matched), 'trial')}, keyed by {keyed}.",
-            file=sys.stderr,
-        )
-        for label, keys in (
-            ("in the data, not the table", report.only_in_data),
-            ("in the table, not the data", report.only_in_table),
-            ("rows that disagree (left empty)", report.conflicting),
-        ):
-            if keys:
-                shown = ", ".join(_format_trial_key(key) for key in keys[:20])
-                # Plain "..." rather than an ellipsis character: this line
-                # goes to stderr, and a Windows console in its default
-                # code page prints the single glyph as a replacement mark.
-                more = "" if len(keys) <= 20 else f", ... (+{len(keys) - 20})"
-                print(f"  {len(keys)} {label}: {shown}{more}", file=sys.stderr)
-        _print_combined_rows(report)
-    elif args.trial_metadata_reader_column:
-        raise SystemExit(
-            "--trial-metadata-participant-column needs --trial-metadata: it names a "
-            "column in that table."
-        )
-
-    # The third grain, flat like the participant table — a text is a
-    # stimulus, so it always joins on text id alone.
-    attached_texts = None
-    if args.text_metadata:
-        try:
-            attached_texts = api.load_text_metadata(
-                args.text_metadata, texts=words if not words.empty else join_frame
-            )
-        except (ValueError, FileNotFoundError, OSError) as exc:
-            raise SystemExit(str(exc))
-        report = attached_texts.report
-        print(
-            f"Text metadata: {_count(len(attached_texts.fields), 'field')} "
-            f"({', '.join(attached_texts.names)}) for "
-            f"{_count(len(report.matched), 'text')}.",
-            file=sys.stderr,
-        )
-        for label, ids in (
-            ("in the data, not the table", report.only_in_data),
-            ("in the table, not the data", report.only_in_table),
-            ("rows that disagree (left empty)", report.conflicting),
-        ):
-            if ids:
-                print(f"  {len(ids)} {label}: {', '.join(ids)}", file=sys.stderr)
-        _print_combined_rows(report)
-
+    if (
+        args.list_trials
+        or args.participant_metadata
+        or args.trial_metadata
+        or args.text_metadata
+        or args.trial_metadata_reader_column
+    ):
+        _report_render_metadata(args, words, fixations, raw_gaze, column_names)
     if args.list_trials:
-        combos = api.list_trials(words, fixations, raw_gaze=raw_gaze)
-        if (
-            args.participant_metadata
-            or attached_trials is not None
-            or attached_texts is not None
-        ):
-            from scanpath_studio import metadata as _metadata
-
-            if args.participant_metadata:
-                combos = _metadata.project(attached, combos)
-            if attached_trials is not None:
-                combos = _metadata.project_trials(attached_trials, combos)
-            if attached_texts is not None:
-                # `list_trials`'s combos is deliberately just
-                # (participant_id, trial_id) — text_id isn't part of its
-                # public contract — so bring it in here, from whichever
-                # table has the trial, before projecting the text table.
-                texts = _trial_text_ids(fixations, words, join_frame)
-                if texts is not None:
-                    combos = combos.merge(
-                        texts, on=["participant_id", "trial_id"], how="left"
-                    )
-                    combos = _metadata.project_texts(attached_texts, combos)
-        # The text id too — the id the app shows a trial by — from whichever
-        # table has the trial, since every table's trials are listed.
-        texts = _trial_text_ids(fixations, words, raw_gaze)
-        if "text_id" not in combos.columns and texts is not None:
-            combos = combos.merge(texts, on=["participant_id", "trial_id"], how="left")
-        print(
-            f"{len(combos)} trial{'' if len(combos) == 1 else 's'}. Pass the "
-            "participant as -p and the trial as -t; the app shows a trial by "
-            "its participant and text.",
-            file=sys.stderr,
-        )
-        # The ids under the dataset's own names.
-        print(_listed(combos, column_names).to_string(index=False))
         return
     if args.list_parts:
         parts = api.list_parts(

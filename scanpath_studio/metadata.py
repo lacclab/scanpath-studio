@@ -910,6 +910,78 @@ def active_texts() -> TextMetadata | None:
         return None
 
 
+def _text_candidates(frame, identity: list[str]) -> pd.DataFrame:
+    """Distinct recorded IDs and their precedence, optionally grouped by reading."""
+    columns = [*identity, "text_id"]
+    fields = [
+        c
+        for c in (*columns, "unique_text_id", _data.TEXT_ID_MAPPED)
+        if c in frame.columns
+    ]
+    keys = frame[fields].drop_duplicates().copy()
+    if "text_id" not in keys:
+        keys["text_id"] = None
+    keys[columns] = keys[columns].astype("str")
+    unique_text = keys.get("unique_text_id")
+    has_unique = False
+    if unique_text is not None:
+        has_unique = unique_text.notna()
+        keys["text_id"] = unique_text.astype("str").fillna(keys["text_id"])
+    mapped = (
+        keys[_data.TEXT_ID_MAPPED].fillna(False).astype(bool)
+        if _data.TEXT_ID_MAPPED in keys
+        else True
+    )
+    # A recorded ID outranks a fallback, and unique_text_id breaks a tie.
+    keys["_priority"] = keys["text_id"].notna() * (1 + 2 * mapped + has_unique)
+    return keys[[*columns, "_priority"]]
+
+
+def trial_text_id(*frames: pd.DataFrame | None) -> str | None:
+    """The recorded text of one reading, or None when absent or ambiguous."""
+    parts = [_text_candidates(f, []) for f in frames if f is not None and not f.empty]
+    if not parts:
+        return None
+    candidates = pd.concat(parts, ignore_index=True)
+    best = candidates["_priority"].max()
+    texts = (
+        candidates.loc[candidates["_priority"].eq(best), "text_id"].dropna().unique()
+    )
+    return str(texts[0]) if len(texts) == 1 else None
+
+
+def recording_keys(*frames: pd.DataFrame | None) -> pd.DataFrame:
+    """Distinct participant, trial and text IDs available for metadata joins.
+
+    A reading can occur in any recording table. Prefer its recorded text IDs
+    to copies of its trial ID. Older normalized frames keep their stored IDs.
+    """
+    reading = ["participant_id", "trial_id"]
+    columns = [*reading, "text_id"]
+    parts = [_text_candidates(f, reading) for f in frames if _data.names_readings(f)]
+    if not parts:
+        return pd.DataFrame(columns=columns)
+    keys = pd.concat(parts, ignore_index=True)
+    best = keys.groupby(reading, sort=False)["_priority"].transform("max")
+    return keys.loc[keys["_priority"].eq(best), columns].drop_duplicates(
+        ignore_index=True
+    )
+
+
+def unambiguous_readings(keys: pd.DataFrame) -> pd.DataFrame:
+    """One row per reading. Conflicting recorded text IDs leave its text unassigned."""
+    identity = ["participant_id", "trial_id"]
+    return keys.assign(
+        text_id=keys["text_id"].mask(keys.duplicated(identity, keep=False))
+    ).drop_duplicates(identity)
+
+
+def readings_for_texts(keys: pd.DataFrame, text_ids) -> set:
+    """Readings whose recording tables agree on a selected text."""
+    readings = unambiguous_readings(keys)
+    return trial_keys(readings[readings["text_id"].isin(text_ids)])
+
+
 def text_keys(combos: pd.DataFrame | None) -> set:
     """The distinct ``text_id`` values the loaded data actually has."""
     if combos is None or combos.empty or "text_id" not in combos.columns:

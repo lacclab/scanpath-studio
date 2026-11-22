@@ -700,20 +700,18 @@ def test_upload_blocker_focuses_duration_then_shows_two_conversions(app_url, bro
                 "buffer": b"participant_id,trial_id,x,y,looking [s]\np1,t1,20,30,0.12\np1,t1,23,35,0.245\n",
             }
         )
-        page.locator(".st-key-col_map_fix_duration input").first.wait_for()
+        field = page.locator(".st-key-col_map_fix_duration input:not([type=hidden])")
+        field.wait_for()
         _settle(page)
         page.get_by_role("button", name="Add dataset", exact=True).click()
         blocker = page.get_by_role("link", name="missing Duration")
         blocker.focus()
         blocker.press("Enter")
-        page.wait_for_function(
-            "document.activeElement?.closest('.st-key-col_map_fix_duration') !== null"
-        )
-        field = page.locator(".st-key-col_map_fix_duration input")
+        sync_api.expect(field).to_be_focused()
         field.fill("looking")
         page.get_by_role("option", name="looking [s]", exact=True).click()
         page.get_by_text("0.12 → 120 ms, 0.245 → 245 ms", exact=False).wait_for()
-        assert not blocker.count()
+        blocker.wait_for(state="detached")
     finally:
         page.context.close()
 

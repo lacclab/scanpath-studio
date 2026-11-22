@@ -95,7 +95,7 @@ keyboard, see [Keyboard shortcuts](index.md#keyboard-shortcuts). Its **▾** hol
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/compare-menu.webp" title="Open full size"><img src="../../../assets/screenshots/controls/compare-menu.webp" alt="The Compare menu" loading="lazy"></a>
 
-**Compare two readings** shows a second scanpath, B, beside or over this one.
+**Compare readings** shows a second scanpath, B, beside or over this one.
 To find everyone who read the same text, open the **Comparisons** tab and match on text.
 Pick B in the [trial control bar](#trial-control-bar), above the plot. Its
 **▾** holds:

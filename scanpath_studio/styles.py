@@ -293,27 +293,22 @@ def get_app_css() -> str:
         outline-offset: 2px;
         border-radius: 0.25rem;
     }
-    /* Phone width: the name, its Current badge, the key count and Remove.
-       Everything else is in *What's in the dataset*, once it is open. */
+    /* On phones the dataset name and its actions take priority. The
+       selected dataset's counts are in Stats below the list. */
     @media (max-width: 640px) {
-        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_"]):not(:has(> [class*="st-key-dsc_name_"])):not(:has(> [class*="st-key-dsc_participants_"])):not(:has(> [class*="st-key-dsc_actions_"])),
-        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsh_"]):not(:has(> .st-key-dsh_name)):not(:has(> .st-key-dsh_participants)):not(:has(> .st-key-dsh_actions)) {
+        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_"]):not(:has(> [class*="st-key-dsc_name_"])):not(:has(> [class*="st-key-dsc_actions_"])),
+        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsh_"]):not(:has(> .st-key-dsh_name)):not(:has(> .st-key-dsh_actions)),
+        [class*="st-key-dsrow_"] > [data-testid="stElementContainer"]:has(> [data-testid="stSpace"]) {
             display: none !important;
-        }
-        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]),
-        [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_name) {
-            min-width: 0;
         }
         [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]),
         [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_name) {
             position: relative;
+            flex: 1 1 0 !important;
+            min-width: 0;
         }
+        .st-key-dataset_table_grid .sps-ds-name { display: block; }
         .st-key-dataset_table_grid [class*="st-key-dsrow_"] { min-width: 0; }
-        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_participants_"]),
-        [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_participants) {
-            width: auto !important;
-            min-width: 3.5rem;
-        }
     }
 
     /* The 🗂️ Data page: denser, with larger small type. Scoped to the

@@ -6903,7 +6903,7 @@ def render_single_trial_tab(
                 st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, False)
                 # `wrap=True` for the same reason as Animate above.
                 compare_requested = st.toggle(
-                    f"{ICONS['compare']} Compare two readings",
+                    f"{ICONS['compare']} Compare readings",
                     key=SINGLE_COMPARE_TOGGLE,
                     persist_state="session",
                     wrap=True,
@@ -10508,16 +10508,6 @@ def _render_corpus_analysis_body(
             has_aoi_table=not words_filtered.empty, has_raw_gaze=has_raw_gaze
         )
         return
-    viz_settings = corpus_style_controls(
-        fixations_filtered,
-        base_font_size,
-        words=words_filtered,
-        host=st,
-        # This view renders true-to-scale stimulus figures from the
-        # canvas / typography settings, so it hosts that panel too — the rail
-        # (its other home) doesn't exist here.
-        canvas_renderer=canvas_renderer,
-    )
     common = dict(
         canvas_width=canvas_width,
         canvas_height=canvas_height,
@@ -10547,6 +10537,16 @@ def _render_corpus_analysis_body(
             bind="query-params",
         )
         opened = dict(zip(names, panes, strict=True))
+    viz_settings = corpus_style_controls(
+        fixations_filtered,
+        base_font_size,
+        words=words_filtered,
+        host=st,
+        # This view renders true-to-scale stimulus figures from the
+        # canvas / typography settings, so it hosts that panel too — the rail
+        # (its other home) doesn't exist here.
+        canvas_renderer=canvas_renderer,
+    )
     text_tab, reader_tab, groups_tab = (
         opened["Per text"],
         opened["Per participant"],
@@ -10851,10 +10851,6 @@ def render_per_text_tab(
     scale_text_to_boxes: bool = True,
 ) -> None:
     """*What does this text look like?* — one text, many readers."""
-    st.caption(
-        "Compare participants on one **text**. Choose a text, a view and a "
-        "measure. Your current trial filters apply."
-    )
     if words_filtered.empty or "word_id" not in words_filtered.columns:
         st.info("Per-text views need a Words table (word ids + reading measures).")
         return

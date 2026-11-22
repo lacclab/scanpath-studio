@@ -6433,7 +6433,7 @@ def _dataset_added_dialog(message: str) -> None:
 
     Raised once by ``main`` on the run after ✅ Add dataset, once the new
     dataset's frames are loaded, so ``message`` carries its counts. Closing it
-    keeps the user on 🗂️ Data Management, where **Open in Scanpath view** under the
+    keeps the user on 🗂️ Data Management, where **Open in Scanpath view** above the
     list of datasets does the same later. Buttons are handled by their return
     value, never ``on_click`` — a dialog body is a fragment (see
     ``_leave_dataset_editor_dialog``).
@@ -6461,7 +6461,7 @@ def _dataset_added_dialog(message: str) -> None:
         st.rerun(scope="app")
     st.caption(
         f"Close this to stay on {ICONS['view_data']} Data Management. "
-        "**Open in Scanpath view**, under the list of datasets, opens it later."
+        "Choose **Open in Scanpath view** to open it later."
     )
 
 
@@ -6803,19 +6803,15 @@ def _render_dataset_editor_bar(host, data_choice: str) -> None:
         str(st.session_state.get("data_source_choice") or data_choice)
     )
     bar = host.container(key="dataset_editor_bar")
-    title_col, back_col = bar.columns([8, 2], vertical_alignment="center")
-    title_col.markdown(
+    actions = bar.container(horizontal=True, vertical_alignment="center")
+    actions.markdown(
         f'<div class="sps-wiz-title">{icon_html("edit")} Edit {html.escape(name)}</div>',
         unsafe_allow_html=True,
     )
-    back_col.button(
-        # The add screen's ✕ Cancel, in the same filled blue and the
-        # same corner — the two screens are the same screen, before and after.
+    actions.button(
         "✕ Cancel",
         key="dataset_editor_close",
-        type="primary",
         on_click=_ask_leave_dataset_editor,
-        width="stretch",
         help="Leave the editor. Saved changes are kept. Unsaved ones are "
         "discarded after you confirm.",
     )
@@ -6824,11 +6820,6 @@ def _render_dataset_editor_bar(host, data_choice: str) -> None:
     if st.session_state.pop(_EDITOR_SCROLL_KEY, False):
         with bar:
             embed_html_iframe(_SCROLL_TO_EDITOR_SCRIPT, height=0)
-    bar.caption(
-        "Where this dataset's files are, how its columns map onto the app's "
-        "fields, the screen it was recorded on, and any attached metadata "
-        "tables."
-    )
 
 
 #: Set by a row action that genuinely changes what the app is showing
@@ -9950,24 +9941,13 @@ def _run_app() -> None:
     )
     # On the Data page the dataset card sits above the table.
     data_page_slot = setup_source_slot.empty()
-    # The page lists every dataset as a *table* — one row each, sortable,
-    # with the counts beside the name and the per-row actions in the row they
-    # belong to. Reserved here (so it keeps its place at the top of the page)
-    # and filled after the load, which is the first point this run's counts for
-    # the open dataset exist.
-    # Keyed: the "Load and verify a dataset" tutorial spotlights it — the data
-    # source picker is not on this page (only Scanpath and Corpus Analysis draw
-    # one), so the table is what the step outlines.
-    dataset_table_slot = setup_source_slot.container(key="tutorial_available_datasets")
-    # The two ways to make a dataset are one **+ Add
-    # dataset** menu (the Scanpath picker's + with its name spelled out), under
-    # the list it adds to, beside **Open in Scanpath view** for the dataset the list
-    # marks Current. Filled once `data_choice` is known.
     add_dataset_slot = (
         setup_source_slot.container(key="data_page_add", horizontal=True)
         if data_view and not wizard_owns_page
         else None
     )
+    # Reserve the list below its actions and fill the counts after loading.
+    dataset_table_slot = setup_source_slot.container(key="tutorial_available_datasets")
     # This run's page — the slot the skeleton and the dataset card draw
     # into while a load is slow: the view area's first child on Scanpath and
     # Corpus Analysis; on the Data page, the slot above the table, or the one
@@ -10535,7 +10515,7 @@ def _run_app() -> None:
         # dialog with Open in Scanpath view / Add another. The Trial ID verdict
         # takes the run's one dialog when it has something to say, and any
         # other dialog already open wins too; the counts then go to a toast,
-        # and **Open in Scanpath view** under the list is the way on.
+        # and **Open in Scanpath view** above the list is the way on.
         message = dataset_added_message(
             _dataset_display_name(str(added)), words_all, fixations_all
         )
@@ -11079,13 +11059,6 @@ def _run_app() -> None:
                 combos=combos,
                 combos_all=combos_all,
             )
-            _render_inclusion_report(
-                words_all,
-                fixations_all,
-                raw_gaze_all,
-                trial_keys(combos),
-                trial_filters,
-            )
             # What each table's recipe shares — the dataset by the name
             # the picker shows (and its stable token), and the pool above.
             source_token = str(
@@ -11113,6 +11086,13 @@ def _run_app() -> None:
                     has_raw_gaze=not raw_gaze_filtered.empty,
                     recipe_context=recipe_context,
                 )
+            _render_inclusion_report(
+                words_all,
+                fixations_all,
+                raw_gaze_all,
+                trial_keys(combos),
+                trial_filters,
+            )
     else:
         # The Scanpath view renders the viz controls itself (right rail) and
         # writes the global_* keys. Share is a subtab of this view — passed in as

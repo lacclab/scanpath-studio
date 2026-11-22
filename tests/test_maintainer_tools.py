@@ -127,3 +127,21 @@ def test_interaction_benchmark_distinguishes_real_data_work_and_reruns(tmp_path)
             interaction["stages"]["build_figure"] > 0
             and interaction["stages"]["select_trial_rows"] > 0
         )
+
+
+def test_corpus_paper_uses_canonical_passage_ids_and_breaks_ties(tmp_path, monkeypatch):
+    import pandas as pd
+
+    monkeypatch.setenv("PAPER_FIGURES_DIR", str(tmp_path))
+    from paper import paper_fig_corpus as paper
+
+    # The ordinary reports have several equally large reader cohorts. A reader
+    # supplies many word rows, and the loader has already composed the text ID.
+    words = pd.DataFrame(
+        {
+            "text_id": ["2_0_1_Adv"] * 2 + ["1_0_1_Adv"] * 3,
+            "participant_id": ["q", "r", "s", "t", "s"],
+        }
+    )
+    assert paper._busiest_text(words) == ("1_0_1_Adv", 2)
+    assert paper._busiest_text(words.iloc[::-1]) == ("1_0_1_Adv", 2)

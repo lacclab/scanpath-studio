@@ -33,20 +33,40 @@ PAPER_FIGURES_DIR=../overleaf/figures uv run python paper/paper_figs.py
 | `paper_timings.py` | the runtime table | bundled demo, plus PoTeC for the long-trial row |
 | `paper_ui_screenshots.py` | `fig_interface`, `fig_ui_*` | a **running app** to point a browser at (see below) |
 
-The interface figures are the one set that cannot be rendered headlessly — they
-are screenshots of the application itself. `paper_ui_screenshots.py` drives a
-real browser over a running server, so they are reproducible all the same:
+The corpus scripts look for their inputs relative to the working directory.
+From the repository root, put the PoTeC checkout at `data/PoTeC/` and the two
+ordinary-reading reports at these paths. Existing data directories can be
+linked into place.
+
+```text
+data/OneStop/ia_Paragraph_ordinary.csv.zip
+data/OneStop/fixations_Paragraph_ordinary.csv.zip
+```
+
+Run `uv run python paper/paper_fig_corpus.py` to check the OneStop figure.
+The ordinary reports select passage `1_0_1_Adv` with 60 readers and 128 words.
+The figure omits words 1 and 128 and shows 24 readers in panel A. Panel C
+calculates each word's rate over readers with a recorded value for that flag.
+The PNG includes the software and dataset citations.
+
+For the interface screenshots, start the app in one terminal.
 
 ```bash
-uv run streamlit run streamlit_app.py --server.port 8599   # in one shell
+uv run streamlit run streamlit_app.py --server.address 127.0.0.1 --server.port 8599
+```
+
+In another terminal, run the screenshot driver. It opens the running app in
+headless Chromium.
+
+```bash
 PAPER_FIGURES_DIR=../overleaf/figures \
     uv run --with playwright python paper/paper_ui_screenshots.py
 ```
 
-It needs Playwright's Chromium (`playwright install chromium`, or point
-`PAPER_CHROME` at another Chrome binary) and talks to `PAPER_APP_URL`
-(default `http://localhost:8599`). Never overwrite `fig_interface` or a
-`fig_ui_*` figure from one of the headless scripts.
+Install Playwright's browser with `uv run --with playwright playwright install chromium`,
+or set `PAPER_CHROME` to an existing Chrome binary. Set `PAPER_APP_URL` to
+capture another running instance. The default is `http://localhost:8599`.
+The filenames `fig_interface` and `fig_ui_*` are reserved for screenshots.
 
 ## Notes
 

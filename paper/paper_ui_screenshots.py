@@ -1,13 +1,11 @@
 """Manuscript screenshots of the running application.
 
-The other scripts here render figures headlessly through the public API. This
-one is the exception: the interface figures can only come from the app itself,
-so it drives a real browser over a running server and saves what a user would
-see.
+The screenshot driver opens the running app in headless Chromium and saves
+the interface as a reader sees it.
 
-Run the app first (its port is the one this script talks to)::
+Run the app first on the port the driver uses::
 
-    uv run streamlit run streamlit_app.py --server.port 8599
+    uv run streamlit run streamlit_app.py --server.address 127.0.0.1 --server.port 8599
 
 then, from the same directory::
 

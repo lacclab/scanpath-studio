@@ -323,7 +323,9 @@ on your tables without opening the app. It looks for:
 Each finding gives the rows and trials affected, a few example rows, and what
 the app does with them. `check` changes nothing and exits 0 whatever it finds.
 `--json` prints the table
-[`check_data_health`][scanpath_studio.api.check_data_health] returns.
+[`check_data_health`][scanpath_studio.api.check_data_health] returns. In example rows,
+missing values are `null` and infinite values are the strings `"Infinity"` or
+`"-Infinity"`.
 
 ```bash
 scanpath-studio check --words ia.csv --fixations fixations.csv

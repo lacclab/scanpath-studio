@@ -64,6 +64,22 @@ class HealthFinding:
             "examples": list(self.examples),
         }
 
+    def to_json_record(self) -> dict:
+        """Keep missing cells and signed infinity distinguishable in a JSON report."""
+
+        def cell(value):
+            if pd.isna(value):
+                return None
+            if isinstance(value, (float, np.floating)) and np.isinf(value):
+                return "Infinity" if value > 0 else "-Infinity"
+            return value
+
+        record = self.to_record()
+        record["examples"] = [
+            {key: cell(value) for key, value in row.items()} for row in self.examples
+        ]
+        return record
+
 
 @dataclass(frozen=True)
 class _Check:

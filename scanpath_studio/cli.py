@@ -4394,10 +4394,8 @@ def check(argv: list[str]) -> None:
 
     findings = api._health_findings(words, fixations, raw_gaze)
     if args.json:
-        from .data_health import findings_frame
-
-        records = findings_frame(findings).to_dict("records")
-        print(json.dumps(records, indent=2, default=str))
+        records = [finding.to_json_record() for finding in findings]
+        print(json.dumps(records, indent=2, allow_nan=False, default=str))
         return
     counts = {
         name: len(frame)

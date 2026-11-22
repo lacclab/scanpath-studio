@@ -10919,17 +10919,25 @@ def render_per_text_tab(
         )
         return
 
-    c = st.columns([3, 1, 1, 1])
+    if view == "Per-participant profiles":
+        measure_col, agg_col = st.columns([3, 1])
+        profile_chart = st.container()
+        options = st.container(horizontal=True)
+        extra_col = norm_col = options
+        note_host = st
+    else:
+        measure_col, agg_col, extra_col, norm_col = st.columns([3, 1, 1, 1])
+        note_host = measure_col
     measure = _measure_picker(
         words_filtered,
         fixations_filtered,
         key="ptext_measure",
-        host=c[0],
+        host=measure_col,
         per_word_only=True,
     )
     if measure is None:
         return
-    agg = c[1].selectbox(
+    agg = agg_col.selectbox(
         "Aggregate",
         _AGG_OPTIONS,
         format_func=str.capitalize,
@@ -10941,12 +10949,12 @@ def render_per_text_tab(
     # of the stimulus view, so disable the toggle there rather than show an
     # inert control.
     normalize = _normalize_toggle(
-        c[3],
+        norm_col,
         key="ptext_norm",
         disabled=measure.is_rate or view == "Measure on the stimulus",
     )
     _measure_note(
-        c[0],
+        note_host,
         measure,
         (
             f"Each value is one participant on one word (the {agg} of their "
@@ -10958,7 +10966,7 @@ def render_per_text_tab(
     )
 
     if view == "Per-participant profiles":
-        overlay = c[2].checkbox(f"Cohort {agg}", value=True, key="ptext1_overlay")
+        overlay = extra_col.checkbox(f"Cohort {agg}", value=True, key="ptext1_overlay")
         per = _c_per_reader_word(
             words_filtered,
             text_col,
@@ -10984,15 +10992,16 @@ def render_per_text_tab(
                 screen_id,
             )
             cohort = coh[["word_id", "value"]] if not coh.empty else None
-        _chart(
-            make_small_multiples_figure(
-                per,
-                measure_label=measure.value_label(normalize),
-                cohort=cohort,
-                aggregate=agg,
-                **fw,
+        with profile_chart:
+            _chart(
+                make_small_multiples_figure(
+                    per,
+                    measure_label=measure.value_label(normalize),
+                    cohort=cohort,
+                    aggregate=agg,
+                    **fw,
+                )
             )
-        )
         _download_tidy(
             st,
             per,
@@ -11045,7 +11054,7 @@ def render_per_text_tab(
             ),
         )
     elif view == "Cohort profile":
-        spread = c[2].selectbox(
+        spread = extra_col.selectbox(
             "Spread",
             _SPREAD_OPTIONS,
             key="ptext3_spread",
@@ -11315,7 +11324,7 @@ def render_per_text_tab(
                 "`universal_pos`."
             )
             return
-        feat_label = c[2].selectbox("Feature", list(feats), key="ptext5_feat")
+        feat_label = extra_col.selectbox("Feature", list(feats), key="ptext5_feat")
         feature_col, categorical = feats[feat_label]
         df = _c_word_feature(
             words_filtered,

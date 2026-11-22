@@ -237,6 +237,22 @@ def test_phone_view_choices_stay_with_figure_in_both_modes(app_url, browser):
         assert abs(box("tour_grp_subtabs")["x"] - plot["x"]) < 1
 
 
+def test_phone_corpus_profile_shows_data_above_the_fold(app_url, browser):
+    with browser.new_context(viewport={"width": 390, "height": 844}) as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/corpus-analysis")
+        chart = page.locator('[data-testid="stPlotlyChart"]').first
+        trace = chart.locator(".scatterlayer .trace").first
+        trace.wait_for()
+        _settle(page)
+        assert trace.bounding_box()["y"] < 844
+        box = chart.bounding_box()
+        assert (
+            page.locator(".st-key-ptext1_overlay").bounding_box()["y"]
+            >= box["y"] + box["height"] - 1
+        )
+
+
 def test_the_page_renders_without_an_exception(page):
     assert page.locator('[data-testid="stTopNavLink"]').count() >= 3
     assert not page.locator('[data-testid="stException"]').count()

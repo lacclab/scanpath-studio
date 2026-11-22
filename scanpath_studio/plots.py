@@ -9975,9 +9975,9 @@ def make_small_multiples_figure(
             row=i,
             col=1,
         )
-    title = f"{measure_label} per participant (word profile)"
+    title = measure_label
     if n_total > n:
-        title += f" (showing {n} of {n_total} participants)"
+        title += f"<br><sup>showing {n} of {n_total} participants</sup>"
     margin_top = 50 + title_gap_px
     margin_bottom = 40
     fig.update_layout(

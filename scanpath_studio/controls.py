@@ -10537,9 +10537,9 @@ def text_metadata_filter_key(name: str, prefix: str = "") -> str:
 
 def participant_metadata_fields():
     """The attached participant table's fields, or ``()`` when none."""
-    from scanpath_studio.tabs import active_participant_metadata
+    from scanpath_studio import metadata as md
 
-    attached = active_participant_metadata()
+    attached = md.active()
     return attached.fields if attached is not None else ()
 
 

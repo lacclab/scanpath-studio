@@ -126,7 +126,14 @@ def test_every_popover_has_a_plain_name():
 def test_the_clipped_popovers_are_named_in_plain_words():
     """A popover whose label `styles.py` clips shows its icon via ``icon=``
     (or, for the ⇅ sorts, the stylesheet), never inside the clipped label."""
-    clipped = 0
+    families = {
+        "add_dataset_menu",
+        "iconpop_preview_",
+        "iconpop_chip_fields",
+        "iconpop_sort_",
+        "iconpop_filter_",
+    }
+    found = set()
     for where, node in _calls():
         key = _keyword(node, "key")
         source = ast.unparse(key) if key is not None else ""
@@ -135,13 +142,12 @@ def test_the_clipped_popovers_are_named_in_plain_words():
             continue
         if not ("iconpop_" in source or any(k in source for k in _KEYED_POPOVERS)):
             continue
-        clipped += 1
+        found.update(family for family in families if family in source)
         text = _label_text(node.args[0])
         assert text and _visible_words(text) and not _SHORTCODE.search(text), where
         assert _keyword(node, "icon") is not None or "iconpop_sort_" in source, where
-    # The + menu, the four previews, the chip fields, the two sorts and the
-    # two trial-filter funnels.
-    assert clipped == 10
+    # A shared renderer can draw several buttons from one call site.
+    assert found == families
 
 
 def test_no_button_label_uses_emphasis_but_spoken():

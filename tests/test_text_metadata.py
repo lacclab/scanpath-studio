@@ -143,7 +143,7 @@ class TestChips:
     def _attach(monkeypatch, built):
         from scanpath_studio import tabs
 
-        monkeypatch.setattr(tabs, "active_participant_metadata", lambda: None)
+        monkeypatch.setattr(metadata, "active", lambda: None)
         monkeypatch.setattr(metadata, "active_trials", lambda: None)
         monkeypatch.setattr(metadata, "active_texts", lambda: built)
         return tabs

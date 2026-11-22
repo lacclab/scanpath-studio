@@ -1198,9 +1198,7 @@ class TestAuthoringEditorFlow:
 
 @pytest.mark.timeout(180)
 def test_co_animating_two_readings_of_one_text_renders():
-    """Animate + Compare on two readings in one coordinate space renders
-    through the same-text check, which calls the two-argument `_trial_text_id`
-    — a second, shadowing definition of it would stop the view."""
+    """Animate and Compare can replay two readings recorded on the same text."""
     from scanpath_studio.session_keys import (
         PENDING_COMPARE_STATE_KEY,
         SINGLE_ANIMATE,

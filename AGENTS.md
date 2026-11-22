@@ -43,6 +43,8 @@ scanpath_studio/
 │  │                     the header switch, the CSS that hides the other mode's containers, ＋ More lists
 │  ├─ tabs.py            the views' panels: Scanpath (plot + rail + subtabs), Corpus Analysis, the Data page
 │  ├─ controls.py        the Scanpath rail, the column-mapping UI and the trial filters
+│  ├─ metadata_editor.py the participant, trial and text metadata controls shared by the wizard and Data Management
+│  ├─ upload_ui.py       shared file-read error messages for the upload controls
 │  ├─ fields.py          the `label | field` row primitive shared by the rail, the wizard and the subtabs
 │  ├─ wizard.py          the ➕ Add-dataset wizard (and dataset naming, rename, removal)
 │  ├─ wizard_shell.py    the wizard's part registry (`STEPS`) and ✏️ Edit dataset's (`EDITOR_STEPS`)

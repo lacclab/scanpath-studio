@@ -188,7 +188,6 @@ from scanpath_studio.data import (
     diagnose_trial_identity,
     empty_fixations_frame,
     empty_words_frame,
-    explain_read_error,
     filter_data,
     filter_frame_to_keys,
     filter_to_keys,
@@ -273,6 +272,11 @@ from scanpath_studio.menu import (
     render_top_menu,
     view_label,
 )
+from scanpath_studio.metadata_editor import (
+    render_participant_metadata_section,
+    render_text_metadata_section,
+    render_trial_metadata_section,
+)
 from scanpath_studio.multipart import SCREEN_ID, extract_part, part_catalog
 from scanpath_studio.persistence import (
     PERSIST_ENV_VAR,
@@ -329,12 +333,9 @@ from scanpath_studio.tabs import (
     render_data_inspection_tab,
     render_dataset_capabilities,
     render_dataset_editor_footer,
-    render_participant_metadata_section,
     render_settings_file,
     render_single_trial_tab,
-    render_text_metadata_section,
     render_trial_identity_section,
-    render_trial_metadata_section,
 )
 from scanpath_studio.tour import (
     build_tutorial_context,
@@ -346,6 +347,7 @@ from scanpath_studio.tour import (
     stash_tutorial_context,
 )
 from scanpath_studio.truncation_tooltip import render_truncation_tooltips
+from scanpath_studio.upload_ui import say_read_error
 from scanpath_studio.url_state import (
     CORPUS_SOURCE_TOKEN,
     _apply_pending_trial_selection,
@@ -4667,22 +4669,6 @@ def _read_uploaded_frame(
             + " To remove the file, click the ✕ next to its name."
         )
     return frame
-
-
-def say_read_error(host, name: str, exc: BaseException) -> None:
-    """A table file the readers refused, said in ``host``: what is wrong in
-    plain words, then the reader's own message folded away beneath it.
-
-    One wording for every upload box — the wizard's tables, the Data page's raw
-    gaze and the metadata tables."""
-    error = explain_read_error(name, exc)
-    shown = name if error.name == Path(str(name)).name else error.name
-    host.error(
-        error.sentence(f"**{shown}**")
-        + " To remove the file, click the ✕ next to its name."
-    )
-    if error.detail:
-        host.expander("Technical detail").code(error.detail, language=None)
 
 
 def _read_upload(uploaded, state_prefix: str, *, multi: bool, kind) -> pd.DataFrame:

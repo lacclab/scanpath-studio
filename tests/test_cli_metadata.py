@@ -6,7 +6,7 @@ study is exactly what you want to hear about before rendering three hundred
 figures. Every branch of that report writes to stderr, so a regression in
 "0 matched" would otherwise go unnoticed.
 
-Everything here runs against the bundled demo, so no corpus is needed.
+Tests use the bundled demo and small local tables.
 """
 
 from __future__ import annotations
@@ -297,7 +297,7 @@ class TestSeveralFiles:
 
 
 class TestTheAppReadsSeveralUploads:
-    """`tabs._read_metadata_uploads`: what the three metadata uploaders read."""
+    """`metadata_editor._read_metadata_uploads`: what the three metadata uploaders read."""
 
     @staticmethod
     def _upload(name: str, text: str):
@@ -309,7 +309,10 @@ class TestTheAppReadsSeveralUploads:
         return upload
 
     def test_files_are_stacked_with_their_columns_aligned(self):
-        from scanpath_studio.tabs import _metadata_upload_name, _read_metadata_uploads
+        from scanpath_studio.metadata_editor import (
+            _metadata_upload_name,
+            _read_metadata_uploads,
+        )
 
         uploads = [
             self._upload("a.csv", "participant_id,age\np1,30\n"),
@@ -321,7 +324,10 @@ class TestTheAppReadsSeveralUploads:
         assert _metadata_upload_name(uploads) == "a.csv + 1 more file"
 
     def test_an_unreadable_file_is_named(self):
-        from scanpath_studio.tabs import _MetadataReadError, _read_metadata_uploads
+        from scanpath_studio.metadata_editor import (
+            _MetadataReadError,
+            _read_metadata_uploads,
+        )
 
         uploads = [
             self._upload("a.csv", "participant_id,age\np1,30\n"),

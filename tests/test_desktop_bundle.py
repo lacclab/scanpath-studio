@@ -484,6 +484,34 @@ def test_the_boot_is_confirmed_once_the_server_answers(monkeypatch):
     assert noted == [True]
 
 
+@pytest.mark.parametrize("ready", [True, False])
+def test_desktop_confirms_only_a_ready_health_body(monkeypatch, ready):
+    from io import BytesIO
+
+    from scanpath_studio import desktop_update
+
+    now = 0
+    seen = []
+    noted = []
+
+    def poll(url, timeout):
+        nonlocal now
+        now += launcher.HEALTH_TIMEOUT_S / 3
+        body = b"ok" if ready and seen else b"starting, not ok"
+        seen.append(body)
+        response = BytesIO(body)
+        response.status = 200
+        return response
+
+    monkeypatch.setattr(launcher.time, "monotonic", lambda: now)
+    monkeypatch.setattr(launcher.time, "sleep", lambda delay: None)
+    monkeypatch.setattr(launcher.urllib.request, "urlopen", poll)
+    monkeypatch.setattr(desktop_update, "note_boot", lambda: noted.append(seen[-1]))
+    launcher._confirm_boot_when_ready(1234)
+    assert seen[0] == b"starting, not ok"
+    assert noted == ([b"ok"] if ready else [])
+
+
 def test_the_launcher_stays_stdlib_only_at_import():
     source = Path(launcher.__file__).read_text(encoding="utf-8")
     header = source.split("\ndef ", 1)[0]

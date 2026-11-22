@@ -75,7 +75,9 @@ class BuildInfo:
     tracked files had uncommitted changes, and ``source`` one of
     ``"checkout"``, ``"stamp"``, ``"vcs"`` or ``"release"``. ``vcs_url`` is the
     repository a ``pip install git+…`` came from. ``ref`` is the checkout branch
-    or the revision requested from pip when available.
+    or the revision requested from pip when available. For VCS installs,
+    ``subdirectory`` locates the package inside that repository and
+    ``commit_pinned`` records a revision that names the installed commit itself.
     """
 
     version: str
@@ -86,6 +88,8 @@ class BuildInfo:
     source: str = "release"
     vcs_url: str = ""
     ref: str = ""
+    subdirectory: str = ""
+    commit_pinned: bool = False
 
     @property
     def channel(self) -> Channel:
@@ -105,7 +109,16 @@ class BuildInfo:
     def describe(self) -> str:
         """The build in a sentence, relative to its release."""
         if self.source == "vcs":
-            return f"Installed from git at {self.commit}, based on v{self.release}"
+            build = f"Installed from git at {self.commit}, based on v{self.release}"
+            if self.ref:
+                build += (
+                    f" (pinned commit {self.ref})"
+                    if self.commit_pinned
+                    else f" (ref {self.ref})"
+                )
+            if self.subdirectory:
+                build += f", package in {self.subdirectory}"
+            return build
         if self.distance is None:
             return f"Git build at {self.commit}, based on v{self.release}"
         if self.channel == "stable" and self.distance:
@@ -308,7 +321,9 @@ def read_vcs_install(
     vcs = data.get("vcs_info") if isinstance(data, dict) else None
     if not isinstance(vcs, dict) or vcs.get("vcs") != "git" or not vcs.get("commit_id"):
         return None
-    commit = str(vcs["commit_id"])[:7]
+    commit_id = str(vcs["commit_id"])
+    commit = commit_id[:7]
+    ref = str(vcs.get("requested_revision") or "")
     version = f"{release}+g{commit}"
     try:
         Version(version)
@@ -322,7 +337,12 @@ def read_vcs_install(
         False,
         "vcs",
         str(data.get("url") or ""),
-        ref=str(vcs.get("requested_revision") or ""),
+        ref=ref,
+        subdirectory=str(data.get("subdirectory") or ""),
+        commit_pinned=bool(
+            re.fullmatch("[0-9a-fA-F]{4,}", ref)
+            and commit_id.lower().startswith(ref.lower())
+        ),
     )
 
 

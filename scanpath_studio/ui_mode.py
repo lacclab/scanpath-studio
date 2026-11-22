@@ -485,12 +485,6 @@ _STATUS_WIDGET_CSS = (
     " box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08); }"
 )
 
-#: The title row that holds the switch's container, whichever column it is in.
-_SWITCH_ROW = (
-    '[data-testid="stLayoutWrapper"]'
-    f':has(> [data-testid="stHorizontalBlock"] .st-key-{SWITCH_BOX_KEY})'
-)
-
 
 def switch_css(visible: bool) -> str:
     """A ``<style>`` that places the Essentials | Full switch.
@@ -501,8 +495,7 @@ def switch_css(visible: bool) -> str:
     room. The switch never moves: Streamlit's "Running…" status widget, which
     the bar would draw under it, is shown just below the bar instead. Below
     ``_SWITCH_FALLBACK_PX`` it is an ordinary right-aligned row of the page.
-    Without it (the views that have no use for the mode) the switch is
-    hidden. Either way the title row it sits in takes no space of its own.
+    The switch is hidden on views that do not use the mode.
     """
     box = f".st-key-{SWITCH_BOX_KEY}"
     # The cookie script's frame, which is there only once the switch has been
@@ -514,20 +507,12 @@ def switch_css(visible: bool) -> str:
     )
     wide = f"@media (min-width: {_SWITCH_FALLBACK_PX + 1}px)"
     narrow = f"@media (max-width: {_SWITCH_FALLBACK_PX}px)"
-    collapse = (
-        # Out of the flow, so the page's rows sit where they would without it;
-        # a fixed box inside it still positions against the viewport.
-        f"{wide} {{ {_SWITCH_ROW} {{ position: absolute; width: 0; height: 0;"
-        " margin: 0 !important; overflow: visible; } }"
-    )
     if not visible:
-        return (
-            f"<style>{box} {{ display: none !important; }} {collapse} {cookie}</style>"
-        )
+        return f"<style>{box} {{ display: none !important; }} {cookie}</style>"
     button = f'{box} [data-testid="stButtonGroup"] button[data-variant]'
     return (
         "<style>"
-        f"{collapse} {cookie}"
+        f"{cookie}"
         f"{wide} {{"
         f" {box} {{ position: fixed; top: 10px; right: 3.75rem;"
         f" z-index: {SWITCH_Z_INDEX}; width: max-content; }}"
@@ -551,10 +536,7 @@ def switch_css(visible: bool) -> str:
         f" {button} {{ min-height: 2.5rem; padding: 0 1.1rem; }}"
         f" {button} p {{ font-size: 1rem; }}"
         f"{narrow} {{"
-        # In the page: right-aligned, with the empty title column out of the way.
         f" {box} {{ align-items: flex-end; }}"
-        f' [data-testid="stColumn"]:has(.st-key-about_header)'
-        " { display: none; }"
         " }"
         "</style>"
     )

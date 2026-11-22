@@ -198,8 +198,6 @@ def test_switch_css_lifts_the_switch_into_the_top_bar():
     assert 'data-testid="stMainMenu"' in css
     # Bigger than the default control: 1rem text, 2.5rem tall.
     assert "min-height: 2.5rem" in css and "font-size: 1rem" in css
-    # The title row that holds it leaves the flow.
-    assert "position: absolute" in css and "height: 0" in css
     # Below the fallback width it is an in-flow, right-aligned row.
     assert f"@media (max-width: {ui_mode._SWITCH_FALLBACK_PX}px)" in css
     assert "align-items: flex-end" in css
@@ -275,11 +273,10 @@ def test_the_cookie_script_takes_no_room_in_the_switch_box():
     assert _has_cookie_embed(at)
 
 
-def test_switch_css_hidden_still_collapses_the_title_row():
+def test_switch_is_hidden_outside_scanpath():
     css = ui_mode.switch_css(False)
     assert "display: none !important" in css
     assert "position: fixed" not in css
-    assert "position: absolute" in css
 
 
 def test_deselecting_the_switch_keeps_the_mode():

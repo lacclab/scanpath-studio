@@ -1,4 +1,4 @@
-"""The app's header: the native top nav, the title row and the notices strip.
+"""The app's navigation, interface mode switch and load notices.
 
 Nothing in the app writes to ``st.sidebar``, so Streamlit draws no sidebar
 chrome and the main content gets the full page width.
@@ -25,11 +25,11 @@ render and several of them drive ``app.prepare_data``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import streamlit as st
 
+from scanpath_studio import ui_mode
 from scanpath_studio.build_info import build_info
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
@@ -76,11 +76,6 @@ _HELP_PAGES = {
 #: The nav section heading the entries above collapse under.
 HELP_SECTION = f"{ICONS['help']} Help · {build_info().channel.title()}"
 
-#: This run's ``st.Page`` objects, view constant → Page. Rebuilt every run (an
-#: ``st.Page`` belongs to the run that made it) and read by
-#: :func:`switch_to_view`, which is the only way to navigate programmatically.
-_PAGES: dict[str, object] = {}
-
 #: What :func:`render_nav` last mirrored into ``main_nav``. Session state, not a
 #: module global — it is per-user. See ``render_nav`` for why it is load-bearing:
 #: without it, a nav click is indistinguishable from a request to go back, and
@@ -91,19 +86,6 @@ _MIRROR_KEY = "_nav_mirrored"
 #: warnings land. A warning inside a *closed* popover would be invisible, so
 #: these stay in the page where the user can't miss them.
 NOTICES_KEY = "top_menu_notices"
-
-
-@dataclass(frozen=True)
-class TopMenu:
-    """What one rendered header row leaves behind for the rest of the run."""
-
-    #: The main-area strip just under the header, where load-time warnings land.
-    notices: DeltaGenerator
-    #: The page heading's slot — the left half of the row the menu shares.
-    #: ``app._render_about_panel`` fills it; see :func:`render_top_menu`.
-    title: DeltaGenerator | None = None
-    #: The right of the title row, where the Essentials | Full switch sits.
-    aside: DeltaGenerator | None = None
 
 
 def view_label(view: str) -> str:
@@ -128,6 +110,17 @@ def _unused_page_body() -> None:  # pragma: no cover - never executed
     raise AssertionError("page body should never run — app.main owns dispatch")
 
 
+def _view_page(view: str):
+    label, icon, path = _NAV_PAGES[view]
+    return st.Page(
+        _unused_page_body,
+        title=label,
+        icon=icon,
+        url_path=path,
+        default=view == _VIEW_SCANPATH,
+    )
+
+
 def switch_to_view(view: str) -> None:
     """Navigate to ``view`` programmatically. Reruns; does not return.
 
@@ -137,9 +130,8 @@ def switch_to_view(view: str) -> None:
     ``main_nav`` and let :func:`render_nav`'s reconciliation do the switch on the
     next run.
     """
-    page = _PAGES.get(view)
-    if page is not None:
-        st.switch_page(page)
+    if view in _NAV_PAGES:
+        st.switch_page(_view_page(view))
 
 
 def _arm_help_action(entry: str) -> None:
@@ -151,9 +143,7 @@ def _arm_help_action(entry: str) -> None:
     """
     from scanpath_studio import tour
 
-    if entry == "help_tour":
-        tour._arm_tour()
-    elif entry == "help_tutorials":
+    if entry == "help_tutorials":
         tour._arm_tutorial_library()
     elif entry == "help_faq":
         tour._arm_faq()
@@ -192,15 +182,7 @@ def render_nav() -> str:
     changed out from under it is a genuine request, honoured by switching —
     which reruns, and next run the two agree and it stops.
     """
-    _PAGES.clear()
-    for view, (label, icon, url_path) in _NAV_PAGES.items():
-        _PAGES[view] = st.Page(
-            _unused_page_body,
-            title=label,
-            icon=icon,
-            url_path=url_path,
-            default=view == _VIEW_SCANPATH,
-        )
+    pages = {view: _view_page(view) for view in _NAV_PAGES}
     # A *dict* of sections. The entries under the empty-string key are
     # drawn first, at the top level; every other key becomes a collapsible item
     # — Streamlit's own documented behaviour for `position="top"`, so ❓ Help
@@ -211,7 +193,7 @@ def render_nav() -> str:
     }
     selected = st.navigation(
         {
-            "": [*_PAGES.values()],
+            "": list(pages.values()),
             HELP_SECTION: [
                 st.Page(
                     build_info().docs_url, title="Documentation", icon=ICONS["docs"]
@@ -234,12 +216,18 @@ def render_nav() -> str:
         (entry for entry, page in action_pages.items() if page.title == selected.title),
         None,
     )
+    # A direct visit to a named page or Help action already has a destination.
+    if (
+        _MIRROR_KEY not in st.session_state
+        and selected.title != pages[_VIEW_SCANPATH].title
+    ):
+        st.session_state["tour_seen"] = True
     if chosen_action is not None:
         _arm_help_action(chosen_action)
         back = st.session_state.get(_MIRROR_KEY)
-        switch_to_view(back if back in _PAGES else _VIEW_SCANPATH)  # reruns
+        switch_to_view(back if back in pages else _VIEW_SCANPATH)  # reruns
     active = next(
-        (view for view, page in _PAGES.items() if page.title == selected.title),
+        (view for view, page in pages.items() if page.title == selected.title),
         _VIEW_SCANPATH,
     )
     requested = st.session_state.get("main_nav")
@@ -250,7 +238,7 @@ def render_nav() -> str:
     # (the default page) resumes the last view.
     url_named_page = _MIRROR_KEY not in st.session_state and active != _VIEW_SCANPATH
     if (
-        requested in _PAGES
+        requested in pages
         and requested != active
         and requested != mirrored
         and not url_named_page
@@ -262,26 +250,7 @@ def render_nav() -> str:
     return active
 
 
-def render_top_menu(*, active_view: str | None = None) -> TopMenu:
-    """Draw the native top nav, then the title row and the notices strip.
-
-    Call this once, early in ``app.main`` — before any data loading, so load
-    warnings land in the notices strip rather than after the page content.
-
-    Args:
-        active_view: The entry the nav currently has selected, from
-            :func:`render_nav`. Accepted so callers that already resolved the
-            view do not resolve it twice.
-
-    Returns:
-        ``title`` — ``app._render_about_panel`` fills it — and ``aside`` (the
-        mode switch's slot), plus the main-area ``notices`` strip.
-    """
-    if active_view is None:
-        render_nav()
-    title_col, aside_col = st.columns([4, 1], vertical_alignment="bottom")
-    return TopMenu(
-        notices=st.container(key=NOTICES_KEY),
-        title=title_col,
-        aside=aside_col,
-    )
+def render_top_menu(*, active_view: str) -> DeltaGenerator:
+    """Draw the mode switch and reserve a stable place for load notices."""
+    ui_mode.render_switch(st, visible=active_view == _VIEW_SCANPATH)
+    return st.container(key=NOTICES_KEY)

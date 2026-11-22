@@ -167,6 +167,26 @@ def _plot_frame(page, key: str):
     pytest.fail(f"no plot iframe holds #truescale-{key}")
 
 
+@pytest.mark.parametrize("path", ["data", "corpus-analysis", "help-faq"])
+def test_first_visit_respects_the_requested_page(app_url, browser, path):
+    with browser.new_context() as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/{path}")
+        if path == "help-faq":
+            page.get_by_role("dialog").wait_for()
+        else:
+            target = (
+                ".st-key-dataset_table_grid"
+                if path == "data"
+                else ".st-key-corpus_pool_bar"
+            )
+            page.locator(target).wait_for()
+        _settle(page)
+        assert not page.locator(".st-key-tour_sp_close button:visible").count()
+        if path != "help-faq":
+            assert page.url.split("?")[0] == f"{app_url}/{path}"
+
+
 def test_the_page_renders_without_an_exception(page):
     assert page.locator('[data-testid="stTopNavLink"]').count() >= 3
     assert not page.locator('[data-testid="stException"]').count()

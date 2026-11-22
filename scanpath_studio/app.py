@@ -825,22 +825,6 @@ def render_app_logo() -> None:
         st.html(css)
 
 
-def _render_about_panel(host=None) -> None:
-    """The page heading — only what the header cannot carry.
-
-    The title is in Streamlit's header as the wordmark
-    (:func:`render_app_logo`), so this prints neither "Scanpath Studio" nor its
-    one-line description; both would then appear twice, a row apart. The
-    description is in **About** (a dialog off the ❓ Help menu) and in the
-    README.
-
-    ``host`` is ``menu.TopMenu.title`` — the left side of the row the settings
-    triggers share. The container is created anyway, deliberately: it is where
-    anything page-level would go (see ``menu.render_top_menu``).
-    """
-    (host if host is not None else st).container(key="about_header")
-
-
 # Base URL for the DiLi Lab (UZH) people pages — three co-author links hang off
 # it, so it's factored out rather than repeated in the About markdown.
 _DILI = "https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people"
@@ -9689,11 +9673,9 @@ def _run_app() -> None:
         page_notices, on_data_view=active_view == _VIEW_DATA
     )
 
-    menu = render_top_menu(active_view=active_view)
-    _render_about_panel(menu.title)
-    ui_mode.render_switch(menu.aside, visible=active_view == _VIEW_SCANPATH)
-    _render_cancelled_load_notice(menu.notices)
-    _render_backup_reminder(menu.notices, active_view)
+    notices = render_top_menu(active_view=active_view)
+    _render_cancelled_load_notice(notices)
+    _render_backup_reminder(notices, active_view)
 
     def _finish_page() -> None:
         """The run's last UI, once, on whichever path ``main`` leaves by.
@@ -10436,7 +10418,7 @@ def _run_app() -> None:
     # every other source loads it here (bundled demo sample, OneStop uploader).
     if raw_gaze_df is None:
         raw_gaze_df = load_raw_gaze_data(
-            data_choice, host=data_location_slot, notices=menu.notices
+            data_choice, host=data_location_slot, notices=notices
         )
 
     if preproc_settings["enabled"]:
@@ -10526,7 +10508,7 @@ def _run_app() -> None:
         fixations_all,
         cache_key=(frame_fingerprint(words_all), frame_fingerprint(fixations_all)),
     ):
-        menu.notices.warning(WORDS_JOIN_NOTHING_WARNING)
+        notices.warning(WORDS_JOIN_NOTHING_WARNING)
     # The verdict is raised **once, where the mapping was chosen** — right after
     # ✅ Add dataset or ✅ Save changes — rather than as a page-wide banner
     # standing above every view for as long as the dataset is loaded. Both flows
@@ -10602,7 +10584,7 @@ def _run_app() -> None:
     if selected.conflicts:
         # A reading whose two tables disagree about a filtered field is
         # left out of the pool, never decided for one table — and said so.
-        menu.notices.warning(
+        notices.warning(
             trial_filter_conflict_note(
                 selected.conflicts, active_all(st.session_state).label
             ),
@@ -10703,7 +10685,7 @@ def _run_app() -> None:
             # Informational, not an error: the loaded raw-gaze samples just
             # don't cover any trial in the current filter (raw gaze typically
             # exists for only a subset of trials). The overlay is optional.
-            menu.notices.caption(
+            notices.caption(
                 f"{ICONS['info']} The loaded raw gaze ({len(raw_gaze_all):,} rows) doesn't "
                 "overlap the current trial filter, so the raw-gaze overlay is "
                 "unavailable."
@@ -10780,18 +10762,18 @@ def _run_app() -> None:
     # A link the pool cannot answer — its reader filtered out, or a trial id
     # several readers share with none named — is reported, and not retried.
     if missed_link := _apply_url_trial_selection(combos):
-        menu.notices.warning(missed_link, icon=ICONS["warning"])
+        notices.warning(missed_link, icon=ICONS["warning"])
     # Same hop, from inside the app: a "go to this trial" button in a Corpus
     # Analysis table parks its request in a callback (before combos exist) and
     # it is applied here — see url_state.request_trial.
     # A reading the pool cannot answer — its reader filtered out, say — is
     # reported, never replaced by another reader's trial of the same name.
     if missed := _apply_pending_trial_selection(combos):
-        menu.notices.warning(missed, icon=ICONS["warning"])
+        notices.warning(missed, icon=ICONS["warning"])
     # A trial id alone in the picker's key (from an older recovery cache) names
     # its reading — or, when several readers share the id, none, which is said.
     if ambiguous := _settle_picker_selection(combos):
-        menu.notices.warning(ambiguous, icon=ICONS["warning"])
+        notices.warning(ambiguous, icon=ICONS["warning"])
 
     # Restore settings from an uploaded settings file BEFORE the rail widgets
     # render, so they pick up the saved values (see _apply_url_preset for the

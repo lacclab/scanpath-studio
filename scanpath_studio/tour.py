@@ -1820,11 +1820,11 @@ def _maybe_start_welcome_tour() -> None:
         return
     if st.session_state.get("tour_seen"):
         return
+    st.session_state["tour_seen"] = True
     if tour_suppressed(st.query_params):
         return
     if tour_opted_out():  # "Don't show this again", persisted in a cookie
         return
-    st.session_state["tour_seen"] = True  # before opening — see module docstring
     # A session recovered from *Saved on this computer* belongs to
     # someone who has used the app here before — a new browser, or cleared
     # site data, cleared the cookie opt-out, not their experience.

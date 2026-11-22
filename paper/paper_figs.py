@@ -138,7 +138,7 @@ def replay_fig(words, fixations):
 
 
 def main():
-    words, fixations = sps.load_sample_data()
+    words, fixations = sps.load_sample_data(names="canonical")
     scanpath_fig(words, fixations)
     comparison_fig(words, fixations)
     replay_fig(words, fixations)

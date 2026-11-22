@@ -110,7 +110,7 @@ def _drop_boundary_words(words, text_col, text_id):
 
 
 def main():
-    words, _ = datasets.load_onestop(ONESTOP_ROOT, regime="ordinary")
+    words, _ = datasets.load_onestop(ONESTOP_ROOT, regime="ordinary", names="canonical")
     words = _add_passage_id(words)
     text_col = PASSAGE
     text_id, n_readers = _busiest_text(words, text_col)

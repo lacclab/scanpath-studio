@@ -1,9 +1,9 @@
 # Manuscript scripts
 
-Every figure and every number in the Scanpath Studio manuscript is produced by a
-script in this directory, so an archived release of the software is enough to
-reproduce them. Each script drives the package's own public API — the same
-pipeline the app uses — rather than a private analysis path.
+These scripts rebuild the case-study figures, descriptive statistics and runtime
+table using the package's figure builders and analysis functions. Use the
+software revision and data from the manuscript revision you are reproducing.
+Runtime measurements also depend on the machine.
 
 ## Running
 
@@ -26,7 +26,7 @@ PAPER_FIGURES_DIR=../overleaf/figures uv run python paper/paper_figs.py
 | --- | --- | --- |
 | `paper_figs.py` | `fig_scanpath`, `fig_comparison`, `fig_replay` | bundled demo (none) |
 | `paper_fig_architecture.py` | `fig1_architecture.pdf` | none |
-| `paper_fig_potec.py` | `fig_potec` | PoTeC under `data/PoTeC` (`download=True` on first use) |
+| `paper_fig_potec.py` | `fig_potec` | a local PoTeC copy under `data/PoTeC` |
 | `paper_fig_drift.py` | `fig_drift` | PoTeC under `data/PoTeC` |
 | `paper_fig_corpus.py` | `fig_corpus` | full OneStop under `data/OneStop` (`datasets.download_onestop`) |
 | `paper_stats.py` | case-study descriptives + the measure validation | bundled demo (none) |
@@ -50,8 +50,18 @@ It needs Playwright's Chromium (`playwright install chromium`, or point
 
 ## Notes
 
-- `paper_stats.py` validates the recomputed measures against the corpus' own
-  EyeLink IA values; both read the experiment's rectangles unchanged — see its
-  module docstring, and `measures.word_box_bounds`.
+- Run `SCANPATH_EXPERIMENTAL=1 uv run python paper/paper_stats.py` for the
+  experimental reading measures. The validation reassigns fixations from the
+  recorded word rectangles and compares the resulting measures with the
+  EyeLink IA report. The current bundled files contain 2,614 word rows, 3,209
+  fixations and 24 readings. The script prints how many words enter each
+  comparison.
+- The architecture PDF uses Matplotlib. Run
+  `uv run --with matplotlib python paper/paper_fig_architecture.py`.
+- The PoTeC and drift figures read the same local corpus. The drift figure
+  applies the experimental Warp line-assignment algorithm to reader 0's
+  reading of text b0.
 - Figures are rendered through Kaleido, which needs a Chrome/Chromium binary
   (`plotly_get_chrome -y` once, locally).
+
+For a small reproducible study with synthetic data, a tagged exclusion, a manuscript panel and a checked cohort CSV, see the [coauthor example](../scanpath_studio/sample_data/coauthor/README.md).

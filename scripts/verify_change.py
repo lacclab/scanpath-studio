@@ -6,7 +6,7 @@ check, so a change is seen *working*, not only compiling. A feature option is
 checked on all four surfaces by passing its spelling on each:
 
     uv run --extra test python scripts/verify_change.py \\
-        --query fixation_index_position=below \\
+        --check-option order_label_position=below \\
         --render-args "--order-label-position below" \\
         --api-kwargs '{"order_label_position": "below"}'
 
@@ -38,10 +38,13 @@ def _isolate_state(state_dir: Path) -> None:
     os.environ["SCANPATH_STUDIO_STATE_DIR"] = str(state_dir)
 
 
-def _check_app(query: dict[str, str], ui: str) -> list[tuple[str, bool, str]]:
+def _check_app(
+    query: dict[str, str], ui: str, options: dict[str, str] | None = None
+) -> list[tuple[str, bool, str]]:
     from streamlit.testing.v1 import AppTest
 
     from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
+    from scanpath_studio.url_state import _URL_PRESETS
 
     results = []
     for view in (_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA):
@@ -64,28 +67,57 @@ def _check_app(query: dict[str, str], ui: str) -> list[tuple[str, bool, str]]:
         if refused:
             detail += f" — {refused[0][:200]}"
         results.append((f"app: {view}", ok, detail))
+        if view == _VIEW_SCANPATH:
+            for param, raw in (options or {}).items():
+                key, parse = _URL_PRESETS[param]
+                try:
+                    expected = parse(raw)
+                except (TypeError, ValueError, OverflowError) as exc:
+                    results.append((f"app option: {param}", False, str(exc)))
+                    continue
+                try:
+                    actual = at.session_state[key]
+                except KeyError:
+                    actual = "<unset>"
+                results.append(
+                    (
+                        f"app option: {param}",
+                        actual == expected,
+                        f"{key} = {actual!r}, expected {expected!r}",
+                    )
+                )
     return results
 
 
 def _check_cli(render_args: str, out_dir: Path) -> tuple[str, bool, str]:
     out = out_dir / "cli.html"
-    cmd = [
-        sys.executable,
-        "-m",
-        "scanpath_studio.cli",
-        "render",
-        "--sample",
-        "-o",
-        str(out),
-        *shlex.split(render_args),
-    ]
     start = time.perf_counter()
-    proc = subprocess.run(cmd, check=False, capture_output=True, text=True, cwd=ROOT)
-    took = time.perf_counter() - start
-    ok = proc.returncode == 0 and out.exists() and out.stat().st_size > 0
-    detail = f"{took:.1f}s → {out}"
-    if not ok:
-        detail += f" — exit {proc.returncode}: {(proc.stderr or proc.stdout)[-400:]}"
+    with tempfile.TemporaryDirectory(dir=out_dir) as scratch:
+        candidate = Path(scratch) / out.name
+        cmd = [
+            sys.executable,
+            "-m",
+            "scanpath_studio.cli",
+            "render",
+            "--sample",
+            *shlex.split(render_args),
+            "-o",
+            str(candidate),
+        ]
+        proc = subprocess.run(
+            cmd, check=False, capture_output=True, text=True, cwd=ROOT
+        )
+        took = time.perf_counter() - start
+        if proc.returncode:
+            ok, detail = (
+                False,
+                f"exit {proc.returncode}: {(proc.stderr or proc.stdout)[-400:]}",
+            )
+        elif not candidate.is_file() or not candidate.stat().st_size:
+            ok, detail = False, "This invocation produced no figure."
+        else:
+            candidate.replace(out)
+            ok, detail = True, f"{took:.1f}s → {out}"
     return ("cli: render --sample " + render_args).strip(), ok, detail
 
 
@@ -103,7 +135,12 @@ def _check_api(api_kwargs: dict, out_dir: Path) -> tuple[str, bool, str]:
         }
         fig = sps.plot_scanpath(words, fixations, **kwargs)
         out = out_dir / "api.html"
-        sps.save_figure(fig, out)
+        with tempfile.TemporaryDirectory(dir=out_dir) as scratch:
+            candidate = Path(scratch) / out.name
+            sps.save_figure(fig, candidate)
+            if not candidate.is_file() or not candidate.stat().st_size:
+                raise ValueError("This invocation produced no figure.")
+            candidate.replace(out)
     except Exception as exc:  # the report is the point; never hide the cause
         return ("api: plot_scanpath", False, f"{type(exc).__name__}: {exc}")
     took = time.perf_counter() - start
@@ -122,6 +159,13 @@ def main(argv: list[str] | None = None) -> int:
         default=[],
         metavar="PARAM=VALUE",
         help="A deep-link parameter to open the app with (repeatable).",
+    )
+    parser.add_argument(
+        "--check-option",
+        action="append",
+        default=[],
+        metavar="PARAM=VALUE",
+        help="Open a figure-setting deep link and check the resulting Scanpath session value (repeatable).",
     )
     parser.add_argument(
         "--ui",
@@ -143,14 +187,40 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    query = dict(item.split("=", 1) for item in args.query)
+    from scanpath_studio import session_keys as sk
+
+    known = (
+        sk.URL_PRESET_PARAMS
+        | sk.URL_SELECTION_PARAMS
+        | sk.URL_OPTIONAL_PARAMS
+        | sk.URL_LEGACY_PARAMS
+        | {sk.PARAM_UI}
+    )
+    query: dict[str, str] = {}
+    options: dict[str, str] = {}
+    for flag, items in (("--query", args.query), ("--check-option", args.check_option)):
+        for item in items:
+            key, sep, value = item.partition("=")
+            if not sep or key not in known:
+                parser.error(
+                    f"{flag} expects a published deep-link PARAM=VALUE, got {item!r}."
+                )
+            if key in query and query[key] != value:
+                parser.error(f"Two different values were supplied for {key!r}.")
+            query[key] = value
+            if flag == "--check-option":
+                if args.skip_app or key not in sk.URL_PRESET_PARAMS:
+                    parser.error(
+                        "--check-option needs the app check and a figure-setting parameter."
+                    )
+                options[key] = value
     out_dir = args.out_dir or Path(tempfile.mkdtemp(prefix="sps-verify-"))
     out_dir.mkdir(parents=True, exist_ok=True)
     _isolate_state(out_dir / "state")
 
     results: list[tuple[str, bool, str]] = []
     if not args.skip_app:
-        results += _check_app(query, args.ui)
+        results += _check_app(query, args.ui, options)
     if not args.skip_cli:
         results.append(_check_cli(args.render_args, out_dir))
     if not args.skip_api:

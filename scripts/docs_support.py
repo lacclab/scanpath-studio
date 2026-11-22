@@ -403,6 +403,8 @@ _OPTION_NOTES = {
 #: The ``render`` flags that set no single figure option, by the topic they
 #: are listed under. The rest are placed through the option they set.
 _FLAG_TOPICS = {
+    "--word-hover-fields-json": "Hover",
+    "--fixation-hover-fields-json": "Hover",
     "--palette": "Fixations",
     "--fix-index-range": "Filters & highlights",
     "--illustration": "Title & labels",
@@ -426,6 +428,7 @@ _FLAG_TOPICS = {
     "--height": "Size and export",
     "--scale": "Size and export",
     "--width-mm": "Size and export",
+    "--proof-width-mm": "Size and export",
     "--width-in": "Size and export",
     "--dpi": "Size and export",
     "--separable-layers": "Size and export",

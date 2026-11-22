@@ -24,7 +24,7 @@ from typing import NamedTuple
 import pandas as pd
 import streamlit as st
 
-from . import app, wizard_shell
+from . import app, dataset_credit, wizard_shell
 from .build_info import build_info
 from .column_names import (
     ColumnNames,
@@ -190,7 +190,8 @@ def _reset_wizard_widgets() -> None:
         # plus their Select-all/None button keys) share the "col_map_" table
         # names as a *suffix*, not a prefix — sweep "wizard_keep_" too, or a
         # new dataset would inherit the previous one's keep choices.
-        if isinstance(k, str) and k.startswith(("col_map_", "wizard_keep_"))
+        if isinstance(k, str)
+        and k.startswith(("col_map_", "wizard_keep_", "wizard_credit_"))
     ]:
         del st.session_state[key]
     for key in (
@@ -403,6 +404,11 @@ def _finalize_wizard_dataset() -> None:
             str(st.session_state.get(WIZARD_IMAGES_PATTERN_KEY) or ""),
         )
     store = st.session_state.setdefault("_datasets", {})
+    dataset_credit.save_credit(
+        st.session_state,
+        ds_name,
+        dataset_credit.form_credit(st.session_state, "wizard_credit"),
+    )
     store[ds_name] = payload
     dataset_share_id(st.session_state, ds_name)
     # Its recording setup is applied when it opens, on the next run, as every
@@ -483,6 +489,7 @@ def _remove_dataset(name: str) -> None:
     store = st.session_state.get("_datasets", {})
     store.pop(name, None)
     forget_dataset_identity(st.session_state, name)
+    dataset_credit.save_credit(st.session_state, name, {})
     # And its description, so a new dataset of that name starts without one.
     descriptions = dict(st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {})
     if descriptions.pop(name, None) is not None:
@@ -4096,6 +4103,8 @@ def _wizard_name_header(host, active: bool) -> None:
         # Streamlit 1.65: read only when Add dataset runs, so no rerun per edit.
         on_change="ignore",
     )
+
+    dataset_credit.credit_fields(box, st.session_state, "wizard_credit")
 
 
 def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:

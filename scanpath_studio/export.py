@@ -41,7 +41,7 @@ from time import perf_counter
 
 import pandas as pd
 
-from . import chart_axes
+from . import chart_axes, dataset_credit
 from .aggregation import reader_summary_table, trial_summary_table
 from .citation import CORPORA, CREDIT_LINE, cite, corpus_for, software_apa
 from .column_names import (
@@ -2710,6 +2710,19 @@ def bulk_export(
     }
 
     corpus = corpus_for(settings.get("data_source") or options.dataset_name)
+    refs = settings.get("dataset_references") or []
+    if refs:
+        cite_lines = [f"- {software_apa()}"]
+        for ref in refs:
+            role = (
+                "Dataset for the exported trials"
+                if ref["side"] == "A"
+                else "Second dataset in the on-screen comparison"
+            )
+            cite_lines.append(f"- {role}: {dataset_credit.reference_text(ref, 'apa')}")
+        cite_lines.extend(("", "`CITATION.bib` contains the references in BibTeX."))
+    else:
+        cite_lines = _cite_lines(corpus)
     readme_lines = [
         "# Bulk export",
         f"Generated: {_local_stamp()}",

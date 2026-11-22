@@ -58,7 +58,7 @@ import pandas as pd
 
 import scanpath_studio.annotations as annotations_mod
 
-from . import progress
+from . import dataset_credit, progress
 from .constants import (
     DATASET_ALIASES_KEY,
     DATASET_COUNTS_STORE_KEY,
@@ -73,6 +73,7 @@ from .constants import (
     SETUP_OVERRIDE_SESSION_KEYS,
 )
 from .dataset_identity import DATASET_IDS_KEY, dataset_share_id, forget_dataset_identity
+from .file_lock import file_lock
 from .session_keys import (
     COLUMN_MAPPING_PREFIX,
     COMPARE_IDENTITY_STATE_KEY,
@@ -103,6 +104,8 @@ STATE_DIR_ENV_VAR = "SCANPATH_STUDIO_STATE_DIR"
 _RESTORED_KEY = "_local_persistence_restored"
 _RESTORED_PAYLOAD_KEY = "_local_persistence_restored_payload"
 _PAUSED_KEY = "_local_persistence_paused"
+_ANNOTATION_BASE_KEY = "_local_annotation_base"
+ANNOTATION_CONFLICT_KEY = "_local_annotation_conflict"
 _LAST_FINGERPRINT_KEY = "_local_persistence_fingerprint"
 _LAST_DATASET_IDENTITY_KEY = "_local_persistence_dataset_identity"
 _LAST_DATASET_ENTRIES_KEY = "_local_persistence_dataset_entries"
@@ -166,6 +169,7 @@ _METADATA_FILE_RE = re.compile(r"^metadata(?:-[0-9a-f]+)?\.json$")
 _STALE_AFTER_S = 600.0
 _SWEPT_KEY = "_local_persistence_swept"
 _STATE_LOCK = threading.RLock()
+_CACHE_LOCK_FILE = ".scanpath-recovery.lock"
 _LOGGER = logging.getLogger(__name__)
 _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     "data_source_choice",
@@ -204,6 +208,7 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     DATASET_ALIASES_KEY,
     DATASET_IDS_KEY,
     DATASET_DESCRIPTIONS_KEY,
+    dataset_credit.STORE_KEY,
     # Each dataset's stimulus-image folder and pattern, kept the same way and
     # for the same reason. A local path in a local cache.
     DATASET_STIMULUS_IMAGES_KEY,
@@ -597,6 +602,72 @@ def _save_metadata(
     }
 
 
+class AnnotationConflictError(ValueError):
+    """Two sessions independently changed the same cached trial or screen."""
+
+
+def _merge_saved_annotations(base, local, disk):
+    """Apply this session's annotation edits to the latest saved annotations."""
+    if disk == base or disk == local:
+        return local
+    if local == base:
+        return disk
+
+    def entries(payload):
+        if isinstance(payload, list):
+            payload = {"unassigned": payload}
+        payload = payload or {}
+        by_dataset = {
+            **(payload.get("datasets") or {}),
+            None: payload.get("unassigned", []),
+        }
+        return {
+            (owner, key): value
+            for owner, records in by_dataset.items()
+            for key, value in annotations_mod.records_to_store(records).items()
+        }
+
+    before, edited, latest = map(entries, (base, local, disk))
+    result = latest.copy()
+    for key in before.keys() | edited.keys():
+        mine, old, saved = edited.get(key), before.get(key), latest.get(key)
+        if mine == old:
+            continue
+        if saved != old and saved != mine:
+            owner, reading = key
+            raise AnnotationConflictError(
+                f"Another session changed the annotation for {owner or 'unassigned dataset'}, "
+                f"{' / '.join(reading)}. Your local changes are still open. Export them from "
+                "Data Management → Annotations, then reopen the saved session and review the imported notes."
+            )
+        if mine is None:
+            result.pop(key, None)
+        else:
+            result[key] = mine
+    owners = {}
+    for (owner, key), entry in result.items():
+        owners.setdefault(owner, {})[key] = entry
+    unassigned = owners.pop(None, {})
+    merged = {
+        "datasets": {
+            owner: annotations_mod.store_to_records(store)
+            for owner, store in owners.items()
+        }
+    }
+    if unassigned:
+        merged["unassigned"] = annotations_mod.store_to_records(unassigned)
+    return merged
+
+
+def _cache_file_lock(root: Path, *, reading: bool = False):
+    # A failed dataset or metadata sidecar can outlive its directory.
+    return (
+        file_lock(root / _CACHE_LOCK_FILE, reading=reading)
+        if root.is_dir()
+        else contextlib.nullcontext()
+    )
+
+
 def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
     """Save local datasets and durable session preferences, all or nothing.
 
@@ -620,11 +691,31 @@ def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
         if session.get(_LAST_FINGERPRINT_KEY) == fingerprint:
             return False
         root.mkdir(parents=True, exist_ok=True)
+        return _publish_state(session, root, metadata_signature, fingerprint)
+
+
+def _publish_state(
+    session: MutableMapping[str, Any],
+    root: Path,
+    metadata_signature: list,
+    fingerprint: str,
+) -> bool:
+    """Write and retire files while the same disk revision stays exclusively ours."""
+    with file_lock(root / _CACHE_LOCK_FILE):
         dataset_identity = _dataset_identity(session)
         written: list[Path] = []
         swapped = False
         try:
             manifest = _manifest_for(session, root, dataset_identity, written)
+            local_annotations = manifest["annotations"]
+            previous_file = root / "manifest.json"
+            if previous_file.exists():
+                disk = json.loads(previous_file.read_text(encoding="utf-8"))
+                manifest["annotations"] = _merge_saved_annotations(
+                    session.get(_ANNOTATION_BASE_KEY, {"datasets": {}}),
+                    local_annotations,
+                    disk.get("annotations", {"datasets": {}}),
+                )
             metadata, metadata_bookkeeping = _save_metadata(
                 session, root, metadata_signature, written
             )
@@ -648,6 +739,8 @@ def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
                 # Named by no manifest: this save's files would only be litter.
                 for path in written:
                     _unlink_quietly(path)
+        session[_ANNOTATION_BASE_KEY] = local_annotations
+        session.pop(ANNOTATION_CONFLICT_KEY, None)
         session[_LAST_FINGERPRINT_KEY] = fingerprint
         session[_LAST_DATASET_IDENTITY_KEY] = dataset_identity
         # The live datasets' entries only: a held-back one is merged in by
@@ -786,7 +879,9 @@ def restore_state(
     if session.get(_RESTORED_KEY):
         return False
     session[_RESTORED_KEY] = True
-    with _STATE_LOCK:
+    if not root.is_dir():
+        return False
+    with _STATE_LOCK, _cache_file_lock(root, reading=True):
         return _restore_manifest(session, root, skip_session_keys)
 
 
@@ -891,6 +986,7 @@ def _restore_manifest(
     # held-back dataset's annotations restore too: they are filed under
     # its name and written back with it.
     try:
+        session[_ANNOTATION_BASE_KEY] = manifest.get("annotations", {"datasets": {}})
         summary["annotations"] = annotations_mod.restore_payload(
             session, manifest.get("annotations")
         )
@@ -1011,7 +1107,7 @@ def retry_failed_datasets(session, root: Path | None = None) -> dict[str, str]:
     failed = _failed(session)
     if not failed:
         return {}
-    with _STATE_LOCK:
+    with _STATE_LOCK, _cache_file_lock(directory, reading=True):
         live = dict(session.get("_datasets", {}))
         entries = session.get(_LAST_DATASET_ENTRIES_KEY)
         # The reuse bookkeeping stays valid only if it described the session
@@ -1054,7 +1150,7 @@ def discard_failed_dataset(session, name: str, root: Path | None = None) -> bool
     record = failed.pop(str(name), None)
     if record is None:
         return False
-    with _STATE_LOCK:
+    with _STATE_LOCK, _cache_file_lock(directory):
         entry = record.get("entry")
         frames = entry.get("frames") if isinstance(entry, dict) else None
         # Only the files its entry names, never guessed from its name: a
@@ -1080,6 +1176,7 @@ def discard_failed_dataset(session, name: str, root: Path | None = None) -> bool
             and not failed_metadata(session)
         ):
             forget_dataset_identity(session, name)
+            dataset_credit.save_credit(session, name, {})
         _set_failed(session, failed)
     return True
 
@@ -1125,6 +1222,13 @@ def _restorable_session(stored: Any) -> dict:
         if not isinstance(key, str) or not (
             key in _SESSION_KEYS or key.startswith(COLUMN_MAPPING_PREFIX)
         ):
+            continue
+        if key == dataset_credit.STORE_KEY:
+            clean[key] = {
+                str(name): credit
+                for name, payload in _as_mapping(value).items()
+                if (credit := dataset_credit.clean_credit(payload))
+            }
             continue
         if key in (DATASET_DESCRIPTIONS_KEY, DATASET_ALIASES_KEY, DATASET_IDS_KEY):
             # ``{dataset: sentence}``; anything else is dropped.
@@ -1293,7 +1397,7 @@ def retry_failed_metadata(session, root: Path | None = None) -> str | None:
     directory = state_directory() if root is None else root
     from . import metadata as metadata_mod
 
-    with _STATE_LOCK:
+    with _STATE_LOCK, _cache_file_lock(directory, reading=True):
         try:
             payloads = _read_metadata_file(directory, held.get("pointer"))
             metadata_mod.restore_dataset_payloads(session, payloads)
@@ -1317,7 +1421,7 @@ def discard_failed_metadata(session, root: Path | None = None) -> bool:
     if not isinstance(held, dict):
         return False
     directory = state_directory() if root is None else root
-    with _STATE_LOCK:
+    with _STATE_LOCK, _cache_file_lock(directory):
         try:
             path = _metadata_path(directory, held.get("pointer"))
         except ValueError:
@@ -1343,7 +1447,9 @@ def _metadata_files(root: Path) -> list[Path]:
 
 def forget_state(root: Path) -> None:
     """Remove the known persistence files without recursively deleting ``root``."""
-    with _STATE_LOCK:
+    if not root.is_dir():
+        return
+    with _STATE_LOCK, _cache_file_lock(root):
         manifest = root / "manifest.json"
         if manifest.exists():
             manifest.unlink()
@@ -1529,6 +1635,8 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
     if session is not None:
         for key in (
             _LAST_FINGERPRINT_KEY,
+            _ANNOTATION_BASE_KEY,
+            ANNOTATION_CONFLICT_KEY,
             _LAST_DATASET_IDENTITY_KEY,
             _LAST_DATASET_ENTRIES_KEY,
             _RESTORED_PAYLOAD_KEY,
@@ -1745,6 +1853,9 @@ def save_local_state(session, url: str) -> bool:
         return False
     try:
         return save_state(session, state_directory())
+    except AnnotationConflictError as exc:
+        session[ANNOTATION_CONFLICT_KEY] = str(exc)
+        return False
     except Exception:
         # Persistence is a recovery convenience, never a reason for the app to
         # stop rendering (read-only homes, full disks, or unsupported Parquet

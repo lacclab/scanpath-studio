@@ -287,11 +287,154 @@ class TestAnnotationsModuleImport:
         )
 
 
+def _edit_from_process(
+    cache, reader, restored, first_read, second_attempt, second_read, release
+):
+    import scanpath_studio.annotations as annotations_mod
+
+    session = {}
+    assert restore_state(session, cache)
+    annotations_mod.activate_dataset(session, "Lab")
+    session[ANNOTATIONS_STATE_KEY][(reader, "trial")] = {"note": reader}
+    restored.wait(timeout=30)
+    merge = persistence._merge_saved_annotations
+
+    def at_snapshot(base, local, disk):
+        if reader == "01":
+            first_read.set()
+            assert release.wait(timeout=30)
+        else:
+            second_read.set()
+        return merge(base, local, disk)
+
+    persistence._merge_saved_annotations = at_snapshot
+    if reader == "02":
+        assert first_read.wait(timeout=30)
+        second_attempt.set()
+    assert save_state(session, cache)
+
+
+def test_two_processes_cannot_replace_the_same_annotation_snapshot(
+    tmp_path, monkeypatch
+):
+    import multiprocessing
+    import sys
+    import types
+
+    import scanpath_studio.annotations as annotations_mod
+
+    base = {"data_source_choice": "Lab"}
+    annotations_mod.activate_dataset(base, "Lab")
+    assert save_state(base, tmp_path)
+    ctx = multiprocessing.get_context("spawn")
+    restored = ctx.Barrier(2)
+    first_read, second_attempt, second_read, release = [ctx.Event() for _ in range(4)]
+    workers = [
+        ctx.Process(
+            target=_edit_from_process,
+            args=(
+                tmp_path,
+                reader,
+                restored,
+                first_read,
+                second_attempt,
+                second_read,
+                release,
+            ),
+        )
+        for reader in ("01", "02")
+    ]
+    # AppTest can leave a generated Streamlit script as __main__. Spawn only
+    # needs this module's worker function, not a copy of that app session.
+    with monkeypatch.context() as patch:
+        patch.setitem(sys.modules, "__main__", types.ModuleType("__main__"))
+        for worker in workers:
+            worker.start()
+    try:
+        assert second_attempt.wait(timeout=30)
+        # The first worker has read the old manifest and is waiting to publish.
+        # Even the second worker's read must wait until that publication.
+        assert not second_read.wait(timeout=0.5)
+        release.set()
+        for worker in workers:
+            worker.join(timeout=30)
+            assert worker.exitcode == 0
+    finally:
+        release.set()
+        for worker in workers:
+            if worker.is_alive():
+                worker.terminate()
+            worker.join(timeout=5)
+    session = {}
+    assert restore_state(session, tmp_path)
+    annotations_mod.activate_dataset(session, "Lab")
+    assert {
+        reader: note["note"]
+        for (reader, _), note in session[ANNOTATIONS_STATE_KEY].items()
+    } == {"01": "01", "02": "02"}
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_read_only_cache_can_be_restored_with_or_without_a_lock_file(
+    tmp_path, monkeypatch, legacy
+):
+    import errno
+    from pathlib import Path
+
+    assert save_state({"_datasets": {"Lab": _dataset()}}, tmp_path)
+    sidecar = tmp_path / persistence._CACHE_LOCK_FILE
+    if legacy:
+        sidecar.unlink()
+    original_open = Path.open
+
+    def read_only(path, mode="r", *args, **kwargs):
+        if path == sidecar and mode == "a+b":
+            raise OSError(errno.EROFS, "read-only cache")
+        return original_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", read_only)
+    session = {}
+    assert restore_state(session, tmp_path)
+    assert "Lab" in session["_datasets"]
+
+
 class TestAnnotationsPerDataset:
     """The cache keeps each dataset's annotations as its own."""
 
     STAR = {"star": True, "tags": ["Review"], "note": "A's note."}
     NOTE = {"star": False, "tags": [], "note": "B's note."}
+
+    def test_two_local_sessions_merge_independent_edits_and_detect_a_conflict(
+        self, tmp_path
+    ):
+        import scanpath_studio.annotations as ann
+
+        base = {"data_source_choice": "Pilot"}
+        ann.activate_dataset(base, "Pilot")
+        base[ANNOTATIONS_STATE_KEY][("01", "a")] = dict(self.STAR)
+        save_state(base, tmp_path)
+
+        def reopen():
+            state = {}
+            assert restore_state(state, tmp_path)
+            ann.activate_dataset(state, "Pilot")
+            return state
+
+        first, second = reopen(), reopen()
+        first[ANNOTATIONS_STATE_KEY][("01", "b", "2")] = dict(self.NOTE)
+        del second[ANNOTATIONS_STATE_KEY][("01", "a")]
+        assert save_state(first, tmp_path) and save_state(second, tmp_path)
+        assert reopen()[ANNOTATIONS_STATE_KEY] == {("01", "b", "2"): self.NOTE}
+
+        first, second = reopen(), reopen()
+        key = ("01", "b", "2")
+        first[ANNOTATIONS_STATE_KEY][key] = dict(self.STAR)
+        second[ANNOTATIONS_STATE_KEY][key] = {**self.NOTE, "note": "Reviewer B"}
+        assert save_state(first, tmp_path)
+        with pytest.raises(persistence.AnnotationConflictError, match="01 / b / 2"):
+            save_state(second, tmp_path)
+        assert second[ANNOTATIONS_STATE_KEY][key]["note"] == "Reviewer B"
+        assert reopen()[ANNOTATIONS_STATE_KEY][key] == self.STAR
 
     def test_two_datasets_with_colliding_ids_round_trip_apart(self, tmp_path):
         import scanpath_studio.annotations as annotations_mod

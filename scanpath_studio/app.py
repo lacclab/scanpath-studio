@@ -65,6 +65,7 @@ if __package__ is None or __package__ == "":
         sys.path.insert(0, str(root))
 
 from scanpath_studio import (
+    dataset_credit,
     dataset_table,
     desktop_update,
     loading,
@@ -5905,6 +5906,19 @@ def _description_draft(token: str) -> str | None:
     return None if text == dataset_description(token)[0].strip() else text
 
 
+def _credit_prefix(token: str) -> str:
+    return f"dataset_credit_{_dataset_row_slug(token)}"
+
+
+def _credit_draft(token: str) -> dict | None:
+    prefix = _credit_prefix(token)
+    if f"{prefix}_title" not in st.session_state:
+        return None
+    values = dataset_credit.form_credit(st.session_state, prefix)
+    saved = (st.session_state.get(dataset_credit.STORE_KEY) or {}).get(token, {})
+    return values if values != saved else None
+
+
 def render_description_field(host, token: str) -> None:
     """✏️ Edit dataset's **Description** — the sentence under its name.
 
@@ -6584,6 +6598,7 @@ def editor_staging_dirty() -> bool:
     token = str(snapshot.get("token") or "")
     return bool(
         _description_draft(token) is not None
+        or _credit_draft(token) is not None
         or _stimulus_images_draft(token) is not None
         or _builtin_name_draft(token) is not None
         or _metadata_grains_changed(snapshot)
@@ -6604,6 +6619,8 @@ def commit_editor_staging(token: str) -> None:
     Both the upload editor and the built-in dataset editor call this after
     validating the pending changes.
     """
+    if (credit := _credit_draft(token)) is not None:
+        dataset_credit.save_credit(st.session_state, token, credit)
     if (text := _description_draft(token)) is not None:
         set_dataset_description(token, text)
     if (images := _stimulus_images_draft(token)) is not None:
@@ -6624,7 +6641,9 @@ def _drop_editor_drafts() -> None:
         k
         for k in list(st.session_state)
         if isinstance(k, str)
-        and k.startswith(("dataset_description_", "dataset_stimulus_"))
+        and k.startswith(
+            ("dataset_description_", "dataset_credit_", "dataset_stimulus_")
+        )
     ]:
         st.session_state.pop(key, None)
 
@@ -10015,6 +10034,15 @@ def _run_app() -> None:
         hold_editor_staging(editing_token)
         render_name_field(editor_name_body, editing_token)
         render_description_field(editor_name_body, editing_token)
+        if editing_token in (st.session_state.get("_datasets") or {}):
+            dataset_credit.credit_fields(
+                editor_name_body,
+                st.session_state,
+                _credit_prefix(editing_token),
+                (st.session_state.get(dataset_credit.STORE_KEY) or {}).get(
+                    editing_token
+                ),
+            )
     # The section is held back behind the experimental flag — heading, caption
     # and controls all come from behind the same gate, so the page has no gap
     # where a hidden stage would be.
@@ -11185,6 +11213,10 @@ def _run_app() -> None:
     # Persist after all view/menu widgets have written their current values.
     # The helper fingerprints the session and is a no-op on unchanged reruns.
     save_local_state(st.session_state, app_url)
+    from .persistence import ANNOTATION_CONFLICT_KEY
+
+    if conflict := st.session_state.get(ANNOTATION_CONFLICT_KEY):
+        st.warning(conflict, icon=ICONS["warning"])
     # …then draw *Saved on this computer*, so it reports the write that just
     # happened rather than the previous run's.
     _finish_page()

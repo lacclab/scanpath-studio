@@ -6418,6 +6418,11 @@ def render_single_trial_tab(
         else _part_catalog_for_display(parent_words, parent_fixations)
     )
     selected_screen = _render_screen_navigator(screens, host=screen_slot)
+    from .annotations import render_disputed_note
+
+    render_disputed_note(
+        plot_notes_slot, selected_participant, selected_trial, selected_screen
+    )
     if selected_screen is not None:
         trial_words = extract_part(
             parent_words, selected_participant, selected_trial, selected_screen

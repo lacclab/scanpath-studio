@@ -10924,29 +10924,20 @@ def _participant_metadata_narrowing(prefix: str, recipe: dict) -> tuple:
     )
 
 
-def _loaded_trial_keys(words: pd.DataFrame, fixations: pd.DataFrame) -> set:
-    """``(participant_id, trial_id)`` pairs present in either frame."""
-    from scanpath_studio.data import frame_fingerprint
+def metadata_readings(words, fixations, raw_gaze=None) -> pd.DataFrame:
+    """The unfiltered dataset's recording identities, shared by joins and filters."""
+    from . import metadata as md
+    from .data import frame_cache
 
-    return set(
-        _c_loaded_trial_keys(
-            words, fixations, frame_fingerprint(words), frame_fingerprint(fixations)
-        )
+    frames = (fixations, words, raw_gaze)
+    return frame_cache(
+        "metadata_readings"
+        if raw_gaze is not None
+        else "metadata_readings_without_samples",
+        tuple(frame_fingerprint(f) for f in frames),
+        lambda: md.recording_keys(*frames),
+        keep=2,
     )
-
-
-@st.cache_data(show_spinner=False, max_entries=8)
-def _c_loaded_trial_keys(_words, _fixations, wkey, fkey) -> frozenset:
-    from scanpath_studio.data import trial_keys as _keys
-
-    return frozenset(_keys(_words)) | frozenset(_keys(_fixations))
-
-
-def _pool_fingerprint(words: pd.DataFrame, fixations: pd.DataFrame) -> tuple:
-    """The loaded pool's identity, for a cache keyed on it."""
-    from scanpath_studio.data import frame_fingerprint
-
-    return (frame_fingerprint(words), frame_fingerprint(fixations))
 
 
 def _metadata_numeric_summary(
@@ -10991,7 +10982,7 @@ def _c_metadata_numeric_summary(_attached, table_key, _keys, pool_key) -> dict:
 
 
 def _compute_trial_filters(
-    words: pd.DataFrame, fixations: pd.DataFrame, *, prefix: str = ""
+    words: pd.DataFrame, fixations: pd.DataFrame, raw_gaze=None, *, prefix: str = ""
 ) -> dict:
     """Derive the narrowing filter result from the live filter-widget values.
 
@@ -11002,6 +10993,8 @@ def _compute_trial_filters(
     it also runs at the end of that function for no-change runs. Only narrowing
     selections feed the result.
     """
+    from . import metadata as md
+
     result: dict = {
         "participants": None,
         "metadata": {},
@@ -11055,7 +11048,11 @@ def _compute_trial_filters(
         # selector list doesn't reshuffle when a metadata filter changes. May
         # legitimately be **empty** — an impossible combination narrows to no
         # reader, which `data.filter_trials` distinguishes from "no constraint".
-        result["participants"] = [p for p in parts if str(p) in keep]
+        result["participants"] = [
+            p
+            for p in md.participant_ids(metadata_readings(words, fixations, raw_gaze))
+            if p in keep
+        ]
         # The per-filter report clears by widget key, and this narrowing did
         # not come from `filter_participants`. Its own top-level slot, not an
         # entry in `metadata_keys`: that dict is column-name → *one* key string,
@@ -11066,7 +11063,9 @@ def _compute_trial_filters(
     # trial, and so a numeric range keeps the trials the table never mentions
     # (the range filters' rule, one grain down).
     by_trial, trial_keys_used = _trial_metadata_narrowing(
-        prefix, lambda: _loaded_trial_keys(words, fixations), attachments
+        prefix,
+        lambda: md.trial_keys(metadata_readings(words, fixations, raw_gaze)),
+        attachments,
     )
     if by_trial is not None:
         result["trial_keys"] = by_trial
@@ -11087,23 +11086,29 @@ def _compute_trial_filters(
             if sel and len(text_vals) > 1 and len(sel) < len(text_vals)
             else None
         )
-        # Text-grain metadata folds into the same slot, the same way
-        # participant-grain metadata folds into `result["participants"]` — an
-        # explicit pick still wins over (intersects with) the table.
-        by_text_meta, text_meta_keys = _text_metadata_narrowing(prefix, attachments)
-        combined = None
-        if by_picker is not None and by_text_meta is not None:
-            combined = by_picker & by_text_meta
-        elif by_picker is not None:
-            combined = by_picker
-        elif by_text_meta is not None:
-            combined = by_text_meta & {str(v) for v in text_vals}
-        if combined is not None:
-            result["metadata"][text_field] = combined
-            # The per-filter clear pops exactly this key, so it must be
-            # emitted already-prefixed or clearing one of B's filters no-ops.
+        if by_picker is not None:
+            result["metadata"][text_field] = by_picker
             result["metadata_keys"][text_field] = f"{prefix}filter_text_id"
-            result["text_filter_keys"] = text_meta_keys
+    by_text_meta, text_meta_keys = _text_metadata_narrowing(prefix, attachments)
+    if by_text_meta is not None:
+        allowed = md.readings_for_texts(
+            metadata_readings(words, fixations, raw_gaze), by_text_meta
+        )
+        if (
+            not prefix
+            and raw_gaze is not None
+            and not raw_gaze.empty
+            and not words.empty
+        ):
+            # A recipe needs the samples if one of its original readings
+            # would enter or leave the selection without their text IDs.
+            primary = metadata_readings(words, fixations)
+            if allowed.intersection(md.trial_keys(primary)) != md.readings_for_texts(
+                primary, by_text_meta
+            ):
+                attachments["text"]["requires_raw_gaze"] = True
+        result["trial_keys"] = allowed if by_trial is None else by_trial & allowed
+        result["text_filter_keys"] = text_meta_keys
     # Numeric trial-level columns narrow by range, not by membership. A
     # slider still at full extent is "no filter" and contributes nothing.
     # With *Keep unknown values* off, even the full extent narrows: it leaves
@@ -11169,7 +11174,7 @@ def _compute_trial_filters(
             else:
                 conditions[text_field] = by_picker
         columns = set(conditions) | set(result["ranges"])
-        if "text" in attachments:
+        if "text" in attachments and text_field:
             columns.add(text_field)
         result["recipe_selection"] = {
             "participants": picked_participants,
@@ -11220,6 +11225,7 @@ def _text_field_and_frame(words: pd.DataFrame, fixations: pd.DataFrame):
 def render_narrow_by(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
+    raw_gaze=None,
     *,
     prefix: str = "",
     text_host=None,
@@ -11233,7 +11239,7 @@ def render_narrow_by(
 
     def _apply() -> None:
         st.session_state[f"{prefix}_trial_filters"] = _compute_trial_filters(
-            words, fixations, prefix=prefix
+            words, fixations, raw_gaze, prefix=prefix
         )
 
     th = text_host if text_host is not None else st
@@ -11303,6 +11309,7 @@ def trial_filter_labels(
 def render_trial_filters(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
+    raw_gaze=None,
     *,
     host,
     prefix: str = "",
@@ -11324,9 +11331,11 @@ def render_trial_filters(
     sees it.
     """
 
+    from . import metadata as md
+
     def _apply() -> None:
         st.session_state[f"{prefix}_trial_filters"] = _compute_trial_filters(
-            words, fixations, prefix=prefix
+            words, fixations, raw_gaze, prefix=prefix
         )
 
     # Text + Participant narrowing lives in the inline "Narrow by" row
@@ -11411,8 +11420,8 @@ def render_trial_filters(
         host,
         prefix=prefix,
         on_change=_apply,
-        keys=lambda: _loaded_trial_keys(words, fixations),
-        pool_key=_pool_fingerprint(words, fixations),
+        keys=lambda: md.trial_keys(metadata_readings(words, fixations, raw_gaze)),
+        pool_key=tuple(frame_fingerprint(f) for f in (words, fixations, raw_gaze)),
     )
     _render_text_metadata_filters(host, prefix=prefix, on_change=_apply)
 
@@ -11509,6 +11518,6 @@ def render_trial_filters(
     st.session_state[f"{prefix}_trial_filters_raw"] = {
         k: st.session_state[k] for k in keys if k in st.session_state
     }
-    result = _compute_trial_filters(words, fixations, prefix=prefix)
+    result = _compute_trial_filters(words, fixations, raw_gaze, prefix=prefix)
     st.session_state[f"{prefix}_trial_filters"] = result
     return result

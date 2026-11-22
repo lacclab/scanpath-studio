@@ -209,3 +209,56 @@ class TestChips:
         assert "genre" in at.session_state["trial_chip_fields"]
         table = " ".join(m.value for m in at.markdown)
         assert ">genre</th>" in table and ">news</td>" in table, table[:400]
+
+
+def test_metadata_filters_select_readings_from_each_recording_table(monkeypatch):
+    from scanpath_studio import analysis_recipe, controls
+
+    def reading(reader, text):
+        return pd.DataFrame(
+            {"participant_id": [reader], "trial_id": ["trial"], "text_id": [text]}
+        )
+
+    words, fixations, samples = (
+        reading("p1", "a"),
+        reading("p2", "b"),
+        reading("p3", "c"),
+    )
+    table = pd.DataFrame(
+        {"text_id": ["a", "b", "c"], "genre": ["poem", "story", "essay"]}
+    )
+    attached = metadata.build_text_metadata(table, "text_id", keys={"a", "b", "c"})
+    state = {metadata.TEXT_SESSION_KEY: attached}
+    monkeypatch.setattr(controls.st, "session_state", state)
+    for reader, genre in (("p1", "poem"), ("p2", "story"), ("p3", "essay")):
+        state[controls.text_metadata_filter_key("genre")] = [genre]
+        selected = controls._compute_trial_filters(words, fixations, samples)
+        assert selected["trial_keys"] == {(reader, "trial")}
+        result = analysis_recipe._select_words(
+            words,
+            fixations,
+            analysis_recipe.jsonable(selected["recipe_selection"]),
+            {"text": table},
+            None,
+        )
+        assert list(result["participant_id"]) == (["p1"] if reader == "p1" else [])
+
+
+def test_text_metadata_respects_unique_and_conflicting_recorded_ids():
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["p", "q"],
+            "trial_id": ["1", "2"],
+            "text_id": ["old", "b"],
+            "unique_text_id": ["a", None],
+        }
+    )
+    words = pd.DataFrame(
+        {"participant_id": ["p", "q"], "trial_id": ["1", "2"], "text_id": ["old", "c"]}
+    )
+    keys = metadata.recording_keys(fixations, words)
+    assert metadata.text_keys(keys) == {"a", "b", "c"}
+    assert metadata.readings_for_texts(keys, {"a", "b"}) == {("p", "1")}
+    displayed = metadata.unambiguous_readings(keys).set_index("participant_id")
+    assert displayed.loc["p", "text_id"] == "a"
+    assert pd.isna(displayed.loc["q", "text_id"])

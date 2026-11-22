@@ -2822,6 +2822,7 @@ def _render_compare_filters(host, source: SecondaryDataset) -> None:
     render_narrow_by(
         source.words,
         source.fixations,
+        source.raw_gaze,
         prefix=_COMPARE_FILTER_PREFIX,
         text_host=box,
         part_host=box,
@@ -2829,6 +2830,7 @@ def _render_compare_filters(host, source: SecondaryDataset) -> None:
     render_trial_filters(
         source.words,
         source.fixations,
+        source.raw_gaze,
         prefix=_COMPARE_FILTER_PREFIX,
         host=box,
         names=across_tables(source.column_names),
@@ -9893,8 +9895,8 @@ def _render_pool_filters(
     per rerun, so the keys never meet.
     """
     words, fixations = pool_filter_frames(words_all, fixations_all, raw_gaze_all)
-    render_narrow_by(words, fixations, text_host=host, part_host=host)
-    render_trial_filters(words, fixations, host=host)
+    render_narrow_by(words, fixations, raw_gaze_all, text_host=host, part_host=host)
+    render_trial_filters(words, fixations, raw_gaze_all, host=host)
 
 
 def pool_filter_frames(

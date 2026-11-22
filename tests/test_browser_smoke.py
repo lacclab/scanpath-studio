@@ -187,6 +187,23 @@ def test_first_visit_respects_the_requested_page(app_url, browser, path):
             assert page.url.split("?")[0] == f"{app_url}/{path}"
 
 
+def test_phone_dataset_list_sorts_by_participant_count(app_url, browser):
+    with browser.new_context(viewport={"width": 390, "height": 844}) as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/data")
+        grid = page.locator(".st-key-dataset_table_grid")
+        counts = grid.locator(
+            '[class*="st-key-dsc_participants_"] .sps-ds-num:not(.sps-ds-gap)'
+        )
+        counts.first.wait_for()
+        _settle(page)
+        largest = max(
+            counts.all_text_contents(), key=lambda text: int(text.replace(",", ""))
+        )
+        grid.get_by_role("button", name="Participants", exact=True).click()
+        sync_api.expect(counts.first).to_have_text(largest)
+
+
 def test_the_page_renders_without_an_exception(page):
     assert page.locator('[data-testid="stTopNavLink"]').count() >= 3
     assert not page.locator('[data-testid="stException"]').count()

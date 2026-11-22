@@ -216,7 +216,7 @@ def get_app_css() -> str:
     [class*="st-key-dsrow_current_"] > [class*="st-key-dataset_open_"] button {
         cursor: default;
     }
-    [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"] {
+    [class*="st-key-dsrow_"]:not(.st-key-dsrow_head) > [data-testid="stLayoutWrapper"] {
         position: relative;
         z-index: 1;
         pointer-events: none;
@@ -293,11 +293,10 @@ def get_app_css() -> str:
         outline-offset: 2px;
         border-radius: 0.25rem;
     }
-    /* On phones the dataset name and its actions take priority. The
-       selected dataset's counts are in Stats below the list. */
+    /* On phones the name wraps beside the participant count and row actions. */
     @media (max-width: 640px) {
-        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_"]):not(:has(> [class*="st-key-dsc_name_"])):not(:has(> [class*="st-key-dsc_actions_"])),
-        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsh_"]):not(:has(> .st-key-dsh_name)):not(:has(> .st-key-dsh_actions)),
+        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_"]):not(:has(> [class*="st-key-dsc_name_"])):not(:has(> [class*="st-key-dsc_participants_"])):not(:has(> [class*="st-key-dsc_actions_"])),
+        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsh_"]):not(:has(> .st-key-dsh_name)):not(:has(> .st-key-dsh_participants)):not(:has(> .st-key-dsh_actions)),
         [class*="st-key-dsrow_"] > [data-testid="stElementContainer"]:has(> [data-testid="stSpace"]) {
             display: none !important;
         }
@@ -306,6 +305,10 @@ def get_app_css() -> str:
             position: relative;
             flex: 1 1 0 !important;
             min-width: 0;
+        }
+        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_participants_"]),
+        [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_participants) {
+            width: 5rem !important;
         }
         .st-key-dataset_table_grid .sps-ds-name { display: block; }
         .st-key-dataset_table_grid [class*="st-key-dsrow_"] { min-width: 0; }

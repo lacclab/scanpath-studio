@@ -30,8 +30,9 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Raw gaze | Rail → **Raw gaze** | `global_show_raw_gaze` | Samples drawn; on by default when raw gaze is the only table |
 | Filters & highlights | Rail → **Filters & highlights** | its popover's keys | The badge counts active filters; the fixation range slices the trail |
 | Figure & canvas | Rail → **Figure & canvas** | its popover's keys (legends: `global_legend_<kind>_*`) | Canvas size, fonts, title / caption, legends, credit |
-| Animate | Rail toggle | `single_animate` | The replay player draws its own toolbar row; the plot keeps the static figure's size |
-| Compare | Rail toggle | `single_compare_toggle`, `single_compare_layout`, `?compare=` | Overlay / side by side / stacked; B from another dataset resolves to side by side on unequal canvases |
+| Animation | Shared View tile | `single_animate` | The replay player draws its own toolbar row; the plot keeps the static figure's size |
+| Four views and Palette | Top of Plot controls | `viz_view_*`, `global_palette` | Both modes show the same grid and keep the figure, palette and comparison when switching |
+| Compare readings | Below Palette | `single_compare_toggle`, `single_compare_layout`, `?compare=` | Overlay / side by side / stacked; B from another dataset resolves to side by side on unequal canvases |
 | Fixation index | Rail → Fixations popover | `global_show_order`, `global_order_label_position` | Numbers above / inside / below each fixation, on every builder |
 | Undo and Redo | Full → foot of Plot controls, beside Reset visualization | `viz_undo`, `viz_redo` | Undo a confirmed reset, redo it, then undo and edit again on the current reading |
 

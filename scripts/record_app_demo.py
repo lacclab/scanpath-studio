@@ -453,14 +453,14 @@ def story(s: Session) -> None:
     s.wait(400)
 
     s.caption("Replay the reading, fixation by fixation")
-    s.toggle("single_animate", True)
+    s.glide(page.get_by_role("button", name="Animation", exact=True))
     s.park()
     s.idle()
     s.wait(5200)
-    s.toggle("single_animate", False)
+    s.glide(page.get_by_role("button", name="Scanpath", exact=True))
 
     s.caption("See where participants dwell")
-    s.glide(page.locator(".st-key-viz_view_heatmap button"))
+    s.glide(page.get_by_role("button", name="Heatmap", exact=True))
     s.park()
     s.idle()
     s.wait(1800)

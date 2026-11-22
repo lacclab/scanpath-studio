@@ -6,13 +6,11 @@ Update it in the same PR as such a change; `tests/test_mode_parity.py` checks
 the code side.
 
 The scanpath rail (`controls.render_plot_controls`) is **one** control set
-feeding **three** figure builders, picked by the rail's Animate / Compare
-toggles (`single_animate` / `single_compare_toggle`, rendered in `tabs.py`
-before `render_plot_controls`):
+feeding **three** figure builders, picked by the Animation tile and Compare readings switch (`single_animate` / `single_compare_toggle`, resolved in `tabs.py`):
 
 | mode | builder | thread |
 | --- | --- | --- |
-| neither toggle | `plots.make_scanpath_figure` | `tabs._build_figure_settings` → `_cached_scanpath_figure` |
+| static, single reading | `plots.make_scanpath_figure` | `tabs._build_figure_settings` → `_cached_scanpath_figure` |
 | **Animate** | `plots.make_scanpath_animation` | `tabs._build_and_render_animation` |
 | **Compare** | `plots.make_comparison_figure` (split layouts: `_make_split_comparison_figure`) | `tabs._render_comparison_figure` |
 | **Animate + Compare** | `make_scanpath_animation(fixations_b=…)` — the co-animation | same as Animate |

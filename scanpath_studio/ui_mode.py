@@ -78,8 +78,8 @@ MORE_IN_ADVANCED: dict[str, tuple[tuple[str, str], ...]] = {
         ),
     ),
     "rail": (
-        ("🎬 Replay settings", "Speed and frame rate."),
-        ("👥 Compare", "Two readings, overlaid or side by side."),
+        ("🎬 Animation settings", "Speed and frame rate."),
+        ("👥 Compare readings", "Two readings, overlaid or side by side."),
         (
             "🎨 Layer style",
             "Colour fixations by a measure; sizes, word boxes and raw gaze.",
@@ -217,7 +217,10 @@ def mode_css(mode: str) -> str:
     else:
         cell = '[class*="st-key-railbtn_"] > div'
         sort = f'> [class*="st-key-railbtn_"] > div:only-child > .st-key-{_ADV_PREFIX}{TRIAL_SORT}'
+        # The comparison switch stays in reach while a comparison is active.
         rules = hide + (
+            ' [data-testid="stLayoutWrapper"]:has(> .st-key-tour_grp_view_modes)'
+            ":not(:has(.st-key-single_compare_toggle input:checked)) { display: none !important; }"
             # The trial summary table's wrapper would still take the page's
             # margin under each block.
             ' [data-testid="stLayoutWrapper"]'
@@ -415,7 +418,7 @@ def hidden_settings_reasons(
 
     ``narrowed``: a trial filter shortens the pool. ``sorted_``: the trial list
     is not in its default order. ``comparing``: Compare is on. ``custom_view``:
-    the plot settings match none of Essentials' View tiles.
+    the design includes settings that can be edited in Full.
     """
     flags = {
         "narrowed": narrowed,

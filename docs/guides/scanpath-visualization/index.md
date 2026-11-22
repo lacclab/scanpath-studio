@@ -40,7 +40,8 @@ Essentials shows:
 - the **Export** tab, for the figure on screen, and **Share**.
 
 The :material/add: **More** buttons show which additional controls are available
-in Full and offer **Switch to Full**. Settings you chose in Full, such as trial
+in Full and offer **Switch to Full**. The four tiles and Palette stay in the same place when you switch modes.
+An active comparison keeps its switch in Essentials. Settings you chose in Full, such as trial
 filters, remain active in Essentials; a short note tells you when they apply.
 Starting a tutorial from :material/help: **Help** switches to Full for the
 current visit. :material/bar_chart: **Corpus Analysis** and
@@ -87,11 +88,11 @@ off and a **▾** that opens its settings.
 
 | Section | What it controls |
 | --- | --- |
-| :material/movie: **Animate** | replay the fixations in the order they happened, at a speed you choose |
-| :material/compare: **Compare** | draw a second reading over this one, beside it or below it |
-| **Design presets** | restyle the whole figure in one click: **Scanpath**, **Heatmap**, **Illustration**, or **Custom** for your most recent settings |
-| :material/palette: **My designs** | save the current settings as a design, apply it again in one click, or export your designs to share them or use them on another computer |
-| **Palette** | one color scheme for the whole figure: **Default (colorblind-safe)**, **Print / grayscale** or **High contrast** |
+| **View** | choose **Animation**, **Scanpath**, **Heatmap**, or **Illustration** |
+| **Palette** | choose **Default (colorblind-safe)**, **Print / grayscale**, or **High contrast** |
+| :material/compare: **Compare readings** | add a second reading over this one, beside it, or below it |
+| :material/movie: **Animation settings** | set playback speed, autoplay, and frame quality |
+| :material/palette: **My designs** | restore your last custom design, save a named design, or share one |
 | :material/blur_on: **Fixations** | the fixation markers: color, shape and size, and the fixation index |
 | :material/arrow_outward: **Saccades** | the saccade lines and arrows, in one color, by direction or by saccade type |
 | :material/article: **Stimulus** | the text (or redacted blocks), highlighted words, the stimulus image, the font and the background |

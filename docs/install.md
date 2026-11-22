@@ -87,7 +87,7 @@ You can explore it without preparing any files. Choose a view, then save an inte
 
     Choose :material/local_fire_department: **Heatmap** to see where fixation time concentrates,
     or :material/timeline: **Scanpath** to follow the order of fixations.
-    These are view tiles in Essentials and **Design presets** in Full.
+    Both tiles sit under **View** in Essentials and Full.
 
 - **3 · Save your figure**
 

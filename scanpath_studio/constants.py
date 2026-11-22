@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
+from .build_info import DOCS_ROOT
 from .session_keys import (
     GLOBAL_ORDER_FONT_COLOR,
     GLOBAL_ORDER_FONT_SIZE,
@@ -805,7 +806,7 @@ CITATION = {
     "license": "MIT",
     "year": 2026,
     "url": "https://github.com/lacclab/scanpath-studio",
-    "docs_url": "https://lacclab.github.io/scanpath-studio/",
+    "docs_url": DOCS_ROOT,
     # Where a user asks, reports, and gets the desktop app.
     "questions_url": "https://github.com/lacclab/scanpath-studio/discussions/categories/q-a",
     "bug_report_url": "https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md",

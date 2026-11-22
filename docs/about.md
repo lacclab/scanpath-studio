@@ -6,13 +6,8 @@ hide:
 
 # About Scanpath Studio
 
-```python exec="true"
-from scanpath_studio import __release__
-
-print(
-    f"**Scanpath Studio v{__release__}** — interactive visualization of eye movements in reading."
-)
-```
+Scanpath Studio visualizes eye movements in reading. The **Help** menu shows
+your app’s channel and opens the matching documentation and [What’s new](whats-new.md).
 
 Developed by [Omer Shubi](https://omershubi.github.io/),
 [Keren Gruteke Klein](https://kerengruteke.github.io/),

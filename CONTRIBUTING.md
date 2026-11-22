@@ -58,10 +58,20 @@ uv run --extra lint ruff format .
 
 ## Docs site
 
-User docs live in `docs/` (MkDocs Material), published per release tag.
+User docs live in `docs/` (MkDocs Material), with two editions.
+Stable lives at the existing site root and builds from the latest release tag.
+Dev lives under `/dev/` and builds from `main`. The Docs workflow can rebuild
+either edition. What’s new reads the matching section in `CHANGELOG.md` and
+includes `changelog.d/` entries on Dev.
+
+The two Streamlit Community Cloud deployments both run `streamlit_app.py`.
+The Stable app follows `stable`, which advances on release. The Dev app follows
+`dev`, which the Update Dev app workflow fast-forwards to `main` after a merge.
+Make changes through a PR to `main`.
 
 ```bash
-uv run --extra docs mkdocs serve
+uv run --extra docs mkdocs serve           # Dev
+SCANPATH_DOCS_CHANNEL=stable uv run --extra docs mkdocs serve
 uv run --extra docs mkdocs build --strict   # the CI gate
 ```
 

@@ -46,6 +46,20 @@ description: "Download Scanpath Studio for Windows, macOS or Linux, install it w
 
 </div>
 
+## Try the Dev build
+
+Stable is the published release on PyPI and the desktop downloads above.
+Dev follows the changes merged into `main`. You can [open the Dev app](https://scanpath-studio-dev.streamlit.app)
+or run it locally. In a separate Python environment with Git installed, run:
+
+```bash
+python -m pip install "git+https://github.com/lacclab/scanpath-studio.git@dev"
+scanpath-studio
+```
+
+**Help** shows which channel you are running. **Help → What’s new** opens
+its release notes.
+
 ## Your first figure { #explore }
 
 Start with the bundled demo, a subset of the [OneStop corpus](guides/loading-data/index.md#onestop).

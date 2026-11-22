@@ -64,6 +64,7 @@ from typing import TYPE_CHECKING
 import streamlit as st
 
 from scanpath_studio import ui_mode
+from scanpath_studio.build_info import build_info
 from scanpath_studio.crash_report import guarded
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.menu import NAV_SELECTOR, switch_to_view
@@ -73,7 +74,6 @@ from .constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
     _VIEW_SCANPATH,
-    CITATION,
     ICONS,
     STREAMLIT_PRIVACY_URL,
     SUBTAB_ANNOTATIONS,
@@ -162,7 +162,7 @@ class TutorialDefinition:
 
 # Each tutorial's "Read this in the docs" button opens the docs page that
 # covers the same task, not a copy of these steps.
-DOCS_URL = CITATION["docs_url"]
+DOCS_URL = build_info().docs_url
 DOCS_TUTORIALS_URL = f"{DOCS_URL}tutorials/"
 
 # NLD similarity scoring is hidden unless SCANPATH_EXPERIMENTAL=1, so the
@@ -2287,7 +2287,7 @@ def render_use_case_tutorial() -> None:
 # the dialog. Keep these answers in sync with that page when either changes.
 # -----------------------------------------------------------------------------
 
-DOCS_FAQ_URL = f"{CITATION['docs_url']}faq/"
+DOCS_FAQ_URL = f"{DOCS_URL}faq/"
 
 # (question, markdown answer). Two-to-four lines each — anything longer belongs
 # on the docs page.

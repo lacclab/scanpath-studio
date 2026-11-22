@@ -12,6 +12,7 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Three views | Header: 🗺️ Scanpath · 📊 Corpus Analysis · 🗂️ Data Management | `main_nav` session key (`constants._VIEW_*`) | Each draws with no exception and no "this is a bug" note |
 | Essentials / Full | Header switch | `?ui=essentials\|full` (first run only) | Full shows every rail section; Essentials hides Full-only containers by CSS but keeps their widgets' values. Share never writes `ui` |
 | ❓ Help actions | Header ❓ menu | — | The dialog opens and the view stays where it was |
+| Stable / Dev | Help menu | Open Documentation and What’s new | Both open the matching docs edition in another tab. Only Dev lists unreleased changes. |
 
 ## Scanpath view
 

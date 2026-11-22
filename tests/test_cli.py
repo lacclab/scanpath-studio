@@ -2251,9 +2251,10 @@ def test_version_command_names_the_build_and_install(capsys):
     cli.main(["version"])
     out = capsys.readouterr().out.splitlines()
     assert out[0] == f"scanpath-studio {__version__}"
-    assert out[1] == f"Build:      {build_info().describe()}"
-    assert out[2] == f"Installed:  {INSTALL_KINDS[install_kind()]}"
-    assert len(out) == 3  # no --check, no network
+    assert out[1] == f"Channel:    {build_info().channel.title()}"
+    assert out[2] == f"Build:      {build_info().describe()}"
+    assert out[3] == f"Installed:  {INSTALL_KINDS[install_kind()]}"
+    assert len(out) == 4  # no --check, no network
 
 
 def test_version_check_prints_the_answer(capsys, monkeypatch):

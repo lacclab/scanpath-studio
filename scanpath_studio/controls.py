@@ -55,6 +55,9 @@ from .constants import (
     DEFAULT_SNAP_POSITION,
     DEFAULT_TITLE_FONT_SIZE,
     DEMO_CHOICE,
+    FIXATION_FLAG_CATEGORIES,
+    FIXATION_FLAG_MARKERS,
+    FIXATION_FLAG_MODES,
     FIXATION_LABEL_OPTIONS,
     FIXATION_OUTLINE_WIDTH_BOUNDS,
     FIXATION_SYMBOLS,
@@ -990,43 +993,6 @@ _VIZ_WIDGET_DEFAULTS = {
 }
 
 
-# Out-of-text fixation marker options: Plotly symbol → emoji-prefixed label (the
-# emoji makes each choice stand out in the dropdown).
-_OUT_OF_TEXT_MARKERS = {
-    "x": "✕ Cross",
-    "circle-open": "○ Circle",
-    "diamond-open": "◇ Diamond",
-    "square-open": "□ Square",
-    "star": "★ Star",
-    "triangle-up-open": "△ Triangle",
-    "triangle-down-open": "▽ Triangle (down)",
-}
-
-# Fixation-classification modes: a category can be left alone, marked with
-# an overlay marker, or hidden from the plot (viz-only — never changes measures).
-_FIXCLASS_MODES = ("Off", "Highlight", "Hide")
-
-
-#: The four fixation classes: ``(key prefix, row title, help, has a ms
-#: threshold)``. The titles are short enough to fit one table row each.
-_FIXCLASS_CATEGORIES = (
-    ("short", "Short", "Fixations shorter than the ms threshold.", True),
-    ("long", "Long", "Fixations longer than the ms threshold.", True),
-    (
-        "oob",
-        "Outside the text",
-        "Fixations in no word box (gaps between lines count).",
-        False,
-    ),
-    (
-        "blink",
-        "Near a blink",
-        "Fixations at or next to a blink; needs a blink column.",
-        False,
-    ),
-)
-
-
 def _render_fixation_cleaning(
     *, disabled: bool = False, reason: str = "", prefix: str = "global"
 ) -> None:
@@ -1066,20 +1032,21 @@ def _render_fixation_cleaning(
     if own_look:
         _sub_caption(head[3], "Marker", "The marker a Highlight draws.")
         _sub_caption(head[4], "Color")
-    for category, label, row_help, has_threshold in _FIXCLASS_CATEGORIES:
-        row_disabled, help_text = _layer_gate(disabled, _gated_help(row_help, reason))
+    for category, spec in FIXATION_FLAG_CATEGORIES.items():
+        label = spec.label
+        row_disabled, help_text = _layer_gate(disabled, _gated_help(spec.help, reason))
         cols = st.columns(weights, gap=_LABEL_GAP, vertical_alignment="center")
         _row_label(cols[0], label, help_text)
         mode = cols[1].selectbox(
             f"{label} fixations",
-            options=_FIXCLASS_MODES,
+            options=FIXATION_FLAG_MODES,
             key=f"{prefix}_fixclass_{category}_mode",
             persist_state="session",
             disabled=row_disabled,
             help=mode_help,
             label_visibility="collapsed",
         )
-        if has_threshold:
+        if spec.has_threshold:
             cols[2].number_input(
                 f"{label} threshold (ms)",
                 min_value=1,
@@ -1094,8 +1061,8 @@ def _render_fixation_cleaning(
         highlight_idle = row_disabled or mode != "Highlight"
         cols[3].selectbox(
             f"{label} marker",
-            options=list(_OUT_OF_TEXT_MARKERS),
-            format_func=lambda s: _OUT_OF_TEXT_MARKERS[s],
+            options=list(FIXATION_FLAG_MARKERS),
+            format_func=lambda s: FIXATION_FLAG_MARKERS[s],
             key=f"global_fixclass_{category}_symbol",
             persist_state="session",
             disabled=highlight_idle,
@@ -1154,7 +1121,7 @@ def _fixation_filter_badge(prefix: str = "global") -> str:
     """Compact badge summarising the active fixation filters."""
     active = [
         st.session_state.get(f"{prefix}_fixclass_{name}_mode", "Off")
-        for name in ("short", "long", "oob", "blink")
+        for name in FIXATION_FLAG_CATEGORIES
     ]
     n_active = sum(mode != "Off" for mode in active)
     n_hidden = sum(mode == "Hide" for mode in active)
@@ -3152,7 +3119,7 @@ _FIELD_TINT = {
 
 #: Fields the user has actually interacted with this session. Deliberately ONE
 #: key, and deliberately *outside* the `col_map_` namespace:
-#: `tabs._collect_column_mapping` sweeps every `col_map_*` key into the saved
+#: `wizard._collect_column_mapping` sweeps every `col_map_*` key into the saved
 #: config, so a per-field marker named that way would travel in users' configs
 #: as if it were part of the mapping.
 TOUCHED_FIELDS_KEY = "_mapping_touched_fields"
@@ -3220,7 +3187,7 @@ def _field_state(
 #: Marker key recording which table a stored mapping was made for.
 #:
 #: The prefix, not a suffix, and deliberately outside ``col_map_*``:
-#: `tabs._collect_column_mapping` sweeps **every** `col_map_*` key that does not
+#: `wizard._collect_column_mapping` sweeps **every** `col_map_*` key that does not
 #: end in `_upload` into the saved config, so a marker named
 #: ``col_map_fix__mapped_columns`` would travel in one — come back from JSON as a
 #: *list* rather than the tuple it was written as, never compare equal to the
@@ -4978,7 +4945,7 @@ def compare_style_defaults() -> dict:
     defaults.update(
         {
             "cmp1_saccade_classes": list(SACCADE_CLASS_ORDER),
-            **{f"cmp1_fixclass_{cat}_mode": "Off" for cat, *_ in _FIXCLASS_CATEGORIES},
+            **{f"cmp1_fixclass_{cat}_mode": "Off" for cat in FIXATION_FLAG_CATEGORIES},
             "cmp1_fixclass_short_threshold_ms": 80,
             "cmp1_fixclass_long_threshold_ms": 800,
         }
@@ -6115,7 +6082,6 @@ _LEGEND_COLUMNS = (
     ),
     ("Text size", "Text size in px. Empty: the figure's text size."),
 )
-_FIXCLASS_LEGEND_CATEGORIES = ("short", "long", "oob", "blink")
 
 
 def _legends_drawn(
@@ -6146,7 +6112,7 @@ def _legends_drawn(
     highlighted = any(
         ss.get(f"{prefix}_fixclass_{category}_mode") == "Highlight"
         for prefix in prefixes
-        for category in _FIXCLASS_LEGEND_CATEGORIES
+        for category in FIXATION_FLAG_CATEGORIES
     )
     raw_gaze = bool(ss.get("global_show_raw_gaze")) and not animating
     kinds = {

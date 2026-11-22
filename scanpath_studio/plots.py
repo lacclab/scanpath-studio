@@ -54,6 +54,7 @@ from .constants import (
     DEFAULT_TITLE_FONT_SIZE,
     DRAWABLE_PX_LIMIT,
     FIX_MARKER_OUTLINE,
+    FIXATION_FLAG_CATEGORIES,
     FIXATION_GLYPH_SIZE_SCALE,
     FIXATION_GLYPH_SYMBOLS,
     FIXATION_SYMBOLS,
@@ -4236,13 +4237,6 @@ def _add_raw_gaze_layer(
 # caller's flags dict; these are the fallbacks the app's own controls default to.
 _FIX_FLAG_SHORT_MS = 80.0
 _FIX_FLAG_LONG_MS = 800.0
-_FIX_FLAG_CATEGORIES = ("short", "long", "oob", "blink")
-_FIX_FLAG_LABELS = {
-    "short": "Short",
-    "long": "Long",
-    "oob": "Outside the text",
-    "blink": "Near a blink",
-}
 
 
 def _fixation_flag_masks(
@@ -5021,11 +5015,11 @@ def _render_scanpath_figure(
 
         # Highlight visible rows with the same recorded-position classification.
         if flags:
-            for _cat in _FIX_FLAG_CATEGORIES:
+            for _cat in FIXATION_FLAG_CATEGORIES:
                 _spec = flags.get(_cat, {})
                 if _spec.get("mode") != "Highlight":
                     continue
-                _name = _FIX_FLAG_LABELS[_cat]
+                _name = FIXATION_FLAG_CATEGORIES[_cat].label
                 hits = ordered.iloc[masks[_cat].to_numpy()[positions]]
                 if hits.empty:
                     continue
@@ -7311,7 +7305,7 @@ def _render_scanpath_animation(
         s_flags = s.get("flags", flags)
         if s_flags:
             overlay_masks = _fixation_flag_masks(ordered, s["words"], s_flags)
-            for category in _FIX_FLAG_CATEGORIES:
+            for category in FIXATION_FLAG_CATEGORIES:
                 spec_flags = s_flags.get(category, {})
                 if spec_flags.get("mode") != "Highlight":
                     continue
@@ -7320,7 +7314,7 @@ def _render_scanpath_animation(
                     continue
                 hx = [all_x[j] if hit[j] else None for j in range(n_total)]
                 hy = [all_y[j] if hit[j] else None for j in range(n_total)]
-                label = _FIX_FLAG_LABELS[category]
+                label = FIXATION_FLAG_CATEGORIES[category].label
                 name = f"{s['label']} · {label}" if dual else label
                 fx0, fy0 = _revealed_xy(hx, hy, 1)
                 s["flag_overlays"].append(
@@ -8152,14 +8146,14 @@ def _add_comparison_fixation_trace(
         )
     if flags:
         overlay = _fixation_flag_masks(trial_fix, words_for_flags, flags)
-        for cat in _FIX_FLAG_CATEGORIES:
+        for cat in FIXATION_FLAG_CATEGORIES:
             spec = flags.get(cat, {})
             if spec.get("mode") != "Highlight" or cat not in overlay:
                 continue
             hits = trial_fix[overlay[cat]]
             if hits.empty:
                 continue
-            name = _FIX_FLAG_LABELS[cat]
+            name = FIXATION_FLAG_CATEGORIES[cat].label
             _add(
                 go.Scatter(
                     x=hits["x"],

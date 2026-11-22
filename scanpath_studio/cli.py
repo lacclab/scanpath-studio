@@ -43,6 +43,9 @@ from .constants import (
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
+    FIXATION_FLAG_CATEGORIES,
+    FIXATION_FLAG_MARKERS,
+    FIXATION_FLAG_MODES,
     FIXATION_LABEL_OPTIONS,
     FIXATION_SYMBOLS,
     FONT_FAMILY,
@@ -2284,10 +2287,6 @@ _CRITICAL_SPAN_STYLES = {
     "none": "None",
 }
 
-#: Fixation-flag category → whether it takes a `threshold_ms`. `oob` and `blink` are
-#: classified from geometry / the recording, not from a duration.
-_FIXCLASS_CATEGORIES = {"short": True, "long": True, "oob": False, "blink": False}
-
 
 def _parse_legend_layout(specs: list[str]) -> dict:
     """``["saccades=right,stacked,14"]`` → the ``legend_layout`` dict.
@@ -2317,32 +2316,33 @@ def _parse_fixation_flags(specs: list[str]) -> dict:
     so the CLI's job is only to spell one category per flag. Unspecified
     categories are left out entirely, which the builder reads as *Off*.
     """
-    from .controls import _FIXCLASS_MODES, _OUT_OF_TEXT_MARKERS
-
-    modes = {mode.lower(): mode for mode in _FIXCLASS_MODES}
+    modes = {mode.lower(): mode for mode in FIXATION_FLAG_MODES}
     flags: dict = {}
     for spec in specs:
         head, _, rest = spec.partition(",")
         category, _, mode = head.partition("=")
         category, mode = category.strip().lower(), mode.strip().lower()
-        if category not in _FIXCLASS_CATEGORIES or mode not in modes:
+        if category not in FIXATION_FLAG_CATEGORIES or mode not in modes:
             raise SystemExit(
                 f"--fixation-flag expects CATEGORY=MODE with CATEGORY one of "
-                f"{', '.join(_FIXCLASS_CATEGORIES)} and MODE one of "
+                f"{', '.join(FIXATION_FLAG_CATEGORIES)} and MODE one of "
                 f"{', '.join(modes)}; got {spec!r}."
             )
         entry: dict = {"mode": modes[mode]}
         for option in (part.strip() for part in rest.split(",") if part.strip()):
             name, _, raw = option.partition("=")
             name, raw = name.strip(), raw.strip()
-            if name == "threshold_ms" and _FIXCLASS_CATEGORIES[category]:
+            if (
+                name == "threshold_ms"
+                and FIXATION_FLAG_CATEGORIES[category].has_threshold
+            ):
                 try:
                     entry["threshold_ms"] = float(raw)
                 except ValueError:
                     raise SystemExit(
                         f"--fixation-flag threshold_ms expects a number, got {raw!r}."
                     )
-            elif name == "symbol" and raw in _OUT_OF_TEXT_MARKERS:
+            elif name == "symbol" and raw in FIXATION_FLAG_MARKERS:
                 entry["symbol"] = raw
             elif name == "color" and re.fullmatch(r"#[0-9A-Fa-f]{6}", raw):
                 entry["color"] = raw
@@ -2350,8 +2350,12 @@ def _parse_fixation_flags(specs: list[str]) -> dict:
                 raise SystemExit(
                     f"--fixation-flag: unknown or invalid option {option!r} for "
                     f"category {category!r}. Valid: "
-                    + ("threshold_ms=N, " if _FIXCLASS_CATEGORIES[category] else "")
-                    + f"symbol=<{'|'.join(_OUT_OF_TEXT_MARKERS)}>, color=#RRGGBB."
+                    + (
+                        "threshold_ms=N, "
+                        if FIXATION_FLAG_CATEGORIES[category].has_threshold
+                        else ""
+                    )
+                    + f"symbol=<{'|'.join(FIXATION_FLAG_MARKERS)}>, color=#RRGGBB."
                 )
         flags[category] = entry
     return flags

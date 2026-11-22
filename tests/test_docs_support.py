@@ -24,6 +24,26 @@ import docs_support  # noqa: E402
 from scanpath_studio import api, cli, tour  # noqa: E402
 
 
+def test_whats_new_uses_fragments_only_in_dev(monkeypatch):
+    from changelog_fragments import Fragment
+
+    from scanpath_studio import __release__
+
+    monkeypatch.setattr(
+        "changelog_fragments.load",
+        lambda: ([Fragment((), "added", "Unreleased feature.")], []),
+    )
+    monkeypatch.setenv("SCANPATH_DOCS_CHANNEL", "stable")
+    stable = docs_support.whats_new()
+    assert f"v{__release__}" in stable
+    assert "Unreleased feature." not in stable
+    monkeypatch.setenv("SCANPATH_DOCS_CHANNEL", "dev")
+    dev = docs_support.whats_new()
+    assert "## In development" in dev
+    assert "Unreleased feature." in dev
+    assert stable in dev
+
+
 @pytest.mark.parametrize(
     ("command", "parser"),
     [

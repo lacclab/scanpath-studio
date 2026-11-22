@@ -133,6 +133,11 @@ def test_an_unreadable_answer_is_an_error_not_a_crash(payload):
     [
         (RELEASE, "v0.35.0", "up_to_date"),
         (RELEASE, "v0.36.0", "update_available"),
+        (
+            BuildInfo("0.35.0+gabc123", "0.35.0", None, ref="stable"),
+            "v0.35.0",
+            "up_to_date",
+        ),
         (DEV, "v0.35.0", "ahead"),
         (DEV, "v0.35.1", "update_available"),
         (BuildInfo("0.36.0b1", "0.36.0b1"), "v0.35.0", "ahead"),
@@ -191,6 +196,14 @@ def test_a_git_install_reinstalls_from_its_own_url():
         updates.update_command("vcs", info)
         == 'pip install -U "git+https://github.com/someone/fork"'
     )
+
+
+@pytest.mark.parametrize(
+    ("ref", "branch"), [("dev", "dev"), ("stable", "stable"), ("v1.2.3", "stable")]
+)
+def test_git_updates_stay_on_the_installed_channel(ref, branch):
+    info = BuildInfo("1.2.3+gabc123", "1.2.3", None, "abc123", source="vcs", ref=ref)
+    assert updates.update_command("vcs", info).endswith(f'@{branch}"')
 
 
 def test_the_desktop_app_gets_its_archive(monkeypatch):

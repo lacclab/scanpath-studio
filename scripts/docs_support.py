@@ -14,9 +14,14 @@ import argparse
 import html
 import inspect
 import json
+import os
 import re
 from pathlib import Path
 
+from packaging.version import Version
+
+from scanpath_studio import __release__
+from scanpath_studio.build_info import Channel
 from scanpath_studio.constants import FIXATION_LABEL_OPTIONS
 from scanpath_studio.figure_views import (
     HEATMAP_OPTIONS,
@@ -27,7 +32,6 @@ from scanpath_studio.figure_views import (
 
 ROOT = Path(__file__).resolve().parent.parent
 REPO_URL = "https://github.com/lacclab/scanpath-studio"
-BLOB_URL = f"{REPO_URL}/blob/main/"
 
 
 # ---------------------------------------------------------------------------
@@ -68,12 +72,51 @@ def software_citation() -> str:
 _RELATIVE_LINK = re.compile(r"\]\((?!https?://|mailto:|#)([^)\s]+)\)")
 
 
-def _link_target(path: str) -> str:
-    """A repo-relative link as it has to read from the docs site: a docs page
-    stays on the site, anything else goes to the file on GitHub."""
-    if path.startswith("docs/") and path.endswith(".md"):
-        return path.removeprefix("docs/")
-    return BLOB_URL + path
+def docs_channel() -> Channel:
+    """The edition selected by the docs build."""
+    channel = os.environ.get("SCANPATH_DOCS_CHANNEL", "dev")
+    if channel not in {"stable", "dev"}:
+        raise ValueError(f"Unknown docs channel {channel!r}. Use stable or dev.")
+    return channel
+
+
+def whats_new() -> str:
+    """Use the release section and, on Dev, the changes waiting for release."""
+    from changelog_fragments import load, render
+    from changelog_notes import extract
+
+    sections = []
+    if docs_channel() == "dev":
+        fragments, errors = load()
+        if errors:
+            raise ValueError("\n".join(errors))
+        sections.extend(
+            [
+                "## In development",
+                render(fragments) or "There are no unreleased changes listed.",
+            ]
+        )
+    notes = extract(
+        (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"), __release__, "markdown"
+    )
+    if not notes:
+        raise ValueError(f"Missing release notes for v{__release__}")
+    tag_url = f"{REPO_URL}/blob/v{__release__}/"
+    label = "Prerelease" if Version(__release__).is_prerelease else "Release"
+    sections.extend(
+        [
+            f"## {label} v{__release__}",
+            _RELATIVE_LINK.sub(lambda m: f"]({tag_url}{m[1]})", notes),
+        ]
+    )
+    # The release archive keeps the issue links. In the app docs each entry
+    # ends with the change itself.
+    return re.sub(
+        r" \(\[#\d+\]\(https://github\.com/[^\n]+\)\)$",
+        "",
+        "\n\n".join(sections),
+        flags=re.MULTILINE,
+    )
 
 
 # ---------------------------------------------------------------------------

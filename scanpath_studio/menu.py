@@ -6,7 +6,8 @@ chrome and the main content gets the full page width.
 **The nav** (:func:`render_nav`) is Streamlit's own
 ``st.navigation(position="top")``: three **views** — 🗺️ Scanpath · 📊 Corpus
 Analysis · 🗂️ Data — and a ❓ Help section of **action** entries (Tutorials,
-FAQ, About, Send feedback; Debug opens from the foot of About). Selecting an action arms a dialog and bounces the router
+FAQ, About, Send feedback) and links to the current edition’s documentation and
+What's new. Selecting a dialog action arms it and bounces the router
 straight back to the view you were on, so the modal opens over your work.
 
 Session-wide tools are not on the bar but where each is used: what the
@@ -29,6 +30,7 @@ from typing import TYPE_CHECKING
 
 import streamlit as st
 
+from scanpath_studio.build_info import build_info
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
@@ -60,21 +62,19 @@ _NAV_PAGES = {
 #: The ❓ Help *section* of the nav: entry id → (label, icon, url path).
 #: These are not views. Each one opens a dialog over whatever you were already
 #: looking at — see :func:`render_nav` for the bounce that makes that work.
-#: Documentation is absent on purpose: ``st.Page`` cannot be a URL, and the
-#: wordmark beside this nav already links to the docs site.
 _HELP_PAGES = {
     "help_tutorials": ("Tutorials", ICONS["tutorials"], "help-tutorials"),
     "help_faq": ("FAQ", ICONS["faq"], "help-faq"),
     "help_about": ("About", ICONS["about"], "help-about"),
     # Last, where a help menu's *Send feedback* usually sits: it is where you
-    # go once the other three have not answered you.
+    # go when the other entries haven't answered your question.
     "help_feedback": ("Send feedback", ICONS["feedback"], "help-feedback"),
     # Debug is not listed here: it is a developer tool, opened from a small
     # button at the foot of About (`app._about_dialog`).
 }
 
 #: The nav section heading the entries above collapse under.
-HELP_SECTION = f"{ICONS['help']} Help"
+HELP_SECTION = f"{ICONS['help']} Help · {build_info().channel.title()}"
 
 #: This run's ``st.Page`` objects, view constant → Page. Rebuilt every run (an
 #: ``st.Page`` belongs to the run that made it) and read by
@@ -212,7 +212,17 @@ def render_nav() -> str:
     selected = st.navigation(
         {
             "": [*_PAGES.values()],
-            HELP_SECTION: [action_pages[entry] for entry in _HELP_PAGES],
+            HELP_SECTION: [
+                st.Page(
+                    build_info().docs_url, title="Documentation", icon=ICONS["docs"]
+                ),
+                st.Page(
+                    build_info().docs_url + "whats-new/",
+                    title="What's new",
+                    icon=ICONS["update"],
+                ),
+                *action_pages.values(),
+            ],
         },
         position="top",
     )

@@ -1,0 +1,25 @@
+name: Update Dev app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dev-app
+  cancel-in-progress: false
+
+jobs:
+  advance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      # Community Cloud watches dev. A divergent deployment branch needs a
+      # maintainer to reconcile it before the next fast-forward.
+      - run: git push origin HEAD:refs/heads/dev

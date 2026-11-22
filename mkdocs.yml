@@ -174,6 +174,7 @@ nav:
   - Reference:
       - Python API: api.md
       - CLI reference: cli.md
+  - What's new: whats-new.md
   - About: about.md
 
 # Fail the strict build on a link to a heading that does not exist, not only on
@@ -295,6 +296,7 @@ plugins:
           - gallery/*.md
         About:
           - about.md
+          - whats-new.md
 
 markdown_extensions:
   - abbr

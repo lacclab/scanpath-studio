@@ -78,6 +78,7 @@ from scanpath_studio import updates as update_check
 from scanpath_studio.annotations import (
     filter_keys,
 )
+from scanpath_studio.build_info import DEV_APP_URL, STABLE_APP_URL, build_info
 from scanpath_studio.color_picker_commit import render_color_picker_commit
 from scanpath_studio.column_names import (
     ACTIVE_COLUMN_NAMES_KEY,
@@ -716,6 +717,7 @@ def configure_page() -> None:
         # fonts.gstatic.com URL — a request to Google on every page load, and no
         # icon at all offline or in the desktop bundle.
         page_icon="👀",
+        menu_items={"Get help": build_info().docs_url},
         layout="wide",
     )
     st.html(_app_stylesheet())
@@ -800,7 +802,7 @@ def render_app_logo() -> None:
             "App logo not found at %s; header left bare.", LOGO_PATH
         )
         return
-    st.logo(str(LOGO_PATH), size="large", link=CITATION["docs_url"])
+    st.logo(str(LOGO_PATH), size="large", link=build_info().docs_url)
     if css := _logo_theme_css():
         # A style-only `st.html` goes to Streamlit's event container: no block.
         st.html(css)
@@ -1736,14 +1738,14 @@ def _about_privacy_line(*, local: bool, saving: bool) -> str:
 def _about_dialog() -> None:
     """The About modal: version, authors, links, where your data goes,
     citation, AI-assistance note."""
-    from scanpath_studio import __version__
     from scanpath_studio.citation import software_bibtex
 
     # Triple-click the heading.
     render_easter_egg()
 
+    info = _build_info()
     st.markdown(
-        f"**Scanpath Studio** v{__version__} — interactive visualization of eye "
+        f"**Scanpath Studio {info.channel.title()}** v{info.version} — interactive visualization of eye "
         "movements in reading."
     )
     _render_build_and_updates()
@@ -1758,7 +1760,10 @@ Developed by [Omer Shubi](https://omershubi.github.io/),
 [Lena Jäger]({_DILI}/group-leader/jaeger.html), and
 [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/).
 
-{ICONS["docs"]} [Documentation]({CITATION["docs_url"]}) ↗ ·
+[Open the Stable app]({STABLE_APP_URL}) · [Open the Dev app]({DEV_APP_URL})
+
+{ICONS["docs"]} [{info.channel.title()} documentation]({info.docs_url}) ↗ ·
+[Release notes for v{info.release}]({CITATION["url"]}/releases/tag/v{info.release}) ↗ ·
 {ICONS["code"]} [Code]({CITATION["url"]}) ↗ ·
 {ICONS["doi"]} [DOI](https://doi.org/{CITATION["doi"]}) ↗
 """
@@ -1836,8 +1841,6 @@ def _latest_release_cached() -> update_check.Release:
 
 def _build_info():
     """This process's build (a seam the About tests pin)."""
-    from scanpath_studio.build_info import build_info
-
     return build_info()
 
 
@@ -9091,7 +9094,7 @@ BACKUP_REMINDER_KEY = "_sps_backup_reminder"
 
 #: Where the docs list what to download, and from where, to keep your work.
 BACKUP_GUIDE_URL = (
-    f"{CITATION['docs_url']}guides/scanpath-visualization/#back-up-your-work"
+    f"{build_info().docs_url}guides/scanpath-visualization/#back-up-your-work"
 )
 
 

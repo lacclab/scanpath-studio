@@ -4170,6 +4170,7 @@ def version(argv: list[str]) -> None:
 
     info = build_info()
     print(f"scanpath-studio {info.version}")
+    print(f"Channel:    {info.channel.title()}")
     print(f"Build:      {info.describe()}")
     print(f"Installed:  {INSTALL_KINDS[install_kind(info)]}")
     if not args.check:

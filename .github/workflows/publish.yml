@@ -26,11 +26,16 @@ jobs:
       # would go on to cut a GitHub release and post "published" to Slack with a
       # link that 404s. Refuse up front instead.
       - name: Tag matches the package version
+        id: version
         run: |
           VERSION="$(sed -n 's/^__release__ = "\(.*\)"$/\1/p' scanpath_studio/__init__.py)"
           if [ "${GITHUB_REF_NAME#v}" != "$VERSION" ]; then
             echo "::error::Tag ${GITHUB_REF_NAME} does not match __release__ ${VERSION} — bump scanpath_studio/__init__.py (and CITATION.cff) before tagging."
             exit 1
+          fi
+
+          if [[ "$VERSION" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
+            echo "stable=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Set up Python
@@ -98,8 +103,8 @@ jobs:
 
       # stable can carry deployment-only changes. Merge the release into it
       # so those commits survive; conflicts fail without changing the remote.
-      - name: Point the demo's branch at this release
-        if: success()
+      - name: Point the Stable demo at this release
+        if: steps.version.outputs.stable == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

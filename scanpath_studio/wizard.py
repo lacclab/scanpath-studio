@@ -24,6 +24,7 @@ import pandas as pd
 import streamlit as st
 
 from . import app, wizard_shell
+from .build_info import build_info
 from .column_names import (
     ColumnNames,
     for_tables,
@@ -4155,7 +4156,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 # page name ("Data guide") would read like one more wizard step
                 # on a row of wizard controls, which is the one thing it is not.
                 "More documentation ↗",
-                "https://lacclab.github.io/scanpath-studio/guides/loading-data/",
+                f"{build_info().docs_url}guides/loading-data/",
                 icon=ICONS["docs"],
                 type="tertiary",
                 help=(

@@ -765,11 +765,11 @@ class TestFaq:
     def test_docs_links_point_at_the_published_pages(self):
         """The FAQ is the app's help-context route into the docs — if these
         drift from the mkdocs nav the buttons 404."""
-        from scanpath_studio.constants import CITATION
+        from scanpath_studio.build_info import build_info
         from scanpath_studio.tour import DOCS_FAQ_URL, DOCS_TUTORIALS_URL
 
-        assert DOCS_FAQ_URL == f"{CITATION['docs_url']}faq/"
-        assert DOCS_TUTORIALS_URL == f"{CITATION['docs_url']}tutorials/"
+        assert DOCS_FAQ_URL == f"{build_info().docs_url}faq/"
+        assert DOCS_TUTORIALS_URL == f"{build_info().docs_url}tutorials/"
 
     def test_answers_stay_short(self):
         """Same rule as the tour steps: the long version lives in docs/faq.md."""

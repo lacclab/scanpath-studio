@@ -29,6 +29,7 @@ def _git(
     status: str = "",
     status_returncode: int = 0,
     count: str | None = None,
+    head: str = "",
 ):
     """A fake ``subprocess.run`` answering ``describe``, ``status`` and the
     ``rev-list`` count separately; without ``count`` the count fails."""
@@ -38,6 +39,8 @@ def _git(
     def run(cmd, **kwargs):
         calls.append(cmd)
         envs.append(kwargs.get("env"))
+        if cmd[3] == "rev-parse":
+            return subprocess.CompletedProcess(cmd, 0 if head else 128, stdout=head)
         if cmd[3] == "status":
             return subprocess.CompletedProcess(
                 cmd, status_returncode, stdout=status, stderr=""
@@ -138,7 +141,7 @@ def test_uncommitted_changes_make_the_build_dirty(tmp_path):
     assert info.dirty
     assert info.version == "0.35.0.post3+g8f18219.dirty"
     status = next(cmd for cmd in run.calls if cmd[3] == "status")
-    assert status[4:] == ["--porcelain", "--untracked-files=no"]
+    assert status[4:] == ["--porcelain", "--branch", "--untracked-files=no"]
 
 
 def test_a_clean_tree_is_not_dirty(tmp_path):
@@ -212,6 +215,38 @@ def test_a_clone_without_tags_falls_through(tmp_path):
     assert bi.read_checkout(_project(tmp_path), run=_git("", returncode=128)) is None
 
 
+@pytest.mark.parametrize(
+    ("branch", "distance", "dirty", "expected"),
+    [
+        ("stable", 3, False, "stable"),
+        ("stable", 3, True, "dev"),
+        ("dev", 0, False, "dev"),
+        ("main", 0, False, "dev"),
+        ("HEAD (no branch)", 0, False, "stable"),
+        ("feature", 3, False, "dev"),
+    ],
+)
+def test_checkout_channel_selects_matching_help(
+    tmp_path, branch, distance, dirty, expected
+):
+    status = f"## {branch}\n" + (" M app.py\n" if dirty else "")
+    run = _git(f"v1.2.3-{distance}-gabc1234", status=status)
+    info = bi.read_checkout(_project(tmp_path), run=run)
+    assert info.channel == expected
+    assert info.docs_url == bi.DOCS_ROOT + ("dev/" if expected == "dev" else "")
+
+
+@pytest.mark.parametrize("branch", ["stable", "dev"])
+def test_a_shallow_deployment_keeps_its_channel(tmp_path, branch):
+    run = _git(
+        returncode=128, status=f"## {branch}...origin/{branch}\n", head="abc1234"
+    )
+    info = bi.resolve("1.2.3", root=_project(tmp_path), run=run)
+    assert info.channel == branch
+    assert info.version == "1.2.3+gabc1234"
+    assert info.distance is None
+
+
 def test_a_stamp_round_trips(tmp_path):
     path = tmp_path / "_build.json"
     bi.write_stamp(bi.from_describe("v0.35.0-3-g8f18219"), path)
@@ -228,6 +263,8 @@ def test_a_stamp_round_trips(tmp_path):
         json.dumps([1]),
         json.dumps({"version": "1"}),
         json.dumps({"version": "not a version", "release": "0.35.0"}),
+        json.dumps({"version": "1.0", "release": "oops"}),
+        json.dumps({"version": "1.0", "release": "1.0", "ref": []}),
     ],
 )
 def test_a_missing_or_broken_stamp_is_ignored(tmp_path, content):

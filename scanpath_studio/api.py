@@ -3929,7 +3929,7 @@ def save_figure(
         fig: The figure.
         path: The file to write: ``.html`` (interactive), or ``.png``, ``.svg`` or
             ``.pdf`` (static, through Kaleido; see the [export
-            FAQ](https://lacclab.github.io/scanpath-studio/faq/#export-fails) for its
+            FAQ](faq.md#export-fails) for its
             setup).
         scale: The static image's scale factor.
         width: The image width in px, overriding the figure's own. Ignored for
@@ -4312,6 +4312,7 @@ def version_info() -> BuildInfo:
     | --- | --- |
     | ``version`` | ``scanpath_studio.__version__``: the release itself (``"0.35.0"``), or between releases a PEP 440 version that sorts after it. ``"0.35.0.post3+g8f18219"`` is three commits after v0.35.0, at commit ``8f18219``; it ends ``.dirty`` with uncommitted changes |
     | ``release`` | The release it descends from (``scanpath_studio.__release__``) |
+    | ``channel``, ``docs_url`` | ``"stable"`` or ``"dev"`` and the matching documentation URL |
     | ``distance`` | The commits since, ``None`` when unknown |
     | ``commit``, ``dirty`` | The commit, and whether there were uncommitted changes |
     | ``source`` | How it was worked out: ``"checkout"`` (``git describe``), ``"stamp"`` (a desktop bundle's build stamp), ``"vcs"`` (a ``pip install git+…``) or ``"release"`` |

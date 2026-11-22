@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/icon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -108,6 +108,21 @@
       
     </div>
     <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+  <nav class="sps-docs-channel" aria-label="Documentation edition">
+    
+      <strong>Stable documentation &middot; v0.47.0</strong>
+      <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
+    
+  </nav>
+
+          </div>
+          
+        </aside>
       
     </div>
     
@@ -370,6 +385,25 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../whats-new/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  What's new
+
+      </a>
+    </li>
   
 
       
@@ -712,7 +746,7 @@
   <span class="md-ellipsis">
     
   
-    Audit an experimenter
+    Review an experimenter's sessions
   
 
     
@@ -875,7 +909,7 @@
   <span class="md-ellipsis">
     
   
-    Find the trials an analysis needs
+    Find trials with specific fixation patterns
   
 
     
@@ -1201,7 +1235,7 @@
   <span class="md-ellipsis">
     
   
-    See progression over time
+    Track changes over time
   
 
     
@@ -2554,6 +2588,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../whats-new/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What's new
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../about/" class="md-nav__link">
         
   
@@ -2972,9 +3033,9 @@
 <h2 id="loading-data">Loading data<a class="headerlink" href="#loading-data" title="Permanent link">&para;</a></h2>
 <h3 id="the-fixations-dont-line-up-with-the-text">The fixations don't line up with the text<a class="headerlink" href="#the-fixations-dont-line-up-with-the-text" title="Permanent link">&para;</a></h3>
 <p>Words and fixations must use the same pixel coordinates and share trial IDs.
-If the fixations are shifted, mirrored or scaled against the words, the two
-tables use different coordinates: a different origin, unit or offset. No
-setting in the app fixes that, so convert one of the tables
+If the fixations are shifted, mirrored or scaled relative to the words, check
+that both tables use the same origin, units and offsets. Correct any coordinate
+differences before importing the tables
 (<a href="../guides/loading-data/#tables">What your data needs → Files and units</a>).</p>
 <p>If the fixations sit on the words but the figure is framed or sized wrongly,
 set the screen resolution of the monitor used in the experiment. Open
@@ -2997,8 +3058,8 @@ pass <code>word_schema</code> / <code>fix_schema</code> to
 <p>Yes. A Words table alone shows the text and any reading measures it carries. A
 Fixations table alone shows the fixations without the text. A Raw gaze table
 can also be the only table. Most features need both words and fixations. When
-your tables cover different trials, every trial that any of them has is listed
-and drawn with the layers it has.</p>
+your tables cover different trials, the app lists every trial found in any
+table and draws the layers available for it.</p>
 <h3 id="can-i-open-potec-or-onestop-in-the-online-demo">Can I open PoTeC or OneStop in the online demo?<a class="headerlink" href="#can-i-open-potec-or-onestop-in-the-online-demo" title="Permanent link">&para;</a></h3>
 <p>No. The online demo has only the bundled demo, and it doesn't download public
 datasets. In the desktop app or a pip install, each public dataset downloads
@@ -3047,7 +3108,7 @@ data tables and exported tables still hold the words.</p>
 as <code>scanpath-studio</code> and the desktop app do, it saves your datasets and
 settings there. <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management</strong> → <span class="sps-icon" data-icon="history" aria-hidden="true"></span>
 <strong>Saved on this computer</strong> shows what it holds. The online demo keeps nothing
-and says so after your first upload, so export your annotations and settings
+and explains this after your first upload, so export your annotations and settings
 before you leave (<a href="../guides/scanpath-visualization/#back-up-your-work">what to back up</a>).</p>
 <p>If the files of one saved dataset go missing or are damaged, the rest of the
 session still comes back. The app names the dataset it could not restore,
@@ -3067,8 +3128,8 @@ See <a href="../about/#your-data">Your data</a> and <a href="../cli/#cache">Reco
 <p><span class="sps-icon" data-icon="help" aria-hidden="true"></span> <strong>Help</strong> → <span class="sps-icon" data-icon="feedback" aria-hidden="true"></span> <strong>Send feedback</strong> links each
 kind of feedback to its page on GitHub: <strong>Report a bug</strong>, <strong>Suggest a
 feature</strong>, <strong>Share an idea</strong> and <strong>Ask a question</strong>. It also shows the version
-and system details a bug report needs, ready to copy. The app sends nothing.
-You submit each one on GitHub yourself.</p>
+and system details for a bug report, ready to copy. You can review and submit
+your message on GitHub.</p>
 <p>Ask questions in
 <a href="https://github.com/lacclab/scanpath-studio/discussions/categories/q-a">Discussions → Q&amp;A</a>.
 Report a bug as a

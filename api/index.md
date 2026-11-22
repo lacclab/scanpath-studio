@@ -18,54 +18,57 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 
 ## At a glance
 
-| Function                                      | What it does                                                                     |
-| --------------------------------------------- | -------------------------------------------------------------------------------- |
-| **Load your data**                            |                                                                                  |
-| load_scanpath_data                            | Load and normalize a Words table, a Fixations table, or both.                    |
-| ScanpathData                                  | The `(words, fixations)` frames `load_scanpath_data` returns, with their names.  |
-| propose_schema                                | Find the column mapping auto-detection would use for a raw table.                |
-| attach_stimulus_images                        | Fill `image_path` from a folder of stimulus images, on frames already loaded.    |
-| load_raw_gaze                                 | Load and normalize a raw, sample-level gaze table, for `raw_gaze=`.              |
-| load_participant_metadata                     | Load a participant-level metadata table: one row per participant.                |
-| load_trial_metadata                           | Load a trial-level metadata table: one row per trial.                            |
-| load_text_metadata                            | Load a text-level metadata table: one row per text.                              |
-| **Load the bundled demo and public datasets** |                                                                                  |
-| load_sample_data                              | Load the bundled demo, normalized and ready to plot.                             |
-| load_sample_raw_gaze                          | Load the bundled demo's raw gaze: what the app overlays on it.                   |
-| load_potec                                    | Load PoTeC as normalized `(words, fixations)` frames, ready to plot.             |
-| load_onestop                                  | Load OneStop as normalized `(words, fixations)` frames, ready to plot.           |
-| **Draw a scanpath**                           |                                                                                  |
-| build_authored_scanpath                       | Build normalized Words and Fixations frames from a hand-drawn scanpath.          |
-| load_authored_scanpath                        | Load a draft file as normalized Words and Fixations frames.                      |
-| **Inspect**                                   |                                                                                  |
-| list_trials                                   | List every plottable trial: one row per participant and trial.                   |
-| list_parts                                    | List the ordered screens of multipart data, optionally for one trial.            |
-| check_data_health                             | Find values that loaded as numbers but cannot be right: the app's *Data checks*. |
-| **Plot**                                      |                                                                                  |
-| plot_scanpath                                 | Build one trial's scanpath figure, by default in the app's Scanpath design.      |
-| animate_scanpath                              | Build the animated replay of one trial's scanpath, or of two on one clock.       |
-| compare_scanpaths                             | Build a figure comparing two scanpaths: the app's **Compare** mode.              |
-| render_parent_trial                           | Render every screen of one multipart trial, each in its own coordinates.         |
-| plot_corpus_figure                            | Plot a corpus profile, distribution or difference figure from a tidy table.      |
-| **Figure options**                            |                                                                                  |
-| figure_options                                | List every figure keyword a builder takes, with the default it renders with.     |
-| **Reproduce a figure in code**                |                                                                                  |
-| figure_code                                   | Write the API or CLI code that reproduces a figure.                              |
-| **Save**                                      |                                                                                  |
-| save_figure                                   | Save a figure, in the format its file extension names.                           |
-| save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                       |
-| **Recovery cache**                            |                                                                                  |
-| cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.        |
-| clear_cache                                   | Delete the recovery cache.                                                       |
-| **Version and updates**                       |                                                                                  |
-| version_info                                  | Say which build of Scanpath Studio this is, without using the network.           |
-| check_for_updates                             | Ask GitHub whether a newer release than this build is out.                       |
-| **Citation**                                  |                                                                                  |
-| cite                                          | How to cite Scanpath Studio — and, optionally, the corpus you used.              |
+| Function                                      | What it does                                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------------- |
+| **Load your data**                            |                                                                                 |
+| load_scanpath_data                            | Load and normalize a Words table, a Fixations table, or both.                   |
+| ScanpathData                                  | The `(words, fixations)` frames `load_scanpath_data` returns, with their names. |
+| propose_schema                                | Find the column mapping auto-detection would use for a raw table.               |
+| attach_stimulus_images                        | Fill `image_path` from a folder of stimulus images, on frames already loaded.   |
+| load_raw_gaze                                 | Load and normalize a raw, sample-level gaze table, for `raw_gaze=`.             |
+| load_participant_metadata                     | Load a participant-level metadata table: one row per participant.               |
+| load_trial_metadata                           | Load a trial-level metadata table: one row per trial.                           |
+| load_text_metadata                            | Load a text-level metadata table: one row per text.                             |
+| **Load the bundled demo and public datasets** |                                                                                 |
+| load_sample_data                              | Load the bundled demo, normalized and ready to plot.                            |
+| load_sample_raw_gaze                          | Load synthesized raw gaze samples for one trial in the bundled demo.            |
+| load_potec                                    | Load PoTeC as normalized `(words, fixations)` frames, ready to plot.            |
+| load_onestop                                  | Load OneStop as normalized `(words, fixations)` frames, ready to plot.          |
+| **Draw a scanpath**                           |                                                                                 |
+| build_authored_scanpath                       | Build normalized Words and Fixations frames from a hand-drawn scanpath.         |
+| load_authored_scanpath                        | Load a draft file as normalized Words and Fixations frames.                     |
+| **Inspect**                                   |                                                                                 |
+| list_trials                                   | List every plottable trial: one row per participant and trial.                  |
+| list_parts                                    | List the ordered screens of multipart data, optionally for one trial.           |
+| check_data_health                             | Check durations, positions and word boxes for data problems.                    |
+| run_analysis_recipe                           | Recreate a downloaded per-word cohort profile table.                            |
+| **Plot**                                      |                                                                                 |
+| plot_scanpath                                 | Build one trial's scanpath figure, by default in the app's Scanpath design.     |
+| animate_scanpath                              | Build the animated replay of one trial's scanpath, or of two on one clock.      |
+| compare_scanpaths                             | Build a figure comparing two scanpaths: the app's **Compare** mode.             |
+| render_parent_trial                           | Render every screen of one multipart trial, each in its own coordinates.        |
+| plot_corpus_figure                            | Plot a corpus profile, distribution or difference figure from a tidy table.     |
+| **Figure options**                            |                                                                                 |
+| figure_options                                | List figure options and their default values.                                   |
+| **Reproduce a figure in code**                |                                                                                 |
+| figure_code                                   | Write the API or CLI code that reproduces a figure.                             |
+| **Save**                                      |                                                                                 |
+| save_figure                                   | Save a figure as HTML, PNG, SVG or PDF.                                         |
+| save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                      |
+| **Recovery cache**                            |                                                                                 |
+| cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.       |
+| clear_cache                                   | Delete the recovery cache.                                                      |
+| **Version and updates**                       |                                                                                 |
+| version_info                                  | Return version and installation details without a network request.              |
+| check_for_updates                             | Check GitHub for a newer release.                                               |
+| **Citation**                                  |                                                                                 |
+| cite                                          | Return a citation for Scanpath Studio and, optionally, a public corpus.         |
 
 ## Column names
 
-Columns keep the names your files give them. The bundled demo's Words table calls its word ID column `IA_ID` and its total fixation duration `IA_DWELL_TIME`, and every function and option takes those names. A column Scanpath Studio made keeps its internal name. `load_scanpath_data(..., names="canonical")` gives the internal names, which are the same for every dataset. On the bundled demo, the first steps print this (run when the docs are built):
+The API preserves the column names from your files. For example, the bundled demo's Words table uses `IA_ID` for word IDs and `IA_DWELL_TIME` for total fixation duration. Use those names when selecting columns in functions and figure options. Columns created by Scanpath Studio use its internal names.
+
+Pass `names="canonical"` to `load_scanpath_data` to use the same internal names across datasets. The example below shows the names returned for the bundled demo:
 
 ```
 import scanpath_studio as sps
@@ -364,7 +367,7 @@ Returns:
 load_sample_raw_gaze(*, names=NAMES_SOURCE)
 ```
 
-Load the bundled demo's raw gaze: what the app overlays on it.
+Load synthesized raw gaze samples for one trial in the bundled demo.
 
 OneStop ships no sample-level gaze, so this is **synthesized** from one of the demo's real trials, and covers that trial alone.
 
@@ -468,7 +471,7 @@ Parameters:
 
 - **`text`** (`str`) – The text to lay out as word boxes. Explicit line breaks are kept.
 - **`events`** (`DataFrame | None`, default: `None` ) – The fixations, one row each, with the columns the app's Draw a scanpath table has (fixation_id, order_in_trial, word_id, x, y, duration_ms). Left out, each word gets one fixation at its center.
-- **`**layout_options`** (`Any`, default: `{}` ) – Passed to authoring.layout_text (canvas_width, margin, character_width, word_height, line_height).
+- **`**layout_options`** (`Any`, default: `{}` ) – Passed to authoring.layout_text (canvas_width, margin, character_width, word_height, line_height, right_to_left).
 
 Returns:
 
@@ -542,7 +545,7 @@ Returns:
 check_data_health(words=None, fixations=None, raw_gaze=None)
 ```
 
-Find values that loaded as numbers but cannot be right: the app's *Data checks*.
+Check durations, positions and word boxes for data problems.
 
 The checks look for fixations lasting 0 ms or less or with an infinite duration or onset, fixations and raw-gaze samples whose position is missing or infinite, word boxes with no area or no finite position, and per-screen screen sizes that are not finite and positive. Nothing is changed or dropped.
 
@@ -576,6 +579,45 @@ words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
 print(sps.check_data_health(words, fixations))
 ```
 
+### run_analysis_recipe
+
+```
+run_analysis_recipe(
+    recipe,
+    words,
+    fixations=None,
+    *,
+    raw_gaze=None,
+    participant_metadata=None,
+    trial_metadata=None,
+    text_metadata=None,
+    annotations=None,
+    column_names=None,
+)
+```
+
+Recreate a downloaded per-word cohort profile table.
+
+Parameters:
+
+- **`recipe`** (`dict | str | Path`) – The downloaded recipe JSON path or its decoded object.
+- **`words`** (`DataFrame`) – Normalized Words table from load_scanpath_data or a corpus loader.
+- **`fixations`** (`DataFrame | None`, default: `None` ) – The matching normalized Fixations table, when present.
+- **`raw_gaze`** (`DataFrame | None`, default: `None` ) – Normalized samples from load_raw_gaze when the text filter uses their IDs.
+- **`participant_metadata`** (`TablesLike | None`, default: `None` ) – The original participant metadata table for a reader filter.
+- **`trial_metadata`** (`TablesLike | None`, default: `None` ) – The original trial metadata table for a trial filter.
+- **`text_metadata`** (`TablesLike | None`, default: `None` ) – The original text metadata table for a text filter.
+- **`annotations`** (`str | Path | None`, default: `None` ) – Path to the dataset's exported annotations JSON for a star or tag filter.
+- **`column_names`** (`dict | None`, default: `None` ) – Source column maps when supplying canonical frames.
+
+Returns:
+
+- `DataFrame` – The cohort profile under the dataset's own output column names.
+
+Raises:
+
+- `ValueError` – Unsupported recipe, missing filter fields or mismatched result.
+
 ## Plot
 
 ### plot_scanpath
@@ -606,7 +648,7 @@ plot_scanpath(
 
 Build one trial's scanpath figure, by default in the app's Scanpath design.
 
-Every figure option is a keyword (`show_heatmap=True`, `color_by="pass_index"`, `x_field="order_in_trial"`), and figure_options lists them with their defaults. An option naming a column takes either name: frames under the dataset's own column names, as `load_scanpath_data` returns them by default, are read through the map they carry.
+Every figure option is a keyword (`show_heatmap=True`, `color_by="pass_index"`, `x_field="order_in_trial"`), and figure_options lists them with their defaults. An option naming a column takes either name: frames under the dataset's own column names, as `load_scanpath_data` returns them by default, are read through the map they carry. Use `x_field="@elapsed_seconds"` with `y_field="x"` or `"y"` to draw fixation durations against time since the reading's first recorded onset. Selecting a screen or index window keeps that origin.
 
 Parameters:
 
@@ -746,6 +788,7 @@ compare_scanpaths(
     drift_correction=None,
     title="",
     caption="",
+    illustration_label="auto",
     column_names=None,
     **figure_overrides,
 )
@@ -761,19 +804,21 @@ Build a figure comparing two scanpaths: the app's **Compare** mode.
 
 **Per-scanpath style.** `style_a` / `style_b` restyle one scanpath with these keys:
 
-| Key                                      | What it sets                                                                                                    | Left out                                         |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `fix_color`, `saccade_color`             | The scanpath's colors                                                                                           | Its default                                      |
-| `marker_size_range`, `opacity`, `hollow` | Its fixation markers                                                                                            | Its default                                      |
-| `saccade_style`, `saccade_width`         | Its saccade lines                                                                                               | Its default                                      |
-| `box_color`                              | The outline of that reading's word boxes                                                                        | Its `fix_color`                                  |
-| `box_fill_color`                         | Their fill                                                                                                      | `word_box_fill_color`                            |
-| `box_line_opacity`, `box_fill_opacity`   | Their outline's and fill's opacity, 0–1 (0 hides it)                                                            | `word_box_line_opacity`, `word_box_fill_opacity` |
-| `raw_gaze_color`                         | That reading's raw-gaze samples                                                                                 | Its `fix_color`                                  |
-| `heatmap_colorscale`                     | That reading's word-box heatmap color scale, on the range both share; two different scales get a color bar each | `heatmap_colorscale`                             |
-| `fixation_flags`, `saccade_classes`      | That scanpath's own filters, in place of the figure's                                                           | The figure's                                     |
+| Key                                    | What it sets                                                                                                    | Left out                                         |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `fix_color`                            | Fixation markers and index numbers                                                                              | The scanpath's palette color                     |
+| `saccade_color`                        | Saccade lines                                                                                                   | The scanpath's palette color                     |
+| `marker_size_range`                    | Smallest and largest fixation markers                                                                           | The figure's `marker_size_range`                 |
+| `opacity`, `hollow`                    | Its fixation markers                                                                                            | Its default                                      |
+| `saccade_style`, `saccade_width`       | Its saccade lines                                                                                               | Its default                                      |
+| `box_color`                            | The outline of that reading's word boxes                                                                        | Its `fix_color`                                  |
+| `box_fill_color`                       | Their fill                                                                                                      | `word_box_fill_color`                            |
+| `box_line_opacity`, `box_fill_opacity` | Their outline's and fill's opacity, 0–1 (0 hides it)                                                            | `word_box_line_opacity`, `word_box_fill_opacity` |
+| `raw_gaze_color`                       | That reading's raw-gaze samples                                                                                 | Its `fix_color`                                  |
+| `heatmap_colorscale`                   | That reading's word-box heatmap color scale, on the range both share; two different scales get a color bar each | `heatmap_colorscale`                             |
+| `fixation_flags`, `saccade_classes`    | That scanpath's own filters, in place of the figure's                                                           | The figure's                                     |
 
-The box keys and `raw_gaze_color` are this figure's only: the co-animation draws one set of boxes and no raw gaze, and ignores them.
+For a replay of two scanpaths, see animate_scanpath for the supported styles.
 
 Parameters:
 
@@ -801,6 +846,7 @@ Parameters:
 - **`fix_index_range`** (`tuple[int, int] | None`, default: `None` ) – (start, end): draw only that window of both scanpaths' fixations.
 - **`fix_index_range_b`** (`tuple[int, int] | None`, default: `None` ) – B's own window, as the app's B slider sets it.
 - **`drift_correction`** (`str | None`, default: `None` ) – Experimental, as in plot_scanpath.
+- **`illustration_label`** (`str`, default: `'auto'` ) – As in plot_scanpath. An authored reading on either side labels the comparison.
 - **`title`** (`str`, default: `''` ) – As in plot_scanpath.
 - **`caption`** (`str`, default: `''` ) – As in plot_scanpath.
 - **`column_names`** (`dict | None`, default: `None` ) – As in plot_scanpath. A's names, or column_names, name the options and the figure's text; either dataset's frames may come under their own names.
@@ -897,11 +943,11 @@ Raises:
 
 ## Figure options
 
-Set layers, colors, sizes and legends with keyword arguments to `plot_scanpath`, `animate_scanpath` or `compare_scanpaths`. The tables below list each option's default and matching CLI `render` flag, under the section names of the app's **Plot controls**. A description ends by naming the builders an option is limited to, if any.
+Set layers, colors, sizes and legends with keyword arguments to `plot_scanpath`, `animate_scanpath` or `compare_scanpaths`. The tables below list each option's default and matching CLI `render` flag, under the section names of the app's **Plot controls**. If an option applies to fewer than four views, its row names them. **Single plot** and **Single replay** show one scanpath. **Compare** shows two scanpaths together or in separate panels, and **Compare + Animate** replays two scanpaths.
 
 For options with a fixed set of values, case, spaces, `-` and `_` are ignored; other values raise a `ValueError`. A `--no-…` flag turns off an option that is on by default.
 
-`figure_options()` returns the defaults in code; `figure_options(choices=True)` also lists the accepted values.
+`figure_options()` returns the keywords a builder accepts and their defaults. `figure_options(choices=True)` also lists the accepted values.
 
 ### figure_options
 
@@ -909,9 +955,9 @@ For options with a fixed set of values, case, spaces, `-` and `_` are ignored; o
 figure_options(kind='static', *, choices=False)
 ```
 
-List every figure keyword a builder takes, with the default it renders with.
+List figure options and their default values.
 
-The defaults are what a call actually renders with, the app's Scanpath design, so a script can diff its intended settings against what it would get. The *Figure options* section of the API reference lists them by section, with their `render` flags.
+The defaults follow the app's Scanpath design. Some accepted keywords affect only certain views. For example, `order_font_color` sets the fixation index color for a single scanpath. With two scanpaths, each index takes its scanpath's fixation color. The *Figure options* table lists the views and matching `render` flags.
 
 Parameters:
 
@@ -936,19 +982,19 @@ Examples:
 
 | Option and `render` flag                                              | Default       | Description                                                                                                                                                                                                                                                                                                                                                     |
 | --------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `show_fixations` `--no-fixations`                                     | `True`        | Hide the fixations. *Plot and compare only.*                                                                                                                                                                                                                                                                                                                    |
-| `fixation_color` `--fixation-color`                                   | `'#0072B2'`   | Fixation color when `--color-by` is '(uniform)'.                                                                                                                                                                                                                                                                                                                |
+| `show_fixations` `--no-fixations`                                     | `True`        | Hide the fixations. *Single plot, Compare.*                                                                                                                                                                                                                                                                                                                     |
+| `fixation_color` `--fixation-color`                                   | `'#0072B2'`   | Fixation color when `--color-by` is '(uniform)'. For two scanpaths, set `fix_color` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                                                                                                                    |
 | `color_by` `--color-by`                                               | `'(uniform)'` | Fixations table column to color the fixations by, e.g. duration_ms, or 'line' for each fixation's text line (same as `--color-by-line`). Default: '(uniform)', one color, since marker size already shows duration.                                                                                                                                             |
 | `color_by_line` `--color-by-line`                                     | `False`       | Color each fixation by the text line it lands on, with the lines found from the word boxes. Overrides `--color-by`. Same as `--color-by` line.                                                                                                                                                                                                                  |
 | `fixation_colorscale` `--fixation-colorscale`                         | `'Blues'`     | Color scale for `--color-by`, e.g. Viridis.                                                                                                                                                                                                                                                                                                                     |
 | `fixation_color_range` `--fixation-color-range`                       | `None`        | Fix the `--color-by` color scale to LO..HI instead of the trial's range, so several figures share one scale.                                                                                                                                                                                                                                                    |
-| `fixation_opacity` `--fixation-opacity`                               | `0.7`         | Fixation marker opacity, 0.1–1.0.                                                                                                                                                                                                                                                                                                                               |
+| `fixation_opacity` `--fixation-opacity`                               | `0.7`         | Fixation marker opacity, 0.1–1.0. For two scanpaths, set `opacity` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                                                                                                                                     |
 | `fixation_symbol` `--fixation-symbol`                                 | `'circle'`    | Fixation marker shape. Unlike color, shape survives a grayscale print. One of `'circle'`, `'square'`, `'diamond'`, `'triangle-up'`, `'cross'`, `'x'`, `'star'`, `'hexagon'`, `'heart'`.                                                                                                                                                                         |
-| `hollow_fixations` `--hollow-fixations`                               | `False`       | Draw the fixations as outlines instead of filled markers.                                                                                                                                                                                                                                                                                                       |
+| `hollow_fixations` `--hollow-fixations`                               | `False`       | Draw the fixations as outlines instead of filled markers. For two scanpaths, set `hollow` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                                                                                                              |
 | `fixation_outline_color` `--fixation-outline-color`                   | `'#111111'`   | Color of that outline.                                                                                                                                                                                                                                                                                                                                          |
 | `fixation_outline_width` `--fixation-outline-width`                   | `0.5`         | Outline width around each filled fixation marker, 0–5 px; 0 draws none.                                                                                                                                                                                                                                                                                         |
 | `marker_size_scale` `--marker-size-scale`                             | `'sqrt'`      | How duration sets marker size. sqrt, linear and log map `--marker-duration-range` onto `--marker-size-range`, so a duration gets the same size in every trial, comparison and replay. With sqrt, marker area grows with duration. relative stretches each figure from its shortest to its longest fixation. One of `'sqrt'`, `'linear'`, `'log'`, `'relative'`. |
-| `marker_size_range` `--marker-size-range`                             | `(8, 24)`     | Smallest and largest fixation marker size in px, e.g. 4 12. A smaller range suits thumbnails.                                                                                                                                                                                                                                                                   |
+| `marker_size_range` `--marker-size-range`                             | `(8, 24)`     | Smallest and largest fixation marker size in px, e.g. 4 12. A smaller range suits thumbnails. Each scanpath uses this range unless its style supplies one.                                                                                                                                                                                                      |
 | `marker_duration_range` `--marker-duration-range`                     | `(50, 600)`   | The durations in ms that get the smallest and largest marker. Shorter and longer fixations are clamped to them. Not used by `--marker-size-scale` relative.                                                                                                                                                                                                     |
 | `show_fixation_colorbar` `--no-fixation-colorbar`                     | `True`        | Leave out `--color-by`'s color bar.                                                                                                                                                                                                                                                                                                                             |
 | `fixation_colorbar_orientation` `--fixation-colorbar-orientation`     | `'Vertical'`  | Fixation color bar: beside the plot (vertical, default) or below it. One of `'Vertical'`, `'Horizontal'`.                                                                                                                                                                                                                                                       |
@@ -958,40 +1004,40 @@ Examples:
 | `fixation_colorbar_tickfont_size` `--fixation-colorbar-tickfont-size` | `12`          | Fixation color bar: tick-label size.                                                                                                                                                                                                                                                                                                                            |
 | `show_order` `--no-fixation-index` `--fixation-index`                 | `False`       | Number the fixations in order (the app's Fixation index).                                                                                                                                                                                                                                                                                                       |
 | `order_font_size` `--order-font-size`                                 | `10`          | Size of the fixation index numbers.                                                                                                                                                                                                                                                                                                                             |
-| `order_font_color` `--order-font-color`                               | `'#111111'`   | Color of the fixation index numbers.                                                                                                                                                                                                                                                                                                                            |
+| `order_font_color` `--order-font-color`                               | `'#111111'`   | Color of the fixation index numbers for a single scanpath. For two scanpaths, set `fix_color` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                                                                                                          |
 | `order_label_position` `--order-label-position`                       | `'above'`     | Where each fixation index number sits on its fixation. One of `'above'`, `'inside'`, `'below'`.                                                                                                                                                                                                                                                                 |
-| `fixation_snap_to_line` `--snap-fixations`                            | `False`       | Move each fixation up or down onto its text line: its word's line, else the nearest. Its x stays. `--snap-position` sets where on the line. *Plot and compare only.*                                                                                                                                                                                            |
-| `fixation_snap_position` `--snap-position`                            | `-0.5`        | Where on its line a snapped fixation sits, in line heights from the line's middle: 0 centers it, -0.5 is the top edge, 0.5 the bottom edge. Used with `--snap-fixations`. *Plot and compare only.*                                                                                                                                                              |
+| `fixation_snap_to_line` `--snap-fixations`                            | `False`       | Move each fixation up or down onto its text line: its word's line, else the nearest. Its x stays. `--snap-position` sets where on the line. *Single plot.*                                                                                                                                                                                                      |
+| `fixation_snap_position` `--snap-position`                            | `-0.5`        | Where on its line a snapped fixation sits, in line heights from the line's middle: 0 centers it, -0.5 is the top edge, 0.5 the bottom edge. Used with `--snap-fixations`. *Single plot.*                                                                                                                                                                        |
 
 ### Saccades
 
-| Option and `render` flag                                                      | Default       | Description                                                                                                                                                                                                                                                                                               |
-| ----------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `show_saccades` `--no-saccades`                                               | `True`        | Hide the saccades.                                                                                                                                                                                                                                                                                        |
-| `saccade_color` `--saccade-color`                                             | `'#CC79A7'`   | Saccade line and arrow color, as hex or a CSS name.                                                                                                                                                                                                                                                       |
-| `saccade_style` `--saccade-style`                                             | `'solid'`     | Saccade line dash style. One of `'solid'`, `'dash'`, `'dot'`, `'dashdot'`.                                                                                                                                                                                                                                |
-| `saccade_width` `--saccade-width`                                             | `2.0`         | Saccade line width in px, 0.5–10.                                                                                                                                                                                                                                                                         |
-| `saccade_opacity` `--saccade-opacity`                                         | `1.0`         | Opacity of the saccade lines and arrows, 0.1–1.0. In a comparison, both scanpaths share it.                                                                                                                                                                                                               |
-| `show_saccade_arrows` `--saccade-arrows`                                      | `False`       | Draw an arrowhead on each saccade (the app's Direction arrows).                                                                                                                                                                                                                                           |
-| `saccade_arrow_size` `--saccade-arrow-size`                                   | `12.0`        | Size of the `--saccade-arrows` arrowheads, 4–40 px.                                                                                                                                                                                                                                                       |
-| `saccade_render_mode` `--saccade-arcs`                                        | `'Straight'`  | Draw saccades as upward arcs instead of straight lines (the app's Shape: Arc). One of `'Straight'`, `'Arc'`. *Plot and compare only.*                                                                                                                                                                     |
-| `saccade_color_mode` `--saccade-color-by-type` `--saccade-color-by-direction` | `'One color'` | Color each saccade by its type: forward, skip, refixation, return sweep or regression (the app's By type). One of `'One color'`, `'Forward / regression'`, `'By type'`. *Plot and compare only.*                                                                                                          |
-| `saccade_class_colors` `--saccade-type-color`                                 | `None`        | Set one saccade type's color, e.g. `--saccade-type-color` regression=#000000. Repeatable. Types: forward, skip, refixation, return_sweep, regression. Implies `--saccade-color-by-type`. With `--saccade-color-by-direction`, it sets the forward and regression colors instead. *Plot and compare only.* |
+| Option and `render` flag                                                      | Default       | Description                                                                                                                                                                                                                                                                                     |
+| ----------------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `show_saccades` `--no-saccades`                                               | `True`        | Hide the saccades.                                                                                                                                                                                                                                                                              |
+| `saccade_color` `--saccade-color`                                             | `'#CC79A7'`   | Saccade line and arrow color, as hex or a CSS name. For two scanpaths, set `saccade_color` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                                             |
+| `saccade_style` `--saccade-style`                                             | `'solid'`     | Saccade line dash style. One of `'solid'`, `'dash'`, `'dot'`, `'dashdot'`. For two scanpaths, set `saccade_style` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                      |
+| `saccade_width` `--saccade-width`                                             | `2.0`         | Saccade line width in px, 0.5–10. For two scanpaths, set `saccade_width` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                                                               |
+| `saccade_opacity` `--saccade-opacity`                                         | `1.0`         | Opacity of the saccade lines and arrows, 0.1–1.0. In a comparison, both scanpaths share it.                                                                                                                                                                                                     |
+| `show_saccade_arrows` `--saccade-arrows`                                      | `False`       | Draw an arrowhead on each saccade (the app's Direction arrows).                                                                                                                                                                                                                                 |
+| `saccade_arrow_size` `--saccade-arrow-size`                                   | `12.0`        | Size of the `--saccade-arrows` arrowheads, 4–40 px.                                                                                                                                                                                                                                             |
+| `saccade_render_mode` `--saccade-arcs`                                        | `'Straight'`  | Draw saccades as upward arcs instead of straight lines (the app's Shape: Arc). One of `'Straight'`, `'Arc'`. *Single plot.*                                                                                                                                                                     |
+| `saccade_color_mode` `--saccade-color-by-type` `--saccade-color-by-direction` | `'One color'` | Color each saccade by its type: forward, skip, refixation, return sweep or regression (the app's By type). One of `'One color'`, `'Forward / regression'`, `'By type'`. *Single plot.*                                                                                                          |
+| `saccade_class_colors` `--saccade-type-color`                                 | `None`        | Set one saccade type's color, e.g. `--saccade-type-color` regression=#000000. Repeatable. Types: forward, skip, refixation, return_sweep, regression. Implies `--saccade-color-by-type`. With `--saccade-color-by-direction`, it sets the forward and regression colors instead. *Single plot.* |
 
 ### Stimulus
 
 | Option and `render` flag                              | Default       | Description                                                                                                                                                                                                                         |
 | ----------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `show_word_labels` `--no-text`                        | `True`        | Hide the stimulus text.                                                                                                                                                                                                             |
-| `redact_text` `--redact-text`                         | `False`       | Draw a rounded block in the text color in place of each word's letters, and leave the words out of the hovers. The figure keeps the text's layout but not its words (the app's Text → Redact).                                      |
+| `redact_text` `--redact-text`                         | `False`       | Replace each word with a rounded block in the text color and hide its text in tooltips. Preserves the text layout while concealing the words (the app's Text → Redact).                                                             |
 | `line_spacing` `--line-spacing`                       | `3.0`         | Line spacing, in font sizes: the text's font size is the distance between lines ÷ N.                                                                                                                                                |
 | `scale_text_to_boxes` `--no-scale-text-to-boxes`      | `True`        | Draw the text at `--font-size` instead of fitting it to the word boxes (the app's Fit to word boxes).                                                                                                                               |
 | `text_color` `--text-color`                           | `'#000000'`   | Stimulus text color.                                                                                                                                                                                                                |
 | `background_color` `--background-color`               | `'#ffffff'`   | Plot background color.                                                                                                                                                                                                              |
 | `highlight_column` `--highlight-column`               | `None`        | Boolean Words table column that marks the words to highlight (e.g. is_in_aspan, OneStop's answer span; default: none). `--critical-span-style` sets how they are drawn.                                                             |
 | `highlight_text_color` `--highlight-text-color`       | `'#D55E00'`   | Color of the `--highlight-column` words under `--critical-span-style` mark-text.                                                                                                                                                    |
-| `critical_span_style` `--critical-span-style`         | `'Mark text'` | How the `--highlight-column` words are marked: mark-text recolors them, mark-border outlines their boxes, none draws neither. One of `'Mark text'`, `'Mark border'`, `'None'`. *Plot and compare only.*                             |
-| `span_border_color` `--span-border-color`             | `'#000000'`   | Box color under `--critical-span-style` mark-border. *Plot and compare only.*                                                                                                                                                       |
+| `critical_span_style` `--critical-span-style`         | `'Mark text'` | How the `--highlight-column` words are marked: mark-text recolors them, mark-border outlines their boxes, none draws neither. One of `'Mark text'`, `'Mark border'`, `'None'`. *Single plot.*                                       |
+| `span_border_color` `--span-border-color`             | `'#000000'`   | Box color under `--critical-span-style` mark-border. *Single plot.*                                                                                                                                                                 |
 | `show_stimulus_image` `--show-stimulus-image`         | `False`       | Draw each trial's stimulus image under the scanpath, from the image_path column of its rows, placed at image_x / image_y. `--image-root` fills that column, and `--sample` ships its images. `--stimulus-image` takes precedence.   |
 | `background_image` `--stimulus-image`                 | `None`        | Draw an image (PNG or JPG) under the scanpath as the stimulus. It is sized to the PNG's pixel size, else to the canvas. Use `--stimulus-image-size` and `--stimulus-image-origin` to place a cropped image in fixation coordinates. |
 | `background_image_size` `--stimulus-image-size`       | `None`        | Stimulus image size in px, e.g. 1310x991. Use with `--stimulus-image`.                                                                                                                                                              |
@@ -1000,75 +1046,75 @@ Examples:
 
 ### Word boxes
 
-| Option and `render` flag                          | Default     | Description                                                                                                            |
-| ------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `show_words` `--no-word-boxes` `--word-boxes`     | `False`     | Draw the word boxes.                                                                                                   |
-| `word_box_color` `--word-box-color`               | `'#6c757d'` | Word-box outline color. In a comparison, each scanpath's boxes are outlined in its color instead.                      |
-| `word_box_line_opacity` `--word-box-line-opacity` | `1.0`       | Word-box outline opacity, 0–1; 0 draws the fill only. Below 1 the outline color must be #rrggbb, #rgb or rgb(r, g, b). |
-| `word_box_fill_color` `--word-box-fill-color`     | `'#646464'` | Word-box fill color, drawn at `--word-box-fill-opacity`: #rrggbb, #rgb or rgb(r, g, b).                                |
-| `word_box_fill_opacity` `--word-box-fill-opacity` | `0.05`      | Word-box fill opacity, 0–1; 0 draws outlines only.                                                                     |
+| Option and `render` flag                          | Default     | Description                                                                                                                                        |
+| ------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `show_words` `--no-word-boxes` `--word-boxes`     | `False`     | Draw the word boxes.                                                                                                                               |
+| `word_box_color` `--word-box-color`               | `'#6c757d'` | Word-box outline color. In a comparison, each scanpath's boxes are outlined in its color instead. *Single plot, Single replay, Compare + Animate.* |
+| `word_box_line_opacity` `--word-box-line-opacity` | `1.0`       | Word-box outline opacity, 0–1; 0 draws the fill only. Below 1 the outline color must be #rrggbb, #rgb or rgb(r, g, b).                             |
+| `word_box_fill_color` `--word-box-fill-color`     | `'#646464'` | Word-box fill color, drawn at `--word-box-fill-opacity`: #rrggbb, #rgb or rgb(r, g, b).                                                            |
+| `word_box_fill_opacity` `--word-box-fill-opacity` | `0.05`      | Word-box fill opacity, 0–1; 0 draws outlines only.                                                                                                 |
 
 ### Heatmap
 
-| Option and `render` flag                                            | Default         | Description                                                                                                                                                                                                 |
-| ------------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `show_heatmap` `--no-heatmap` `--heatmap`                           | `False`         | Draw the heatmap. *Plot and compare only.*                                                                                                                                                                  |
-| `heatmap_style` `--heatmap-style`                                   | `'Word boxes'`  | Heatmap style: word-boxes tints each word box, smoothed blurs the fixations. One of `'Word boxes'`, `'Smoothed'`. *Plot and compare only.*                                                                  |
-| `heatmap_metric` `--heatmap-metric`                                 | `'duration_ms'` | What the heatmap colors by (the app's Color → By): the fixation duration column, under your file's name or as duration_ms, or counts for the fixation count. Default: duration_ms. *Plot and compare only.* |
-| `heatmap_colorscale` `--heatmap-colorscale`                         | `'Blues'`       | Heatmap color scale, e.g. Greens. *Plot and compare only.*                                                                                                                                                  |
-| `heatmap_norm` `--heatmap-norm`                                     | `'Linear'`      | Heatmap color scaling: linear (default) or log. Log keeps a few words with long dwell times from washing out the rest. One of `'Linear'`, `'Log'`. *Plot and compare only.*                                 |
-| `heatmap_range` `--heatmap-range`                                   | `None`          | Fix the heatmap's color scale to LO..HI instead of the trial's range. *Plot and compare only.*                                                                                                              |
-| `heatmap_opacity` `--heatmap-opacity`                               | `None`          | Heatmap opacity, 0.05–1.0. *Plot and compare only.*                                                                                                                                                         |
-| `heatmap_sigma_px` `--heatmap-sigma`                                | `None`          | Blur of `--heatmap-style` smoothed, as a Gaussian σ in px. *Plot and compare only.*                                                                                                                         |
-| `word_heatmap_col` `--word-heatmap-col`                             | `None`          | With `--heatmap`, for a dataset with no fixations: tint each word box by this numeric Words table column, e.g. gpt2_surprisal, instead of its total fixation duration. *Plot and compare only.*             |
-| `word_heatmap_title` `--word-heatmap-title`                         | `None`          | Color-bar title for `--word-heatmap-col`. *Plot and compare only.*                                                                                                                                          |
-| `show_heatmap_colorbar` `--no-heatmap-colorbar`                     | `True`          | Leave out the heatmap's color bar.                                                                                                                                                                          |
-| `heatmap_colorbar_orientation` `--heatmap-colorbar-orientation`     | `'Vertical'`    | Heatmap color bar: beside the plot (vertical, default) or below it. One of `'Vertical'`, `'Horizontal'`.                                                                                                    |
-| `heatmap_colorbar_length` `--heatmap-colorbar-length`               | `None`          | Heatmap color bar: length as a share of the plot's side, 0.1–1.0.                                                                                                                                           |
-| `heatmap_colorbar_thickness` `--heatmap-colorbar-thickness`         | `14`            | Heatmap color bar: thickness, 4–40 px.                                                                                                                                                                      |
-| `heatmap_colorbar_tickangle` `--heatmap-colorbar-tickangle`         | `0`             | Heatmap color bar: tick-label angle, -90–90.                                                                                                                                                                |
-| `heatmap_colorbar_tickfont_size` `--heatmap-colorbar-tickfont-size` | `12`            | Heatmap color bar: tick-label size.                                                                                                                                                                         |
+| Option and `render` flag                                            | Default         | Description                                                                                                                                                                                                |
+| ------------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `show_heatmap` `--no-heatmap` `--heatmap`                           | `False`         | Draw the heatmap. *Single plot, Compare.*                                                                                                                                                                  |
+| `heatmap_style` `--heatmap-style`                                   | `'Word boxes'`  | Heatmap style: word-boxes tints each word box, smoothed blurs the fixations. One of `'Word boxes'`, `'Smoothed'`. *Single plot.*                                                                           |
+| `heatmap_metric` `--heatmap-metric`                                 | `'duration_ms'` | What the heatmap colors by (the app's Color → By): the fixation duration column, under your file's name or as duration_ms, or counts for the fixation count. Default: duration_ms. *Single plot, Compare.* |
+| `heatmap_colorscale` `--heatmap-colorscale`                         | `'Blues'`       | Heatmap color scale, e.g. Greens. *Single plot, Compare.*                                                                                                                                                  |
+| `heatmap_norm` `--heatmap-norm`                                     | `'Linear'`      | Heatmap color scaling: linear (default) or log. Log keeps a few words with long dwell times from washing out the rest. One of `'Linear'`, `'Log'`. *Single plot, Compare.*                                 |
+| `heatmap_range` `--heatmap-range`                                   | `None`          | Fix the heatmap's color scale to LO..HI instead of the trial's range. *Single plot, Compare.*                                                                                                              |
+| `heatmap_opacity` `--heatmap-opacity`                               | `None`          | Heatmap opacity, 0.05–1.0. *Single plot, Compare.*                                                                                                                                                         |
+| `heatmap_sigma_px` `--heatmap-sigma`                                | `None`          | Blur of `--heatmap-style` smoothed, as a Gaussian σ in px. *Single plot.*                                                                                                                                  |
+| `word_heatmap_col` `--word-heatmap-col`                             | `None`          | With `--heatmap`, for a dataset with no fixations: tint each word box by this numeric Words table column, e.g. gpt2_surprisal, instead of its total fixation duration. *Single plot.*                      |
+| `word_heatmap_title` `--word-heatmap-title`                         | `None`          | Color-bar title for `--word-heatmap-col`. *Single plot.*                                                                                                                                                   |
+| `show_heatmap_colorbar` `--no-heatmap-colorbar`                     | `True`          | Leave out the heatmap's color bar. *Single plot, Compare.*                                                                                                                                                 |
+| `heatmap_colorbar_orientation` `--heatmap-colorbar-orientation`     | `'Vertical'`    | Heatmap color bar: beside the plot (vertical, default) or below it. One of `'Vertical'`, `'Horizontal'`. *Single plot, Compare.*                                                                           |
+| `heatmap_colorbar_length` `--heatmap-colorbar-length`               | `None`          | Heatmap color bar: length as a share of the plot's side, 0.1–1.0. *Single plot, Compare.*                                                                                                                  |
+| `heatmap_colorbar_thickness` `--heatmap-colorbar-thickness`         | `14`            | Heatmap color bar: thickness, 4–40 px. *Single plot, Compare.*                                                                                                                                             |
+| `heatmap_colorbar_tickangle` `--heatmap-colorbar-tickangle`         | `0`             | Heatmap color bar: tick-label angle, -90–90. *Single plot, Compare.*                                                                                                                                       |
+| `heatmap_colorbar_tickfont_size` `--heatmap-colorbar-tickfont-size` | `12`            | Heatmap color bar: tick-label size. *Single plot, Compare.*                                                                                                                                                |
 
 ### Raw gaze
 
-| Option and `render` flag                        | Default     | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ----------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `show_raw_gaze` `--raw-gaze` `--no-raw-gaze`    | `False`     | The Raw gaze table to draw under the fixations, in the formats `--fixations` reads and auto-detected the same way. Several paths, or a quoted glob, are stacked into one table. Drawn on static figures and `--compare-with` comparisons, where each scanpath's samples take its color, but not with `--animate`. As the only input it is the dataset: its trials are listed and drawn as recorded, and no fixations are detected from the samples. *Plot and compare only.* |
-| `raw_gaze_color` `--raw-gaze-color`             | `'#888888'` | Raw gaze sample color. In a comparison, each scanpath's samples are drawn in its color instead.                                                                                                                                                                                                                                                                                                                                                                              |
-| `raw_gaze_marker_size` `--raw-gaze-marker-size` | `4.0`       | Raw gaze sample size, 1–12 px.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `raw_gaze_opacity` `--raw-gaze-opacity`         | `0.6`       | Raw gaze sample opacity, 0.1–1.0.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Option and `render` flag                        | Default     | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `show_raw_gaze` `--raw-gaze` `--no-raw-gaze`    | `False`     | The Raw gaze table to draw under the fixations, in the formats `--fixations` reads and auto-detected the same way. Several paths, or a quoted glob, are stacked into one table. Drawn on static figures and `--compare-with` comparisons, where each scanpath's samples take its color, but not with `--animate`. As the only input it is the dataset: its trials are listed and drawn as recorded, and no fixations are detected from the samples. *Single plot, Compare.* |
+| `raw_gaze_color` `--raw-gaze-color`             | `'#888888'` | Raw gaze sample color. In a comparison, each scanpath's samples are drawn in its color instead. In Compare, set `raw_gaze_color` in `style_a` or `style_b`. *Single plot.*                                                                                                                                                                                                                                                                                                  |
+| `raw_gaze_marker_size` `--raw-gaze-marker-size` | `4.0`       | Raw gaze sample size, 1–12 px. *Single plot, Compare.*                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `raw_gaze_opacity` `--raw-gaze-opacity`         | `0.6`       | Raw gaze sample opacity, 0.1–1.0. *Single plot, Compare.*                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ### Filters & highlights
 
 | Option and `render` flag              | Default                        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ------------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `fixation_flags` `--fixation-flag`    | `None`                         | Highlight or hide one kind of fixation, like the app's Filters & highlights. Repeatable. SPEC is CATEGORY=MODE[,threshold_ms=N][,symbol=S][,color=#RRGGBB]. CATEGORY is short, long, oob (outside every word box) or blink. MODE is off, highlight or hide. threshold_ms applies to short and long only. hide removes the fixations from the figure only; measures and exports keep them. E.g. `--fixation-flag` short=hide,threshold_ms=80. |
-| `saccade_classes` `--saccade-classes` | `list`, see `figure_options()` | Draw only these saccade types, comma-separated, e.g. `--saccade-classes` regression,return_sweep. Types: forward, skip, refixation, return_sweep, regression, other (off the text). A hidden type loses its line and its arrow. Default: all. *Plot and compare only.*                                                                                                                                                                       |
+| `saccade_classes` `--saccade-classes` | `list`, see `figure_options()` | Draw only these saccade types, comma-separated, e.g. `--saccade-classes` regression,return_sweep. Types: forward, skip, refixation, return_sweep, regression, other (off the text). A hidden type loses its line and its arrow. Default: all. *Single plot, Compare.*                                                                                                                                                                        |
 
 ### Figure & canvas
 
-| Option and `render` flag                                  | Default     | Description                                                                                                                              |
-| --------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `fit_to_monitor` `--no-full-monitor`                      | `True`      | Frame the plot on the data instead of the whole `--canvas` screen (the app's Crop to data).                                              |
-| `crop_margin` `--crop-margin`                             | `None`      | The margin around the data, in screen px, when cropping to it. Implies `--crop-to-data`.                                                 |
-| `show_plot_frame` `--no-plot-frame`                       | `True`      | Leave out the border around the plot area.                                                                                               |
-| `plot_frame_color` `--plot-frame-color`                   | `'#000000'` | Color of the border around the plot area.                                                                                                |
-| `show_coordinate_grid` `--coordinate-grid`                | `False`     | Draw a grid in screen pixels over the scanpath (the app's Axes & grid → Grid).                                                           |
-| `coordinate_grid_spacing` `--coordinate-grid-spacing`     | `None`      | The grid's major spacing in px. Implies `--coordinate-grid`. Leave it out for an automatic spacing of 1, 2 or 5 × 10ⁿ px.                |
-| `coordinate_grid_font_size` `--coordinate-grid-font-size` | `18`        | Size of the coordinate grid's labels, 6–36 px.                                                                                           |
-| `x_field` `--x-field`                                     | `'x'`       | Fixations table column on the x axis. A non-spatial one draws a chart of the fixations instead of the scanpath. *Plot and compare only.* |
-| `y_field` `--y-field`                                     | `'y'`       | Fixations table column on the y axis. *Plot and compare only.*                                                                           |
+| Option and `render` flag                                  | Default     | Description                                                                                                                                                                              |
+| --------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fit_to_monitor` `--no-full-monitor`                      | `True`      | Frame the plot on the data instead of the whole `--canvas` screen (the app's Crop to data).                                                                                              |
+| `crop_margin` `--crop-margin`                             | `None`      | The margin around the data, in screen px, when cropping to it. Implies `--crop-to-data`.                                                                                                 |
+| `show_plot_frame` `--no-plot-frame`                       | `True`      | Leave out the border around the plot area.                                                                                                                                               |
+| `plot_frame_color` `--plot-frame-color`                   | `'#000000'` | Color of the border around the plot area.                                                                                                                                                |
+| `show_coordinate_grid` `--coordinate-grid`                | `False`     | Draw a grid in screen pixels over the scanpath (the app's Axes & grid → Grid).                                                                                                           |
+| `coordinate_grid_spacing` `--coordinate-grid-spacing`     | `None`      | The grid's major spacing in px. Implies `--coordinate-grid`. Leave it out for an automatic spacing of 1, 2 or 5 × 10ⁿ px.                                                                |
+| `coordinate_grid_font_size` `--coordinate-grid-font-size` | `18`        | Size of the coordinate grid's labels, 6–36 px.                                                                                                                                           |
+| `x_field` `--x-field`                                     | `'x'`       | Horizontal axis of the static chart. Choose a numeric fixation column, order_in_trial for fixation index, or @elapsed_seconds for time since the first recorded fixation. *Single plot.* |
+| `y_field` `--y-field`                                     | `'y'`       | Vertical axis of the static chart. Takes the same fields as `--x-field`. *Single plot.*                                                                                                  |
 
 ### Title & labels
 
-| Option and `render` flag                  | Default     | Description                                                                                                                                                      |
-| ----------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `illustration_text` `--illustration-text` | `''`        | The Illustration label's text.                                                                                                                                   |
-| `illustration_reasons`                    | `None`      | Why the figure is labeled an illustration. The builder works it out from `illustration_label`. Pass it only to word the label yourself. *Plot and compare only.* |
-| `title_font_size` `--title-size`          | `20`        | Size of the `--title` text, 8–48 px.                                                                                                                             |
-| `caption_font_size` `--caption-size`      | `13`        | Size of the `--caption` text, 6–36 px.                                                                                                                           |
-| `caption_color` `--caption-color`         | `'#555555'` | Color of the `--caption` text.                                                                                                                                   |
-| `show_credit` `--credit`                  | `False`     | A small 'Made with Scanpath Studio' line under the plot. The figure grows to fit it.                                                                             |
+| Option and `render` flag                  | Default     | Description                                                                                                                                                     |
+| ----------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `illustration_text` `--illustration-text` | `''`        | The Illustration label's text.                                                                                                                                  |
+| `illustration_reasons`                    | `None`      | Why the figure is labeled an illustration. The builder works it out from `illustration_label`. Pass it only to word the label yourself. *Single plot, Compare.* |
+| `title_font_size` `--title-size`          | `20`        | Size of the `--title` text, 8–48 px.                                                                                                                            |
+| `caption_font_size` `--caption-size`      | `13`        | Size of the `--caption` text, 6–36 px.                                                                                                                          |
+| `caption_color` `--caption-color`         | `'#555555'` | Color of the `--caption` text.                                                                                                                                  |
+| `show_credit` `--credit`                  | `False`     | A small 'Made with Scanpath Studio' line under the plot. The figure grows to fit it.                                                                            |
 
 ### Hover
 
@@ -1085,32 +1131,32 @@ Examples:
 | `legend_layout` `--legend`                         | `None`  | Place one legend. Repeatable. SPEC is KIND=POSITION[,ARRANGEMENT][,SIZE]. KIND is compare (Compare (A/B)), saccades (Saccade types), colors (Fixation colors), size-key (Fixation sizes) or highlight (Text highlight). POSITION is auto, or SPOT-outside or SPOT-inside, with SPOT one of top-left, top-center, top-right, left, right, bottom-left, bottom-center, bottom-right. Outside grows the figure, and left and right run down the side. ARRANGEMENT is stacked or side-by-side, and SIZE the text size in px. E.g. `--legend` saccades=right-outside,stacked,14. Each legend's switch still decides whether it is drawn. |
 | `show_color_legend` `--no-color-legend`            | `True`  | Hide the Fixation colors legend, which lists the categories of a categorical `--color-by` and the highlighted fixations. The markers still draw.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `show_highlight_legend` `--no-highlight-legend`    | `True`  | Hide the Text highlight legend, which names the highlighted words. The words stay marked. `--legend` highlight=SPEC places it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `saccade_type_legend` `--no-saccade-type-legend`   | `True`  | With `--saccade-color-by-type`: hide the Saccade types legend. The colored lines still draw. *Plot and compare only.*                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `saccade_type_legend` `--no-saccade-type-legend`   | `True`  | With `--saccade-color-by-type`: hide the Saccade types legend. The colored lines still draw. *Single plot.*                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `duration_size_legend` `--no-duration-size-legend` | `True`  | Hide the Fixation sizes legend, reference circles labeled in ms. It is drawn when `--marker-size-scale` is sqrt, linear or log.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ### Animate
 
-| Option and `render` flag                  | Default | Description                                                                                                                    |
-| ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `anim_grid_step_ms` `--anim-grid-step-ms` | `None`  | With `--animate`: one frame per MS of reading time. A smaller step is smoother and makes a larger file. *Animate only.*        |
-| `anim_max_frames` `--anim-max-frames`     | `None`  | With `--animate`: at most N frames. A trial too long for that many at `--anim-grid-step-ms` gets a wider step. *Animate only.* |
+| Option and `render` flag                  | Default | Description                                                                                                                                        |
+| ----------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `anim_grid_step_ms` `--anim-grid-step-ms` | `None`  | With `--animate`: one frame per MS of reading time. A smaller step is smoother and makes a larger file. *Single replay, Compare + Animate.*        |
+| `anim_max_frames` `--anim-max-frames`     | `None`  | With `--animate`: at most N frames. A trial too long for that many at `--anim-grid-step-ms` gets a wider step. *Single replay, Compare + Animate.* |
 
 ### Compare
 
 | Option and `render` flag                                | Default        | Description                                                                                                                                                                                                                                                                                                                               |
 | ------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `label_a` `--label-a`                                   | `'Scanpath A'` | Name of scanpath A in the legend and hovers. Used by the comparison and by `--animate`. Needs `--label-b`. *Animate only.*                                                                                                                                                                                                                |
-| `label_b` `--label-b`                                   | `'Scanpath B'` | Name of scanpath B in the legend and hovers. Needs `--label-a`. *Animate only.*                                                                                                                                                                                                                                                           |
+| `label_a` `--label-a`                                   | `'Scanpath A'` | Name of scanpath A in the legend and tooltips. Requires `--compare-with` and `--label-b`. In Python, pass `labels=(a, b)` to `compare_scanpaths`. *Compare, Compare + Animate.*                                                                                                                                                           |
+| `label_b` `--label-b`                                   | `'Scanpath B'` | Name of scanpath B in the legend and tooltips. Requires `--label-a`. In Python, pass `labels=(a, b)` to `compare_scanpaths`. *Compare, Compare + Animate.*                                                                                                                                                                                |
 | `style_a` `--style-a`                                   | `None`         | Style for scanpath A, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default `--word-box-fill-color`), raw_gaze_color (default fix_color). Also heatmap_colorscale (default `--heatmap-colorscale`, on the shared range), saccade_style (solid |
 | `style_b` `--style-b`                                   | `None`         | Style for scanpath B, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default `--word-box-fill-color`), raw_gaze_color (default fix_color). Also heatmap_colorscale (default `--heatmap-colorscale`, on the shared range), saccade_style (solid |
-| `show_legend` `--no-compare-legend`                     | `True`         | Draw the Compare (A/B) legend, which names the two scanpaths. On by default; `--no-compare-legend` hides it. Also applies to `--animate`. *Animate and compare only.*                                                                                                                                                                     |
-| `compare_stimulus` `--compare-stimulus`                 | `'both'`       | On an overlay, whose word boxes and text to draw. Two datasets' word boxes line up only when the text is the same. One of `'both'`, `'a'`, `'b'`. *Animate only.*                                                                                                                                                                         |
-| `words_b`                                               | `None`         | Scanpath B's Words table, for a replay of two scanpaths. *Animate only.*                                                                                                                                                                                                                                                                  |
-| `fixations_b`                                           | `None`         | Scanpath B's Fixations table, for a replay of two scanpaths. *Animate only.*                                                                                                                                                                                                                                                              |
-| `fixation_flags_b` `--compare-fixation-flag`            | `None`         | Filters & highlights for scanpath B only. Repeatable. Same SPEC as `--fixation-flag`, e.g. `--compare-fixation-flag` short=hide,threshold_ms=80. Replaces `--fixation-flag` for B. *Animate only.*                                                                                                                                        |
-| `background_image_b` `--stimulus-image-b`               | `None`         | Scanpath B's stimulus image, for a side-by-side or stacked comparison across two datasets, where each panel draws its image. Sized and placed like `--stimulus-image`. *Compare only.*                                                                                                                                                    |
-| `background_image_size_b` `--stimulus-image-size-b`     | `None`         | Size of `--stimulus-image-b` in px. *Compare only.*                                                                                                                                                                                                                                                                                       |
-| `background_image_origin_b` `--stimulus-image-origin-b` | `None`         | Top-left corner of `--stimulus-image-b` in B's screen px. *Compare only.*                                                                                                                                                                                                                                                                 |
+| `show_legend` `--no-compare-legend`                     | `True`         | Draw the Compare (A/B) legend, which names the two scanpaths. On by default; `--no-compare-legend` hides it. Also applies to `--animate`. *Compare, Compare + Animate.*                                                                                                                                                                   |
+| `compare_stimulus` `--compare-stimulus`                 | `'both'`       | On an overlay, whose word boxes and text to draw. Two datasets' word boxes line up only when the text is the same. A two-scanpath replay shows B's text for 'b' and A's text for 'a' or 'both'. One of `'both'`, `'a'`, `'b'`. *Compare, Compare + Animate.*                                                                              |
+| `words_b`                                               | `None`         | Scanpath B's Words table when it comes from a second dataset. *Compare, Compare + Animate.*                                                                                                                                                                                                                                               |
+| `fixations_b`                                           | `None`         | Scanpath B's Fixations table when it comes from a second dataset. *Compare, Compare + Animate.*                                                                                                                                                                                                                                           |
+| `fixation_flags_b` `--compare-fixation-flag`            | `None`         | Filters & highlights for scanpath B only. Repeatable. Same SPEC as `--fixation-flag`, e.g. `--compare-fixation-flag` short=hide,threshold_ms=80. Replaces `--fixation-flag` for B. In Python, pass `style_b={'fixation_flags': flags}` to `compare_scanpaths`. *Compare, Compare + Animate.*                                              |
+| `background_image_b` `--stimulus-image-b`               | `None`         | Scanpath B's stimulus image, for a side-by-side or stacked comparison across two datasets, where each panel draws its image. Sized and placed like `--stimulus-image`. *Compare.*                                                                                                                                                         |
+| `background_image_size_b` `--stimulus-image-size-b`     | `None`         | Size of `--stimulus-image-b` in px. *Compare.*                                                                                                                                                                                                                                                                                            |
+| `background_image_origin_b` `--stimulus-image-origin-b` | `None`         | Top-left corner of `--stimulus-image-b` in B's screen px. *Compare.*                                                                                                                                                                                                                                                                      |
 
 ## Reproduce a figure in code
 
@@ -1256,7 +1302,7 @@ save_figure(
 )
 ```
 
-Save a figure, in the format its file extension names.
+Save a figure as HTML, PNG, SVG or PDF.
 
 The file carries the citation of Scanpath Studio in its metadata — PNG text chunks, an SVG `<metadata>` element, the PDF's document properties, the HTML page's `<head>` — so a figure found later on its own still says how to cite it (cite prints it). Nothing is drawn.
 
@@ -1348,17 +1394,18 @@ Returns:
 version_info()
 ```
 
-Say which build of Scanpath Studio this is, without using the network.
+Return version and installation details without a network request.
 
 The same is in the app's Help → About, and in `scanpath-studio version`.
 
-| Field             | What it holds                                                                                                                                                                                                                                       |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`         | `scanpath_studio.__version__`: the release itself (`"0.35.0"`), or between releases a PEP 440 version that sorts after it. `"0.35.0.post3+g8f18219"` is three commits after v0.35.0, at commit `8f18219`; it ends `.dirty` with uncommitted changes |
-| `release`         | The release it descends from (`scanpath_studio.__release__`)                                                                                                                                                                                        |
-| `distance`        | The commits since, `None` when unknown                                                                                                                                                                                                              |
-| `commit`, `dirty` | The commit, and whether there were uncommitted changes                                                                                                                                                                                              |
-| `source`          | How it was worked out: `"checkout"` (`git describe`), `"stamp"` (a desktop bundle's build stamp), `"vcs"` (a `pip install git+…`) or `"release"`                                                                                                    |
+| Field                 | What it holds                                                                                                                                                                                                                                       |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`             | `scanpath_studio.__version__`: the release itself (`"0.35.0"`), or between releases a PEP 440 version that sorts after it. `"0.35.0.post3+g8f18219"` is three commits after v0.35.0, at commit `8f18219`; it ends `.dirty` with uncommitted changes |
+| `release`             | The release it descends from (`scanpath_studio.__release__`)                                                                                                                                                                                        |
+| `channel`, `docs_url` | `"stable"` or `"dev"` and the matching documentation URL                                                                                                                                                                                            |
+| `distance`            | The commits since, `None` when unknown                                                                                                                                                                                                              |
+| `commit`, `dirty`     | The commit, and whether there were uncommitted changes                                                                                                                                                                                              |
+| `source`              | How it was worked out: `"checkout"` (`git describe`), `"stamp"` (a desktop bundle's build stamp), `"vcs"` (a `pip install git+…`) or `"release"`                                                                                                    |
 
 Returns:
 
@@ -1370,7 +1417,7 @@ Returns:
 check_for_updates(timeout=5.0)
 ```
 
-Ask GitHub whether a newer release than this build is out.
+Check GitHub for a newer release.
 
 The one call here that uses the network, and only when made. It reads the latest release from `api.github.com` (drafts and pre-releases excluded), compares it with version_info, and never raises. The same check is the app's Help → About → *Check for updates*, and `scanpath-studio version --check`.
 
@@ -1398,7 +1445,7 @@ Returns:
 cite(format='bibtex', corpus=None)
 ```
 
-How to cite Scanpath Studio — and, optionally, the corpus you used.
+Return a citation for Scanpath Studio and, optionally, a public corpus.
 
 The same entries as the app's Help → About and *Cite* buttons, and `scanpath-studio cite`. Every figure, replay and page `save_figure` writes also carries the citation in its file metadata.
 

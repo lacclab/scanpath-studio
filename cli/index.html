@@ -16,14 +16,14 @@
         <link rel="prev" href="../api/">
       
       
-        <link rel="next" href="../about/">
+        <link rel="next" href="../whats-new/">
       
       
         
       
       
       <link rel="icon" href="../assets/icon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -108,6 +108,21 @@
       
     </div>
     <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+  <nav class="sps-docs-channel" aria-label="Documentation edition">
+    
+      <strong>Stable documentation &middot; v0.47.0</strong>
+      <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
+    
+  </nav>
+
+          </div>
+          
+        </aside>
       
     </div>
     
@@ -370,6 +385,25 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../whats-new/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  What's new
+
+      </a>
+    </li>
   
 
       
@@ -712,7 +746,7 @@
   <span class="md-ellipsis">
     
   
-    Audit an experimenter
+    Review an experimenter's sessions
   
 
     
@@ -875,7 +909,7 @@
   <span class="md-ellipsis">
     
   
-    Find the trials an analysis needs
+    Find trials with specific fixation patterns
   
 
     
@@ -1201,7 +1235,7 @@
   <span class="md-ellipsis">
     
   
-    See progression over time
+    Track changes over time
   
 
     
@@ -2547,6 +2581,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#recipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        recipe
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#check" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2602,6 +2647,33 @@
           </ul>
         </nav>
       
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../whats-new/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What's new
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -2975,6 +3047,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#recipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        recipe
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#check" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3087,8 +3170,8 @@
 
 
 <h1 id="cli-reference">CLI reference<a class="headerlink" href="#cli-reference" title="Permanent link">&para;</a></h1>
-<p><code>scanpath-studio</code> launches the app. Its subcommands do the rest without opening
-it:</p>
+<p><code>scanpath-studio</code> launches the app. Use these commands to create figures,
+check data and manage saved work without opening the app:</p>
 <table>
 <thead>
 <tr>
@@ -3110,6 +3193,10 @@ it:</p>
 <td>Render a corpus figure from a tidy CSV you already have</td>
 </tr>
 <tr>
+<td><a href="#recipe"><code>recipe</code></a></td>
+<td>Recreate a cohort profile CSV from its saved recipe</td>
+</tr>
+<tr>
 <td><a href="#check"><code>check</code></a></td>
 <td>Run the Data checks on your tables</td>
 </tr>
@@ -3128,8 +3215,7 @@ it:</p>
 </tbody>
 </table>
 <p>Each command takes <code>--help</code>, and <code>scanpath-studio --version</code> prints the version.
-A word that is not a command is an error that suggests the closest command. It
-is not passed on to Streamlit.</p>
+If you mistype a command, the CLI suggests the closest match.</p>
 <h2 id="launch-the-app">Launch the app<a class="headerlink" href="#launch-the-app" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>scanpath-studio<span class="w"> </span>--server.port<span class="w"> </span><span class="m">8600</span>
@@ -3151,8 +3237,8 @@ the public datasets and stimulus-image folders. On a lab server you trust, turn
 them back on with <code>SCANPATH_LOCAL_FS=1</code>
 (<code>SCANPATH_LOCAL_FS=1 scanpath-studio --server.address 0.0.0.0</code>).</p>
 <h2 id="render">render<a class="headerlink" href="#render" title="Permanent link">&para;</a></h2>
-<p><code>render</code> writes one trial to a file without opening the app. The extension
-picks the format: <code>.html</code> is interactive and needs nothing else, while <code>.png</code>,
+<p><code>render</code> writes one trial to a file without opening the app. The file extension
+sets the format: <code>.html</code> opens as an interactive figure in your browser, while <code>.png</code>,
 <code>.svg</code> and <code>.pdf</code> need Chrome, Chromium or Edge (or run <code>plotly_get_chrome -y</code>
 once; see the <a href="../faq/#export-fails">FAQ</a>). The figure is the app's Scanpath
 design unless a flag changes it, and every <a href="../api/#figure-options">figure option</a>
@@ -3822,7 +3908,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--order-font-color</code></td>
 <td><code>COLOR</code></td>
 <td>—</td>
-<td>Color of the fixation index numbers (default: #111111).</td>
+<td>Color of the fixation index numbers for a single scanpath (default: #111111).</td>
 </tr>
 <tr>
 <td><code>--order-label-position</code></td>
@@ -4020,7 +4106,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--redact-text</code></td>
 <td>switch</td>
 <td>—</td>
-<td>Draw a rounded block in the text color in place of each word's letters, and leave the words out of the hovers. The figure keeps the text's layout but not its words (the app's Text → Redact).</td>
+<td>Replace each word with a rounded block in the text color and hide its text in tooltips. Preserves the text layout while concealing the words (the app's Text → Redact).</td>
 </tr>
 <tr>
 <td><code>--highlight-text-color</code></td>
@@ -4377,13 +4463,13 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--x-field</code></td>
 <td><code>FIELD</code></td>
 <td>—</td>
-<td>Fixations table column on the x axis (default: x). A non-spatial one draws a chart of the fixations instead of the scanpath.</td>
+<td>Horizontal axis of the static chart (default: x). Choose a numeric fixation column, order_in_trial for fixation index, or @elapsed_seconds for time since the first recorded fixation.</td>
 </tr>
 <tr>
 <td><code>--y-field</code></td>
 <td><code>FIELD</code></td>
 <td>—</td>
-<td>Fixations table column on the y axis (default: y).</td>
+<td>Vertical axis of the static chart (default: y). Takes the same fields as <code>--x-field</code>.</td>
 </tr>
 <tr>
 <td><code>--crop-to-data</code><br><code>--no-full-monitor</code></td>
@@ -4689,19 +4775,19 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--compare-stimulus</code></td>
 <td><code>both</code>, <code>a</code>, <code>b</code></td>
 <td><code>both</code></td>
-<td>On an overlay, whose word boxes and text to draw (default: both). Two datasets' word boxes line up only when the text is the same.</td>
+<td>On an overlay, whose word boxes and text to draw (default: both). Two datasets' word boxes line up only when the text is the same. A two-scanpath replay shows B's text for 'b' and A's text for 'a' or 'both'.</td>
 </tr>
 <tr>
 <td><code>--label-a</code></td>
 <td><code>TEXT</code></td>
 <td>—</td>
-<td>Name of scanpath A in the legend and hovers. Used by the comparison and by <code>--animate</code>. Needs <code>--label-b</code>.</td>
+<td>Name of scanpath A in the legend and tooltips. Requires <code>--compare-with</code> and <code>--label-b</code>.</td>
 </tr>
 <tr>
 <td><code>--label-b</code></td>
 <td><code>TEXT</code></td>
 <td>—</td>
-<td>Name of scanpath B in the legend and hovers. Needs <code>--label-a</code>.</td>
+<td>Name of scanpath B in the legend and tooltips. Requires <code>--label-a</code>.</td>
 </tr>
 <tr>
 <td><code>--compare-legend</code><br><code>--no-compare-legend</code></td>
@@ -4713,13 +4799,13 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--style-a</code></td>
 <td><code>SPEC</code></td>
 <td>—</td>
-<td>Style for scanpath A, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-a</code> fix_color=#D55E00,opacity=0.5. <code>--animate</code> uses them too, except box_color, box_fill_color, the box opacities and raw_gaze_color.</td>
+<td>Style for scanpath A, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-a</code> fix_color=#D55E00,opacity=0.5. A two-scanpath replay uses the fixation and saccade styles.</td>
 </tr>
 <tr>
 <td><code>--style-b</code></td>
 <td><code>SPEC</code></td>
 <td>—</td>
-<td>Style for scanpath B, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-b</code> fix_color=#D55E00,opacity=0.5. <code>--animate</code> uses them too, except box_color, box_fill_color, the box opacities and raw_gaze_color.</td>
+<td>Style for scanpath B, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-b</code> fix_color=#D55E00,opacity=0.5. A two-scanpath replay uses the fixation and saccade styles.</td>
 </tr>
 <tr>
 <td><code>--compare-fixation-flag</code></td>
@@ -4859,6 +4945,128 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 </tbody>
 </table>
 </div>
+<h2 id="recipe">recipe<a class="headerlink" href="#recipe" title="Permanent link">&para;</a></h2>
+<p>Recreate a <strong>Per text → Cohort profile</strong> CSV from its downloaded JSON recipe
+and source tables. Recipes include the original column mappings. If raw gaze
+supplied the text IDs used by a metadata filter, pass its files with <code>--raw-gaze</code>.
+The command identifies any missing metadata or annotation input and verifies
+the regenerated CSV against the checksum in the recipe when available.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>scanpath-studio<span class="w"> </span>recipe<span class="w"> </span>profile.recipe.json<span class="w"> </span>--words<span class="w"> </span>words.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>-o<span class="w"> </span>profile.csv
+</code></pre></div>
+<p><strong>Positional arguments</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td><code>RECIPE.json</code></td>
+<td>required</td>
+<td>Cohort profile recipe from Corpus Analysis.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Options</strong></p>
+<div class="sps-reference-table sps-flag-table">
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Value</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--sample</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Use the bundled demo.</td>
+</tr>
+<tr>
+<td><code>--words</code></td>
+<td><code>WORDS [WORDS ...]</code></td>
+<td>—</td>
+<td>Original Words table(s).</td>
+</tr>
+<tr>
+<td><code>--fixations</code></td>
+<td><code>FIXATIONS [FIXATIONS ...]</code></td>
+<td>—</td>
+<td>Original Fixations table(s).</td>
+</tr>
+<tr>
+<td><code>--raw-gaze</code></td>
+<td><code>RAW_GAZE [RAW_GAZE ...]</code></td>
+<td>—</td>
+<td>Original raw gaze table(s) when a text metadata filter uses their IDs.</td>
+</tr>
+<tr>
+<td><code>--trial-parts-manifest</code></td>
+<td><code>TRIAL_PARTS_MANIFEST</code></td>
+<td>—</td>
+<td>Multipart trial manifest used at import.</td>
+</tr>
+<tr>
+<td><code>--word-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--words</code> table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from.</td>
+</tr>
+<tr>
+<td><code>--fix-schema</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Column mapping for the <code>--fixations</code> table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from.</td>
+</tr>
+<tr>
+<td><code>--keep-columns</code></td>
+<td><code>COLUMN [COLUMN ...]</code></td>
+<td>—</td>
+<td>More columns to keep through loading, under the names they have in your files (e.g. a pupil size), from whichever table has them. Without it, loading keeps only the mapped and recognized fields. A kept fixation column can be used by <code>--color-by</code>, an axis or a hover. Same as keep_columns= in api.load_scanpath_data.</td>
+</tr>
+<tr>
+<td><code>--participant-metadata</code></td>
+<td><code>PARTICIPANT_METADATA</code></td>
+<td>—</td>
+<td>The participant metadata table used by the recipe's filters.</td>
+</tr>
+<tr>
+<td><code>--trial-metadata</code></td>
+<td><code>TRIAL_METADATA</code></td>
+<td>—</td>
+<td>The trial metadata table used by the recipe's filters.</td>
+</tr>
+<tr>
+<td><code>--text-metadata</code></td>
+<td><code>TEXT_METADATA</code></td>
+<td>—</td>
+<td>The text metadata table used by the recipe's filters.</td>
+</tr>
+<tr>
+<td><code>--annotations</code></td>
+<td><code>ANNOTATIONS</code></td>
+<td>—</td>
+<td>Annotations JSON used for favorites or tag filters.</td>
+</tr>
+<tr>
+<td><code>-o</code><br><code>--output</code></td>
+<td><code>OUTPUT</code></td>
+<td>required</td>
+<td>Where to write the reproduced CSV.</td>
+</tr>
+</tbody>
+</table>
+</div>
 <h2 id="check">check<a class="headerlink" href="#check" title="Permanent link">&para;</a></h2>
 <p><code>check</code> runs the <strong><span class="sps-icon" data-icon="database" aria-hidden="true"></span> Data Management</strong> page's <strong>Data checks</strong>
 on your tables without opening the app. It looks for:</p>
@@ -4873,9 +5081,11 @@ on your tables without opening the app. It looks for:</p>
 <p>Each finding gives the rows and trials affected, a few example rows, and what
 the app does with them. <code>check</code> changes nothing and exits 0 whatever it finds.
 <code>--json</code> prints the table
-<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;check_data_health&lt;/span&gt;" href="../api/#scanpath_studio.api.check_data_health"><code>check_data_health</code></a> returns.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>--json
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;check_data_health&lt;/span&gt;" href="../api/#scanpath_studio.api.check_data_health"><code>check_data_health</code></a> returns. In example rows,
+missing values are <code>null</code> and infinite values are the strings <code>"Infinity"</code> or
+<code>"-Infinity"</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>--json
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -4956,10 +5166,10 @@ the app does with them. <code>check</code> changes nothing and exits 0 whatever 
 restart resumes where you left off. It saves uploaded datasets, column
 mappings, view settings, saved designs, metadata tables and annotations.
 <code>cache</code> shows what is stored and can delete it.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the recovery cache</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the recovery cache</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5024,8 +5234,8 @@ app closed.</p>
 <p><code>version</code> says which build this is and how it was installed. <code>--check</code> also
 asks GitHub whether a newer release is out and says how to update your install.
 Only <code>--check</code> uses the network.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>scanpath-studio<span class="w"> </span>version<span class="w">           </span><span class="c1"># the build, and how it was installed</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>scanpath-studio<span class="w"> </span>version<span class="w"> </span>--check<span class="w">   </span><span class="c1"># …and whether a newer release is out</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>scanpath-studio<span class="w"> </span>version<span class="w">           </span><span class="c1"># the build, and how it was installed</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>scanpath-studio<span class="w"> </span>version<span class="w"> </span>--check<span class="w">   </span><span class="c1"># …and whether a newer release is out</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5061,9 +5271,9 @@ updates</strong> in the app, and
 <h2 id="cite">cite<a class="headerlink" href="#cite" title="Permanent link">&para;</a></h2>
 <p><code>cite</code> prints how to cite Scanpath Studio. <code>--corpus</code> adds the citation of the
 public corpus you used.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>scanpath-studio<span class="w"> </span>cite<span class="w">                           </span><span class="c1"># BibTeX</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>apa<span class="w"> </span>--corpus<span class="w"> </span>onestop
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>credit<span class="w">           </span><span class="c1"># one sentence for a figure caption</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>scanpath-studio<span class="w"> </span>cite<span class="w">                           </span><span class="c1"># BibTeX</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>apa<span class="w"> </span>--corpus<span class="w"> </span>onestop
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>scanpath-studio<span class="w"> </span>cite<span class="w"> </span>--format<span class="w"> </span>credit<span class="w">           </span><span class="c1"># one sentence for a figure caption</span>
 </code></pre></div>
 <div class="sps-reference-table sps-flag-table">
 <table>
@@ -5151,13 +5361,13 @@ writes carries it in its file metadata. The same entries are
         
         
           
-          <a href="../about/" class="md-footer__link md-footer__link--next" aria-label="Next: About">
+          <a href="../whats-new/" class="md-footer__link md-footer__link--next" aria-label="Next: What&#39;s new">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                About
+                What's new
               </div>
             </div>
             <div class="md-footer__button md-icon">

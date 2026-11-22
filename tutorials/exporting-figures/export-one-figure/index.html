@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../../assets/icon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -108,6 +108,21 @@
       
     </div>
     <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+  <nav class="sps-docs-channel" aria-label="Documentation edition">
+    
+      <strong>Stable documentation &middot; v0.47.0</strong>
+      <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
+    
+  </nav>
+
+          </div>
+          
+        </aside>
       
     </div>
     
@@ -370,6 +385,25 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../whats-new/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  What's new
+
+      </a>
+    </li>
   
 
       
@@ -717,7 +751,7 @@
   <span class="md-ellipsis">
     
   
-    Audit an experimenter
+    Review an experimenter's sessions
   
 
     
@@ -880,7 +914,7 @@
   <span class="md-ellipsis">
     
   
-    Find the trials an analysis needs
+    Find trials with specific fixation patterns
   
 
     
@@ -1299,7 +1333,7 @@
   <span class="md-ellipsis">
     
   
-    See progression over time
+    Track changes over time
   
 
     
@@ -2300,6 +2334,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../whats-new/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What's new
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../about/" class="md-nav__link">
         
   
@@ -2478,10 +2539,10 @@
 
 <h1 id="export-one-figure">Export one figure<a class="headerlink" href="#export-one-figure" title="Permanent link">&para;</a></h1>
 <p>Save a scanpath, heatmap or comparison at the size you need.</p>
-<p><strong>Design presets</strong>, <strong>Compare</strong> and <strong>My designs</strong> are in the <strong>Full</strong>
-mode: switch to it in the top bar of the <span class="sps-icon" data-icon="route" aria-hidden="true"></span> <strong>Scanpath</strong> view,
-or add <code>ui=full</code> to the app's address
-(<a href="../../../guides/scanpath-visualization/#essentials-and-full">Essentials and Full</a>). In Essentials, the view tiles choose the figure.</p>
+<p>In Essentials, use the view tiles to choose a figure. For <strong>Design presets</strong>,
+<strong>Compare</strong> and <strong>My designs</strong>, switch to <strong>Full</strong> at the top of the
+<span class="sps-icon" data-icon="route" aria-hidden="true"></span> <strong>Scanpath</strong> view
+(<a href="../../../guides/scanpath-visualization/#essentials-and-full">Essentials and Full</a>).</p>
 <h2 id="1-choose-the-view">1. Choose the view<a class="headerlink" href="#1-choose-the-view" title="Permanent link">&para;</a></h2>
 <p>Pick a trial in the <span class="sps-icon" data-icon="route" aria-hidden="true"></span> <strong>Scanpath</strong> view. Choose one of the
 <strong>Design presets</strong>, or set the layers in the Plot controls. Turn on
@@ -2528,7 +2589,12 @@ Choose the <strong>Download format</strong>:</p>
 <li><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> <strong>My designs</strong> in the Plot controls saves the look for
   other trials.</li>
 <li><span class="sps-icon" data-icon="share" aria-hidden="true"></span> <strong>Share</strong> → <strong>Link</strong> reopens the trial and its settings.
-  The link does not carry data you uploaded, so load that data separately.</li>
+  For data you imported, send the source files and tell the recipient the
+  dataset name shown in the link. They can open the link after importing
+  the files under that name. If a comparison uses two imported datasets,
+  send both. Someone who has only A can open its trial and return to the
+  link after adding B. Your own copy of the link still works if you rename
+  either dataset later.</li>
 <li><a href="../../../guides/exporting/#from-the-app-to-a-script"><strong>Share</strong> → <strong>Code</strong></a>
   gives Python or CLI code that redraws the figure.</li>
 <li><strong>Share</strong> → <strong>Settings file</strong> → <strong>Download settings</strong> saves the settings,

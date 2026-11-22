@@ -4,7 +4,7 @@
 
 ### The fixations don't line up with the text
 
-Words and fixations must use the same pixel coordinates and share trial IDs. If the fixations are shifted, mirrored or scaled against the words, the two tables use different coordinates: a different origin, unit or offset. No setting in the app fixes that, so convert one of the tables ([What your data needs → Files and units](https://lacclab.github.io/scanpath-studio/guides/loading-data/#tables)).
+Words and fixations must use the same pixel coordinates and share trial IDs. If the fixations are shifted, mirrored or scaled relative to the words, check that both tables use the same origin, units and offsets. Correct any coordinate differences before importing the tables ([What your data needs → Files and units](https://lacclab.github.io/scanpath-studio/guides/loading-data/#tables)).
 
 If the fixations sit on the words but the figure is framed or sized wrongly, set the screen resolution of the monitor used in the experiment. Open **Data Management** → **Edit dataset** → **Recording setup** and choose **Screen** → **I know it**. *Estimate from my data* gives only a lower bound.
 
@@ -18,7 +18,7 @@ The app guesses columns from their names. Pick the right one under **Data Manage
 
 ### Can I load only one table?
 
-Yes. A Words table alone shows the text and any reading measures it carries. A Fixations table alone shows the fixations without the text. A Raw gaze table can also be the only table. Most features need both words and fixations. When your tables cover different trials, every trial that any of them has is listed and drawn with the layers it has.
+Yes. A Words table alone shows the text and any reading measures it carries. A Fixations table alone shows the fixations without the text. A Raw gaze table can also be the only table. Most features need both words and fixations. When your tables cover different trials, the app lists every trial found in any table and draws the layers available for it.
 
 ### Can I open PoTeC or OneStop in the online demo?
 
@@ -60,7 +60,7 @@ Yes. Turn on **Stimulus** ▾ → **Text** → **Redact**. Each word becomes a r
 
 ### Will a refresh lose my work?
 
-Not on a local or desktop install. When the app listens only on this computer, as `scanpath-studio` and the desktop app do, it saves your datasets and settings there. **Data Management** → **Saved on this computer** shows what it holds. The online demo keeps nothing and says so after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#back-up-your-work)).
+Not on a local or desktop install. When the app listens only on this computer, as `scanpath-studio` and the desktop app do, it saves your datasets and settings there. **Data Management** → **Saved on this computer** shows what it holds. The online demo keeps nothing and explains this after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#back-up-your-work)).
 
 If the files of one saved dataset go missing or are damaged, the rest of the session still comes back. The app names the dataset it could not restore, keeps that saved copy unchanged, and offers **Retry** and **Remove saved copy**. Saved metadata tables that can't be read are kept the same way. If the whole saved copy can't be read, the app opens without it and stops saving over it until you retry or clear it.
 
@@ -72,7 +72,7 @@ Start the app with `scanpath-studio run --no-persist` to save nothing. To delete
 
 ### Where do I ask a question, report a bug or send feedback?
 
-**Help** → **Send feedback** links each kind of feedback to its page on GitHub: **Report a bug**, **Suggest a feature**, **Share an idea** and **Ask a question**. It also shows the version and system details a bug report needs, ready to copy. The app sends nothing. You submit each one on GitHub yourself.
+**Help** → **Send feedback** links each kind of feedback to its page on GitHub: **Report a bug**, **Suggest a feature**, **Share an idea** and **Ask a question**. It also shows the version and system details for a bug report, ready to copy. You can review and submit your message on GitHub.
 
 Ask questions in [Discussions → Q&A](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a). Report a bug as a [GitHub issue](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md), with the version, your operating system and how you run the app (pip, the desktop app or the online demo). **Help** → **About** shows the version and links to both. On the command line, run `scanpath-studio --version`.
 

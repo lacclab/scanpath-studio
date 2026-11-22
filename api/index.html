@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/icon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -108,6 +108,21 @@
       
     </div>
     <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+  <nav class="sps-docs-channel" aria-label="Documentation edition">
+    
+      <strong>Stable documentation &middot; v0.47.0</strong>
+      <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
+    
+  </nav>
+
+          </div>
+          
+        </aside>
       
     </div>
     
@@ -370,6 +385,25 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../whats-new/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  What's new
+
+      </a>
+    </li>
   
 
       
@@ -712,7 +746,7 @@
   <span class="md-ellipsis">
     
   
-    Audit an experimenter
+    Review an experimenter's sessions
   
 
     
@@ -875,7 +909,7 @@
   <span class="md-ellipsis">
     
   
-    Find the trials an analysis needs
+    Find trials with specific fixation patterns
   
 
     
@@ -1201,7 +1235,7 @@
   <span class="md-ellipsis">
     
   
-    See progression over time
+    Track changes over time
   
 
     
@@ -2475,6 +2509,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.run_analysis_recipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;run_analysis_recipe
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2958,6 +3003,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../whats-new/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What's new
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../about/" class="md-nav__link">
         
   
@@ -3270,6 +3342,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;check_data_health
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.run_analysis_recipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;run_analysis_recipe
       
     </span>
   </a>
@@ -3844,7 +3927,7 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;load_sample_raw_gaze&lt;/span&gt;" href="#scanpath_studio.api.load_sample_raw_gaze"><code>load_sample_raw_gaze</code></a></td>
-<td>Load the bundled demo's raw gaze: what the app overlays on it.</td>
+<td>Load synthesized raw gaze samples for one trial in the bundled demo.</td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;load_potec&lt;/span&gt;" href="#scanpath_studio.datasets.load_potec"><code>load_potec</code></a></td>
@@ -3880,7 +3963,11 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;check_data_health&lt;/span&gt;" href="#scanpath_studio.api.check_data_health"><code>check_data_health</code></a></td>
-<td>Find values that loaded as numbers but cannot be right: the app's <em>Data checks</em>.</td>
+<td>Check durations, positions and word boxes for data problems.</td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;run_analysis_recipe&lt;/span&gt;" href="#scanpath_studio.api.run_analysis_recipe"><code>run_analysis_recipe</code></a></td>
+<td>Recreate a downloaded per-word cohort profile table.</td>
 </tr>
 <tr>
 <td><strong>Plot</strong></td>
@@ -3912,7 +3999,7 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;figure_options&lt;/span&gt;" href="#scanpath_studio.api.figure_options"><code>figure_options</code></a></td>
-<td>List every figure keyword a builder takes, with the default it renders with.</td>
+<td>List figure options and their default values.</td>
 </tr>
 <tr>
 <td><strong>Reproduce a figure in code</strong></td>
@@ -3928,7 +4015,7 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;save_figure&lt;/span&gt;" href="#scanpath_studio.api.save_figure"><code>save_figure</code></a></td>
-<td>Save a figure, in the format its file extension names.</td>
+<td>Save a figure as HTML, PNG, SVG or PDF.</td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;save_figure_layers&lt;/span&gt;" href="#scanpath_studio.api.save_figure_layers"><code>save_figure_layers</code></a></td>
@@ -3952,11 +4039,11 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;version_info&lt;/span&gt;" href="#scanpath_studio.api.version_info"><code>version_info</code></a></td>
-<td>Say which build of Scanpath Studio this is, without using the network.</td>
+<td>Return version and installation details without a network request.</td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;check_for_updates&lt;/span&gt;" href="#scanpath_studio.api.check_for_updates"><code>check_for_updates</code></a></td>
-<td>Ask GitHub whether a newer release than this build is out.</td>
+<td>Check GitHub for a newer release.</td>
 </tr>
 <tr>
 <td><strong>Citation</strong></td>
@@ -3964,19 +4051,18 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;cite&lt;/span&gt;" href="#scanpath_studio.api.cite"><code>cite</code></a></td>
-<td>How to cite Scanpath Studio — and, optionally, the corpus you used.</td>
+<td>Return a citation for Scanpath Studio and, optionally, a public corpus.</td>
 </tr>
 </tbody>
 </table>
 </div>
 <h2 id="column-names">Column names<a class="headerlink" href="#column-names" title="Permanent link">&para;</a></h2>
-<p>Columns keep the names your files give them. The bundled demo's Words table
-calls its word ID column <code>IA_ID</code> and its total fixation duration
-<code>IA_DWELL_TIME</code>, and every function and option takes those names. A column
-Scanpath Studio made keeps its internal name.
-<code>load_scanpath_data(..., names="canonical")</code> gives the internal names, which are
-the same for every dataset. On the bundled demo, the first steps print this
-(run when the docs are built):</p>
+<p>The API preserves the column names from your files. For example, the bundled
+demo's Words table uses <code>IA_ID</code> for word IDs and <code>IA_DWELL_TIME</code> for total
+fixation duration. Use those names when selecting columns in functions and
+figure options. Columns created by Scanpath Studio use its internal names.</p>
+<p>Pass <code>names="canonical"</code> to <code>load_scanpath_data</code> to use the same internal names
+across datasets. The example below shows the names returned for the bundled demo:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sps</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_sample_data</span><span class="p">()</span>
@@ -4862,7 +4948,7 @@ internal ones (see
 
     <div class="doc doc-contents first">
 
-        <p>Load the bundled demo's raw gaze: what the app overlays on it.</p>
+        <p>Load synthesized raw gaze samples for one trial in the bundled demo.</p>
 <p>OneStop ships no sample-level gaze, so this is <strong>synthesized</strong> from one of the
 demo's real trials, and covers that trial alone.</p>
 
@@ -5177,7 +5263,7 @@ center.</p>
           –
           <div class="doc-md-description">
             <p>Passed to <code>authoring.layout_text</code> (<code>canvas_width</code>,
-<code>margin</code>, <code>character_width</code>, <code>word_height</code>, <code>line_height</code>).</p>
+<code>margin</code>, <code>character_width</code>, <code>word_height</code>, <code>line_height</code>, <code>right_to_left</code>).</p>
           </div>
         </li>
     </ul>
@@ -5421,7 +5507,7 @@ in a dataset whose other trials have fixations.</p>
 
     <div class="doc doc-contents first">
 
-        <p>Find values that loaded as numbers but cannot be right: the app's <em>Data checks</em>.</p>
+        <p>Check durations, positions and word boxes for data problems.</p>
 <p>The checks look for fixations lasting 0 ms or less or with an infinite duration or
 onset, fixations and raw-gaze samples whose position is missing or infinite, word
 boxes with no area or no finite position, and per-screen screen sizes that are not
@@ -5528,6 +5614,152 @@ finite and positive. Nothing is changed or dropped.</p>
 
     </div>
 
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.run_analysis_recipe" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">run_analysis_recipe</span>
+
+
+<a href="#scanpath_studio.api.run_analysis_recipe" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">run_analysis_recipe</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">recipe</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">words</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">fixations</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">raw_gaze</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">participant_metadata</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">trial_metadata</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">text_metadata</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">annotations</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">column_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Recreate a downloaded per-word cohort profile table.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>recipe</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a> | <a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a> | <a class="autorefs autorefs-external" title="&lt;code&gt;pathlib.Path&lt;/code&gt;" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path">Path</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>The downloaded recipe JSON path or its decoded object.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>words</code></b>
+              (<code><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>Normalized Words table from <code>load_scanpath_data</code> or a corpus loader.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>fixations</code></b>
+              (<code><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The matching normalized Fixations table, when present.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>raw_gaze</code></b>
+              (<code><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Normalized samples from <code>load_raw_gaze</code> when the text filter uses their IDs.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>participant_metadata</code></b>
+              (<code><span title="scanpath_studio.api.TablesLike">TablesLike</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The original participant metadata table for a reader filter.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>trial_metadata</code></b>
+              (<code><span title="scanpath_studio.api.TablesLike">TablesLike</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The original trial metadata table for a trial filter.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>text_metadata</code></b>
+              (<code><span title="scanpath_studio.api.TablesLike">TablesLike</span> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>The original text metadata table for a text filter.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>annotations</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a> | <a class="autorefs autorefs-external" title="&lt;code&gt;pathlib.Path&lt;/code&gt;" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path">Path</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Path to the dataset's exported annotations JSON for a star or tag filter.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>column_names</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Source column maps when supplying canonical frames.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></code>
+          –
+          <div class="doc-md-description">
+            <p>The cohort profile under the dataset's own output column names.</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/exceptions.html#ValueError">ValueError</a></code>
+            –
+          <div class="doc-md-description">
+            <p>Unsupported recipe, missing filter fields or mismatched result.</p>
+          </div>
+        </li>
+    </ul>
+
+
+    </div>
+
 </div><h2 id="plot">Plot<a class="headerlink" href="#plot" title="Permanent link">&para;</a></h2>
 
 
@@ -5570,7 +5802,9 @@ finite and positive. Nothing is changed or dropped.</p>
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;figure_options&lt;/span&gt;" href="#scanpath_studio.api.figure_options"><code>figure_options</code></a> lists them with their
 defaults. An option naming a column takes either name: frames under the dataset's
 own column names, as <code>load_scanpath_data</code> returns them by default, are read
-through the map they carry.</p>
+through the map they carry. Use <code>x_field="@elapsed_seconds"</code> with
+<code>y_field="x"</code> or <code>"y"</code> to draw fixation durations against time since the
+reading's first recorded onset. Selecting a screen or index window keeps that origin.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -6197,7 +6431,7 @@ filter), or B frames holding several trials without <code>trial_b</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
-              <code><span title="IncomparableScreensError">IncomparableScreensError</span></code>
+              <code>IncomparableScreensError</code>
             –
           <div class="doc-md-description">
             <p>B's dataset has a different canvas from A's. A
@@ -6247,9 +6481,10 @@ filter), or B frames holding several trials without <code>trial_b</code>.</p>
 <a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>    <span class="n">drift_correction</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>    <span class="n">title</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
 <a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>    <span class="n">caption</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
-<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>    <span class="n">column_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>    <span class="o">**</span><span class="n">figure_overrides</span><span class="p">,</span>
-<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="p">)</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>    <span class="n">illustration_label</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>    <span class="n">column_names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>    <span class="o">**</span><span class="n">figure_overrides</span><span class="p">,</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -6281,12 +6516,22 @@ keys:</p>
 </thead>
 <tbody>
 <tr>
-<td><code>fix_color</code>, <code>saccade_color</code></td>
-<td>The scanpath's colors</td>
-<td>Its default</td>
+<td><code>fix_color</code></td>
+<td>Fixation markers and index numbers</td>
+<td>The scanpath's palette color</td>
 </tr>
 <tr>
-<td><code>marker_size_range</code>, <code>opacity</code>, <code>hollow</code></td>
+<td><code>saccade_color</code></td>
+<td>Saccade lines</td>
+<td>The scanpath's palette color</td>
+</tr>
+<tr>
+<td><code>marker_size_range</code></td>
+<td>Smallest and largest fixation markers</td>
+<td>The figure's <code>marker_size_range</code></td>
+</tr>
+<tr>
+<td><code>opacity</code>, <code>hollow</code></td>
 <td>Its fixation markers</td>
 <td>Its default</td>
 </tr>
@@ -6327,8 +6572,8 @@ keys:</p>
 </tr>
 </tbody>
 </table>
-<p>The box keys and <code>raw_gaze_color</code> are this figure's only: the co-animation draws
-one set of boxes and no raw gaze, and ignores them.</p>
+<p>For a replay of two scanpaths, see
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;animate_scanpath&lt;/span&gt;" href="#scanpath_studio.api.animate_scanpath"><code>animate_scanpath</code></a> for the supported styles.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -6575,6 +6820,16 @@ fixations.</p>
           <div class="doc-md-description">
             <p>Experimental, as in
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>illustration_label</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a></code>, default:
+                  <code>&#39;auto&#39;</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>As in <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;plot_scanpath&lt;/span&gt;" href="#scanpath_studio.api.plot_scanpath"><code>plot_scanpath</code></a>. An authored reading on either side labels the comparison.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -6972,13 +7227,15 @@ and the columns present), or <code>kind</code> is unknown.</p>
 <p>Set layers, colors, sizes and legends with keyword arguments to <code>plot_scanpath</code>,
 <code>animate_scanpath</code> or <code>compare_scanpaths</code>. The tables below list each option's
 default and matching CLI <code>render</code> flag, under the section names of the app's
-<span class="sps-icon" data-icon="tune" aria-hidden="true"></span> <strong>Plot controls</strong>. A description ends by naming the builders an
-option is limited to, if any.</p>
+<span class="sps-icon" data-icon="tune" aria-hidden="true"></span> <strong>Plot controls</strong>. If an option applies to fewer than four views,
+its row names them. <strong>Single plot</strong> and <strong>Single replay</strong> show one scanpath.
+<strong>Compare</strong> shows two scanpaths together or in separate panels, and
+<strong>Compare + Animate</strong> replays two scanpaths.</p>
 <p>For options with a fixed set of values, case, spaces, <code>-</code> and <code>_</code> are ignored;
 other values raise a <code>ValueError</code>. A <code>--no-…</code> flag turns off an option that is
 on by default.</p>
-<p><code>figure_options()</code> returns the defaults in code; <code>figure_options(choices=True)</code>
-also lists the accepted values.</p>
+<p><code>figure_options()</code> returns the keywords a builder accepts and their defaults.
+<code>figure_options(choices=True)</code> also lists the accepted values.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -6994,11 +7251,12 @@ also lists the accepted values.</p>
 
     <div class="doc doc-contents first">
 
-        <p>List every figure keyword a builder takes, with the default it renders with.</p>
-<p>The defaults are what a call actually renders with, the app's Scanpath design, so a
-script can diff its intended settings against what it would get. The <em>Figure
-options</em> section of the API reference lists them by section, with their <code>render</code>
-flags.</p>
+        <p>List figure options and their default values.</p>
+<p>The defaults follow the app's Scanpath design. Some accepted keywords affect
+only certain views. For example, <code>order_font_color</code> sets the fixation index
+color for a single scanpath. With two scanpaths, each index takes its
+scanpath's fixation color. The <em>Figure options</em> table lists the views and
+matching <code>render</code> flags.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -7080,12 +7338,12 @@ listing them for anything else.</p>
 <tr>
 <td><code>show_fixations</code><br><code>--no-fixations</code></td>
 <td><code>True</code></td>
-<td>Hide the fixations. <em>Plot and compare only.</em></td>
+<td>Hide the fixations.<br><em>Single plot, Compare.</em></td>
 </tr>
 <tr>
 <td><code>fixation_color</code><br><code>--fixation-color</code></td>
 <td><code>'#0072B2'</code></td>
-<td>Fixation color when <code>--color-by</code> is '(uniform)'.</td>
+<td>Fixation color when <code>--color-by</code> is '(uniform)'. For two scanpaths, set <code>fix_color</code> in <code>style_a</code> or <code>style_b</code>.<br><em>Single plot, Single replay.</em></td>
 </tr>
 <tr>
 <td><code>color_by</code><br><code>--color-by</code></td>
@@ -7110,7 +7368,7 @@ listing them for anything else.</p>
 <tr>
 <td><code>fixation_opacity</code><br><code>--fixation-opacity</code></td>
 <td><code>0.7</code></td>
-<td>Fixation marker opacity, 0.1–1.0.</td>
+<td>Fixation marker opacity, 0.1–1.0. For two scanpaths, set <code>opacity</code> in <code>style_a</code> or <code>style_b</code>.<br><em>Single plot, Single replay.</em></td>
 </tr>
 <tr>
 <td><code>fixation_symbol</code><br><code>--fixation-symbol</code></td>
@@ -7120,7 +7378,7 @@ listing them for anything else.</p>
 <tr>
 <td><code>hollow_fixations</code><br><code>--hollow-fixations</code></td>
 <td><code>False</code></td>
-<td>Draw the fixations as outlines instead of filled markers.</td>
+<td>Draw the fixations as outlines instead of filled markers. For two scanpaths, set <code>hollow</code> in <code>style_a</code> or <code>style_b</code>.<br><em>Single plot, Single replay.</em></td>
 </tr>
 <tr>
 <td><code>fixation_outline_color</code><br><code>--fixation-outline-color</code></td>
@@ -7140,7 +7398,7 @@ listing them for anything else.</p>
 <tr>
 <td><code>marker_size_range</code><br><code>--marker-size-range</code></td>
 <td><code>(8, 24)</code></td>
-<td>Smallest and largest fixation marker size in px, e.g. 4 12. A smaller range suits thumbnails.</td>
+<td>Smallest and largest fixation marker size in px, e.g. 4 12. A smaller range suits thumbnails. Each scanpath uses this range unless its style supplies one.</td>
 </tr>
 <tr>
 <td><code>marker_duration_range</code><br><code>--marker-duration-range</code></td>
@@ -7190,7 +7448,7 @@ listing them for anything else.</p>
 <tr>
 <td><code>order_font_color</code><br><code>--order-font-color</code></td>
 <td><code>'#111111'</code></td>
-<td>Color of the fixation index numbers.</td>
+<td>Color of the fixation index numbers for a single scanpath. For two scanpaths, set <code>fix_color</code> in <code>style_a</code> or <code>style_b</code>.<br><em>Single plot, Single replay.</em></td>
 </tr>
 <tr>
 <td><code>order_label_position</code><br><code>--order-label-position</code></td>
@@ -7200,12 +7458,12 @@ listing them for anything else.</p>
 <tr>
 <td><code>fixation_snap_to_line</code><br><code>--snap-fixations</code></td>
 <td><code>False</code></td>
-<td>Move each fixation up or down onto its text line: its word's line, else the nearest. Its x stays. <code>--snap-position</code> sets where on the line. <em>Plot and compare only.</em></td>
+<td>Move each fixation up or down onto its text line: its word's line, else the nearest. Its x stays. <code>--snap-position</code> sets where on the line.<br><em>Single plot.</em></td>
 </tr>
 <tr>
 <td><code>fixation_snap_position</code><br><code>--snap-position</code></td>
 <td><code>-0.5</code></td>
-<td>Where on its line a snapped fixation sits, in line heights from the line's middle: 0 centers it, -0.5 is the top edge, 0.5 the bottom edge. Used with <code>--snap-fixations</code>. <em>Plot and compare only.</em></td>
+<td>Where on its line a snapped fixation sits, in line heights from the line's middle: 0 centers it, -0.5 is the top edge, 0.5 the bottom edge. Used with <code>--snap-fixations</code>.<br><em>Single plot.</em></td>
 </tr>
 </tbody>
 </table>
@@ -7229,17 +7487,17 @@ listing them for anything else.</p>
 <tr>
 <td><code>saccade_color</code><br><code>--saccade-color</code></td>
 <td><code>'#CC79A7'</code></td>
-<td>Saccade line and arrow color, as hex or a CSS name.</td>
+<td>Saccade line and arrow color, as hex or a CSS name. For two scanpaths, set <code>saccade_color</code> in <code>style_a</code> or <code>style_b</code>.<br><em>Single plot, Single replay.</em></td>
 </tr>
 <tr>
 <td><code>saccade_style</code><br><code>--saccade-style</code></td>
 <td><code>'solid'</code></td>
-<td>Saccade line dash style. One of <code>'solid'</code>, <code>'dash'</code>, <code>'dot'</code>, <code>'dashdot'</code>.</td>
+<td>Saccade line dash style. One of <code>'solid'</code>, <code>'dash'</code>, <code>'dot'</code>, <code>'dashdot'</code>. For two scanpaths, set <code>saccade_style</code> in <code>style_a</code> or <code>style_b</code>.<br><em>Single plot, Single replay.</em></td>
 </tr>
 <tr>
 <td><code>saccade_width</code><br><code>--saccade-width</code></td>
 <td><code>2.0</code></td>
-<td>Saccade line width in px, 0.5–10.</td>
+<td>Saccade line width in px, 0.5–10. For two scanpaths, set <code>saccade_width</code> in <code>style_a</code> or <code>style_b</code>.<br><em>Single plot, Single replay.</em></td>
 </tr>
 <tr>
 <td><code>saccade_opacity</code><br><code>--saccade-opacity</code></td>
@@ -7259,17 +7517,17 @@ listing them for anything else.</p>
 <tr>
 <td><code>saccade_render_mode</code><br><code>--saccade-arcs</code></td>
 <td><code>'Straight'</code></td>
-<td>Draw saccades as upward arcs instead of straight lines (the app's Shape: Arc). One of <code>'Straight'</code>, <code>'Arc'</code>. <em>Plot and compare only.</em></td>
+<td>Draw saccades as upward arcs instead of straight lines (the app's Shape: Arc). One of <code>'Straight'</code>, <code>'Arc'</code>.<br><em>Single plot.</em></td>
 </tr>
 <tr>
 <td><code>saccade_color_mode</code><br><code>--saccade-color-by-type</code><br><code>--saccade-color-by-direction</code></td>
 <td><code>'One color'</code></td>
-<td>Color each saccade by its type: forward, skip, refixation, return sweep or regression (the app's By type). One of <code>'One color'</code>, <code>'Forward / regression'</code>, <code>'By type'</code>. <em>Plot and compare only.</em></td>
+<td>Color each saccade by its type: forward, skip, refixation, return sweep or regression (the app's By type). One of <code>'One color'</code>, <code>'Forward / regression'</code>, <code>'By type'</code>.<br><em>Single plot.</em></td>
 </tr>
 <tr>
 <td><code>saccade_class_colors</code><br><code>--saccade-type-color</code></td>
 <td><code>None</code></td>
-<td>Set one saccade type's color, e.g. <code>--saccade-type-color</code> regression=#000000. Repeatable. Types: forward, skip, refixation, return_sweep, regression. Implies <code>--saccade-color-by-type</code>. With <code>--saccade-color-by-direction</code>, it sets the forward and regression colors instead. <em>Plot and compare only.</em></td>
+<td>Set one saccade type's color, e.g. <code>--saccade-type-color</code> regression=#000000. Repeatable. Types: forward, skip, refixation, return_sweep, regression. Implies <code>--saccade-color-by-type</code>. With <code>--saccade-color-by-direction</code>, it sets the forward and regression colors instead.<br><em>Single plot.</em></td>
 </tr>
 </tbody>
 </table>
@@ -7293,7 +7551,7 @@ listing them for anything else.</p>
 <tr>
 <td><code>redact_text</code><br><code>--redact-text</code></td>
 <td><code>False</code></td>
-<td>Draw a rounded block in the text color in place of each word's letters, and leave the words out of the hovers. The figure keeps the text's layout but not its words (the app's Text → Redact).</td>
+<td>Replace each word with a rounded block in the text color and hide its text in tooltips. Preserves the text layout while concealing the words (the app's Text → Redact).</td>
 </tr>
 <tr>
 <td><code>line_spacing</code><br><code>--line-spacing</code></td>
@@ -7328,12 +7586,12 @@ listing them for anything else.</p>
 <tr>
 <td><code>critical_span_style</code><br><code>--critical-span-style</code></td>
 <td><code>'Mark text'</code></td>
-<td>How the <code>--highlight-column</code> words are marked: mark-text recolors them, mark-border outlines their boxes, none draws neither. One of <code>'Mark text'</code>, <code>'Mark border'</code>, <code>'None'</code>. <em>Plot and compare only.</em></td>
+<td>How the <code>--highlight-column</code> words are marked: mark-text recolors them, mark-border outlines their boxes, none draws neither. One of <code>'Mark text'</code>, <code>'Mark border'</code>, <code>'None'</code>.<br><em>Single plot.</em></td>
 </tr>
 <tr>
 <td><code>span_border_color</code><br><code>--span-border-color</code></td>
 <td><code>'#000000'</code></td>
-<td>Box color under <code>--critical-span-style</code> mark-border. <em>Plot and compare only.</em></td>
+<td>Box color under <code>--critical-span-style</code> mark-border.<br><em>Single plot.</em></td>
 </tr>
 <tr>
 <td><code>show_stimulus_image</code><br><code>--show-stimulus-image</code></td>
@@ -7382,7 +7640,7 @@ listing them for anything else.</p>
 <tr>
 <td><code>word_box_color</code><br><code>--word-box-color</code></td>
 <td><code>'#6c757d'</code></td>
-<td>Word-box outline color. In a comparison, each scanpath's boxes are outlined in its color instead.</td>
+<td>Word-box outline color. In a comparison, each scanpath's boxes are outlined in its color instead.<br><em>Single plot, Single replay, Compare + Animate.</em></td>
 </tr>
 <tr>
 <td><code>word_box_line_opacity</code><br><code>--word-box-line-opacity</code></td>
@@ -7416,82 +7674,82 @@ listing them for anything else.</p>
 <tr>
 <td><code>show_heatmap</code><br><code>--no-heatmap</code><br><code>--heatmap</code></td>
 <td><code>False</code></td>
-<td>Draw the heatmap. <em>Plot and compare only.</em></td>
+<td>Draw the heatmap.<br><em>Single plot, Compare.</em></td>
 </tr>
 <tr>
 <td><code>heatmap_style</code><br><code>--heatmap-style</code></td>
 <td><code>'Word boxes'</code></td>
-<td>Heatmap style: word-boxes tints each word box, smoothed blurs the fixations. One of <code>'Word boxes'</code>, <code>'Smoothed'</code>. <em>Plot and compare only.</em></td>
+<td>Heatmap style: word-boxes tints each word box, smoothed blurs the fixations. One of <code>'Word boxes'</code>, <code>'Smoothed'</code>.<br><em>Single plot.</em></td>
 </tr>
 <tr>
 <td><code>heatmap_metric</code><br><code>--heatmap-metric</code></td>
 <td><code>'duration_ms'</code></td>
-<td>What the heatmap colors by (the app's Color → By): the fixation duration column, under your file's name or as duration_ms, or counts for the fixation count. Default: duration_ms. <em>Plot and compare only.</em></td>
+<td>What the heatmap colors by (the app's Color → By): the fixation duration column, under your file's name or as duration_ms, or counts for the fixation count. Default: duration_ms.<br><em>Single plot, Compare.</em></td>
 </tr>
 <tr>
 <td><code>heatmap_colorscale</code><br><code>--heatmap-colorscale</code></td>
 <td><code>'Blues'</code></td>
-<td>Heatmap color scale, e.g. Greens. <em>Plot and compare only.</em></td>
+<td>Heatmap color scale, e.g. Greens.<br><em>Single plot, Compare.</em></td>
 </tr>
 <tr>
 <td><code>heatmap_norm</code><br><code>--heatmap-norm</code></td>
 <td><code>'Linear'</code></td>
-<td>Heatmap color scaling: linear (default) or log. Log keeps a few words with long dwell times from washing out the rest. One of <code>'Linear'</code>, <code>'Log'</code>. <em>Plot and compare only.</em></td>
+<td>Heatmap color scaling: linear (default) or log. Log keeps a few words with long dwell times from washing out the rest. One of <code>'Linear'</code>, <code>'Log'</code>.<br><em>Single plot, Compare.</em></td>
 </tr>
 <tr>
 <td><code>heatmap_range</code><br><code>--heatmap-range</code></td>
 <td><code>None</code></td>
-<td>Fix the heatmap's color scale to LO..HI instead of the trial's range. <em>Plot and compare only.</em></td>
+<td>Fix the heatmap's color scale to LO..HI instead of the trial's range.<br><em>Single plot, Compare.</em></td>
 </tr>
 <tr>
 <td><code>heatmap_opacity</code><br><code>--heatmap-opacity</code></td>
 <td><code>None</code></td>
-<td>Heatmap opacity, 0.05–1.0. <em>Plot and compare only.</em></td>
+<td>Heatmap opacity, 0.05–1.0.<br><em>Single plot, Compare.</em></td>
 </tr>
 <tr>
 <td><code>heatmap_sigma_px</code><br><code>--heatmap-sigma</code></td>
 <td><code>None</code></td>
-<td>Blur of <code>--heatmap-style</code> smoothed, as a Gaussian σ in px. <em>Plot and compare only.</em></td>
+<td>Blur of <code>--heatmap-style</code> smoothed, as a Gaussian σ in px.<br><em>Single plot.</em></td>
 </tr>
 <tr>
 <td><code>word_heatmap_col</code><br><code>--word-heatmap-col</code></td>
 <td><code>None</code></td>
-<td>With <code>--heatmap</code>, for a dataset with no fixations: tint each word box by this numeric Words table column, e.g. gpt2_surprisal, instead of its total fixation duration. <em>Plot and compare only.</em></td>
+<td>With <code>--heatmap</code>, for a dataset with no fixations: tint each word box by this numeric Words table column, e.g. gpt2_surprisal, instead of its total fixation duration.<br><em>Single plot.</em></td>
 </tr>
 <tr>
 <td><code>word_heatmap_title</code><br><code>--word-heatmap-title</code></td>
 <td><code>None</code></td>
-<td>Color-bar title for <code>--word-heatmap-col</code>. <em>Plot and compare only.</em></td>
+<td>Color-bar title for <code>--word-heatmap-col</code>.<br><em>Single plot.</em></td>
 </tr>
 <tr>
 <td><code>show_heatmap_colorbar</code><br><code>--no-heatmap-colorbar</code></td>
 <td><code>True</code></td>
-<td>Leave out the heatmap's color bar.</td>
+<td>Leave out the heatmap's color bar.<br><em>Single plot, Compare.</em></td>
 </tr>
 <tr>
 <td><code>heatmap_colorbar_orientation</code><br><code>--heatmap-colorbar-orientation</code></td>
 <td><code>'Vertical'</code></td>
-<td>Heatmap color bar: beside the plot (vertical, default) or below it. One of <code>'Vertical'</code>, <code>'Horizontal'</code>.</td>
+<td>Heatmap color bar: beside the plot (vertical, default) or below it. One of <code>'Vertical'</code>, <code>'Horizontal'</code>.<br><em>Single plot, Compare.</em></td>
 </tr>
 <tr>
 <td><code>heatmap_colorbar_length</code><br><code>--heatmap-colorbar-length</code></td>
 <td><code>None</code></td>
-<td>Heatmap color bar: length as a share of the plot's side, 0.1–1.0.</td>
+<td>Heatmap color bar: length as a share of the plot's side, 0.1–1.0.<br><em>Single plot, Compare.</em></td>
 </tr>
 <tr>
 <td><code>heatmap_colorbar_thickness</code><br><code>--heatmap-colorbar-thickness</code></td>
 <td><code>14</code></td>
-<td>Heatmap color bar: thickness, 4–40 px.</td>
+<td>Heatmap color bar: thickness, 4–40 px.<br><em>Single plot, Compare.</em></td>
 </tr>
 <tr>
 <td><code>heatmap_colorbar_tickangle</code><br><code>--heatmap-colorbar-tickangle</code></td>
 <td><code>0</code></td>
-<td>Heatmap color bar: tick-label angle, -90–90.</td>
+<td>Heatmap color bar: tick-label angle, -90–90.<br><em>Single plot, Compare.</em></td>
 </tr>
 <tr>
 <td><code>heatmap_colorbar_tickfont_size</code><br><code>--heatmap-colorbar-tickfont-size</code></td>
 <td><code>12</code></td>
-<td>Heatmap color bar: tick-label size.</td>
+<td>Heatmap color bar: tick-label size.<br><em>Single plot, Compare.</em></td>
 </tr>
 </tbody>
 </table>
@@ -7510,22 +7768,22 @@ listing them for anything else.</p>
 <tr>
 <td><code>show_raw_gaze</code><br><code>--raw-gaze</code><br><code>--no-raw-gaze</code></td>
 <td><code>False</code></td>
-<td>The Raw gaze table to draw under the fixations, in the formats <code>--fixations</code> reads and auto-detected the same way. Several paths, or a quoted glob, are stacked into one table. Drawn on static figures and <code>--compare-with</code> comparisons, where each scanpath's samples take its color, but not with <code>--animate</code>. As the only input it is the dataset: its trials are listed and drawn as recorded, and no fixations are detected from the samples. <em>Plot and compare only.</em></td>
+<td>The Raw gaze table to draw under the fixations, in the formats <code>--fixations</code> reads and auto-detected the same way. Several paths, or a quoted glob, are stacked into one table. Drawn on static figures and <code>--compare-with</code> comparisons, where each scanpath's samples take its color, but not with <code>--animate</code>. As the only input it is the dataset: its trials are listed and drawn as recorded, and no fixations are detected from the samples.<br><em>Single plot, Compare.</em></td>
 </tr>
 <tr>
 <td><code>raw_gaze_color</code><br><code>--raw-gaze-color</code></td>
 <td><code>'#888888'</code></td>
-<td>Raw gaze sample color. In a comparison, each scanpath's samples are drawn in its color instead.</td>
+<td>Raw gaze sample color. In a comparison, each scanpath's samples are drawn in its color instead. In Compare, set <code>raw_gaze_color</code> in <code>style_a</code> or <code>style_b</code>.<br><em>Single plot.</em></td>
 </tr>
 <tr>
 <td><code>raw_gaze_marker_size</code><br><code>--raw-gaze-marker-size</code></td>
 <td><code>4.0</code></td>
-<td>Raw gaze sample size, 1–12 px.</td>
+<td>Raw gaze sample size, 1–12 px.<br><em>Single plot, Compare.</em></td>
 </tr>
 <tr>
 <td><code>raw_gaze_opacity</code><br><code>--raw-gaze-opacity</code></td>
 <td><code>0.6</code></td>
-<td>Raw gaze sample opacity, 0.1–1.0.</td>
+<td>Raw gaze sample opacity, 0.1–1.0.<br><em>Single plot, Compare.</em></td>
 </tr>
 </tbody>
 </table>
@@ -7549,7 +7807,7 @@ listing them for anything else.</p>
 <tr>
 <td><code>saccade_classes</code><br><code>--saccade-classes</code></td>
 <td><code>list</code>, see <code>figure_options()</code></td>
-<td>Draw only these saccade types, comma-separated, e.g. <code>--saccade-classes</code> regression,return_sweep. Types: forward, skip, refixation, return_sweep, regression, other (off the text). A hidden type loses its line and its arrow. Default: all. <em>Plot and compare only.</em></td>
+<td>Draw only these saccade types, comma-separated, e.g. <code>--saccade-classes</code> regression,return_sweep. Types: forward, skip, refixation, return_sweep, regression, other (off the text). A hidden type loses its line and its arrow. Default: all.<br><em>Single plot, Compare.</em></td>
 </tr>
 </tbody>
 </table>
@@ -7603,12 +7861,12 @@ listing them for anything else.</p>
 <tr>
 <td><code>x_field</code><br><code>--x-field</code></td>
 <td><code>'x'</code></td>
-<td>Fixations table column on the x axis. A non-spatial one draws a chart of the fixations instead of the scanpath. <em>Plot and compare only.</em></td>
+<td>Horizontal axis of the static chart. Choose a numeric fixation column, order_in_trial for fixation index, or @elapsed_seconds for time since the first recorded fixation.<br><em>Single plot.</em></td>
 </tr>
 <tr>
 <td><code>y_field</code><br><code>--y-field</code></td>
 <td><code>'y'</code></td>
-<td>Fixations table column on the y axis. <em>Plot and compare only.</em></td>
+<td>Vertical axis of the static chart. Takes the same fields as <code>--x-field</code>.<br><em>Single plot.</em></td>
 </tr>
 </tbody>
 </table>
@@ -7632,7 +7890,7 @@ listing them for anything else.</p>
 <tr>
 <td><code>illustration_reasons</code></td>
 <td><code>None</code></td>
-<td>Why the figure is labeled an illustration. The builder works it out from <code>illustration_label</code>. Pass it only to word the label yourself. <em>Plot and compare only.</em></td>
+<td>Why the figure is labeled an illustration. The builder works it out from <code>illustration_label</code>. Pass it only to word the label yourself.<br><em>Single plot, Compare.</em></td>
 </tr>
 <tr>
 <td><code>title_font_size</code><br><code>--title-size</code></td>
@@ -7715,7 +7973,7 @@ listing them for anything else.</p>
 <tr>
 <td><code>saccade_type_legend</code><br><code>--no-saccade-type-legend</code></td>
 <td><code>True</code></td>
-<td>With <code>--saccade-color-by-type</code>: hide the Saccade types legend. The colored lines still draw. <em>Plot and compare only.</em></td>
+<td>With <code>--saccade-color-by-type</code>: hide the Saccade types legend. The colored lines still draw.<br><em>Single plot.</em></td>
 </tr>
 <tr>
 <td><code>duration_size_legend</code><br><code>--no-duration-size-legend</code></td>
@@ -7739,12 +7997,12 @@ listing them for anything else.</p>
 <tr>
 <td><code>anim_grid_step_ms</code><br><code>--anim-grid-step-ms</code></td>
 <td><code>None</code></td>
-<td>With <code>--animate</code>: one frame per MS of reading time. A smaller step is smoother and makes a larger file. <em>Animate only.</em></td>
+<td>With <code>--animate</code>: one frame per MS of reading time. A smaller step is smoother and makes a larger file.<br><em>Single replay, Compare + Animate.</em></td>
 </tr>
 <tr>
 <td><code>anim_max_frames</code><br><code>--anim-max-frames</code></td>
 <td><code>None</code></td>
-<td>With <code>--animate</code>: at most N frames. A trial too long for that many at <code>--anim-grid-step-ms</code> gets a wider step. <em>Animate only.</em></td>
+<td>With <code>--animate</code>: at most N frames. A trial too long for that many at <code>--anim-grid-step-ms</code> gets a wider step.<br><em>Single replay, Compare + Animate.</em></td>
 </tr>
 </tbody>
 </table>
@@ -7763,62 +8021,62 @@ listing them for anything else.</p>
 <tr>
 <td><code>label_a</code><br><code>--label-a</code></td>
 <td><code>'Scanpath A'</code></td>
-<td>Name of scanpath A in the legend and hovers. Used by the comparison and by <code>--animate</code>. Needs <code>--label-b</code>. <em>Animate only.</em></td>
+<td>Name of scanpath A in the legend and tooltips. Requires <code>--compare-with</code> and <code>--label-b</code>. In Python, pass <code>labels=(a, b)</code> to <code>compare_scanpaths</code>.<br><em>Compare, Compare + Animate.</em></td>
 </tr>
 <tr>
 <td><code>label_b</code><br><code>--label-b</code></td>
 <td><code>'Scanpath B'</code></td>
-<td>Name of scanpath B in the legend and hovers. Needs <code>--label-a</code>. <em>Animate only.</em></td>
+<td>Name of scanpath B in the legend and tooltips. Requires <code>--label-a</code>. In Python, pass <code>labels=(a, b)</code> to <code>compare_scanpaths</code>.<br><em>Compare, Compare + Animate.</em></td>
 </tr>
 <tr>
 <td><code>style_a</code><br><code>--style-a</code></td>
 <td><code>None</code></td>
-<td>Style for scanpath A, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-a</code> fix_color=#D55E00,opacity=0.5. <code>--animate</code> uses them too, except box_color, box_fill_color, the box opacities and raw_gaze_color. <em>Animate and compare only.</em></td>
+<td>Style for scanpath A, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-a</code> fix_color=#D55E00,opacity=0.5. A two-scanpath replay uses the fixation and saccade styles.<br><em>Compare, Compare + Animate.</em></td>
 </tr>
 <tr>
 <td><code>style_b</code><br><code>--style-b</code></td>
 <td><code>None</code></td>
-<td>Style for scanpath B, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-b</code> fix_color=#D55E00,opacity=0.5. <code>--animate</code> uses them too, except box_color, box_fill_color, the box opacities and raw_gaze_color. <em>Animate and compare only.</em></td>
+<td>Style for scanpath B, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-b</code> fix_color=#D55E00,opacity=0.5. A two-scanpath replay uses the fixation and saccade styles.<br><em>Compare, Compare + Animate.</em></td>
 </tr>
 <tr>
 <td><code>show_legend</code><br><code>--no-compare-legend</code></td>
 <td><code>True</code></td>
-<td>Draw the Compare (A/B) legend, which names the two scanpaths. On by default; <code>--no-compare-legend</code> hides it. Also applies to <code>--animate</code>. <em>Animate and compare only.</em></td>
+<td>Draw the Compare (A/B) legend, which names the two scanpaths. On by default; <code>--no-compare-legend</code> hides it. Also applies to <code>--animate</code>.<br><em>Compare, Compare + Animate.</em></td>
 </tr>
 <tr>
 <td><code>compare_stimulus</code><br><code>--compare-stimulus</code></td>
 <td><code>'both'</code></td>
-<td>On an overlay, whose word boxes and text to draw. Two datasets' word boxes line up only when the text is the same. One of <code>'both'</code>, <code>'a'</code>, <code>'b'</code>. <em>Animate only.</em></td>
+<td>On an overlay, whose word boxes and text to draw. Two datasets' word boxes line up only when the text is the same. A two-scanpath replay shows B's text for 'b' and A's text for 'a' or 'both'. One of <code>'both'</code>, <code>'a'</code>, <code>'b'</code>.<br><em>Compare, Compare + Animate.</em></td>
 </tr>
 <tr>
 <td><code>words_b</code></td>
 <td><code>None</code></td>
-<td>Scanpath B's Words table, for a replay of two scanpaths. <em>Animate only.</em></td>
+<td>Scanpath B's Words table when it comes from a second dataset.<br><em>Compare, Compare + Animate.</em></td>
 </tr>
 <tr>
 <td><code>fixations_b</code></td>
 <td><code>None</code></td>
-<td>Scanpath B's Fixations table, for a replay of two scanpaths. <em>Animate only.</em></td>
+<td>Scanpath B's Fixations table when it comes from a second dataset.<br><em>Compare, Compare + Animate.</em></td>
 </tr>
 <tr>
 <td><code>fixation_flags_b</code><br><code>--compare-fixation-flag</code></td>
 <td><code>None</code></td>
-<td>Filters &amp; highlights for scanpath B only. Repeatable. Same SPEC as <code>--fixation-flag</code>, e.g. <code>--compare-fixation-flag</code> short=hide,threshold_ms=80. Replaces <code>--fixation-flag</code> for B. <em>Animate only.</em></td>
+<td>Filters &amp; highlights for scanpath B only. Repeatable. Same SPEC as <code>--fixation-flag</code>, e.g. <code>--compare-fixation-flag</code> short=hide,threshold_ms=80. Replaces <code>--fixation-flag</code> for B. In Python, pass <code>style_b={'fixation_flags': flags}</code> to <code>compare_scanpaths</code>.<br><em>Compare, Compare + Animate.</em></td>
 </tr>
 <tr>
 <td><code>background_image_b</code><br><code>--stimulus-image-b</code></td>
 <td><code>None</code></td>
-<td>Scanpath B's stimulus image, for a side-by-side or stacked comparison across two datasets, where each panel draws its image. Sized and placed like <code>--stimulus-image</code>. <em>Compare only.</em></td>
+<td>Scanpath B's stimulus image, for a side-by-side or stacked comparison across two datasets, where each panel draws its image. Sized and placed like <code>--stimulus-image</code>.<br><em>Compare.</em></td>
 </tr>
 <tr>
 <td><code>background_image_size_b</code><br><code>--stimulus-image-size-b</code></td>
 <td><code>None</code></td>
-<td>Size of <code>--stimulus-image-b</code> in px. <em>Compare only.</em></td>
+<td>Size of <code>--stimulus-image-b</code> in px.<br><em>Compare.</em></td>
 </tr>
 <tr>
 <td><code>background_image_origin_b</code><br><code>--stimulus-image-origin-b</code></td>
 <td><code>None</code></td>
-<td>Top-left corner of <code>--stimulus-image-b</code> in B's screen px. <em>Compare only.</em></td>
+<td>Top-left corner of <code>--stimulus-image-b</code> in B's screen px.<br><em>Compare.</em></td>
 </tr>
 </tbody>
 </table>
@@ -8293,7 +8551,7 @@ as <code># Note:</code> comments, as the app's ⚠️ captions and the <code>Not
 
     <div class="doc doc-contents first">
 
-        <p>Save a figure, in the format its file extension names.</p>
+        <p>Save a figure as HTML, PNG, SVG or PDF.</p>
 <p>The file carries the citation of Scanpath Studio in its metadata — PNG text
 chunks, an SVG <code>&lt;metadata&gt;</code> element, the PDF's document properties, the
 HTML page's <code>&lt;head&gt;</code> — so a figure found later on its own still says how to
@@ -8316,7 +8574,7 @@ cite it (<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-s
           –
           <div class="doc-md-description">
             <p>The file to write: <code>.html</code> (interactive), or <code>.png</code>, <code>.svg</code> or
-<code>.pdf</code> (static, through Kaleido; see the <a href="https://lacclab.github.io/scanpath-studio/faq/#export-fails">export
+<code>.pdf</code> (static, through Kaleido; see the <a href="../faq/#export-fails">export
 FAQ</a> for its
 setup).</p>
           </div>
@@ -8633,7 +8891,7 @@ session back out at its next change, so start it with <code>scanpath-studio run
 
     <div class="doc doc-contents first">
 
-        <p>Say which build of Scanpath Studio this is, without using the network.</p>
+        <p>Return version and installation details without a network request.</p>
 <p>The same is in the app's Help → About, and in <code>scanpath-studio version</code>.</p>
 <table>
 <thead>
@@ -8650,6 +8908,10 @@ session back out at its next change, so start it with <code>scanpath-studio run
 <tr>
 <td><code>release</code></td>
 <td>The release it descends from (<code>scanpath_studio.__release__</code>)</td>
+</tr>
+<tr>
+<td><code>channel</code>, <code>docs_url</code></td>
+<td><code>"stable"</code> or <code>"dev"</code> and the matching documentation URL</td>
 </tr>
 <tr>
 <td><code>distance</code></td>
@@ -8696,7 +8958,7 @@ session back out at its next change, so start it with <code>scanpath-studio run
 
     <div class="doc doc-contents first">
 
-        <p>Ask GitHub whether a newer release than this build is out.</p>
+        <p>Check GitHub for a newer release.</p>
 <p>The one call here that uses the network, and only when made. It reads the latest
 release from <code>api.github.com</code> (drafts and pre-releases excluded), compares it with
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;version_info&lt;/span&gt;" href="#scanpath_studio.api.version_info"><code>version_info</code></a>, and never raises. The same check
@@ -8779,7 +9041,7 @@ is the app's Help → About → <em>Check for updates</em>, and <code>scanpath-s
 
     <div class="doc doc-contents first">
 
-        <p>How to cite Scanpath Studio — and, optionally, the corpus you used.</p>
+        <p>Return a citation for Scanpath Studio and, optionally, a public corpus.</p>
 <p>The same entries as the app's Help → About and <em>Cite</em> buttons, and
 <code>scanpath-studio cite</code>. Every figure, replay and page <code>save_figure</code> writes
 also carries the citation in its file metadata.</p>

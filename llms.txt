@@ -11,14 +11,14 @@ Scanpath Studio is an interactive Streamlit workbench, a Python API (`import sca
 - [Analyze a corpus](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/index.md)
 - [Analyze one text](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/analyze-one-text/index.md)
 - [Compare groups or conditions](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/compare-groups/index.md)
-- [See progression over time](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/progression-over-time/index.md)
+- [Track changes over time](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/progression-over-time/index.md)
 - [Optimize data collection](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/index.md)
-- [Audit an experimenter](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/audit-an-experimenter/index.md)
+- [Review an experimenter's sessions](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/audit-an-experimenter/index.md)
 - [Check a session](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/check-a-session/index.md)
 - [Compare two eye trackers](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/compare-eye-trackers/index.md)
 - [Filter data](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/index.md)
 - [Exclude unsuitable trials](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/exclude-unsuitable-trials/index.md)
-- [Find the trials an analysis needs](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/find-trials-for-an-analysis/index.md)
+- [Find trials with specific fixation patterns](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/find-trials-for-an-analysis/index.md)
 - [Select participants by a field](https://lacclab.github.io/scanpath-studio/tutorials/data-filtering/select-participants/index.md)
 - [Export customized figures](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/index.md)
 - [Export a replay](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/export-a-replay/index.md)
@@ -54,4 +54,5 @@ Scanpath Studio is an interactive Streamlit workbench, a Python API (`import sca
 ## About
 
 - [About](https://lacclab.github.io/scanpath-studio/about/index.md)
+- [What's new](https://lacclab.github.io/scanpath-studio/whats-new/index.md)
 

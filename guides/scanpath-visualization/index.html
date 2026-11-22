@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/icon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -108,6 +108,21 @@
       
     </div>
     <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+  <nav class="sps-docs-channel" aria-label="Documentation edition">
+    
+      <strong>Stable documentation &middot; v0.47.0</strong>
+      <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
+    
+  </nav>
+
+          </div>
+          
+        </aside>
       
     </div>
     
@@ -370,6 +385,25 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../whats-new/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  What's new
+
+      </a>
+    </li>
   
 
       
@@ -712,7 +746,7 @@
   <span class="md-ellipsis">
     
   
-    Audit an experimenter
+    Review an experimenter's sessions
   
 
     
@@ -875,7 +909,7 @@
   <span class="md-ellipsis">
     
   
-    Find the trials an analysis needs
+    Find trials with specific fixation patterns
   
 
     
@@ -1201,7 +1235,7 @@
   <span class="md-ellipsis">
     
   
-    See progression over time
+    Track changes over time
   
 
     
@@ -2209,6 +2243,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../whats-new/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What's new
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../about/" class="md-nav__link">
         
   
@@ -2429,27 +2490,26 @@ menu by menu, with a picture of each menu. Search it for what you want to
 change, such as <em>saccade color</em> or <em>legend position</em>.</p>
 </div>
 <h2 id="essentials-and-full">Essentials and Full<a class="headerlink" href="#essentials-and-full" title="Permanent link">&para;</a></h2>
-<p>The view opens in <strong>Essentials</strong>, a trimmed version of the same view for a first
-look. The <strong>Essentials | Full</strong> switch is in the top bar, on the
-<span class="sps-icon" data-icon="route" aria-hidden="true"></span> <strong>Scanpath</strong> view only. The mode you choose is remembered in
-this browser. Adding <code>ui=full</code> (or <code>ui=essentials</code>) to the app's address, as
-<code>?ui=full</code> or <code>&amp;ui=full</code>, uses that mode for the visit without
-changing the saved choice, and a link made with <strong>Share</strong> does not carry the
-mode.</p>
+<p>The Scanpath view opens in <strong>Essentials</strong>, with the main controls for exploring
+a reading. Switch to <strong>Full</strong> in the top bar whenever you want more options.
+The app remembers your choice in this browser.</p>
 <p>Essentials shows:</p>
 <ul>
 <li>the dataset and trial pickers with <strong>◀ ▶</strong>;</li>
-<li>the plot, which on a new visit opens on a playing replay;</li>
+<li>the plot, which starts with a replay on a new visit;</li>
 <li>four view tiles (<strong>Animation</strong>, <strong>Scanpath</strong>, <strong>Heatmap</strong> and
   <strong>Illustration</strong>) and the <strong>Palette</strong>;</li>
 <li>the <strong>Export</strong> tab, for the figure on screen, and <strong>Share</strong>.</li>
 </ul>
-<p>Where Full has more, a <span class="sps-icon" data-icon="add" aria-hidden="true"></span> <strong>More</strong> button lists what it adds
-there and ends in <strong>Switch to Full</strong>. A setting made in Full, such as a
-trial filter, still shapes the figure in Essentials, and Essentials says so in a short
-note. Starting a tutorial from <span class="sps-icon" data-icon="help" aria-hidden="true"></span> <strong>Help</strong> switches that visit to
-Full. <span class="sps-icon" data-icon="bar_chart" aria-hidden="true"></span> <strong>Corpus Analysis</strong> and
+<p>The <span class="sps-icon" data-icon="add" aria-hidden="true"></span> <strong>More</strong> buttons show which additional controls are available
+in Full and offer <strong>Switch to Full</strong>. Settings you chose in Full, such as trial
+filters, remain active in Essentials; a short note tells you when they apply.
+Starting a tutorial from <span class="sps-icon" data-icon="help" aria-hidden="true"></span> <strong>Help</strong> switches to Full for the
+current visit. <span class="sps-icon" data-icon="bar_chart" aria-hidden="true"></span> <strong>Corpus Analysis</strong> and
 <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management</strong> are the same in both modes.</p>
+<p>To open a mode for one visit, add <code>?ui=full</code> or <code>?ui=essentials</code> to the app's
+address (use <code>&amp;</code> if the address already has a <code>?</code>). This leaves your saved
+choice unchanged. Links created with <strong>Share</strong> use the recipient's own mode.</p>
 <p>The numbered regions above and the rest of this guide describe Full.</p>
 <h2 id="choose-a-trial">Choose a trial<a class="headerlink" href="#choose-a-trial" title="Permanent link">&para;</a></h2>
 <p>Pick a trial in <strong>Select trial</strong> above the plot, or step through the list with
@@ -2634,8 +2694,8 @@ GIF or MP4 replays, see <a href="../exporting/">Export and share</a>.</p>
 </tr>
 </tbody>
 </table>
-<p>None of these files holds your data, so load the same data before you restore
-one. In the desktop app or a local install, the app also keeps your datasets,
+<p>Keep your source data alongside these files, and load the same dataset before
+restoring them. In the desktop app or a local install, the app also keeps your datasets,
 annotations and designs between sessions. See <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data
 Management</strong> → <span class="sps-icon" data-icon="history" aria-hidden="true"></span> <strong>Saved on this computer</strong>.</p>
 

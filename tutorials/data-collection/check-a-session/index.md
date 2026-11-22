@@ -2,7 +2,7 @@
 
 Inspect a recording and save the trials that need attention.
 
-These steps use the **Full** mode: switch to it in the top bar of the **Scanpath** view, or add `ui=full` to the app's address ([Essentials and Full](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#essentials-and-full)).
+Before you start, switch to **Full** at the top of the **Scanpath** view ([Essentials and Full](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#essentials-and-full)).
 
 ## 1. Open the session
 

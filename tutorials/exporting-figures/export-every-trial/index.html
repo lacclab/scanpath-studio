@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../../assets/icon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -108,6 +108,21 @@
       
     </div>
     <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+  <nav class="sps-docs-channel" aria-label="Documentation edition">
+    
+      <strong>Stable documentation &middot; v0.47.0</strong>
+      <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
+    
+  </nav>
+
+          </div>
+          
+        </aside>
       
     </div>
     
@@ -370,6 +385,25 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../whats-new/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  What's new
+
+      </a>
+    </li>
   
 
       
@@ -717,7 +751,7 @@
   <span class="md-ellipsis">
     
   
-    Audit an experimenter
+    Review an experimenter's sessions
   
 
     
@@ -880,7 +914,7 @@
   <span class="md-ellipsis">
     
   
-    Find the trials an analysis needs
+    Find trials with specific fixation patterns
   
 
     
@@ -1218,7 +1252,7 @@
   <span class="md-ellipsis">
     
   
-    See progression over time
+    Track changes over time
   
 
     
@@ -2219,6 +2253,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../whats-new/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What's new
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../about/" class="md-nav__link">
         
   
@@ -2345,9 +2406,8 @@
 
 <h1 id="export-every-trial">Export every trial<a class="headerlink" href="#export-every-trial" title="Permanent link">&para;</a></h1>
 <p>Build a ZIP of static figures and data tables for a set of trials.</p>
-<p>These steps use the <strong>Full</strong> mode: switch to it in the top bar of the
-<span class="sps-icon" data-icon="route" aria-hidden="true"></span> <strong>Scanpath</strong> view, or add <code>ui=full</code> to the app's
-address (<a href="../../../guides/scanpath-visualization/#essentials-and-full">Essentials and Full</a>).</p>
+<p>Before you start, switch to <strong>Full</strong> at the top of the <span class="sps-icon" data-icon="route" aria-hidden="true"></span>
+<strong>Scanpath</strong> view (<a href="../../../guides/scanpath-visualization/#essentials-and-full">Essentials and Full</a>).</p>
 <ol>
 <li><a href="../export-one-figure/#1-choose-the-view">Set the figure's design</a> once.
    Each exported trial uses that design, without animation or a comparison partner.</li>
@@ -2366,8 +2426,8 @@ address (<a href="../../../guides/scanpath-visualization/#essentials-and-full">E
   <source src="../../../assets/workflows/export-bundle.mp4" type="video/mp4">
 </video>
 
-<p><em>Exporting figures and tables for the bundled demo's trials. The recording
-speeds up the build.</em></p>
+<p><em>Exporting figures and tables for the bundled demo's trials. The build is
+sped up in this recording.</em></p>
 <p>Keep each trial's <code>plot_config.json</code> for the design, <code>README.md</code> for the build
 details and <code>index.csv</code> for the file list and failures. Keep your original data
 and record its version and the selected trial filters separately.</p>

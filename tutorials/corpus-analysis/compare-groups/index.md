@@ -8,4 +8,4 @@ Compare a reading measure between two groups of participants or two conditions.
 1. In **View**, choose **Group means & difference** and a measure. Check the number of participants in each group and whether any participant is in both. The **Standardized difference** (Cohen's d) is shown only when the groups share no participant.
 1. [Download the table and recipe](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/#keep-the-result).
 
-The comparison is descriptive. It runs no significance test. For a recorded example, see [Analyze one text](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/analyze-one-text/index.md).
+The comparison provides a descriptive summary; it does not run significance tests. For a recorded example, see [Analyze one text](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/analyze-one-text/index.md).

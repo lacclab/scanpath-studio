@@ -12,13 +12,21 @@ Pick a dataset in **Select dataset** above the plot, or in the dataset list on t
 - **+** → **Import files**: your own tables.
 - **+** → **Draw a scanpath**: write a text and place its fixations by hand.
 
+### Draw a scanpath
+
+Choose **+ → Draw a scanpath**, then type your passage. In **Draw** mode, click the words in reading order. Click a word twice for two visits, or click the space between words for a fixation without a target. For a regular sequence, **Reset to one fixation per word** places a 220 ms fixation on each word.
+
+Use **Select & move** to drag a marker. The **Fixation** list lets you select visits that land on top of one another. Change **Duration (ms)** and use **Play preview** to check the timing. The **Fixation table** also accepts keyboard edits. Leaving both coordinates empty places the fixation at the center of its target word.
+
+**Save dataset** opens the figure. To revise it, go to **Data Management** and click **Edit** on its row. **Save changes** updates the drawing, and **Save as copy** keeps a separate version. For another computer, download the editable draft from **Share** and open it with **Load a saved draft** in the drawing editor.
+
 ### OneStop
 
 The bundled demo comes from [OneStop Eye Movements](https://github.com/lacclab/OneStop-Eye-Movements) (Berzak et al., 2025), an English corpus with 360 participants. The full corpus is available as four public datasets: **OneStop · Ordinary reading**, **OneStop · Information seeking**, **OneStop · Repeated reading** and **OneStop · Information seeking (repeated)**. Each downloads once from [OSF](https://osf.io/2prdq/).
 
 ## What your data needs
 
-A dataset needs at least one of the first three tables below. Add the others as you need them.
+Start with a Fixations, Words or Raw gaze table. You can add the other tables whenever you need them.
 
 | Table                  | Contents                                                       |
 | ---------------------- | -------------------------------------------------------------- |
@@ -29,7 +37,7 @@ A dataset needs at least one of the first three tables below. Add the others as 
 | Trials                 | One row per trial, with metadata                               |
 | Texts                  | One row per text, with metadata                                |
 
-The app detects columns from common eye-tracker exports. Check and correct the mapping when you import. To keep condition labels and other columns, pick them under **Extra fields to keep**. You can filter, sort and group trials by any metadata field.
+The app recognizes column names from common eye-tracker exports. Check the mapping when you import. To keep condition labels and other columns, pick them under **Extra fields to keep**. You can filter, sort and group trials by any metadata field.
 
 ### Files and units
 
@@ -37,14 +45,14 @@ The app detects columns from common eye-tracker exports. Check and correct the m
 - Positions in pixels
 - Times in milliseconds. A time column whose header names its unit, such as `[s]`, `[μs]` or `[ns]`, is converted.
 - Word boxes as `x/y/width/height` or EyeLink's `IA_LEFT/RIGHT/TOP/BOTTOM`
-- Word IDs as numbers, or as text such as `w1`. Spell text IDs the same way in the Fixations and Words tables. With text IDs, the order of the rows in the Words table sets the word order.
-- Several files for one table, such as one file per trial, are stacked into one table, with each file's name in a `source_file` column. When an ID is only in the file name, **Derive columns from text** splits it out into a column you can map. When you click **Apply**, a derived column named like an ID, such as `participant`, `trial` or `stimulus`, fills that ID field if it is empty.
+- Word IDs as numbers, or as text such as `w1`. Text IDs must match exactly in the Fixations and Words tables. With text IDs, the order of the rows in the Words table sets the word order.
+- Several files for one table, such as one file per trial, are stacked into one table, with each file's name in a `source_file` column. When an ID is only in the file name, use **Derive columns from text** to extract it into a column you can map. When you click **Apply**, a derived column named like an ID, such as `participant`, `trial` or `stimulus`, fills that ID field if it is empty.
 - Trial and Text IDs are matched exactly, so spell them the same way in both tables, including upper and lower case. The import screen says when they differ only in case.
 - Words tables with one box per character, as in Chinese or Japanese: turn on **Merge character boxes into word boxes**. The import screen suggests it when a word's rows are at different positions.
 
 ### Trials over several screens
 
-Map the **Screen ID** field in your tables. A column named `screen_index` sets the order of the screens. Without one, the screens are ordered by where they first appear, in the Fixations table when the dataset has one. The app draws one screen at a time.
+Map the **Screen ID** field in your tables. A column named `screen_index` sets the order of the screens. Without one, the screens are ordered by where they first appear, using the Fixations table if available. The app draws one screen at a time.
 
 ### Reading measures
 

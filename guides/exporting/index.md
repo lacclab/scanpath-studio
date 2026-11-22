@@ -11,16 +11,16 @@ Save a figure, export many trials at once, or reuse a view in the app or in code
 | Share a view or copy its code       | **Share** → **Link** or **Code**                 |
 | Reuse the figure settings           | **My designs**, or **Share** → **Settings file** |
 
-In Essentials mode, **Export** holds **Current figure** only; **Export bundle** is in Full.
+To export multiple trials, switch to Full and open **Export bundle**. Essentials offers **Current figure** for the figure or replay on screen.
 
 For step-by-step instructions, see the [export tutorials](https://lacclab.github.io/scanpath-studio/tutorials/exporting-figures/index.md).
 
 ## Cite what you export
 
-Every file you export says how to cite Scanpath Studio in its own metadata: the PNG's text chunks, the SVG's `<metadata>`, the PDF's document properties, the HTML page's `<head>`, and the GIF's and MP4's comment. Nothing is drawn on the figure.
+Files saved through **Export** include citation information in their metadata. To add a visible credit to the figure, use **Figure & canvas** → **Credit**.
 
 - **Cite**, under each download and in **Share** → **Code**, gives a one-line figure credit, the APA reference and BibTeX, and `.bib` and `.ris` files for Zotero, Mendeley or EndNote. For the bundled demo, OneStop or PoTeC, it cites the corpus too.
-- An export bundle has a `CITATION.bib`, and its `README.md` a *Cite* section.
+- Each export bundle includes `CITATION.bib` and citation instructions in `README.md`.
 - **Figure & canvas** → **Credit** adds a small *Made with Scanpath Studio* line under the plot, for a figure shared without its caption. In code, pass `show_credit=True`, or `--credit` to `render`.
 - In code, cite and `scanpath-studio cite` print the citation.
 
@@ -28,11 +28,11 @@ Every file you export says how to cite Scanpath Studio in its own metadata: the 
 
 \](../../assets/workflows/share-link_poster.webp)\](../../assets/workflows/share-link.mp4)
 
-A link reopens the trial and its settings for anyone who has the same dataset. [All controls → Under the plot](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/#under-the-plot) says what the recipient needs.
+A link can find an imported dataset on the same computer after you rename it. On another computer, import the sender’s data under the name in the link. The link checks that the recording tables match, including those for a second imported dataset in a comparison. Older links can open without checking the tables. [All controls → Under the plot](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/controls/#under-the-plot) says what the recipient needs.
 
 ## Reproduce a figure
 
-Open **Share** → **Code** and copy the Python or CLI code. It carries the figure's settings and your column mapping. For a dataset you imported, replace the placeholder file paths with your own. [Render in code](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#render-in-code) shows a minimal example.
+Open **Share** → **Code** and copy the Python or CLI code. It includes the figure's settings and your column mapping. The compact code includes changes that affect this view. For example, a comparison uses each scanpath's own fixation color for its index numbers. Select **Show every option** to include the other accepted figure settings. For a dataset you imported, replace the placeholder file paths with your own. [Render in code](https://lacclab.github.io/scanpath-studio/guides/scanpath-visualization/#render-in-code) shows a minimal example.
 
 For a PNG at print size, pass `width_mm` and `dpi` to `save_figure`, or `--width-mm` and `--dpi` to `render`. To edit the layers in a vector editor, save each layer to a separate file with `save_figure_layers` or `render --separable-layers`. In the app's export bundle, this is **Layers as separate files**.
 

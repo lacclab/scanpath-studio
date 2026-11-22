@@ -1,4 +1,4 @@
-# See progression over time
+# Track changes over time
 
 Inspect a measure within trials or across a session.
 

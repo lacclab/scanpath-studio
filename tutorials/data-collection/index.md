@@ -8,7 +8,7 @@
 
   Review recordings of the same text.
 
-- **[Audit an experimenter](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/audit-an-experimenter/index.md)**
+- **[Review an experimenter's sessions](https://lacclab.github.io/scanpath-studio/tutorials/data-collection/audit-an-experimenter/index.md)**
 
   Review sessions by who collected them.
 

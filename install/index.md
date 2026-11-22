@@ -18,22 +18,33 @@
 
 - **Try online**
 
-  Explore the bundled demo. No installation.
+  Explore the bundled demo without installing anything.
 
   [Launch demo](https://scanpath-studio.streamlit.app)
 
 - **Install with Python**
 
-  Python 3.11–3.14. Opens in your browser.
+  Requires Python 3.11–3.15. Runs on your computer and opens in your browser.
 
   ```
   pip install scanpath-studio
   scanpath-studio
   ```
 
+## Try the Dev build
+
+Stable is the published release on PyPI and the desktop downloads above. Dev follows the changes merged into `main`. You can [open the Dev app](https://scanpath-studio-dev.streamlit.app) or run it locally. In a separate Python environment with Git installed, run:
+
+```
+python -m pip install "git+https://github.com/lacclab/scanpath-studio.git@dev"
+scanpath-studio
+```
+
+**Help** shows which channel you are running. **Help → What’s new** opens its release notes.
+
 ## Your first figure
 
-Start with the bundled demo, a subset of the [OneStop corpus](https://lacclab.github.io/scanpath-studio/guides/loading-data/#onestop). You don't need to prepare any files. Choose a look, then save an interactive figure.
+Start with the bundled demo, a subset of the [OneStop corpus](https://lacclab.github.io/scanpath-studio/guides/loading-data/#onestop). You can explore it without preparing any files. Choose a view, then save an interactive figure.
 
 \[!\[
 
@@ -45,7 +56,7 @@ Start with the bundled demo, a subset of the [OneStop corpus](https://lacclab.gi
 
 - **2 · Choose a view**
 
-  In **Design presets**, click **Heatmap** to see where fixation time concentrates. Click **Scanpath** to follow the order of fixations.
+  Choose **Heatmap** to see where fixation time concentrates, or **Scanpath** to follow the order of fixations. These are view tiles in Essentials and **Design presets** in Full.
 
 - **3 · Save your figure**
 

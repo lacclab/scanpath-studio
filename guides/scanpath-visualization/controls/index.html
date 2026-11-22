@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../../assets/icon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -108,6 +108,21 @@
       
     </div>
     <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+  <nav class="sps-docs-channel" aria-label="Documentation edition">
+    
+      <strong>Stable documentation &middot; v0.47.0</strong>
+      <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
+    
+  </nav>
+
+          </div>
+          
+        </aside>
       
     </div>
     
@@ -370,6 +385,25 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../whats-new/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  What's new
+
+      </a>
+    </li>
   
 
       
@@ -712,7 +746,7 @@
   <span class="md-ellipsis">
     
   
-    Audit an experimenter
+    Review an experimenter's sessions
   
 
     
@@ -875,7 +909,7 @@
   <span class="md-ellipsis">
     
   
-    Find the trials an analysis needs
+    Find trials with specific fixation patterns
   
 
     
@@ -1201,7 +1235,7 @@
   <span class="md-ellipsis">
     
   
-    See progression over time
+    Track changes over time
   
 
     
@@ -2438,6 +2472,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../whats-new/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What's new
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../about/" class="md-nav__link">
         
   
@@ -2753,9 +2814,9 @@
 
 
 <h1 id="all-controls">All controls<a class="headerlink" href="#all-controls" title="Permanent link">&para;</a></h1>
-<p>Every control in the <span class="sps-icon" data-icon="route" aria-hidden="true"></span> <strong>Scanpath</strong> view, where it is and what it
-does, in the order you meet them on screen. Search this page (<span class="keys"><kbd class="key-control">Ctrl</kbd><span>+</span><kbd class="key-f">F</kbd></span>, or
-<span class="keys"><kbd class="key-command">Cmd</kbd><span>+</span><kbd class="key-f">F</kbd></span> on a Mac) for the thing you want to change, such as <em>colors</em>,
+<p>Find every control in the <span class="sps-icon" data-icon="route" aria-hidden="true"></span> <strong>Scanpath</strong> view, in the order it
+appears on screen. Search this page (<span class="keys"><kbd class="key-control">Ctrl</kbd><span>+</span><kbd class="key-f">F</kbd></span>, or
+<span class="keys"><kbd class="key-command">Cmd</kbd><span>+</span><kbd class="key-f">F</kbd></span> on a Mac) for what you want to change, such as <em>colors</em>,
 <em>legends</em> or <em>axes</em>.</p>
 <p>The view has two sets of controls:</p>
 <ul>
@@ -2764,8 +2825,8 @@ does, in the order you meet them on screen. Search this page (<span class="keys"
 <li>The <strong>plot controls</strong>, the column on the right, decide <em>how</em> it is drawn:
   each layer of the figure, its colors and sizes, and the figure as a whole.</li>
 </ul>
-<p>The tabs under the plot then work with the trial on screen: annotate it, read
-its context, compare it, export it or share it. For how the parts fit
+<p>Use the tabs under the plot to annotate the current trial, read its context,
+compare readings, export a figure or share the view. For how the parts fit
 together, see the <a href="../">Scanpath visualization</a> guide.</p>
 <p>For the corresponding Python keywords and CLI flags, use the
 <a href="../../../api/#figure-options">figure options table</a>.</p>
@@ -2911,11 +2972,11 @@ time slider above the plot. While it is on, the <strong>Fixations</strong>, <str
 </tr>
 <tr>
 <td><strong>Frames</strong> → <strong>Limit</strong></td>
-<td>The most frames a video gets. A long trial gets wider frame steps to fit.</td>
+<td>The maximum number of frames in the replay. For long trials, frames are spaced farther apart to stay within this limit.</td>
 </tr>
 <tr>
 <td><strong>Frames</strong> → <strong>Result</strong></td>
-<td>For information only: how many frames this trial's video has, and how far apart they ended up.</td>
+<td>Shows the number of frames in this replay and the reading time between them.</td>
 </tr>
 </tbody>
 </table>
@@ -2972,7 +3033,7 @@ saved:</p>
 </tr>
 <tr>
 <td><span class="sps-icon" data-icon="build" aria-hidden="true"></span> <strong>Custom</strong></td>
-<td>Your most recent hand-made settings.</td>
+<td>Your most recent custom settings.</td>
 </tr>
 <tr>
 <td><span class="sps-icon" data-icon="palette" aria-hidden="true"></span> <strong>My designs</strong></td>
@@ -3053,7 +3114,7 @@ saved:</p>
 </tr>
 <tr>
 <td><strong>Fixation index</strong> → color, <strong>Size</strong></td>
-<td>Choose the numbers' color and size.</td>
+<td>Choose the numbers' size in every view. For one scanpath, choose their color here. When comparing two scanpaths, each number uses its scanpath’s fixation color, including during replay.</td>
 </tr>
 <tr>
 <td><strong>Fixation index</strong> → <strong>Position</strong></td>
@@ -3136,7 +3197,7 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 </tr>
 <tr>
 <td><strong>Text</strong> → <strong>Redact</strong></td>
-<td>Draw a rounded block over each word's letters instead of the word, in the text color, and hide the word in the hovers, so a figure shows where the text was without showing what it said.</td>
+<td>Replace each word with a rounded block in the text color and hide its text in tooltips. This preserves the text layout while concealing the words.</td>
 </tr>
 <tr>
 <td><strong>Fit</strong> → <strong>Fit to word boxes</strong></td>
@@ -3372,8 +3433,12 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 <td>Set the grid label (tick label) font size.</td>
 </tr>
 <tr>
+<td><strong>Axis preset</strong></td>
+<td>Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. <strong>Connect fixations</strong> traces the index sequence. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window.</td>
+</tr>
+<tr>
 <td><strong>Axes</strong> → <strong>X</strong> / <strong>Y</strong></td>
-<td>Choose the x and y axis fields. <strong>X</strong> / <strong>Y</strong> draws the reading on the screen. Any other pair turns the figure into a scatter plot (chart) of the fixations, with no text, word boxes, saccades, heatmap or grid. Animate and Compare always plot <strong>X</strong> / <strong>Y</strong>. For example: <strong>Time (ms)</strong> against <strong>X</strong> for a time course of the reading, where regressions show as dips; <strong>Time (ms)</strong> against <strong>Word #</strong> for reading progress through the text; <strong>Fixation #</strong> against <strong>Duration (ms)</strong> for fixation durations over the trial.</td>
+<td>Choose any two numeric fixation fields. Try fixation order against duration, or recorded onset against word number. Screen Y increases downward. Raw samples can appear when they supply both plotted quantities. <strong>Screen X and Y</strong> restores the stimulus view. Animate and Compare use screen coordinates.</td>
 </tr>
 <tr>
 <td><strong>Illustration</strong> → <strong>Label</strong></td>
@@ -3417,9 +3482,11 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 </tr>
 </tbody>
 </table>
+<p><img alt="Vertical screen position by elapsed time for a bundled demo reading" src="../../../assets/screenshots/elapsed-reading-chart.jpg" /></p>
+<p>Each dot is a fixation. The clusters step down as the reader looks lower on the screen. Around 39 seconds, the reader looks back near the top.</p>
 <h3 id="reset-visualization"><span class="sps-icon" data-icon="restart_alt" aria-hidden="true"></span> Reset visualization<a class="headerlink" href="#reset-visualization" title="Permanent link">&para;</a></h3>
-<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/reset.webp" title="Open full size"><img src="../../../assets/screenshots/controls/reset.webp" alt="The Plot controls column, with Reset visualization circled at its foot" loading="lazy"></a></p>
-<p>The button at the foot of the column.</p>
+<p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/reset.webp" title="Open full size"><img src="../../../assets/screenshots/controls/reset.webp" alt="Undo and Redo arrows beside Reset visualization" loading="lazy"></a></p>
+<p>At the foot of <strong>Full</strong> plot controls, use the arrows beside <strong>Reset visualization</strong> to step through your last 30 plot changes. Presets and a confirmed reset each count as one change.</p>
 <table>
 <thead>
 <tr>
@@ -3429,11 +3496,20 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 </thead>
 <tbody>
 <tr>
+<td><strong>Undo</strong></td>
+<td>Restore the previous plot settings for the current dataset. Switching trials keeps you on the newly selected trial.</td>
+</tr>
+<tr>
+<td><strong>Redo</strong></td>
+<td>Reapply the change you undid. Making a new plot edit clears the redo list.</td>
+</tr>
+<tr>
 <td><strong>Reset visualization</strong></td>
 <td>After you confirm, reset every plot setting to its default, <strong>Filters &amp; highlights</strong> included. Annotations, trial filters, data and the selected trial stay.</td>
 </tr>
 </tbody>
 </table>
+<p>Changing datasets starts a fresh history. A trial-specific fixation window drops out of history when you leave that reading.</p>
 <h2 id="in-compare">In Compare<a class="headerlink" href="#in-compare" title="Permanent link">&para;</a></h2>
 <p><a class="sps-ctl sps-ctl--wide" href="../../../assets/screenshots/controls/compare-row.webp" title="Open full size"><img src="../../../assets/screenshots/controls/compare-row.webp" alt="The trial control bar in Compare: scanpath A's row, and B's under it" loading="lazy"></a></p>
 <p>With <strong>Compare</strong> on, scanpath B gets a second row in the trial control bar, and
@@ -3448,7 +3524,7 @@ several menus split into a <strong>Scanpath A</strong> and a <strong>Scanpath B<
 <tbody>
 <tr>
 <td><strong>Dataset B</strong></td>
-<td>Choose the dataset scanpath B comes from: this one, or another dataset.</td>
+<td>Choose the dataset scanpath B comes from. To reopen a shared comparison with PoTeC or OneStop, the recipient needs the corpus on their computer. If the link opens only A, open the named corpus as the main dataset to locate or download its files, then reopen the link.</td>
 </tr>
 <tr>
 <td><strong>Trial B</strong>, slider, <strong>◀ ▶</strong></td>
@@ -3583,7 +3659,7 @@ several menus split into a <strong>Scanpath A</strong> and a <strong>Scanpath B<
 <tr>
 <td><span class="sps-icon" data-icon="share" aria-hidden="true"></span> <strong>Share</strong></td>
 <td><strong>Link</strong></td>
-<td>Copy a share link that reopens this trial with these settings. The data doesn't travel in the link, so whoever opens it needs the same dataset. The bundled demo works anywhere. A public dataset has to be downloaded on their side. For your own dataset, send its files and setup file (<span class="sps-icon" data-icon="edit" aria-hidden="true"></span> <strong>Edit dataset</strong> → <strong>Download setup file</strong>) so they can add it first. A link made on your own computer (a <code>localhost</code> address) opens only where the app runs at that same address.</td>
+<td>Copy a link that reopens this trial and its settings. The bundled demo works anywhere. A public dataset has to be downloaded on the recipient's side. For each dataset you imported, send its data files and setup file (<span class="sps-icon" data-icon="edit" aria-hidden="true"></span> <strong>Edit dataset</strong> → <strong>Download setup file</strong>) so they can add it under the same name. If they have A but still need B for a comparison, the link opens A and names the dataset to add. On your own computer the link still works after either dataset is renamed. A <code>localhost</code> link opens where the app runs at the same address.</td>
 </tr>
 <tr>
 <td></td>

@@ -16,16 +16,18 @@ Looking for a specific button?
 
 ## Essentials and Full
 
-The view opens in **Essentials**, a trimmed version of the same view for a first look. The **Essentials | Full** switch is in the top bar, on the **Scanpath** view only. The mode you choose is remembered in this browser. Adding `ui=full` (or `ui=essentials`) to the app's address, as `?ui=full` or `&ui=full`, uses that mode for the visit without changing the saved choice, and a link made with **Share** does not carry the mode.
+The Scanpath view opens in **Essentials**, with the main controls for exploring a reading. Switch to **Full** in the top bar whenever you want more options. The app remembers your choice in this browser.
 
 Essentials shows:
 
 - the dataset and trial pickers with **◀ ▶**;
-- the plot, which on a new visit opens on a playing replay;
+- the plot, which starts with a replay on a new visit;
 - four view tiles (**Animation**, **Scanpath**, **Heatmap** and **Illustration**) and the **Palette**;
 - the **Export** tab, for the figure on screen, and **Share**.
 
-Where Full has more, a **More** button lists what it adds there and ends in **Switch to Full**. A setting made in Full, such as a trial filter, still shapes the figure in Essentials, and Essentials says so in a short note. Starting a tutorial from **Help** switches that visit to Full. **Corpus Analysis** and **Data Management** are the same in both modes.
+The **More** buttons show which additional controls are available in Full and offer **Switch to Full**. Settings you chose in Full, such as trial filters, remain active in Essentials; a short note tells you when they apply. Starting a tutorial from **Help** switches to Full for the current visit. **Corpus Analysis** and **Data Management** are the same in both modes.
+
+To open a mode for one visit, add `?ui=full` or `?ui=essentials` to the app's address (use `&` if the address already has a `?`). This leaves your saved choice unchanged. Links created with **Share** use the recipient's own mode.
 
 The numbered regions above and the rest of this guide describe Full.
 
@@ -113,4 +115,4 @@ You can save each of these to a file and load it again:
 | column mapping and recording setup | **Edit dataset** → **Download setup file**         |
 | saved figure designs               | **My designs** → **Export**                        |
 
-None of these files holds your data, so load the same data before you restore one. In the desktop app or a local install, the app also keeps your datasets, annotations and designs between sessions. See **Data Management** → **Saved on this computer**.
+Keep your source data alongside these files, and load the same dataset before restoring them. In the desktop app or a local install, the app also keeps your datasets, annotations and designs between sessions. See **Data Management** → **Saved on this computer**.

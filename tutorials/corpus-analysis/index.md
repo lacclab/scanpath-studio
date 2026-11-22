@@ -8,7 +8,7 @@
 
   Inspect group means and differences.
 
-- **[See progression over time](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/progression-over-time/index.md)**
+- **[Track changes over time](https://lacclab.github.io/scanpath-studio/tutorials/corpus-analysis/progression-over-time/index.md)**
 
   Inspect trends within or across trials.
 
@@ -18,6 +18,6 @@ Open a dataset and set the trial filters for your question. Word-level views nee
 
 ## Keep the result
 
-**⬇ Download this table (CSV)** saves the values. **⬇ Download the recipe (JSON)** saves the dataset name, the trial filters, the analysis choices and the counts. The recipe names the dataset but holds none of its data, so keep the source data to reproduce the result.
+**⬇ Download this table (CSV)** saves the values. **⬇ Download the recipe (JSON)** saves the dataset name, the trial filters, the analysis choices and the counts. Keep the source data as well: the recipe records the dataset name, but does not include the data itself.
 
 To draw a summary with Python or the CLI, see [Plot a summary in code](https://lacclab.github.io/scanpath-studio/guides/corpus-workspace/#plot-a-summary-in-code).

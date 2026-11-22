@@ -1,30 +1,40 @@
 # Corpus Analysis
 
-The **Corpus Analysis** view summarizes reading measures by text, participant or group. It uses the selected dataset and the trials your filters keep.
+The **Corpus Analysis** view summarizes reading measures by text, participant or group. It uses the selected dataset and the trials that match your filters.
 
 ## Choose a view
 
 Open a tab, then pick a figure in its **View** menu.
 
-| Tab                 | Use it to                                                          |
-| ------------------- | ------------------------------------------------------------------ |
-| **Per text**        | Compare word-by-word reading across participants                   |
-| **Per participant** | Inspect one participant across trials                              |
-| **Groups**          | Describe a group of trials, or compare two, such as two conditions |
+| Tab                 | Use it to                                                        |
+| ------------------- | ---------------------------------------------------------------- |
+| **Per text**        | Compare word-by-word reading across participants                 |
+| **Per participant** | Inspect one participant across trials                            |
+| **Groups**          | Summarize a group of trials, or compare two groups or conditions |
 
-Choose the **Measure**, how to **Aggregate** it and, where a view draws a band, its **Spread**. For word profiles, set **Min participants per word**.
+Choose a **Measure** and use **Aggregate** to choose how values are combined. For views with a shaded band, **Spread** controls what the band shows. For word profiles, **Min participants per word** sets how many participants must have a value for a word to be included.
 
-## Supply reading measures
+## Include reading measures in your Words table
 
 Word-level views use the [reading measures in your data](https://lacclab.github.io/scanpath-studio/guides/loading-data/#reading-measures), such as first fixation duration or total fixation duration. Map those columns when you import. Views of single fixations, such as **Fixation duration over time**, use the Fixations table.
 
 ## Compare groups
 
-Under **Define groups by**, choose **Split a field** to pick a group by the values of one field, or **Independent filter sets** to build it from filters. Turn on **Compare a second group** to define a group B and see the two groups side by side, their means and their difference. These views are descriptive and run no significance tests.
+Under **Define groups by**, choose **Split a field** to group trials by the values of a column, or **Independent filter sets** to define a group using filters. Turn on **Compare a second group** to define group B. You can then compare the groups side by side, including their means and the difference between them. These views provide descriptive summaries; they do not run significance tests.
 
 ## Save results
 
-Under each result, **⬇ Download this table (CSV)** saves the table and **⬇ Download the recipe (JSON)** saves how it was made: the dataset, the trial filters, the analysis choices and the counts. The recipe holds no data rows and no figure settings. To inspect single trials, return to the Scanpath view.
+Under each result, **⬇ Download this table (CSV)** saves the table and **⬇ Download the recipe (JSON)** saves a record of the analysis: the dataset name, trial filters, analysis choices and counts. Keep your source data separately; the recipe contains neither the data nor the figure settings. To inspect individual trials, return to the Scanpath view.
+
+### Rerun a cohort profile
+
+For **Per text → Cohort profile**, save the recipe and keep the source tables. New recipes save the column mappings, filename-derived columns and character-box merges used at import. Supply the original files to reproduce the CSV.
+
+```
+scanpath-studio recipe profile.recipe.json --words words.csv --fixations fixations.csv -o profile.csv
+```
+
+For the bundled demo, use `--sample` in place of the table paths. If you filtered by participant, trial or text metadata, supply the original table with `--participant-metadata`, `--trial-metadata` or `--text-metadata`. For a star or tag filter, supply the dataset’s exported annotations with `--annotations`. New recipes also record a checksum of the CSV. If the rows or values differ, the command reports the mismatch before writing the output. Older recipes have no checksum. Supply their original mappings if needed, and download a fresh recipe when one of their filter labels is ambiguous. In Python, pass the decoded recipe or its path and the normalized frames to run_analysis_recipe.
 
 ## Plot a summary in code
 

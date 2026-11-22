@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/icon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -108,6 +108,21 @@
       
     </div>
     <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+  <nav class="sps-docs-channel" aria-label="Documentation edition">
+    
+      <strong>Stable documentation &middot; v0.47.0</strong>
+      <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
+    
+  </nav>
+
+          </div>
+          
+        </aside>
       
     </div>
     
@@ -370,6 +385,25 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../whats-new/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  What's new
+
+      </a>
+    </li>
   
 
       
@@ -712,7 +746,7 @@
   <span class="md-ellipsis">
     
   
-    Audit an experimenter
+    Review an experimenter's sessions
   
 
     
@@ -875,7 +909,7 @@
   <span class="md-ellipsis">
     
   
-    Find the trials an analysis needs
+    Find trials with specific fixation patterns
   
 
     
@@ -1201,7 +1235,7 @@
   <span class="md-ellipsis">
     
   
-    See progression over time
+    Track changes over time
   
 
     
@@ -1490,6 +1524,17 @@
   
     <nav class="md-nav" aria-label="Choose a dataset">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#draw-a-scanpath" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Draw a scanpath
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#onestop" class="md-nav__link">
@@ -2365,6 +2410,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../whats-new/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What's new
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../about/" class="md-nav__link">
         
   
@@ -2422,6 +2494,17 @@
   
     <nav class="md-nav" aria-label="Choose a dataset">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#draw-a-scanpath" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Draw a scanpath
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#onestop" class="md-nav__link">
@@ -2608,6 +2691,20 @@ the <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <stro
 <li><strong>+</strong> → <span class="sps-icon" data-icon="draw" aria-hidden="true"></span> <strong>Draw a scanpath</strong>: write a text and place its
   fixations by hand.</li>
 </ul>
+<h3 id="draw-a-scanpath">Draw a scanpath<a class="headerlink" href="#draw-a-scanpath" title="Permanent link">&para;</a></h3>
+<p>Choose <strong>+ → Draw a scanpath</strong>, then type your passage. In <strong>Draw</strong> mode, click
+the words in reading order. Click a word twice for two visits, or click the
+space between words for a fixation without a target. For a regular sequence,
+<strong>Reset to one fixation per word</strong> places a 220 ms fixation on each word.</p>
+<p>Use <strong>Select &amp; move</strong> to drag a marker. The <strong>Fixation</strong> list lets you select
+visits that land on top of one another. Change <strong>Duration (ms)</strong> and use
+<strong>Play preview</strong> to check the timing. The <strong>Fixation table</strong> also accepts
+keyboard edits. Leaving both coordinates empty places the fixation at the
+center of its target word.</p>
+<p><strong>Save dataset</strong> opens the figure. To revise it, go to <strong>Data Management</strong> and
+click <strong>Edit</strong> on its row. <strong>Save changes</strong> updates the drawing, and <strong>Save as
+copy</strong> keeps a separate version. For another computer, download the editable
+draft from <strong>Share</strong> and open it with <strong>Load a saved draft</strong> in the drawing editor.</p>
 <h3 id="onestop">OneStop<a class="headerlink" href="#onestop" title="Permanent link">&para;</a></h3>
 <p>The bundled demo comes from <a href="https://github.com/lacclab/OneStop-Eye-Movements">OneStop Eye Movements</a>
 (Berzak et al., 2025), an English corpus with 360 participants. The full corpus
@@ -2616,8 +2713,8 @@ is available as four public datasets: <strong>OneStop · Ordinary reading</stron
 <strong>OneStop · Information seeking (repeated)</strong>. Each downloads once from
 <a href="https://osf.io/2prdq/">OSF</a>.</p>
 <h2 id="what-your-data-needs">What your data needs<a class="headerlink" href="#what-your-data-needs" title="Permanent link">&para;</a></h2>
-<p>A dataset needs at least one of the first three tables below. Add the others as
-you need them.</p>
+<p>Start with a Fixations, Words or Raw gaze table. You can add the other tables
+whenever you need them.</p>
 <table>
 <thead>
 <tr>
@@ -2652,7 +2749,7 @@ you need them.</p>
 </tr>
 </tbody>
 </table>
-<p>The app detects columns from common eye-tracker exports. Check and correct the
+<p>The app recognizes column names from common eye-tracker exports. Check the
 mapping when you import. To keep condition labels and other columns, pick them
 under <strong>Extra fields to keep</strong>. You can filter, sort and group trials by any
 metadata field.</p>
@@ -2663,12 +2760,12 @@ metadata field.</p>
 <li>Times in milliseconds. A time column whose header names its unit, such as
   <code>[s]</code>, <code>[μs]</code> or <code>[ns]</code>, is converted.</li>
 <li>Word boxes as <code>x/y/width/height</code> or EyeLink's <code>IA_LEFT/RIGHT/TOP/BOTTOM</code></li>
-<li>Word IDs as numbers, or as text such as <code>w1</code>. Spell text IDs the same way in
+<li>Word IDs as numbers, or as text such as <code>w1</code>. Text IDs must match exactly in
   the Fixations and Words tables. With text IDs, the order of the rows in the
   Words table sets the word order.</li>
 <li>Several files for one table, such as one file per trial, are stacked into
   one table, with each file's name in a <code>source_file</code> column. When an ID is
-  only in the file name, <strong>Derive columns from text</strong> splits it out into a
+  only in the file name, use <strong>Derive columns from text</strong> to extract it into a
   column you can map. When you click <strong>Apply</strong>, a derived column named like an
   ID, such as <code>participant</code>, <code>trial</code> or <code>stimulus</code>, fills that ID field if it
   is empty.</li>
@@ -2682,7 +2779,7 @@ metadata field.</p>
 <h3 id="multipart-logical-trials">Trials over several screens<a class="headerlink" href="#multipart-logical-trials" title="Permanent link">&para;</a></h3>
 <p>Map the <strong>Screen ID</strong> field in your tables. A column named <code>screen_index</code> sets
 the order of the screens. Without one, the screens are ordered by where they
-first appear, in the Fixations table when the dataset has one. The app draws one
+first appear, using the Fixations table if available. The app draws one
 screen at a time.</p>
 <h3 id="reading-measures">Reading measures<a class="headerlink" href="#reading-measures" title="Permanent link">&para;</a></h3>
 <p>Corpus Analysis uses the per-word reading measures in your Words table, such as

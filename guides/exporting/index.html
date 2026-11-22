@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/icon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -108,6 +108,21 @@
       
     </div>
     <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+  <nav class="sps-docs-channel" aria-label="Documentation edition">
+    
+      <strong>Stable documentation &middot; v0.47.0</strong>
+      <a href="https://lacclab.github.io/scanpath-studio/dev/">Dev docs home &rarr;</a>
+    
+  </nav>
+
+          </div>
+          
+        </aside>
       
     </div>
     
@@ -370,6 +385,25 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../whats-new/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  What's new
+
+      </a>
+    </li>
   
 
       
@@ -712,7 +746,7 @@
   <span class="md-ellipsis">
     
   
-    Audit an experimenter
+    Review an experimenter's sessions
   
 
     
@@ -875,7 +909,7 @@
   <span class="md-ellipsis">
     
   
-    Find the trials an analysis needs
+    Find trials with specific fixation patterns
   
 
     
@@ -1201,7 +1235,7 @@
   <span class="md-ellipsis">
     
   
-    See progression over time
+    Track changes over time
   
 
     
@@ -2309,6 +2343,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../whats-new/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What's new
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../about/" class="md-nav__link">
         
   
@@ -2507,20 +2568,18 @@
 </tr>
 </tbody>
 </table>
-<p>In Essentials mode, <strong>Export</strong> holds <strong>Current figure</strong> only; <strong>Export bundle</strong> is
-in Full.</p>
+<p>To export multiple trials, switch to Full and open <strong>Export bundle</strong>.
+Essentials offers <strong>Current figure</strong> for the figure or replay on screen.</p>
 <p>For step-by-step instructions, see the <a href="../../tutorials/exporting-figures/">export tutorials</a>.</p>
 <h2 id="cite">Cite what you export<a class="headerlink" href="#cite" title="Permanent link">&para;</a></h2>
-<p>Every file you export says how to cite Scanpath Studio in its own metadata:
-the PNG's text chunks, the SVG's <code>&lt;metadata&gt;</code>, the PDF's document properties,
-the HTML page's <code>&lt;head&gt;</code>, and the GIF's and MP4's comment. Nothing is drawn on
-the figure.</p>
+<p>Files saved through <strong>Export</strong> include citation information in their metadata.
+To add a visible credit to the figure, use <strong>Figure &amp; canvas</strong> → <strong>Credit</strong>.</p>
 <ul>
 <li><span class="sps-icon" data-icon="format_quote" aria-hidden="true"></span> <strong>Cite</strong>, under each download and in
   <span class="sps-icon" data-icon="share" aria-hidden="true"></span> <strong>Share</strong> → <strong>Code</strong>, gives a one-line figure credit, the
   APA reference and BibTeX, and <code>.bib</code> and <code>.ris</code> files for Zotero, Mendeley or
   EndNote. For the bundled demo, OneStop or PoTeC, it cites the corpus too.</li>
-<li>An export bundle has a <code>CITATION.bib</code>, and its <code>README.md</code> a <em>Cite</em> section.</li>
+<li>Each export bundle includes <code>CITATION.bib</code> and citation instructions in <code>README.md</code>.</li>
 <li><strong>Figure &amp; canvas</strong> → <strong>Credit</strong> adds a small <em>Made with Scanpath Studio</em>
   line under the plot, for a figure shared without its caption. In code, pass
   <code>show_credit=True</code>, or <code>--credit</code> to <code>render</code>.</li>
@@ -2533,12 +2592,18 @@ the figure.</p>
   <source src="../../assets/workflows/share-link.mp4" type="video/mp4">
 </video>
 
-<p>A link reopens the trial and its settings for anyone who has the same dataset.
+<p>A link can find an imported dataset on the same computer after you rename it.
+On another computer, import the sender’s data under the name in the link.
+The link checks that the recording tables match, including those for a second
+imported dataset in a comparison. Older links can open without checking the tables.
 <a href="../scanpath-visualization/controls/#under-the-plot">All controls → Under the plot</a>
 says what the recipient needs.</p>
 <h2 id="from-the-app-to-a-script">Reproduce a figure<a class="headerlink" href="#from-the-app-to-a-script" title="Permanent link">&para;</a></h2>
-<p>Open <strong>Share</strong> → <strong>Code</strong> and copy the Python or CLI code. It carries the
-figure's settings and your column mapping. For a dataset you imported, replace
+<p>Open <strong>Share</strong> → <strong>Code</strong> and copy the Python or CLI code. It includes the
+figure's settings and your column mapping. The compact code includes changes
+that affect this view. For example, a comparison uses each scanpath's own
+fixation color for its index numbers. Select <strong>Show every option</strong> to include
+the other accepted figure settings. For a dataset you imported, replace
 the placeholder file paths with your own.
 <a href="../scanpath-visualization/#render-in-code">Render in code</a> shows a minimal example.</p>
 <p>For a PNG at print size, pass <code>width_mm</code> and <code>dpi</code> to <code>save_figure</code>, or

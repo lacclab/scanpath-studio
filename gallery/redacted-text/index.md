@@ -1,6 +1,6 @@
 # Redacted text
 
-Show where the text was without showing what it said. Each word is drawn as a rounded block over its letters, and the hovers hide the words too.
+Show where the text was without showing what it said. Each word is drawn as a rounded block over its letters. Words are also hidden in tooltips.
 
 1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
 1. In **Stimulus** ▾ → **Text**, tick **Redact**. The blocks take the text color.

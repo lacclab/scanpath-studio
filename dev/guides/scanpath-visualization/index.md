@@ -25,7 +25,7 @@ Essentials shows:
 - four view tiles (**Animation**, **Scanpath**, **Heatmap** and **Illustration**) and the **Palette**;
 - the **Export** tab, for the figure on screen, and **Share**.
 
-The **More** buttons show which additional controls are available in Full and offer **Switch to Full**. Settings you chose in Full, such as trial filters, remain active in Essentials; a short note tells you when they apply. Starting a tutorial from **Help** switches to Full for the current visit. **Corpus Analysis** and **Data Management** are the same in both modes.
+The **More** buttons show which additional controls are available in Full and offer **Switch to Full**. The four tiles and Palette stay in the same place when you switch modes. An active comparison keeps its switch in Essentials. Settings you chose in Full, such as trial filters, remain active in Essentials; a short note tells you when they apply. Starting a tutorial from **Help** switches to Full for the current visit. **Corpus Analysis** and **Data Management** are the same in both modes.
 
 To open a mode for one visit, add `?ui=full` or `?ui=essentials` to the app's address (use `&` if the address already has a `?`). This leaves your saved choice unchanged. Links created with **Share** use the recipient's own mode.
 
@@ -54,21 +54,21 @@ With **A and B together** on, either pair of trial shortcuts steps both readings
 
 The **Plot controls** column, on the right of the plot, holds the figure's settings. Each layer has a row with a switch that turns it on or off and a **▾** that opens its settings.
 
-| Section                  | What it controls                                                                                                                         |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Animate**              | replay the fixations in the order they happened, at a speed you choose                                                                   |
-| **Compare**              | draw a second reading over this one, beside it or below it                                                                               |
-| **Design presets**       | restyle the whole figure in one click: **Scanpath**, **Heatmap**, **Illustration**, or **Custom** for your most recent settings          |
-| **My designs**           | save the current settings as a design, apply it again in one click, or export your designs to share them or use them on another computer |
-| **Palette**              | one color scheme for the whole figure: **Default (colorblind-safe)**, **Print / grayscale** or **High contrast**                         |
-| **Fixations**            | the fixation markers: color, shape and size, and the fixation index                                                                      |
-| **Saccades**             | the saccade lines and arrows, in one color, by direction or by saccade type                                                              |
-| **Stimulus**             | the text (or redacted blocks), highlighted words, the stimulus image, the font and the background                                        |
-| **Word boxes**           | each word's box: outline and fill, color and opacity                                                                                     |
-| **Heatmap**              | where fixations concentrate, by fixation count or duration                                                                               |
-| **Raw gaze**             | the gaze samples as recorded                                                                                                             |
-| **Filters & highlights** | which fixations and saccades are drawn, and which stand out                                                                              |
-| **Figure & canvas**      | screen framing, axes and grid, title and labels, hover fields and legends                                                                |
+| Section                  | What it controls                                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------------------------- |
+| **View**                 | choose **Animation**, **Scanpath**, **Heatmap**, or **Illustration**                              |
+| **Palette**              | choose **Default (colorblind-safe)**, **Print / grayscale**, or **High contrast**                 |
+| **Compare readings**     | add a second reading over this one, beside it, or below it                                        |
+| **Animation settings**   | set playback speed, autoplay, and frame quality                                                   |
+| **My designs**           | restore your last custom design, save a named design, or share one                                |
+| **Fixations**            | the fixation markers: color, shape and size, and the fixation index                               |
+| **Saccades**             | the saccade lines and arrows, in one color, by direction or by saccade type                       |
+| **Stimulus**             | the text (or redacted blocks), highlighted words, the stimulus image, the font and the background |
+| **Word boxes**           | each word's box: outline and fill, color and opacity                                              |
+| **Heatmap**              | where fixations concentrate, by fixation count or duration                                        |
+| **Raw gaze**             | the gaze samples as recorded                                                                      |
+| **Filters & highlights** | which fixations and saccades are drawn, and which stand out                                       |
+| **Figure & canvas**      | screen framing, axes and grid, title and labels, hover fields and legends                         |
 
 [All controls → Plot controls](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/controls/#plot-controls) describes every setting in each menu.
 

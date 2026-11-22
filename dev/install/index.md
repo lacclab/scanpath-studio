@@ -58,7 +58,7 @@ Start with the bundled demo, a subset of the [OneStop corpus](https://lacclab.gi
 
 - **2 · Choose a view**
 
-  Choose **Heatmap** to see where fixation time concentrates, or **Scanpath** to follow the order of fixations. These are view tiles in Essentials and **Design presets** in Full.
+  Choose **Heatmap** to see where fixation time concentrates, or **Scanpath** to follow the order of fixations. Both tiles sit under **View** in Essentials and Full.
 
 - **3 · Save your figure**
 

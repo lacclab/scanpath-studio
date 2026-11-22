@@ -76,7 +76,7 @@ Use the [data loaders](https://lacclab.github.io/scanpath-studio/dev/guides/load
 
 ## Replay export
 
-With **Animate** on, **Export** → **Current figure** saves the replay as HTML, GIF or MP4. In a saved HTML replay, **Previous fixation** and **Next fixation** move to individual onsets and show the fixation’s duration and assigned word when available. The time slider scrubs through the whole reading. A GIF or MP4 with a low frame cap shows the state reached at each frame’s start. A fixation after the last frame starts can be absent from the clip.
+With **Animation** selected, **Export** → **Current figure** saves the replay as HTML, GIF or MP4. In a saved HTML replay, **Previous fixation** and **Next fixation** move to individual onsets and show the fixation’s duration and assigned word when available. The time slider scrubs through the whole reading. A GIF or MP4 with a low frame cap shows the state reached at each frame’s start. A fixation after the last frame starts can be absent from the clip.
 
 The CLI’s `render --animate` saves interactive HTML. For a GIF or MP4 in Python:
 

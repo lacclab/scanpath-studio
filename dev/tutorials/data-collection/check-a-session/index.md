@@ -20,7 +20,7 @@ For a consistent offset, check [coordinate units and screen setup](https://laccl
 
 ## 3. Replay the recording
 
-Turn on **Animate** to follow the fixation order and timing. To mark short or long fixations, or fixations outside the text, open **Filters & highlights** ▾ → **Fixations** and set **Short**, **Long** or **Outside the text** to **Highlight**. A gap or an unusual scanpath does not tell you its cause.
+Choose **Animation** to follow the fixation order and timing. To mark short or long fixations, or fixations outside the text, open **Filters & highlights** ▾ → **Fixations** and set **Short**, **Long** or **Outside the text** to **Highlight**. A gap or an unusual scanpath does not tell you its cause.
 
 \[!\[
 

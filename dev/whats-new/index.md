@@ -31,6 +31,7 @@
 - On phones, the Scanpath view choices sit directly below the figure, ahead of Export and the other trial panels.
 - Word-box heatmaps show the current reading’s dwell-time or count limits and can reuse those limits on other readings. Grayscale comparisons distinguish readers with filled and hollow markers and solid and dashed lines. A snapped illustration can be viewed beside the same trial’s original coordinates.
 - Data Management puts Add dataset above the list, shows full names on phones and restores click-to-sort column headers. Corpus Analysis opens with the analysis controls and keeps figure styling and the inclusion report below the results.
+- Essentials and Full share the same four view tiles and Palette. Full adds comparison, animation settings, saved designs, and layers below them.
 
 ### Removed
 

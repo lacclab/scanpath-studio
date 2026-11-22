@@ -66,7 +66,7 @@ Start with the bundled demo, a subset of the [OneStop corpus](https://lacclab.gi
 
 - **2 · Choose a view**
 
-  Choose **Heatmap** to see where fixation time concentrates, or **Scanpath** to follow the order of fixations. These are view tiles in Essentials and **Design presets** in Full.
+  Choose **Heatmap** to see where fixation time concentrates, or **Scanpath** to follow the order of fixations. Both tiles sit under **View** in Essentials and Full.
 
 - **3 · Save your figure**
 
@@ -242,7 +242,7 @@ For a consistent offset, check [coordinate units and screen setup](https://laccl
 
 ## 3. Replay the recording
 
-Turn on **Animate** to follow the fixation order and timing. To mark short or long fixations, or fixations outside the text, open **Filters & highlights** ▾ → **Fixations** and set **Short**, **Long** or **Outside the text** to **Highlight**. A gap or an unusual scanpath does not tell you its cause.
+Choose **Animation** to follow the fixation order and timing. To mark short or long fixations, or fixations outside the text, open **Filters & highlights** ▾ → **Fixations** and set **Short**, **Long** or **Outside the text** to **Highlight**. A gap or an unusual scanpath does not tell you its cause.
 
 \[!\[
 
@@ -381,8 +381,8 @@ Save an animated reading for a talk or supplement.
 
 Before you start, switch to **Full** at the top of the **Scanpath** view ([Essentials and Full](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#essentials-and-full)).
 
-1. Pick a trial in the **Scanpath** view and turn on **Animate**.
-1. In **Animate** ▾ → **Replay**, set the **Speed**. Turn on the layers you want to show.
+1. Pick a trial in the **Scanpath** view and choose **Animation**.
+1. In **Animation settings** → **Replay**, set the **Speed**. Turn on the layers you want to show.
 1. Open the **Export** tab. Under **Current figure**, set **Download format** to **GIF**, **MP4** or **HTML**.
 1. Download the replay. GIF and MP4 play at the selected speed. HTML keeps the interactive playback controls.
 
@@ -419,11 +419,11 @@ For a [scripted batch](https://lacclab.github.io/scanpath-studio/dev/guides/expo
 
 Save a scanpath, heatmap or comparison at the size you need.
 
-In Essentials, use the view tiles to choose a figure. For **Design presets**, **Compare** and **My designs**, switch to **Full** at the top of the **Scanpath** view ([Essentials and Full](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#essentials-and-full)).
+In either mode, use the view tiles to choose a figure. For **Compare readings** and **My designs**, switch to **Full** at the top of the **Scanpath** view ([Essentials and Full](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#essentials-and-full)).
 
 ## 1. Choose the view
 
-Pick a trial in the **Scanpath** view. Choose one of the **Design presets**, or set the layers in the Plot controls. Turn on **Compare** if the figure needs two readings. Check that text and markers are readable and nothing is clipped.
+Pick a trial in the **Scanpath** view. Choose a **View** tile, or set the layers in Full. Turn on **Compare** if the figure needs two readings. Check that text and markers are readable and nothing is clipped.
 
 ## 2. Set the format and size
 
@@ -622,7 +622,7 @@ Use the [data loaders](https://lacclab.github.io/scanpath-studio/dev/guides/load
 
 ## Replay export
 
-With **Animate** on, **Export** → **Current figure** saves the replay as HTML, GIF or MP4. In a saved HTML replay, **Previous fixation** and **Next fixation** move to individual onsets and show the fixation’s duration and assigned word when available. The time slider scrubs through the whole reading. A GIF or MP4 with a low frame cap shows the state reached at each frame’s start. A fixation after the last frame starts can be absent from the clip.
+With **Animation** selected, **Export** → **Current figure** saves the replay as HTML, GIF or MP4. In a saved HTML replay, **Previous fixation** and **Next fixation** move to individual onsets and show the fixation’s duration and assigned word when available. The time slider scrubs through the whole reading. A GIF or MP4 with a low frame cap shows the state reached at each frame’s start. A fixation after the last frame starts can be absent from the clip.
 
 The CLI’s `render --animate` saves interactive HTML. For a GIF or MP4 in Python:
 
@@ -786,7 +786,7 @@ Essentials shows:
 - four view tiles (**Animation**, **Scanpath**, **Heatmap** and **Illustration**) and the **Palette**;
 - the **Export** tab, for the figure on screen, and **Share**.
 
-The **More** buttons show which additional controls are available in Full and offer **Switch to Full**. Settings you chose in Full, such as trial filters, remain active in Essentials; a short note tells you when they apply. Starting a tutorial from **Help** switches to Full for the current visit. **Corpus Analysis** and **Data Management** are the same in both modes.
+The **More** buttons show which additional controls are available in Full and offer **Switch to Full**. The four tiles and Palette stay in the same place when you switch modes. An active comparison keeps its switch in Essentials. Settings you chose in Full, such as trial filters, remain active in Essentials; a short note tells you when they apply. Starting a tutorial from **Help** switches to Full for the current visit. **Corpus Analysis** and **Data Management** are the same in both modes.
 
 To open a mode for one visit, add `?ui=full` or `?ui=essentials` to the app's address (use `&` if the address already has a `?`). This leaves your saved choice unchanged. Links created with **Share** use the recipient's own mode.
 
@@ -815,21 +815,21 @@ With **A and B together** on, either pair of trial shortcuts steps both readings
 
 The **Plot controls** column, on the right of the plot, holds the figure's settings. Each layer has a row with a switch that turns it on or off and a **▾** that opens its settings.
 
-| Section                  | What it controls                                                                                                                         |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Animate**              | replay the fixations in the order they happened, at a speed you choose                                                                   |
-| **Compare**              | draw a second reading over this one, beside it or below it                                                                               |
-| **Design presets**       | restyle the whole figure in one click: **Scanpath**, **Heatmap**, **Illustration**, or **Custom** for your most recent settings          |
-| **My designs**           | save the current settings as a design, apply it again in one click, or export your designs to share them or use them on another computer |
-| **Palette**              | one color scheme for the whole figure: **Default (colorblind-safe)**, **Print / grayscale** or **High contrast**                         |
-| **Fixations**            | the fixation markers: color, shape and size, and the fixation index                                                                      |
-| **Saccades**             | the saccade lines and arrows, in one color, by direction or by saccade type                                                              |
-| **Stimulus**             | the text (or redacted blocks), highlighted words, the stimulus image, the font and the background                                        |
-| **Word boxes**           | each word's box: outline and fill, color and opacity                                                                                     |
-| **Heatmap**              | where fixations concentrate, by fixation count or duration                                                                               |
-| **Raw gaze**             | the gaze samples as recorded                                                                                                             |
-| **Filters & highlights** | which fixations and saccades are drawn, and which stand out                                                                              |
-| **Figure & canvas**      | screen framing, axes and grid, title and labels, hover fields and legends                                                                |
+| Section                  | What it controls                                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------------------------- |
+| **View**                 | choose **Animation**, **Scanpath**, **Heatmap**, or **Illustration**                              |
+| **Palette**              | choose **Default (colorblind-safe)**, **Print / grayscale**, or **High contrast**                 |
+| **Compare readings**     | add a second reading over this one, beside it, or below it                                        |
+| **Animation settings**   | set playback speed, autoplay, and frame quality                                                   |
+| **My designs**           | restore your last custom design, save a named design, or share one                                |
+| **Fixations**            | the fixation markers: color, shape and size, and the fixation index                               |
+| **Saccades**             | the saccade lines and arrows, in one color, by direction or by saccade type                       |
+| **Stimulus**             | the text (or redacted blocks), highlighted words, the stimulus image, the font and the background |
+| **Word boxes**           | each word's box: outline and fill, color and opacity                                              |
+| **Heatmap**              | where fixations concentrate, by fixation count or duration                                        |
+| **Raw gaze**             | the gaze samples as recorded                                                                      |
+| **Filters & highlights** | which fixations and saccades are drawn, and which stand out                                       |
+| **Figure & canvas**      | screen framing, axes and grid, title and labels, hover fields and legends                         |
 
 [All controls → Plot controls](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/controls/#plot-controls) describes every setting in each menu.
 
@@ -933,11 +933,13 @@ The bar above the plot: pick a dataset and a trial, step through the trials, and
 
 ## Plot controls
 
-The column on the right of the plot. At the top, the modes and designs change the whole figure at once. Under them, each layer of the figure has a row: the switch turns the layer on or off, and the **▾** beside it opens that layer's settings, described below one menu at a time. The last two rows, **Filters & highlights** and **Figure & canvas**, cover the figure as a whole. A grayed-out control says why when you hover over it. Essentials shows only the view tiles and **Palette**; the rest of this section is in Full.
+Both modes start with the same four **View** tiles and **Palette**. Switching modes keeps your figure and its settings. If you switch to Essentials while comparing readings, the **Compare readings** switch stays available.
 
-### Animate: play the reading as a video
+Full adds comparison and animation settings, saved designs, and a row for each layer. Use the switch to turn a layer on or off and **▾** to open its settings. **Filters & highlights** and **Figure & canvas** apply to the whole figure. Hover over a grayed-out control to see why it is unavailable.
 
-The **Animate** switch turns the figure into an animation, a video of the reading played back fixation by fixation, with play and pause buttons and a time slider above the plot. While it is on, the **Fixations**, **Heatmap** and **Raw gaze** switches are grayed. For playback and frame stepping from the keyboard, see [Keyboard shortcuts](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#keyboard-shortcuts). Its **▾** holds:
+### Animation settings
+
+Choose **Animation** to play the reading fixation by fixation. The play and pause buttons and time slider appear above the plot. Select **Animation** again to return to the previous static figure with its settings. During an animation, the **Fixations**, **Heatmap** and **Raw gaze** switches are grayed. For playback and frame stepping from the keyboard, see [Keyboard shortcuts](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#keyboard-shortcuts). Open **Animation settings** in Full for these controls:
 
 | Control                                 | What it does                                                                                                                                                            |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -955,24 +957,24 @@ The **Animate** switch turns the figure into an animation, a video of the readin
 
 | Control                         | What it does                                                                                                                                                     |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **View**                        | **Overlay** both scanpaths, or give each a panel, **Side by side** or **Top & bottom**. With **Animate** on, the comparison is an overlay.                       |
+| **View**                        | **Overlay** both scanpaths, or give each a panel, **Side by side** or **Top & bottom**. In **Animation**, the comparison is an overlay.                          |
 | **Stimulus from**               | In an overlay, whose word boxes and text are drawn: **Both**, **A** or **B**.                                                                                    |
 | **Label A** / **Label B**       | Each scanpath's name in the Compare (A/B) legend, written with fields such as `{participant_id}`. Empty uses the automatic label. Shown while that legend is on. |
 | **Available fields**            | The fields a label can use.                                                                                                                                      |
 | **Step** → **A and B together** | ◀ ▶ move both scanpaths at once.                                                                                                                                 |
 
-### Design presets and palette
+### Views, palette and saved designs
 
 Restyle the whole figure in one click, with a ready-made design or one you saved:
 
-| Control                                       | What it does                                                                                                                                                                                   |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Scanpath** / **Heatmap** / **Illustration** | Ready-made designs: fixations and saccades over the text, a word-box heatmap, or a clean schematic.                                                                                            |
-| **Custom**                                    | Your most recent custom settings.                                                                                                                                                              |
-| **My designs**                                | Your saved designs. Click one to apply it. renames it and deletes it.                                                                                                                          |
-| **My designs** →                              | Save the settings on screen as a named design, to apply again later in one click.                                                                                                              |
-| **My designs** → **Export** / **Import**      | Download your designs as a file, or load a file of designs, to share a look with co-authors or move your designs to another computer. A design in the file replaces yours of the same name.    |
-| **Palette**                                   | Choose **Default (colorblind-safe)**, **Print / grayscale** or **High contrast**. For a grayscale comparison, A has filled markers and solid lines, and B has hollow markers and dashed lines. |
+| Control                                         | What it does                                                                                                                                                                                   |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Scanpath** / **Heatmap** / **Illustration**   | Ready-made designs: fixations and saccades over the text, a word-box heatmap, or a clean schematic.                                                                                            |
+| **My designs** → **Restore last custom design** | Return to your most recent manual settings.                                                                                                                                                    |
+| **My designs**                                  | Your saved designs. Click one to apply it. renames it and deletes it.                                                                                                                          |
+| **My designs** →                                | Save the settings on screen as a named design, to apply again later in one click.                                                                                                              |
+| **My designs** → **Export** / **Import**        | Download your designs as a file, or load a file of designs, to share a look with co-authors or move your designs to another computer. A design in the file replaces yours of the same name.    |
+| **Palette**                                     | Choose **Default (colorblind-safe)**, **Print / grayscale** or **High contrast**. For a grayscale comparison, A has filled markers and solid lines, and B has hollow markers and dashed lines. |
 
 ### Fixations
 
@@ -1099,7 +1101,7 @@ The figure as a whole:
 | **Grid** → **Auto**, interval                 | Set the grid spacing (interval), in px, or let **Auto** choose it.                                                                                                                                                                                                                                                                                                        |
 | **Labels**                                    | Set the grid label (tick label) font size.                                                                                                                                                                                                                                                                                                                                |
 | **Axis preset**                               | Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. **Connect fixations** traces the index sequence. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window. |
-| **Axes** → **X** / **Y**                      | Choose any two numeric fixation fields. Try fixation order against duration, or recorded onset against word number. Screen Y increases downward. Raw samples can appear when they supply both plotted quantities. **Screen X and Y** restores the stimulus view. Animate and Compare use screen coordinates.                                                              |
+| **Axes** → **X** / **Y**                      | Choose any two numeric fixation fields. Try fixation order against duration, or recorded onset against word number. Screen Y increases downward. Raw samples can appear when they supply both plotted quantities. **Screen X and Y** restores the stimulus view. Animation and Compare readings use screen coordinates.                                                   |
 | **Illustration** → **Label**                  | Choose when the figure carries an *Illustration* note, saying it does not show the recorded positions. **Auto** adds it when a setting changes the geometry or the data (such as snapping fixations to a line or drawing saccades as arcs), **Show** always, **Hide** never.                                                                                              |
 | **Illustration** → **Text**                   | Write the *Illustration* label's text. Empty writes "Illustration ·" followed by the reasons.                                                                                                                                                                                                                                                                             |
 | **Title** → **Show**, text, **Size**          | Add a figure title above the plot, and set its font size. `{field}` inserts a value of the trial.                                                                                                                                                                                                                                                                         |
@@ -2229,7 +2231,7 @@ Raises:
 
 ## Figure options
 
-Set layers, colors, sizes and legends with keyword arguments to `plot_scanpath`, `animate_scanpath` or `compare_scanpaths`. The tables below list each option's default and matching CLI `render` flag, under the section names of the app's **Plot controls**. If an option applies to fewer than four views, its row names them. **Single plot** and **Single replay** show one scanpath. **Compare** shows two scanpaths together or in separate panels, and **Compare + Animate** replays two scanpaths.
+Set layers, colors, sizes and legends with keyword arguments to `plot_scanpath`, `animate_scanpath` or `compare_scanpaths`. The tables below list each option's default and matching CLI `render` flag, under the section names of the app's **Plot controls**. If an option applies to fewer than four views, its row names them. **Single plot** and **Single replay** show one scanpath. **Compare** shows two scanpaths together or in separate panels, and **Compare readings** with **Animation** replays two scanpaths.
 
 For options with a fixed set of values, case, spaces, `-` and `_` are ignored; other values raise a `ValueError`. A `--no-…` flag turns off an option that is on by default.
 
@@ -3765,8 +3767,8 @@ sps.save_figure(fig, "redacted-text.html")
 Replay a reading in fixation order. Press **▶ Play** above the text to start this example, **⏸ Pause** to stop, or drag the time slider to inspect a moment. The example shows the first forty fixations at twice the recorded speed.
 
 1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
-1. Turn on **Animate**. To replay part of the reading, set **Filters & highlights** ▾ → **Fixations** → **Index range**, here 1 to 40.
-1. In **Animate** ▾ → **Replay** → **Speed**, choose **×2**, then press **▶ Play** above the plot. Use **⏸ Pause** or the time slider to inspect the reading.
+1. Choose **Animation**. To replay part of the reading, set **Filters & highlights** ▾ → **Fixations** → **Index range**, here 1 to 40.
+1. In **Animation settings** → **Replay** → **Speed**, choose **×2**, then press **▶ Play** above the plot. Use **⏸ Pause** or the time slider to inspect the reading.
 1. Save the replay from **Export** → **Current figure**.
 
 [Open the demo](https://scanpath-studio-dev.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/controls/index.md)
@@ -3842,7 +3844,7 @@ sps.save_figure(fig, "saccade-types.html")
 Fixations and saccades over the text.
 
 1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
-1. In **Design presets**, click **Scanpath**. It turns on **Fixations**, **Saccades** and **Stimulus**.
+1. Under **View**, click **Scanpath**. It turns on **Fixations**, **Saccades** and **Stimulus**.
 1. Save the figure from **Export** → **Current figure**.
 
 [Open the demo](https://scanpath-studio-dev.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/controls/index.md)
@@ -4081,6 +4083,7 @@ Developed with AI assistance. Cross-check results before publishing.
 - On phones, the Scanpath view choices sit directly below the figure, ahead of Export and the other trial panels.
 - Word-box heatmaps show the current reading’s dwell-time or count limits and can reuse those limits on other readings. Grayscale comparisons distinguish readers with filled and hollow markers and solid and dashed lines. A snapped illustration can be viewed beside the same trial’s original coordinates.
 - Data Management puts Add dataset above the list, shows full names on phones and restores click-to-sort column headers. Corpus Analysis opens with the analysis controls and keeps figure styling and the inclusion report below the results.
+- Essentials and Full share the same four view tiles and Palette. Full adds comparison, animation settings, saved designs, and layers below them.
 
 ### Removed
 

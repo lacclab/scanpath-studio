@@ -3,7 +3,7 @@
 Fixations and saccades over the text.
 
 1. Open your data in the **Scanpath** view and pick a trial in **Select trial**.
-1. In **Design presets**, click **Scanpath**. It turns on **Fixations**, **Saccades** and **Stimulus**.
+1. Under **View**, click **Scanpath**. It turns on **Fixations**, **Saccades** and **Stimulus**.
 1. Save the figure from **Export** → **Current figure**.
 
 [Open the demo](https://scanpath-studio-dev.streamlit.app) · [All controls](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/controls/index.md)

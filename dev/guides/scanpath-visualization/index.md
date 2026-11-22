@@ -37,6 +37,19 @@ Pick a trial in **Select trial** above the plot, or step through the list with *
 
 [All controls → Trial control bar](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/controls/#trial-control-bar) describes each control.
 
+### Keyboard shortcuts
+
+| With focus on                                    | Keys                             | Action                                                    |
+| ------------------------------------------------ | -------------------------------- | --------------------------------------------------------- |
+| The page, plot background or trial arrow buttons | `Left` / `Right`                 | Previous or next trial in the current list (A in Compare) |
+| The page, plot background or trial arrow buttons | `Shift`+`Left` / `Shift`+`Right` | Previous or next trial for B in Compare                   |
+| The page or plot background                      | `Space`                          | Play or pause the replay                                  |
+| The **Replay time** slider                       | `Left` / `Right`                 | Pause and step one frame                                  |
+| The **Replay time** slider                       | `Home` / `End`                   | Jump to the first or last frame                           |
+| The **Replay time** slider                       | `Space`                          | Play or pause from the current frame                      |
+
+With **A and B together** on, either pair of trial shortcuts steps both readings. Use `Tab` and `Shift`+`Tab` to reach the replay controls. The slider keys also work in downloaded HTML replays.
+
 ## Control the layers
 
 The **Plot controls** column, on the right of the plot, holds the figure's settings. Each layer has a row with a switch that turns it on or off and a **▾** that opens its settings.

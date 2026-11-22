@@ -754,6 +754,19 @@ Pick a trial in **Select trial** above the plot, or step through the list with *
 
 [All controls → Trial control bar](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/controls/#trial-control-bar) describes each control.
 
+### Keyboard shortcuts
+
+| With focus on                                    | Keys                             | Action                                                    |
+| ------------------------------------------------ | -------------------------------- | --------------------------------------------------------- |
+| The page, plot background or trial arrow buttons | `Left` / `Right`                 | Previous or next trial in the current list (A in Compare) |
+| The page, plot background or trial arrow buttons | `Shift`+`Left` / `Shift`+`Right` | Previous or next trial for B in Compare                   |
+| The page or plot background                      | `Space`                          | Play or pause the replay                                  |
+| The **Replay time** slider                       | `Left` / `Right`                 | Pause and step one frame                                  |
+| The **Replay time** slider                       | `Home` / `End`                   | Jump to the first or last frame                           |
+| The **Replay time** slider                       | `Space`                          | Play or pause from the current frame                      |
+
+With **A and B together** on, either pair of trial shortcuts steps both readings. Use `Tab` and `Shift`+`Tab` to reach the replay controls. The slider keys also work in downloaded HTML replays.
+
 ## Control the layers
 
 The **Plot controls** column, on the right of the plot, holds the figure's settings. Each layer has a row with a switch that turns it on or off and a **▾** that opens its settings.
@@ -858,7 +871,7 @@ The bar above the plot: pick a dataset and a trial, step through the trials, and
 | → **Import files**                                | Upload your own Fixations and Words tables as a new dataset.                                                                                                                                                                                                                                                                        |
 | **Select trial**                                  | The trial to show. Click it and type to narrow the list.                                                                                                                                                                                                                                                                            |
 | Slider                                            | Move through the trials in the list.                                                                                                                                                                                                                                                                                                |
-| **◀ ▶**                                           | The previous or next trial.                                                                                                                                                                                                                                                                                                         |
+| **◀ ▶**                                           | The previous or next trial. You can also use `Left` and `Right` from the page or plot background.                                                                                                                                                                                                                                   |
 | **⇅** → **Sort trials by**                        | Reorder the trial list by a statistic (such as reading time), a participant, text or condition field, or a column of a metadata table you attached.                                                                                                                                                                                 |
 | **⇅** → **Descending**                            | Reverse that order.                                                                                                                                                                                                                                                                                                                 |
 | → **Text** / **Participant**                      | Keep only these texts or participants. Empty keeps all.                                                                                                                                                                                                                                                                             |
@@ -880,7 +893,7 @@ The column on the right of the plot. At the top, the modes and designs change th
 
 ### Animate: play the reading as a video
 
-The **Animate** switch turns the figure into an animation, a video of the reading played back fixation by fixation, with play and pause buttons and a time slider above the plot. While it is on, the **Fixations**, **Heatmap** and **Raw gaze** switches are grayed. Its **▾** holds:
+The **Animate** switch turns the figure into an animation, a video of the reading played back fixation by fixation, with play and pause buttons and a time slider above the plot. While it is on, the **Fixations**, **Heatmap** and **Raw gaze** switches are grayed. For playback and frame stepping from the keyboard, see [Keyboard shortcuts](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#keyboard-shortcuts). Its **▾** holds:
 
 | Control                                 | What it does                                                                                                                                                            |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -3944,7 +3957,9 @@ Developed with AI assistance. Cross-check results before publishing.
 
 ## In development
 
-There are no unreleased changes listed.
+### Added
+
+- Use the arrow keys to browse trials and Space to play or pause a scanpath replay, including from the replay time slider.
 
 ## Release v0.47.0
 

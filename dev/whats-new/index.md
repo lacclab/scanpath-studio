@@ -2,7 +2,9 @@
 
 ## In development
 
-There are no unreleased changes listed.
+### Added
+
+- Use the arrow keys to browse trials and Space to play or pause a scanpath replay, including from the replay time slider.
 
 ## Release v0.47.0
 

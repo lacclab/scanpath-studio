@@ -40,7 +40,7 @@ def test_the_data_page_names_the_scope_of_its_counts():
     # `app.main` filters with on the following run.
     pin_view(at, "Scanpath")
     at.run(timeout=90)
-    at.session_state["filter_participants"] = ["l7_1090"]
+    at.session_state["filter_participants"] = ["l7_183"]
     at.run(timeout=90)
     pin_data_view(at)
     at.run(timeout=90)
@@ -48,7 +48,7 @@ def test_the_data_page_names_the_scope_of_its_counts():
 
     scoped = _captions(at, "12 of 24 trials · 1 of 2 participants · filtered")
     assert len(scoped) == 7, scoped
-    assert all(md_literal("Participant: l7_1090") in c for c in scoped)
+    assert all(md_literal("Participant: l7_183") in c for c in scoped)
     # The table and the capabilities block say they did not follow.
     assert _captions(at, "Whole datasets, before the trial filters")
     assert _captions(at, "Available with this dataset** · whole dataset")

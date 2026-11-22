@@ -200,14 +200,13 @@ from scanpath_studio.data import (
     harmonize_frames_reporting,
     hashable_key,
     header_only_error,
-    infer_raw_gaze_schema,
     load_onestop_server_bundle,
     load_sample_data,
-    load_sample_raw_gaze,
     match_stimulus_images,
     normalize_fixations,
     normalize_raw_gaze,
     normalize_words,
+    normalized_sample_raw_gaze,
     onestop_data_dir,
     onestop_full_bundle_exists,
     plan_table_read,
@@ -217,6 +216,7 @@ from scanpath_studio.data import (
     propose_raw_gaze_schema,
     propose_word_schema,
     raw_gaze_in_pool,
+    raw_gaze_trial_keys,
     read_table,
     read_table_columns,
     read_table_sample,
@@ -3095,19 +3095,14 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
             "Texts": 12,
             "Trials": 24,
             "Words": 2614,
-            "Fixations": 3209,
-            "Gaze points": 2233,
+            "Fixations": 1894,
+            "Gaze points": 386_572,
         },
         published_counts_source=(
             "Counted from the files bundled with this release of the package."
         ),
-        # OneStop publishes no raw samples, so the raw-gaze layer is made up —
-        # which changes how that layer is read, so it is said. The flag says it
-        # at the figure too, and in its exports (`synthesized_raw_gaze_note`),
-        # in this same sentence.
-        reading_note="The raw-gaze samples are synthesized: OneStop publishes "
-        "no raw gaze.",
-        raw_gaze_synthesized=True,
+        reading_note="Raw gaze comes from the EyeLink recordings for all 24 paragraph readings. "
+        "Gaps mark samples without a recorded position.",
     ),
     ONESTOP_CHOICE: dict(
         language="English (L1)",
@@ -3191,23 +3186,6 @@ def dataset_about(token: str, registry: dict | None = None) -> dict:
     if "published_counts" in about:
         about["published_counts"] = dict(about["published_counts"])
     return about
-
-
-def synthesized_raw_gaze_note(token: str | None) -> str:
-    """The catalogue's sentence for a dataset whose raw gaze is made up, else ``""``.
-
-    The 🗂️ Data page says the demo's samples are synthesized, but the
-    🔵 Raw gaze layer is switched on from Scanpath, where that page is out of
-    sight — so the plot repeats the note while the layer is drawn, and the
-    Share → File settings and the bundle's ``plot_config.json`` record it. One
-    flag (``raw_gaze_synthesized``) and one sentence (``reading_note``), read
-    from the packaged sources' table directly: no public corpus or upload sets
-    it, so the registry is never built to answer.
-    """
-    about = _BUILTIN_DATASET_ABOUT.get(str(token or "")) or {}
-    if not about.get("raw_gaze_synthesized"):
-        return ""
-    return str(about.get("reading_note") or "")
 
 
 def public_dataset_registry() -> dict:
@@ -4842,7 +4820,7 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
     warn = notices if notices is not None else st.container()
 
     if data_choice in (SYNTHETIC_CHOICE, PUBLIC_DATASETS_CHOICE):
-        # Neither the synthetic trial nor the public corpora ship raw gaze;
+        # The synthetic trial and the public report loaders have no raw-gaze table;
         # skip the uploader entirely.
         return raw_gaze_df
 
@@ -4851,26 +4829,10 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
     # per click at 1M rows. `frame_cache` keeps the result while its inputs
     # hold and hands back the same object, as for the corpus.
     if data_choice == DEMO_CHOICE:
-
-        def _demo_raw_gaze() -> tuple[pd.DataFrame, dict | None, bool]:
-            sample = load_sample_raw_gaze()
-            if sample.empty:
-                return sample, None, False
-            schema = infer_raw_gaze_schema(sample)
-            if not schema:
-                return pd.DataFrame(), None, True
-            return normalize_raw_gaze(sample, schema), schema, False
-
-        raw_gaze_df, raw_gaze_schema, unmappable = frame_cache(
-            "raw_gaze", ("demo",), _demo_raw_gaze
-        )
+        raw_gaze_df, raw_gaze_schema, columns = normalized_sample_raw_gaze()
         if raw_gaze_schema:
-            # The raw sample is read inside the cached builder; its loader is
-            # cached too, so asking it again costs a copy of a 2k-row sample.
-            _stash_active_mapping(
-                "raw_gaze", raw_gaze_schema, load_sample_raw_gaze().columns
-            )
-        elif unmappable:
+            _stash_active_mapping("raw_gaze", raw_gaze_schema, columns)
+        elif columns:
             warn.warning("The bundled demo's raw-gaze samples couldn't be read.")
     else:
         uploaded_raw_gaze = cfg.file_uploader(
@@ -6201,7 +6163,7 @@ def _render_dataset_overview(token: str, *, registry: dict) -> None:
     Only what a new reader can use: the description (its first sentence,
     unless the user wrote it), the corpus' home page on the same line, and —
     only where it changes how a figure is read — one ``reading_note`` (PoTeC's
-    reconstructed positions, the demo's synthesized raw gaze). Maintainer
+    reconstructed positions, the demo's raw-gaze coverage). Maintainer
     provenance, such as how each published figure was counted, stays out; the
     table's count headers say whether a row's numbers are published or loaded.
 
@@ -10620,11 +10582,9 @@ def _run_app() -> None:
         # Trials live in fixations normally; for words-only datasets the words
         # frame carries them, and for raw-gaze-only ones the samples table —
         # union all three so every frame's trials get judged by the filter.
-        present_keys = (
-            trial_keys(words_df)
-            | trial_keys(fixations_df)
-            | trial_keys(raw_gaze_scoped)
-        )
+        sample_key = frame_fingerprint(raw_gaze_df)
+        sample_trials = raw_gaze_trial_keys(raw_gaze_df, cache_key=sample_key)
+        present_keys = trial_keys(words_df) | trial_keys(fixations_df) | sample_trials
         kept = set(
             filter_keys(
                 list(present_keys),
@@ -10633,12 +10593,15 @@ def _run_app() -> None:
                 excluded_tags=trial_filters["excluded_tags"],
             )
         )
-        pool = (words_df, fixations_df, raw_gaze_scoped)
+        pool = (words_df, fixations_df)
         words_df, fixations_df = filter_to_keys(words_df, fixations_df, kept)
-        raw_gaze_scoped = filter_frame_to_keys(raw_gaze_scoped, kept)
-        assign_derived(
-            (words_df, fixations_df, raw_gaze_scoped), "filter_to_keys", pool, kept
-        )
+        assign_derived((words_df, fixations_df), "filter_to_keys", pool, kept)
+        if not sample_trials.issubset(kept):
+            raw_gaze_scoped = frame_cache(
+                "raw_gaze_annotations",
+                (sample_key, hashable_key(kept)),
+                lambda: filter_frame_to_keys(raw_gaze_df, kept),
+            )
 
     # Apply filters (participant/trial/text selection). For a raw-gaze-only
     # dataset (no words/fixations) derive the participant/trial options from the

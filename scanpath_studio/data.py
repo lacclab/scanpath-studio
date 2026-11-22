@@ -4908,6 +4908,21 @@ def read_sample_raw_gaze() -> pd.DataFrame:
 load_sample_raw_gaze = st.cache_data(read_sample_raw_gaze)
 
 
+def normalized_sample_raw_gaze() -> tuple[pd.DataFrame, dict | None, tuple[str, ...]]:
+    """The demo samples, mapping and original headers shared by both scanpaths."""
+
+    def build():
+        sample = read_sample_raw_gaze()
+        if sample.empty:
+            return sample, None, ()
+        schema = propose_raw_gaze_schema(sample)
+        if validate_raw_gaze_schema(schema):
+            return pd.DataFrame(), None, tuple(sample.columns)
+        return normalize_raw_gaze(sample, schema), schema, tuple(sample.columns)
+
+    return frame_cache("demo_raw_gaze", (), build)
+
+
 def infer_raw_gaze_schema(raw_gaze: pd.DataFrame) -> dict[str, str] | None:
     """Infer schema for raw millisecond-level gaze data."""
     schema = propose_raw_gaze_schema(raw_gaze)
@@ -6002,8 +6017,8 @@ def _key_frame(frame: pd.DataFrame, ids: pd.Series) -> pd.DataFrame:
 def detect_word_id_offset(words: pd.DataFrame, fixations: pd.DataFrame) -> int:
     """Detect a 1-based fixation ``word_id`` against 0-based word boxes.
 
-    Some exports (the bundled OneStop demo among them) number the fixation
-    report's word column ``1..N`` while the Words table numbers its rows
+    Some exports number the fixation report's word column ``1..N``
+    while the Words table numbers its rows
     ``0..N-1``, so every fixation's pre-assigned ``word_id`` points at the *next*
     word. ``measures.assign_fixations_to_words`` keeps existing ids, so the
     computed reading measures then attach to the wrong words.
@@ -8318,7 +8333,7 @@ def raw_gaze_in_pool(
         # Per raw-gaze table, not per filter change: `frame_cache` keeps one
         # entry per slot, so toggling a filter back rebuilds this — and the
         # samples' own keys are the one full pass worth not repeating.
-        present = _raw_gaze_trial_keys(raw_gaze, cache_key=frame_fingerprint(raw_gaze))
+        present = raw_gaze_trial_keys(raw_gaze, cache_key=frame_fingerprint(raw_gaze))
         pooled = trial_keys(words_pool) | trial_keys(fixations_pool)
         keep = {k for k in present if k in pooled or (keep_unknown and k not in known)}
         return raw_gaze if keep == present else filter_frame_to_keys(raw_gaze, keep)
@@ -8327,7 +8342,7 @@ def raw_gaze_in_pool(
 
 
 @st.cache_data(show_spinner=False, max_entries=8)
-def _raw_gaze_trial_keys(_raw_gaze: pd.DataFrame, cache_key) -> set:
+def raw_gaze_trial_keys(_raw_gaze: pd.DataFrame, cache_key) -> set:
     """`trial_keys` of one (narrowed) raw-gaze table, cached on its fingerprint."""
     progress.report()
     return trial_keys(_raw_gaze)

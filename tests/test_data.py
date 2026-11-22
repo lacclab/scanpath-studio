@@ -1870,8 +1870,7 @@ class TestCoerceFlag:
         assert flags.dropna().tolist() == [False, True, False]
 
     def test_the_bundled_demo_no_longer_flags_every_row(self):
-        """The demo's IA_REGRESSION_* columns carry 1191 `'.'` rows, which a
-        truthiness cast would read as True."""
+        """EyeLink flags must keep their recorded values during normalization."""
         from scanpath_studio.data import (
             infer_word_schema,
             load_sample_data,

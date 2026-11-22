@@ -3438,9 +3438,6 @@ def bulk_export(
                 # The title/caption are part of how the figure looked, so
                 # the manifest records them verbatim alongside the settings.
                 cfg["figure_text"] = {"title": title, "caption": caption}
-                # The trial's samples, and whether they were recorded —
-                # the bundled demo's are synthesized, which its figure and its
-                # raw-gaze table cannot say for themselves.
                 if not trial_raw_gaze.empty:
                     cfg["raw_gaze"].update(
                         available=True,

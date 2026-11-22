@@ -1427,10 +1427,11 @@ def load_raw_gaze(
 
 
 def load_sample_raw_gaze(*, names: str = NAMES_SOURCE) -> pd.DataFrame:
-    """Load synthesized raw gaze samples for one trial in the bundled demo.
+    """Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo.
 
-    OneStop ships no sample-level gaze, so this is **synthesized** from one of the
-    demo's real trials, and covers that trial alone.
+    The table includes each recorded x/y position during paragraph reading, in
+    screen pixels. Timestamps are milliseconds from trial recording start on
+    the same clock as the fixation report. Missing positions leave time gaps.
 
     Args:
         names: ``"source"`` or ``"canonical"``, as
@@ -3754,7 +3755,7 @@ def compare_scanpaths(
         if isinstance(pair, str) or len(tuple(pair)) != 2:
             raise ValueError(
                 f"{side} must be a (participant, trial) pair, e.g. "
-                f"('l37_1129', 'l37_1129_2_1_1_Ele'); got {pair!r}. "
+                f"('l37_273', 'l37_273_2_1_1_Ele'); got {pair!r}. "
                 "list_trials(words, fixations) lists the pairs."
             )
     # Ids written before composite ids escaped a `_` inside a part still name
@@ -4327,8 +4328,8 @@ def figure_code(
         ```python
         print(
             sps.figure_code(
-                participant="l7_1090",
-                trial="l7_1090_2_1_1_Ele",
+                participant="l7_183",
+                trial="l7_183_2_1_1_Ele",
                 show_heatmap=True,
                 flavor="cli",
             )

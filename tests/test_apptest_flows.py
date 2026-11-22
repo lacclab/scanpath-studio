@@ -231,7 +231,7 @@ class TestColumnMappingOverrideFlow:
         # the fixations frame was re-normalized, not relabelled.
         raw_fix = load_sample_data()[1]
         before_expected = list(raw_fix["CURRENT_FIX_DURATION"].head(5))
-        after_expected = list(raw_fix["NEXT_SAC_AMPLITUDE"].head(5))
+        after_expected = pd.to_numeric(raw_fix["NEXT_SAC_AMPLITUDE"].head(5)).tolist()
         assert before_expected != after_expected  # the remap must be observable
 
         at = _boot(view=VIEW_DATA)
@@ -473,7 +473,7 @@ class TestBulkExportFlow:
         at = _boot(subtab=SUBTAB_EXPORT)
         tabular = at.pills(key="bulk_export_tabular")
         assert "Mega-table" not in tabular.options
-        at.multiselect(key="filter_participants").set_value(["l7_1090"])
+        at.multiselect(key="filter_participants").set_value(["l7_183"])
         at.pills(key="bulk_export_figfmts").set_value([])
         tabular.set_value(["Fixations"])
         at.run(timeout=60)
@@ -514,7 +514,7 @@ class TestBulkExportFlow:
 
         # Narrow to one reader — the export's default scope is the filtered pool.
         participants = at.multiselect(key="filter_participants")
-        participants.set_value(["l7_1090"])
+        participants.set_value(["l7_183"])
         at.run(timeout=60)
         _clean(at, "after narrowing to one participant:")
         pool = _trial_ids(at)
@@ -555,18 +555,18 @@ class TestBulkExportFlow:
             "read_csv.R",
         }
         for trial in pool:
-            expected.add(f"per_trial/l7_1090__{trial}/fixations.csv")
-            expected.add(f"per_trial/l7_1090__{trial}/plot_config.json")
+            expected.add(f"per_trial/l7_183__{trial}/fixations.csv")
+            expected.add(f"per_trial/l7_183__{trial}/plot_config.json")
         assert self._zip_names(zip_bytes) == expected
 
         # The per-trial config identifies its own trial, and records the live
         # word-box toggle in the file itself (not just in the call kwargs).
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-            cfg = json.loads(zf.read(f"per_trial/l7_1090__{pool[0]}/plot_config.json"))
+            cfg = json.loads(zf.read(f"per_trial/l7_183__{pool[0]}/plot_config.json"))
             fix_csv = pd.read_csv(
-                io.BytesIO(zf.read(f"per_trial/l7_1090__{pool[0]}/fixations.csv"))
+                io.BytesIO(zf.read(f"per_trial/l7_183__{pool[0]}/fixations.csv"))
             )
-        assert cfg["selection"]["participant_id"] == "l7_1090"
+        assert cfg["selection"]["participant_id"] == "l7_183"
         assert cfg["selection"]["trial_id"] == pool[0]
         assert cfg["layers"]["words"] is True
 
@@ -575,19 +575,19 @@ class TestBulkExportFlow:
         raw_fix = load_sample_data()[1]
         expected_rows = int(
             (
-                (raw_fix["participant_id"] == "l7_1090")
+                (raw_fix["participant_id"] == "l7_183")
                 & (raw_fix["unique_trial_id"] == pool[0])
             ).sum()
         )
         assert expected_rows > 0
         assert len(fix_csv) == expected_rows
-        assert set(fix_csv["participant_id"].unique()) == {"l7_1090"}
+        assert set(fix_csv["participant_id"].unique()) == {"l7_183"}
         # Under the demo's own names: its file calls the trial id
         # `unique_trial_id` and the duration `CURRENT_FIX_DURATION`.
         assert set(fix_csv["unique_trial_id"].unique()) == {pool[0]}
         assert sorted(fix_csv["CURRENT_FIX_DURATION"]) == sorted(
             raw_fix.loc[
-                (raw_fix["participant_id"] == "l7_1090")
+                (raw_fix["participant_id"] == "l7_183")
                 & (raw_fix["unique_trial_id"] == pool[0]),
                 "CURRENT_FIX_DURATION",
             ]
@@ -626,7 +626,7 @@ class TestBulkExportFlow:
             for name in names_all
             if name.startswith("per_trial/")
         }
-        assert exported == {"l7_1090", "l37_1129"}
+        assert exported == {"l7_183", "l37_273"}
         # README, citation, inventory, dictionary and R reader, then two files
         # per trial.
         assert len(names_all) == 5 + 2 * DEMO_TRIALS_IN_PICKER

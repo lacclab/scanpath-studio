@@ -1517,8 +1517,7 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--sample-raw-gaze",
         action="store_true",
-        help="With --sample: draw the bundled demo's raw gaze. It is "
-        "synthesized, and covers one trial only.",
+        help="With --sample, draw the recorded EyeLink gaze samples for the selected reading.",
     )
     viz.add_argument(
         "--raw-gaze-schema",

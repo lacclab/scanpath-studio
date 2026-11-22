@@ -459,11 +459,8 @@ def _png_first_ink_col(path: str) -> int:
 
 class TestStimulusImageAlignment:
     """The bundled demo ships per-trial stimulus PNGs placed at data
-    (``image_x``, ``image_y``). Those origins are *external* metadata (rendered by
-    a separate script, not by ``update_sample_data.py``), so this guards against a
-    regenerated origin drifting the page off the AOI boxes / fixations (e.g.
-    ``image_y=148``, ~36 px too high). Aligns the PNG's own text lines to the
-    word boxes; a wrong origin fails here regardless of which script produced it.
+    (``image_x``, ``image_y``). Each rendered PNG's text lines align with the
+    recorded word boxes when the sample builder places it at the correct origin.
 
     Correct origin for the OneStop demo is ``(image_x=368, image_y=186)`` — where
     the experiment's own Experiment Builder drew the paragraph image (its

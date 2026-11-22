@@ -5,17 +5,13 @@ mode. We aim for a corpus that lets users actually exercise every feature
 without uploading their own data: a handful of participants reading the same
 paragraphs at both Adv and Ele difficulty levels.
 
-Stimulus images are NOT produced here. The per-trial paragraph PNGs under
-``sample_data/images/`` plus the ``image_path`` / ``image_x`` / ``image_y``
-columns are stamped by a separate, external rendering step. When regenerating
-those, place each page at data origin ``(image_x=368, image_y=186)`` — where the
-experiment itself drew the paragraph image (the ``IMGLOAD`` origin in each
-trial's Experiment Builder ``.vcl`` view file). Each word box is then centred on
-its word, half a space either side; ``(358, 184)`` would put the text flush
-left in the boxes, and ``image_y=148`` would sit the page ~36 px too high.
-``tests/test_smoke.py::TestStimulusImageAlignment`` asserts the shipped origin
-keeps every PNG line on its word boxes, so a bad origin fails CI regardless of
-which script emitted it.
+The default slice is two readers in the published L1 cohort who read the twelve
+paragraph versions pictured in ``sample_data/images/``. Their raw gaze comes
+from the OneStop EyeLink ASC recordings. The fixation report supplies each
+paragraph's interest period and the origin of its trial clock.
+
+Paragraph PNGs are rendered separately. Each is placed at the experiment's
+``IMGLOAD`` origin (368, 186) so its text aligns with the recorded word boxes.
 """
 
 from __future__ import annotations
@@ -23,13 +19,16 @@ from __future__ import annotations
 import argparse
 from collections.abc import Iterable
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import BinaryIO
 
-import numpy as np
 import pandas as pd
 
 DATA_DIR = Path(__file__).parent
 DEFAULT_SOURCE_DIR = DATA_DIR / "OneStop"
 DEFAULT_OUTPUT_DIR = DATA_DIR / "sample_data"
+DEMO_PARTICIPANTS = ("l37_273", "l7_183")
+DEMO_ARTICLES = ((2, 1), (2, 2))
 
 # Search for the demo slice in at most this many rows of each giant source CSV;
 # large enough to span many participants and trials while staying
@@ -83,12 +82,10 @@ IA_KEEP_COLUMNS = [
     "distance_to_head",
     "morphological_features",
     "entity_type",
-    # Critical-/distractor-span columns enable the Hunting-condition overlay
-    # in plots.py / tabs.py. Bool flags drive the per-word coloring; the
-    # ind_* + indices columns are normalized through but not yet read by the
-    # app — they're kept for parity with the OneStop local export, so the demo
-    # and a server bundle carry the same metadata table.
+    # The published report labels each word and gives all span ranges. Some
+    # exports also include separate boolean flags and the first range's bounds.
     "question_preview",
+    "auxiliary_span_type",
     "is_in_aspan",
     "is_in_dspan",
     "aspan_ind_start",
@@ -113,18 +110,14 @@ FIXATION_KEEP_COLUMNS = [
     "selected_answer",
     "is_correct",
     "CURRENT_FIX_INDEX",
+    "TRIAL_START_TIME",
+    "IP_START_TIME",
+    "IP_END_TIME",
     "CURRENT_FIX_START",
     "CURRENT_FIX_END",
     "CURRENT_FIX_DURATION",
     "CURRENT_FIX_X",
     "CURRENT_FIX_Y",
-    # In the OneStop fixation report this column is numbered 1..N while
-    # ia.csv's IA_ID runs 0..N-1, so a fixation's pre-assigned word id points at
-    # the *next* word. It is copied through verbatim (the bundled sample is a
-    # faithful subset of the source export, offset and all); the fix lives on the
-    # normalization side — data.correct_word_id_offset detects the 1-based range
-    # and shifts it down. Don't "fix" it here: doing so would make the bundled
-    # sample disagree with the corpus it is a subset of.
     "CURRENT_FIX_INTEREST_AREA_ID",
     "CURRENT_FIX_INTEREST_AREA_LABEL",
     "CURRENT_FIX_VALIDITY",
@@ -340,118 +333,144 @@ def filter_demo(
     return df
 
 
-def write_outputs(df: pd.DataFrame, base: Path) -> None:
-    base.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(base.with_suffix(".csv"), index=False)
-    try:
-        df.to_parquet(base.with_suffix(".parquet"), index=False)
-    except Exception as exc:
-        print(f"Parquet write failed for {base}: {exc}")
+def with_span_fields(words: pd.DataFrame) -> pd.DataFrame:
+    """Expose the demo's highlight flags and first-range bounds from the report."""
+    if "auxiliary_span_type" not in words:
+        return words
+    words = words.copy()
+    for prefix, label in (("aspan", "critical"), ("dspan", "distractor")):
+        words[f"is_in_{prefix}"] = words["auxiliary_span_type"].eq(label)
+        indices = f"{label}_span_indices"
+        if indices in words:
+            # Preserve the endpoints of the first range exactly as published.
+            # Each word's label above covers the full list of ranges.
+            bounds = words[indices].str.extract(r"\(\s*(\d+)\s*,\s*(\d+)\s*\)")
+            words[[f"{prefix}_ind_start", f"{prefix}_ind_end"]] = bounds.astype("Int64")
+    return words
 
 
-# ---------------------------------------------------------------------------
-# Raw-gaze sample synthesis.
-#
-# OneStop's exports are IA/fixation reports only — there are no raw, sample-
-# level (ms) gaze recordings. To still let the bundled demo exercise the
-# "Show raw gaze data" overlay, we synthesize an illustrative gaze path for ONE
-# real bundled trial: a small jittered cloud around each fixation for its
-# duration, joined by short interpolated saccade segments. It's keyed to a
-# (participant, trial) present in BOTH the ia and fixation samples so it lines
-# up with that trial's scanpath and isn't dropped by the trial filter.
-# ---------------------------------------------------------------------------
-
-RAW_GAZE_SAMPLE_DT_MS = 10  # ~100 Hz effective sampling
-RAW_GAZE_JITTER_PX = 4.0
-RAW_GAZE_SACCADE_POINTS = 6
-RAW_GAZE_MAX_POINTS = 2500
-
-_RAW_GAZE_COLUMNS = ["participant_id", "unique_trial_id", "x", "y", "timestamp_ms"]
+def with_stimulus_images(frame: pd.DataFrame, image_dir: Path) -> pd.DataFrame:
+    images = {
+        p.name.removesuffix("__paragraph.png"): f"images/{p.name}"
+        for p in image_dir.glob("*__paragraph.png")
+    }
+    paths = frame["unique_paragraph_id"].map(images)
+    return frame.assign(
+        image_path=paths,
+        image_x=pd.Series(368, index=frame.index).where(paths.notna()),
+        image_y=pd.Series(186, index=frame.index).where(paths.notna()),
+    )
 
 
-def synthesize_raw_gaze(
-    fixations: pd.DataFrame, ia: pd.DataFrame, *, seed: int = 20260520
-) -> pd.DataFrame:
-    """Build an illustrative ms-level gaze path for one real bundled trial.
+def write_tables(output_dir: Path, **tables: pd.DataFrame) -> None:
+    """Finish both formats for every table before replacing the packaged data."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(dir=output_dir) as temp:
+        for name, frame in tables.items():
+            frame.to_csv(Path(temp) / f"{name}.csv", index=False)
+            frame.to_parquet(Path(temp) / f"{name}.parquet", index=False)
+        for artifact in Path(temp).iterdir():
+            artifact.replace(output_dir / artifact.name)
 
-    Returns an empty frame (with the canonical columns) if the required
-    ``CURRENT_FIX_*`` columns are missing or no trial is shared between the two
-    tables.
+
+def _paragraph_samples(asc: BinaryIO, trial) -> pd.DataFrame:
+    """Read one matching ASC recording block on the fixation report's clock."""
+    start, stop = trial.IP_START_TIME, trial.IP_END_TIME
+    if not trial.TRIAL_START_TIME <= start < stop:
+        raise ValueError(f"Invalid paragraph interval for {trial.unique_trial_id}")
+    eye = trial.EYE_TRACKED.upper().encode("ascii")
+    rows = []
+    gaze_header = False
+    for line in asc:
+        if line.startswith(b"SAMPLES"):
+            # Each OneStop session records one eye. A binocular or HREF export
+            # would give the first two numbers a different meaning.
+            if line.split()[1:4] != [b"GAZE", eye, b"RATE"]:
+                raise ValueError(
+                    f"Expected monocular GAZE {eye.decode()} for {trial.unique_trial_id}"
+                )
+            gaze_header = True
+        elif line.startswith(b"END"):
+            if int(line.split()[1]) < stop or not rows:
+                raise ValueError(
+                    f"Incomplete paragraph recording for {trial.unique_trial_id}"
+                )
+            break
+        elif line.startswith(b"START"):
+            raise ValueError(
+                f"Missing END in the recording for {trial.unique_trial_id}"
+            )
+        elif line[:1].isdigit():
+            fields = line.split()
+            time = int(fields[0])
+            if start <= time < stop:
+                if not gaze_header:
+                    raise ValueError(
+                        f"Missing GAZE sample header for {trial.unique_trial_id}"
+                    )
+                x, y = fields[1:3]
+                if b"." not in (x, y):
+                    rows.append((float(x), float(y), time - trial.TRIAL_START_TIME))
+    else:
+        raise ValueError(f"Missing END in the recording for {trial.unique_trial_id}")
+    frame = pd.DataFrame(rows, columns=["x", "y", "timestamp_ms"])
+    frame.insert(0, "unique_paragraph_id", trial.unique_paragraph_id)
+    frame.insert(0, "unique_trial_id", trial.unique_trial_id)
+    frame.insert(0, "participant_id", trial.participant_id)
+    return frame
+
+
+def extract_raw_gaze(fixations: pd.DataFrame, asc_dir: Path) -> pd.DataFrame:
+    """All recorded gaze positions in the bundled readings' paragraph intervals.
+
+    The report's TRIAL_START_TIME identifies the ASC START block exactly.
+    IP_START_TIME is inclusive and IP_END_TIME is exclusive, in tracker ms.
     """
-    empty = pd.DataFrame(columns=_RAW_GAZE_COLUMNS)
-    needed = {
+    columns = [
         "participant_id",
         "unique_trial_id",
-        "CURRENT_FIX_X",
-        "CURRENT_FIX_Y",
-        "CURRENT_FIX_DURATION",
-        "CURRENT_FIX_START",
-    }
-    if fixations.empty or ia.empty or not needed.issubset(fixations.columns):
-        return empty
-
-    fix = fixations.assign(
-        _p=fixations["participant_id"].astype(str),
-        _t=fixations["unique_trial_id"].astype(str),
-    )
-    ia_keys = set(
-        zip(ia["participant_id"].astype(str), ia["unique_trial_id"].astype(str))
-    )
-    sizes = fix.groupby(["_p", "_t"]).size().reset_index(name="n")
-    sizes = sizes[[(p, t) in ia_keys for p, t in zip(sizes["_p"], sizes["_t"])]]
-    if sizes.empty:
-        return empty
-    # Deterministic pick: most fixations, then lexicographic id tie-break.
-    sizes = sizes.sort_values(["n", "_p", "_t"], ascending=[False, True, True])
-    pid, tid = str(sizes.iloc[0]["_p"]), str(sizes.iloc[0]["_t"])
-
-    trial = fix[(fix["_p"] == pid) & (fix["_t"] == tid)].sort_values(
-        "CURRENT_FIX_START"
-    )
-    xs = pd.to_numeric(trial["CURRENT_FIX_X"], errors="coerce").to_numpy(float)
-    ys = pd.to_numeric(trial["CURRENT_FIX_Y"], errors="coerce").to_numpy(float)
-    durs = (
-        pd.to_numeric(trial["CURRENT_FIX_DURATION"], errors="coerce")
-        .fillna(0)
-        .to_numpy(float)
-    )
-    starts = (
-        pd.to_numeric(trial["CURRENT_FIX_START"], errors="coerce")
-        .fillna(0)
-        .to_numpy(float)
-    )
-
-    rng = np.random.default_rng(seed)
-    px: list[float] = []
-    py: list[float] = []
-    pt: list[float] = []
-    n = len(trial)
-    for i in range(n):
-        n_dwell = max(1, round(durs[i] / RAW_GAZE_SAMPLE_DT_MS))
-        px.extend(xs[i] + rng.normal(0.0, RAW_GAZE_JITTER_PX, n_dwell))
-        py.extend(ys[i] + rng.normal(0.0, RAW_GAZE_JITTER_PX, n_dwell))
-        pt.extend(starts[i] + np.linspace(0.0, durs[i], n_dwell))
-        if i < n - 1:
-            seg = np.linspace(0.0, 1.0, RAW_GAZE_SACCADE_POINTS + 2)[1:-1]
-            px.extend(xs[i] + seg * (xs[i + 1] - xs[i]))
-            py.extend(ys[i] + seg * (ys[i + 1] - ys[i]))
-            t0 = starts[i] + durs[i]
-            t1 = starts[i + 1] if starts[i + 1] > t0 else t0 + RAW_GAZE_SACCADE_POINTS
-            pt.extend(t0 + seg * (t1 - t0))
-
-    out = pd.DataFrame(
-        {
-            "participant_id": pid,
-            "unique_trial_id": tid,
-            "x": np.round(px, 1),
-            "y": np.round(py, 1),
-            "timestamp_ms": np.round(pt).astype(int),
-        }
-    )
-    if len(out) > RAW_GAZE_MAX_POINTS:
-        step = int(np.ceil(len(out) / RAW_GAZE_MAX_POINTS))
-        out = out.iloc[::step].reset_index(drop=True)
-    return out
+        "unique_paragraph_id",
+        "TRIAL_START_TIME",
+        "IP_START_TIME",
+        "IP_END_TIME",
+        "EYE_TRACKED",
+    ]
+    trials = fixations[columns].drop_duplicates()
+    if (
+        trials.empty
+        or trials.isna().any().any()
+        or any(
+            trials.duplicated(["participant_id", key]).any()
+            for key in ("unique_trial_id", "TRIAL_START_TIME")
+        )
+    ):
+        raise ValueError(
+            "Each demo reading needs one distinct recording block, paragraph interval and tracked eye."
+        )
+    files = {path.name.lower(): path for path in asc_dir.iterdir() if path.is_file()}
+    samples = []
+    for participant, readings in trials.groupby("participant_id", sort=False):
+        stem = participant.lower()
+        path = files.get(f"{stem}_clean.asc") or files.get(f"{stem}.asc")
+        if path is None:
+            raise FileNotFoundError(
+                f"No OneStop ASC recording for {participant} in {asc_dir}"
+            )
+        pending = {r.TRIAL_START_TIME: r for r in readings.itertuples(index=False)}
+        with path.open("rb") as asc:
+            for line in asc:
+                if line.startswith(b"START"):
+                    trial = pending.pop(int(line.split()[1]), None)
+                    if trial is not None:
+                        samples.append(_paragraph_samples(asc, trial))
+                        if not pending:
+                            break
+        if pending:
+            missing = ", ".join(r.unique_trial_id for r in pending.values())
+            raise ValueError(
+                f"{path.name} has no matching recording block for {missing}"
+            )
+    return pd.concat(samples, ignore_index=True)
 
 
 def _read_bundle(output_dir: Path, name: str) -> pd.DataFrame:
@@ -465,34 +484,19 @@ def _read_bundle(output_dir: Path, name: str) -> pd.DataFrame:
     raise FileNotFoundError(f"Neither {parquet} nor {csv} found.")
 
 
-def regenerate_raw_gaze_from_bundle(output_dir: Path, *, seed: int = 20260520) -> None:
-    """(Re)build raw_gaze.{csv,parquet} from the already-written ia/fixation
-    samples — no access to the multi-GB source CSVs required."""
-    ia = _read_bundle(output_dir, "ia")
-    fix = _read_bundle(output_dir, "fixations")
-    raw_gaze = synthesize_raw_gaze(fix, ia, seed=seed)
-    if raw_gaze.empty:
-        print("Raw-gaze synthesis produced no rows (no shared ia/fixation trial).")
-        return
-    write_outputs(raw_gaze, output_dir / "raw_gaze")
-    print(
-        f"Raw-gaze sample written: {len(raw_gaze)} pts for "
-        f"{raw_gaze['participant_id'].iloc[0]} / {raw_gaze['unique_trial_id'].iloc[0]}"
-    )
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--participants", type=int, default=3, help="Number of participants to bundle."
+        "--participants",
+        type=int,
+        help="Search for a custom slice with this many participants.",
     )
     parser.add_argument(
         "--articles",
         type=int,
-        default=2,
-        help="Number of articles (each spanning Adv + Ele) to bundle.",
+        help="Search for a custom slice with this many articles.",
     )
-    parser.add_argument("--seed", type=int, default=20260520)
+    parser.add_argument("--seed", type=int, help="Random seed for a custom slice.")
     parser.add_argument(
         "--max-rows",
         type=int,
@@ -501,43 +505,47 @@ def main() -> None:
         "slice; the picked readers are then read in full.",
     )
     parser.add_argument("--source-dir", type=Path, default=DEFAULT_SOURCE_DIR)
+    parser.add_argument(
+        "--asc-dir",
+        type=Path,
+        help="Directory of OneStop .asc or _clean.asc files (default: SOURCE_DIR/asc).",
+    )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument(
         "--raw-gaze-only",
         action="store_true",
         help="Skip the source rebuild; only regenerate raw_gaze.{csv,parquet} "
-        "from the already-bundled ia/fixation samples.",
+        "from the ASC recordings and the bundled fixation report.",
     )
     args = parser.parse_args()
 
+    asc_dir = args.asc_dir or args.source_dir / "asc"
     if args.raw_gaze_only:
-        regenerate_raw_gaze_from_bundle(args.output_dir, seed=args.seed)
+        gaze = extract_raw_gaze(_read_bundle(args.output_dir, "fixations"), asc_dir)
+        write_tables(args.output_dir, raw_gaze=gaze)
+        print(f"Written {len(gaze):,} gaze samples.")
         return
 
-    ia_full = add_unique_ids(
-        load_subset(
-            args.source_dir / "ia_Paragraph.csv", IA_KEEP_COLUMNS, args.max_rows
+    participants, articles = list(DEMO_PARTICIPANTS), list(DEMO_ARTICLES)
+    if any(
+        value is not None for value in (args.participants, args.articles, args.seed)
+    ):
+        ia_search = add_unique_ids(
+            load_subset(
+                args.source_dir / "ia_Paragraph.csv", IA_KEEP_COLUMNS, args.max_rows
+            )
         )
-    )
-    fix_full = add_unique_ids(
-        load_subset(
+        fix_search = load_subset(
             args.source_dir / "fixations_Paragraph.csv",
             FIXATION_KEEP_COLUMNS,
             args.max_rows,
         )
-    )
-
-    # Only a reader both capped reads reached can be picked…
-    ia_full = ia_full[
-        ia_full["participant_id"]
-        .astype(str)
-        .isin(fix_full["participant_id"].astype(str))
-    ]
-    participants, articles = pick_demo_slice(
-        ia_full, args.participants, args.articles, args.seed
-    )
-    # …and the picked readers are then read whole, not up to the cap, so the
-    # last reader inside a cap is not cut off part-way through a trial.
+        participants, articles = pick_demo_slice(
+            ia_search[ia_search["participant_id"].isin(fix_search["participant_id"])],
+            args.participants if args.participants is not None else 3,
+            args.articles if args.articles is not None else 2,
+            args.seed if args.seed is not None else 20260520,
+        )
     ia_full = add_unique_ids(
         load_participants(
             args.source_dir / "ia_Paragraph.csv", IA_KEEP_COLUMNS, participants
@@ -551,15 +559,20 @@ def main() -> None:
         )
     )
 
-    ia_sample = filter_demo(ia_full, participants, articles)
+    ia_sample = with_span_fields(filter_demo(ia_full, participants, articles))
     fix_sample = filter_demo(fix_full, participants, articles)
     check_fixations_cover_words(ia_sample, fix_sample)
 
-    write_outputs(ia_sample, args.output_dir / "ia")
-    write_outputs(fix_sample, args.output_dir / "fixations")
-
-    # Synthesize a raw-gaze overlay sample tied to one of these trials.
-    regenerate_raw_gaze_from_bundle(args.output_dir, seed=args.seed)
+    if set(fix_sample["participant_id"]) != set(participants):
+        raise ValueError("The OneStop reports are missing a selected demo participant.")
+    image_dir = args.output_dir / "images"
+    raw_gaze = extract_raw_gaze(fix_sample, asc_dir)
+    write_tables(
+        args.output_dir,
+        ia=with_stimulus_images(ia_sample, image_dir),
+        fixations=with_stimulus_images(fix_sample, image_dir),
+        raw_gaze=raw_gaze,
+    )
 
     # Remove any *_full CSVs an older build left behind, so they don't bloat
     # the wheel.
@@ -576,6 +589,7 @@ def main() -> None:
         f"  articles: {articles}\n"
         f"  ia rows: {len(ia_sample):,}\n"
         f"  fixation rows: {len(fix_sample):,}\n"
+        f"  gaze samples: {len(raw_gaze):,}\n"
         f"  output: {args.output_dir}"
     )
 

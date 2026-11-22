@@ -565,10 +565,8 @@ class TestEyeLinkDefinitions:
 
 
 class TestImportedMeasuresOnUnfixatedWords:
-    """An IA report may store 0 rather than a blank for a word nobody fixated —
-    the bundled OneStop one does, for all 1191 such words — and a 0 would win
-    the imported-over-computed precedence, so every mean would count skipped
-    words as 0-ms fixations."""
+    """An imported zero for an unfixated word would count as a 0-ms fixation
+    in the mean. First-pass measures treat those words as missing."""
 
     def test_an_imported_zero_on_an_unfixated_word_becomes_nan(self, four_word_layout):
         words = four_word_layout.assign(

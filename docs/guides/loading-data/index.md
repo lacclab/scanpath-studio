@@ -16,7 +16,7 @@ Load your own data, open a public dataset, or try the bundled demo.
 Pick a dataset in **Select dataset** above the plot, or in the dataset list on
 the :material/database: **Data Management** page:
 
-- **Bundled demo**: 24 trials from OneStop, with two participants and 12 texts.
+- **Bundled demo**: 24 trials from OneStop, with two L1 English readers and 12 texts. Each reading includes the recorded 1,000 Hz gaze positions from paragraph onset to the keypress that ended reading. Samples without an x/y position leave gaps on the trial clock.
 - **Hand-drawn sample**: a scanpath drawn by hand over a short English text,
   which you can edit.
 - Public datasets: OneStop and PoTeC. In the desktop app or a pip install, each

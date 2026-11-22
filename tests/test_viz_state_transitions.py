@@ -281,7 +281,7 @@ class TestTrialFiltersKeepTheDesign:
         # A trial with no fixations must not wipe the user's hover picks; the
         # unit test above covers that, since the demo has no such reader, so
         # this narrows by the demo's two readers.
-        for participant in (["l37_1129"], ["l7_1090"], []):
+        for participant in (["l37_273"], ["l7_183"], []):
             box = next(m for m in at.multiselect if m.key == "filter_participants")
             box.set_value(participant)
             self._run(at)

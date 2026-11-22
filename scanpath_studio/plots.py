@@ -2367,7 +2367,7 @@ def apply_legend_layout(
     # well above it. The default legend is lowered onto that line, and its
     # strip above the plot (exactly that reserve on the single-trial figures
     # and the Compare overlay; a title is added later, in a band of its own)
-    # shrinks to what still pokes out of the plot. On the side-by-side and
+    # fits the part that extends above the plot, including wrapped rows. On the side-by-side and
     # stacked layouts it holds the panels' names and, above them, the default
     # legend while it has entries.
     plot_w, plot_h, margin = _plot_px(fig)
@@ -2380,11 +2380,9 @@ def apply_legend_layout(
         and getattr(fig, "_grid_ref", None) is None
     ):
         needed = max(0.0, default_h + _LEGEND_GAP_PX - inset) if default_h else 0.0
-        if needed < margin["t"]:
-            _grow(fig, "t", needed - margin["t"])
-            if default_h:
-                _plot_w, plot_h, _margin = _plot_px(fig)
-                fig.layout.legend.y = 1.0 + (_LEGEND_GAP_PX - inset) / plot_h
+        _grow(fig, "t", needed - margin["t"])
+        if default_h:
+            fig.layout.legend.y = 1.0 + (_LEGEND_GAP_PX - inset) / plot_h
     names_px = _panel_names_px(fig)
     if names_px:
         _grow(fig, "t", names_px + default_h - margin["t"])

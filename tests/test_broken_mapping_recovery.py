@@ -484,7 +484,7 @@ def test_the_scanpath_view_says_when_the_data_checks_fail_badly():
 
     assert not at.exception
     (notice,) = [w.value for w in at.warning if "Data checks found problems" in w.value]
-    assert "**Fixations lasting 0 ms or less**: 3,199 of 3,209 fixation rows." in (
+    assert "**Fixations lasting 0 ms or less**: 1,883 of 1,894 fixation rows." in (
         notice
     )
     (open_checks,) = [b for b in at.button if b.key == "data_health_notice_open"]

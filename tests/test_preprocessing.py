@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 
@@ -185,6 +187,40 @@ def test_sentence_and_saccade_tables(normalized_words_df, normalized_fixations_d
     assert len(saccades) == len(fixations) - 1
     assert saccades["amplitude_deg"].notna().all()
     assert {"angle", "launch_letter", "landing_letter"} <= set(saccades)
+
+
+def test_peak_velocity_uses_only_sample_pairs_inside_each_saccade_and_screen():
+    fixes = pd.DataFrame(
+        {
+            "participant_id": "p",
+            "trial_id": "t",
+            "screen_id": "a",
+            "timestamp_ms": [0, 10, 20],
+            "duration_ms": 5,
+            "x": [0, 10, 20],
+            "y": 0,
+        }
+    )
+    gaze = pd.DataFrame(
+        {
+            "participant_id": "p",
+            "trial_id": "t",
+            "screen_id": "a",
+            "timestamp_ms": [15, 6, 4, 10, 5, 11, 6],
+            "x": [0, 3, -900, 6, 0, 900, 3],
+            "y": [0, 4, 0, 8, 0, 0, 4],
+        }
+    )
+    result = saccade_table(
+        pd.concat([fixes, fixes.assign(screen_id="b")]),
+        pixels_per_degree=50,
+        raw_gaze=pd.concat(
+            [gaze, gaze.assign(screen_id="b", x=2 * gaze.x, y=2 * gaze.y)]
+        ),
+    )
+    np.testing.assert_allclose(
+        result["peak_velocity_deg_s"], [100, np.nan, 200, np.nan]
+    )
 
 
 def test_saccade_duration_is_gap_after_fixation_and_uses_canonical_line_idx():

@@ -600,7 +600,7 @@ class TestNumericIdsAreUnchanged:
             normalize_fixations(raw_fix, data_module.propose_fix_schema(raw_fix)),
         )
         assert WORD_KEY not in words.columns and WORD_KEY not in fixations.columns
-        assert rewrites == (("fixations", "word_id", " − 1"),)
+        assert rewrites == ()
 
     def test_the_numeric_map_has_no_key_entry(self):
         data = _quiet_load(_words((1, 2, 3)), _fixations([2]))

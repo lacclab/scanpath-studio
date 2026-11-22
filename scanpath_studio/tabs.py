@@ -4137,31 +4137,6 @@ def _in_text_fixation_value(
     return f"{n_in} / {n_total}"
 
 
-def _synthesized_raw_gaze_note(token: str | None) -> str:
-    """`app.synthesized_raw_gaze_note`, imported late (``app`` imports ``tabs``)."""
-    from scanpath_studio.app import synthesized_raw_gaze_note
-
-    return synthesized_raw_gaze_note(token)
-
-
-def _synthetic_raw_gaze_plot_note(
-    *, drawn_a: bool, source_a: str | None, drawn_b: bool = False, source_b=None
-) -> str:
-    """The caption for a figure that draws synthesized samples, or ``""``.
-
-    ``drawn_a`` / ``drawn_b`` say whether each reading's samples are actually
-    on the figure (switch on, samples on this trial, not the replay), and
-    ``source_*`` names the dataset they came from — B's may be a second
-    dataset's. The sentence is the 🗂️ Data page's own (`reading_note`).
-    """
-    note = (drawn_a and _synthesized_raw_gaze_note(source_a)) or (
-        drawn_b and _synthesized_raw_gaze_note(source_b)
-    )
-    if not note:
-        return ""
-    return f"{ICONS['raw_gaze']} **Synthetic raw-gaze illustration.** {note}"
-
-
 def _raw_gaze_missing_note(
     shown: bool,
     *,
@@ -4409,7 +4384,6 @@ def _build_studio_config(
             else None
         ),
         print_size=_print_size_setting(),
-        raw_gaze_synthesized=bool(_synthesized_raw_gaze_note(data_source)),
     )
 
 
@@ -5763,10 +5737,6 @@ def _render_export_panel(
         AUTHOR_CHOICE,
         MANUAL_SAMPLE_CHOICE,
         SYNTHETIC_CHOICE,
-    )
-    # Each trial's `plot_config.json` says when its samples are made up.
-    bulk_settings["raw_gaze_synthesized"] = bool(
-        _synthesized_raw_gaze_note(st.session_state.get("data_source_choice"))
     )
     # The bulk export rebuilds every figure from scratch, so the drift
     # correction must ride along or the batch silently differs from
@@ -7844,19 +7814,6 @@ def render_single_trial_tab(
         )
         if raw_gaze_missing:
             plot_notes_slot.warning(raw_gaze_missing, icon=ICONS["warning"])
-        # Synthesized samples say so where they are drawn, not only on
-        # the 🗂️ Data page. The replay draws no raw gaze.
-        synthetic_note = _synthetic_raw_gaze_plot_note(
-            drawn_a=effective_show_raw_gaze and not animate,
-            source_a=st.session_state.get("data_source_choice"),
-            drawn_b=compare_shows_raw_gaze and not compare_raw_gaze.empty,
-            source_b=(
-                (compare_meta.get("dataset") if compare_meta else None)
-                or st.session_state.get("data_source_choice")
-            ),
-        )
-        if synthetic_note:
-            plot_notes_slot.caption(synthetic_note)
         no_fixations_note = _no_fixations_note(
             trial_has_fixations=trial_has_fixations,
             trial_has_raw_gaze=trial_has_raw_gaze,
@@ -13623,14 +13580,6 @@ def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
             "them all."
         )
         return
-    # The bundled demo's raw gaze is synthesized from the fixation
-    # report — a table that looks like recorded samples must say it isn't.
-    # The catalogue's flag decides it, as it does at the plot.
-    if _synthesized_raw_gaze_note(st.session_state.get("data_source_choice")):
-        st.caption(
-            f"{ICONS['warning']} The demo's raw gaze is **synthesized** from its fixations for "
-            "illustration. It is not recorded eye-tracker output."
-        )
     _render_raw_table(raw_gaze_filtered, table="raw_gaze")
 
 

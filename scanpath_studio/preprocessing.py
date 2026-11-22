@@ -670,6 +670,20 @@ def _letter_position_in_word(
     return offset / advance + 1
 
 
+def _sample_velocities(
+    samples: pd.DataFrame, pixels_per_degree: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """Sorted sample times and the speed from each sample to the next."""
+    points = samples[["timestamp_ms", "x", "y"]].apply(pd.to_numeric, errors="coerce")
+    points = points.dropna(subset=["timestamp_ms"]).sort_values(
+        "timestamp_ms", kind="stable"
+    )
+    times, x, y = points.to_numpy(dtype=float, na_value=np.nan).T
+    dt = np.diff(times)
+    dt[dt == 0] = np.nan
+    return times, np.hypot(np.diff(x), np.diff(y)) / dt / pixels_per_degree * 1000
+
+
 def saccade_table(
     fixations: pd.DataFrame,
     *,
@@ -690,8 +704,24 @@ def saccade_table(
     # frame per fixation (a `to_numeric` over every word id plus a boolean
     # mask, twice per saccade), which grows with corpus × trial count.
     word_geometry = _word_letter_geometry(words, keys)
+    # A 1 kHz reading can have tens of thousands of samples. Index them on
+    # their own clock once so each saccade reads just its interval.
+    gaze_keys = [k for k in keys if raw_gaze is not None and k in raw_gaze]
+    velocities = {}
+    if (
+        pixels_per_degree
+        and raw_gaze is not None
+        and {"timestamp_ms", "x", "y"} <= set(raw_gaze)
+    ):
+        groups = (
+            raw_gaze.groupby(gaze_keys, sort=False) if gaze_keys else [((), raw_gaze)]
+        )
+        for group, samples in groups:
+            group = group if isinstance(group, tuple) else (group,)
+            velocities[group] = _sample_velocities(samples, pixels_per_degree)
     for identity, chunk in analysis.groupby(keys, sort=False, dropna=False):
         identity = identity if isinstance(identity, tuple) else (identity,)
+        gaze = velocities.get(tuple(chunk[k].iat[0] for k in gaze_keys))
         chunk = chunk.sort_values("timestamp_ms")
         records = chunk.to_dict("records")
         for start, end in itertools.pairwise(records):
@@ -703,25 +733,13 @@ def saccade_table(
             )
             duration = max(float(end["timestamp_ms"]) - start_end, 0.0)
             peak_velocity = np.nan
-            if raw_gaze is not None and not raw_gaze.empty and pixels_per_degree:
-                gaze = raw_gaze
-                for key, value in zip(keys, identity):
-                    if key in gaze:
-                        gaze = gaze[gaze[key] == value]
-                if "timestamp_ms" in gaze:
-                    gaze = gaze[
-                        pd.to_numeric(gaze["timestamp_ms"], errors="coerce").between(
-                            start_end, float(end["timestamp_ms"])
-                        )
-                    ].sort_values("timestamp_ms")
-                    if len(gaze) >= 2:
-                        dt = pd.to_numeric(gaze["timestamp_ms"], errors="coerce").diff()
-                        gd = np.hypot(
-                            pd.to_numeric(gaze["x"], errors="coerce").diff(),
-                            pd.to_numeric(gaze["y"], errors="coerce").diff(),
-                        )
-                        speed = gd / dt.replace(0, np.nan) / pixels_per_degree * 1000
-                        peak_velocity = float(speed.max())
+            if gaze is not None and pd.notna(end["timestamp_ms"]):
+                times, speeds = gaze
+                first = times.searchsorted(start_end, side="left")
+                last = times.searchsorted(float(end["timestamp_ms"]), side="right") - 1
+                # Both endpoints of a speed measurement must be inside the gap.
+                if last > first:
+                    peak_velocity = float(np.fmax.reduce(speeds[first:last]))
 
             def _letter_position(event, _identity=identity):
                 return _letter_position_in_word(event, word_geometry, _identity)

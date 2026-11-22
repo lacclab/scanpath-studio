@@ -1222,10 +1222,6 @@ def _true_scale_plot_html(
     player_script = None
     if page is not None:
         figure_dict, player_script = page
-    elif key == "single":
-        from .fixation_inspector import PLOT_CLICK
-
-        player_script = PLOT_CLICK
     config: dict = {
         **PLOTLY_CONFIG,
         "responsive": False,
@@ -8167,10 +8163,6 @@ def render_single_trial_tab(
                             fit_window=True,
                             alt=f"Fixation positions before snapping for {selected_participant}, {selected_trial}.",
                         )
-            if displayed_fig is not None and not comparing and not animate:
-                from .fixation_inspector import render as render_fixation_inspector
-
-                render_fixation_inspector(displayed_fig, trial_words, plot_fixations)
             note = _full_screen_note(viz_settings, canvas_width, canvas_height)
             if note and (static_settings.x_field, static_settings.y_field) == (
                 "x",

@@ -5024,7 +5024,6 @@ def _render_scanpath_figure(
                 name="Fixations",
                 showlegend=False,
             ):
-                trace.ids = ordered["order_in_trial"].astype(str)
                 fig.add_trace(trace)
             bar = _glyph_colorbar_trace(marker, color_data if is_numeric_color else ())
             if bar is not None:
@@ -5064,7 +5063,6 @@ def _render_scanpath_figure(
                     hovertemplate=hovertemplate,
                     customdata=customdata,
                     name="Fixations",
-                    ids=ordered["order_in_trial"].astype(str),
                     showlegend=False,
                 )
             )

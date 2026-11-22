@@ -782,10 +782,11 @@ def test_mixed_script_passage_keeps_each_label_in_its_box_in_html_and_svg(
         )
 
 
-def test_clicking_a_live_fixation_opens_its_local_source_record(app_url, browser):
+@pytest.mark.parametrize("mode", ["essentials", "full"])
+def test_clicking_a_fixation_keeps_the_trial_tabs_available(app_url, browser, mode):
     with browser.new_context() as context:
         page = context.new_page()
-        page.goto(f"{app_url}/?ui=full&source=synthetic&animate=0")
+        page.goto(f"{app_url}/?ui={mode}&source=synthetic&animate=0")
         _settle(page)
         _close_tour(page)
         assert not page.locator('[data-testid="stException"]').count()
@@ -794,9 +795,13 @@ def test_clicking_a_live_fixation_opens_its_local_source_record(app_url, browser
             """document.getElementById('truescale-single')._fullData.find(t => t.name === 'Fixations').uid"""
         )
         frame.locator(f".trace{uid} .point").nth(6).click(force=True)
-        page.get_by_text("Fixation 7 · Contained by word box", exact=False).wait_for(
-            timeout=15000
-        )
+        _settle(page)
+        sync_api.expect(
+            page.get_by_text("Inspect a fixation", exact=True)
+        ).to_have_count(0)
+        sync_api.expect(
+            page.get_by_role("tab", name=re.compile("Export"))
+        ).to_be_visible()
 
 
 def test_live_comparison_exports_a_physical_svg_and_reopenable_panel_settings(

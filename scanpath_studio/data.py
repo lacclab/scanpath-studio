@@ -7287,21 +7287,23 @@ def normalize_fixations(
     schema: dict[str, str],
     *,
     keep_columns: set | None = None,
-    keep_source_cells: bool = True,
+    keep_source_cells: bool = False,
     _renormalizing: bool = False,
 ) -> pd.DataFrame:
     if not _renormalizing:
         fixations = _drop_reserved_columns(fixations, schema, table="Fixations")
     _warn_normalization_issues(fixations, schema, table="Fixations", fixations=True)
     blank, unkeyed = _rows_missing_identity(fixations, schema)
-    keep = np.flatnonzero(~(blank | unkeyed))
+    keep = ~(blank | unkeyed)
     source = fixations
-    if len(keep) < len(source):
-        fixations = source.iloc[keep]
+    if not keep.all():
+        fixations = source.loc[keep]
     # Explicit index so a constant participant placeholder fills every row.
     df = pd.DataFrame(index=fixations.index)
     if keep_source_cells:
-        fixation_source.record_rows(df, source, keep, remap=_renormalizing)
+        fixation_source.record_rows(
+            df, source, np.flatnonzero(keep), remap=_renormalizing
+        )
     if schema.get("participant"):
         # str or list (a composite participant id, joined like the trial id).
         df["participant_id"] = trial_id_series(fixations, schema["participant"])
@@ -7658,7 +7660,11 @@ def remap_normalized_frame(
         )
     elif kind == "fixations":
         result = normalize_fixations(
-            working, schema, keep_columns=keep, _renormalizing=True
+            working,
+            schema,
+            keep_columns=keep,
+            keep_source_cells=fixation_source.SOURCE_ROW in working,
+            _renormalizing=True,
         )
     elif kind == "raw_gaze":
         result = normalize_raw_gaze(

@@ -109,7 +109,7 @@ def test_every_wire_format_widget_declares_persist_state():
     import ast
     import inspect
 
-    from scanpath_studio import app, session_keys, tabs
+    from scanpath_studio import app, metadata_editor, session_keys, tabs, wizard
 
     keys = (
         set(controls._VIZ_WIDGET_DEFAULTS)
@@ -118,7 +118,7 @@ def test_every_wire_format_widget_declares_persist_state():
         | set(session_keys.URL_SEEDED_STATE_KEYS)
     ) - _NO_PERSIST_STATE
     offenders = []
-    for module in (app, controls, tabs):
+    for module in (app, controls, metadata_editor, tabs, wizard):
         tree = ast.parse(inspect.getsource(module))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
@@ -210,13 +210,13 @@ def test_no_wire_format_widget_passes_a_default():
     import ast
     import inspect
 
-    from scanpath_studio import app, session_keys, tabs
+    from scanpath_studio import app, metadata_editor, session_keys, tabs, wizard
 
     wire = set(session_keys.PLOT_CONFIG_STATE_KEYS) | set(
         session_keys.URL_SEEDED_STATE_KEYS
     )
     offenders = []
-    for module in (app, controls, tabs):
+    for module in (app, controls, metadata_editor, tabs, wizard):
         tree = ast.parse(inspect.getsource(module))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):

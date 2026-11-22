@@ -32,7 +32,7 @@ import streamlit as st
 from .constants import ICONS, md_literal, upload_limit_mb
 from .data import respell_reading
 from .fields import PANEL_LABEL_W, panel_field, row_label
-from .session_keys import COMPARE_SOURCE_STATE_KEY
+from .session_keys import COMPARE_SOURCE_STATE_KEY, SAME_DATASET
 
 ANNOTATIONS_STATE_KEY = "trial_annotations"
 #: The annotations file (🗂️ Data → Annotations, an Export bundle's
@@ -315,7 +315,7 @@ PENDING_DATASET = "\x00pending"
 #: and the picker's "same dataset" answer (``compare_source.THIS_DATASET``).
 #: Pinned equal by a test; not imported, since both modules import this one.
 _COMPARE_PREFIX = "cmp"
-_COMPARE_SAME_DATASET = "This dataset"
+_COMPARE_SAME_DATASET = SAME_DATASET
 
 
 def _stored(session) -> dict[str, dict[Key, Entry]]:
@@ -856,8 +856,10 @@ def render_trial_annotations(
             options=["Whole trial", "This screen"],
             key=scope_key,
             horizontal=True,
-            help="**Whole trial** covers every screen of this trial. "
-            "**This screen** covers only the screen on view.",
+            help=(
+                "**Whole trial** applies the annotation to every screen of this trial. "
+                "**This screen** applies it only to the screen you are viewing."
+            ),
         )
         if scope == "This screen":
             annotation_screen = str(screen_id)
@@ -1227,9 +1229,9 @@ def render_dataset_annotations(
             max_upload_size=upload_limit_mb(),
         )
         st.caption(
-            "Use a file exported here or in an Export bundle. Annotations on "
-            "trials this dataset doesn't have are skipped. An imported "
-            "annotation replaces the trial's current one."
+            "Choose a file saved here or in an Export bundle. Imported annotations "
+            "replace existing ones for the same trial or screen. Annotations for "
+            "trials outside this dataset are skipped."
         )
     delete_slot = toolbar.container(width="content")
 

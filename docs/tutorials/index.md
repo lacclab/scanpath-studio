@@ -4,8 +4,8 @@ description: "Step-by-step tutorials for eye-tracking reading studies: check rec
 
 # Tutorials
 
-Choose a task. For installation, see [Get started](../install.md); for control
-reference, see the [feature guides](../guides/index.md).
+Choose a task below. If you're new to the app, start with [Get started](../install.md).
+The [feature guides](../guides/index.md) explain the controls in more detail.
 
 <div class="grid cards" markdown>
 
@@ -13,13 +13,13 @@ reference, see the [feature guides](../guides/index.md).
 
     - [Check a session](data-collection/check-a-session.md)
     - [Compare two eye trackers](data-collection/compare-eye-trackers.md)
-    - [Audit an experimenter](data-collection/audit-an-experimenter.md)
+    - [Review an experimenter's sessions](data-collection/audit-an-experimenter.md)
 
 - :material-filter:{ .lg .middle } **[Filter data](data-filtering/index.md)**
 
     - [Exclude unsuitable trials](data-filtering/exclude-unsuitable-trials.md)
     - [Select participants by a field](data-filtering/select-participants.md)
-    - [Find the trials an analysis needs](data-filtering/find-trials-for-an-analysis.md)
+    - [Find trials with specific fixation patterns](data-filtering/find-trials-for-an-analysis.md)
 
 - :material-file-export:{ .lg .middle } **[Export customized figures](exporting-figures/index.md)**
 
@@ -31,10 +31,10 @@ reference, see the [feature guides](../guides/index.md).
 
     - [Analyze one text](corpus-analysis/analyze-one-text.md)
     - [Compare groups or conditions](corpus-analysis/compare-groups.md)
-    - [See progression over time](corpus-analysis/progression-over-time.md)
+    - [Track changes over time](corpus-analysis/progression-over-time.md)
 
 </div>
 
 In the app, open :material/help: **Help** → :material/explore: **Tutorials**
-for guided tours of the controls. They use the Full mode, and starting one
-switches that visit to it.
+for guided tours of the controls. Starting a tutorial switches the app to Full
+for the current visit.

@@ -14,7 +14,7 @@ description: "Filter eye-tracking data for analysis: exclude unsuitable trials, 
 
     Use participant metadata.
 
-- :material-magnify-scan:{ .lg .middle } **[Find the trials an analysis needs](find-trials-for-an-analysis.md)**
+- :material-magnify-scan:{ .lg .middle } **[Find trials with specific fixation patterns](find-trials-for-an-analysis.md)**
 
     Select trials after inspecting fixations.
 
@@ -26,9 +26,9 @@ Open a dataset in the :material/route: **Scanpath** view. The filter
 (:material/filter_alt:) beside **Select trial** selects whole trials.
 :material/filter_list: **Filters & highlights** in the Plot controls changes
 which fixations and saccades the figure draws.
-Both, and the export these tasks end with, are in the **Full** mode:
-switch to it in the top bar of the Scanpath view, or add `ui=full` to the
-app's address ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
+Switch to **Full** at the top of the Scanpath view to use trial filters,
+fixation highlights, and batch export
+([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../assets/workflows/trial-filtering_poster.webp" data-autoplay

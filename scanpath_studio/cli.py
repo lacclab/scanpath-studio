@@ -28,7 +28,6 @@ import pandas as pd
 from . import __version__
 from . import column_names as _cn
 from .code_snippet import (
-    SOURCE_AUTHOR,
     SOURCE_DEMO,
     SOURCE_MULTIPLEYE,
     SOURCE_ONESTOP,
@@ -44,6 +43,10 @@ from .constants import (
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
+    FIXATION_FLAG_CATEGORIES,
+    FIXATION_FLAG_MARKERS,
+    FIXATION_FLAG_MODES,
+    FIXATION_LABEL_OPTIONS,
     FIXATION_SYMBOLS,
     FONT_FAMILY,
     SACCADE_CLASS_COLORS,
@@ -1250,22 +1253,14 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar=("LO", "HI"),
         help="Fix the heatmap's color scale to LO..HI instead of the trial's range.",
     )
-    viz.add_argument(
-        "--order-font-size",
-        type=int,
-        metavar="PX",
-        help="Size of the fixation index numbers (default: 10).",
-    )
-    viz.add_argument(
-        "--order-font-color",
-        metavar="COLOR",
-        help="Color of the fixation index numbers (default: #111111).",
-    )
-    viz.add_argument(
-        "--order-label-position",
-        choices=("above", "inside", "below"),
-        help="Where each fixation index number sits on its fixation (default: above).",
-    )
+    for option in FIXATION_LABEL_OPTIONS.values():
+        viz.add_argument(
+            option.flag,
+            type=int if option.kind == "int" else str,
+            metavar=option.metavar,
+            choices=option.choices or None,
+            help=f"{option.description} (default: {option.default}).",
+        )
     viz.add_argument(
         "--text-color",
         metavar="COLOR",
@@ -1274,9 +1269,11 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--redact-text",
         action="store_true",
-        help="Draw a rounded block in the text color in place of each word's "
-        "letters, and leave the words out of the hovers. The figure keeps the "
-        "text's layout but not its words (the app's Text → Redact).",
+        help=(
+            "Replace each word with a rounded block in the text color and hide its "
+            "text in tooltips. Preserves the text layout while concealing the words "
+            "(the app's Text → Redact)."
+        ),
     )
     viz.add_argument(
         "--highlight-text-color",
@@ -1340,13 +1337,13 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--x-field",
         metavar="FIELD",
-        help="Fixations table column on the x axis (default: x). A non-spatial "
-        "one draws a chart of the fixations instead of the scanpath.",
+        help="Horizontal axis of the static chart (default: x). Choose a numeric fixation "
+        "column, order_in_trial for fixation index, or @elapsed_seconds for time since the first recorded fixation.",
     )
     viz.add_argument(
         "--y-field",
         metavar="FIELD",
-        help="Fixations table column on the y axis (default: y).",
+        help="Vertical axis of the static chart (default: y). Takes the same fields as --x-field.",
     )
     viz.add_argument(
         "--crop-to-data",
@@ -1724,7 +1721,8 @@ def _render_parser() -> argparse.ArgumentParser:
         choices=["both", "a", "b"],
         default="both",
         help="On an overlay, whose word boxes and text to draw (default: both). "
-        "Two datasets' word boxes line up only when the text is the same.",
+        "Two datasets' word boxes line up only when the text is the same. "
+        "A two-scanpath replay shows B's text for 'b' and A's text for 'a' or 'both'.",
     )
     # Named `-a` / `-b` after the `style_a` / `style_b` pair rather
     # than `--label`, which would read as a sibling of `--no-labels` (the word
@@ -1732,13 +1730,15 @@ def _render_parser() -> argparse.ArgumentParser:
     cmp_group.add_argument(
         "--label-a",
         metavar="TEXT",
-        help="Name of scanpath A in the legend and hovers. Used by the "
-        "comparison and by --animate. Needs --label-b.",
+        help=(
+            "Name of scanpath A in the legend and tooltips. Requires --compare-with "
+            "and --label-b."
+        ),
     )
     cmp_group.add_argument(
         "--label-b",
         metavar="TEXT",
-        help="Name of scanpath B in the legend and hovers. Needs --label-a.",
+        help=("Name of scanpath B in the legend and tooltips. Requires --label-a."),
     )
     cmp_group.add_argument(
         "--compare-legend",
@@ -1766,8 +1766,7 @@ def _render_parser() -> argparse.ArgumentParser:
             "box_line_opacity / box_fill_opacity (0–1; default "
             "--word-box-line-opacity / --word-box-fill-opacity), "
             f"hollow (true|false). E.g. --style-{side} fix_color=#D55E00,opacity=0.5. "
-            "--animate uses them too, except box_color, box_fill_color, the box "
-            "opacities and raw_gaze_color.",
+            "A two-scanpath replay uses the fixation and saccade styles.",
         )
     # Scanpath B's own filters — the app's "· B" blocks under 🧹 Filter.
     # A's are the ordinary --fixation-flag / --saccade-classes /
@@ -1863,9 +1862,7 @@ _DIRECT_OPTION_FLAGS = (
     "marker_size_scale",
     "fixation_opacity",
     "saccade_opacity",
-    "order_font_size",
-    "order_font_color",
-    "order_label_position",
+    *FIXATION_LABEL_OPTIONS,
     "text_color",
     "highlight_text_color",
     "span_border_color",
@@ -2057,18 +2054,96 @@ def _compare_second_dataset(api, args, words, fixations):
         )
 
 
-def _trial_text_ids(*frames) -> pd.DataFrame | None:
-    """``[participant_id, trial_id, text_id]``, one row per trial, from the
-    first of ``frames`` that has it — ``None`` when none carries a text id."""
-    columns = ["participant_id", "trial_id", "text_id"]
-    parts = [
-        f[columns].drop_duplicates(columns[:2])
-        for f in frames
-        if f is not None and not f.empty and set(columns) <= set(f.columns)
-    ]
-    if not parts:
-        return None
-    return pd.concat(parts, ignore_index=True).drop_duplicates(columns[:2])
+def _report_render_metadata(args, words, fixations, raw_gaze, column_names) -> None:
+    """Check metadata against all loaded readings and print the requested trial list."""
+    from . import api
+    from . import metadata as _metadata
+
+    readings = _metadata.recording_keys(fixations, words, raw_gaze)
+    if args.participant_metadata:
+        try:
+            attached = api.load_participant_metadata(
+                args.participant_metadata, participants=readings
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        report = attached.report
+        print(
+            f"Participant metadata: {_count(len(attached.fields), 'field')} "
+            f"({', '.join(attached.names)}) for "
+            f"{_count(len(report.matched), 'participant')}.",
+            file=sys.stderr,
+        )
+        _print_join_details(report)
+
+    attached_trials = None
+    if args.trial_metadata:
+        try:
+            attached_trials = api.load_trial_metadata(
+                args.trial_metadata,
+                participant_column=args.trial_metadata_reader_column,
+                trials=readings,
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        report = attached_trials.report
+        keyed = (
+            "participant + trial"
+            if attached_trials.keyed_by_participant
+            else "trial id"
+        )
+        print(
+            f"Trial metadata: {_count(len(attached_trials.fields), 'field')} "
+            f"({', '.join(attached_trials.names)}) for "
+            f"{_count(len(report.matched), 'trial')}, keyed by {keyed}.",
+            file=sys.stderr,
+        )
+        _print_join_details(report, limit=20)
+    elif args.trial_metadata_reader_column:
+        raise SystemExit(
+            "--trial-metadata-participant-column needs --trial-metadata: it names a "
+            "column in that table."
+        )
+
+    attached_texts = None
+    if args.text_metadata:
+        try:
+            attached_texts = api.load_text_metadata(
+                args.text_metadata,
+                texts=readings,
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        report = attached_texts.report
+        print(
+            f"Text metadata: {_count(len(attached_texts.fields), 'field')} "
+            f"({', '.join(attached_texts.names)}) for "
+            f"{_count(len(report.matched), 'text')}.",
+            file=sys.stderr,
+        )
+        _print_join_details(report)
+
+    if not args.list_trials:
+        return
+
+    identity = ["participant_id", "trial_id"]
+    combos = _metadata.unambiguous_readings(readings).sort_values(identity)
+    if args.participant_metadata:
+        combos = _metadata.project(attached, combos)
+    if attached_trials is not None:
+        combos = _metadata.project_trials(attached_trials, combos)
+    # Keep the listing's column order: reader/trial fields, then text ID and fields.
+    combos["text_id"] = combos.pop("text_id")
+    if attached_texts is not None:
+        combos = _metadata.project_texts(attached_texts, combos)
+    print(
+        f"{len(combos)} trial{'' if len(combos) == 1 else 's'}. Pass the "
+        "participant as -p and the trial as -t; the app shows a trial by "
+        "its participant and text.",
+        file=sys.stderr,
+    )
+    # The ids under the dataset's own names.
+    print(_listed(combos, column_names).to_string(index=False))
 
 
 def _listed(table: pd.DataFrame, column_names: dict) -> pd.DataFrame:
@@ -2169,8 +2244,18 @@ def _compare_setup_snapshot(canvas: tuple | None):
     )
 
 
-def _print_combined_rows(report) -> None:
-    """Say how many duplicate rows a metadata table folded together."""
+def _print_join_details(report, *, limit: int | None = None) -> None:
+    """Print unmatched IDs, conflicts and compatible duplicates for any metadata table."""
+    for label, keys in (
+        ("in the data, not the table", report.only_in_data),
+        ("in the table, not the data", report.only_in_table),
+        ("rows that disagree (left empty)", report.conflicting),
+    ):
+        if keys:
+            shown = ", ".join(_format_trial_key(key) for key in keys[:limit])
+            remaining = len(keys) - len(keys[:limit])
+            suffix = f", ... (+{remaining})" if remaining else ""
+            print(f"  {len(keys)} {label}: {shown}{suffix}", file=sys.stderr)
     combined = int(getattr(report, "combined_rows", 0) or 0)
     if combined:
         print(
@@ -2290,10 +2375,6 @@ _CRITICAL_SPAN_STYLES = {
     "none": "None",
 }
 
-#: Fixation-flag category → whether it takes a `threshold_ms`. `oob` and `blink` are
-#: classified from geometry / the recording, not from a duration.
-_FIXCLASS_CATEGORIES = {"short": True, "long": True, "oob": False, "blink": False}
-
 
 def _parse_legend_layout(specs: list[str]) -> dict:
     """``["saccades=right,stacked,14"]`` → the ``legend_layout`` dict.
@@ -2323,32 +2404,33 @@ def _parse_fixation_flags(specs: list[str]) -> dict:
     so the CLI's job is only to spell one category per flag. Unspecified
     categories are left out entirely, which the builder reads as *Off*.
     """
-    from .controls import _FIXCLASS_MODES, _OUT_OF_TEXT_MARKERS
-
-    modes = {mode.lower(): mode for mode in _FIXCLASS_MODES}
+    modes = {mode.lower(): mode for mode in FIXATION_FLAG_MODES}
     flags: dict = {}
     for spec in specs:
         head, _, rest = spec.partition(",")
         category, _, mode = head.partition("=")
         category, mode = category.strip().lower(), mode.strip().lower()
-        if category not in _FIXCLASS_CATEGORIES or mode not in modes:
+        if category not in FIXATION_FLAG_CATEGORIES or mode not in modes:
             raise SystemExit(
                 f"--fixation-flag expects CATEGORY=MODE with CATEGORY one of "
-                f"{', '.join(_FIXCLASS_CATEGORIES)} and MODE one of "
+                f"{', '.join(FIXATION_FLAG_CATEGORIES)} and MODE one of "
                 f"{', '.join(modes)}; got {spec!r}."
             )
         entry: dict = {"mode": modes[mode]}
         for option in (part.strip() for part in rest.split(",") if part.strip()):
             name, _, raw = option.partition("=")
             name, raw = name.strip(), raw.strip()
-            if name == "threshold_ms" and _FIXCLASS_CATEGORIES[category]:
+            if (
+                name == "threshold_ms"
+                and FIXATION_FLAG_CATEGORIES[category].has_threshold
+            ):
                 try:
                     entry["threshold_ms"] = float(raw)
                 except ValueError:
                     raise SystemExit(
                         f"--fixation-flag threshold_ms expects a number, got {raw!r}."
                     )
-            elif name == "symbol" and raw in _OUT_OF_TEXT_MARKERS:
+            elif name == "symbol" and raw in FIXATION_FLAG_MARKERS:
                 entry["symbol"] = raw
             elif name == "color" and re.fullmatch(r"#[0-9A-Fa-f]{6}", raw):
                 entry["color"] = raw
@@ -2356,8 +2438,12 @@ def _parse_fixation_flags(specs: list[str]) -> dict:
                 raise SystemExit(
                     f"--fixation-flag: unknown or invalid option {option!r} for "
                     f"category {category!r}. Valid: "
-                    + ("threshold_ms=N, " if _FIXCLASS_CATEGORIES[category] else "")
-                    + f"symbol=<{'|'.join(_OUT_OF_TEXT_MARKERS)}>, color=#RRGGBB."
+                    + (
+                        "threshold_ms=N, "
+                        if FIXATION_FLAG_CATEGORIES[category].has_threshold
+                        else ""
+                    )
+                    + f"symbol=<{'|'.join(FIXATION_FLAG_MARKERS)}>, color=#RRGGBB."
                 )
         flags[category] = entry
     return flags
@@ -2684,9 +2770,14 @@ def render(argv: list[str]) -> None:
     # A print width sizes a PNG; say so before the data loads.
     printed = args.width_mm is not None or args.width_in is not None
     if args.dpi is not None and not printed:
-        parser.error("--dpi is the resolution of --width-mm / --width-in; add one.")
+        parser.error(
+            "Use --dpi with --width-mm or --width-in to set the PNG print resolution."
+        )
     if printed and args.output and not str(args.output).lower().endswith(".png"):
-        parser.error("--width-mm / --width-in size a PNG; write to a .png file.")
+        parser.error(
+            "Print width applies to PNG files. Use an output filename ending in .png "
+            "with --width-mm or --width-in."
+        )
     # Validate everything derivable from argv before the (possibly minutes-long
     # on full corpora) data load.
     corpus_inputs = [
@@ -2863,7 +2954,7 @@ def render(argv: list[str]) -> None:
             raise SystemExit(f"--authoring: file not found: {args.authoring}") from None
         except (ValueError, OSError) as exc:
             raise SystemExit(str(exc)) from exc
-        canvas = canvas or source_canvas(SOURCE_AUTHOR)
+        canvas = canvas or api._recorded_screen(words, fixations)
     elif args.potec:
         from .data import split_composite_id
         from .datasets import load_potec
@@ -2980,148 +3071,15 @@ def render(argv: list[str]) -> None:
             column_names[found[0]] = found[1]
         raw_gaze = _cn.to_canonical_frame(raw_gaze)
 
-    # What the metadata tables are joined against — the samples, when
-    # they are the only table, or every join would report "0 matched".
-    join_frame = (
-        raw_gaze
-        if raw_gaze is not None and fixations.empty and words.empty
-        else fixations
-    )
-
-    # Attaching a participant table headlessly is worth doing for the
-    # join report alone — a mistyped id column or a cohort file from the wrong
-    # study is exactly what you want to hear about before rendering 300 figures.
-    if args.participant_metadata:
-        try:
-            attached = api.load_participant_metadata(
-                args.participant_metadata, participants=join_frame
-            )
-        except (ValueError, FileNotFoundError, OSError) as exc:
-            raise SystemExit(str(exc))
-        report = attached.report
-        print(
-            f"Participant metadata: {_count(len(attached.fields), 'field')} "
-            f"({', '.join(attached.names)}) for "
-            f"{_count(len(report.matched), 'participant')}.",
-            file=sys.stderr,
-        )
-        for label, ids in (
-            ("in the data, not the table", report.only_in_data),
-            ("in the table, not the data", report.only_in_table),
-            ("rows that disagree (left empty)", report.conflicting),
-        ):
-            if ids:
-                print(f"  {len(ids)} {label}: {', '.join(ids)}", file=sys.stderr)
-        _print_combined_rows(report)
-
-    # The same, one grain down. A trial table's report is worth more
-    # than the participant one, not less: getting the *key* wrong is silent
-    # (a table keyed by trial alone still joins, it just means something else),
-    # and "0 matched" here is the one thing that says so out loud.
-    attached_trials = None
-    if args.trial_metadata:
-        try:
-            attached_trials = api.load_trial_metadata(
-                args.trial_metadata,
-                participant_column=args.trial_metadata_reader_column,
-                trials=join_frame,
-            )
-        except (ValueError, FileNotFoundError, OSError) as exc:
-            raise SystemExit(str(exc))
-        report = attached_trials.report
-        keyed = (
-            "participant + trial"
-            if attached_trials.keyed_by_participant
-            else "trial id"
-        )
-        print(
-            f"Trial metadata: {_count(len(attached_trials.fields), 'field')} "
-            f"({', '.join(attached_trials.names)}) for "
-            f"{_count(len(report.matched), 'trial')}, keyed by {keyed}.",
-            file=sys.stderr,
-        )
-        for label, keys in (
-            ("in the data, not the table", report.only_in_data),
-            ("in the table, not the data", report.only_in_table),
-            ("rows that disagree (left empty)", report.conflicting),
-        ):
-            if keys:
-                shown = ", ".join(_format_trial_key(key) for key in keys[:20])
-                # Plain "..." rather than an ellipsis character: this line
-                # goes to stderr, and a Windows console in its default
-                # code page prints the single glyph as a replacement mark.
-                more = "" if len(keys) <= 20 else f", ... (+{len(keys) - 20})"
-                print(f"  {len(keys)} {label}: {shown}{more}", file=sys.stderr)
-        _print_combined_rows(report)
-    elif args.trial_metadata_reader_column:
-        raise SystemExit(
-            "--trial-metadata-participant-column needs --trial-metadata: it names a "
-            "column in that table."
-        )
-
-    # The third grain, flat like the participant table — a text is a
-    # stimulus, so it always joins on text id alone.
-    attached_texts = None
-    if args.text_metadata:
-        try:
-            attached_texts = api.load_text_metadata(
-                args.text_metadata, texts=words if not words.empty else join_frame
-            )
-        except (ValueError, FileNotFoundError, OSError) as exc:
-            raise SystemExit(str(exc))
-        report = attached_texts.report
-        print(
-            f"Text metadata: {_count(len(attached_texts.fields), 'field')} "
-            f"({', '.join(attached_texts.names)}) for "
-            f"{_count(len(report.matched), 'text')}.",
-            file=sys.stderr,
-        )
-        for label, ids in (
-            ("in the data, not the table", report.only_in_data),
-            ("in the table, not the data", report.only_in_table),
-            ("rows that disagree (left empty)", report.conflicting),
-        ):
-            if ids:
-                print(f"  {len(ids)} {label}: {', '.join(ids)}", file=sys.stderr)
-        _print_combined_rows(report)
-
+    if (
+        args.list_trials
+        or args.participant_metadata
+        or args.trial_metadata
+        or args.text_metadata
+        or args.trial_metadata_reader_column
+    ):
+        _report_render_metadata(args, words, fixations, raw_gaze, column_names)
     if args.list_trials:
-        combos = api.list_trials(words, fixations, raw_gaze=raw_gaze)
-        if (
-            args.participant_metadata
-            or attached_trials is not None
-            or attached_texts is not None
-        ):
-            from scanpath_studio import metadata as _metadata
-
-            if args.participant_metadata:
-                combos = _metadata.project(attached, combos)
-            if attached_trials is not None:
-                combos = _metadata.project_trials(attached_trials, combos)
-            if attached_texts is not None:
-                # `list_trials`'s combos is deliberately just
-                # (participant_id, trial_id) — text_id isn't part of its
-                # public contract — so bring it in here, from whichever
-                # table has the trial, before projecting the text table.
-                texts = _trial_text_ids(fixations, words, join_frame)
-                if texts is not None:
-                    combos = combos.merge(
-                        texts, on=["participant_id", "trial_id"], how="left"
-                    )
-                    combos = _metadata.project_texts(attached_texts, combos)
-        # The text id too — the id the app shows a trial by — from whichever
-        # table has the trial, since every table's trials are listed.
-        texts = _trial_text_ids(fixations, words, raw_gaze)
-        if "text_id" not in combos.columns and texts is not None:
-            combos = combos.merge(texts, on=["participant_id", "trial_id"], how="left")
-        print(
-            f"{len(combos)} trial{'' if len(combos) == 1 else 's'}. Pass the "
-            "participant as -p and the trial as -t; the app shows a trial by "
-            "its participant and text.",
-            file=sys.stderr,
-        )
-        # The ids under the dataset's own names.
-        print(_listed(combos, column_names).to_string(index=False))
         return
     if args.list_parts:
         parts = api.list_parts(
@@ -3608,6 +3566,7 @@ def render(argv: list[str]) -> None:
                     fixations_b=fixations_b,
                     dataset_b=args.compare_dataset_name,
                     layout=args.compare_layout,
+                    illustration_label=args.illustration_label,
                     compare_stimulus=args.compare_stimulus,
                     labels=_compare_labels(args),
                     setup=_compare_setup_snapshot(canvas),
@@ -3893,6 +3852,97 @@ def analyze(argv: list[str]) -> None:
         )
 
 
+def _recipe_parser() -> argparse.ArgumentParser:
+    """Options for reproducing a downloaded Corpus Analysis table."""
+    parser = _ShortErrorParser(
+        prog="scanpath-studio recipe",
+        description="Rerun a Per text cohort profile recipe on its source tables.",
+    )
+    parser.add_argument(
+        "recipe",
+        metavar="RECIPE.json",
+        help="Cohort profile recipe from Corpus Analysis.",
+    )
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--sample", action="store_true", help="Use the bundled demo.")
+    source.add_argument("--words", nargs="+", help="Original Words table(s).")
+    parser.add_argument("--fixations", nargs="+", help="Original Fixations table(s).")
+    parser.add_argument(
+        "--raw-gaze",
+        nargs="+",
+        help="Original raw gaze table(s) when a text metadata filter uses their IDs.",
+    )
+    parser.add_argument(
+        "--trial-parts-manifest", help="Multipart trial manifest used at import."
+    )
+    _add_schema_flags(parser)
+    for grain in ("participant", "trial", "text"):
+        parser.add_argument(
+            f"--{grain}-metadata",
+            help=f"The {grain} metadata table used by the recipe's filters.",
+        )
+    parser.add_argument(
+        "--annotations", help="Annotations JSON used for favorites or tag filters."
+    )
+    parser.add_argument(
+        "-o", "--output", required=True, help="Where to write the reproduced CSV."
+    )
+    return parser
+
+
+def recipe(argv: list[str]) -> None:
+    """Rerun a cohort profile using the same inputs as its author."""
+    from . import api, data
+    from .analysis_recipe import load_recipe_sources
+
+    args = _recipe_parser().parse_args(argv)
+    if args.sample and any(
+        (
+            args.fixations,
+            args.raw_gaze,
+            args.word_schema,
+            args.fix_schema,
+            args.trial_parts_manifest,
+            args.keep_columns,
+        )
+    ):
+        raise SystemExit(
+            "--sample uses the bundled tables and their mappings. Pass --words to use your own."
+        )
+    try:
+        saved = json.loads(Path(args.recipe).read_text(encoding="utf-8"))
+        words, fixations = (
+            data.load_sample_data() if args.sample else (args.words, args.fixations)
+        )
+        manifest = (
+            json.loads(Path(args.trial_parts_manifest).read_text(encoding="utf-8"))
+            if args.trial_parts_manifest
+            else None
+        )
+        tables, raw_gaze = load_recipe_sources(
+            saved,
+            words,
+            fixations,
+            data.load_sample_raw_gaze() if args.sample else args.raw_gaze,
+            word_schema=_parse_schema_arg(args.word_schema, "--word-schema"),
+            fix_schema=_parse_schema_arg(args.fix_schema, "--fix-schema"),
+            keep_columns=args.keep_columns,
+            trial_parts_manifest=manifest,
+        )
+        result = api.run_analysis_recipe(
+            saved,
+            *tables,
+            raw_gaze=raw_gaze,
+            participant_metadata=args.participant_metadata,
+            trial_metadata=args.trial_metadata,
+            text_metadata=args.text_metadata,
+            annotations=args.annotations,
+        )
+        result.to_csv(args.output, index=False, lineterminator="\n")
+    except (ValueError, OSError) as exc:
+        raise SystemExit(str(exc)) from exc
+
+
 def _corpus_parser() -> argparse.ArgumentParser:
     """The `corpus` parser (see `_analyze_parser`)."""
     parser = _ShortErrorParser(
@@ -4120,6 +4170,7 @@ def version(argv: list[str]) -> None:
 
     info = build_info()
     print(f"scanpath-studio {info.version}")
+    print(f"Channel:    {info.channel.title()}")
     print(f"Build:      {info.describe()}")
     print(f"Installed:  {INSTALL_KINDS[install_kind(info)]}")
     if not args.check:
@@ -4311,10 +4362,8 @@ def check(argv: list[str]) -> None:
 
     findings = api._health_findings(words, fixations, raw_gaze)
     if args.json:
-        from .data_health import findings_frame
-
-        records = findings_frame(findings).to_dict("records")
-        print(json.dumps(records, indent=2, default=str))
+        records = [finding.to_json_record() for finding in findings]
+        print(json.dumps(records, indent=2, allow_nan=False, default=str))
         return
     counts = {
         name: len(frame)
@@ -4343,6 +4392,7 @@ usage:
   scanpath-studio render …         render one trial to .html/.png/.svg/.pdf
                                    (see `scanpath-studio render --help`)
   scanpath-studio corpus …         render a corpus figure from a tidy CSV
+  scanpath-studio recipe …         reproduce a cohort profile CSV from its recipe
   scanpath-studio check …          run the Data checks on your tables
   scanpath-studio cache …          show / clear the on-device recovery cache
   scanpath-studio version [--check]
@@ -4367,6 +4417,7 @@ _COMMANDS = (
     "render",
     "analyze",
     "corpus",
+    "recipe",
     "check",
     "cache",
     "version",
@@ -4476,6 +4527,8 @@ def main(argv: list[str] | None = None) -> None:
                 f"been validated yet. Set {EXPERIMENTAL_ENV_VAR}=1 to use it anyway."
             )
         analyze(argv[1:])
+    elif argv[0] == "recipe":
+        recipe(argv[1:])
     elif argv[0] == "corpus":
         corpus(argv[1:])
     elif argv[0] == "check":

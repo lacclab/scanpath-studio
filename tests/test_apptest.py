@@ -1411,10 +1411,7 @@ class TestDatasetTable:
 class TestDatasetRename:
     """A dataset the user added can be renamed after the fact.
 
-    The name is the key into the ``_datasets`` store, so these are really about
-    everything that key had to drag along with it. ``wizard.rename_dataset`` is
-    the whole of that, and it touches only session state — so it is exercised
-    directly rather than through a 90-second AppTest boot.
+    Reads, annotations and settings are owned by a stable dataset key.
 
     The rename lives in exactly **one** place: the **Name** field on
     ✏️ Edit dataset.
@@ -1439,7 +1436,7 @@ class TestDatasetRename:
         _session["_datasets"] = {name: {"words": name} for name in names}
         _session["data_source_choice"] = names[0]
 
-    def test_rename_rekeys_the_store_and_follows_the_selection(self, _session):
+    def test_rename_keeps_the_store_and_selection(self, _session):
         from scanpath_studio import wizard
 
         self._store(_session, self.NAME)
@@ -1447,12 +1444,9 @@ class TestDatasetRename:
             "Reading study 2026"
         )
 
-        assert set(_session["_datasets"]) == {"Reading study 2026"}
-        # The selection followed, so the app is still showing the same data
-        # rather than falling back to the demo (the healing branch in
-        # resolve_data_source drops a name that is no longer an entry). It is
-        # applied through the pre-widget seam, not by assigning the widget key.
-        assert _session["_pending_source_choice"] == "Reading study 2026"
+        assert set(_session["_datasets"]) == {self.NAME}
+        assert _session["data_source_choice"] == self.NAME
+        assert wizard.app._dataset_display_name(self.NAME) == "Reading study 2026"
 
     def test_a_taken_name_is_suffixed(self, _session):
         from scanpath_studio import wizard
@@ -1460,7 +1454,7 @@ class TestDatasetRename:
         self._store(_session, self.NAME, "Other corpus")
         assert wizard.rename_dataset(self.NAME, "Other corpus") == "Other corpus (2)"
 
-        assert "Other corpus (2)" in _session["_datasets"]
+        assert wizard.app._dataset_display_name(self.NAME) == "Other corpus (2)"
         # Both datasets survive — a rename must never overwrite another entry's
         # frames, which is what an un-suffixed re-key would do.
         assert _session["_datasets"]["Other corpus"] == {"words": "Other corpus"}
@@ -1474,7 +1468,7 @@ class TestDatasetRename:
         _session[COMPARE_SOURCE_STATE_KEY] = self.NAME
         wizard.rename_dataset(self.NAME, "Renamed corpus")
 
-        assert _session[COMPARE_SOURCE_STATE_KEY] == "Renamed corpus"
+        assert _session[COMPARE_SOURCE_STATE_KEY] == self.NAME
 
     def test_the_description_follows_the_rename_and_leaves_with_the_dataset(
         self, _session
@@ -1485,8 +1479,8 @@ class TestDatasetRename:
         self._store(_session, self.NAME)
         _session[DATASET_DESCRIPTIONS_KEY] = {self.NAME: "A pilot."}
         wizard.rename_dataset(self.NAME, "Pilot")
-        assert _session[DATASET_DESCRIPTIONS_KEY] == {"Pilot": "A pilot."}
-        wizard._remove_dataset("Pilot")
+        assert _session[DATASET_DESCRIPTIONS_KEY] == {self.NAME: "A pilot."}
+        wizard._remove_dataset(self.NAME)
         assert _session[DATASET_DESCRIPTIONS_KEY] == {}
         # Persisted as a session key, so it survives a restart without making
         # the recovery cache rewrite any stored frames.
@@ -1532,8 +1526,8 @@ class TestDatasetRename:
         }
         annotations_mod.activate_dataset(_session, "Other")
         assert wizard.rename_dataset(self.NAME, "Pilot") == "Pilot"
-        assert annotations_mod.store_for(_session, self.NAME) == {}
-        assert set(annotations_mod.store_for(_session, "Pilot")) == {("p1", "t1")}
+        assert set(annotations_mod.store_for(_session, self.NAME)) == {("p1", "t1")}
+        assert annotations_mod.store_for(_session, "Pilot") == {}
 
     def test_a_built_in_source_label_cannot_be_shadowed(self, _session):
         """A stored dataset named exactly like a built-in source would put a
@@ -1545,7 +1539,9 @@ class TestDatasetRename:
         wizard.rename_dataset(self.NAME, DEMO_CHOICE)
 
         assert DEMO_CHOICE not in _session["_datasets"]
-        assert f"{DEMO_CHOICE} (uploaded)" in _session["_datasets"]
+        assert (
+            wizard.app._dataset_display_name(self.NAME) == f"{DEMO_CHOICE} (uploaded)"
+        )
 
     def test_every_built_in_source_label_is_reserved(self, _session):
         """Derived from the picker's own tokens and the corpus registry, not a
@@ -1633,18 +1629,19 @@ class TestDatasetRename:
         assert annotations_mod.store_for(_session, corpus) == {}
         assert app._annotations_dataset(corpus) == app.DEMO_CHOICE
 
-    def test_a_refused_annotation_rename_leaves_the_dataset_as_it_was(
-        self, _session, monkeypatch
-    ):
-        """The annotations move first; if their rename is refused the
-        frames are not re-keyed either, so nothing is stranded."""
-        import scanpath_studio.annotations as annotations_mod
+    def test_a_freed_label_can_be_used_by_a_new_upload(self, _session):
         from scanpath_studio import wizard
+        from scanpath_studio.dataset_identity import dataset_share_id
 
         self._store(_session, self.NAME)
-        monkeypatch.setattr(annotations_mod, "rename_dataset", lambda *a: False)
-        assert wizard.rename_dataset(self.NAME, "Pilot") is None
-        assert list(_session["_datasets"]) == [self.NAME]
+        original_id = dataset_share_id(_session, self.NAME)
+        assert wizard.rename_dataset(self.NAME, "Pilot") == "Pilot"
+        token = wizard._new_dataset_token(wizard._safe_dataset_name(self.NAME))
+        assert token != self.NAME
+        _session["_datasets"][token] = {"words": "Another dataset"}
+        assert dataset_share_id(_session, token) != original_id
+        assert wizard.app._dataset_display_name(token) == self.NAME
+        assert wizard.app._dataset_display_name(self.NAME) == "Pilot"
 
     def test_saving_an_authored_draft_takes_its_annotations(self, _session):
         """The draft's annotations were made on the scanpath being
@@ -4776,13 +4773,14 @@ class TestRecordingSetupGate(TestSetupWizard):
         assert not finalize.disabled
         # The estimate is said to be one, with the ask for the real value.
         assert any(
-            "**Screen** is an estimate or a default" in c.value for c in at.caption
+            "**Screen** uses an estimated or default value" in c.value
+            for c in at.caption
         )
 
         # Entering the screen answers the ask.
         at.session_state[_SETUP_MODE_KEYS["screen"]] = _SCREEN_KNOW
         at.run(timeout=60)
-        assert not [c for c in at.caption if "an estimate or a default" in c.value]
+        assert not [c for c in at.caption if "an estimated or default value" in c.value]
 
         finalize = next(b for b in at.button if b.key == "wizard_finalize")
         finalize.click()

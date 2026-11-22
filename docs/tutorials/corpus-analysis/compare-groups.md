@@ -17,5 +17,5 @@ Compare a reading measure between two groups of participants or two conditions.
    groups share no participant.
 5. [Download the table and recipe](index.md#keep-the-result).
 
-The comparison is descriptive. It runs no significance test.
+The comparison provides a descriptive summary; it does not run significance tests.
 For a recorded example, see [Analyze one text](analyze-one-text.md).

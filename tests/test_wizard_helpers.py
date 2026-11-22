@@ -147,7 +147,7 @@ def _seed_setdefault_app():
 def _remove_dataset_app():
     import streamlit as st
 
-    from scanpath_studio.app import _remove_dataset
+    from scanpath_studio.wizard import _remove_dataset
 
     st.session_state["_datasets"] = {"DS1": {"x": 1}, "DS2": {"y": 2}}
     st.session_state["data_source_choice"] = "DS1"

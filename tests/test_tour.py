@@ -765,11 +765,11 @@ class TestFaq:
     def test_docs_links_point_at_the_published_pages(self):
         """The FAQ is the app's help-context route into the docs — if these
         drift from the mkdocs nav the buttons 404."""
-        from scanpath_studio.constants import CITATION
+        from scanpath_studio.build_info import build_info
         from scanpath_studio.tour import DOCS_FAQ_URL, DOCS_TUTORIALS_URL
 
-        assert DOCS_FAQ_URL == f"{CITATION['docs_url']}faq/"
-        assert DOCS_TUTORIALS_URL == f"{CITATION['docs_url']}tutorials/"
+        assert DOCS_FAQ_URL == f"{build_info().docs_url}faq/"
+        assert DOCS_TUTORIALS_URL == f"{build_info().docs_url}tutorials/"
 
     def test_answers_stay_short(self):
         """Same rule as the tour steps: the long version lives in docs/faq.md."""
@@ -791,14 +791,14 @@ class TestFaq:
         monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "0")
         monkeypatch.setattr(persistence, "server_bound_to_loopback", lambda: False)
         hosted = answer()
-        assert hosted.startswith("To the server this app runs on")
+        assert "processed on the server running this app" in hosted
         assert "Nowhere" not in hosted and "not kept" in hosted
 
         monkeypatch.setattr(persistence, "server_bound_to_loopback", lambda: True)
         monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "1")
         local = answer()
-        assert local.startswith("Nowhere")
-        assert "recovery copy" in local and "server" not in local
+        assert "processed on your computer" in local
+        assert "local copy" in local and "server" not in local
 
     def test_about_says_where_data_goes_for_this_run(self):
         """About's privacy line is the short form of this answer, decided by
@@ -1319,12 +1319,12 @@ class TestSpotlightSelectorsResolve:
         assert (
             "st.markdown(f\"## {ICONS['plot_controls']} Plot controls\")" in tab_source
         )
-        assert 'st.container(key="plot_reset_footer"),' in tab_source
-        assert "render_viz_reset(st)" in tab_source
+        assert 'st.container(key="plot_reset_footer")' in tab_source
+        assert "render_viz_reset(plot_footer)" in tab_source
         # No second column in the heading row, and no reset above the controls.
         assert "rail_heading, rail_reset = st.columns(" not in tab_source
         assert tab_source.index("render_plot_controls(") < tab_source.index(
-            "render_viz_reset(st)"
+            "render_viz_reset(plot_footer)"
         )
 
         # Full width, one label, no compact pill.

@@ -329,7 +329,12 @@ _HIDDEN_PHRASES = (
 
 
 def hidden_settings_reasons(
-    *, narrowed: bool, sorted_: bool, comparing: bool, custom_view: bool
+    *,
+    narrowed: bool,
+    sorted_: bool,
+    comparing: bool,
+    custom_view: bool,
+    axes: tuple[str, str] = ("x", "y"),
 ) -> list[str]:
     """The Full-only settings shaping what Essentials shows, as short phrases.
 
@@ -341,9 +346,21 @@ def hidden_settings_reasons(
         "narrowed": narrowed,
         "sorted_": sorted_,
         "comparing": comparing,
-        "custom_view": custom_view,
+        "custom_view": custom_view and axes == ("x", "y"),
     }
-    return [phrase for name, phrase in _HIDDEN_PHRASES if flags[name]]
+    reasons = [phrase for name, phrase in _HIDDEN_PHRASES if flags[name]]
+    if axes != ("x", "y"):
+        import streamlit as st
+
+        from .chart_axes import ELAPSED, ELAPSED_LABEL
+        from .column_names import active as active_column_names
+
+        labels = active_column_names(st.session_state, "fixations").option_labels(
+            list(dict.fromkeys(axes)), roles=True
+        )
+        labels[ELAPSED] = ELAPSED_LABEL
+        reasons.append(f"X: {labels[axes[0]]} · Y: {labels[axes[1]]}")
+    return reasons
 
 
 def render_hidden_settings_note(host: DeltaGenerator, reasons: list[str]) -> None:
@@ -361,11 +378,11 @@ def render_hidden_settings_note(host: DeltaGenerator, reasons: list[str]) -> Non
         key="hidden_settings_note",
     )
     row.caption(
-        f"{ICONS['info']} Settings from Full are shaping this view: "
+        f"{ICONS['info']} Some settings from Full are still active: "
         f"{', '.join(reasons)}."
     )
     row.button(
-        "Switch to Full",
+        "Edit in Full",
         key="hidden_note_to_advanced",
         type="tertiary",
         on_click=_switch_to_advanced,
@@ -477,8 +494,8 @@ def render_export_pointer(host: DeltaGenerator) -> None:
         key="export_advanced_note",
     )
     row.caption(
-        f"{ICONS['info']} Exporting many trials at once, with figures and "
-        "tables for every trial, is in Full."
+        f"{ICONS['info']} Switch to Full to export figures and tables "
+        "for multiple trials."
     )
     row.button(
         "Switch to Full",

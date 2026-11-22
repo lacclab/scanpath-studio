@@ -378,6 +378,13 @@ class TestWhatTheOtherSurfacesSay:
         assert not any("Download setup file" in c for c in caveats)
         _query, caveats = url_state._build_share_query("Mine")
         assert any("Download setup file" in c for c in caveats)
+        fake.session_state["_share_selection"] = {
+            "compare": {"source": "Zurich", "participant_id": "p", "trial_id": "t"}
+        }
+        _query, caveats = url_state._build_share_query("Bundled demo")
+        (note,) = caveats
+        assert "MultiplEYE session set" in note
+        assert "setup file" not in note
 
     def test_edit_dataset_offers_no_setup_file_for_a_session_set(
         self, monkeypatch, session_set
@@ -397,7 +404,9 @@ class TestWhatTheOtherSurfacesSay:
         assert any(b.key == "remap_apply_Zurich demo" for b in at.button)
         downloads = [d.proto.id for d in at.get("download_button")]
         assert not any("remap_setup_download" in d for d in downloads)
-        assert any("read from a MultiplEYE session set" in c.value for c in at.caption)
+        assert any(
+            "created from a MultiplEYE session set" in c.value for c in at.caption
+        )
 
     def test_the_snippet_says_what_the_loader_cannot_replay(self):
         uploaded = cs.upload_source(

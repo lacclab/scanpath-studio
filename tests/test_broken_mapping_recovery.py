@@ -478,12 +478,12 @@ def test_the_scanpath_view_says_when_the_data_checks_fail_badly():
     """Duration mapped to the word labels: every fixation reads as 0 ms and
     the figure still draws. The Scanpath view says so and links the checks."""
     at = _boot()
-    assert not any("fails the data checks" in w.value for w in at.warning)
+    assert not any("Data checks found problems" in w.value for w in at.warning)
 
     at = _remap(at, {"col_map_fix_duration": "CURRENT_FIX_INTEREST_AREA_LABEL"})
 
     assert not at.exception
-    (notice,) = [w.value for w in at.warning if "fails the data checks" in w.value]
+    (notice,) = [w.value for w in at.warning if "Data checks found problems" in w.value]
     assert "**Fixations lasting 0 ms or less**: 3,199 of 3,209 fixation rows." in (
         notice
     )

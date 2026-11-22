@@ -41,6 +41,7 @@ from time import perf_counter
 
 import pandas as pd
 
+from . import chart_axes
 from .aggregation import reader_summary_table, trial_summary_table
 from .citation import CORPORA, CREDIT_LINE, cite, corpus_for, software_apa
 from .column_names import (
@@ -572,8 +573,7 @@ def pattern_fields(
     sanitizes them, while titles and captions want them readable.
 
     **``dataset_name`` arrives as an argument, never read from here.** The app
-    knows it as ``data_source_choice`` (that key *is* the picker's label, and a
-    rename re-keys it), but this function is pure and also runs headless under
+    supplies the label shown in its picker. This function also runs headless under
     ``api.save_figure_layers`` and ``cli render``, where there is no session at
     all. Each caller supplies it.
 
@@ -1313,7 +1313,7 @@ def _render_scope_picker(
         options=list(options_map),
         index=default_index,
         key=f"{key_prefix}_scope",
-        # The stored value stays "All"; only what the radio shows says more.
+        persist_state="session",  # The stored value stays "All"; only what the radio shows says more.
         format_func=lambda label: (
             "All trials, ignoring filters" if label == "All" else label
         ),
@@ -1348,6 +1348,7 @@ def _render_scope_picker(
                 "Participant",
                 options=participants,
                 key=f"{key_prefix}_scope_pid",
+                persist_state="session",
             )
             trials_for_pid = (
                 active.loc[
@@ -1363,6 +1364,7 @@ def _render_scope_picker(
                 "Trial",
                 options=sorted(trials_for_pid),
                 key=f"{key_prefix}_scope_trial",
+                persist_state="session",
             )
     elif scope == "participant" and not active.empty:
         participants = sorted(active["participant_id"].dropna().astype(str).unique())
@@ -1372,6 +1374,7 @@ def _render_scope_picker(
             "Participant",
             options=participants,
             key=f"{key_prefix}_scope_pid",
+            persist_state="session",
         )
     elif scope == "text" and not active.empty:
         if text_col is None:
@@ -1384,6 +1387,7 @@ def _render_scope_picker(
                 "Text",
                 options=texts,
                 key=f"{key_prefix}_scope_text",
+                persist_state="session",
             )
 
     # Close the Scope section with a live count of what will be exported.
@@ -1560,7 +1564,13 @@ def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
 
     def _pattern_input(label: str, default: str, key: str, help_text: str) -> str:
         value = panel_field(
-            st, "text_input", label, value=default, key=key, help=help_text
+            st,
+            "text_input",
+            label,
+            value=default,
+            key=key,
+            help=help_text,
+            persist_state="session",
         )
         error = pattern_error(value, fields) or path_structure_error(value)
         if error:
@@ -1654,9 +1664,12 @@ def render_export_options(
                 selection_mode="multi",
                 default=["PDF"],
                 key=f"{key_prefix}_figfmts",
-                help="PDF and SVG are vector, PNG is raster, and HTML is "
-                "interactive. PDF, SVG and PNG need Chrome, Chromium or Edge; "
-                "HTML needs no browser.",
+                persist_state="session",
+                help=(
+                    "PDF and SVG are vector images, PNG is a pixel image, and HTML is "
+                    "interactive. Creating PDF, SVG or PNG files requires Chrome, Chromium or"
+                    " Edge. HTML needs no additional browser installation."
+                ),
             )
             or []
         )
@@ -1674,9 +1687,11 @@ def render_export_options(
                 value=False,
                 key=f"{key_prefix}_html_self_contained",
                 persist_state="session",
-                help="Tick to make the bundle's HTML figures open offline. Each "
-                "then includes the Plotly library, about 4.8 MB more. Unticked, "
-                "they load it from cdn.plot.ly when opened.",
+                help=(
+                    "Include the plotting library so the bundle's HTML figures open offline "
+                    "(adds about 4.8 MB per figure). Otherwise, an internet connection is "
+                    "needed when you open them."
+                ),
             )
         )
         # The bundle's static figures need a browser on the server,
@@ -1697,6 +1712,7 @@ def render_export_options(
                 value=2,
                 width=140,
                 key=f"{key_prefix}_scale",
+                persist_state="session",
                 help="Higher values give sharper images and larger files.",
             )
         else:
@@ -1710,6 +1726,7 @@ def render_export_options(
             "Layers as separate files",
             value=False,
             key=f"{key_prefix}_layers",
+            persist_state="session",
             help="Export each visual layer as a separate file.",
         )
         # Layers are static vectors/rasters — HTML can't be split. When no
@@ -1727,6 +1744,7 @@ def render_export_options(
             "Settings file (JSON)",
             value=True,
             key=f"{key_prefix}_cfg",
+            persist_state="session",
             help="Include the figure's settings file.",
         )
         include_annotations = panel_field(
@@ -1735,6 +1753,7 @@ def render_export_options(
             "Annotations (JSON)",
             value=False,
             key=f"{key_prefix}_annotations",
+            persist_state="session",
             help="Include the exported trials' favorites, tags and notes as "
             "annotations.json. You can import it on "
             f"{ICONS['view_data']} Data Management → Annotations.",
@@ -1755,9 +1774,11 @@ def render_export_options(
                 selection_mode="multi",
                 default=[],
                 key=f"{key_prefix}_tabular",
-                help="Choose the data tables to include. Word measures are the "
-                "reading measures that came with the dataset; the app computes "
-                "none.",
+                persist_state="session",
+                help=(
+                    "Choose the data tables to include. Word measures are the reading "
+                    "measures provided in your dataset; the app does not compute them."
+                ),
             )
             or []
         )
@@ -1780,6 +1801,7 @@ def render_export_options(
                     }[value],
                     default="csv",
                     key=f"{key_prefix}_fmt",
+                    persist_state="session",
                 )
                 or "csv"
             )
@@ -1789,6 +1811,7 @@ def render_export_options(
                 "Combine all trials into one file per table",
                 value=False,
                 key=f"{key_prefix}_combine",
+                persist_state="session",
                 help="Write each table once under aggregate/, with all exported "
                 "trials in it, instead of one file per trial.",
             )
@@ -1802,9 +1825,11 @@ def render_export_options(
         path_pattern = _render_naming_options(st, combos, key_prefix)
         if title_pattern or caption_pattern:
             st.caption(
-                "The figures use the title and caption set on the Scanpath rail's "
+                "The figures use the title and caption set in Plot controls under "
                 f"**{ICONS['figure']} Figure & canvas** → *Title* / *Caption*."
             )
+
+    from .controls import current_dataset_name
 
     return ExportOptions(
         include_png=include_png,
@@ -1827,7 +1852,7 @@ def render_export_options(
         caption_pattern=caption_pattern,
         # This panel only runs inside the app, so the picker's label is
         # available; `pattern_fields` itself stays session-free.
-        dataset_name=_session_dataset_name(),
+        dataset_name=current_dataset_name(),
         metadata_fields=metadata_fields,
         trial_metadata_fields=trial_metadata_fields,
         text_metadata_fields=text_metadata_fields,
@@ -1861,6 +1886,7 @@ def _render_screen_picker(
             "Screens",
             options=screen_options,
             key=key,
+            persist_state="session",
             placeholder="All screens",
             help="Export only these screens of each trial. Leave empty for all "
             "screens. Trials that show none of the picked screens are left out.",
@@ -1868,21 +1894,6 @@ def _render_screen_picker(
         or []
     )
     return tuple(picked) if picked else None
-
-
-def _session_dataset_name() -> str:
-    """The dataset picker's label, for the options UI only.
-
-    Guarded because `export` is imported headless by `api` and `cli`, where
-    there is no session; the value only ever reaches `ExportOptions`, never
-    `pattern_fields`, which takes it as an argument by design.
-    """
-    import streamlit as st
-
-    try:
-        return str(st.session_state.get("data_source_choice") or "")
-    except Exception:
-        return ""
 
 
 def _scope_frame(
@@ -2698,7 +2709,7 @@ def bulk_export(
         row["canonical"]: row["column"] for row in written.get("words", [])
     }
 
-    corpus = corpus_for(options.dataset_name)
+    corpus = corpus_for(settings.get("data_source") or options.dataset_name)
     readme_lines = [
         "# Bulk export",
         f"Generated: {_local_stamp()}",
@@ -2883,6 +2894,8 @@ def bulk_export(
             # miss rows the view finds.
             trial_words = extract_trial(words, participant, trial)
             trial_fix = extract_trial(fixations, participant, trial)
+            if chart_axes.ELAPSED in (x_field, y_field):
+                trial_fix = chart_axes.with_origin(trial_fix)
             trial_raw_gaze = (
                 extract_trial(raw_gaze, participant, trial)
                 if raw_gaze is not None and not raw_gaze.empty
@@ -2948,7 +2961,7 @@ def bulk_export(
                 # Never retry an app-refused server path in the builder.
                 unit_settings["show_stimulus_image"] = False
             reasons = illustration_reasons(
-                unit_settings,
+                {**unit_settings, "x_field": x_field, "y_field": y_field},
                 data_source=settings.get("data_source"),
                 synthetic=bool(settings.get("synthetic_source")),
                 static=True,

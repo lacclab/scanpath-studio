@@ -3,8 +3,7 @@
 Everything from the upload-table reading UI through the wizard's parts (name →
 upload and map each table → recording setup → stimulus images → add) and the
 MultiplEYE format, which reads a session set from a folder or from uploaded
-files. ``app.py`` drives this from ``resolve_data_source`` /
-``main`` and re-exports a few helpers for tests.
+files. The app opens the wizard from Data Management.
 
 A handful of data-IO / normalization helpers (``_read_uploaded_frame``,
 ``_normalize_pair``, ``_stash_active_mapping``, ``_render_unmapped_view``) stay in
@@ -25,6 +24,7 @@ import pandas as pd
 import streamlit as st
 
 from . import app, wizard_shell
+from .build_info import build_info
 from .column_names import (
     ColumnNames,
     for_tables,
@@ -42,7 +42,6 @@ from .constants import (
     DEMO_CHOICE,
     FONT_FAMILY,
     ICONS,
-    SETUP_OVERRIDE_FOR_KEY,
     TRIAL_IDENTITY_CHECK_KEY,
     WIZARD_LEAVE_KEY,
     WORD_KEY,
@@ -100,7 +99,7 @@ from .data import (
     propose_raw_gaze_schema,
     propose_word_schema,
     source_file_regex_collisions,
-    split_source_file,
+    split_named_columns,
     stamp_source,
     text_word_id_issues,
     trial_id_series,
@@ -112,6 +111,7 @@ from .data import (
     word_ids_set_aside,
     words_with_several_boxes,
 )
+from .dataset_identity import dataset_share_id, forget_dataset_identity
 from .experimental_setup import (
     FONT_CHOICES,
     FONT_PT_RANGE,
@@ -131,10 +131,14 @@ from .experimental_setup import (
 )
 from .fields import row_label, switch, tooltip
 from .menu import view_label
-from .persistence import is_loopback_url, persistence_enabled, rename_cached_dataset
-from .session_keys import COMPARE_SOURCE_STATE_KEY
+from .metadata_editor import (
+    commit_deferred_metadata,
+    render_participant_metadata_section,
+    render_text_metadata_section,
+    render_trial_metadata_section,
+)
+from .persistence import is_loopback_url, persistence_enabled
 from .styles import mapping_menu_css
-from .tabs import _collect_column_mapping
 from .tour import (
     maybe_show_wizard_guide,
     render_spotlight_wizard_guide,
@@ -259,79 +263,59 @@ def _default_dataset_name() -> str:
     return f"Dataset {n}"
 
 
+def _occupied_dataset_tokens() -> set[str]:
+    """Include held-back cache entries and owners of detached annotations or metadata."""
+    import scanpath_studio.annotations as annotations_mod
+
+    from . import metadata
+    from .dataset_identity import DATASET_IDS_KEY
+    from .persistence import failed_datasets
+
+    session = st.session_state
+    tokens = set(session.get("_datasets") or {}) | set(failed_datasets(session))
+    tokens.update(session.get(app.DATASET_ALIASES_KEY) or {})
+    tokens.update(session.get(DATASET_IDS_KEY) or {})
+    tokens.update(annotations_mod.dataset_names(session))
+    tokens.update(session.get(metadata.DATASET_STORE_KEY) or {})
+    if owner := session.get(metadata.OWNER_KEY):
+        tokens.add(owner)
+    return tokens
+
+
 def _safe_dataset_name(name: str | None, *, exclude: str | None = None) -> str:
-    """A non-empty dataset name that collides with neither a built-in source label
-    nor an already-stored dataset (suffixed ``(2)``, ``(3)``… rather than silently
-    overwriting an existing entry's frames).
-
-    Built-in labels are every token the picker can list
-    (``app.reserved_source_names`` — the demo, the samples, the server bundles
-    and every public corpus): a user dataset shadowing one gets a duplicate
-    option and hijacks the built-in's load branch. A name that still
-    holds another dataset's annotation store counts as taken too, so a new or
-    renamed dataset never inherits annotations that are not its own.
-
-    ``exclude`` drops one stored name from the collision check — a rename
-    must not read the dataset being renamed as a clash with itself and turn
-    "My corpus" into "My corpus (2)" on a capitalisation fix."""
-    import scanpath_studio.annotations as _annotations
-
+    """Choose a unique display name, including labels held by unavailable datasets."""
     # The fields stop typing at the limit; a name from a setup file is cut to it.
     name = (name or "").strip()[:DATASET_NAME_MAX_CHARS].rstrip()
     name = name or _default_dataset_name()
     if name in app.reserved_source_names():
         name = f"{name} (uploaded)"
+    aliases = st.session_state.get(app.DATASET_ALIASES_KEY) or {}
     existing = {
-        key: value
-        for key, value in st.session_state.get("_datasets", {}).items()
-        if key != exclude
+        str(aliases.get(key) or key).casefold()
+        for key in _occupied_dataset_tokens()
+        if key != exclude and key is not None
     }
-    existing.update(
-        dict.fromkeys(_annotations.dataset_names(st.session_state) - {exclude} - {None})
-    )
-    if name in existing:
-        base, n = name, 2
-        while f"{base} ({n})" in existing:
-            n += 1
-        name = f"{base} ({n})"
+    base, n = name, 2
+    while name.casefold() in existing:
+        suffix = f" ({n})"
+        name = base[: DATASET_NAME_MAX_CHARS - len(suffix)].rstrip() + suffix
+        n += 1
     return name
 
 
-def _wizard_finalize_metadata_pools(payload: dict) -> tuple:
-    """The just-finalized dataset's own participant/trial/text pools.
+def _new_dataset_token(label: str) -> str:
+    """Allocate an immutable store key, including when a rename freed this label."""
+    from uuid import uuid4
 
-    Unlike ``_wizard_reader_ids``/``_wizard_trial_combos``/
-    ``_wizard_text_ids`` (which read the *raw*, pre-normalization frames,
-    because those run live while mapping is still being worked out), this
-    reads the *normalized* ``words``/``fixations`` already in ``payload`` —
-    the canonical ``participant_id``/``trial_id``/``text_id`` columns are
-    exactly what the real dataset will carry, so there is no re-deriving to
-    do. Called once, from ``_finalize_wizard_dataset``.
-    """
-    words = payload.get("words")
-    fixations = payload.get("fixations")
-    combo_frames = [
-        frame[["participant_id", "trial_id"]]
-        for frame in (fixations, words)
-        if frame is not None and not frame.empty and "participant_id" in frame.columns
-    ]
-    combos = (
-        pd.concat(combo_frames, ignore_index=True).drop_duplicates()
-        if combo_frames
-        else pd.DataFrame(columns=["participant_id", "trial_id"])
-    )
-    participants = sorted(combos["participant_id"].dropna().astype(str).unique())
-    text_series = [
-        frame["text_id"]
-        for frame in (fixations, words)
-        if frame is not None and not frame.empty and "text_id" in frame.columns
-    ]
-    texts = (
-        sorted(pd.concat(text_series).dropna().astype(str).unique())
-        if text_series
-        else []
-    )
-    return participants, combos, texts
+    used = _occupied_dataset_tokens()
+    if label not in used:
+        return label
+    token = f"upload-{uuid4().hex}"
+    st.session_state[app.DATASET_ALIASES_KEY] = {
+        **(st.session_state.get(app.DATASET_ALIASES_KEY) or {}),
+        token: label,
+    }
+    return token
 
 
 def _source_recipe(
@@ -399,11 +383,10 @@ def _finalize_wizard_dataset() -> None:
     # this dataset is being assembled — do it now, against the
     # pools this dataset actually ends up with. No UI here: a callback runs
     # before the widgets that would host it exist for this run.
-    from scanpath_studio.tabs import commit_deferred_metadata
-
-    participants, combos, texts = _wizard_finalize_metadata_pools(payload)
-    commit_deferred_metadata(participants, combos, texts)
-    ds_name = _safe_dataset_name(st.session_state.get("wizard_dataset_name"))
+    commit_deferred_metadata(payload)
+    ds_name = _new_dataset_token(
+        _safe_dataset_name(st.session_state.get("wizard_dataset_name"))
+    )
     # The sentence the 🗂️ Data page shows under its name. Kept
     # beside the store, not in its entry (see `DATASET_DESCRIPTIONS_KEY`).
     if description := str(
@@ -422,6 +405,7 @@ def _finalize_wizard_dataset() -> None:
         )
     store = st.session_state.setdefault("_datasets", {})
     store[ds_name] = payload
+    dataset_share_id(st.session_state, ds_name)
     # Its recording setup is applied when it opens, on the next run, as every
     # added dataset's is (`app.seed_canvas_state`), and leaving it puts back
     # what the figure held before. What that is excludes the answers this
@@ -499,6 +483,7 @@ def _remove_dataset(name: str) -> None:
     annotations_mod.forget_dataset(st.session_state, name)
     store = st.session_state.get("_datasets", {})
     store.pop(name, None)
+    forget_dataset_identity(st.session_state, name)
     # And its description, so a new dataset of that name starts without one.
     descriptions = dict(st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {})
     if descriptions.pop(name, None) is not None:
@@ -516,66 +501,18 @@ def _remove_dataset(name: str) -> None:
     app.clear_computation_cache()
 
 
-def rename_dataset(old: str, new: str) -> str | None:
-    """Rename a stored dataset. Returns the name it actually took.
-
-    The name is the **key** into the ``_datasets`` store, so a rename is a re-key,
-    and every other holder of that string has to move with it: the canonical
-    ``data_source_choice`` (through the pre-widget ``_pending_source_choice`` seam,
-    like `_remove_dataset`'s fallback — assigning the widget key inline is
-    unreliable in a browser), the wizard's ``_prev_source`` return address, and
-    ``cmp_dataset`` when the comparison draws scanpath B from it. The recovery
-    cache follows in :func:`persistence.rename_cached_dataset`, which re-keys its
-    manifest rather than re-encoding the Parquet files.
-
-    Returns ``None`` when there is nothing to rename (unknown dataset, or the new
-    name resolves to the one it already has). The store is rebuilt in order rather
-    than re-inserted, so the renamed dataset keeps its place in the source picker.
-    """
-    store = st.session_state.get("_datasets", {})
-    if old not in store:
+def rename_dataset(token: str, requested: str) -> str | None:
+    """Change an upload's display name. Its store key stays valid across restarts."""
+    if token not in (st.session_state.get("_datasets") or {}):
         return None
-    name = _safe_dataset_name(new, exclude=old)
-    if name == old:
+    label = _safe_dataset_name(requested, exclude=token)
+    if label == app._dataset_display_name(token):
         return None
-    # The annotations move first, and refuse a name that already
-    # holds a store. `_safe_dataset_name` never picks one, so this is a guard:
-    # if it ever did, renaming the frames without the annotations would strand
-    # them under the old name.
-    import scanpath_studio.annotations as _annotations
-
-    if not _annotations.rename_dataset(st.session_state, old, name):
-        return None
-    st.session_state["_datasets"] = {
-        (name if key == old else key): value for key, value in store.items()
+    st.session_state[app.DATASET_ALIASES_KEY] = {
+        **(st.session_state.get(app.DATASET_ALIASES_KEY) or {}),
+        token: label,
     }
-    if st.session_state.get("data_source_choice") == old:
-        st.session_state["_pending_source_choice"] = name
-    if st.session_state.get("_prev_source") == old:
-        st.session_state["_prev_source"] = name
-    if st.session_state.get(COMPARE_SOURCE_STATE_KEY) == old:
-        st.session_state[COMPARE_SOURCE_STATE_KEY] = name
-    # The figure holds its setup under its name: renamed, it is still the
-    # same visit, so a value tuned on the rail is not reset.
-    if st.session_state.get(SETUP_OVERRIDE_FOR_KEY) == old:
-        st.session_state[SETUP_OVERRIDE_FOR_KEY] = name
-    # And its description.
-    descriptions = dict(st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {})
-    if old in descriptions:
-        descriptions[name] = descriptions.pop(old)
-        st.session_state[DATASET_DESCRIPTIONS_KEY] = descriptions
-    # And its stimulus-image folder.
-    images = dict(st.session_state.get(DATASET_STIMULUS_IMAGES_KEY) or {})
-    if old in images:
-        images[name] = images.pop(old)
-        st.session_state[DATASET_STIMULUS_IMAGES_KEY] = images
-    # And its metadata tables, which are keyed by the name too (the
-    # annotations moved above).
-    from scanpath_studio import metadata as _metadata
-
-    _metadata.rename_dataset(st.session_state, old, name)
-    rename_cached_dataset(st.session_state, old, name)
-    return name
+    return label
 
 
 def _render_leave_prompt(host) -> None:
@@ -1197,27 +1134,6 @@ def _row_note(block, table: str, prefix: str):
 _DERIVE_LINE_W = (0.14, 0.16, 0.15, 0.24, 0.09, 0.11, 0.11)
 
 
-def _next_available_names(existing: set, base: str, count: int) -> list:
-    """The next ``count`` names ``<base>_<n>`` not already in ``existing``,
-    marking each as claimed as it is picked.
-
-    Splitting the same column a second time then continues past whatever the
-    first split already claimed (``source_file_7``, not another
-    ``source_file_1``) instead of colliding with — and silently
-    overwriting — it. ``existing`` is mutated in place so a caller reusing it
-    across several lines against the same table keeps accumulating names.
-    """
-    names = []
-    n = 1
-    while len(names) < count:
-        candidate = f"{base}_{n}"
-        if candidate not in existing:
-            names.append(candidate)
-            existing.add(candidate)
-        n += 1
-    return names
-
-
 #: The last derivation each Apply line made, per table: what it was made from
 #: and the frame it gave. A derivation is a pure function of its input frame and
 #: its settings, and the add screen reruns on every click — so without this a
@@ -1253,7 +1169,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
     upload, not one shared value), so a line derives from exactly the one
     table named, never all three at once. Two modes per line: split into positional
     ``<column>_1``/``<column>_2``/… columns on a delimiter (collision-safe —
-    see :func:`_next_available_names`), or extract *named groups* with a
+    see :func:`split_named_columns`), or extract *named groups* with a
     regex (robust to variable-length parts, e.g. a stimulus name whose length
     varies). ➕ **Another** (beside Apply, on the first line) adds another
     mapping line — the same Table/Column/How/pattern/Lowercase controls, no
@@ -1275,12 +1191,11 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         "Derive columns from text",
         key="wizard_filename_split",
         help=(
-            "Use this when an id, such as a session or stimulus, appears only "
-            "inside a text value like the filename. Pick a table and one of its "
-            "columns (by default the uploaded filename, `source_file`). Then "
-            "split the text on a delimiter, or pull parts out with named regex "
-            "groups. The new columns can be mapped as ids below. "
-            f"{ICONS['add']} Add line derives from a second column."
+            "Extract IDs from filenames or another text column. Choose a table "
+            "and column, then split the values using a delimiter or a regular "
+            "expression with named groups. Click Apply to create the columns, "
+            "then select them in the mappings below. "
+            f"Use {ICONS['add']} Add line to extract from another column."
         ),
     )
     if not enabled:
@@ -1333,7 +1248,7 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             table_options,
             key=table_key,
             label_visibility="collapsed",
-            help="The uploaded table to derive from. Its columns are offered next.",
+            help="Choose the table containing the text you want to extract from.",
         )
         table_frame = frames[selected_table]
         table_columns = (
@@ -1352,15 +1267,15 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
             table_columns,
             key=column_key,
             label_visibility="collapsed",
-            help="The column to derive from. Defaults to the filename "
-            "(`source_file`); pick another column if it holds the id as text.",
+            help="Choose the column containing the IDs. The default, "
+            "source_file, contains the uploaded filename.",
         )
         mode = mode_col.selectbox(
             "How",
             ["Split on a delimiter", "Extract with a regex"],
             key=mode_key,
             label_visibility="collapsed",
-            help="How to pull columns out of the chosen column's text.",
+            help="Choose how to extract values from the text.",
         )
         pattern = ""
         lower = False
@@ -1417,8 +1332,8 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         f"{ICONS['add']} Add line",
         key="wizard_filename_another",
         width="stretch",
-        help="Add another line, to derive from a second column or table, or "
-        "from the same column a second way.",
+        help="Extract values from another column or table, or use another "
+        "pattern on the same column.",
     ):
         # `line_count` was already read (and the lines above already drawn
         # with it) before this button was evaluated, so raising it here alone
@@ -1434,7 +1349,8 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
         disabled=any(
             d["mode"] == "Extract with a regex" and not d["pattern"] for d in drafts
         ),
-        help="Derive the columns above and make them available to map below.",
+        help="Create the columns from these patterns, then choose them in the "
+        "column mappings below.",
     )
     if apply_clicked:
         st.session_state[_FILENAME_DERIVE_APPLIED_KEY] = drafts
@@ -1485,15 +1401,9 @@ def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
                 delimiter=config["delimiter"],
                 column=applied_column,
             ):
-                split = split_source_file(parent, delimiter=delimiter, column=column)
-                # `split_source_file` always names positionally
-                # (`file_part_N`) — rename to `<source column>_<n>` here, using
-                # the next names not already claimed in this table, rather than
-                # letting a second split of the same (or another) column
-                # collide with the first's `file_part_1`/`_2`/….
-                temp_cols = [c for c in split.columns if c not in parent.columns]
-                new_names = _next_available_names(set(existing), column, len(temp_cols))
-                derived = split.rename(columns=dict(zip(temp_cols, new_names)))
+                derived, new_names = split_named_columns(
+                    parent, column, delimiter, existing
+                )
                 # Named by what made it, so it is not re-hashed each rerun.
                 assign_derived(
                     derived,
@@ -1876,125 +1786,6 @@ def wide_frame_warning(n_extra_fields: int, n_rows: int) -> str | None:
     )
 
 
-def _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema) -> list:
-    """The reader ids the finished dataset will have, read from the raw tables.
-
-    The participant metadata table attaches in the wizard, **before** the
-    frames are normalized (normalization needs the keep-columns chosen there),
-    so the join report can't be built from `metadata.participant_ids`. The mapped
-    participant column is only *renamed* by `normalize_*` — its values are
-    untouched — so reading it off the raw frame gives the same id set the join
-    will see, which is what makes "no row for reader p7" trustworthy here.
-
-    Cached and **gated**, following `app._cached_participant_ids`: this is a
-    `.unique()` over the *raw* (unfiltered, un-normalized) frames, the largest
-    version there is, and the wizard reruns on every keystroke. Only the join
-    report consumes the list, so nothing is scanned until a
-    table is actually being attached.
-    """
-    from scanpath_studio import metadata as metadata_mod
-
-    if st.session_state.get(metadata_mod.RAW_SESSION_KEY) is None:
-        return []
-    found: set = set()
-    for frame, schema in ((raw_fix, fix_schema), (raw_words, word_schema)):
-        column = (schema or {}).get("participant")
-        if not column or frame is None or frame.empty or column not in frame.columns:
-            continue
-        found |= set(_wizard_reader_ids_cached(frame, column, frame_fingerprint(frame)))
-    return sorted(found)
-
-
-def _wizard_trial_combos(raw_words, word_schema, raw_fix, fix_schema):
-    """The ``(participant_id, trial_id)`` pairs the finished dataset will have.
-
-    The trial metadata table attaches in the wizard, **before** the frames are
-    normalized — so, exactly as :func:`_wizard_reader_ids` does one grain up,
-    the keys are read off the raw tables through the mapping the user has just
-    made. ``trial_id_series`` is what `normalize_*` itself uses to compose a
-    trial id, including the multi-column case, so the pairs here are the pairs
-    the join will really see.
-
-    An unmapped participant column yields an empty reader half rather than no
-    rows: the dataset has no reader identity, so a trial-keyed table still joins
-    and a reader-keyed one correctly matches nothing.
-
-    Gated on a table actually being attached, and cached per frame — this
-    walks the whole raw frame, and the wizard reruns on every keystroke.
-    """
-    from scanpath_studio import metadata as metadata_mod
-
-    empty = pd.DataFrame(columns=["participant_id", "trial_id"])
-    if st.session_state.get(metadata_mod.TRIAL_RAW_SESSION_KEY) is None:
-        return empty
-    parts = []
-    for frame, schema in ((raw_fix, fix_schema), (raw_words, word_schema)):
-        trial_mapping = (schema or {}).get("trial")
-        if not trial_mapping or frame is None or frame.empty:
-            continue
-        columns = trial_mapping_columns(trial_mapping)
-        if any(column not in frame.columns for column in columns):
-            continue
-        participant = (schema or {}).get("participant")
-        if participant and participant not in frame.columns:
-            participant = None
-        parts.append(
-            _wizard_trial_combos_cached(
-                frame,
-                tuple(columns),
-                participant,
-                frame_fingerprint(frame),
-            )
-        )
-    if not parts:
-        return empty
-    return pd.concat(parts, ignore_index=True).drop_duplicates()
-
-
-@st.cache_data(show_spinner=False)
-def _wizard_trial_combos_cached(_frame, columns: tuple, participant, fingerprint: str):
-    """Distinct ``(participant_id, trial_id)`` pairs in one raw frame."""
-    trial = trial_id_series(_frame, list(columns)).astype(str)
-    reader = (
-        _frame[participant].astype(str)
-        if participant
-        else pd.Series([""] * len(_frame), index=_frame.index)
-    )
-    out = pd.DataFrame({"participant_id": reader, "trial_id": trial})
-    return out.drop_duplicates().reset_index(drop=True)
-
-
-@st.cache_data(show_spinner=False)
-def _wizard_reader_ids_cached(_frame, column: str, fingerprint: str) -> list:
-    """Distinct reader ids in one raw frame's mapped participant column.
-
-    Underscore-prefixed frame + an explicit `frame_fingerprint` key, the house
-    convention — see `app._cached_participant_ids`.
-    """
-    return sorted({str(value) for value in _frame[column].dropna().unique()})
-
-
-def _wizard_text_ids(raw_words, word_schema, raw_fix, fix_schema) -> list:
-    """The text ids the finished dataset will have, read from the raw tables.
-
-    The third-grain sibling of :func:`_wizard_reader_ids` — same reasoning:
-    runs before normalization, so the join report is built off the raw
-    frames through the mapping the user has just made, gated on a text table
-    actually being attached, and cached per frame.
-    """
-    from scanpath_studio import metadata as metadata_mod
-
-    if st.session_state.get(metadata_mod.TEXT_RAW_SESSION_KEY) is None:
-        return []
-    found: set = set()
-    for frame, schema in ((raw_fix, fix_schema), (raw_words, word_schema)):
-        column = (schema or {}).get("text_id")
-        if not column or frame is None or frame.empty or column not in frame.columns:
-            continue
-        found |= set(_wizard_reader_ids_cached(frame, column, frame_fingerprint(frame)))
-    return sorted(found)
-
-
 def _row_body(host):
     """Indent to where the field-mapping pickers start (`_MAP_ROW_W`'s name
     column), for a row that has no name of its own — the "Extra fields to
@@ -2173,7 +1964,7 @@ def _dataset_setup_config(name: str) -> dict | None:
     choices = choices if isinstance(choices, dict) else {}
     setup = entry.get("setup")
     return {
-        "data_source": name,
+        "data_source": app._dataset_display_name(name),
         # An older stored upload with no `source_recipe` gets one rebuilt
         # from its stored mapping (`column_names.stored_source_recipe`).
         "column_mapping": _mapping_keys_from_schemas(
@@ -2390,7 +2181,9 @@ def _copy_dataset_setup() -> None:
     name = st.session_state.get(_COPY_FROM_KEY)
     config = _dataset_setup_config(name) if name else None
     if config is not None:
-        _apply_setup_config(config, source=str(name), kind="dataset")
+        _apply_setup_config(
+            config, source=app._dataset_display_name(name), kind="dataset"
+        )
 
 
 def _wizard_restore_config(host) -> None:
@@ -2418,7 +2211,10 @@ def _wizard_restore_config(host) -> None:
     try:
         config = json.loads(uploaded.getvalue().decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
-        host.warning("That file isn't a saved setup (not valid JSON).")
+        host.warning(
+            "This file could not be read as a setup file. Choose a JSON file saved "
+            "with Download setup file."
+        )
         return
     _setup_sections = (
         "data_source",
@@ -2430,7 +2226,10 @@ def _wizard_restore_config(host) -> None:
     )
     if not isinstance(config, dict) or not any(k in config for k in _setup_sections):
         # An unrelated JSON must not report "Restored" with nothing restored.
-        host.warning("That file holds no saved setup, so nothing was restored.")
+        host.warning(
+            "No saved setup was found in this file. Choose a file saved with Download"
+            " setup file."
+        )
         return
     _apply_setup_config(config, source=uploaded.name, kind="file")
     st.rerun()
@@ -2480,6 +2279,7 @@ def _render_start_from(host) -> None:
         row.selectbox(
             "Dataset to copy from",
             uploads,
+            format_func=app._dataset_display_name,
             key=_COPY_FROM_KEY,
             label_visibility="collapsed",
             width=260,
@@ -2600,6 +2400,21 @@ def _keep_and_filter_section() -> dict | None:
         "wizard_filter_by": filter_fields,
         "wizard_keep_extra": sorted({c for cols in by_table.values() for c in cols})
         or None,
+    }
+
+
+def _collect_column_mapping() -> dict:
+    """The column-mapping selections from session_state, for a setup file.
+
+    The upload boxes share the ``col_map_*`` prefix (``state_prefix="col_map_fix"``
+    etc.), so their ``file_uploader`` widgets land in this sweep too. Their value
+    is an ``UploadedFile`` (or list of them), which isn't JSON serializable and
+    isn't part of the column mapping — so the ``_upload`` widget keys are
+    excluded."""
+    return {
+        k: st.session_state[k]
+        for k in sorted(st.session_state.keys())
+        if isinstance(k, str) and k.startswith("col_map_") and not k.endswith("_upload")
     }
 
 
@@ -3032,7 +2847,9 @@ def _wizard_setup_step(
         )
         if not has_data:
             line.caption(
-                "Estimated from your data once a Fixations or Words table is in.",
+                (
+                    "An estimate will appear after you upload a Fixations or Words table."
+                ),
                 width="content",
             )
         else:
@@ -3354,10 +3171,10 @@ def _wizard_setup_step(
     if guessed:
         nudge.caption(
             f"{ICONS['warning']} **{' and '.join(guessed)}** "
-            + ("is" if len(guessed) == 1 else "are")
-            + " an estimate or a default. If you know the real "
+            + ("uses" if len(guessed) == 1 else "use")
+            + " an estimated or default value. If you know the recorded "
             + ("value" if len(guessed) == 1 else "values")
-            + ", choose *I know it*. Every figure is drawn with these values."
+            + ", choose *I know it*. These settings determine how figures are drawn."
             + (
                 " You can also add the dataset now and change them later."
                 if initial is None
@@ -3685,7 +3502,7 @@ def _multipleye_folder_field(host, active: bool) -> str:
         if chosen := app._pick_directory_dialog():
             st.session_state[f"{MULTIPLEYE_DIR_KEY}_picked"] = chosen
             st.rerun()
-        host.caption("No folder picker here. Type or paste the path.")
+        host.caption("Enter or paste the folder path.")
     resolved = app._resolve_data_dir(str(typed or ""))
     if resolved and resolved != str(typed).strip():
         host.caption(f"Full path: `{resolved}`")
@@ -4339,11 +4156,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 # page name ("Data guide") would read like one more wizard step
                 # on a row of wizard controls, which is the one thing it is not.
                 "More documentation ↗",
-                "https://lacclab.github.io/scanpath-studio/guides/loading-data/",
+                f"{build_info().docs_url}guides/loading-data/",
                 icon=ICONS["docs"],
                 type="tertiary",
-                help="What your export needs, how this wizard maps it, and the "
-                "recording setup it asks for.",
+                help=(
+                    "Learn which tables you can import, how to map their columns, and how to "
+                    "enter the recording setup."
+                ),
             )
         # The way out, on the row that stays on screen.
         #
@@ -4584,24 +4403,15 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # only the intro note.
     raw_fix, raw_words, raw_gaze = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-    def _render_metadata_uploads(word_schema, fix_schema) -> None:
+    def _render_metadata_uploads() -> None:
         """The participant, trial and text metadata tables: three more rows of
         the same "left = upload, right = mapping" format Fixations/AOI/Raw gaze
-        use above, under a small **Metadata** heading. `word_schema` /
-        `fix_schema` are `{}` pre-upload — there is nothing to derive a join
-        report from yet, which is also the correct answer — and the real
-        mapping once the identity pickers have resolved it. Only while
+        use above, under a small **Metadata** heading. Only while
         `active`: the collapsed *Data & mapping* review panel would otherwise
         build the same widget keys as the 🗂️ Data page's section.
         """
         if not active:
             return
-        from scanpath_studio.tabs import (
-            render_participant_metadata_section,
-            render_text_metadata_section,
-            render_trial_metadata_section,
-        )
-
         meta_host.markdown(
             '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
         )
@@ -4631,46 +4441,30 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
         from scanpath_studio import metadata as metadata_mod
 
-        def _meta_row(slug, renderer, ids):
+        def _meta_row(slug, renderer):
             block = meta_host.container(key=f"wiz_map_block_meta_{slug}")
             row = block.columns(_META_ROW_W, gap="small")
             # What the table is for, until one is attached.
             if not st.session_state.get(metadata_mod.upload_key(slug)):
                 row[1].caption(META_ROW_CAPTIONS[slug])
-            # `live_join=False` — there is no finished dataset to join
-            # against yet (the pools below are provisional, still shifting as
-            # identity mapping is worked out), so the wizard only collects the
-            # upload + id-column + keep-fields choices here. The real join
-            # runs once, in `_finalize_wizard_dataset`, against the dataset's
-            # own settled pools — see `tabs.commit_deferred_metadata`.
+            # The wizard matches metadata once, after normalization has settled
+            # composite IDs and the readings contributed by all three tables.
             renderer(
-                ids,
+                None,
                 host=row[1],
                 live_join=False,
                 upload_host=row[0].container(key=f"wiz_map_upload_meta_{slug}"),
             )
 
-        _meta_row(
-            "participant",
-            render_participant_metadata_section,
-            _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema),
-        )
+        _meta_row("participant", render_participant_metadata_section)
         meta_host.markdown(
             '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
         )
-        _meta_row(
-            "trial",
-            render_trial_metadata_section,
-            _wizard_trial_combos(raw_words, word_schema, raw_fix, fix_schema),
-        )
+        _meta_row("trial", render_trial_metadata_section)
         meta_host.markdown(
             '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
         )
-        _meta_row(
-            "text",
-            render_text_metadata_section,
-            _wizard_text_ids(raw_words, word_schema, raw_fix, fix_schema),
-        )
+        _meta_row("text", render_text_metadata_section)
 
     # === Data tables & column mapping: per-table upload + mapping rows ================
 
@@ -5194,7 +4988,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # others. Called down here, after the identity pickers have resolved the
     # real mapping, so the join report reads the up-to-date
     # schema rather than the `{}` an earlier call would have had to use.
-    _render_metadata_uploads(word_schema, fix_schema)
+    _render_metadata_uploads()
 
     # "Recording setup" is its own numbered part.
     s_setup = _part("setup")

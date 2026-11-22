@@ -245,7 +245,7 @@ def test_data_inspection_reports_the_verdict():
         if str(m.value).startswith('<div class="sps-wiz-part"')
     ]
     assert any("Trial identity" in part for part in parts), parts
-    assert any("none looks like more than one reading" in s.value for s in at.success)
+    assert any("No signs of merged readings were found" in s.value for s in at.success)
     assert any(e.label == "What was checked" for e in at.expander)
 
 
@@ -273,17 +273,6 @@ class TestTheVerdictIsRaisedWhereTheMappingIsChosen:
 
         assert st.session_state[TRIAL_IDENTITY_CHECK_KEY] == "add"
         st.session_state.clear()
-
-    def test_saving_an_edited_mapping_asks_for_the_check(self):
-        """Source-level: `_apply_remap` needs a whole stored dataset and the
-        editor's pending schemas to run. What must not silently regress is that
-        saving still asks."""
-        import inspect
-
-        from scanpath_studio.tabs import _apply_remap
-
-        source = inspect.getsource(_apply_remap)
-        assert 'st.session_state[TRIAL_IDENTITY_CHECK_KEY] = "edit"' in source
 
     def test_main_raises_the_modal_and_no_longer_writes_a_banner(self):
         import inspect

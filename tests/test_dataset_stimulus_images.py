@@ -317,8 +317,8 @@ class TestTheAddScreen:
         session["data_source_choice"] = "My corpus"
         app.set_dataset_stimulus_images("My corpus", "/imgs", "")
         wizard.rename_dataset("My corpus", "Pilot")
-        assert set(session[DATASET_STIMULUS_IMAGES_KEY]) == {"Pilot"}
-        wizard._remove_dataset("Pilot")
+        assert set(session[DATASET_STIMULUS_IMAGES_KEY]) == {"My corpus"}
+        wizard._remove_dataset("My corpus")
         assert session[DATASET_STIMULUS_IMAGES_KEY] == {}
 
 

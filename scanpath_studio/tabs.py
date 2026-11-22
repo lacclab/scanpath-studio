@@ -25,7 +25,7 @@ import pandas as pd
 import plotly.io as pio
 import streamlit as st
 
-from scanpath_studio import alignment, loading, progress, ui_mode
+from scanpath_studio import alignment, chart_axes, loading, progress, ui_mode
 from scanpath_studio import metadata as _metadata_mod
 from scanpath_studio.aggregation import (
     MEASURES,
@@ -127,9 +127,9 @@ from scanpath_studio.constants import (
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
-    DEFAULT_ORDER_LABEL_POSITION,
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
+    FIXATION_LABEL_OPTIONS,
     FOCUS_MAPPING_KEY,
     HIGHLIGHTED_TEXT_COLOR,
     ICONS,
@@ -199,7 +199,7 @@ from scanpath_studio.controls import (
     field_help,
     format_filter_item,
     has_active_trial_filters,
-    inline_field_label,
+    plot_popover_on_change,
     read_trial_filters,
     render_compare_filters,
     render_narrow_by,
@@ -228,14 +228,12 @@ from scanpath_studio.data import (
     drop_internal_columns,
     empty_fixations_frame,
     empty_words_frame,
-    explain_read_error,
     filter_to_keys,
     frame_cache,
     frame_fingerprint,
     harmonize_frames_reporting,
     has_explicit_trial_index,
     hashable_key,
-    header_only_error,
     identity_text_plan,
     normalize_fixations,
     normalize_raw_gaze,
@@ -243,7 +241,6 @@ from scanpath_studio.data import (
     propose_fix_schema,
     propose_raw_gaze_schema,
     propose_word_schema,
-    read_table,
     read_tables,
     remap_normalized_frame,
     repeat_bases,
@@ -302,6 +299,7 @@ from scanpath_studio.fields import (
     row_label,
     switch,
 )
+from scanpath_studio.figure_views import STATIC_COMPARISON_LAYER_STYLES
 from scanpath_studio.file_citation import png_text_chunks, stamp_html, svg_metadata
 from scanpath_studio.html_embed import embed_html_iframe, plotlyjs_script
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
@@ -1621,9 +1619,11 @@ def _render_html_files_choice() -> None:
         value=False,
         key=HTML_SELF_CONTAINED_KEY,
         persist_state="session",
-        help="Tick to make the HTML file open without an internet connection. "
-        "It then includes the Plotly library, about 4.8 MB more. Unticked, it "
-        "loads the library from cdn.plot.ly when opened.",
+        help=(
+            "Include the plotting library so this HTML file opens offline (adds about"
+            " 4.8 MB). Otherwise, an internet connection is needed when you open the "
+            "file."
+        ),
     )
 
 
@@ -1722,9 +1722,9 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
         horizontal=True,
         key="anim_export_format",
         help=(
-            "HTML keeps the interactive Play button and slider, and doesn't "
-            "need Chrome. GIF and MP4 are self-playing clips for slides and "
-            "talks, drawn with Chrome. MP4 files are far smaller than GIFs."
+            "HTML opens in your browser with interactive playback controls. GIF and "
+            "MP4 are clips for slides and talks; creating them requires Chrome, "
+            "Chromium or Edge. MP4 usually produces smaller files than GIF."
         ),
     )
 
@@ -1773,8 +1773,11 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
         value=1.0,
         format_func=lambda s: f"{s:g}×",
         key="anim_export_scale",
-        help="Render scale: 1× matches the on-screen size. Lower is smaller/faster; "
-        "higher is crisper/larger.",
+        help=(
+            "At 1×, the export matches the on-screen size. Lower values make smaller "
+            "files and export faster; higher values make sharper images and larger "
+            "files."
+        ),
     )
 
     max_frames = None
@@ -1906,7 +1909,9 @@ def _render_animation_export(replay: _ReplayView, *, file_stem: str) -> None:
         )
 
 
-def _fix_window_note(window_a, full_a, window_b=None, full_b=None) -> str:
+def _fix_window_note(
+    window_a, full_a, window_b=None, full_b=None, *, essentials=False
+) -> str:
     """Say so when an index window hides some of a trial's fixations.
 
     The window lives in the Filters & highlights popover, out of sight, so without
@@ -1930,7 +1935,8 @@ def _fix_window_note(window_a, full_a, window_b=None, full_b=None) -> str:
         what = f"Scanpath B shows {b}"
     else:
         what = f"Scanpath A shows {a}, and B shows {b}"
-    return f"{what}. Change it with **Index range** in Filters & highlights."
+    action = "Switch to Full to change it" if essentials else "Change it"
+    return f"{what}. {action} with **Index range** in Filters & highlights."
 
 
 def _slice_fix_range(fix: pd.DataFrame, fix_range) -> pd.DataFrame:
@@ -2055,11 +2061,10 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         ),
         duration_size_legend=viz_settings.get("duration_size_legend", True),
         legend_layout=viz_settings.get("legend_layout"),
-        order_font_size=viz_settings["order_font_size"],
-        order_font_color=viz_settings["order_font_color"],
-        order_label_position=viz_settings.get(
-            "order_label_position", DEFAULT_ORDER_LABEL_POSITION
-        ),
+        **{
+            name: viz_settings.get(name, option.default)
+            for name, option in FIXATION_LABEL_OPTIONS.items()
+        },
         **{
             key: viz_settings.get(key, default)
             for key, default in COLORBAR_DEFAULTS.items()
@@ -2703,7 +2708,7 @@ def _resolve_compare_source(
             title=f"Loading {_dataset_label(chosen)} for scanpath B",
             task_key=task_key,
             cancel=loading.Cancel(
-                f"Compare within {md_literal(_dataset_label(current_dataset_name()))}",
+                f"Compare within {md_literal(current_dataset_name())}",
                 _cancel_compare_source,
                 args=(task_key,),
             ),
@@ -2742,6 +2747,22 @@ def _render_compare_dataset_cell(
     """
     # Lazy, like every other `app` reach from this module: app imports tabs, so
     # a module-level import would close the cycle.
+    labels = {
+        token: _dataset_label(token)
+        if ready_by_name.get(token, True)
+        else f"{_dataset_label(token)} (needs setup)"
+        for token in names
+        if token != THIS_DATASET
+    }
+    same_label = "This dataset"
+    if same_label in labels.values():
+        same_label = "Same dataset as A"
+        index = 2
+        while same_label in labels.values():
+            same_label = f"Same dataset as A ({index})"
+            index += 1
+    labels[THIS_DATASET] = same_label
+
     host.selectbox(
         "Dataset B",
         options=names,
@@ -2754,23 +2775,11 @@ def _render_compare_dataset_cell(
         # Streamlit has no per-option disabling, so an unready corpus is marked
         # in the label and explains itself below once picked — offered but
         # honest, rather than absent and mysterious.
-        format_func=lambda name: (
-            _dataset_label(name)
-            if ready_by_name.get(name, True)
-            else f"{_dataset_label(name)} (needs setup)"
-        ),
+        format_func=labels.__getitem__,
         help="The dataset scanpath B comes from. A trial from another dataset is "
         "drawn on that dataset's screen.",
     )
-    widen_menu(
-        COMPARE_SOURCE_KEY,
-        [
-            _dataset_label(name)
-            if ready_by_name.get(name, True)
-            else f"{_dataset_label(name)} (needs setup)"
-            for name in names
-        ],
-    )
+    widen_menu(COMPARE_SOURCE_KEY, [labels[name] for name in names])
 
 
 def _compare_label_display(
@@ -2813,6 +2822,7 @@ def _render_compare_filters(host, source: SecondaryDataset) -> None:
     render_narrow_by(
         source.words,
         source.fixations,
+        source.raw_gaze,
         prefix=_COMPARE_FILTER_PREFIX,
         text_host=box,
         part_host=box,
@@ -2820,6 +2830,7 @@ def _render_compare_filters(host, source: SecondaryDataset) -> None:
     render_trial_filters(
         source.words,
         source.fixations,
+        source.raw_gaze,
         prefix=_COMPARE_FILTER_PREFIX,
         host=box,
         names=across_tables(source.column_names),
@@ -3592,8 +3603,8 @@ def _render_stimulus_field_picker(host, span_options, qa_options) -> None:
         return
     with host.popover(f"{ICONS['settings']} Fields", width="content"):
         st.caption(
-            "The columns this panel highlights and lists. They are picked by "
-            "column name; change them here if a pick is wrong or missing."
+            "Choose which columns to show in this panel. Columns are selected "
+            "automatically by name; add or remove them here."
         )
         if span_options:
             labeled(
@@ -3604,8 +3615,8 @@ def _render_stimulus_field_picker(host, span_options, qa_options) -> None:
                 format_func=_field_label,
                 key=_STIMULUS_SPAN_KEY,
                 persist_state="session",
-                help="Per-word true/false columns. Each selected one tints its "
-                "words in the stimulus text and gets a summary line below it.",
+                help="Choose true/false word columns. Each column highlights "
+                "its matching words in the text and adds a summary below.",
             )
         if qa_options:
             labeled(
@@ -4331,7 +4342,7 @@ def _build_studio_config(
         base_font_size=base_font_size,
         trial_raw_gaze=trial_raw_gaze,
         font_family=font_family,
-        data_source=data_source,
+        data_source=_dataset_label(data_source) if data_source else None,
         app_version=app_version,
         exported_at=exported_at,
         compare_styles=compare_styles,
@@ -4344,21 +4355,6 @@ def _build_studio_config(
         print_size=_print_size_setting(),
         raw_gaze_synthesized=bool(_synthesized_raw_gaze_note(data_source)),
     )
-
-
-def _collect_column_mapping() -> dict:
-    """The column-mapping selections from session_state, for a setup file.
-
-    The upload boxes share the ``col_map_*`` prefix (``state_prefix="col_map_fix"``
-    etc.), so their ``file_uploader`` widgets land in this sweep too. Their value
-    is an ``UploadedFile`` (or list of them), which isn't JSON serializable and
-    isn't part of the column mapping — so the ``_upload`` widget keys are
-    excluded."""
-    return {
-        k: st.session_state[k]
-        for k in sorted(st.session_state.keys())
-        if isinstance(k, str) and k.startswith("col_map_") and not k.endswith("_upload")
-    }
 
 
 def render_settings_file(
@@ -4669,7 +4665,9 @@ def _build_compare_meta(
             label_primary = (
                 f"{primary_dataset}{_COMPARE_DATASET_SEP}{selected_participant}"
             )
-        label_compare = f"{source.name}{_COMPARE_DATASET_SEP}{compare_participant}"
+        label_compare = (
+            f"{_dataset_label(source.name)}{_COMPARE_DATASET_SEP}{compare_participant}"
+        )
     elif str(selected_participant) != str(compare_participant):
         label_primary = str(selected_participant)
         label_compare = str(compare_participant)
@@ -5098,7 +5096,7 @@ def _shown_dataset_name(token: str | None = None) -> str:
     not the stored token — a renamed or public dataset reads the same."""
     from scanpath_studio.app import _dataset_display_name
 
-    return _dataset_display_name(token or current_dataset_name())
+    return _dataset_display_name(token) if token else current_dataset_name()
 
 
 def _compare_dataset_name(compare_meta: dict | None) -> str:
@@ -5225,15 +5223,7 @@ def _replay_style(style: dict | None) -> dict | None:
         k: v
         for k, v in style.items()
         if k not in COMPARE_FILTER_STYLE_KEYS
-        and k
-        not in (
-            "box_color",
-            "box_fill_color",
-            "box_line_opacity",
-            "box_fill_opacity",
-            "raw_gaze_color",
-            "heatmap_colorscale",
-        )
+        and k not in STATIC_COMPARISON_LAYER_STYLES
     }
 
 
@@ -5653,6 +5643,7 @@ def _render_export_panel(
         }
     )
     bulk_settings["data_source"] = st.session_state.get("data_source_choice")
+    bulk_settings["data_source_label"] = current_dataset_name()
     bulk_settings["synthetic_source"] = bulk_settings["data_source"] in (
         AUTHOR_CHOICE,
         MANUAL_SAMPLE_CHOICE,
@@ -5690,7 +5681,7 @@ def _render_export_panel(
     # shape would produce an identical signature and serve the *stale* cached
     # zip, with the pre-edit `metadata/participants.csv` inside it. The frame itself
     # rides on a private key the exporter reads and the signature ignores.
-    _attached = active_participant_metadata()
+    _attached = _metadata_mod.active()
     if _attached is not None and not _attached.frame.empty:
         bulk_settings["participant_metadata_fingerprint"] = frame_fingerprint(
             _attached.frame
@@ -5746,7 +5737,9 @@ def _render_export_panel(
 _CHIP_NEUTRAL_BG = "#EEF2F7"
 
 
-def _chip_value_and_uniqueness(col, trial_words, trial_fixations, participant):
+def _chip_value_and_uniqueness(
+    col, trial_words, trial_fixations, participant, trial_raw_gaze=None
+):
     """``(value, is_trial_level)`` for ``col`` in the trial.
 
     ``value`` is the first non-null (words first, then fixations);
@@ -5774,7 +5767,7 @@ def _chip_value_and_uniqueness(col, trial_words, trial_fixations, participant):
     # reader attribute is trivially constant within a trial, so it never earns
     # the ⚠️ "varies within this trial" flag. Checked *after* the frames, so a
     # real column of the same name always wins.
-    attached = active_participant_metadata()
+    attached = _metadata_mod.active()
     if attached is not None and participant is not None:
         value = attached.values_for(participant).get(col)
         if value is not None and not pd.isna(value):
@@ -5784,43 +5777,26 @@ def _chip_value_and_uniqueness(col, trial_words, trial_fixations, participant):
     # the warning either. The trial id comes off the frames rather than from an
     # argument: every caller already passes this trial's own rows, and the id is
     # on both of them.
-    from scanpath_studio import metadata as _md
-
-    attached_trials = _md.active_trials()
+    attached_trials = _metadata_mod.active_trials()
     if attached_trials is not None:
-        trial_id = _first_value("trial_id", trial_words, trial_fixations)
+        trial_id = _first_value(
+            "trial_id", trial_words, trial_fixations, trial_raw_gaze
+        )
         if trial_id is not None:
             value = attached_trials.values_for(participant, trial_id).get(col)
             if value is not None and not pd.isna(value):
                 return (value, True)
-    # And the attached *text* table, the third grain — without it a text
-    # field put in the chips would silently render nothing. A trial reads one
-    # text, so its value is trial-level too. The id is the one the trial
-    # filters' *By text* narrow (`_trial_text_id`), which is also what
-    # `combos["text_id"]` holds.
-    attached_texts = _md.active_texts()
-    if attached_texts is not None:
-        text_id = _trial_text_id(trial_words, trial_fixations)
+    # Resolve text fields by the same recording identity used by the join report.
+    attached_texts = _metadata_mod.active_texts()
+    if attached_texts is not None and col in attached_texts.names:
+        text_id = _metadata_mod.trial_text_id(
+            trial_fixations, trial_words, trial_raw_gaze
+        )
         if text_id is not None:
             value = attached_texts.values_for(text_id).get(col)
             if value is not None and not pd.isna(value):
                 return (value, True)
     return (None, True)
-
-
-def _trial_text_id(trial_words, trial_fixations):
-    """The trial's text id, as the text table is keyed.
-
-    Walks the columns in `controls._text_field_and_frame`'s order —
-    ``unique_text_id`` before ``text_id``, fixations before words — so a chip
-    reads the same id the *By text* filter and `utils.build_combo_options`
-    (whose ``text_id`` copies ``unique_text_id`` when there is one) resolve.
-    """
-    for field in ("unique_text_id", "text_id"):
-        value = _first_value(field, trial_fixations, trial_words)
-        if value is not None:
-            return value
-    return None
 
 
 def _first_value(col: str, *frames):
@@ -5930,7 +5906,7 @@ def _trial_chip_entries(
             )
             continue
         value, trial_level = _chip_value_and_uniqueness(
-            col, trial_words, trial_fixations, participant
+            col, trial_words, trial_fixations, participant, trial_raw_gaze
         )
         if value is None:
             continue
@@ -6421,6 +6397,11 @@ def render_single_trial_tab(
     parent_fixations = extract_trial(
         fixations_filtered, selected_participant, selected_trial
     )
+    if chart_axes.ELAPSED in (
+        st.session_state.get("global_x_field"),
+        st.session_state.get("global_y_field"),
+    ):
+        parent_fixations = chart_axes.with_origin(parent_fixations)
     parent_raw_gaze = pd.DataFrame()
     if raw_gaze is not None and not raw_gaze.empty:
         parent_raw_gaze = extract_trial(raw_gaze, selected_participant, selected_trial)
@@ -6591,6 +6572,7 @@ def render_single_trial_tab(
                         "Replay settings",
                         width="content",
                         key="split_mode_animate_popover",
+                        on_change=plot_popover_on_change(),
                         help="Replay settings. Playback controls appear above the plot.",
                     ),
                     _popover_rows("animate"),
@@ -6601,7 +6583,7 @@ def render_single_trial_tab(
                     playback_speed = _sub_row(
                         "Speed",
                         section="Replay",
-                        section_help="How the replay plays.",
+                        section_help="Playback speed, autoplay and duration.",
                         caption_help=_gated_help(
                             "Playback speed relative to the recorded fixation timings.",
                             anim_gate,
@@ -6822,6 +6804,7 @@ def render_single_trial_tab(
                         "Compare settings",  # named for screen readers, as Animate's
                         width="content",
                         key="split_mode_compare_popover",
+                        on_change=plot_popover_on_change(),
                         help="Compare settings. "
                         + (
                             "Replay scanpath B in step with A."
@@ -7035,6 +7018,7 @@ def render_single_trial_tab(
             # The selected trial's fixations size the fixation-index window
             # slider (its max is this trial's fixation count).
             fix_range_fixations=trial_fixations,
+            trial_samples=trial_raw_gaze,
             # The canvas / text panel (monitor geometry, fonts, text colour,
             # background) renders inside the rail's group order. `app.main`
             # passes it in already bound to the frames + data source, since
@@ -7057,11 +7041,8 @@ def render_single_trial_tab(
         # resets, rather than sharing the heading row. It is last in creation
         # order, so it lands at the foot of the rail's own scroll area.
         # Full-only: Essentials' View tiles are its way back to a preset.
-        with (
-            ui_mode.advanced_only(rail, "rail_reset"),
-            st.container(key="plot_reset_footer"),
-        ):
-            render_viz_reset(st)
+        with ui_mode.advanced_only(rail, "rail_reset"):
+            plot_footer = st.container(key="plot_reset_footer")
 
     # Essentials hides the controls that Full sets, but they keep shaping the
     # figure; say which are in play. The container is drawn on every run, in
@@ -7074,6 +7055,9 @@ def render_single_trial_tab(
             sorted_=trial_sort_is_set("single"),
             comparing=bool(compare_enabled),
             custom_view=st.session_state.get(SIMPLE_VIEW_LIT_KEY, "") is None,
+            axes=(viz_settings.get("x_field", "x"), viz_settings.get("y_field", "y"))
+            if not (animate or compare_enabled)
+            else ("x", "y"),
         )
         if ui_mode.is_simple()
         else [],
@@ -7159,7 +7143,12 @@ def render_single_trial_tab(
         compare_fixations_pool = fixations_filtered
 
     global_raw_toggle = bool(viz_settings.get("show_raw_gaze"))
-    effective_show_raw_gaze = bool(global_raw_toggle and trial_has_raw_gaze)
+    fields = (viz_settings.get("x_field", "x"), viz_settings.get("y_field", "y"))
+    if animate or compare_enabled:
+        fields = ("x", "y")
+    effective_show_raw_gaze = global_raw_toggle and chart_axes.raw_axes_available(
+        fields, trial_raw_gaze
+    )
     figure_settings = _build_figure_settings(viz_settings, effective_show_raw_gaze)
     figure_raw_gaze = trial_raw_gaze if trial_has_raw_gaze else None
     figure_settings.update(
@@ -7196,7 +7185,7 @@ def render_single_trial_tab(
         selected_compare_screen,
         source=compare_source,
         # A's corpus, so a cross-dataset pair names both sides.
-        primary_dataset=str(st.session_state.get("data_source_choice") or ""),
+        primary_dataset=current_dataset_name(),
         # Only the static comparison draws B's samples, so nothing is cut for
         # them while the switch is off or the replay runs. The *unfiltered*
         # samples: B's pool ignores A's filters, so A's `raw_gaze` can lack B.
@@ -7229,10 +7218,19 @@ def render_single_trial_tab(
     share_selection = st.session_state.get("_share_selection")
     if isinstance(share_selection, dict):
         if comparing and compare_meta is not None:
+            from .dataset_identity import dataset_share_id
+
+            source = compare_meta.get("dataset")
+            source_id = dataset_share_id(st.session_state, source)
             share_selection["compare"] = {
                 "participant_id": compare_meta["raw_participant"],
                 "trial_id": compare_meta["trial"],
-                "source": compare_meta.get("dataset"),
+                "source": source,
+                **(
+                    {"source_id": source_id, "source_name": _dataset_label(source)}
+                    if source_id
+                    else {}
+                ),
                 # B's own screen (`cmp_screen=`), from its own navigator.
                 "screen_id": selected_compare_screen,
             }
@@ -7250,6 +7248,9 @@ def render_single_trial_tab(
     # window. Everything below reads them in this same run.
     if comparing:
         render_compare_filters(rail_slots.get("compare_filter"), compare_fix)
+    # Record the completed edit after both readings and their fixation windows
+    # have resolved, in the slot already placed at the foot of the rail.
+    render_viz_reset(plot_footer)
     # The one predicate both gates below consult. Computed here because
     # this is the first point B's screen is known.
     # The *trial's* frames, not the filtered corpus: A's canvas is overwritten with
@@ -7333,6 +7334,9 @@ def render_single_trial_tab(
     # figure's cache key is unchanged.
     if comparing:
         figure_settings["fixation_flags_b"] = compare_b_filters()["fixation_flags"]
+    source_names = [st.session_state.get("data_source_choice")]
+    if comparing and compare_source is not None:
+        source_names.append(compare_source.name)
     detected_reasons = illustration_reasons(
         {
             **viz_settings,
@@ -7345,10 +7349,10 @@ def render_single_trial_tab(
         # …and only on the static figure, the one that draws them.
         static=not (animate or comparing),
         data_source=st.session_state.get("_active_data_source"),
-        synthetic=bool(
-            st.session_state.get("_datasets", {})
-            .get(st.session_state.get("data_source_choice"), {})
-            .get("authoring")
+        synthetic=any(
+            source in (SYNTHETIC_CHOICE, MANUAL_SAMPLE_CHOICE, AUTHOR_CHOICE)
+            or st.session_state.get("_datasets", {}).get(source, {}).get("authoring")
+            for source in source_names
         ),
         fix_index_range=fix_range,
         full_fixation_range=full_fix_range,
@@ -7614,7 +7618,9 @@ def render_single_trial_tab(
                 screen=selected_compare_screen,
                 layout=str(compare_layout),
                 compare_stimulus=str(compare_stimulus),
-                dataset=str(compare_meta.get("dataset") or ""),
+                dataset=_dataset_label(compare_meta["dataset"])
+                if compare_meta.get("dataset")
+                else "",
                 # B's own screen, which a second dataset's snippet
                 # states (`setup_b=` / `--compare-canvas`).
                 canvas=(
@@ -7716,6 +7722,7 @@ def render_single_trial_tab(
             full_fix_range,
             window_b if comparing else None,
             full_b,
+            essentials=ui_mode.is_simple(),
         )
         if window_note:
             plot_notes_slot.info(window_note, icon=ICONS["plot_filter"])
@@ -7799,8 +7806,10 @@ def render_single_trial_tab(
                 # A co-replay is always one coordinate space (`requested_layout`
                 # is forced to overlay above), so the overlay wording applies.
                 text_note = _different_texts_note(
-                    _trial_text_id(trial_words, trial_fixations),
-                    _trial_text_id(compare_meta["words"], compare_meta["fixations"]),
+                    _metadata_mod.trial_text_id(trial_fixations, trial_words),
+                    _metadata_mod.trial_text_id(
+                        compare_meta["fixations"], compare_meta["words"]
+                    ),
                 )
                 if text_note:
                     st.warning(text_note, icon=ICONS["warning"])
@@ -7823,7 +7832,7 @@ def render_single_trial_tab(
                     selected_participant,
                     selected_trial,
                     selected_text,
-                    figure_compare_participant,
+                    compare_participant,
                     compare_trial,
                     render_settings,
                     viz_settings,
@@ -7841,7 +7850,8 @@ def render_single_trial_tab(
                     ),
                     primary_combo_row=primary_combo_row,
                     download_name=f"scanpath_{_safe_filename(save_slug)}",
-                    figure_participant_b=self_compare_figure_id,
+                    figure_participant_b=self_compare_figure_id
+                    or figure_compare_participant,
                     raw_gaze=cmp_raw_gaze,
                 )
         else:
@@ -7874,6 +7884,14 @@ def render_single_trial_tab(
                     build_inputs.pop(name, None)
                 _amend_snippet_settings(static_settings, "static")
                 build_inputs["raw_gaze"] = figure_raw_gaze
+                if chart_axes.ELAPSED in (
+                    static_settings.x_field,
+                    static_settings.y_field,
+                ):
+                    origin = chart_axes.origin_ms(plot_fixations)
+                    build_inputs["reading_origin_ms"] = (
+                        None if pd.isna(origin) else origin
+                    )
                 # Not an option, but the figure's text: a renamed column redraws.
                 build_inputs["column_labels"] = static_settings.column_labels
                 displayed_fig = _cached_scanpath_figure(
@@ -7903,13 +7921,17 @@ def render_single_trial_tab(
                     download_name=f"scanpath_{_safe_filename(save_slug)}",
                     alt=_scanpath_alt(
                         selected_participant,
-                        _trial_text_id(trial_words, plot_fixations) or selected_trial,
+                        _metadata_mod.trial_text_id(plot_fixations, trial_words)
+                        or selected_trial,
                         len(plot_fixations),
                     ),
                     fit_window=True,
                 )
             note = _full_screen_note(viz_settings, canvas_width, canvas_height)
-            if note:
+            if note and (static_settings.x_field, static_settings.y_field) == (
+                "x",
+                "y",
+            ):
                 st.caption(note)
 
     # Per-trial panels sit directly BELOW the plot, in the next row's left
@@ -8506,9 +8528,8 @@ def _render_comparison_figure(
     frames, or ``None`` when the layer is off or neither reading has any.
 
     ``figure_participant_b`` is the id B's rows carry in the merged
-    frames when it differs from ``compare_participant`` — a trial compared with
-    itself, renamed apart by `separate_self_compare`. It is used only to slice
-    the figure; labels and lookups keep the real id.
+    frames. Cross-dataset and self-comparisons qualify that id so the two
+    readings can be sliced independently. Labels keep the reader's own id.
 
     ``fixations_filtered`` carries both scanpaths, already resolved by the
     caller: each scanpath's own fixation-index window is applied upstream, and
@@ -8576,8 +8597,14 @@ def _render_comparison_figure(
     primary_label = friendly_trial_label(
         selected_participant, selected_trial, primary_text_id, label_pool
     )
+    dataset_b = _compare_dataset_name(compare_meta)
+    frame_participant_b = figure_participant_b or compare_participant
     compare_label = friendly_trial_label(
-        compare_participant, compare_trial, compare_text_id, label_pool
+        compare_participant,
+        compare_trial,
+        compare_text_id,
+        label_pool,
+        prefix=f"{dataset_b}{_COMPARE_DATASET_SEP}" if cross_dataset else "",
     )
     # An explicit cmp{idx}_label_pattern overrides the auto label above.
     if st.session_state.get("cmp0_label_pattern"):
@@ -8594,9 +8621,9 @@ def _render_comparison_figure(
             1,
             compare_participant,
             compare_trial,
-            extract_trial(words_filtered, compare_participant, compare_trial),
-            extract_trial(fixations_filtered, compare_participant, compare_trial),
-            dataset_name=_compare_dataset_name(compare_meta),
+            extract_trial(words_filtered, frame_participant_b, compare_trial),
+            extract_trial(fixations_filtered, frame_participant_b, compare_trial),
+            dataset_name=dataset_b,
         )
 
     _amend_snippet_compare_labels((primary_label, compare_label))
@@ -8682,7 +8709,7 @@ def _render_comparison_figure(
         words_filtered,
         fixations_filtered,
         (selected_participant, selected_trial),
-        (figure_participant_b or compare_participant, compare_trial),
+        (frame_participant_b, compare_trial),
         settings=comparison_settings,
         raw_gaze=raw_gaze,
     )
@@ -8703,7 +8730,7 @@ def _render_comparison_figure(
         # Two readings in one figure, so `{dataset_name_b}` and friends
         # have a value to resolve against.
         compare_row={
-            "dataset_name": _compare_dataset_name(compare_meta),
+            "dataset_name": dataset_b,
             "participant_id": compare_participant,
             "trial_id": compare_trial,
             "text_id": compare_text_id,
@@ -8725,7 +8752,8 @@ def _render_comparison_figure(
         # about its own geometry. Each panel is true-to-scale on its *own*
         # monitor, so a box twice the size of the one beside it may be the same
         # physical size — naming both screens is what keeps that readable.
-        active = st.session_state.get("data_source_choice") or "this dataset"
+        active = md_literal(current_dataset_name() or "this dataset")
+        other = md_literal(_compare_dataset_name(compare_meta))
         if canvas_b is None:
             canvas_b = canvas_a
         if layout == "overlay":
@@ -8737,7 +8765,7 @@ def _render_comparison_figure(
             # can't say so), and the caveat is raised to a warning rather than
             # buried in the caption, because it qualifies what the figure means.
             st.caption(
-                f"Overlaying {active} and {compare_meta['dataset']}, both at "
+                f"Overlaying {active} and {other}, both at "
                 f"{canvas_a[0]}×{canvas_a[1]}. Positions are compared in screen "
                 "pixels, without rescaling."
             )
@@ -8747,13 +8775,13 @@ def _render_comparison_figure(
             st.caption(
                 "Each panel is drawn at its dataset's screen size: "
                 f"{active} {canvas_a[0]}×{canvas_a[1]}, "
-                f"{compare_meta['dataset']} {canvas_b[0]}×{canvas_b[1]}. "
+                f"{other} {canvas_b[0]}×{canvas_b[1]}. "
                 "Sizes are not comparable across panels."
                 + (f" {setup_note}" if setup_note else "")
             )
         else:
             st.caption(
-                f"Comparing {active} and {compare_meta['dataset']}, which share "
+                f"Comparing {active} and {other}, which share "
                 f"a {canvas_a[0]}×{canvas_a[1]} screen."
                 + (f" {setup_note}" if setup_note else "")
             )
@@ -9088,33 +9116,77 @@ def _download_tidy(
     # Written on click, not on every rerun: a words × readers table on a full
     # corpus takes most of a second to serialize. Under the dataset's own
     # names, as on screen — the map is read here, where the session is.
-    csv = partial(_tidy_csv, df, active_all(st.session_state).identity())
+    names = active_all(st.session_state).identity()
+    csv = partial(_tidy_csv, df, names)
     button = dict(data=csv, file_name=name, mime="text/csv", key=key, on_click="ignore")
     if recipe is None or context is None:
         host.download_button(label, **button)
         return
     recipe = dict(recipe)
     counts = result_counts(df, recipe.pop("counts", None))
+    cohort_csv = None
+    if recipe.get("view") == "Cohort profile":
+        entry = (st.session_state.get("_datasets") or {}).get(
+            context.get("dataset", {}).get("source")
+        )
+        inputs = (
+            stored_source_recipe(entry)
+            if entry
+            else {"schemas": st.session_state.get("_active_column_mapping") or {}}
+        )
+        # Only the mapping and file transformations travel. A local session-set path does not.
+        tables = ("words", "fixations", "raw_gaze")
+        mapping = {
+            t: inputs["schemas"][t]
+            for t in tables
+            if (inputs.get("schemas") or {}).get(t)
+        }
+        choices = (entry or {}).get("wizard_choices") or {}
+        derivations = choices.get("filename_derive") or {}
+        keep = (choices.get("keep_and_filter") or {}).get("wizard_keep_extra") or []
+        context = {
+            **context,
+            "inputs": {
+                "schemas": mapping,
+                "steps": inputs.get("steps") or [],
+                "derive": derivations.get("applied")
+                if (derivations.get("widgets") or {}).get("wizard_filename_split", True)
+                else None,
+                "keep_columns": keep,
+            },
+        }
+        cohort_csv = csv
+        # Record the app's headers even if the runner loads canonical tables.
+        counts["headers"] = as_written(df.iloc[:0], names).columns.tolist()
     row = host.container(horizontal=True, gap="small")
     row.download_button(label, **button)
     row.download_button(
         "⬇ Download the recipe (JSON)",
-        data=partial(_recipe_json, context, recipe, name, counts),
+        data=partial(_recipe_json, context, recipe, name, counts, cohort_csv),
         file_name=recipe_file_name(name),
         mime="application/json",
         key=f"{key}_recipe",
         on_click="ignore",
-        help="The dataset, trial filters, choices and counts behind this table. "
-        "It holds no data rows or figure settings.",
+        help="Rerun this cohort profile with scanpath-studio recipe and the same source tables."
+        if recipe.get("view") == "Cohort profile"
+        else (
+            "A record of the dataset name, trial filters, analysis choices and counts"
+            " used for this table. Keep your data separately; the recipe contains no "
+            "data rows or figure settings."
+        ),
     )
 
 
 def _tidy_csv(df: pd.DataFrame, names: ColumnNames) -> bytes:
     """A tidy table's CSV, built when its download button is clicked."""
-    return as_written(df, names).to_csv(index=False).encode("utf-8")
+    return (
+        as_written(df, names).to_csv(index=False, lineterminator="\n").encode("utf-8")
+    )
 
 
-def _recipe_json(context: dict, recipe: dict, name: str, counts: dict) -> str:
+def _recipe_json(
+    context: dict, recipe: dict, name: str, counts: dict, cohort_csv=None
+) -> str:
     """The recipe file's text, built when the button is clicked.
 
     ``recipe["groups"]`` holds ``(label, spec)`` pairs, resolved here: a
@@ -9129,14 +9201,20 @@ def _recipe_json(context: dict, recipe: dict, name: str, counts: dict) -> str:
     if recipe.get("groups"):
         recipe["groups"] = [group_definition(*pair) for pair in recipe["groups"]]
     analysis = analysis_choices(section=context.get("section"), **recipe)
+    if cohort_csv is not None:
+        counts = {**counts, "sha256": hashlib.sha256(cohort_csv()).hexdigest()}
 
     return json.dumps(
         build_analysis_recipe(
             app_version=__version__,
             dataset=context.get("dataset") or {},
+            inputs=context.get("inputs"),
             trial_filters=context.get("trial_filters") or [],
             pool=context.get("pool") or {},
             analysis=analysis,
+            selection=context.get("selection")
+            if analysis.get("view") == "Cohort profile"
+            else None,
             table_file=name,
             counts=counts,
             exported_at=datetime.now().isoformat(timespec="seconds"),
@@ -9596,9 +9674,9 @@ def _render_group_definition(words, fixations, *, key, two_groups, host=None):
         cols = _group_split_columns(words, fixations)
         if not cols:
             host.info(
-                "No field to split on: none of the known condition fields has "
-                "2 or more values in both the Words and the fixation table. Use "
-                "*Independent filter sets*."
+                "No suitable grouping field was found. Use *Independent filter sets*, or "
+                "choose a condition field with at least two values in both the Words and "
+                "Fixations tables."
             )
             return (None, None, "Group A", "Group B") if two_groups else (None, "Group")
         # Detaching a metadata table removes its `meta:` options; without
@@ -9729,7 +9807,7 @@ def _text_column(frame: pd.DataFrame) -> str | None:
 def _corpus_unavailable_notice(
     *, has_aoi_table: bool = True, has_raw_gaze: bool = False
 ) -> None:
-    """The Corpus Analysis page when the data brings no reading measures.
+    """The Corpus Analysis page when the dataset contains no reading measures.
 
     The page computes no measure of its own, so without an uploaded one there is
     nothing for any of its sections to show. It says so, points at where the
@@ -9747,15 +9825,15 @@ def _corpus_unavailable_notice(
             else f"Add a dataset that has one with {ICONS['add']} Add dataset"
         )
         samples = (
-            " Raw gaze samples carry no reading measures, and Scanpath Studio "
-            "doesn't detect fixations from them or compute measures."
+            " Raw gaze samples do not include per-word reading measures. "
+            "The app does not detect fixations from samples or compute these measures."
             if has_raw_gaze
             else ""
         )
         st.info(
-            f"{ICONS['info']} **No reading measures in this dataset.** Corpus "
-            "Analysis shows per-word measures from an interest-area report, such "
-            "as TFD, FFD, FPRT and RPD, and this dataset has no Words table."
+            f"{ICONS['info']} **No reading measures in this dataset.** "
+            "To use Corpus Analysis, add a Words table with per-word measures "
+            "such as total fixation duration (TFD) or first fixation duration (FFD)."
             f"{samples} {where}. An EyeLink interest-area report "
             "(`IA_DWELL_TIME`, `IA_FIRST_FIXATION_DURATION`, …) maps its measures "
             "automatically."
@@ -9770,9 +9848,10 @@ def _corpus_unavailable_notice(
             "**Reading measures** in its Words table"
         )
         st.info(
-            f"{ICONS['info']} **No reading measures in this dataset.** Corpus "
-            "Analysis shows the per-word measures in your report, such as TFD, "
-            f"FFD, FPRT and RPD, and doesn't compute them itself. {where}. An "
+            f"{ICONS['info']} **No reading measures in this dataset.** "
+            "Corpus Analysis uses per-word measures from your data, such as "
+            "total fixation duration (TFD) or first fixation duration (FFD). "
+            f"The app does not compute these measures. {where}. An "
             "EyeLink interest-area report (`IA_DWELL_TIME`, "
             "`IA_FIRST_FIXATION_DURATION`, …) maps them automatically."
         )
@@ -9816,8 +9895,8 @@ def _render_pool_filters(
     per rerun, so the keys never meet.
     """
     words, fixations = pool_filter_frames(words_all, fixations_all, raw_gaze_all)
-    render_narrow_by(words, fixations, text_host=host, part_host=host)
-    render_trial_filters(words, fixations, host=host)
+    render_narrow_by(words, fixations, raw_gaze_all, text_host=host, part_host=host)
+    render_trial_filters(words, fixations, raw_gaze_all, host=host)
 
 
 def pool_filter_frames(
@@ -9974,7 +10053,11 @@ def render_analysis_pool_bar(
         width="content",
         help="Clear all trial filters, here and on the Scanpath view.",
     )
-    return {"trial_filters": items, "pool": pool}
+    return {
+        "trial_filters": items,
+        "pool": pool,
+        "selection": read_trial_filters().get("recipe_selection"),
+    }
 
 
 _POOL_POPOVER_KEY = "corpus_pool_popover"
@@ -10426,8 +10509,8 @@ def render_per_text_tab(
 ) -> None:
     """*What does this text look like?* — one text, many readers."""
     st.caption(
-        "One **text**, all its participants. Pick a text, a view and a measure. "
-        "Uses the active trial filters."
+        "Compare participants on one **text**. Choose a text, a view and a "
+        "measure. Your current trial filters apply."
     )
     if words_filtered.empty or "word_id" not in words_filtered.columns:
         st.info("Per-text views need a Words table (word ids + reading measures).")
@@ -10703,8 +10786,10 @@ def render_per_text_tab(
             marker_size_range=viz_settings.get(
                 "marker_size_range", DEFAULT_MARKER_SIZE_RANGE
             ),
-            order_font_size=viz_settings.get("order_font_size", 10),
-            order_font_color=viz_settings.get("order_font_color", "#111111"),
+            **{
+                name: viz_settings.get(name, option.default)
+                for name, option in FIXATION_LABEL_OPTIONS.items()
+            },
             **{
                 key: viz_settings.get(key, default)
                 for key, default in COLORBAR_DEFAULTS.items()
@@ -10944,10 +11029,10 @@ def render_per_reader_tab(
                 icon=icon,
             )
         st.caption(
-            f"Participant **{pid}** vs the others in scope. Each percentile is "
-            "the share of the other participants with a value for that measure "
-            "whose value is lower, out of the number shown. No percentile is "
-            "shown when no other participant has a value."
+            f"Participant **{pid}** compared with the others in the selection. "
+            "Each percentile shows the percentage of other participants with a "
+            "lower value for that measure. The count includes only participants "
+            "with a value; no percentile is shown when none are available."
         )
         trials = _c_trial_summary(
             words_filtered,
@@ -11491,8 +11576,9 @@ def render_group_comparison_tab(
 ) -> None:
     """*How do two groups differ?* — two cohorts side by side."""
     st.caption(
-        "Define **two groups** and compare their distributions, word profiles "
-        "and means. These views are descriptive and run no significance tests."
+        "Define **two groups** to compare their distributions, word profiles and "
+        "means. These are descriptive summaries; they do not run significance "
+        "tests."
     )
     if fixations_filtered.empty and words_filtered.empty:
         st.info("No data after filtering.")
@@ -13413,7 +13499,7 @@ def _fill_raw_data_tabs(
     with tabs[3]:
         _render_raw_metadata_tab(
             "Participants",
-            active_participant_metadata(),
+            _metadata_mod.active(),
             "the participant id",
             kind="participant",
             unit="participant",
@@ -13666,959 +13752,6 @@ def _active_stored_dataset() -> tuple | None:
     name = st.session_state.get("data_source_choice")
     entry = st.session_state.get("_datasets", {}).get(name)
     return (name, entry) if entry is not None else None
-
-
-# The file name the attached table came from, for the "from **X**" captions.
-# Separate from the file *identity* (`md.FILE_SESSION_KEY`), which is an
-# opaque `file_id` rather than something readable.
-_PM_NAME_KEY = "_participant_metadata_name"
-
-
-def active_participant_metadata():
-    """The attached participant table for this session, or ``None``."""
-    from scanpath_studio import metadata as md
-
-    return md.active()
-
-
-def _clear_participant_metadata() -> None:
-    from scanpath_studio import metadata as md
-
-    for key in (md.SESSION_KEY, md.RAW_SESSION_KEY, md.FILE_SESSION_KEY, _PM_NAME_KEY):
-        st.session_state.pop(key, None)
-    # And the uploader's own key: without it the widget still holds the file on
-    # the next run, the (now absent) signature check reads as "new file", and
-    # the table re-attaches itself immediately.
-    st.session_state.pop(md.upload_key("participant"), None)
-
-
-def _restored_metadata_note(host, attached, *, grain: str, on_detach) -> None:
-    """The uploader-side line for a table with no file behind it.
-
-    A table that came back from the recovery cache or a saved config has
-    nothing in its uploader, so the file chip that normally *is* the detach
-    control is not there to press. This says where the table came from
-    and puts a ✕ Detach back, for this case only. Changing its key or its
-    fields means uploading the file again — the raw table it was cut from is
-    not part of what is restored.
-    """
-    n_fields = len(attached.fields)
-    host.caption(
-        f"↩️ **{attached.source_name}** restored, with "
-        f"{plural(n_fields, 'field')}. Upload the file again to change its id "
-        "column or its fields."
-    )
-    host.button(
-        "✕ Detach",
-        key=f"{grain}_metadata_detach_restored",
-        on_click=on_detach,
-        help="Remove this table. Its fields leave the filters, the trial summary "
-        "and trial sorting.",
-    )
-
-
-class _MetadataReadError(Exception):
-    """One of a metadata table's files could not be read; names which, in the
-    words every upload box uses (`app.say_read_error`)."""
-
-    def __init__(self, name: str, cause: Exception) -> None:
-        self.name = name
-        self.cause = cause
-        super().__init__(explain_read_error(name, cause).sentence())
-
-    def say(self) -> None:
-        """The message, where the metadata table's uploader is."""
-        from scanpath_studio.app import say_read_error
-
-        say_read_error(st, self.name, self.cause)
-
-
-def _metadata_upload_signature(uploads) -> tuple:
-    """What a metadata uploader holds, by each file's `file_id` — not its name
-    and size: a corrected file of the same name and length must be read again
-    (as in `controls._uploaded_image_data_uri`)."""
-    return tuple(
-        getattr(upload, "file_id", None) or (upload.name, getattr(upload, "size", None))
-        for upload in uploads
-    )
-
-
-def _metadata_upload_name(uploads) -> str:
-    """The files a metadata table was read from, for its "from **X**" captions."""
-    first = uploads[0].name
-    if len(uploads) == 1:
-        return first
-    return f"{first} + {plural(len(uploads) - 1, 'more file')}"
-
-
-def _read_metadata_uploads(uploads) -> pd.DataFrame:
-    """Every file uploaded for one metadata table, stacked into one table.
-
-    A table split across files (one per session, one per lab) reads as one:
-    columns line up by name, and a column a file lacks is empty for its rows.
-    The same reader turning up in two files is what the builders already
-    handle — combined when the rows agree, dropped and reported when not.
-    """
-    frames = []
-    for upload in uploads:
-        try:
-            frame = read_table(upload)
-        except Exception as exc:  # unreadable file — the caller names it
-            raise _MetadataReadError(upload.name, exc) from exc
-        if frame.empty and len(frame.columns):
-            # Attached, it would join nothing and say nothing.
-            error = header_only_error(upload.name)
-            raise _MetadataReadError(upload.name, error) from error
-        frames.append(frame)
-    if len(frames) == 1:
-        return frames[0]
-    return pd.concat(frames, ignore_index=True, sort=False)
-
-
-def render_participant_metadata_section(
-    participants, *, host=None, live_join: bool = True, upload_host=None
-) -> None:
-    """Attach a participant-level table and report the join.
-
-    Two homes, one body. The **add-dataset wizard**'s *Metadata* rows are the
-    main one: a first-time uploader is answering exactly this question and
-    would otherwise never meet the feature. The 🗂️ **Data page**
-    section is the other, because "which readers are these" is a question about
-    the demo and a public corpus too, and the wizard runs only for an upload.
-
-    They never render together: while the wizard is active ``app.main`` returns
-    before the page's slot is filled, and the collapsed *Data & mapping* review
-    panel skips this step's body entirely — two live copies would be two widgets
-    on one key.
-
-    Nothing is guessed. The id column is offered pre-filled but overridable,
-    and the join result — matched count, or a loud mismatch warning when
-    nothing joined at all (:func:`_render_key_mismatch`) — is reported before
-    the fields go anywhere.
-
-    ``live_join=False`` (the wizard's) skips the join entirely:
-    the upload, the id-column picker and the keep-fields picker still render,
-    but nothing is matched against ``participants`` and nothing attaches — see
-    :func:`commit_deferred_metadata`, which the wizard's "✅ Add dataset" runs
-    instead once the dataset it would join against actually exists.
-
-    ``upload_host`` (the wizard's) is the thin left-hand
-    column the six-table row format puts the uploader in — Fixations/AOI/Raw
-    gaze's own left column, via ``upload_box``. When given, the title + file
-    uploader (and, once a table is read, its row-count + preview stats) render
-    there instead of ``host``, so ``host`` holds only the id-column picker, the
-    keep-fields picker and the status line — the same "left = upload, right =
-    mapping" shape every table shares. There is no ✕ Detach button on this
-    row: removing the uploaded file detaches the table (see
-    ``_participant_metadata_body``).
-    """
-    if host is not None:
-        with host:
-            _participant_metadata_body(
-                participants, live_join=live_join, upload_host=upload_host
-            )
-        return
-    _participant_metadata_body(
-        participants, live_join=live_join, upload_host=upload_host
-    )
-
-
-def _participant_metadata_body(
-    participants, *, live_join: bool = True, upload_host=None
-) -> None:
-    from scanpath_studio import metadata as md
-
-    # The description rides the uploader's own title as a tooltip —
-    # descriptive prose on this page is hover-only — in the same
-    # dotted-underline format the mapping fields use (`inline_field_label`),
-    # rather than Streamlit's own label + native (~1s) help tooltip.
-    _pm_help = (
-        "One row per participant, with a participant-id column. Its columns "
-        "work like fields in the data, in filters, the trial summary, "
-        "trial sorting, inspection and export. CSV, TSV, Parquet or Excel; "
-        "several files are stacked into one table."
-    )
-    # With `upload_host` (the wizard's row format), the title + uploader go
-    # into that thin left column — mirroring `upload_box`'s `short_label`,
-    # including its row-count + preview stats right under the uploader (see
-    # `stats_host` below). Without it (the Data page), the same block renders
-    # at full width in `st` instead.
-    if upload_host is not None:
-        inline_field_label(upload_host, "Participants", _pm_help, emphasis=True)
-        stats_host = upload_host
-    else:
-        inline_field_label(
-            st, "Participant metadata table (optional)", _pm_help, emphasis=True
-        )
-        stats_host = st
-    uploads = stats_host.file_uploader(
-        "Participant metadata table (optional)",
-        type=list(UPLOAD_FILE_TYPES),
-        key=md.upload_key("participant"),
-        accept_multiple_files=True,
-        # No `persist_state` — `st.file_uploader` does not take it. It does
-        # not need it either: the parsed frame is kept in session state under
-        # `md.RAW_SESSION_KEY`, so the attached table survives even if the
-        # uploader widget itself is ever reset.
-        help=_pm_help,
-        label_visibility="collapsed",
-        max_upload_size=upload_limit_mb(),
-    )
-    if not uploads:
-        if active_participant_metadata() is None:
-            return
-        # Removing the file from its uploader chip detaches the table
-        # too — every other upload on this page (fixations, words, raw gaze)
-        # vanishes the moment its own uploader goes empty
-        # (`app._read_uploaded_frame` returns nothing), so a metadata table
-        # that lingers, still joined and still counting kept fields, after its
-        # own chip is dismissed would read as broken rather than intentional. This
-        # section's uploader is reliably rendered every run while the wizard
-        # is active (`wizard_active = not setup_complete`, never toggled
-        # mid-flow) and unconditionally on the Data page, so `upload is None`
-        # here really does mean "the user just removed it", not "this widget
-        # simply didn't render last run" — safe to clear on sight. It is also
-        # why there is no separate ✕ Detach button.
-        # Except for a *restored* table, which never had a file in this
-        # uploader — clearing it here would undo the restore on sight.
-        if md.is_restored(st.session_state, "participant"):
-            _restored_metadata_note(
-                stats_host,
-                active_participant_metadata(),
-                grain="participant",
-                on_detach=_clear_participant_metadata,
-            )
-            return
-        _clear_participant_metadata()
-        return
-    else:
-        # `file_id`, not (name, size): re-uploading a corrected file of the
-        # same name and byte length must be read again (as in
-        # `controls._uploaded_image_data_uri`).
-        signature = _metadata_upload_signature(uploads)
-        if st.session_state.get(md.FILE_SESSION_KEY) != signature:
-            try:
-                st.session_state[md.RAW_SESSION_KEY] = _read_metadata_uploads(uploads)
-            except _MetadataReadError as exc:  # say which file, keep the page
-                exc.say()
-                return
-            st.session_state[md.FILE_SESSION_KEY] = signature
-            st.session_state[_PM_NAME_KEY] = _metadata_upload_name(uploads)
-            st.session_state.pop("participant_metadata_id_column", None)
-
-    raw = st.session_state.get(md.RAW_SESSION_KEY)
-    if raw is None or raw.empty:
-        return
-
-    # Row-count + preview stats sit right under the uploader, same as
-    # Fixations/AOI/Raw gaze's own `upload_box` — not a separate status line
-    # further down the mapping side.
-    stats = stats_host.container(key="wiz_upload_stats_participant_metadata")
-    # Named for screen readers; `styles.py` clips the name.
-    preview = stats.popover(
-        "Preview the first rows",
-        icon=ICONS["preview"],
-        width="content",
-        wrap=True,
-        help="Preview — first rows",
-        key="iconpop_preview_participant_metadata",
-    )
-    preview.caption("First rows:")
-    preview.dataframe(raw.head(), width="stretch", hide_index=True)
-    counts = stats.container(key="wiz_upload_counts_participant_metadata")
-    counts.caption(plural(len(raw), "row"))
-    counts.caption(plural(len(raw.columns), "column"))
-
-    columns = [str(column) for column in raw.columns]
-    inferred = md.infer_participant_id_column(raw)
-    key_host = st.container()
-    status_host = st.container()
-    id_column = key_host.selectbox(
-        "Participant ID column *",
-        columns,
-        index=columns.index(inferred) if inferred in columns else 0,
-        key="participant_metadata_id_column",
-        persist_state="session",
-        help="The column holding the participant id, used to join this table to "
-        "your data. Required.",
-    )
-    # Which non-id columns actually become fields — right under the id
-    # picker. How many are selected is in that picker's own label (see
-    # `_metadata_keep_picker`).
-    kept = _metadata_keep_picker(
-        key_host, raw, id_column, prefix="participant_metadata", noun="participant"
-    )
-    if not live_join:
-        # The wizard doesn't have a finished dataset to join against yet,
-        # and a join report against a *provisional* reader pool (still
-        # changing as identity mapping is worked out) would read as noise, or
-        # worse — a wrong verdict. Nothing is matched or attached here;
-        # `commit_deferred_metadata` does that once "✅ Add dataset" is clicked.
-        return
-    attached = md.build_participant_metadata(
-        raw[[id_column, *kept]],
-        id_column,
-        source_name=str(st.session_state.get(_PM_NAME_KEY) or "participant table"),
-        participants=participants,
-    )
-    st.session_state[md.SESSION_KEY] = attached
-
-    report = attached.report
-    if not attached.fields:
-        status_host.warning(
-            "No fields kept. Pick at least one field above, or remove the "
-            "uploaded file to detach this table.",
-            icon=ICONS["warning"],
-        )
-        return
-    id_count = _metadata_id_count(raw, id_column)
-    matched = len(report.matched)
-    if report.is_clean or matched:
-        # One small combined line — the distinct-id count (independent of
-        # the join) and the join result together.
-        parts = _join_status_parts(id_count, report)
-        parts.append(_combined_rows_note(report))
-        status_host.caption(" · ".join(p for p in parts if p))
-    else:
-        # Zero matches is a silent trap (see `_render_key_mismatch`): the
-        # fields attach, appear everywhere, and read as missing everywhere.
-        # Loud on purpose — unlike the line above, this stays a real alert.
-        with status_host:
-            _render_key_mismatch(attached, report, "reader")
-
-
-#: The trial table's display name, like `_PM_NAME_KEY` for readers.
-_TM_NAME_KEY = "_trial_metadata_name"
-
-
-def _clear_trial_metadata() -> None:
-    """Detach the trial table: when the uploader's own file chip goes empty,
-    or from a restored table's ✕ Detach."""
-    from scanpath_studio import metadata as md
-
-    for key in (
-        md.TRIAL_SESSION_KEY,
-        md.TRIAL_RAW_SESSION_KEY,
-        md.TRIAL_FILE_SESSION_KEY,
-        _TM_NAME_KEY,
-        # …and the key picker, so a different table uploaded next starts from
-        # its own auto-detect rather than from a column name that belonged to
-        # the one just detached.
-        "trial_metadata_id_column",
-    ):
-        st.session_state.pop(key, None)
-    # The uploader's own key, as for the participant table: without it the
-    # widget still holds the file on the next run, the (now absent) signature
-    # check reads as "new file", and the table re-attaches itself
-    # immediately — detaching would look like it had done nothing.
-    st.session_state.pop(md.upload_key("trial"), None)
-
-
-def render_trial_metadata_section(
-    combos, *, host=None, live_join: bool = True, upload_host=None
-) -> None:
-    """Attach a trial-level table and report the join.
-
-    The sibling of :func:`render_participant_metadata_section`, and deliberately
-    the same shape: nothing is guessed, the key column is offered pre-filled
-    but overridable, and the join result is reported before the fields go
-    anywhere.
-
-    **Trial id only, no reader column.** A table keyed by trial id
-    alone describes a *text*, and every reading of that text inherits its
-    row; a table keyed by reader *and* trial describes one *reading* — but
-    this UI only attaches the first kind. The picker itself is a
-    multiselect, exactly like the uploaded data's own Trial ID mapping: pick
-    one column, or several to build a unique id on the fly (joined with "_"
-    via :func:`data.trial_id_series`, through :func:`metadata.build_trial_metadata`).
-    A row-per-reading table still reaches the app headlessly, via
-    ``--trial-metadata-reader-column`` (:func:`api.load_trial_metadata`),
-    which takes the ``participant_column`` parameter this screen does not
-    expose.
-
-    ``live_join=False`` — see :func:`render_participant_metadata_section`.
-    ``upload_host`` — see :func:`render_participant_metadata_section`.
-    """
-    if host is not None:
-        with host:
-            _trial_metadata_body(combos, live_join=live_join, upload_host=upload_host)
-        return
-    _trial_metadata_body(combos, live_join=live_join, upload_host=upload_host)
-
-
-def _trial_metadata_body(combos, *, live_join: bool = True, upload_host=None) -> None:
-    from scanpath_studio import metadata as md
-
-    # Same dotted-underline title format as the mapping fields.
-    _tm_help = (
-        "One row per trial, with a trial-id column. Its columns work like "
-        "fields in the data, in filters, the trial summary, trial sorting, "
-        "inspection and export. CSV, TSV, Parquet or Excel; several files are "
-        "stacked into one table."
-    )
-    # See the matching branch in `_participant_metadata_body`.
-    if upload_host is not None:
-        inline_field_label(upload_host, "Trials", _tm_help, emphasis=True)
-        stats_host = upload_host
-    else:
-        inline_field_label(
-            st, "Trial metadata table (optional)", _tm_help, emphasis=True
-        )
-        stats_host = st
-    uploads = stats_host.file_uploader(
-        "Trial metadata table (optional)",
-        type=list(UPLOAD_FILE_TYPES),
-        key=md.upload_key("trial"),
-        accept_multiple_files=True,
-        help=_tm_help,
-        label_visibility="collapsed",
-        max_upload_size=upload_limit_mb(),
-    )
-    if not uploads:
-        if md.active_trials() is None:
-            return
-        # See the matching note in
-        # `_participant_metadata_body`.
-        if md.is_restored(st.session_state, "trial"):
-            _restored_metadata_note(
-                stats_host,
-                md.active_trials(),
-                grain="trial",
-                on_detach=_clear_trial_metadata,
-            )
-            return
-        _clear_trial_metadata()
-        return
-    else:
-        signature = _metadata_upload_signature(uploads)
-        if st.session_state.get(md.TRIAL_FILE_SESSION_KEY) != signature:
-            try:
-                st.session_state[md.TRIAL_RAW_SESSION_KEY] = _read_metadata_uploads(
-                    uploads
-                )
-            except _MetadataReadError as exc:  # say which file, keep the page
-                exc.say()
-                return
-            st.session_state[md.TRIAL_FILE_SESSION_KEY] = signature
-            st.session_state[_TM_NAME_KEY] = _metadata_upload_name(uploads)
-            st.session_state.pop("trial_metadata_id_column", None)
-            st.session_state.pop("trial_metadata_participant_column", None)
-
-    raw = st.session_state.get(md.TRIAL_RAW_SESSION_KEY)
-    if raw is None or raw.empty:
-        return
-
-    # See the matching block in `_participant_metadata_body`.
-    stats = stats_host.container(key="wiz_upload_stats_trial_metadata")
-    # Named for screen readers; `styles.py` clips the name.
-    preview = stats.popover(
-        "Preview the first rows",
-        icon=ICONS["preview"],
-        width="content",
-        wrap=True,
-        help="Preview — first rows",
-        key="iconpop_preview_trial_metadata",
-    )
-    preview.caption("First rows:")
-    preview.dataframe(raw.head(), width="stretch", hide_index=True)
-    counts = stats.container(key="wiz_upload_counts_trial_metadata")
-    counts.caption(plural(len(raw), "row"))
-    counts.caption(plural(len(raw.columns), "column"))
-
-    columns = [str(column) for column in raw.columns]
-    inferred = md.infer_trial_id_column(raw)
-    # Two slots, filled below, so the section reads as **one line**
-    # once the table is in: the key pickers, then the verdict. Reserved in
-    # this order because Streamlit's creation order is screen order and the
-    # pickers have to run before the join they decide.
-    key_host = st.container()
-    status_host = st.container()
-    # One key — the trial id — not a trial-id-plus-reader-id pair.
-    # A row-per-reading table (one row per reader × trial) needs its own
-    # reader column to disambiguate, which is not offered here; such a
-    # table can be attached via the headless
-    # `--trial-metadata-reader-column` (api.load_trial_metadata).
-    trial_key = "trial_metadata_id_column"
-    stored = st.session_state.get(trial_key)
-    if not isinstance(stored, list):
-        st.session_state[trial_key] = [inferred] if inferred in columns else []
-    else:
-        valid = [c for c in stored if c in columns]
-        st.session_state[trial_key] = valid or (
-            [inferred] if inferred in columns else []
-        )
-    inline_field_label(
-        key_host,
-        "Trial ID column *",
-        "The column holding this table's trial id, or several columns "
-        "combined as in the data's Trial ID mapping. Each row applies to every "
-        "participant's trial with that id. Required to join the table to the "
-        "data.",
-    )
-    trial_columns = key_host.multiselect(
-        "Trial ID column *",
-        columns,
-        key=trial_key,
-        select_all=False,  # an id is a few columns, never all
-        persist_state="session",
-        label_visibility="collapsed",
-    )
-    if not trial_columns:
-        status_host.warning(
-            "Pick a Trial ID column above. It is required to join this table "
-            "to the data.",
-            icon=ICONS["warning"],
-        )
-        return
-    # Which non-id columns actually become fields — right under the id
-    # picker. How many are selected is in that picker's own label (see
-    # `_metadata_keep_picker`).
-    kept = _metadata_keep_picker(
-        key_host, raw, trial_columns, prefix="trial_metadata", noun="trial"
-    )
-    if not live_join:
-        # See the matching branch in `_participant_metadata_body`.
-        return
-    attached = md.build_trial_metadata(
-        raw[[*trial_columns, *kept]],
-        trial_columns,
-        None,
-        source_name=str(st.session_state.get(_TM_NAME_KEY) or "trial table"),
-        keys=md.trial_keys(combos),
-    )
-    st.session_state[md.TRIAL_SESSION_KEY] = attached
-
-    report = attached.report
-    if not attached.fields:
-        status_host.warning(
-            "No fields kept. Pick at least one field above, or remove the "
-            "uploaded file to detach this table.",
-            icon=ICONS["warning"],
-        )
-        return
-    grain = "trial"
-    id_count = _metadata_id_count(raw, trial_columns)
-    matched = len(report.matched)
-    if report.is_clean or matched:
-        # One small combined line — the distinct-id count (independent of
-        # the join) and the join result together.
-        parts = _join_status_parts(id_count, report)
-        parts.append(_combined_rows_note(report))
-        status_host.caption(" · ".join(p for p in parts if p))
-    else:
-        # Nothing matched. A quiet "Joined to 0 trials" would dress the *worst*
-        # case as a status line: the table attaches, its fields appear in every
-        # picker, and then every one of them renders as missing everywhere, with
-        # nothing on screen connecting the two facts. It is an error, and it names
-        # the two things that cause it, with both sides' ids side by side — nearly
-        # always a spelling difference ("101" against "101.0", a float column
-        # with one blank cell in it) or the wrong column picked above. Loud on
-        # purpose — unlike the line above, this stays a real alert.
-        with status_host:
-            _render_key_mismatch(attached, report, grain)
-
-
-#: The text table's display name, like `_PM_NAME_KEY`/`_TM_NAME_KEY`.
-_TXM_NAME_KEY = "_text_metadata_name"
-
-
-def _clear_text_metadata() -> None:
-    """Detach the text table — see the matching note on
-    ``_clear_trial_metadata``."""
-    from scanpath_studio import metadata as md
-
-    for key in (
-        md.TEXT_SESSION_KEY,
-        md.TEXT_RAW_SESSION_KEY,
-        md.TEXT_FILE_SESSION_KEY,
-        _TXM_NAME_KEY,
-        "text_metadata_id_column",
-    ):
-        st.session_state.pop(key, None)
-    st.session_state.pop(md.upload_key("text"), None)
-
-
-def render_text_metadata_section(
-    texts, *, host=None, live_join: bool = True, upload_host=None
-) -> None:
-    """Attach a text-level table and report the join — the third grain.
-
-    Sibling of :func:`render_participant_metadata_section` and
-    :func:`render_trial_metadata_section`, same shape: nothing is guessed, the
-    key column is offered pre-filled but overridable, and the join result is
-    reported before the fields go anywhere.
-
-    Flat grain, like the participant table — one row per ``text_id``, never a
-    reader-paired key, since a text is a stimulus rather than something one
-    reader owns. The id picker is a multiselect like the trial table's,
-    though: a text id can be composite (joined with "_" via
-    :func:`data.trial_id_series`, through :func:`metadata.build_text_metadata`).
-
-    ``live_join=False`` — see :func:`render_participant_metadata_section`.
-    ``upload_host`` — see :func:`render_participant_metadata_section`.
-    """
-    if host is not None:
-        with host:
-            _text_metadata_body(texts, live_join=live_join, upload_host=upload_host)
-        return
-    _text_metadata_body(texts, live_join=live_join, upload_host=upload_host)
-
-
-def _text_metadata_body(texts, *, live_join: bool = True, upload_host=None) -> None:
-    from scanpath_studio import metadata as md
-
-    _txm_help = (
-        "One row per text, with a text-id column. Its columns work like "
-        "fields in the data, in filters, the trial summary, trial sorting, "
-        "inspection and export. CSV, TSV, Parquet or Excel; several files are "
-        "stacked into one table."
-    )
-    # See the matching branch in `_participant_metadata_body`.
-    if upload_host is not None:
-        inline_field_label(upload_host, "Texts", _txm_help, emphasis=True)
-        stats_host = upload_host
-    else:
-        inline_field_label(
-            st, "Text metadata table (optional)", _txm_help, emphasis=True
-        )
-        stats_host = st
-    uploads = stats_host.file_uploader(
-        "Text metadata table (optional)",
-        type=list(UPLOAD_FILE_TYPES),
-        key=md.upload_key("text"),
-        accept_multiple_files=True,
-        help=_txm_help,
-        label_visibility="collapsed",
-        max_upload_size=upload_limit_mb(),
-    )
-    if not uploads:
-        if md.active_texts() is None:
-            return
-        # See the matching note in
-        # `_participant_metadata_body`.
-        if md.is_restored(st.session_state, "text"):
-            _restored_metadata_note(
-                stats_host,
-                md.active_texts(),
-                grain="text",
-                on_detach=_clear_text_metadata,
-            )
-            return
-        _clear_text_metadata()
-        return
-    else:
-        signature = _metadata_upload_signature(uploads)
-        if st.session_state.get(md.TEXT_FILE_SESSION_KEY) != signature:
-            try:
-                st.session_state[md.TEXT_RAW_SESSION_KEY] = _read_metadata_uploads(
-                    uploads
-                )
-            except _MetadataReadError as exc:  # say which file, keep the page
-                exc.say()
-                return
-            st.session_state[md.TEXT_FILE_SESSION_KEY] = signature
-            st.session_state[_TXM_NAME_KEY] = _metadata_upload_name(uploads)
-            st.session_state.pop("text_metadata_id_column", None)
-
-    raw = st.session_state.get(md.TEXT_RAW_SESSION_KEY)
-    if raw is None or raw.empty:
-        return
-
-    # See the matching block in `_participant_metadata_body`.
-    stats = stats_host.container(key="wiz_upload_stats_text_metadata")
-    # Named for screen readers; `styles.py` clips the name.
-    preview = stats.popover(
-        "Preview the first rows",
-        icon=ICONS["preview"],
-        width="content",
-        wrap=True,
-        help="Preview — first rows",
-        key="iconpop_preview_text_metadata",
-    )
-    preview.caption("First rows:")
-    preview.dataframe(raw.head(), width="stretch", hide_index=True)
-    counts = stats.container(key="wiz_upload_counts_text_metadata")
-    counts.caption(plural(len(raw), "row"))
-    counts.caption(plural(len(raw.columns), "column"))
-
-    columns = [str(column) for column in raw.columns]
-    inferred = md.infer_text_id_column(raw)
-    key_host = st.container()
-    status_host = st.container()
-    text_key = "text_metadata_id_column"
-    stored = st.session_state.get(text_key)
-    if not isinstance(stored, list):
-        st.session_state[text_key] = [inferred] if inferred in columns else []
-    else:
-        valid = [c for c in stored if c in columns]
-        st.session_state[text_key] = valid or (
-            [inferred] if inferred in columns else []
-        )
-    inline_field_label(
-        key_host,
-        "Text ID column *",
-        "The column holding this table's text id, or several columns combined "
-        "as in the data's Text ID mapping. Required to join the table to the "
-        "data.",
-    )
-    text_columns = key_host.multiselect(
-        "Text ID column *",
-        columns,
-        key=text_key,
-        select_all=False,  # an id is a few columns, never all
-        persist_state="session",
-        label_visibility="collapsed",
-    )
-    if not text_columns:
-        status_host.warning(
-            "Pick a Text ID column above. It is required to join this table "
-            "to the data.",
-            icon=ICONS["warning"],
-        )
-        return
-    # Which non-id columns actually become fields — right under the id
-    # picker. How many are selected is in that picker's own label (see
-    # `_metadata_keep_picker`).
-    kept = _metadata_keep_picker(
-        key_host, raw, text_columns, prefix="text_metadata", noun="text"
-    )
-    if not live_join:
-        # See the matching branch in `_participant_metadata_body`.
-        return
-    attached = md.build_text_metadata(
-        raw[[*text_columns, *kept]],
-        text_columns,
-        source_name=str(st.session_state.get(_TXM_NAME_KEY) or "text table"),
-        keys=texts,
-    )
-    st.session_state[md.TEXT_SESSION_KEY] = attached
-
-    report = attached.report
-    if not attached.fields:
-        status_host.warning(
-            "No fields kept. Pick at least one field above, or remove the "
-            "uploaded file to detach this table.",
-            icon=ICONS["warning"],
-        )
-        return
-    id_count = _metadata_id_count(raw, text_columns)
-    matched = len(report.matched)
-    if report.is_clean or matched:
-        # One small combined line — the distinct-id count (independent of
-        # the join) and the join result together.
-        parts = _join_status_parts(id_count, report)
-        parts.append(_combined_rows_note(report))
-        status_host.caption(" · ".join(p for p in parts if p))
-    else:
-        # Loud on purpose — unlike the line above, this stays a real alert:
-        # a metadata table that joins to nothing says so.
-        with status_host:
-            _render_key_mismatch(attached, report, "text")
-
-
-def _join_status_parts(id_count, report) -> list[str | None]:
-    """A metadata table's join line: what is in it, what matched, and
-    what did not — data rows without a table row, ids dropped as conflicting."""
-    unmatched = len(report.only_in_data)
-    conflicting = len(report.conflicting)
-    return [
-        f"{id_count:,} in the table" if id_count is not None else None,
-        f"{len(report.matched):,} matched",
-        f"{unmatched:,} in the data have no row" if unmatched else None,
-        f"{conflicting:,} dropped (rows disagree)" if conflicting else None,
-    ]
-
-
-def _combined_rows_note(report) -> str | None:
-    """``combined 2 compatible duplicate rows`` — or ``None`` when none were.
-
-    Rows that repeat a key without disagreeing are folded into one, each field
-    taking the one value they hold (`metadata._merge_duplicates`); the status
-    line says so, so a table shorter than its file is not a surprise.
-    """
-    combined = int(getattr(report, "combined_rows", 0) or 0)
-    if not combined:
-        return None
-    return (
-        f"combined {combined:,} compatible duplicate row{'s' if combined != 1 else ''}"
-    )
-
-
-def _render_key_mismatch(attached, report, grain: str) -> None:
-    """Nothing joined — say so, and show the two sides' ids.
-
-    Shared by both metadata sections: zero matches is the one outcome that
-    looks like success everywhere else in the app (the table attaches, its
-    fields fill every picker) and is a total failure wherever a value is
-    actually read. It names the columns the key was built from, because that is
-    what the fix is.
-
-    Quiet when the dataset has contributed **no** keys to match against. In the
-    add-dataset wizard the table can be attached before the id column it joins
-    on is mapped, and there is nothing wrong with that — shouting "nothing
-    matched" at a user on their way to mapping it would be an error message for
-    a step they have not reached.
-    """
-    if not report.only_in_data:
-        st.caption(
-            "Nothing to join to yet. Map this dataset's id column to see the "
-            "report here."
-        )
-        return
-    # Three grains, three attribute shapes — dispatch on which the attached
-    # object actually carries rather than a passed-in type tag.
-    if hasattr(attached, "id_column"):
-        keyed = f", keyed by `{attached.id_column}`"
-    elif hasattr(attached, "keyed_by_participant"):
-        if attached.keyed_by_participant:
-            keyed = (
-                f", keyed by `{attached.participant_column}` + "
-                f"`{attached.trial_column}`"
-            )
-        else:
-            keyed = f", keyed by `{attached.trial_column}`"
-    else:
-        keyed = f", keyed by `{attached.text_column}`"
-    st.error(
-        f"**No {grain} in this dataset matched a row in that table**{keyed}. "
-        "Its fields will read as missing until the ids match. Check the column "
-        "picked above, or remove the uploaded file to detach the table.\n\n"
-        f"In the table: {_id_list(list(report.only_in_table), limit=4)}  \n"
-        f"In this dataset: {_id_list(list(report.only_in_data), limit=4)}\n\n"
-        "A common cause is a trailing `.0` on one side. The id column was read "
-        "as decimals in one file (one blank cell is enough) and as whole "
-        "numbers in the other.",
-        icon=ICONS["error"],
-    )
-
-
-def _id_list(ids, limit: int = 6) -> str:
-    """``p1, p2, p3 …`` — enough to act on without flooding the page."""
-    shown = ", ".join(f"`{value}`" for value in list(ids)[:limit])
-    extra = len(ids) - limit
-    return f"{shown} +{extra} more" if extra > 0 else shown
-
-
-def _metadata_id_count(raw, mapping) -> int | None:
-    """Distinct values of a metadata table's own id-column mapping.
-
-    The same immediate "✓ N" feedback the wizard's own Trial ID field gives
-    (`wizard._distinct_id_count`) — a sanity check on what the picked column(s)
-    actually contain, independent of whether they go on to join anything.
-    Reimplemented locally rather than imported: `wizard.py` imports from this
-    module, so the reverse import would be a cycle."""
-    from scanpath_studio.data import trial_id_series, trial_mapping_columns
-
-    if raw is None or getattr(raw, "empty", True) or not mapping:
-        return None
-    cols = trial_mapping_columns(mapping)
-    if not cols or not all(c in raw.columns for c in cols):
-        return None
-    return int(trial_id_series(raw, mapping).nunique())
-
-
-def _metadata_keep_picker(host, raw, id_columns, *, prefix: str, noun: str) -> list:
-    """Which of a metadata table's non-id columns to register as fields —
-    the metadata-table sibling of the wizard's own per-table "Extra fields to
-    keep" picker. Everything not kept here never becomes a field: not
-    filterable, not sortable, not a color-by option, not an info chip.
-    Defaults to every non-id column, so ignoring this control keeps them all.
-    """
-    id_cols = (
-        {str(c) for c in trial_mapping_columns(id_columns)} if id_columns else set()
-    )
-    options = [str(c) for c in raw.columns if str(c) not in id_cols]
-    if not options:
-        return []
-    key = f"{prefix}_keep_fields"
-    if key not in st.session_state:
-        st.session_state[key] = list(options)
-    else:
-        stored = st.session_state[key]
-        if isinstance(stored, list):
-            opt_set = set(options)
-            cleaned = [c for c in stored if c in opt_set]
-            if len(cleaned) != len(stored):
-                st.session_state[key] = cleaned
-
-    # The selected-count is in this label, right where the count changes, so
-    # it costs no vertical space of its own.
-    n_selected = len(st.session_state.get(key, options))
-    inline_field_label(
-        host,
-        f"Extra fields to keep — {noun} · {n_selected} selected",
-        "Columns besides the id. Keep the ones you want to filter, sort or "
-        "color trials by, or show in the trial summary. Columns left out are not "
-        "added.",
-    )
-    # No bulk-select buttons, as on the wizard's twin of this row: the
-    # multiselect's select-all lives in its dropdown and its ✕ clears, so a
-    # pair of buttons would only copy the widget's own controls.
-    # `wrap=True`, as on the wizard's pickers — in a column the chips
-    # otherwise stay on one row that scrolls sideways.
-    return host.multiselect(
-        f"Extra fields to keep — {noun}",
-        options=options,
-        key=key,
-        label_visibility="collapsed",
-        wrap=True,
-    )
-
-
-def commit_deferred_metadata(participants, combos, texts) -> None:
-    """Perform the join the three ``_*_metadata_body`` functions skip
-    under ``live_join=False``.
-
-    The wizard's "✅ Add dataset" runs this from its ``on_click`` callback —
-    which is why nothing here renders (a callback runs before the widgets that
-    make up the rest of the page exist for this run, so any ``st.*`` call
-    inside one is dropped or misplaced). It reads back exactly what the
-    deferred render already captured — the raw table and the id-column /
-    keep-fields picks, all plain session state the widgets themselves wrote —
-    and attaches it the same way the live path does, now that ``participants``
-    /``combos``/``texts`` (the just-finalized dataset's own pools) exist to
-    join against.
-
-    A table with nothing to join (no id column chosen, or nothing kept) is
-    left unattached, the same silent bail-out the live path takes; the full
-    report becomes visible the next time this table is opened for editing
-    (🗂️ Data page, ``live_join=True``).
-    """
-    from scanpath_studio import metadata as md
-
-    raw = st.session_state.get(md.RAW_SESSION_KEY)
-    id_column = st.session_state.get("participant_metadata_id_column")
-    kept = st.session_state.get("participant_metadata_keep_fields") or []
-    if raw is not None and not raw.empty and id_column and kept:
-        st.session_state[md.SESSION_KEY] = md.build_participant_metadata(
-            raw[[id_column, *kept]],
-            id_column,
-            source_name=str(st.session_state.get(_PM_NAME_KEY) or "participant table"),
-            participants=participants,
-        )
-
-    raw = st.session_state.get(md.TRIAL_RAW_SESSION_KEY)
-    trial_columns = st.session_state.get("trial_metadata_id_column") or []
-    kept = st.session_state.get("trial_metadata_keep_fields") or []
-    if raw is not None and not raw.empty and trial_columns and kept:
-        st.session_state[md.TRIAL_SESSION_KEY] = md.build_trial_metadata(
-            raw[[*trial_columns, *kept]],
-            trial_columns,
-            None,
-            source_name=str(st.session_state.get(_TM_NAME_KEY) or "trial table"),
-            keys=md.trial_keys(combos),
-        )
-
-    raw = st.session_state.get(md.TEXT_RAW_SESSION_KEY)
-    text_columns = st.session_state.get("text_metadata_id_column") or []
-    kept = st.session_state.get("text_metadata_keep_fields") or []
-    if raw is not None and not raw.empty and text_columns and kept:
-        st.session_state[md.TEXT_SESSION_KEY] = md.build_text_metadata(
-            raw[[*text_columns, *kept]],
-            text_columns,
-            source_name=str(st.session_state.get(_TXM_NAME_KEY) or "text table"),
-            keys=texts,
-        )
 
 
 def _remap_proposed(schema: dict | None, frame_columns, canon: dict) -> dict:
@@ -14987,19 +14120,14 @@ def _apply_remap() -> None:
             values := upload_setup_values(name)
         ):
             _apply_dataset_values(name, values)
-    # The description and the metadata tables are part of the
-    # same save; committed under the old name, which the rename below carries.
     from scanpath_studio.app import commit_editor_staging
 
     commit_editor_staging(name)
-    # And the name typed at the top of the screen. Applied last, after
-    # the entry is saved under the name its widgets were keyed by: every editor
-    # key carries the dataset's name, so renaming mid-edit would orphan them.
     requested = str(st.session_state.get(EDITOR_PENDING_NAME_KEY) or "").strip()
-    if requested and requested != name:
+    if requested:
         from scanpath_studio.wizard import rename_dataset
 
-        name = rename_dataset(name, requested) or name
+        rename_dataset(name, requested)
     st.session_state["_remap_applied"] = name
     # Saving *is* the moment the Trial ID mapping is decided, so ask for the
     # trial-identity check's verdict on the frames this just re-derived.
@@ -15928,21 +15056,19 @@ def _render_remap_editor(
     # and the mapping form is several screens down.
     if st.session_state.pop(FOCUS_MAPPING_KEY, None) == name:
         st.info(
-            f"Editing **{md_literal(name)}**. Its mapping and saved tables are below."
+            f"Editing **{md_literal(_dataset_label(name))}**. Its mapping and saved tables are below."
         )
     if is_multipleye_entry(stored):
         st.caption(
-            "This dataset was read from a MultiplEYE session set, so these are "
-            "the tables the app built from it, not files of your own. A change "
-            "here applies in the app; Share → Code reads the session set again "
-            "as it was added."
+            "These tables were created from a MultiplEYE session set. Changes here "
+            "apply within the app. Code copied from Share → Code reloads the original"
+            " session set."
         )
     else:
         st.caption(
-            "Change which of this dataset's columns fills each field the app "
-            "reads. Only columns kept when the dataset was added are available. "
-            "To use a column that isn't listed, remove this dataset and add it "
-            "again from its files."
+            "Choose which columns contain the IDs, positions and other values the app"
+            " needs. Only columns kept during import are available. To use a column "
+            "that is missing, remove the dataset and add it again from its files."
         )
     # The same wide option lists the add-dataset screen gets — this is
     # the same mapping, in the same shape.
@@ -15971,7 +15097,10 @@ def _render_remap_editor(
     if setup_host is None:
         st.divider()
         st.markdown("##### Recording setup")
-        st.caption("Screen, physical geometry and reading-text setup for this dataset.")
+        st.caption(
+            "Screen resolution, monitor dimensions, and the size and font of the "
+            "reading text."
+        )
     initial_setup = SetupSnapshot.from_dict(
         stored.get("setup") or {}, fallback=SetupSnapshot()
     )
@@ -16011,9 +15140,11 @@ def _render_remap_editor(
     baseline = st.session_state.get(_REMAP_BASELINE_KEY)
     if baseline is None:
         st.session_state[_REMAP_BASELINE_KEY] = baseline = signature
-    renamed = str(st.session_state.get(EDITOR_PENDING_NAME_KEY) or name).strip()
+    renamed = str(st.session_state.get(EDITOR_PENDING_NAME_KEY) or "").strip()
     st.session_state[_REMAP_DIRTY_KEY] = (
-        bool(added) or signature != baseline or (bool(renamed) and renamed != name)
+        bool(added)
+        or signature != baseline
+        or (bool(renamed) and renamed != _dataset_label(name))
     )
 
     dropped = stored.get("dropped_columns") or {}
@@ -16405,7 +15536,7 @@ def _editor_setup_config(name: str) -> dict:
         "schema": PLOT_CONFIG_SCHEMA,
         "app": {"name": "Scanpath Studio", "version": __version__},
         "exported_at": datetime.now().isoformat(timespec="seconds"),
-        "data_source": name,
+        "data_source": _dataset_label(name),
         "column_mapping": mapping,
         "column_mapping_notes": notes,
         "experimental_setup": dict(setup) if isinstance(setup, dict) else None,
@@ -16528,7 +15659,7 @@ def render_trial_identity_section() -> None:
     affected = int(report.get("affected_trials") or 0)
     if not affected:
         st.success(
-            f"{scope.capitalize()} checked; none looks like more than one reading.",
+            f"Checked {scope}. No signs of merged readings were found.",
             icon=ICONS["success"],
         )
     else:
@@ -16543,9 +15674,9 @@ def render_trial_identity_section() -> None:
         )
     if sampled_from:
         st.caption(
-            f"Checked {total:,} of this dataset's {int(sampled_from):,} trials. A "
-            "Trial ID that is missing a column usually shows up in a sample this "
-            "size. Run the full check for the exact count."
+            f"Checked {total:,} of this dataset's {int(sampled_from):,} trials. "
+            "Choose **Check every trial** to check the whole dataset and get "
+            "a complete count."
         )
         st.button(
             f"{ICONS['search']} Check every trial",
@@ -17155,7 +16286,7 @@ def render_data_health_notice(host, words, fixations, raw_gaze) -> None:
 
     box = host.container(key="data_health_notice")
     box.warning(
-        "This dataset fails the data checks, so the figure may be wrong.  \n"
+        "Data checks found problems that may affect this figure.  \n"
         + "  \n".join(lines)
         + "  \nSee **Data Management → Data checks** for the rows. If a field "
         "is mapped to the wrong column, change it under **Edit dataset**, or "

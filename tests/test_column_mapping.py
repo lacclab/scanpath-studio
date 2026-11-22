@@ -264,7 +264,7 @@ class TestSwitchingToAnotherTable:
     def test_the_table_marker_stays_out_of_the_saved_config(self):
         """It records this session's widget state, not the mapping.
 
-        `tabs._collect_column_mapping` sweeps every `col_map_*` key that does not
+        `wizard._collect_column_mapping` sweeps every `col_map_*` key that does not
         end in `_upload` into the saved-config JSON, so a marker named
         `col_map_fix__mapped_columns` would travel in one — and come back as a
         *list* rather than the tuple it was written as, never compare equal to the
@@ -278,7 +278,7 @@ class TestSwitchingToAnotherTable:
 
             from scanpath_studio.controls import FIX_FIELD_SPECS, column_mapping_ui
             from scanpath_studio.data import propose_fix_schema
-            from scanpath_studio.tabs import _collect_column_mapping
+            from scanpath_studio.wizard import _collect_column_mapping
 
             df = pd.DataFrame(
                 {

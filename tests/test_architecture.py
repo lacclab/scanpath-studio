@@ -1,26 +1,60 @@
 """Small dependency-boundary tests for the core data pipeline."""
 
+from __future__ import annotations
+
 import ast
 from pathlib import Path
+
+import pytest
 
 PACKAGE = Path(__file__).resolve().parents[1] / "scanpath_studio"
 
 
-def _relative_imports(module: str) -> set[str]:
-    tree = ast.parse((PACKAGE / f"{module}.py").read_text(encoding="utf-8"))
-    return {
-        node.module or ""
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom) and node.level
-    }
+def _package_imports(source: str) -> set[str]:
+    """Direct imports of this package's modules, including function-local imports."""
+    modules = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if node.level == 1:
+                base = f"scanpath_studio.{base}".rstrip(".")
+            names = [f"{base}.{alias.name}" for alias in node.names]
+        else:
+            continue
+        for name in names:
+            if name.startswith("scanpath_studio."):
+                modules.add(name.split(".")[1])
+    return modules
 
 
-def test_core_data_dependencies_are_one_way():
-    """``data`` never imports ``datasets`` and ``measures`` never imports
-    ``preprocessing``: the dependencies run one way, so neither pair can form
-    an import cycle."""
-    assert "datasets" not in _relative_imports("data")
-    assert "preprocessing" not in _relative_imports("measures")
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from .datasets import load_potec",
+        "from . import datasets as ds",
+        "from scanpath_studio import datasets",
+        "import scanpath_studio.datasets as ds",
+        "from scanpath_studio.datasets import load_potec",
+    ],
+)
+def test_package_import_spellings(source):
+    assert _package_imports(source) == {"datasets"}
+
+
+@pytest.mark.parametrize(
+    ("module", "forbidden"),
+    [
+        ("data", {"datasets"}),
+        ("measures", {"preprocessing"}),
+        ("metadata_editor", {"app", "tabs", "wizard"}),
+        ("wizard", {"tabs"}),
+    ],
+)
+def test_module_dependencies_are_one_way(module, forbidden):
+    imports = _package_imports((PACKAGE / f"{module}.py").read_text(encoding="utf-8"))
+    assert imports.isdisjoint(forbidden), f"{module} imports {imports & forbidden}"
 
 
 def test_offscreen_page_twins_are_actually_hidden():

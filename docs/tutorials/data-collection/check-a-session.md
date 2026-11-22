@@ -6,9 +6,8 @@ description: "Inspect an eye-tracking recording trial by trial — fixations aga
 
 Inspect a recording and save the trials that need attention.
 
-These steps use the **Full** mode: switch to it in the top bar of the
-:material/route: **Scanpath** view, or add `ui=full` to the app's
-address ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
+Before you start, switch to **Full** at the top of the :material/route:
+**Scanpath** view ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
 
 ## 1. Open the session { #1-load-the-session }
 

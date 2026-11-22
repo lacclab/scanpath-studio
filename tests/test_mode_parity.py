@@ -1,9 +1,8 @@
 """The rail's settings must reach *all three* render paths.
 
 The scanpath rail is one control set feeding three builders (static figure,
-animation, comparison). ``AGENTS.md`` → *Which viz settings apply in which
-render path* is the map; this file is the executable half of it for the
-settings that reach more than the static figure:
+animation, comparison). ``RENDER_PATHS.md`` is the map; this file is the
+executable half of it for the settings that reach more than the static figure:
 
 - **drift correction** is applied once, above the render-mode split, so the
   two Drift-correction controls move fixations on the animation and the

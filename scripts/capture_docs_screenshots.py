@@ -159,21 +159,16 @@ def capture_overview(page: Page) -> None:
 
 
 def capture(page: Page) -> None:
-    ui.deep_link(page, ui.DEMO_TRIAL)
-    ui.reset_viz(page)
-
-    # The numbered overview (scanpath-view) is `--overview`'s: it needs a
-    # dataset with screens, which the demo is not.
-
     print("corpus analysis")
+    ui.deep_link(page, {})
     ui.nav(page, "Corpus Analysis")
-    page.wait_for_timeout(2000)
+    page.locator(".st-key-tutorial_corpus_subtabs").wait_for(state="visible")
     ui.shot(page, "corpus-analysis")
     _webp("corpus-analysis")
 
     print("data page")
-    ui.nav(page, "Data")
-    page.wait_for_timeout(1500)
+    ui.nav(page, "Data Management")
+    page.get_by_role("heading", name="Data Management", exact=True).wait_for()
     ui.shot(page, "data-page")
     _webp("data-page")
 
@@ -311,25 +306,8 @@ def _shot_chips_menu(page: Page) -> None:
 
 
 def _shot_reset(page: Page) -> None:
-    """The whole Plot controls column, the Reset visualization button circled."""
-    page.locator(".st-key-reset_viz_settings_btn").first.evaluate(
-        "el => { el.style.outline = '3px solid #e5262c';"
-        " el.style.outlineOffset = '5px'; el.style.borderRadius = '999px'; }"
-    )
-    page.evaluate("window.scrollTo(0, 0)")
-    box = page.locator(".st-key-scanpath_rail").first.bounding_box()
-    pad = 12  # room for the ring, which sits outside the button
-    clip = {
-        "x": box["x"] - pad,
-        "y": box["y"],
-        "width": box["width"] + 2 * pad,
-        "height": box["height"] + pad,
-    }
-    _shot_controls(page, "reset", page, clip=clip)
-    page.locator(".st-key-reset_viz_settings_btn").first.evaluate(
-        "el => { el.style.outline = ''; el.style.outlineOffset = '';"
-        " el.style.borderRadius = ''; }"
-    )
+    """The Undo, Redo and Reset visualization row at the foot of the rail."""
+    _shot_controls(page, "reset", page.locator(".st-key-plot_reset_footer").first)
 
 
 def _shot_compare_bar(page: Page) -> None:

@@ -13,7 +13,7 @@ uv sync --extra test --extra lint     # or: pip install -e ".[test,lint]"
 uv run streamlit run streamlit_app.py --server.address 127.0.0.1
 ```
 
-Python 3.11–3.14. Bind to `127.0.0.1`: the on-device recovery cache is off on a
+Python 3.11–3.15. Bind to `127.0.0.1`: the on-device recovery cache is off on a
 server other machines can reach.
 
 The architecture map, conventions and gotchas are in [AGENTS.md](AGENTS.md);
@@ -58,10 +58,20 @@ uv run --extra lint ruff format .
 
 ## Docs site
 
-User docs live in `docs/` (MkDocs Material), published per release tag.
+User docs live in `docs/` (MkDocs Material), with two editions.
+Stable lives at the existing site root and builds from the latest release tag.
+Dev lives under `/dev/` and builds from `main`. The Docs workflow can rebuild
+either edition. What’s new reads the matching section in `CHANGELOG.md` and
+includes `changelog.d/` entries on Dev.
+
+The two Streamlit Community Cloud deployments both run `streamlit_app.py`.
+The Stable app follows `stable`, which advances on release. The Dev app follows
+`dev`, which the Update Dev app workflow fast-forwards to `main` after a merge.
+Make changes through a PR to `main`.
 
 ```bash
-uv run --extra docs mkdocs serve
+uv run --extra docs mkdocs serve           # Dev
+SCANPATH_DOCS_CHANNEL=stable uv run --extra docs mkdocs serve
 uv run --extra docs mkdocs build --strict   # the CI gate
 ```
 
@@ -75,6 +85,10 @@ reference comes from the `api.py` docstrings, so keep those current.
 - **Dependencies** are declared only in `pyproject.toml`. Don't commit a
   `uv.lock`: the hosted demo would silently switch onto it.
 - **Releasing:** AGENTS.md → *Releasing* (or the `/release` skill).
+- **Reviewing a change:** [REVIEW.md](REVIEW.md) — what to check, by what the
+  diff touches.
+- **Which figure settings reach which view** (static, Animate, Compare):
+  [RENDER_PATHS.md](RENDER_PATHS.md).
 
 By contributing, you agree your contributions are licensed under the
 [MIT License](LICENSE).

@@ -1,5 +1,5 @@
 ---
-description: "Compare how participants read the words of one text, using the eye-tracking reading measures your data brings."
+description: "Compare how participants read the words of one text using the reading measures in your data."
 ---
 
 # Analyze one text
@@ -12,9 +12,9 @@ Compare how participants read the words of one text.
 3. In **View**, choose **Measure on the stimulus**. To plot the measure against
    a word feature such as surprisal, choose **Measure vs feature** and pick the
    **Feature**. Your Words table must have that column.
-4. In **Aggregate**, choose how the values are combined. **Cohort profile**
-   also draws a **Spread** band, and its **Min participants per word** leaves
-   out words that too few participants have a value for.
+4. In **Aggregate**, choose how to combine the values. **Cohort profile**
+   also shows a shaded **Spread** band. Use **Min participants per word**
+   to leave out words with too few participants contributing a value.
 5. [Download the table and recipe](index.md#keep-the-result).
 
 <video class="sps-shot" controls muted loop playsinline preload="none"

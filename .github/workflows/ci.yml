@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
 
     steps:
       - uses: actions/checkout@v7
@@ -43,6 +43,16 @@ jobs:
       # setup-python interpreter for this matrix leg.
       - name: Install package + test deps
         run: uv pip install --system -e ".[test]"
+
+      - name: Render the bundled sample from the installed wheel
+        if: matrix.python-version == '3.12'
+        run: |
+          uv build --wheel --out-dir "$RUNNER_TEMP/wheel"
+          uv venv --python 3.12 "$RUNNER_TEMP/wheel-env"
+          uv pip install --python "$RUNNER_TEMP/wheel-env/bin/python" "$RUNNER_TEMP"/wheel/*.whl
+          cd "$RUNNER_TEMP"
+          wheel-env/bin/scanpath-studio render --sample -o sample.html
+          test -s sample.html
 
       - name: Run pytest
         # -n auto fans the suite across the runner's cores; the Streamlit

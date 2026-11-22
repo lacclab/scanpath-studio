@@ -4,7 +4,10 @@
 
 A free, open-source app for exploring eye movements in reading. Check data quality, compare participants, and make figures and replay videos. No coding required.
 
-**[Try it online](https://scanpath-studio.streamlit.app)** · **[Download the app](https://lacclab.github.io/scanpath-studio/install/)** · **[Browse the gallery](https://lacclab.github.io/scanpath-studio/gallery/)**
+**[Try Stable online](https://scanpath-studio.streamlit.app)** · [Try Dev online](https://scanpath-studio-dev.streamlit.app) · **[Download the app](https://lacclab.github.io/scanpath-studio/install/)** · **[Browse the gallery](https://lacclab.github.io/scanpath-studio/gallery/)**
+
+[Stable documentation](https://lacclab.github.io/scanpath-studio/) · [Dev documentation](https://lacclab.github.io/scanpath-studio/dev/) · [What’s new in Dev](https://lacclab.github.io/scanpath-studio/dev/whats-new/)
+
 
 ![Scanpath Studio on the Scanpath page: a replay, the Heatmap preset, a figure built layer by layer, saccade filters, redacted text, two participants side by side, Export and Share](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/app_demo.gif)
 
@@ -31,7 +34,7 @@ Download the desktop app. You don't need Python.
 A local install keeps your data on your computer. To try the app first, open the bundled demo [online](https://scanpath-studio.streamlit.app).
 
 <details>
-<summary>Prefer pip? Install with Python 3.11–3.14</summary>
+<summary>Prefer pip? Install with Python 3.11–3.15</summary>
 
 ```bash
 pip install scanpath-studio

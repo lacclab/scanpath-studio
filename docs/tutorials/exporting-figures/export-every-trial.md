@@ -6,9 +6,8 @@ description: "Batch-export scanpath figures and data tables for every selected e
 
 Build a ZIP of static figures and data tables for a set of trials.
 
-These steps use the **Full** mode: switch to it in the top bar of the
-:material/route: **Scanpath** view, or add `ui=full` to the app's
-address ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
+Before you start, switch to **Full** at the top of the :material/route:
+**Scanpath** view ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
 
 1. [Set the figure's design](export-one-figure.md#1-choose-the-view) once.
    Each exported trial uses that design, without animation or a comparison partner.
@@ -27,8 +26,8 @@ address ([Essentials and Full](../../guides/scanpath-visualization/index.md#esse
   <source src="../../../assets/workflows/export-bundle.mp4" type="video/mp4">
 </video>
 
-*Exporting figures and tables for the bundled demo's trials. The recording
-speeds up the build.*
+*Exporting figures and tables for the bundled demo's trials. The build is
+sped up in this recording.*
 
 Keep each trial's `plot_config.json` for the design, `README.md` for the build
 details and `index.csv` for the file list and failures. Keep your original data

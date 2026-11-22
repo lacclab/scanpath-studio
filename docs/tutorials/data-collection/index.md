@@ -14,7 +14,7 @@ description: "Use scanpath plots while collecting eye-tracking data: check each 
 
     Review recordings of the same text.
 
-- :material-account-search:{ .lg .middle } **[Audit an experimenter](audit-an-experimenter.md)**
+- :material-account-search:{ .lg .middle } **[Review an experimenter's sessions](audit-an-experimenter.md)**
 
     Review sessions by who collected them.
 

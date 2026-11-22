@@ -25,6 +25,7 @@ is the task-oriented guide to this module for scripted / agent use.
 from __future__ import annotations
 
 import difflib
+import json
 import logging
 from collections.abc import Iterable, Sequence
 from copy import deepcopy
@@ -45,6 +46,8 @@ import plotly.io as pio
 # import time). Inside the app a runtime exists and these warnings never fire.
 import streamlit as _st  # noqa: F401  (imported for its logging side effect)
 
+from . import chart_axes
+
 for _name in (
     "streamlit.runtime.caching.cache_data_api",
     "streamlit.runtime.scriptrunner_utils.script_run_context",
@@ -54,13 +57,14 @@ for _name in (
 from . import column_names as _cn  # noqa: E402
 from . import data as _data  # noqa: E402
 from . import export as _export  # noqa: E402
+from .authoring import is_authored  # noqa: E402
 from .build_info import BuildInfo  # noqa: E402
 from .column_names import ColumnNames  # noqa: E402
 from .constants import (  # noqa: E402
     DEFAULT_BACKGROUND_COLOR,
-    DEFAULT_ORDER_FONT_COLOR,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
     EXPERIMENTAL_ENV_VAR,
+    FIXATION_LABEL_OPTIONS,
     FONT_FAMILY,
     PLOTLY_CONFIG,
     SACCADE_CLASS_ORDER,
@@ -117,17 +121,29 @@ def build_authored_scanpath(
             ``x``, ``y``, ``duration_ms``). Left out, each word gets one fixation at its
             center.
         **layout_options: Passed to `authoring.layout_text` (``canvas_width``,
-            ``margin``, ``character_width``, ``word_height``, ``line_height``).
+            ``margin``, ``character_width``, ``word_height``, ``line_height``, ``right_to_left``).
 
     Returns:
         The ``(words, fixations)`` frames, ready to plot.
     """
-    from .authoring import authored_fixations, default_events, layout_text
+    from .authoring import (
+        AUTHORED_ATTR,
+        DEFAULT_LAYOUT,
+        authored_fixations,
+        canvas_size,
+        default_events,
+        layout_text,
+    )
 
     words = layout_text(text, **layout_options)
     if events is None:
         events = default_events(words)
-    return words, authored_fixations(words, events)
+    fixations = authored_fixations(words, events)
+    screen = canvas_size(words, {**DEFAULT_LAYOUT, **layout_options})
+    for frame in (words, fixations):
+        frame.attrs[AUTHORED_ATTR] = True
+        frame.attrs[RECORDED_SCREEN_ATTR] = screen
+    return words, fixations
 
 
 def load_authored_scanpath(
@@ -210,9 +226,7 @@ _CANONICAL_OPTION_NAMES = {
     "marker_duration_range",
     "duration_size_legend",
     "legend_layout",
-    "order_font_size",
-    "order_font_color",
-    "order_label_position",
+    *FIXATION_LABEL_OPTIONS,
     "show_fixation_colorbar",
     "fixation_colorbar_orientation",
     "fixation_colorbar_tickangle",
@@ -283,7 +297,6 @@ CANONICAL_FIGURE_DEFAULTS: dict = FigureSettings.defaults(
     show_order=False,
     show_heatmap=False,
     heatmap_metric="duration_ms",
-    order_font_color=DEFAULT_ORDER_FONT_COLOR,
     saccade_classes=list(SACCADE_CLASS_ORDER),
     fixation_opacity=0.7,
     background_color=DEFAULT_BACKGROUND_COLOR,
@@ -1308,6 +1321,12 @@ def _recorded_screen(*frames) -> tuple[int, int] | None:
     for frame in frames:
         screen = getattr(frame, "attrs", {}).get(RECORDED_SCREEN_ATTR)
         if screen:
+            if is_authored(frame):
+                for candidate in frames:
+                    if candidate is not None and (
+                        size := screen_canvas_size(candidate)
+                    ):
+                        return size
             return int(screen[0]), int(screen[1])
     return None
 
@@ -1366,7 +1385,7 @@ def load_raw_gaze(
 
 
 def load_sample_raw_gaze(*, names: str = NAMES_SOURCE) -> pd.DataFrame:
-    """Load the bundled demo's raw gaze: what the app overlays on it.
+    """Load synthesized raw gaze samples for one trial in the bundled demo.
 
     OneStop ships no sample-level gaze, so this is **synthesized** from one of the
     demo's real trials, and covers that trial alone.
@@ -1386,7 +1405,7 @@ def check_data_health(
     fixations: pd.DataFrame | None = None,
     raw_gaze: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Find values that loaded as numbers but cannot be right: the app's *Data checks*.
+    """Check durations, positions and word boxes for data problems.
 
     The checks look for fixations lasting 0 ms or less or with an infinite duration or
     onset, fixations and raw-gaze samples whose position is missing or infinite, word
@@ -1708,6 +1727,83 @@ def _require_corpus_columns(data: pd.DataFrame, kind: str, value_col: str) -> No
         f"{', '.join(repr(column) for column in missing)}, which the table doesn't "
         f"have. Columns present ({len(data.columns)}): {_column_preview(data)}.{hint}"
     )
+
+
+def run_analysis_recipe(
+    recipe: dict | str | Path,
+    words: pd.DataFrame,
+    fixations: pd.DataFrame | None = None,
+    *,
+    raw_gaze: pd.DataFrame | None = None,
+    participant_metadata: TablesLike | None = None,
+    trial_metadata: TablesLike | None = None,
+    text_metadata: TablesLike | None = None,
+    annotations: str | Path | None = None,
+    column_names: dict | None = None,
+) -> pd.DataFrame:
+    """Recreate a downloaded per-word cohort profile table.
+
+    Args:
+        recipe: The downloaded recipe JSON path or its decoded object.
+        words: Normalized Words table from `load_scanpath_data` or a corpus loader.
+        fixations: The matching normalized Fixations table, when present.
+        raw_gaze: Normalized samples from `load_raw_gaze` when the text filter uses their IDs.
+        participant_metadata: The original participant metadata table for a reader filter.
+        trial_metadata: The original trial metadata table for a trial filter.
+        text_metadata: The original text metadata table for a text filter.
+        annotations: Path to the dataset's exported annotations JSON for a star or tag filter.
+        column_names: Source column maps when supplying canonical frames.
+
+    Returns:
+        The cohort profile under the dataset's own output column names.
+
+    Raises:
+        ValueError: Unsupported recipe, missing filter fields or mismatched result.
+    """
+    from .analysis_recipe import cohort_recipe_table
+
+    if isinstance(recipe, (str, Path)):
+        recipe = json.loads(Path(recipe).read_text(encoding="utf-8"))
+    words, word_names = _named_in(words, "words")
+    fixations, fix_names = _named_in(fixations, "fixations", optional=True)
+    samples, _ = _named_in(raw_gaze, "raw_gaze", optional=True)
+    table = cohort_recipe_table(
+        recipe,
+        words,
+        fixations,
+        raw_gaze=samples,
+        metadata={
+            "participant": participant_metadata,
+            "trial": trial_metadata,
+            "text": text_metadata,
+        },
+        annotations=annotations,
+    )
+    headers = recipe["result"].get("headers")
+    if headers is not None:
+        if (
+            not isinstance(headers, list)
+            or len(headers) != len(table.columns)
+            or any(not isinstance(header, str) or not header for header in headers)
+            or len(set(headers)) != len(headers)
+        ):
+            raise ValueError(
+                "Invalid output column names in the cohort profile recipe."
+            )
+        table = table.set_axis(headers, axis="columns")
+    else:
+        names = _call_names(column_names, words=word_names, fixations=fix_names)
+        table = _cn.as_written(table, names.identity() if names else None)
+    expected = recipe["result"].get("sha256")
+    if expected is not None:
+        import hashlib
+
+        csv = table.to_csv(index=False, lineterminator="\n").encode("utf-8")
+        if hashlib.sha256(csv).hexdigest() != expected:
+            raise ValueError(
+                "The reproduced CSV differs from the original. Check the source tables, import mapping, filter inputs and app version."
+            )
+    return table
 
 
 def plot_corpus_figure(
@@ -2039,6 +2135,7 @@ def _select_part(
     *,
     raw_gaze: pd.DataFrame | None = None,
     screen_param: str = "screen",
+    elapsed_axis: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame, str, str, str | None]:
     """Resolve one logical trial and, for multipart data, exactly one screen.
 
@@ -2047,6 +2144,8 @@ def _select_part(
     trial_words, trial_fixations, pid, tid = _select_trial(
         words, fixations, participant, trial, raw_gaze=raw_gaze
     )
+    if elapsed_axis:
+        trial_fixations = chart_axes.with_origin(trial_fixations)
     catalog = part_catalog(trial_words, trial_fixations)
     if (
         catalog.empty
@@ -2376,12 +2475,13 @@ def _check_column_options(
 
 
 def figure_options(kind: str = "static", *, choices: bool = False) -> dict:
-    """List every figure keyword a builder takes, with the default it renders with.
+    """List figure options and their default values.
 
-    The defaults are what a call actually renders with, the app's Scanpath design, so a
-    script can diff its intended settings against what it would get. The *Figure
-    options* section of the API reference lists them by section, with their ``render``
-    flags.
+    The defaults follow the app's Scanpath design. Some accepted keywords affect
+    only certain views. For example, ``order_font_color`` sets the fixation index
+    color for a single scanpath. With two scanpaths, each index takes its
+    scanpath's fixation color. The *Figure options* table lists the views and
+    matching ``render`` flags.
 
     Args:
         kind: ``"static"`` for [`plot_scanpath`][scanpath_studio.api.plot_scanpath],
@@ -2546,7 +2646,9 @@ def plot_scanpath(
     [`figure_options`][scanpath_studio.api.figure_options] lists them with their
     defaults. An option naming a column takes either name: frames under the dataset's
     own column names, as ``load_scanpath_data`` returns them by default, are read
-    through the map they carry.
+    through the map they carry. Use ``x_field="@elapsed_seconds"`` with
+    ``y_field="x"`` or ``"y"`` to draw fixation durations against time since the
+    reading's first recorded onset. Selecting a screen or index window keeps that origin.
 
     Args:
         words: A normalized words frame from
@@ -2649,13 +2751,24 @@ def plot_scanpath(
     )
     word_side = _table_names(column_names, "words", word_names)
     figure_overrides = _canonical_options(figure_overrides, names, words=word_side)
+    axes = (figure_overrides.get("x_field", "x"), figure_overrides.get("y_field", "y"))
     trial_words, trial_fixations, pid, tid, selected_screen = _select_part(
-        words, fixations, participant, trial, screen, raw_gaze=raw_gaze
+        words,
+        fixations,
+        participant,
+        trial,
+        screen,
+        raw_gaze=raw_gaze,
+        elapsed_axis=chart_axes.ELAPSED in axes,
     )
     if raw_gaze is not None:
         raw_gaze = _data.filter_raw_gaze(raw_gaze, [pid], [tid])
-        if selected_screen is not None and SCREEN_ID in raw_gaze.columns:
-            raw_gaze = extract_part(raw_gaze, pid, tid, selected_screen)
+        if selected_screen is not None:
+            raw_gaze = (
+                extract_part(raw_gaze, pid, tid, selected_screen)
+                if SCREEN_ID in raw_gaze.columns
+                else raw_gaze.iloc[:0]
+            )
     _check_column_options(
         figure_overrides, words=trial_words, fixations=trial_fixations
     )
@@ -2694,6 +2807,7 @@ def plot_scanpath(
 
         reasons = illustration_reasons(
             settings,
+            synthetic=is_authored(words, fixations),
             fix_index_range=fix_index_range,
             full_fixation_range=full_fix_range,
         )
@@ -2996,6 +3110,7 @@ def animate_scanpath(
 
         reasons = illustration_reasons(
             {**animation_overrides, "playback_speed": playback_speed},
+            synthetic=is_authored(words, fixations, *passed_b),
             # The replay draws neither the snap nor the arcs.
             static=False,
             fix_index_range=fix_index_range,
@@ -3416,6 +3531,7 @@ def compare_scanpaths(
     drift_correction: str | None = None,
     title: str = "",
     caption: str = "",
+    illustration_label: str = "auto",
     column_names: dict | None = None,
     **figure_overrides: Any,
 ) -> go.Figure:
@@ -3443,8 +3559,10 @@ def compare_scanpaths(
 
     | Key | What it sets | Left out |
     | --- | --- | --- |
-    | ``fix_color``, ``saccade_color`` | The scanpath's colors | Its default |
-    | ``marker_size_range``, ``opacity``, ``hollow`` | Its fixation markers | Its default |
+    | ``fix_color`` | Fixation markers and index numbers | The scanpath's palette color |
+    | ``saccade_color`` | Saccade lines | The scanpath's palette color |
+    | ``marker_size_range`` | Smallest and largest fixation markers | The figure's ``marker_size_range`` |
+    | ``opacity``, ``hollow`` | Its fixation markers | Its default |
     | ``saccade_style``, ``saccade_width`` | Its saccade lines | Its default |
     | ``box_color`` | The outline of that reading's word boxes | Its ``fix_color`` |
     | ``box_fill_color`` | Their fill | ``word_box_fill_color`` |
@@ -3453,8 +3571,8 @@ def compare_scanpaths(
     | ``heatmap_colorscale`` | That reading's word-box heatmap color scale, on the range both share; two different scales get a color bar each | ``heatmap_colorscale`` |
     | ``fixation_flags``, ``saccade_classes`` | That scanpath's own filters, in place of the figure's | The figure's |
 
-    The box keys and ``raw_gaze_color`` are this figure's only: the co-animation draws
-    one set of boxes and no raw gaze, and ignores them.
+    For a replay of two scanpaths, see
+    [`animate_scanpath`][scanpath_studio.api.animate_scanpath] for the supported styles.
 
     Args:
         words: The words frame holding both trials, or A's when ``words_b`` is given.
@@ -3493,6 +3611,7 @@ def compare_scanpaths(
         fix_index_range_b: B's own window, as the app's B slider sets it.
         drift_correction: Experimental, as in
             [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
+        illustration_label: As in [`plot_scanpath`][scanpath_studio.api.plot_scanpath]. An authored reading on either side labels the comparison.
         title: As in [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
         caption: As in [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
         column_names: As in [`plot_scanpath`][scanpath_studio.api.plot_scanpath]. A's
@@ -3723,7 +3842,21 @@ def compare_scanpaths(
     if not (trial_raw_a.empty and trial_raw_b.empty):
         merged_raw = pd.concat(align_compare_columns(trial_raw_a, trial_raw_b)[:2])
     settings = _figure_kwargs(figure_overrides)
-    settings.pop("illustration_reasons", None)
+    from .illustration import illustration_reasons, resolve_label_reasons
+
+    label_mode = str(illustration_label).capitalize()
+    if label_mode not in {"Auto", "Show", "Hide"}:
+        raise ValueError("illustration_label must be 'auto', 'show', or 'hide'.")
+    reasons = settings.pop("illustration_reasons", None)
+    if reasons is None:
+        reasons = resolve_label_reasons(
+            label_mode,
+            illustration_reasons(
+                settings,
+                static=False,
+                synthetic=is_authored(words, fixations, words_b, fixations_b),
+            ),
+        )
     if raw_gaze is not None or raw_gaze_b is not None:
         settings.setdefault("show_raw_gaze", True)
     render_settings = FigureSettings.from_mapping(
@@ -3755,6 +3888,7 @@ def compare_scanpaths(
     annotate_figure(
         fig, title=title, caption=caption, **figure_text_style(render_settings)
     )
+    add_illustration_label(fig, reasons, text=render_settings.illustration_text)
     return fig
 
 
@@ -3784,7 +3918,7 @@ def save_figure(
     width_in: float | None = None,
     dpi: int | None = None,
 ) -> Path:
-    """Save a figure, in the format its file extension names.
+    """Save a figure as HTML, PNG, SVG or PDF.
 
     The file carries the citation of Scanpath Studio in its metadata — PNG text
     chunks, an SVG ``<metadata>`` element, the PDF's document properties, the
@@ -3795,7 +3929,7 @@ def save_figure(
         fig: The figure.
         path: The file to write: ``.html`` (interactive), or ``.png``, ``.svg`` or
             ``.pdf`` (static, through Kaleido; see the [export
-            FAQ](https://lacclab.github.io/scanpath-studio/faq/#export-fails) for its
+            FAQ](faq.md#export-fails) for its
             setup).
         scale: The static image's scale factor.
         width: The image width in px, overriding the figure's own. Ignored for
@@ -4170,7 +4304,7 @@ def clear_cache() -> dict:
 
 
 def version_info() -> BuildInfo:
-    """Say which build of Scanpath Studio this is, without using the network.
+    """Return version and installation details without a network request.
 
     The same is in the app's Help → About, and in ``scanpath-studio version``.
 
@@ -4178,6 +4312,7 @@ def version_info() -> BuildInfo:
     | --- | --- |
     | ``version`` | ``scanpath_studio.__version__``: the release itself (``"0.35.0"``), or between releases a PEP 440 version that sorts after it. ``"0.35.0.post3+g8f18219"`` is three commits after v0.35.0, at commit ``8f18219``; it ends ``.dirty`` with uncommitted changes |
     | ``release`` | The release it descends from (``scanpath_studio.__release__``) |
+    | ``channel``, ``docs_url`` | ``"stable"`` or ``"dev"`` and the matching documentation URL |
     | ``distance`` | The commits since, ``None`` when unknown |
     | ``commit``, ``dirty`` | The commit, and whether there were uncommitted changes |
     | ``source`` | How it was worked out: ``"checkout"`` (``git describe``), ``"stamp"`` (a desktop bundle's build stamp), ``"vcs"`` (a ``pip install git+…``) or ``"release"`` |
@@ -4191,7 +4326,7 @@ def version_info() -> BuildInfo:
 
 
 def check_for_updates(timeout: float = 5.0) -> UpdateCheck:
-    """Ask GitHub whether a newer release than this build is out.
+    """Check GitHub for a newer release.
 
     The one call here that uses the network, and only when made. It reads the latest
     release from ``api.github.com`` (drafts and pre-releases excluded), compares it with
@@ -4219,7 +4354,7 @@ def check_for_updates(timeout: float = 5.0) -> UpdateCheck:
 
 
 def cite(format: str = "bibtex", corpus: str | None = None) -> str:
-    """How to cite Scanpath Studio — and, optionally, the corpus you used.
+    """Return a citation for Scanpath Studio and, optionally, a public corpus.
 
     The same entries as the app's Help → About and *Cite* buttons, and
     ``scanpath-studio cite``. Every figure, replay and page `save_figure` writes

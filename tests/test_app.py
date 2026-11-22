@@ -10,16 +10,19 @@ from scanpath_studio import app as app_module
 from scanpath_studio.app import (
     DEMO_CHOICE,
     UPLOAD_CHOICE,
-    _apply_url_preset,
-    _apply_url_trial_selection,
-    _build_comparison_options,
-    _build_share_query,
-    build_combo_options,
 )
 from scanpath_studio.data import compute_canvas_size
-
-# Imported from its real home (utils); app.py does not re-export it.
-from scanpath_studio.utils import compute_trial_stats, reading_key
+from scanpath_studio.url_state import (
+    _apply_url_preset,
+    _apply_url_trial_selection,
+    _build_share_query,
+)
+from scanpath_studio.utils import (
+    build_combo_options,
+    build_comparison_options,
+    compute_trial_stats,
+    reading_key,
+)
 
 
 class TestBuildComboOptions:
@@ -126,7 +129,7 @@ class TestComputeTrialStats:
 
 
 class TestBuildComparisonOptions:
-    """Tests for _build_comparison_options function."""
+    """Tests for build_comparison_options function."""
 
     def test_build_comparison_options_text_mode(self):
         combos = pd.DataFrame(
@@ -136,7 +139,7 @@ class TestBuildComparisonOptions:
                 "text_id": ["para1", "para1", "para1"],
             }
         )
-        options = _build_comparison_options(
+        options = build_comparison_options(
             combos, "Text", "p1", "t1", "para1", include_primary=False
         )
         # (participant, trial, label, markers). p1/t2 is same participant AND same
@@ -154,7 +157,7 @@ class TestBuildComparisonOptions:
                 "text_id": ["para1", "para1", "para2"],
             }
         )
-        options = _build_comparison_options(
+        options = build_comparison_options(
             combos, "Participant", "p1", "t1", "para1", include_primary=False
         )
         # Same-text (📄) trial leads, then the different-text one (no marker).
@@ -170,7 +173,7 @@ class TestBuildComparisonOptions:
                 "text_id": ["para1", "para2"],
             }
         )
-        options = _build_comparison_options(
+        options = build_comparison_options(
             combos, "None", "p1", "t1", None, include_primary=False
         )
         assert len(options) > 0
@@ -185,7 +188,7 @@ class TestBuildComparisonOptions:
                 "unique_text_id": ["up1", "up1"],
             }
         )
-        options = _build_comparison_options(combos, "Text", "p1", "t1", "up1")
+        options = build_comparison_options(combos, "Text", "p1", "t1", "up1")
         assert len(options) > 0
 
 
@@ -219,8 +222,97 @@ def fake_st(monkeypatch):
     return fake
 
 
+@pytest.mark.parametrize("width, expected_height", [(1920, 480), (1200, 750)])
+def test_named_drawing_keeps_gaze_and_respects_screen_edits(
+    fake_st, width, expected_height
+):
+    from scanpath_studio.authoring import authoring_json, layout_text, sample_draft
+
+    text, layout, events = sample_draft()
+    original_gaze = pd.DataFrame({"x": [17]})
+    setup = {"canvas_width": width, "canvas_height": 480, "monitor_width_mm": 470}
+    updated = pd.DataFrame({"duration_ms": [430]})
+    fake_st.session_state.update(
+        {
+            "data_source_choice": "Class example",
+            "_datasets": {
+                "Class example": {
+                    "words": layout_text(text, **layout),
+                    "authoring": authoring_json(text, events, layout=layout),
+                    "raw_gaze": original_gaze,
+                    "setup": setup,
+                }
+            },
+            "_author_save_payload": {
+                "words": pd.DataFrame(),
+                "fixations": updated,
+                "authoring": "new",
+                "setup": {**setup, "canvas_width": 1200, "canvas_height": 750},
+            },
+        }
+    )
+    app_module._save_authored_dataset("unused_copy_name")
+    saved = fake_st.session_state["_datasets"]["Class example"]
+    assert saved["raw_gaze"] is original_gaze
+    assert saved["setup"] == {**setup, "canvas_height": expected_height}
+    assert saved["fixations"] is updated and saved["authoring"] == "new"
+
+
 class TestBuildShareQuery:
     """The Share button's deep-link builder (inverse of the URL preset parser)."""
+
+    def test_renamed_drawing_shares_its_display_name_and_portable_draft(self, fake_st):
+        from scanpath_studio.authoring import authoring_json, sample_draft
+        from scanpath_studio.constants import DATASET_ALIASES_KEY
+        from scanpath_studio.url_state import _snippet_source
+
+        text, layout, events = sample_draft()
+        key = "original-name"
+        fake_st.session_state.update(
+            {
+                "_datasets": {
+                    key: {"authoring": authoring_json(text, events, layout=layout)}
+                },
+                DATASET_ALIASES_KEY: {key: "Class example"},
+            }
+        )
+        query, notes = _build_share_query(key)
+        params = parse_qs(query)
+        assert params["dataset"] == ["Class example"]
+        assert params["dataset_id"] and params["dataset_digest"]
+        assert "**Class example**" in notes[0]
+        assert _snippet_source(key).options["path"] == "Class-example.json"
+
+    def test_manual_sample_link_is_scoped_to_the_sample(self, fake_st):
+        from scanpath_studio.authoring import (
+            DEFAULT_LAYOUT,
+            default_events,
+            layout_text,
+        )
+        from scanpath_studio.constants import MANUAL_SAMPLE_CHOICE
+
+        private = default_events(layout_text("Private draft"))
+        fake_st.session_state.update(
+            author_text="Private draft", _authored_events_frame=private
+        )
+        query, _ = _build_share_query(MANUAL_SAMPLE_CHOICE)
+        params = parse_qs(query)
+        assert params["source"] == ["manual_sample"]
+        assert "author_text" not in params and "author_events" not in params
+        sample = default_events(layout_text("Sample"))
+        layout = {**DEFAULT_LAYOUT, "right_to_left": 1}
+        fake_st.session_state["_manual_scanpath_drafts"] = {
+            MANUAL_SAMPLE_CHOICE: ("Sample", layout, sample)
+        }
+        query, _ = _build_share_query(MANUAL_SAMPLE_CHOICE)
+        fake_st.query_params = {k: v[0] for k, v in parse_qs(query).items()}
+        fake_st.session_state.clear()
+        assert _apply_url_preset() == "manual_sample"
+        text, restored_layout, events = fake_st.session_state[
+            "_manual_scanpath_drafts"
+        ][MANUAL_SAMPLE_CHOICE]
+        assert (text, restored_layout) == ("Sample", layout)
+        assert events.to_dict("records") == sample.to_dict("records")
 
     def test_demo_source_selection_and_toggles(self, fake_st):
         fake_st.session_state = {
@@ -487,7 +579,7 @@ class TestBuildShareQuery:
         assert "onestop_regime" not in ss  # bad regime dropped
         assert ss["onestop_parts"] == ["Paragraph"]  # only the valid part kept
 
-    def test_authored_link_seeds_event_text_guard(self, fake_st):
+    def test_authored_link_restores_the_text_and_events_together(self, fake_st):
         events = [{"word_id": 2, "x": 123, "y": 45, "duration_ms": 456}]
         fake_st.query_params = {
             "source": "author",
@@ -496,9 +588,8 @@ class TestBuildShareQuery:
         }
         assert _apply_url_preset() == "author"
         ss = fake_st.session_state
-        assert ss["author_text"] == "alpha beta"
-        assert ss["_author_text_for_events"] == "alpha beta"
-        restored = ss["_authored_events_frame"]
+        text, _, restored = ss["_manual_scanpath_drafts"][app_module.AUTHOR_CHOICE]
+        assert text == "alpha beta"
         assert restored[list(events[0])].to_dict("records") == events
         # Normalized on the way in: the stable id/order a link may omit.
         assert restored[["fixation_id", "order_in_trial"]].to_dict("records") == [
@@ -526,9 +617,9 @@ class TestBuildShareQuery:
         }
         assert _apply_url_preset() == "author"
         ss = fake_st.session_state
-        assert ss["author_text"] == "alpha beta"
-        assert "_authored_events_frame" not in ss
-        assert "_author_text_for_events" not in ss
+        assert (
+            ss["_manual_scanpath_drafts"][app_module.AUTHOR_CHOICE][0] == "alpha beta"
+        )
         assert any("unreadable authored scanpath" in str(w) for w in fake_st.warnings)
 
 

@@ -2,7 +2,7 @@
 
 **Get it**
 - **Desktop app**, for your own data: the Windows, macOS and Linux downloads under *Assets* below.
-- **With pip** (Python 3.11–3.14): `pip install -U scanpath-studio`, then `scanpath-studio`.
+- **With pip** (Python 3.11–3.15): `pip install -U scanpath-studio`, then `scanpath-studio`.
 - **In the browser:** try the bundled demo [online](https://scanpath-studio.streamlit.app).
 
 [Documentation](https://lacclab.github.io/scanpath-studio/) · [Ask a question](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a) · [Report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md) · [Cite](https://lacclab.github.io/scanpath-studio/about/#cite-scanpath-studio)

@@ -6,9 +6,8 @@ description: "Export an animated scanpath replay of a reading as GIF or MP4 for 
 
 Save an animated reading for a talk or supplement.
 
-These steps use the **Full** mode: switch to it in the top bar of the
-:material/route: **Scanpath** view, or add `ui=full` to the app's
-address ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
+Before you start, switch to **Full** at the top of the :material/route:
+**Scanpath** view ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
 
 1. Pick a trial in the :material/route: **Scanpath** view and turn on
    :material/movie: **Animate**.
@@ -25,7 +24,7 @@ address ([Essentials and Full](../../guides/scanpath-visualization/index.md#esse
   <source src="../../../assets/workflows/replay-export.mp4" type="video/mp4">
 </video>
 
-*Exporting a GIF. The recording shortens the rendering wait.*
+*Exporting a GIF. The rendering wait is shortened in this recording.*
 
 For [GIF/MP4 export from Python](../../guides/exporting/index.md#replays-as-gif-or-mp4),
 see Export and share.

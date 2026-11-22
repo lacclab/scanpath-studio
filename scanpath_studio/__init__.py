@@ -33,6 +33,7 @@ __all__ = [
     "plot_scanpath",
     "propose_schema",
     "render_parent_trial",
+    "run_analysis_recipe",
     "save_figure",
     "save_figure_layers",
     "version_info",
@@ -42,7 +43,7 @@ __all__ = [
 # against. `__version__` is the exact build, worked out from it lazily
 # (build_info.py) — "0.35.0" at the release itself,
 # "0.35.0.post3+g8f18219" three commits after it.
-__release__ = "0.46.0"
+__release__ = "0.47.0"
 
 # Public headless API (see api.py / datasets.py). Resolved lazily so
 # `import scanpath_studio` stays cheap and doesn't pull in pandas/plotly/

@@ -220,6 +220,10 @@ def update_command(kind: str, info: BuildInfo) -> str:
     """The shell command that updates this kind of install; ``""`` for the desktop app."""
     if kind == "vcs":
         url = info.vcs_url or f"https://github.com/{REPO}"
+        if info.ref in {"stable", "dev", "main"}:
+            url += f"@{info.ref}"
+        elif info.ref == f"v{info.release}" and info.channel == "stable":
+            url += "@stable"
         return f'pip install -U "git+{url}"'
     return UPDATE_COMMANDS.get(kind, "")
 
@@ -251,7 +255,8 @@ def check_for_updates(
     except UpdateCheckError as error:
         return UpdateCheck("error", info.version, str(error), install_kind=kind)
     try:
-        newest, current = Version(release.version), Version(info.version)
+        newest = Version(release.version)
+        current = Version(info.release if info.channel == "stable" else info.version)
     except InvalidVersion:
         return UpdateCheck(
             "error",

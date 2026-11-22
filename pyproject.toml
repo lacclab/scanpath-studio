@@ -34,6 +34,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
@@ -80,6 +81,9 @@ test = [
     # Registers the `@pytest.mark.timeout` marker the AppTest tests rely on;
     # required for collection under `--strict-markers`.
     "pytest-timeout>=2.1.0",
+    # Property tests (`tests/test_properties.py`): invariants checked against
+    # generated inputs rather than hand-picked examples.
+    "hypothesis>=6.140.0",
 ]
 # The linter, pinned to exactly what CI runs (.github/workflows/ci.yml). An
 # unpinned ruff means a local run and CI can disagree — a new release lands new

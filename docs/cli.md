@@ -4,22 +4,22 @@ description: "Command-line reference for scanpath-studio: launch the app, or ren
 
 # CLI reference
 
-`scanpath-studio` launches the app. Its subcommands do the rest without opening
-it:
+`scanpath-studio` launches the app. Use these commands to create figures,
+check data and manage saved work without opening the app:
 
 | Command | What it does |
 | --- | --- |
 | [`scanpath-studio`](#launch-the-app), `run` | Launch the app |
 | [`render`](#render) | Write one trial's scanpath, heatmap or replay to a file |
 | [`corpus`](#corpus) | Render a corpus figure from a tidy CSV you already have |
+| [`recipe`](#recipe) | Recreate a cohort profile CSV from its saved recipe |
 | [`check`](#check) | Run the Data checks on your tables |
 | [`cache`](#cache) | Show or clear the recovery cache |
 | [`version`](#version) | Show the build, and whether a newer release is out |
 | [`cite`](#cite) | Print how to cite Scanpath Studio |
 
 Each command takes `--help`, and `scanpath-studio --version` prints the version.
-A word that is not a command is an error that suggests the closest command. It
-is not passed on to Streamlit.
+If you mistype a command, the CLI suggests the closest match.
 
 ## Launch the app
 
@@ -51,8 +51,8 @@ them back on with `SCANPATH_LOCAL_FS=1`
 
 ## render
 
-`render` writes one trial to a file without opening the app. The extension
-picks the format: `.html` is interactive and needs nothing else, while `.png`,
+`render` writes one trial to a file without opening the app. The file extension
+sets the format: `.html` opens as an interactive figure in your browser, while `.png`,
 `.svg` and `.pdf` need Chrome, Chromium or Edge (or run `plotly_get_chrome -y`
 once; see the [FAQ](faq.md#export-fails)). The figure is the app's Scanpath
 design unless a flag changes it, and every [figure option](api.md#figure-options)
@@ -292,6 +292,24 @@ from docs_support import cli_reference
 print(cli_reference("corpus"))
 ```
 
+## recipe
+
+Recreate a **Per text → Cohort profile** CSV from its downloaded JSON recipe
+and source tables. Recipes include the original column mappings. If raw gaze
+supplied the text IDs used by a metadata filter, pass its files with `--raw-gaze`.
+The command identifies any missing metadata or annotation input and verifies
+the regenerated CSV against the checksum in the recipe when available.
+
+```bash
+scanpath-studio recipe profile.recipe.json --words words.csv --fixations fixations.csv -o profile.csv
+```
+
+```python exec="true"
+from docs_support import cli_reference
+
+print(cli_reference("recipe"))
+```
+
 ## check
 
 `check` runs the **:material/database: Data Management** page's **Data checks**
@@ -307,7 +325,9 @@ on your tables without opening the app. It looks for:
 Each finding gives the rows and trials affected, a few example rows, and what
 the app does with them. `check` changes nothing and exits 0 whatever it finds.
 `--json` prints the table
-[`check_data_health`][scanpath_studio.api.check_data_health] returns.
+[`check_data_health`][scanpath_studio.api.check_data_health] returns. In example rows,
+missing values are `null` and infinite values are the strings `"Infinity"` or
+`"-Infinity"`.
 
 ```bash
 scanpath-studio check --words ia.csv --fixations fixations.csv

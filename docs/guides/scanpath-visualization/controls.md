@@ -5,9 +5,9 @@ description: "Every control on Scanpath Studio's Scanpath view and what it does:
 
 # All controls
 
-Every control in the :material/route: **Scanpath** view, where it is and what it
-does, in the order you meet them on screen. Search this page (++ctrl+f++, or
-++cmd+f++ on a Mac) for the thing you want to change, such as *colors*,
+Find every control in the :material/route: **Scanpath** view, in the order it
+appears on screen. Search this page (++ctrl+f++, or
+++cmd+f++ on a Mac) for what you want to change, such as *colors*,
 *legends* or *axes*.
 
 The view has two sets of controls:
@@ -17,8 +17,8 @@ The view has two sets of controls:
 - The **plot controls**, the column on the right, decide *how* it is drawn:
   each layer of the figure, its colors and sizes, and the figure as a whole.
 
-The tabs under the plot then work with the trial on screen: annotate it, read
-its context, compare it, export it or share it. For how the parts fit
+Use the tabs under the plot to annotate the current trial, read its context,
+compare readings, export a figure or share the view. For how the parts fit
 together, see the [Scanpath visualization](index.md) guide.
 
 For the corresponding Python keywords and CLI flags, use the
@@ -87,8 +87,8 @@ time slider above the plot. While it is on, the **Fixations**, **Heatmap** and
 | **Replay** → **Duration** | For information only: the trial's reading time, and how long the video runs at this speed. |
 | **Frames** → **Quality** | How smooth the video is: **Coarse**, **Standard** or **Fine**. More frames play more smoothly but take longer to build. Moving either slider below makes it **Custom**. |
 | **Frames** → **Every** | Reading time between frames, in ms. |
-| **Frames** → **Limit** | The most frames a video gets. A long trial gets wider frame steps to fit. |
-| **Frames** → **Result** | For information only: how many frames this trial's video has, and how far apart they ended up. |
+| **Frames** → **Limit** | The maximum number of frames in the replay. For long trials, frames are spaced farther apart to stay within this limit. |
+| **Frames** → **Result** | Shows the number of frames in this replay and the reading time between them. |
 
 ### :material/compare: Compare
 
@@ -116,7 +116,7 @@ saved:
 | Control | What it does |
 | --- | --- |
 | :material/timeline: **Scanpath** / :material/local_fire_department: **Heatmap** / :material/draw: **Illustration** | Ready-made designs: fixations and saccades over the text, a word-box heatmap, or a clean schematic. |
-| :material/build: **Custom** | Your most recent hand-made settings. |
+| :material/build: **Custom** | Your most recent custom settings. |
 | :material/palette: **My designs** | Your saved designs. Click one to apply it. :material/edit: renames it and :material/delete: deletes it. |
 | :material/palette: **My designs** → :material/save: | Save the settings on screen as a named design, to apply again later in one click. |
 | :material/palette: **My designs** → **Export** / **Import** | Download your designs as a file, or load a file of designs, to share a look with co-authors or move your designs to another computer. A design in the file replaces yours of the same name. |
@@ -143,7 +143,7 @@ The **Fixations** switch draws the fixation markers. Its **▾** holds:
 | **Color bar** → **Show** | Show the color scale's bar, when markers are colored by a number. |
 | **Color bar** → **Vertical** / **Horizontal**, **Angle**, **Size**, **Thickness**, **Length** | Set the bar's direction (right of the plot or below it), its tick-label angle and size, and its thickness and length. |
 | **Fixation index** → **Show** | Number each fixation in reading order. |
-| **Fixation index** → color, **Size** | Choose the numbers' color and size. |
+| **Fixation index** → color, **Size** | Choose the numbers' size in every view. For one scanpath, choose their color here. When comparing two scanpaths, each number uses its scanpath’s fixation color, including during replay. |
 | **Fixation index** → **Position** | Put each number above its fixation, inside it, or below it. |
 | **Snap** → **To line** | Move each fixation up or down onto its line of text. This makes a schematic, labeled *Illustration*. |
 | **Snap** → **Position** | Choose where on its line a snapped fixation sits. |
@@ -178,7 +178,7 @@ Recording setup, and changes here apply to the figure only. Its **▾** holds:
 | Control | What it does |
 | --- | --- |
 | **Text** → **Show** | Show the stimulus text, the words the participant read, at their place on the screen. |
-| **Text** → **Redact** | Draw a rounded block over each word's letters instead of the word, in the text color, and hide the word in the hovers, so a figure shows where the text was without showing what it said. |
+| **Text** → **Redact** | Replace each word with a rounded block in the text color and hide its text in tooltips. This preserves the text layout while concealing the words. |
 | **Fit** → **Fit to word boxes** | Size the stimulus text from its word boxes, instead of a fixed font size. |
 | **Fit** → **Spacing** | With **Fit to word boxes** on: the distance between lines, in font sizes. The font size is that distance divided by this value, so 3 leaves a blank line above and below. |
 | **Size** | With **Fit to word boxes** on: the size of the axis and legend text, in px. Off: the stimulus text's size too, in px or pt. |
@@ -271,7 +271,8 @@ The figure as a whole:
 | **Grid** → **Show** | Show a grid of screen coordinates, in px. |
 | **Grid** → **Auto**, interval | Set the grid spacing (interval), in px, or let **Auto** choose it. |
 | **Labels** | Set the grid label (tick label) font size. |
-| **Axes** → **X** / **Y** | Choose the x and y axis fields. **X** / **Y** draws the reading on the screen. Any other pair turns the figure into a scatter plot (chart) of the fixations, with no text, word boxes, saccades, heatmap or grid. Animate and Compare always plot **X** / **Y**. For example: **Time (ms)** against **X** for a time course of the reading, where regressions show as dips; **Time (ms)** against **Word #** for reading progress through the text; **Fixation #** against **Duration (ms)** for fixation durations over the trial. |
+| **Axis preset** | Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. **Connect fixations** traces the index sequence. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window. |
+| **Axes** → **X** / **Y** | Choose any two numeric fixation fields. Try fixation order against duration, or recorded onset against word number. Screen Y increases downward. Raw samples can appear when they supply both plotted quantities. **Screen X and Y** restores the stimulus view. Animate and Compare use screen coordinates. |
 | **Illustration** → **Label** | Choose when the figure carries an *Illustration* note, saying it does not show the recorded positions. **Auto** adds it when a setting changes the geometry or the data (such as snapping fixations to a line or drawing saccades as arcs), **Show** always, **Hide** never. |
 | **Illustration** → **Text** | Write the *Illustration* label's text. Empty writes "Illustration ·" followed by the reasons. |
 | **Title** → **Show**, text, **Size** | Add a figure title above the plot, and set its font size. `{field}` inserts a value of the trial. |
@@ -283,15 +284,23 @@ The figure as a whole:
 | **Legends** → **Arrangement** | Choose the legend arrangement: **Stacked** or **Side by side**. |
 | **Legends** → **Text size** | Set the legend text (font) size, in px. Empty uses the figure's text size. |
 
+![Vertical screen position by elapsed time for a bundled demo reading](../../assets/screenshots/elapsed-reading-chart.jpg)
+
+Each dot is a fixation. The clusters step down as the reader looks lower on the screen. Around 39 seconds, the reader looks back near the top.
+
 ### :material/restart_alt: Reset visualization
 
-<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/reset.webp" title="Open full size"><img src="../../../assets/screenshots/controls/reset.webp" alt="The Plot controls column, with Reset visualization circled at its foot" loading="lazy"></a>
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/reset.webp" title="Open full size"><img src="../../../assets/screenshots/controls/reset.webp" alt="Undo and Redo arrows beside Reset visualization" loading="lazy"></a>
 
-The button at the foot of the column.
+At the foot of **Full** plot controls, use the arrows beside **Reset visualization** to step through your last 30 plot changes. Presets and a confirmed reset each count as one change.
 
 | Control | What it does |
 | --- | --- |
+| **Undo** | Restore the previous plot settings for the current dataset. Switching trials keeps you on the newly selected trial. |
+| **Redo** | Reapply the change you undid. Making a new plot edit clears the redo list. |
 | **Reset visualization** | After you confirm, reset every plot setting to its default, **Filters & highlights** included. Annotations, trial filters, data and the selected trial stay. |
+
+Changing datasets starts a fresh history. A trial-specific fixation window drops out of history when you leave that reading.
 
 ## In Compare
 
@@ -302,7 +311,7 @@ several menus split into a **Scanpath A** and a **Scanpath B** group.
 
 | Control | What it does |
 | --- | --- |
-| **Dataset B** | Choose the dataset scanpath B comes from: this one, or another dataset. |
+| **Dataset B** | Choose the dataset scanpath B comes from. To reopen a shared comparison with PoTeC or OneStop, the recipient needs the corpus on their computer. If the link opens only A, open the named corpus as the main dataset to locate or download its files, then reopen the link. |
 | **Trial B**, slider, **◀ ▶** | Choose scanpath B's trial: 📄 marks the same text, 👤 the same participant. |
 | **Screen B** | On a trial recorded over several screens: B's screen to show. |
 | **⇅** on B's row | Sort scanpath B's trial list, apart from A's. The default, **Same text, then same participant**, lists trials of A's text first, then A's participant, then the rest. You can also sort by any field, as on A's row. |
@@ -338,6 +347,6 @@ The tabs under the figure. Essentials has **Export**, for the current figure, an
 | | **Annotations (JSON)** / **Settings file (JSON)** | **Settings file**: beside each trial's figure, a `plot_config.json` recording how it was drawn (layers, colors, sizes, screen, title and caption), so the figures are documented. **Annotations**: one `annotations.json` with the exported trials' favorites, tags and notes, which :material/database: **Data Management** → **Annotations** can import again. |
 | | **File path pattern** | Set the file names inside the export bundle. |
 | | **Build export** | Build the export bundle (a zip) to download. |
-| :material/share: **Share** | **Link** | Copy a share link that reopens this trial with these settings. The data doesn't travel in the link, so whoever opens it needs the same dataset. The bundled demo works anywhere. A public dataset has to be downloaded on their side. For your own dataset, send its files and setup file (:material/edit: **Edit dataset** → **Download setup file**) so they can add it first. A link made on your own computer (a `localhost` address) opens only where the app runs at that same address. |
+| :material/share: **Share** | **Link** | Copy a link that reopens this trial and its settings. The bundled demo works anywhere. A public dataset has to be downloaded on the recipient's side. For each dataset you imported, send its data files and setup file (:material/edit: **Edit dataset** → **Download setup file**) so they can add it under the same name. If they have A but still need B for a comparison, the link opens A and names the dataset to add. On your own computer the link still works after either dataset is renamed. A `localhost` link opens where the app runs at the same address. |
 | | **Code** → **Python** / **CLI**, **Show every option** | Get the Python or command-line code that redraws this figure, for scripts and reproduction. |
 | | **Settings file** → **Download settings** / **Restore settings** | Save the plot settings to a file, or load (restore) a saved settings file. |

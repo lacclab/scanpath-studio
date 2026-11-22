@@ -532,9 +532,9 @@ class TestStimulusLevelWordsRemap:
         st.session_state[tabs.EDITOR_PENDING_NAME_KEY] = "Pilot study"
         tabs._apply_remap()
         assert not st.session_state.get("_remap_problems")
-        assert set(st.session_state["_datasets"]) == {"Pilot study"}
-        assert st.session_state["_pending_source_choice"] == "Pilot study"
-        assert st.session_state["_remap_applied"] == "Pilot study"
+        assert set(st.session_state["_datasets"]) == {"study"}
+        assert tabs._dataset_label("study") == "Pilot study"
+        assert st.session_state["_remap_applied"] == "study"
         # The edit is over: the staged name goes with the rest of it.
         assert tabs.EDITOR_PENDING_NAME_KEY not in st.session_state
 
@@ -1097,9 +1097,9 @@ class TestEditorSetupExport:
         at = AppTest.from_function(_setup_file_editor_app, default_timeout=30).run()
         assert not at.exception
         said = " ".join(c.value for c in at.caption)
-        assert "Only columns kept when the dataset was added are available." in said
+        assert "Only columns kept during import are available." in said
         assert (
-            "To use a column that isn't listed, remove this dataset and add it "
+            "To use a column that is missing, remove the dataset and add it "
             "again from its files." in said
         )
 

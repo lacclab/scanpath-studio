@@ -15,10 +15,10 @@ from .constants import (
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_DURATION_RANGE,
     DEFAULT_MARKER_SIZE_SCALE,
-    DEFAULT_ORDER_LABEL_POSITION,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
     DEFAULT_SNAP_POSITION,
+    FIXATION_LABEL_OPTIONS,
     HIGHLIGHTED_TEXT_COLOR,
     SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
@@ -89,7 +89,12 @@ def build_plot_config(
         {
             "participant_id": str(published["participant_id"]),
             "trial_id": str(published["trial_id"]),
-            "source": published.get("source") or None,
+            "source": published.get("source_name") or published.get("source") or None,
+            **(
+                {"source_id": published["source_id"]}
+                if published.get("source_id")
+                else {}
+            ),
             "screen_id": (
                 str(published["screen_id"])
                 if published.get("screen_id") not in (None, "")
@@ -317,13 +322,12 @@ def build_plot_config(
             "duration_size_legend": bool(
                 figure_settings.get("duration_size_legend", True)
             ),
-            "order_font_size": int(figure_settings["order_font_size"]),
-            "order_font_color": figure_settings["order_font_color"],
-            "order_label_position": str(
-                figure_settings.get(
-                    "order_label_position", DEFAULT_ORDER_LABEL_POSITION
-                )
-            ),
+            **{
+                name: int(figure_settings[name])
+                if option.kind == "int"
+                else figure_settings.get(name, option.default)
+                for name, option in FIXATION_LABEL_OPTIONS.items()
+            },
             "base_font_size": int(base_font_size),
         },
         # Figure & canvas → Legends: every legend, Auto included, so a file
@@ -511,7 +515,7 @@ def render_plot_config(
         base_font_size=base_font_size,
         font_family=font_family,
         trial_raw_gaze=pd.DataFrame(),
-        data_source=settings.get("data_source"),
+        data_source=settings.get("data_source_label", settings.get("data_source")),
         app_version=build_info().version,
         exported_at="",
         state=state,

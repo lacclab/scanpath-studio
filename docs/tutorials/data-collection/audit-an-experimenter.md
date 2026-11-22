@@ -2,13 +2,12 @@
 description: "Review the eye-tracking recordings one experimenter collected: filter by experimenter, replay their trials, tag problems and export the review."
 ---
 
-# Audit an experimenter
+# Review an experimenter's sessions { #audit-an-experimenter }
 
 Review recordings collected by one experimenter.
 
-These steps use the **Full** mode: switch to it in the top bar of the
-:material/route: **Scanpath** view, or add `ui=full` to the app's
-address ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
+Before you start, switch to **Full** at the top of the :material/route:
+**Scanpath** view ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
 
 1. Keep the experimenter column when you import the data, under **Extra fields
    to keep**. If each participant had one experimenter, you can instead attach

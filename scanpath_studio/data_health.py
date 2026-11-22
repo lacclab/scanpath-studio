@@ -64,6 +64,22 @@ class HealthFinding:
             "examples": list(self.examples),
         }
 
+    def to_json_record(self) -> dict:
+        """Keep missing cells and signed infinity distinguishable in a JSON report."""
+
+        def cell(value):
+            if pd.isna(value):
+                return None
+            if isinstance(value, (float, np.floating)) and np.isinf(value):
+                return "Infinity" if value > 0 else "-Infinity"
+            return value
+
+        record = self.to_record()
+        record["examples"] = [
+            {key: cell(value) for key, value in row.items()} for row in self.examples
+        ]
+        return record
+
 
 @dataclass(frozen=True)
 class _Check:
@@ -131,10 +147,10 @@ def _box_masks(frame: pd.DataFrame) -> dict[str, pd.Series]:
 
 #: What a per-screen screen size the figure cannot use does, on either table.
 _CANVAS_CONSEQUENCE = (
-    "They stay in every table and export. The figure ignores a screen size that "
-    "is not one finite, positive number per screen, and draws that screen at the "
-    "size in the Recording setup instead (in the API and on the command line, the "
-    "size given or one fitted to the data)."
+    "These rows stay in your tables and exports. Each screen needs "
+    "consistent, finite, positive dimensions. If its size is invalid or "
+    "inconsistent, the figure uses Recording setup instead. The API and CLI "
+    "use the supplied screen size, or estimate one from the data."
 )
 
 
@@ -147,9 +163,12 @@ CHECKS: tuple[_Check, ...] = (
         "Fixations lasting 0 ms or less",
         ("duration_ms",),
         _duration_masks,
-        "They stay in every table and export, and count at their value in "
-        "duration sums (reading time, dwell). The plot draws them at the smallest "
-        "marker size. A blank or unreadable duration cell also loads as 0 ms.",
+        (
+            "These rows stay in your tables and exports. Their durations, including"
+            " negative values, are included in totals such as reading time and dwell "
+            "time. The plot uses the smallest marker size for them. Blank or "
+            "unreadable durations also load as 0 ms."
+        ),
     ),
     _Check(
         "fixation_timing",

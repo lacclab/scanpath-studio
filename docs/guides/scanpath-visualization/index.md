@@ -27,28 +27,28 @@ the screen it was recorded on.
 
 ## Essentials and Full
 
-The view opens in **Essentials**, a trimmed version of the same view for a first
-look. The **Essentials | Full** switch is in the top bar, on the
-:material/route: **Scanpath** view only. The mode you choose is remembered in
-this browser. Adding `ui=full` (or `ui=essentials`) to the app's address, as
-`?ui=full` or `&ui=full`, uses that mode for the visit without
-changing the saved choice, and a link made with **Share** does not carry the
-mode.
+The Scanpath view opens in **Essentials**, with the main controls for exploring
+a reading. Switch to **Full** in the top bar whenever you want more options.
+The app remembers your choice in this browser.
 
 Essentials shows:
 
 - the dataset and trial pickers with **◀ ▶**;
-- the plot, which on a new visit opens on a playing replay;
+- the plot, which starts with a replay on a new visit;
 - four view tiles (**Animation**, **Scanpath**, **Heatmap** and
   **Illustration**) and the **Palette**;
 - the **Export** tab, for the figure on screen, and **Share**.
 
-Where Full has more, a :material/add: **More** button lists what it adds
-there and ends in **Switch to Full**. A setting made in Full, such as a
-trial filter, still shapes the figure in Essentials, and Essentials says so in a short
-note. Starting a tutorial from :material/help: **Help** switches that visit to
-Full. :material/bar_chart: **Corpus Analysis** and
+The :material/add: **More** buttons show which additional controls are available
+in Full and offer **Switch to Full**. Settings you chose in Full, such as trial
+filters, remain active in Essentials; a short note tells you when they apply.
+Starting a tutorial from :material/help: **Help** switches to Full for the
+current visit. :material/bar_chart: **Corpus Analysis** and
 :material/database: **Data Management** are the same in both modes.
+
+To open a mode for one visit, add `?ui=full` or `?ui=essentials` to the app's
+address (use `&` if the address already has a `?`). This leaves your saved
+choice unchanged. Links created with **Share** use the recipient's own mode.
 
 The numbered regions above and the rest of this guide describe Full.
 
@@ -161,7 +161,7 @@ You can save each of these to a file and load it again:
 | column mapping and recording setup | :material/edit: **Edit dataset** → **Download setup file** |
 | saved figure designs | :material/palette: **My designs** → **Export** |
 
-None of these files holds your data, so load the same data before you restore
-one. In the desktop app or a local install, the app also keeps your datasets,
+Keep your source data alongside these files, and load the same dataset before
+restoring them. In the desktop app or a local install, the app also keeps your datasets,
 annotations and designs between sessions. See :material/database: **Data
 Management** → :material/history: **Saved on this computer**.

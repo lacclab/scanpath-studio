@@ -37,6 +37,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from .constants import FIXATION_DURATION_FLAGS, FIXATION_LABEL_OPTIONS
+from .figure_views import (
+    SECOND_SCANPATH_OPTIONS,
+    STATIC_COMPARISON_LAYER_STYLES,
+    STYLE_KEYS_FOR_TWO_SCANPATHS,
+    options_for_view,
+)
+
 #: Where ``tabs._publish_snippet_state`` parks the :class:`FigureState` the
 #: Share subtab writes its snippet from. Session-local and never serialized —
 #: it is derived from state that *is* on the wire, so it carries no contract of
@@ -102,8 +110,7 @@ SOURCE_UNKNOWN = "unknown"
 #: the browser session, not at a path the server can quote back — writing a
 #: guessed path would produce a snippet that runs and loads the wrong thing.
 UNKNOWN_SOURCE_NOTE = (
-    "This dataset was uploaded in the app, so the snippet can't name its files. "
-    "Fill in the paths to your own tables."
+    "Replace the placeholder file paths in this code with paths to your source tables."
 )
 
 
@@ -154,8 +161,6 @@ def source_canvas(kind: str) -> tuple[int, int] | None:
         return tuple(DEFAULT_FIGURE_SIZE)
     if kind == SOURCE_POTEC:
         return (1680, 1050)  # PoTeC monitor (DELL P2210)
-    if kind == SOURCE_AUTHOR:
-        return (1200, 800)
     # MultiplEYE stamps each session set's own monitor on its fixations, so it
     # is read off the data like any other dataset's.
     return None
@@ -186,12 +191,14 @@ def _loader_columns() -> frozenset:
     """Every column ``load_scanpath_data`` hands back without being asked — the
     canonical ones, the recognized optional ones, and the per-fixation fields
     the builders compute — plus the two non-column ``color_by`` values."""
+    from .chart_axes import ELAPSED
     from .constants import UNIFORM_COLOR_FIELD
     from .data import FIX_OPTIONAL_FIELDS, WORD_OPTIONAL_FIELDS, empty_fixations_frame
 
     return frozenset(
         {
             *empty_fixations_frame().columns,
+            ELAPSED,
             *(entry[1] for entry in (*FIX_OPTIONAL_FIELDS, *WORD_OPTIONAL_FIELDS)),
             "order_in_trial",
             "pass_index",
@@ -388,8 +395,9 @@ UPLOAD_FIXATIONS_PLACEHOLDER = "fixations.csv"
 #: replay — step code (``source_recipe["steps"]``) → the caveat naming it.
 UPLOAD_STEP_NOTES = {
     "aggregate_char_boxes": (
-        "Its AOIs were character boxes, which the app joined into word boxes. "
-        "The snippet's loader doesn't, so join them in your words table first."
+        "The app merged character boxes into word boxes for this dataset. Merge "
+        "them in your Words table before running this code; the loader does not "
+        "perform that step."
     ),
 }
 
@@ -841,8 +849,48 @@ def _is_data_uri(value) -> bool:
     return isinstance(value, str) and value.startswith("data:")
 
 
+def _snippet_options(settings, kind, compare, *, explicit):
+    """Current values and defaults for the same view, for either emitter."""
+    from . import api
+
+    defaults = api.figure_options(kind)
+    if explicit or kind == "static":
+        return settings, defaults
+    dual = compare is not None and bool(compare.trial)
+    names = options_for_view(defaults, kind, comparing=dual)
+    if kind == "animation" and dual:
+        # If a Hide filter removes one reading, the remaining trail uses the
+        # single-replay style. B's selected screen can also hold only words.
+        flags_b = settings.get("fixation_flags_b")
+        if flags_b is None:
+            flags_b = (settings.get("style_b") or {}).get("fixation_flags")
+        # Caller-supplied frames can omit a screen present in the Words table,
+        # including the implicit first screen. File loaders require matching parts.
+        supplied_frames = any(
+            settings.get(key) is not None for key in ("words_b", "fixations_b")
+        )
+        if (
+            compare.screen is not None
+            or supplied_frames
+            or any(
+                isinstance(rule, dict) and rule.get("mode") == "Hide"
+                for flags in (settings.get("fixation_flags"), flags_b)
+                for rule in (flags or {}).values()
+            )
+        ):
+            names.update(STYLE_KEYS_FOR_TWO_SCANPATHS)
+    return (
+        {name: value for name, value in settings.items() if name in names},
+        {name: value for name, value in defaults.items() if name in names},
+    )
+
+
 def figure_kwargs(
-    settings: dict, kind: str = "static", *, explicit: bool = False
+    settings: dict,
+    kind: str = "static",
+    *,
+    explicit: bool = False,
+    compare: CompareTarget | None = None,
 ) -> dict:
     """The figure keywords a snippet has to pass, in ``api`` vocabulary.
 
@@ -851,9 +899,11 @@ def figure_kwargs(
     are keys already at their effective default — unless ``explicit``, which
     emits the full form. Ordered as ``figure_options`` lists them, so two
     snippets from neighbouring states read as neighbours."""
-    from . import api
+    settings, defaults = _snippet_options(settings, kind, compare, explicit=explicit)
+    return _figure_kwargs(settings, kind, defaults, explicit=explicit)
 
-    defaults = api.figure_options(kind)
+
+def _figure_kwargs(settings, kind, defaults, *, explicit):
     out = {}
     for key, default in defaults.items():
         if key not in settings:
@@ -870,6 +920,13 @@ def figure_kwargs(
         ):
             continue  # B inheriting A's flags is the builder's default
         if key in _COMPARE_STYLE_SIDES:
+            if not explicit and kind == "animation" and isinstance(value, dict):
+                value = {
+                    k: v
+                    for k, v in value.items()
+                    if k not in STATIC_COMPARISON_LAYER_STYLES
+                    and not (key == "style_a" and k == "fixation_flags")
+                }
             value = _drop_inherited_filters(value, settings)
             # The rail always builds a complete style dict, so the one an
             # untouched Compare carries is not a choice anyone made — only
@@ -899,7 +956,7 @@ _LAYER_OPTIONS = {
         "word_box_fill_color",
         "word_box_fill_opacity",
     ),
-    "show_order": ("order_font_size", "order_font_color", "order_label_position"),
+    "show_order": tuple(FIXATION_LABEL_OPTIONS),
     "show_heatmap": (
         "heatmap_metric",
         "heatmap_style",
@@ -1020,7 +1077,7 @@ def _active_flags(flags) -> dict:
         if not isinstance(spec, dict) or str(spec.get("mode") or "Off") == "Off":
             continue
         entry = {"mode": spec.get("mode")}
-        if category in ("short", "long") and spec.get("threshold_ms") is not None:
+        if category in FIXATION_DURATION_FLAGS and spec.get("threshold_ms") is not None:
             entry["threshold_ms"] = float(spec["threshold_ms"])
         out[category] = entry
     return out
@@ -1173,7 +1230,7 @@ def _fixation_flags(value, flag: str = "--fixation-flag"):
         parts = [f"{category}={mode.lower()}"]
         # Only for the two categories that have one — `oob` / `blink` carry a
         # stale default threshold in the app's dict that the CLI would reject.
-        if category in ("short", "long") and spec.get("threshold_ms") is not None:
+        if category in FIXATION_DURATION_FLAGS and spec.get("threshold_ms") is not None:
             parts.append(f"threshold_ms={_num(spec['threshold_ms'])}")
         if spec.get("symbol"):
             parts.append(f"symbol={spec['symbol']}")
@@ -1258,7 +1315,7 @@ def _classes_coloured(settings: dict) -> bool:
     return settings.get("saccade_color_mode") in ("By type", "Forward / regression")
 
 
-def _matching_palette(settings: dict, kind: str) -> tuple[str | None, dict]:
+def _matching_palette(settings: dict, defaults: dict) -> tuple[str | None, dict]:
     """The ``--palette`` a CLI snippet can name instead of spelling it out.
 
     A palette writes eight colors at once, so naming it saves flags. A
@@ -1270,10 +1327,8 @@ def _matching_palette(settings: dict, kind: str) -> tuple[str | None, dict]:
 
     Returns ``(name, colors)`` — the colors the named palette supplies — or
     ``(None, {})``."""
-    from . import api
     from .constants import PALETTES
 
-    defaults = api.figure_options(kind)
     best: tuple[str | None, dict] = (None, {})
     best_score = 0
     for name in PALETTES:
@@ -1297,14 +1352,11 @@ def _matching_palette(settings: dict, kind: str) -> tuple[str | None, dict]:
 
 
 def _restate_against_palette(
-    kwargs: dict, settings: dict, kind: str, palette_colors: dict
+    kwargs: dict, settings: dict, defaults: dict, palette_colors: dict
 ) -> dict:
     """The figure keywords to write after ``--palette``: the colors it got right
     dropped, and every one it got wrong restated — a color still at its default
     included, which `figure_kwargs` would not otherwise write."""
-    from . import api
-
-    defaults = api.figure_options(kind)
     out = dict(kwargs)
     for key, value in palette_colors.items():
         if _inert(key, settings):
@@ -1505,9 +1557,10 @@ _CLI_EMITTERS: dict[str, Any] = {
     "color_by_line": _flag_when("--color-by-line", True),
     "fixation_color_range": _two_numbers("--fixation-color-range"),
     "heatmap_range": _two_numbers("--heatmap-range"),
-    "order_font_size": _int_valued("--order-font-size"),
-    "order_font_color": _valued("--order-font-color"),
-    "order_label_position": _valued("--order-label-position"),
+    **{
+        name: _int_valued(option.flag) if option.kind == "int" else _valued(option.flag)
+        for name, option in FIXATION_LABEL_OPTIONS.items()
+    },
     "text_color": _valued("--text-color"),
     "redact_text": _flag_when("--redact-text", True),
     "highlight_text_color": _valued("--highlight-text-color"),
@@ -1571,22 +1624,6 @@ _CLI_EMITTERS: dict[str, Any] = {
     "background_image_size_b": _pair("--stimulus-image-size-b", "x"),
     "background_image_origin_b": _pair("--stimulus-image-origin-b", ","),
 }
-
-#: Options that only mean something beside a second scanpath, and whose `render`
-#: flag is refused without `--compare-with`. A *single* replay carries them too —
-#: the animation builder takes them and ignores them — so there they are left
-#: off the command rather than written into one `render` would reject.
-_COMPARE_ONLY_SETTINGS = frozenset(
-    {
-        "show_legend",
-        "label_a",
-        "label_b",
-        "compare_stimulus",
-        "fixation_flags_b",
-        "style_a",
-        "style_b",
-    }
-)
 
 
 # ---------------------------------------------------------------------------
@@ -1672,11 +1709,8 @@ def _call_kwargs(state: FigureState, *, explicit: bool) -> list[tuple[str, Any]]
     # The disclosure is a rail choice, not a derived value: `illustration_reasons`
     # (what the app resolved it to) is in `_DERIVED_SETTINGS`, so without the
     # *label mode* the snippet would silently re-derive at "auto" and disagree
-    # with the figure on screen. `compare_scanpaths` has no such parameter —
-    # `state_caveats` says so rather than passing a keyword it would reject.
-    if state.kind != "comparison" and (
-        explicit or str(state.illustration_label).lower() != "auto"
-    ):
+    # with the figure on screen.
+    if explicit or str(state.illustration_label).lower() != "auto":
         out.append(("illustration_label", str(state.illustration_label).lower()))
     if state.title:
         out.append(("title", str(state.title)))
@@ -1965,7 +1999,7 @@ def python_snippet(
     for name, value in _call_kwargs(state, explicit=explicit):
         call.append(f"    {name}={_py(value)},")
     for name, value in figure_kwargs(
-        state.settings, state.kind, explicit=explicit
+        state.settings, state.kind, explicit=explicit, compare=state.compare
     ).items():
         if name == "critical_span_style" and value == "None":
             value = None  # no marking is Python's None, not 'None'
@@ -2032,12 +2066,7 @@ def cli_snippet(
         argv += ["--font-size", str(int(state.base_font_size))]
     if state.font_family and (explicit or _non_default_font(state.font_family)):
         argv += ["--font-family", str(state.font_family)]
-    # `render`'s compare branch passes neither to `compare_scanpaths` (which has
-    # no parameter for either), so emitting them beside a Python form that
-    # correctly omits them would be the two flavours contradicting each other.
-    if state.kind != "comparison" and (
-        explicit or str(state.illustration_label).lower() != "auto"
-    ):
+    if explicit or str(state.illustration_label).lower() != "auto":
         argv += ["--illustration-label", str(state.illustration_label).lower()]
     if state.title:
         argv += ["--title", str(state.title)]
@@ -2113,15 +2142,16 @@ def cli_snippet(
             label_a, label_b = compare.labels
             argv += ["--label-a", str(label_a), "--label-b", str(label_b)]
 
-    palette, palette_colors = _matching_palette(state.settings, state.kind)
-    kwargs = figure_kwargs(state.settings, state.kind, explicit=explicit)
+    settings, defaults = _snippet_options(
+        state.settings, state.kind, state.compare, explicit=explicit
+    )
+    palette, palette_colors = _matching_palette(settings, defaults)
+    kwargs = _figure_kwargs(settings, state.kind, defaults, explicit=explicit)
     if palette:
         from .plots import palette_slug
 
         argv += ["--palette", palette_slug(palette)]  # no shell quotes
-        kwargs = _restate_against_palette(
-            kwargs, state.settings, state.kind, palette_colors
-        )
+        kwargs = _restate_against_palette(kwargs, settings, defaults, palette_colors)
     for key, value in kwargs.items():
         # Never emit class colours the figure isn't drawing —
         # `--saccade-type-color` implies By type, so emitting them into a
@@ -2132,7 +2162,7 @@ def cli_snippet(
                     value, palette_colors.get("saccade_class_colors")
                 )
             continue
-        if key in _COMPARE_ONLY_SETTINGS and (
+        if key in SECOND_SCANPATH_OPTIONS and (
             state.kind == "animation" and state.compare is None
         ):
             continue  # a single replay takes these and draws nothing with them
@@ -2277,12 +2307,6 @@ def state_caveats(source: SnippetSource, state: FigureState) -> list[str]:
                 "Without it, B's screen is read from its data and may not match."
             )
         notes.append(note)
-    if state.kind == "comparison" and str(state.illustration_label).lower() != "auto":
-        notes.append(
-            "`compare_scanpaths` has no `illustration_label` parameter, so the "
-            "snippet leaves out your Illustration label (**"
-            f"{str(state.illustration_label).capitalize()}**)."
-        )
     return notes
 
 

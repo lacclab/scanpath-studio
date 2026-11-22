@@ -63,7 +63,7 @@ from .data import (
     trial_mapping_columns,
     zero_padding_map,
 )
-from .session_keys import COMPARE_SOURCE_STATE_KEY
+from .session_keys import COMPARE_SOURCE_STATE_KEY, SAME_DATASET
 
 
 def _with_data_candidates(data_candidates: list[str], *extras: str) -> tuple[str, ...]:
@@ -269,6 +269,7 @@ class TrialMetadata:
     trial_column: str
     participant_column: str | None = None
     report: JoinReport = JoinReport()
+    id_columns: tuple[str, ...] = ()
 
     @property
     def keyed_by_participant(self) -> bool:
@@ -350,6 +351,7 @@ class TextMetadata:
     source_name: str
     text_column: str
     report: JoinReport = JoinReport()
+    id_columns: tuple[str, ...] = ()
 
     @property
     def names(self) -> tuple[str, ...]:
@@ -591,6 +593,7 @@ def build_trial_metadata(
         source_name,
         label,
         str(participant_column) if participant_column else None,
+        id_columns=tuple(trial_cols),
     )
     if (
         frame is None
@@ -666,6 +669,7 @@ def build_trial_metadata(
             conflicting=tuple(sorted(conflicting_set, key=str)),
             combined_rows=combined,
         ),
+        id_columns=tuple(trial_cols),
     )
     if keys is None:
         return metadata
@@ -695,13 +699,9 @@ def rejoin_trials(metadata: TrialMetadata, keys: Iterable) -> TrialMetadata:
             )
     table_keys = set(metadata.key_series()) | set(metadata.report.conflicting)
     usable = set(metadata.key_series())
-    return TrialMetadata(
-        metadata.frame,
-        metadata.fields,
-        metadata.source_name,
-        metadata.trial_column,
-        metadata.participant_column,
-        JoinReport(
+    return replace(
+        metadata,
+        report=JoinReport(
             matched=tuple(sorted(usable & data_keys, key=str)),
             only_in_table=tuple(sorted(table_keys - data_keys, key=str)),
             only_in_data=tuple(sorted(data_keys - table_keys, key=str)),
@@ -864,6 +864,7 @@ def trial_to_payload(metadata: TrialMetadata | None) -> dict | None:
     return {
         "source_name": metadata.source_name,
         "trial_column": metadata.trial_column,
+        "id_columns": list(metadata.id_columns),
         "participant_column": metadata.participant_column,
         "rows": metadata.frame.to_dict("records"),
     }
@@ -875,19 +876,25 @@ def trial_from_payload(payload: dict | None) -> TrialMetadata | None:
         return None
     frame = pd.DataFrame(payload["rows"])
     trial_column = str(payload.get("trial_column") or "trial_id")
+    id_columns = tuple(payload.get("id_columns") or ())
     participant_column = payload.get("participant_column")
     if "trial_id" in frame.columns:
         # The payload holds the *clean* frame, whose key columns are already
         # canonical — rebuild against those rather than the original names.
-        return build_trial_metadata(
-            frame,
-            "trial_id",
-            "participant_id" if participant_column else None,
-            source_name=str(payload.get("source_name") or "trial metadata"),
+        return replace(
+            build_trial_metadata(
+                frame,
+                "trial_id",
+                "participant_id" if participant_column else None,
+                source_name=str(payload.get("source_name") or "trial metadata"),
+            ),
+            trial_column=trial_column,
+            participant_column=participant_column,
+            id_columns=id_columns,
         )
     return build_trial_metadata(
         frame,
-        trial_column,
+        list(id_columns) or trial_column,
         participant_column,
         source_name=str(payload.get("source_name") or "trial metadata"),
     )
@@ -901,6 +908,78 @@ def active_texts() -> TextMetadata | None:
         return st.session_state.get(TEXT_SESSION_KEY)
     except Exception:  # no script run context (API, CLI, plain import)
         return None
+
+
+def _text_candidates(frame, identity: list[str]) -> pd.DataFrame:
+    """Distinct recorded IDs and their precedence, optionally grouped by reading."""
+    columns = [*identity, "text_id"]
+    fields = [
+        c
+        for c in (*columns, "unique_text_id", _data.TEXT_ID_MAPPED)
+        if c in frame.columns
+    ]
+    keys = frame[fields].drop_duplicates().copy()
+    if "text_id" not in keys:
+        keys["text_id"] = None
+    keys[columns] = keys[columns].astype("str")
+    unique_text = keys.get("unique_text_id")
+    has_unique = False
+    if unique_text is not None:
+        has_unique = unique_text.notna()
+        keys["text_id"] = unique_text.astype("str").fillna(keys["text_id"])
+    mapped = (
+        keys[_data.TEXT_ID_MAPPED].fillna(False).astype(bool)
+        if _data.TEXT_ID_MAPPED in keys
+        else True
+    )
+    # A recorded ID outranks a fallback, and unique_text_id breaks a tie.
+    keys["_priority"] = keys["text_id"].notna() * (1 + 2 * mapped + has_unique)
+    return keys[[*columns, "_priority"]]
+
+
+def trial_text_id(*frames: pd.DataFrame | None) -> str | None:
+    """The recorded text of one reading, or None when absent or ambiguous."""
+    parts = [_text_candidates(f, []) for f in frames if f is not None and not f.empty]
+    if not parts:
+        return None
+    candidates = pd.concat(parts, ignore_index=True)
+    best = candidates["_priority"].max()
+    texts = (
+        candidates.loc[candidates["_priority"].eq(best), "text_id"].dropna().unique()
+    )
+    return str(texts[0]) if len(texts) == 1 else None
+
+
+def recording_keys(*frames: pd.DataFrame | None) -> pd.DataFrame:
+    """Distinct participant, trial and text IDs available for metadata joins.
+
+    A reading can occur in any recording table. Prefer its recorded text IDs
+    to copies of its trial ID. Older normalized frames keep their stored IDs.
+    """
+    reading = ["participant_id", "trial_id"]
+    columns = [*reading, "text_id"]
+    parts = [_text_candidates(f, reading) for f in frames if _data.names_readings(f)]
+    if not parts:
+        return pd.DataFrame(columns=columns)
+    keys = pd.concat(parts, ignore_index=True)
+    best = keys.groupby(reading, sort=False)["_priority"].transform("max")
+    return keys.loc[keys["_priority"].eq(best), columns].drop_duplicates(
+        ignore_index=True
+    )
+
+
+def unambiguous_readings(keys: pd.DataFrame) -> pd.DataFrame:
+    """One row per reading. Conflicting recorded text IDs leave its text unassigned."""
+    identity = ["participant_id", "trial_id"]
+    return keys.assign(
+        text_id=keys["text_id"].mask(keys.duplicated(identity, keep=False))
+    ).drop_duplicates(identity)
+
+
+def readings_for_texts(keys: pd.DataFrame, text_ids) -> set:
+    """Readings whose recording tables agree on a selected text."""
+    readings = unambiguous_readings(keys)
+    return trial_keys(readings[readings["text_id"].isin(text_ids)])
 
 
 def text_keys(combos: pd.DataFrame | None) -> set:
@@ -952,7 +1031,13 @@ def build_text_metadata(
     """
     text_cols = trial_mapping_columns(text_column)
     label = _text_column_label(text_column)
-    empty = TextMetadata(pd.DataFrame(columns=["text_id"]), (), source_name, label)
+    empty = TextMetadata(
+        pd.DataFrame(columns=["text_id"]),
+        (),
+        source_name,
+        label,
+        id_columns=tuple(text_cols),
+    )
     if (
         frame is None
         or frame.empty
@@ -1013,7 +1098,9 @@ def build_text_metadata(
             conflicting=tuple(sorted(conflicting_set)),
             combined_rows=combined,
         )
-    return TextMetadata(clean, tuple(fields), source_name, label, report)
+    return TextMetadata(
+        clean, tuple(fields), source_name, label, report, tuple(text_cols)
+    )
 
 
 def texts_matching(
@@ -1122,6 +1209,7 @@ def text_to_payload(metadata: TextMetadata | None) -> dict | None:
     return {
         "source_name": metadata.source_name,
         "text_column": metadata.text_column,
+        "id_columns": list(metadata.id_columns),
         "rows": metadata.frame.to_dict("records"),
     }
 
@@ -1132,17 +1220,22 @@ def text_from_payload(payload: dict | None) -> TextMetadata | None:
         return None
     frame = pd.DataFrame(payload["rows"])
     text_column = str(payload.get("text_column") or "text_id")
+    id_columns = tuple(payload.get("id_columns") or ())
     if "text_id" in frame.columns:
         # The payload holds the *clean* frame, whose key column is already
         # canonical — rebuild against that rather than the original name.
-        return build_text_metadata(
-            frame,
-            "text_id",
-            source_name=str(payload.get("source_name") or "text metadata"),
+        return replace(
+            build_text_metadata(
+                frame,
+                "text_id",
+                source_name=str(payload.get("source_name") or "text metadata"),
+            ),
+            text_column=text_column,
+            id_columns=id_columns,
         )
     return build_text_metadata(
         frame,
-        text_column,
+        list(id_columns) or text_column,
         source_name=str(payload.get("source_name") or "text metadata"),
     )
 
@@ -1502,10 +1595,13 @@ def from_payload(payload: dict | None) -> ParticipantMetadata | None:
     frame = pd.DataFrame(payload["records"])
     if "participant_id" not in frame.columns:
         return None
-    return build_participant_metadata(
-        frame,
-        "participant_id",
-        source_name=str(payload.get("source_name") or "participant metadata"),
+    return replace(
+        build_participant_metadata(
+            frame,
+            "participant_id",
+            source_name=str(payload.get("source_name") or "participant metadata"),
+        ),
+        id_column=str(payload.get("id_column") or "participant_id"),
     )
 
 
@@ -1792,7 +1888,7 @@ def activate_dataset(session, dataset: str) -> bool:
 #: answer (``compare_source.THIS_DATASET`` — not imported: `compare_source`
 #: imports `app`, which imports this).
 _COMPARE_PREFIX = "cmp"
-_COMPARE_SAME_DATASET = "This dataset"
+_COMPARE_SAME_DATASET = SAME_DATASET
 _BUILT_KEY = "_metadata_built_for_compare"
 
 

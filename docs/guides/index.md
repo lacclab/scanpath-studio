@@ -11,16 +11,17 @@ they apply. For step-by-step workflows, see the [tutorials](../tutorials/index.m
 
 - :material-eye:{ .lg .middle } **[Scanpath visualization](scanpath-visualization/index.md)**
 
-    Layers, filters, replay, and comparison, also across two datasets.
+    Explore layers and filters, replay a reading, or compare readings from one
+    or two datasets.
 
 - :material-database-import:{ .lg .middle } **[Data Management](loading-data/index.md)**
 
-    Built-in and public datasets, importing your files, column mapping and the
-    recording setup.
+    Open a public dataset or import your files, check the column mapping, and
+    enter the recording setup.
 
 - :material-chart-box:{ .lg .middle } **[Corpus Analysis](corpus-workspace/index.md)**
 
-    Per text, Per participant and Groups, from the reading measures in your data.
+    Explore the reading measures in your data by text, participant or group.
 
 - :material-file-export:{ .lg .middle } **[Export and share](exporting/index.md)**
 

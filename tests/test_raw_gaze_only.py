@@ -73,6 +73,49 @@ def _key(raw_gaze):
 # -----------------------------------------------------------------------------
 
 
+def test_raw_gaze_only_reader_and_text_reach_the_wizard_and_data_editor(
+    raw_gaze, monkeypatch
+):
+    from scanpath_studio import controls, metadata, metadata_editor
+
+    reader, trial = _key(raw_gaze)
+    text_id = str(raw_gaze["text_id"].iloc[0])
+    state = {}
+    monkeypatch.setattr(metadata_editor.st, "session_state", state)
+    for grain, column, value in (
+        ("participant", "participant_id", reader),
+        ("trial", "trial_id", trial),
+        ("text", "text_id", text_id),
+    ):
+        _, raw, _ = metadata.grain_keys(grain)
+        state[raw] = pd.DataFrame({column: [value], "label": ["match"]})
+        state[f"{grain}_metadata_id_column"] = (
+            column if grain == "participant" else [column]
+        )
+        state[f"{grain}_metadata_keep_fields"] = ["label"]
+    metadata_editor.commit_deferred_metadata({"raw_gaze": raw_gaze})
+    for grain in ("participant", "trial", "text"):
+        attached, _, _ = metadata.grain_keys(grain)
+        assert len(state[attached].report.matched) == 1
+        assert state[attached].report.is_clean
+    readings = controls.metadata_readings(None, None, raw_gaze)
+    assert readings.to_records(index=False).tolist() == [(reader, trial, text_id)]
+
+
+def test_editing_raw_gaze_preserves_the_text_mapping():
+    from scanpath_studio import data, metadata
+
+    source = pd.DataFrame(
+        {"participant_id": ["r"], "trial_id": ["t"], "x": [1], "y": [2]}
+    )
+    samples = data.normalize_raw_gaze(source, data.propose_raw_gaze_schema(source))
+    remapped = data.remap_normalized_frame(
+        samples, data.propose_raw_gaze_schema(samples), kind="raw_gaze"
+    )
+    words = source.assign(text_id="passage", **{data.TEXT_ID_MAPPED: True})
+    assert metadata.text_keys(metadata.recording_keys(remapped, words)) == {"passage"}
+
+
 def test_raw_gaze_is_never_an_illustration_reason():
     import inspect
 
@@ -719,8 +762,8 @@ class TestScanpathView:
         at.run()
         assert not at.exception, at.exception
         text = " ".join(i.value for i in at.info)
-        assert "this dataset has no Words table" in text
-        assert "Raw gaze samples carry no reading measures" in text
+        assert "add a Words table with per-word measures" in text
+        assert "Raw gaze samples do not include per-word reading measures" in text
 
     def test_the_heatmap_greys_only_with_neither_fixations_nor_words(self, raw_gaze):
         """No fixations and no words: nothing for the heatmap to draw. Words

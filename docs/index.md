@@ -51,7 +51,7 @@ Bring your own data, or start with the bundled demo.
       <source src="assets/workflows/essentials.mp4" type="video/mp4">
     </video>
 
-    **Start in Essentials.** The app opens on a replay of the reading. Switch between four ready-made views, pick a palette and step through the trials. Every other control is one click away in Full.
+    **Start in Essentials.** Watch a reading replay, try four ready-made views, pick a palette and step through the trials. Switch to Full whenever you want more control.
 
     [Essentials and Full :material-arrow-right:](guides/scanpath-visualization/index.md#essentials-and-full){ .md-button }
 
@@ -87,7 +87,7 @@ Bring your own data, or start with the bundled demo.
       <source src="assets/workflows/home-customize.mp4" type="video/mp4">
     </video>
 
-    **Make the view your own.** Start from a design preset, pick a palette, then adjust each layer in Plot controls, in Full mode.
+    **Make the view your own.** In Full mode, start with a design preset, pick a palette, then adjust each layer in Plot controls.
 
     [Explore plot controls :material-arrow-right:](guides/scanpath-visualization/controls.md){ .md-button }
 

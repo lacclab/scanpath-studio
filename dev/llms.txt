@@ -1,0 +1,58 @@
+# Scanpath Studio
+
+> Free, open-source software for visualizing eye-tracking data from reading studies: scanpaths, fixations, saccades, gaze heatmaps and raw gaze drawn over the text, from EyeLink, Tobii and other eye trackers.
+
+Scanpath Studio is an interactive Streamlit workbench, a Python API (`import scanpath_studio as sps`) and a CLI (`scanpath-studio`) for eye-tracking-while-reading data: it draws fixations, saccades and heatmaps over the text at its true on-screen position, shows the per-word reading measures your data brings (FFD, FPRT, RPD, TFD, skips, regressions), compares participants, and exports figures and tables. The bundled demo is a subset of the OneStop Eye Movements corpus.
+
+## Use the app
+
+- [Get started](https://lacclab.github.io/scanpath-studio/dev/install/index.md): Install, launch, and a first plot
+- [Tutorials](https://lacclab.github.io/scanpath-studio/dev/tutorials/index.md)
+- [Analyze a corpus](https://lacclab.github.io/scanpath-studio/dev/tutorials/corpus-analysis/index.md)
+- [Analyze one text](https://lacclab.github.io/scanpath-studio/dev/tutorials/corpus-analysis/analyze-one-text/index.md)
+- [Compare groups or conditions](https://lacclab.github.io/scanpath-studio/dev/tutorials/corpus-analysis/compare-groups/index.md)
+- [Track changes over time](https://lacclab.github.io/scanpath-studio/dev/tutorials/corpus-analysis/progression-over-time/index.md)
+- [Optimize data collection](https://lacclab.github.io/scanpath-studio/dev/tutorials/data-collection/index.md)
+- [Review an experimenter's sessions](https://lacclab.github.io/scanpath-studio/dev/tutorials/data-collection/audit-an-experimenter/index.md)
+- [Check a session](https://lacclab.github.io/scanpath-studio/dev/tutorials/data-collection/check-a-session/index.md)
+- [Compare two eye trackers](https://lacclab.github.io/scanpath-studio/dev/tutorials/data-collection/compare-eye-trackers/index.md)
+- [Filter data](https://lacclab.github.io/scanpath-studio/dev/tutorials/data-filtering/index.md)
+- [Exclude unsuitable trials](https://lacclab.github.io/scanpath-studio/dev/tutorials/data-filtering/exclude-unsuitable-trials/index.md)
+- [Find trials with specific fixation patterns](https://lacclab.github.io/scanpath-studio/dev/tutorials/data-filtering/find-trials-for-an-analysis/index.md)
+- [Select participants by a field](https://lacclab.github.io/scanpath-studio/dev/tutorials/data-filtering/select-participants/index.md)
+- [Export customized figures](https://lacclab.github.io/scanpath-studio/dev/tutorials/exporting-figures/index.md)
+- [Export a replay](https://lacclab.github.io/scanpath-studio/dev/tutorials/exporting-figures/export-a-replay/index.md)
+- [Export every trial](https://lacclab.github.io/scanpath-studio/dev/tutorials/exporting-figures/export-every-trial/index.md)
+- [Export one figure](https://lacclab.github.io/scanpath-studio/dev/tutorials/exporting-figures/export-one-figure/index.md)
+- [Feature guides](https://lacclab.github.io/scanpath-studio/dev/guides/index.md)
+- [Corpus Analysis](https://lacclab.github.io/scanpath-studio/dev/guides/corpus-workspace/index.md)
+- [Export and share](https://lacclab.github.io/scanpath-studio/dev/guides/exporting/index.md)
+- [Data Management](https://lacclab.github.io/scanpath-studio/dev/guides/loading-data/index.md)
+- [Scanpath visualization](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/index.md)
+- [All controls](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/controls/index.md)
+- [FAQ](https://lacclab.github.io/scanpath-studio/dev/faq/index.md)
+
+## Reference
+
+- [Python API](https://lacclab.github.io/scanpath-studio/dev/api/index.md): Python API and figure options, defaults and CLI flags
+- [CLI reference](https://lacclab.github.io/scanpath-studio/dev/cli/index.md): The CLI reference, every flag included
+- [Across the experiment](https://lacclab.github.io/scanpath-studio/dev/gallery/across-experiment/index.md)
+- [Two participants](https://lacclab.github.io/scanpath-studio/dev/gallery/comparison/index.md)
+- [Fully customizable](https://lacclab.github.io/scanpath-studio/dev/gallery/hearts-arrows/index.md)
+- [Gaze heatmap](https://lacclab.github.io/scanpath-studio/dev/gallery/heatmap/index.md)
+- [Highlighted text](https://lacclab.github.io/scanpath-studio/dev/gallery/highlighted-text/index.md)
+- [Reading schematic](https://lacclab.github.io/scanpath-studio/dev/gallery/illustration/index.md)
+- [Raw gaze](https://lacclab.github.io/scanpath-studio/dev/gallery/raw-gaze/index.md)
+- [Redacted text](https://lacclab.github.io/scanpath-studio/dev/gallery/redacted-text/index.md)
+- [Replay](https://lacclab.github.io/scanpath-studio/dev/gallery/replay/index.md)
+- [Saccade types](https://lacclab.github.io/scanpath-studio/dev/gallery/saccade-types/index.md)
+- [Scanpath](https://lacclab.github.io/scanpath-studio/dev/gallery/scanpath/index.md)
+- [Fixations by line](https://lacclab.github.io/scanpath-studio/dev/gallery/text-lines/index.md)
+- [Title, caption & legend](https://lacclab.github.io/scanpath-studio/dev/gallery/title-caption-legend/index.md)
+- [Word-box heatmap](https://lacclab.github.io/scanpath-studio/dev/gallery/word-boxes/index.md)
+
+## About
+
+- [About](https://lacclab.github.io/scanpath-studio/dev/about/index.md)
+- [What's new](https://lacclab.github.io/scanpath-studio/dev/whats-new/index.md)
+

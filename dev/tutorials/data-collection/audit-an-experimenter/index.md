@@ -1,0 +1,13 @@
+# Review an experimenter's sessions
+
+Review recordings collected by one experimenter.
+
+Before you start, switch to **Full** at the top of the **Scanpath** view ([Essentials and Full](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#essentials-and-full)).
+
+1. Keep the experimenter column when you import the data, under **Extra fields to keep**. If each participant had one experimenter, you can instead attach it in a participant metadata table.
+1. Open the filter () beside **Select trial** and choose the experimenter. Columns of a participant metadata table are under **By participant**.
+1. [Inspect and replay their trials](https://lacclab.github.io/scanpath-studio/dev/tutorials/data-collection/check-a-session/#2-inspect-a-trial).
+1. In **Annotations**, tag trials `review` and note recurring problems.
+1. [Export the review](https://lacclab.github.io/scanpath-studio/dev/tutorials/data-collection/check-a-session/#5-save-the-review).
+
+To compare experimenters, turn on **Compare**. Use the filter on each scanpath's row to pick a different experimenter, and choose readings of the same text.

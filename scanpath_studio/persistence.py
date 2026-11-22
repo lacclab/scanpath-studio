@@ -881,42 +881,39 @@ def restore_state(
     session[_RESTORED_KEY] = True
     if not root.is_dir():
         return False
-    with _STATE_LOCK, _cache_file_lock(root, reading=True):
-        return _restore_manifest(session, root, skip_session_keys)
+    with _STATE_LOCK, contextlib.ExitStack() as locks:
+        try:
+            locks.enter_context(_cache_file_lock(root, reading=True))
+            path = root / "manifest.json"
+            if not path.exists():
+                return False
+            manifest = _as_mapping(json.loads(path.read_text(encoding="utf-8")))
+            schema = int(manifest.get("schema", 0))
+            if schema != SCHEMA_VERSION:
+                raise ValueError(
+                    f"it was saved by another version (format {schema}; this one "
+                    f"reads {SCHEMA_VERSION})"
+                )
+            stored_datasets = _as_mapping(manifest.get("datasets", {}))
+        except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+            # An empty session must never overwrite data it could not open.
+            session[_CACHE_FAILURE_KEY] = _failure_reason(exc)
+            session[_PAUSED_KEY] = True
+            _LOGGER.warning("Could not read the recovery cache at %s: %s", root, exc)
+            return False
+        return _restore_manifest(
+            session, root, skip_session_keys, manifest, stored_datasets
+        )
 
 
 def _restore_manifest(
-    session: MutableMapping[str, Any], root: Path, skip_session_keys
+    session: MutableMapping[str, Any],
+    root: Path,
+    skip_session_keys,
+    manifest,
+    stored_datasets,
 ) -> bool:
-    """The body of :func:`restore_state`, under its lock."""
-    path = root / "manifest.json"
-    if not path.exists():
-        return False
-    try:
-        # Read and check the manifest's *shape* before touching the session.
-        # It is a file on disk, so any JSON value can be in it — `[]`, `null`,
-        # a dataset entry that is a string — and each of those must fail here,
-        # as an unreadable cache, not escape as an AttributeError on every
-        # launch.
-        manifest = _as_mapping(json.loads(path.read_text(encoding="utf-8")))
-        schema = int(manifest.get("schema", 0))
-        if schema != SCHEMA_VERSION:
-            raise ValueError(
-                f"it was saved by another version (format {schema}; this one "
-                f"reads {SCHEMA_VERSION})"
-            )
-        stored_datasets = _as_mapping(manifest.get("datasets", {}))
-    except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
-        # The cache is there but cannot be read as a whole. Opening without
-        # it is right — a damaged cache must never stop the app — but
-        # overwriting it is not: the next save would replace whatever is
-        # still recoverable with this session's empty state. So saving
-        # pauses and the app says why (`cache_failure`), with a way to try
-        # again or to clear it.
-        session[_CACHE_FAILURE_KEY] = _failure_reason(exc)
-        session[_PAUSED_KEY] = True
-        _LOGGER.warning("Could not read the recovery cache at %s: %s", root, exc)
-        return False
+    """Apply the validated manifest while its referenced sidecars remain locked."""
     # What the manifest on disk names, so the save that replaces it
     # removes what the new one no longer does.
     session[_LAST_REFERENCED_KEY] = sorted(_manifest_references(root, manifest))

@@ -398,6 +398,35 @@ def test_read_only_cache_can_be_restored_with_or_without_a_lock_file(
     assert "Lab" in session["_datasets"]
 
 
+def test_unreadable_cache_lock_pauses_saving_until_reopened(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    assert save_state({"_datasets": {"Lab": _dataset()}}, tmp_path)
+    manifest = tmp_path / "manifest.json"
+    saved = manifest.read_bytes()
+    sidecar = tmp_path / persistence._CACHE_LOCK_FILE
+    original_open = Path.open
+
+    def unreadable(path, *args, **kwargs):
+        if path == sidecar:
+            raise PermissionError("Lock is unreadable")
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+    monkeypatch.setattr(persistence, "state_directory", lambda: tmp_path)
+    session = {}
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "open", unreadable)
+        assert not restore_local_state(session, "http://localhost")
+    assert persistence.persistence_paused(session)
+    assert "permission denied" in persistence.cache_failure(session)
+    assert not save_local_state(session, "http://localhost")
+    assert manifest.read_bytes() == saved
+    fresh = {}
+    assert restore_local_state(fresh, "http://localhost")
+    assert "Lab" in fresh["_datasets"]
+
+
 class TestAnnotationsPerDataset:
     """The cache keeps each dataset's annotations as its own."""
 
@@ -1088,6 +1117,11 @@ class TestTheRecoveryToastPhrase:
     def test_nothing_to_report_still_reads_as_a_sentence(self):
         assert self._recap() == "your last session"
 
+    def test_metadata_tables_are_named_in_the_toast(self):
+        """A restored participant table is something a user would
+        recognise coming back, so the toast says so."""
+        assert self._recap(datasets=1, metadata=2) == "1 dataset and 2 metadata tables"
+
 
 class TestAMalformedCacheNeverStopsTheApp:
     """The manifest is a file on disk, so any JSON can be in it.
@@ -1306,11 +1340,6 @@ def test_a_restore_that_crashes_the_app_does_not_crash_the_next_launch(
     assert not second.exception, [e.message for e in second.exception]
     assert any("didn't finish opening" in t.value for t in second.toast)
     assert (tmp_path / "manifest.json").read_text(encoding="utf-8") == manifest
-
-    def test_metadata_tables_are_named_in_the_toast(self):
-        """A restored participant table is something a user would
-        recognise coming back, so the toast says so."""
-        assert self._recap(datasets=1, metadata=2) == "1 dataset and 2 metadata tables"
 
 
 class TestMetadataTablesInTheRecoveryCache:

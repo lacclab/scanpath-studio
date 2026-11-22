@@ -2161,7 +2161,7 @@ def _select_trial(
             "whose word/AOI ids match the fixations', so each fixation can be "
             "placed at its word box's center."
         )
-    return trial_words, trial_fixations, pid, tid
+    return trial_words, _data.with_onset_provenance(trial_fixations), pid, tid
 
 
 def _select_part(
@@ -3253,6 +3253,8 @@ def _second_reading(
 
     trial_words_b = one_reading(words_b, "words_b")
     trial_fix_b = one_reading(fixations_b, "fixations_b")
+    if trial_fix_b is not None:
+        trial_fix_b = _data.with_onset_provenance(trial_fix_b)
     if trial_b is not None and (trial_fix_b is None or trial_fix_b.empty):
         raise ValueError(
             f"No fixations for the second scanpath participant={pid_b!r}, "

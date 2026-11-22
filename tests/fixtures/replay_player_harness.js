@@ -228,7 +228,7 @@ function setHidden(hidden) {
         range: (({ min, max, value, attributes }) => ({ min, max, value, attributes }))(
           bar.children.find((c) => c.type === "range"),
         ),
-        readout: bar.children[bar.children.length - 1].textContent,
+        readout: bar.children.find((c) => c.attributes["aria-hidden"] === "true").textContent,
       }
     : null;
   process.stdout.write(JSON.stringify(log));

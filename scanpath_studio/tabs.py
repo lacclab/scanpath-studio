@@ -26,7 +26,15 @@ import pandas as pd
 import plotly.io as pio
 import streamlit as st
 
-from scanpath_studio import alignment, chart_axes, loading, progress, ui_mode
+from scanpath_studio import (
+    alignment,
+    chart_axes,
+    dataset_credit,
+    loading,
+    progress,
+    replay_frames,
+    ui_mode,
+)
 from scanpath_studio import metadata as _metadata_mod
 from scanpath_studio.aggregation import (
     MEASURES,
@@ -268,6 +276,7 @@ from scanpath_studio.data import (
     validate_raw_gaze_schema,
     validate_word_schema,
     verbatim_text_plan,
+    with_onset_provenance,
 )
 from scanpath_studio.debug_log import timed
 from scanpath_studio.export import (
@@ -2440,15 +2449,13 @@ def _cached_scanpath_animation(
     """Build + cache the animated scanpath, as ``_cached_scanpath_figure`` does
     for the static one. Returns ``(figure, frame_step_ms)``.
 
-    Uncached, every click anywhere while 🎬 Animate is on — opening a subtab,
-    ticking a checkbox back to what it was — would rebuild every frame: ~3 s on
-    the demo at the default smoothness, 22 s at the finest. ``anim_key`` is every
+    The compact player stores a trace template and its reading timeline.
+    ``anim_key`` is every
     ``FigureSettings`` field plus both scanpaths' fingerprints, so any change that
     reaches the builder still rebuilds — except the playback speed, autoplay and
     the Illustration reasons, which the caller fixes before building:
     the frames depend on none of them, and `set_replay_clock` stamps the real
-    speed and autoplay onto the copy each hit returns. Few entries: a replay is
-    megabytes.
+    speed and autoplay onto the copy each hit returns.
     """
     with timed(
         "build scanpath animation (cache miss)",
@@ -2459,6 +2466,7 @@ def _cached_scanpath_animation(
             _words,
             _fixations,
             settings=_settings,
+            compact=True,
             fixations_b=_fixations_b,
             words_b=_words_b,
         )
@@ -2471,12 +2479,10 @@ class _ReplayView:
     A cached `go.Figure` would be unpickled on every hit — plotly re-validates
     every frame, 9 s at 2,000 frames — and `to_html` would then write it into
     the page again, 12 s more. This keeps the embed's markup and
-    the finished figure as compressed bytes (zlib cuts the markup ~10×): a
-    rerun decompresses the markup, 30 ms at 2,000 frames, and only an export
-    unpickles the figure. It is kept as the ``to_dict()`` the markup was written
-    from: pickling the figure itself would deep-copy it all over again (2 s at
-    2,000 frames), and the HTML download serializes the dict with no figure at
-    all. ``signature`` names the clip that figure exports to.
+    the finished figure as compressed bytes. Its sole frame holds the final
+    coordinates and styles. The HTML player reconstructs each frame using the
+    recorded onsets, and a movie requests the complete figure on demand.
+    ``signature`` names the clip that figure exports to.
     """
 
     plot_html_z: bytes
@@ -2506,7 +2512,7 @@ class _ReplayView:
             ),
             width=int(fig.layout.width or 900),
             height=int(fig.layout.height or 600),
-            n_frames=len(fig.frames or ()),
+            n_frames=len((fig.layout.meta or {}).get("scanpath_frame_times_ms", ())),
             plot_height=plot_height,
             toolbar=toolbar,
             clip_frame_ms=animation_clip_frame_ms(fig),
@@ -2527,7 +2533,7 @@ class _ReplayView:
         re-validates every frame, 9 s at 2,000 frames."""
         import plotly.graph_objects as go
 
-        return go.Figure(self.figure_dict())
+        return go.Figure(replay_frames.expand_figure(self.figure_dict()))
 
 
 @st.cache_data(show_spinner=False, max_entries=8)
@@ -4684,6 +4690,7 @@ def _build_compare_meta(
             )
     compare_words = extract_trial(words_filtered, compare_participant, compare_trial)
     compare_fix = extract_trial(fixations_filtered, compare_participant, compare_trial)
+    compare_fix = with_onset_provenance(compare_fix)
     if compare_screen is not None:
         if not compare_words.empty:
             if SCREEN_ID not in compare_words.columns:
@@ -5711,6 +5718,7 @@ def _render_export_panel(
     )
     bulk_settings["data_source"] = st.session_state.get("data_source_choice")
     bulk_settings["data_source_label"] = current_dataset_name()
+    bulk_settings["dataset_references"] = dataset_credit.references(st.session_state)
     bulk_settings["synthetic_source"] = bulk_settings["data_source"] in (
         AUTHOR_CHOICE,
         MANUAL_SAMPLE_CHOICE,
@@ -6464,6 +6472,7 @@ def render_single_trial_tab(
     parent_fixations = extract_trial(
         fixations_filtered, selected_participant, selected_trial
     )
+    parent_fixations = with_onset_provenance(parent_fixations)
     if chart_axes.ELAPSED in (
         st.session_state.get("global_x_field"),
         st.session_state.get("global_y_field"),

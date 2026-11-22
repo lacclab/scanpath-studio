@@ -34,14 +34,6 @@ import pandas as pd
 
 from .multipart import grouping_columns
 
-# A recorded ``timestamp_ms`` series is trusted as real reading time only when
-# its span covers at least this fraction of the summed fixation durations.
-# Fixations don't overlap, so a genuine recording spans at least its total
-# dwell; the 0,1,2,… row index ``data.normalize_fixations`` synthesises when the
-# source has no timestamps collapses to a few ms and must NOT be read as
-# milliseconds. Shared by the similarity time-curve and the animation clock.
-REAL_TIMESTAMP_DWELL_FRAC = 0.5
-
 
 def _assign_word_ids_single(
     fix_chunk: pd.DataFrame,
@@ -547,12 +539,8 @@ def fixation_clock(ordered_fixations: pd.DataFrame) -> tuple[np.ndarray, bool]:
 
     ``ordered_fixations`` must already be in reading order (sorted by
     ``timestamp_ms``); the returned array is aligned to its rows. Uses the
-    recorded ``timestamp_ms`` when they look like real times — their span is at
-    least ``REAL_TIMESTAMP_DWELL_FRAC`` of the summed durations — otherwise lays
-    fixations back-to-back by their durations, so a synthesised 0,1,2,… index
-    doesn't crush the time axis. Fixations normalization numbered because the
-    table had no onset (``data.TIMESTAMP_SYNTHESIZED``) always take the
-    durations — the same estimate the reading summaries use.
+    recorded ``timestamp_ms`` when all onsets are known. Otherwise lays
+    fixations back-to-back by duration, as the reading summaries do.
 
     The flag is ``False`` whenever the onsets were laid end to end: their span
     is then the summed fixation time, not the trial's duration, and nothing
@@ -577,13 +565,7 @@ def fixation_clock(ordered_fixations: pd.DataFrame) -> tuple[np.ndarray, bool]:
         ts = pd.to_numeric(ordered_fixations["timestamp_ms"], errors="coerce").to_numpy(
             dtype=float
         )
-        total_dwell = float(dur.sum()) if len(dur) else 0.0
-        if (
-            len(ts)
-            and not np.isnan(ts).any()
-            and (ts[-1] - ts[0]) >= REAL_TIMESTAMP_DWELL_FRAC * total_dwell
-        ):
-            return ts - ts[0], True
+        return ts - ts[0], True
     return contiguous, False
 
 

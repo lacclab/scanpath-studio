@@ -95,9 +95,11 @@ def _replay(kind: str):
     )
 
 
-def _decode(script: str, tmp_path) -> dict:
+def _decode(script: str, tmp_path, layout=None) -> dict:
     path = tmp_path / "config.json"
-    path.write_text(json.dumps({"script": script}), encoding="utf-8")
+    path.write_text(
+        to_json_plotly({"script": script, "layout": layout}), encoding="utf-8"
+    )
     done = subprocess.run(
         [NODE, str(HARNESS), str(path)],
         capture_output=True,
@@ -127,6 +129,44 @@ def _as_written(frames) -> list:
 
 
 class TestTheBrowserGetsTheSameFrames:
+    @needs_node
+    @pytest.mark.parametrize("dual", [False, True])
+    def test_compact_streamlit_frames_match_every_full_trace(self, dual, tmp_path):
+        from scanpath_studio import plots, replay_frames
+        from scanpath_studio.synthetic import load_synthetic_data
+
+        words, fixations = load_synthetic_data()
+        other = fixations.iloc[:4].assign(
+            timestamp_ms=[0, 51, 123, 287], duration_ms=[20, 30, 25, 37]
+        )
+        kwargs = dict(
+            canvas_width=800,
+            canvas_height=600,
+            base_font_size=16,
+            autoplay=False,
+            fixations_b=other if dual else None,
+            words_b=words if dual else None,
+            show_order=True,
+            show_saccade_arrows=True,
+            fixation_symbol="heart",
+            fixation_outline_color="magenta",
+            fixation_flags={"short": {"mode": "Highlight", "threshold_ms": 110}},
+            anim_grid_step_ms=70,
+        )
+        full, _ = plots.build_scanpath_replay(words, fixations, **kwargs)
+        compact, _ = plots.build_scanpath_replay(
+            words, fixations, compact=True, **kwargs
+        )
+        assert len(compact.frames) == 1 < len(full.frames)
+        page, script = plots.replay_page(compact)
+        assert "frames" not in page
+        expected = _as_written(full.to_dict()["frames"])
+        assert _same(_decode(script, tmp_path, page["layout"])["frames"], expected)
+        assert _same(
+            _as_written(replay_frames.expand_figure(compact.to_dict())["frames"]),
+            expected,
+        )
+
     @needs_node
     @pytest.mark.parametrize("kind", ["single", "dual"])
     def test_decoded_frames_equal_the_frames_the_page_used_to_carry(

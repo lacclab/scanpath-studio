@@ -347,7 +347,9 @@ class TestToolbar:
         assert bar["width"] == "960px"
         assert bar["height"] == f"{REPLAY_TOOLBAR_PX}px"
         assert bar["attributes"]["aria-label"] == "Replay controls"
-        assert bar["buttons"] == [b.label for b in fig.layout.updatemenus[0].buttons]
+        assert bar["buttons"] == [
+            b.label for b in fig.layout.updatemenus[0].buttons
+        ] + ["‹", "›"]
         assert bar["font"] == fig.layout.updatemenus[0].font.family
         slider = fig.layout.sliders[0]
         assert bar["range"]["max"] == str(len(fig.frames) - 1)

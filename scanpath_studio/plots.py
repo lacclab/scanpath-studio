@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from . import chart_axes, progress
+from . import chart_axes, progress, replay_frames
 from .constants import (
     APP_THEME,
     CANVAS_PAD_FRACTION,
@@ -5891,9 +5891,7 @@ def _scanpath_anim_specs(
             continue
         ordered = fix_df.sort_values("timestamp_ms").reset_index(drop=True)
         dur = pd.to_numeric(ordered["duration_ms"], errors="coerce").fillna(0)
-        # Recorded-timestamp-vs-synthetic-index heuristic (shared with the
-        # similarity time-curve): trust recorded timestamps only when they look
-        # like real times, else lay fixations back-to-back by their durations.
+        # The replay and the reading summary use the same onset provenance.
         onsets, recorded_clock = fixation_clock(ordered)
         specs.append(
             dict(
@@ -5901,7 +5899,7 @@ def _scanpath_anim_specs(
                 dur=dur,
                 onsets=onsets,
                 recorded_clock=recorded_clock,
-                end=float(onsets[-1] + dur.iloc[-1]),
+                end=float(np.max(onsets + dur.to_numpy())),
                 color=color,
                 label=label,
                 size_range=tuple(size_range),
@@ -6109,6 +6107,14 @@ _REPLAY_META_TOOLBAR = "scanpath_toolbar"
 _REPLAY_PLAYER_JS = """(function () {
   var gd = document.getElementById('{plot_id}');
   if (!gd) { return; }
+  __FRAME_AT_TIME__
+  var terminal = gd._spsTerminal;
+  if (terminal) {
+    var clock = gd.layout.meta;
+    Plotly.addFrames(gd, clock.scanpath_frame_times_ms.map(function (ms, i) {
+      return frameAtTime(terminal, clock.scanpath_fixation_steps, ms, String(i));
+    }));
+  }
   var tries = 0;
   // Frames live on gd._transitionData._frames (gd.frames is undefined) and are
   // attached after newPlot resolves, so wait for them rather than a fixed delay.
@@ -6135,6 +6141,13 @@ _REPLAY_PLAYER_JS = """(function () {
     var leap = {mode: 'immediate', frame: {duration: 0, redraw: true},
                 transition: {duration: 0}};
     var shown = 0, raf = null, t0 = 0, resume = false, bar = null;
+    var exactTime = null, eventIndex = -1;
+    var readings = meta.scanpath_fixation_steps || [], events = [];
+    readings.forEach(function (r, side) {
+      r.times.forEach(function (ms, index) { events.push({ms: ms, side: side, index: index}); });
+    });
+    events.sort(function (a, b) { return a.ms - b.ms || a.side - b.side || a.index - b.index; });
+    var template = terminal || gd._transitionData._frames[last];
 
     function frameAt(ms) {  // the last frame whose reading time has been reached
       var lo = 0, hi = last;
@@ -6146,6 +6159,7 @@ _REPLAY_PLAYER_JS = """(function () {
     }
     function show(k) {
       shown = k;
+      exactTime = null; eventIndex = -1;
       Plotly.animate(gd, [String(k)], jump);
     }
     // A late tick skips frames rather than falling behind the clock.
@@ -6160,14 +6174,35 @@ _REPLAY_PLAYER_JS = """(function () {
     }
     function play() {
       if (raf !== null) { return; }  // already playing: keep the clock
-      show(shown < last ? shown : 0);  // at the end, Play starts over
-      t0 = performance.now() - times[shown] / speed;
+      var start = exactTime;
+      if (start === null) { show(shown < last ? shown : 0); start = times[shown]; }
+      t0 = performance.now() - start / speed;
       raf = requestAnimationFrame(tick);
     }
     function seek(k) {  // Restart, and the toolbar's time slider
       stop();
+      exactTime = null; eventIndex = -1;
       shown = k;
       Plotly.animate(gd, [String(k)], leap);
+    }
+    function step(direction) {
+      stop();
+      var i = eventIndex;
+      if (i < 0) {
+        var ms = times[shown];
+        i = direction > 0 ? events.findIndex(function (e) { return e.ms > ms; })
+                          : events.findLastIndex(function (e) { return e.ms < ms; });
+        if (i < 0) { i = direction > 0 ? events.length - 1 : 0; }
+      } else { i = Math.max(0, Math.min(i + direction, events.length - 1)); }
+      var e = events[i], r = readings[e.side], j = e.index;
+      eventIndex = i; exactTime = e.ms; shown = frameAt(e.ms);
+      var frame = frameAtTime(template, readings, e.ms, 'fixation-step');
+      Plotly.animate(gd, frame, leap);
+      var words = r.words[j], duration = r.durations[j];
+      var detail = (r.label ? r.label + ' · ' : '') + 'Fixation ' + (r.ids[j] || (j + 1)) +
+        ', ' + (r.recorded ? 'onset ' : 'estimated onset ') + e.ms + ' ms' +
+        (duration == null ? '' : ', duration ' + duration + ' ms') + (words ? ', ' + words : '');
+      bar.at(shown, detail);
     }
 
     // Whatever put a frame on screen — this clock, the slider, Restart — Play
@@ -6250,6 +6285,10 @@ _REPLAY_PLAYER_JS = """(function () {
         b.type = 'button';
         b.textContent = label(name, fallback);
         b.setAttribute('data-name', name);
+        if (name === 'previous' || name === 'next') {
+          b.title = name === 'previous' ? 'Previous fixation' : 'Next fixation';
+          b.setAttribute('aria-label', b.title);
+        }
         var bs = b.style;
         bs.height = (px - 8) + 'px';
         bs.padding = '0 8px';
@@ -6266,6 +6305,10 @@ _REPLAY_PLAYER_JS = """(function () {
       button('play', 'Play', play);
       button('pause', 'Pause', stop);
       button('restart', 'Restart', function () { seek(0); });
+      if (events.length) {
+        button('previous', '‹', function () { step(-1); });
+        button('next', '›', function () { step(1); });
+      }
       var range = document.createElement('input');
       range.type = 'range';
       range.min = '0';
@@ -6289,17 +6332,31 @@ _REPLAY_PLAYER_JS = """(function () {
       readout.style.minWidth = widest.length + 'ch';
       readout.style.textAlign = 'right';
       slot.appendChild(readout);
-      function at(k) {
+      var detail = document.createElement('span');
+      detail.setAttribute('role', 'status');
+      detail.setAttribute('aria-live', 'polite');
+      detail.style.position = 'absolute';
+      detail.style.width = '1px';
+      detail.style.height = '1px';
+      detail.style.overflow = 'hidden';
+      detail.style.clipPath = 'inset(50%)';
+      slot.appendChild(detail);
+      function at(k, announcement) {
         var text = prefix + ((steps[k] && steps[k].label) || '');
         range.value = String(k);
         range.setAttribute('aria-valuetext', text);
-        readout.textContent = text;
+        readout.textContent = announcement || text;
+        readout.title = readout.textContent;
+        readout.style.overflow = 'hidden';
+        readout.style.textOverflow = 'ellipsis';
+        readout.style.maxWidth = announcement ? '50%' : '';
+        detail.textContent = announcement || '';
       }
       at(shown);
       return {at: at};
     }
   }
-})();"""
+})();""".replace("__FRAME_AT_TIME__", replay_frames.FRAME_AT_JS)
 
 
 def animation_player_post_script(fig) -> str | None:
@@ -6537,6 +6594,14 @@ def replay_page(fig, *, toolbar: bool = True) -> tuple[dict, str] | None:
         return None
     if toolbar:
         fig_dict = {**fig_dict, "layout": _toolbar_layout(fig_dict.get("layout"))}
+    if (fig_dict.get("layout", {}).get("meta") or {}).get(replay_frames.COMPACT):
+        from plotly.io.json import to_json_plotly
+
+        terminal = _script_json(to_json_plotly(frames[0]))
+        script = f"document.getElementById('{{plot_id}}')._spsTerminal = {terminal};"
+        return {
+            k: v for k, v in fig_dict.items() if k != "frames"
+        }, script + "\n" + player
     if not all(_packable(frame) for frame in frames):
         # Frames this encoding can't address (a typed-array `traces`) travel as
         # plotly.py writes them, still on the player.
@@ -6614,12 +6679,15 @@ def _packed_frames_script(frames: Sequence[Mapping]) -> str:
     """`_REPLAY_FRAMES_JS` carrying ``frames``, packed."""
     from plotly.io.json import to_json_plotly
 
-    packed = to_json_plotly(pack_replay_frames(frames))
+    packed = _script_json(to_json_plotly(pack_replay_frames(frames)))
+    return _REPLAY_FRAMES_JS.replace(_PACKED_FRAMES_TOKEN, packed)
+
+
+def _script_json(value: str) -> str:
     # Inside a <script>: no `<` may close it, and plotly.py substitutes
     # `{plot_id}` across the whole script — both only ever occur inside a JSON
     # string, where the escapes decode to the same text.
-    packed = packed.replace("<", "\\u003c").replace("{plot_id}", "\\u007bplot_id}")
-    return _REPLAY_FRAMES_JS.replace(_PACKED_FRAMES_TOKEN, packed)
+    return value.replace("<", "\\u003c").replace("{plot_id}", "\\u007bplot_id}")
 
 
 def animation_clip_frame_ms(fig) -> float | None:
@@ -6818,6 +6886,7 @@ def _render_scanpath_animation(
     fixations: pd.DataFrame,
     *,
     settings: FigureSettings,
+    compact: bool = False,
     fixations_b: pd.DataFrame | None = None,
     words_b: pd.DataFrame | None = None,
 ) -> tuple[go.Figure, float]:
@@ -7039,6 +7108,8 @@ def _render_scanpath_animation(
             (fixations, fixations_b), styles, (label_a, label_b)
         )
     ]
+    if compact:
+        progress.report(0, 4, unit="stages", detail="Preparing the reading")
     specs = _scanpath_anim_specs(
         entries,
         marker_size_range,
@@ -7063,6 +7134,8 @@ def _render_scanpath_animation(
         spec["flags"] = spec_flags
         spec["style"] = spec_style
     dual = len(specs) > 1
+    if compact:
+        progress.report(1, 4, unit="stages", detail="Drawing fixation layers")
     if not dual and specs:
         # A lone scanpath always wears the canonical single-replay colour,
         # whether it arrived as `fixations` or (degenerately) only as
@@ -7418,10 +7491,12 @@ def _render_scanpath_animation(
         s["flag_overlays"] = []
         s_flags = s.get("flags", flags)
         if s_flags:
-            overlay_masks = _fixation_flag_masks(ordered, s["words"], s_flags)
+            overlay_masks = _fixation_flag_masks(
+                ordered, s["words"], s_flags, modes=("Highlight",)
+            )
             for category in FIXATION_FLAG_CATEGORIES:
                 spec_flags = s_flags.get(category, {})
-                if spec_flags.get("mode") != "Highlight":
+                if category not in overlay_masks:
                     continue
                 hit = overlay_masks[category].to_numpy()
                 if not hit.any():
@@ -7497,113 +7572,123 @@ def _render_scanpath_animation(
         if bar is not None:
             fig.add_trace(bar)
 
+    if compact:
+        progress.report(2, 4, unit="stages", detail="Preparing recorded playback times")
     frame_times, frame_step_ms, reading_span_ms = _anim_timeline(
         specs,
         grid_step_ms=anim_grid_step_ms,
         max_frames=anim_max_frames,
     )
 
-    # Frames are plain dicts, validated once, by the `fig.frames` assignment
-    # below. Built from `go.Scatter`/`go.Frame` they would be validated (and
-    # deep-copied) three times over — each trace, each frame, then the figure —
-    # which on a long replay is most of the build: every frame restates the
-    # trail's full-length sizes and colours (see `_trail_marker`).
-    frames = []
-    n_frames = len(frame_times)
-    for k, t in enumerate(frame_times):
-        # The loading card's "120 of 360 frames" — and a cancel checkpoint, so an
-        # abandoned build stops within a frame. A no-op outside a card.
-        progress.report(k + 1, n_frames, unit="frames")
-        traces_in_frame = []
-        traces_idx_in_frame = []
-        for s in specs:
-            all_x = s["all_x"]
-            all_y = s["all_y"]
-            # Fixations whose recorded onset has been reached by time t.
-            kk = max(int(np.searchsorted(s["onsets"], t, side="right")), 1)
+    # Every timed state shares these trace styles and final coordinates. The
+    # UI caches this one template and lets its player reveal the coordinates.
+    traces_in_frame = []
+    traces_idx_in_frame = []
+    for s in specs:
+        all_x = s["all_x"]
+        all_y = s["all_y"]
+        kk = len(all_x)
 
-            # Trail: full-length, fixations past kk masked to None. The marker
-            # (sizes/colours) and `text` are full-length and identical every
-            # frame, so only positions change — `redraw=False` then re-renders
-            # just this trace, not the whole figure.
-            tx, ty = _revealed_xy(all_x, all_y, kk)
-            for idx, trace in zip(s["idx_trails"], _trail_traces(s, tx, ty, make=dict)):
-                traces_in_frame.append(trace)
-                traces_idx_in_frame.append(idx)
+        # Trail: full-length, fixations past kk masked to None. The marker
+        # (sizes/colours) and `text` are full-length and identical every
+        # frame, so only positions change — `redraw=False` then re-renders
+        # just this trace, not the whole figure.
+        tx, ty = _revealed_xy(all_x, all_y, kk)
+        for idx, trace in zip(s["idx_trails"], _trail_traces(s, tx, ty, make=dict)):
+            traces_in_frame.append(trace)
+            traces_idx_in_frame.append(idx)
 
-            if show_order:
-                # Same full-length positions/text as the base order trace; the
-                # reveal is purely the un-masking of x/y for reached fixations,
-                # so numbers appear in place (and `redraw=False` shows them).
-                ox, oy = _revealed_xy(all_x, all_y, kk)
-                traces_in_frame.append(
-                    dict(
-                        x=ox,
-                        y=oy,
-                        mode="text",
-                        text=s["order_text"],
-                        textfont=dict(
-                            color=s["text_color"],
-                            size=order_font_size,
-                            family=font_settings["family"],
-                        ),
-                        textposition=order_textposition,
-                    )
-                )
-                traces_idx_in_frame.append(s["idx_order"])
-
-            if show_saccades:
-                sac_x, sac_y = _revealed_saccade_xy(all_x, all_y, kk)
-                traces_in_frame.append(
-                    dict(
-                        x=sac_x,
-                        y=sac_y,
-                        mode="lines",
-                        line=dict(
-                            color=s["sac_color"],
-                            width=s["sac_width"],
-                            dash=s["sac_dash"],
-                        ),
-                    )
-                )
-                traces_idx_in_frame.append(s["idx_sac"])
-
-            if s["idx_arrow"] is not None:
-                # Arrowheads reveal with the saccades above: same constant-length
-                # array, only the mask moves (angles are set on the base trace).
-                arw_x, arw_y = _revealed_arrow_xy(
-                    s["arrow_x"], s["arrow_y"], s["arrow_seg"], kk
-                )
-                traces_in_frame.append(dict(x=arw_x, y=arw_y, mode="markers"))
-                traces_idx_in_frame.append(s["idx_arrow"])
-
-            ci = kk - 1
+        if show_order:
+            # Same full-length positions/text as the base order trace; the
+            # reveal is purely the un-masking of x/y for reached fixations,
+            # so numbers appear in place (and `redraw=False` shows them).
+            ox, oy = _revealed_xy(all_x, all_y, kk)
             traces_in_frame.append(
                 dict(
-                    x=[all_x[ci]],
-                    y=[all_y[ci]],
-                    mode="markers",
-                    marker=dict(
-                        size=[float(s["sizes"][ci]) + 8],
-                        color=CURRENT_FIX_COLOR,
-                        line=dict(color=s["curr_outline"], width=s["curr_outline_w"]),
+                    x=ox,
+                    y=oy,
+                    mode="text",
+                    text=s["order_text"],
+                    textfont=dict(
+                        color=s["text_color"],
+                        size=order_font_size,
+                        family=font_settings["family"],
+                    ),
+                    textposition=order_textposition,
+                )
+            )
+            traces_idx_in_frame.append(s["idx_order"])
+
+        if show_saccades:
+            sac_x, sac_y = _revealed_saccade_xy(all_x, all_y, kk)
+            traces_in_frame.append(
+                dict(
+                    x=sac_x,
+                    y=sac_y,
+                    mode="lines",
+                    line=dict(
+                        color=s["sac_color"],
+                        width=s["sac_width"],
+                        dash=s["sac_dash"],
                     ),
                 )
             )
-            traces_idx_in_frame.append(s["idx_curr"])
+            traces_idx_in_frame.append(s["idx_sac"])
 
-            for overlay in s["flag_overlays"]:
-                # A flagged fixation's highlight appears with the fixation itself.
-                ox_f, oy_f = _revealed_xy(overlay["x"], overlay["y"], kk)
-                traces_in_frame.append(
-                    dict(x=ox_f, y=oy_f, mode="markers", marker=overlay["marker"])
-                )
-                traces_idx_in_frame.append(overlay["idx"])
+        if s["idx_arrow"] is not None:
+            # Arrowheads reveal with the saccades above: same constant-length
+            # array, only the mask moves (angles are set on the base trace).
+            arw_x, arw_y = _revealed_arrow_xy(
+                s["arrow_x"], s["arrow_y"], s["arrow_seg"], kk
+            )
+            traces_in_frame.append(dict(x=arw_x, y=arw_y, mode="markers"))
+            traces_idx_in_frame.append(s["idx_arrow"])
 
-        frames.append(
-            dict(data=traces_in_frame, name=str(k), traces=traces_idx_in_frame)
+        ci = kk - 1
+        traces_in_frame.append(
+            dict(
+                x=[all_x[ci]],
+                y=[all_y[ci]],
+                mode="markers",
+                marker=dict(
+                    size=[float(s["sizes"][ci]) + 8],
+                    color=CURRENT_FIX_COLOR,
+                    line=dict(color=s["curr_outline"], width=s["curr_outline_w"]),
+                ),
+            )
         )
-    fig.frames = frames
+        traces_idx_in_frame.append(s["idx_curr"])
+
+        for overlay in s["flag_overlays"]:
+            # A flagged fixation's highlight appears with the fixation itself.
+            ox_f, oy_f = _revealed_xy(overlay["x"], overlay["y"], kk)
+            traces_in_frame.append(
+                dict(x=ox_f, y=oy_f, mode="markers", marker=overlay["marker"])
+            )
+            traces_idx_in_frame.append(overlay["idx"])
+
+    if compact:
+        progress.report(3, 4, unit="stages", detail="Preparing the playback template")
+    readings = []
+    if frame_times:
+        slots = {idx: slot for slot, idx in enumerate(traces_idx_in_frame)}
+        readings = [
+            replay_frames.reading(s, slots, redact=settings.redact_text, comparing=dual)
+            for s in specs
+        ]
+        terminal = dict(
+            data=traces_in_frame, traces=traces_idx_in_frame, name="terminal"
+        )
+        if compact:
+            fig.frames = [terminal]
+        else:
+            frames = []
+            for k, time_ms in enumerate(frame_times):
+                progress.report(k + 1, len(frame_times), unit="frames")
+                frames.append(
+                    replay_frames.at_time(terminal, readings, time_ms, str(k))
+                )
+            fig.frames = frames
 
     if settings.show_plot_frame:
         shapes.append(
@@ -7746,8 +7831,16 @@ def _render_scanpath_animation(
     # intent, which that player reads on load (Plotly's own `auto_play` ignores
     # the frame duration). No frames → no times, so no player and no autoplay.
     fig.layout.meta = _replay_clock_meta(
-        [round(float(t), 3) for t in frame_times], playback_speed, autoplay
+        list(map(float, frame_times)), playback_speed, autoplay
     )
+    if readings:
+        fig.layout.meta = {
+            **fig.layout.meta,
+            replay_frames.READINGS: readings,
+            **({replay_frames.COMPACT: True} if compact else {}),
+        }
+    if compact:
+        progress.report(4, 4, unit="stages", detail="Replay ready")
     return fig, frame_step_ms
 
 
@@ -10681,6 +10774,7 @@ def build_scanpath_replay(
     fixations: pd.DataFrame,
     *,
     settings: FigureSettings | Mapping[str, Any] | None = None,
+    compact: bool = False,
     fixations_b: pd.DataFrame | None = None,
     words_b: pd.DataFrame | None = None,
     **overrides: Any,
@@ -10723,6 +10817,7 @@ def build_scanpath_replay(
         fig, frame_step_ms = _render_scanpath_animation(
             words,
             fixations,
+            compact=compact,
             settings=resolved,
             fixations_b=fixations_b,
             words_b=words_b,

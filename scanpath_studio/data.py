@@ -7533,15 +7533,11 @@ def _synthesized_timestamps(
     onset = schema.get("timestamp")
     if not onset:
         return pd.Series(True, index=fixations.index)
-    if (
-        renormalizing
-        and onset == "timestamp_ms"
-        and TIMESTAMP_SYNTHESIZED in fixations.columns
-    ):
-        previous = fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
-    else:
-        previous = False
-    missing = ~np.isfinite(_to_number(fixations[onset])) | previous
+    missing = (
+        synthesized_onset_mask(fixations)
+        if renormalizing and onset == "timestamp_ms"
+        else ~np.isfinite(_to_number(fixations[onset]))
+    )
     return missing if missing.any() else None
 
 

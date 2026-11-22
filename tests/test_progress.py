@@ -5,6 +5,7 @@ from __future__ import annotations
 import gc
 import threading
 
+import pandas as pd
 import pytest
 
 from scanpath_studio import api, plots, progress, tabs
@@ -268,8 +269,10 @@ def test_building_a_replay_reports_every_frame():
     assert snap.done == snap.total == len(fig.frames)
 
 
+@pytest.mark.parametrize("repeats", [1, 100])
 def test_a_replay_cancelled_mid_build_caches_nothing_and_the_next_starts_afresh(
     monkeypatch,
+    repeats,
 ):
     """A cancelled replay stops within a frame — `Cancelled` straight
     out of the app's cached build — and, having returned nothing, leaves
@@ -277,6 +280,15 @@ def test_a_replay_cancelled_mid_build_caches_nothing_and_the_next_starts_afresh(
     joins a cancelled one), is a miss: it starts again from the first frame
     and runs to the last."""
     words, fixations = api.load_scanpath_data(*load_synthetic_data(), names="canonical")
+    if repeats > 1:
+        fixations = pd.concat(
+            [
+                fixations.assign(timestamp_ms=fixations.timestamp_ms + offset * 1000)
+                for offset in range(repeats)
+            ],
+            ignore_index=True,
+        )
+        fixations["order_in_trial"] = range(1, len(fixations) + 1)
     pid = str(fixations["participant_id"].iloc[0])
     trial = str(fixations["trial_id"].iloc[0])
     plan = tabs._plan_replay(
@@ -304,7 +316,7 @@ def test_a_replay_cancelled_mid_build_caches_nothing_and_the_next_starts_afresh(
     real_report, real_build = progress.report, tabs.build_scanpath_replay
 
     def report(done=None, total=None, **kwargs):
-        if kwargs.get("unit") == "frames":
+        if kwargs.get("unit") == "stages":
             frames.append(done)
             if done == 3 and len(builds) == 1:  # a few frames into the first build
                 progress.cancel(key)
@@ -327,16 +339,16 @@ def test_a_replay_cancelled_mid_build_caches_nothing_and_the_next_starts_afresh(
             with pytest.raises(progress.Cancelled):
                 replay()
         assert cancelled.cancelled
-        assert frames == [1, 2, 3]
+        assert frames == [0, 1, 2, 3]
         frames.clear()
         with progress.task(key, title="Building the animation") as fresh:
             fig, _frame_step_ms = replay()
         assert fresh is not cancelled and not fresh.cancelled
         assert builds == [1, 2]  # a miss: the cancelled build cached nothing
-        assert len(fig.frames) > 3
-        assert frames == list(range(1, len(fig.frames) + 1))
+        assert len(fig.layout.meta["scanpath_frame_times_ms"]) > 3
+        assert frames == [0, 1, 2, 3, 4]
         snap = fresh.snapshot()
-        assert snap.done == snap.total == len(fig.frames)
+        assert snap.done == snap.total == 4
     finally:
         tabs._cached_scanpath_animation.clear()
 

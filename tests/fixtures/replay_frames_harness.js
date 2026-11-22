@@ -11,7 +11,7 @@
 const fs = require("fs");
 
 const config = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-const gd = { layout: { meta: {} }, on() {} };
+const gd = { layout: config.layout || { meta: {} }, on() {} };
 let added = null;
 let calls = 0;
 
@@ -26,6 +26,8 @@ global.Plotly = {
     calls += 1;
     added = frames;
     gd._transitionData = { _frames: frames };
+    // The transport itself runs in the player and browser tests.
+    gd.layout.meta = {};
     return Promise.resolve();
   },
 };

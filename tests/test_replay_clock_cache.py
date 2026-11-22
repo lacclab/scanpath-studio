@@ -226,5 +226,11 @@ class TestTheAppReusesItsFrames:
                 ),
             )
             # (The app adds the Illustration label's keys to the meta on top.)
-            assert {key: fig.layout.meta[key] for key in _CLOCK} == direct.layout.meta
+            assert all(
+                fig.layout.meta[key] == direct.layout.meta[key] for key in _CLOCK
+            )
+            assert (
+                fig.layout.meta["scanpath_fixation_steps"]
+                == direct.layout.meta["scanpath_fixation_steps"]
+            )
             assert fig.layout.updatemenus == direct.layout.updatemenus

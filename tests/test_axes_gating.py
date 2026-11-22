@@ -44,7 +44,7 @@ def test_animate_greys_the_fields_and_says_how_to_get_them_back():
     at = _app(single_animate=True)
     x_field = _widget(at.selectbox, "global_x_field")
     assert x_field.disabled
-    assert "Turn **Animate** off" in x_field.help
+    assert "Animation uses screen coordinates" in x_field.help
     # The frame and the grid still apply to the replay.
     assert not _widget(at.checkbox, "_rail_crop_to_data").disabled
 

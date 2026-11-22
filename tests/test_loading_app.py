@@ -1181,7 +1181,9 @@ def test_animate_on_a_trial_with_no_fixations_stops_the_replay_left_building():
     at.run()
     assert not at.exception, at.exception
     # The static figure is drawn instead, and the note says why.
-    assert any("**Animate** draws fixations" in caption.value for caption in at.caption)
+    assert any(
+        "**Animation** draws fixations" in caption.value for caption in at.caption
+    )
     assert task.cancelled
     assert tabs.ANIM_TASK_KEY not in at.session_state
 

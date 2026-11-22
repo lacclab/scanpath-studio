@@ -219,22 +219,85 @@ def test_phone_view_choices_stay_with_figure_in_both_modes(app_url, browser):
             a, b = box(lower), box(upper)
             assert a["y"] >= b["y"] + b["height"] - 1
 
-        below("tour_grp_simple_views", "tour_grp_plot")
-        below("tour_grp_subtabs", "tour_grp_simple_views")
-        below("global_palette", "tour_grp_subtabs")
-        views = box("tour_grp_simple_views")
+        below("tour_grp_views", "tour_grp_plot")
+        below("tour_grp_subtabs", "tour_grp_views")
+        below("global_palette", "tour_grp_views")
+        below("tour_grp_subtabs", "global_palette")
+        views = box("tour_grp_views")
         assert views["y"] + views["height"] <= 844
         page.get_by_role("button", name="Heatmap", exact=True).click()
         _settle(page)
         page.locator(".st-key-ui_mode_switch").get_by_text("Full", exact=True).click()
         _settle(page)
         below("tour_grp_view_modes", "tour_grp_plot")
-        below("tour_grp_subtabs", "quick_views_grid")
+        below("global_palette", "tour_grp_views")
+        below("tour_grp_subtabs", "global_palette")
         assert box("tour_grp_viz_controls")["height"] > 0
         page.set_viewport_size({"width": 1440, "height": 900})
         plot = box("tour_grp_plot")
         assert box("scanpath_rail")["x"] >= plot["x"] + plot["width"]
         assert abs(box("tour_grp_subtabs")["x"] - plot["x"]) < 1
+
+
+def test_shared_controls_keep_their_positions_and_selection(app_url, browser):
+    page = _open(browser, f"{app_url}/?ui=full&source=demo&animate=0")
+    try:
+        names = ("animation", "scanpath", "heatmap", "illustration")
+        tiles = [
+            page.locator(f".st-key-viz_view_{name}").get_by_role("button")
+            for name in names
+        ]
+        palette = page.locator(".st-key-global_palette")
+
+        def positions():
+            header = page.locator(".st-key-plot_controls_header").bounding_box()
+            boxes = [element.bounding_box() for element in [*tiles, palette]]
+            return [
+                (
+                    box["x"] - header["x"],
+                    box["y"] - header["y"],
+                    box["width"],
+                    box["height"],
+                )
+                for box in boxes
+            ]
+
+        tiles[2].click()
+        _settle(page)
+        palette.get_by_role("combobox").click()
+        page.get_by_role("option", name="High contrast", exact=True).click()
+        _settle(page)
+        expected = positions()
+        x, _, width, _ = expected[-1]
+        for left, _, tile_width, _ in expected[:-1]:
+            assert x <= left and left + tile_width <= x + width + 1
+        for mode in ("Essentials", "Full"):
+            page.locator(".st-key-ui_mode_switch").get_by_text(mode, exact=True).click()
+            _settle(page)
+            assert positions() == expected
+            assert tiles[2].get_attribute("kind") == "primary"
+            assert palette.get_by_role("combobox").input_value() == "High contrast"
+            assert page.locator(".st-key-rail_compare").is_visible() == (mode == "Full")
+            assert page.locator(".st-key-adv_only_rail_animation").is_visible() == (
+                mode == "Full"
+            )
+        compare = page.locator(".st-key-single_compare_toggle")
+        compare.locator("label").click()
+        _settle(page)
+        page.locator(".st-key-ui_mode_switch").get_by_text(
+            "Essentials", exact=True
+        ).click()
+        _settle(page)
+        assert compare.is_visible() and compare.locator("input").is_checked()
+        assert positions() == expected
+        compare.locator("label").click()
+        _settle(page)
+        assert not compare.is_visible()
+        assert tiles[2].get_attribute("kind") == "primary"
+        assert not page.locator('[data-testid="stException"]').count()
+        assert page.errors == []
+    finally:
+        page.context.close()
 
 
 def test_phone_corpus_profile_shows_data_above_the_fold(app_url, browser):
@@ -521,6 +584,7 @@ def test_chart_controls_survive_navigation_presets_and_reset(app_url, browser):
         switch("Essentials")
         assert chart() == heatmap
         switch("Full")
+        page.locator(".st-key-design_shell summary").click()
         click("viz_view_custom")
         assert chart() == second
         click("single_prev_trial")
@@ -537,7 +601,7 @@ def test_chart_controls_survive_navigation_presets_and_reset(app_url, browser):
         assert chart() == default
         switch("Essentials")
         assert chart() == default
-        click("simple_view_heatmap")
+        click("viz_view_heatmap")
         assert "heatmap colorbar" in chart()["layers"]
         switch("Full")
         click("viz_view_illustration")

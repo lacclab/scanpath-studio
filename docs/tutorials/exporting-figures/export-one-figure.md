@@ -6,15 +6,14 @@ description: "Export a publication-ready scanpath, gaze heatmap or comparison fi
 
 Save a scanpath, heatmap or comparison at the size you need.
 
-In Essentials, use the view tiles to choose a figure. For **Design presets**,
-**Compare** and **My designs**, switch to **Full** at the top of the
+In either mode, use the view tiles to choose a figure. For **Compare readings**
+and **My designs**, switch to **Full** at the top of the
 :material/route: **Scanpath** view
 ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
 
 ## 1. Choose the view { #1-choose-the-view }
 
-Pick a trial in the :material/route: **Scanpath** view. Choose one of the
-**Design presets**, or set the layers in the Plot controls. Turn on
+Pick a trial in the :material/route: **Scanpath** view. Choose a **View** tile, or set the layers in Full. Turn on
 :material/compare: **Compare** if the figure needs two readings.
 Check that text and markers are readable and nothing is clipped.
 

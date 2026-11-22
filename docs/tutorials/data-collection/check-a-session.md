@@ -28,7 +28,7 @@ For a consistent offset, check [coordinate units and screen setup](../../faq.md#
 
 ## 3. Replay the recording { #3-replay-the-recording }
 
-Turn on :material/movie: **Animate** to follow the fixation order and timing.
+Choose :material/movie: **Animation** to follow the fixation order and timing.
 To mark short or long fixations, or fixations outside the text, open
 :material/filter_list: **Filters & highlights** ▾ → **Fixations** and set
 **Short**, **Long** or **Outside the text** to **Highlight**. A gap or an

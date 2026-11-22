@@ -122,7 +122,7 @@ For a scripted batch, loop over the trial list.
 
 ## Replay export { #replays-as-gif-or-mp4 }
 
-With :material/movie: **Animate** on, **Export** → **Current figure** saves the
+With :material/movie: **Animation** selected, **Export** → **Current figure** saves the
 replay as HTML, GIF or MP4. In a saved HTML replay, **Previous fixation** and
 **Next fixation** move to individual onsets and show the fixation’s duration and
 assigned word when available. The time slider scrubs through the whole reading.

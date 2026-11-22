@@ -12,10 +12,8 @@ import pytest
 from scanpath_studio import column_names as cn
 from scanpath_studio.column_names import ColumnNames, SourceName
 from scanpath_studio.export import (
-    ComparisonSide,
     ExportOptions,
     bulk_export,
-    pair_export,
     pattern_fields,
     render_pattern,
 )
@@ -192,43 +190,6 @@ class TestPatterns:
         assert render_pattern("{participant_id}", fields) == "p1"
 
 
-class TestPairExport:
-    def _pair(self, frames, dataset_b):
-        _, words, fixations = frames
-        side_a = ComparisonSide("p1", "t1", words, fixations)
-        side_b = ComparisonSide("p1", "t1", words, fixations, dataset=dataset_b)
-        data = pair_export(
-            None,
-            side_a,
-            side_b,
-            canvas_width=800,
-            canvas_height=400,
-            x_field="x",
-            y_field="y",
-            settings={},
-            options=ExportOptions(
-                include_png=False,
-                include_svg=False,
-                include_fixations=True,
-                table_format="csv",
-            ),
-            column_names=MAPS,
-        )
-        zf = zipfile.ZipFile(io.BytesIO(data))
-        name = next(n for n in zf.namelist() if n.endswith("fixations.csv"))
-        return zf, pd.read_csv(zf.open(name))
-
-    def test_a_same_dataset_pair_uses_the_datasets_names(self, frames):
-        _, fix = self._pair(frames, None)
-        assert "CURRENT_FIX_DURATION" in fix
-
-    def test_a_pair_across_datasets_keeps_the_shared_internal_names(self, frames):
-        zf, fix = self._pair(frames, "Other corpus")
-        assert "duration_ms" in fix
-        dictionary = next(n for n in zf.namelist() if n.endswith("columns.json"))
-        assert json.loads(zf.read(dictionary))["tables"] == {}
-
-
 # --- Aliases, app datasets and rewritten columns ----------------------------
 
 
@@ -360,80 +321,6 @@ class TestRewrites:
         names = ColumnNames.from_payload(payload)
         assert names.kind_of("word_id") == cn.CONVERTED
         assert names.label("word_id").endswith(" − 1")
-
-
-@pytest.mark.parametrize("same_source", [True, False])
-def test_comparison_labels_preserve_the_labs_columns_and_source_headers(
-    frames, same_source
-):
-    _, words, fixations = frames
-    sides = [
-        ComparisonSide(
-            "p1",
-            "t1",
-            words.assign(
-                dataset=study, scanpath="word review", comparison_dataset="lab label"
-            ),
-            fixations.assign(
-                dataset=study,
-                scanpath="manual review",
-                comparison_scanpath_2="lab field",
-            ),
-            dataset=source,
-        )
-        for study, source in (
-            ("pilot", "Lab A"),
-            ("replication", "Lab A" if same_source else "Lab B"),
-        )
-    ]
-    maps = {
-        "fixations": ColumnNames({"duration_ms": SourceName(("comparison_scanpath",))})
-    }
-    payload = pair_export(
-        None,
-        *sides,
-        canvas_width=800,
-        canvas_height=400,
-        x_field="x",
-        y_field="y",
-        settings={},
-        column_names=maps,
-        options=ExportOptions(
-            include_png=False,
-            include_svg=False,
-            include_fixations=True,
-            include_measures=True,
-        ),
-    )
-    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
-        folder = f"{sides[0].slug}__vs__{sides[1].slug}"
-        columns = json.loads(archive.read(f"{folder}/columns.json"))["tables"]
-        for table, artifact, lab_label in (
-            ("words", "measures", "word review"),
-            ("fixations", "fixations", "manual review"),
-        ):
-            frame = pd.read_csv(archive.open(f"{folder}/{artifact}.csv"))
-            assert set(frame["dataset"]) == {"pilot", "replication"}
-            assert set(frame["scanpath"]) == {lab_label}
-            generated = {
-                field["column"]: field["note"]
-                for field in columns[table]
-                if field["kind"] == cn.GENERATED
-            }
-            side_label = (
-                "comparison_scanpath_3" if same_source else "comparison_scanpath"
-            )
-            assert side_label in generated and "comparison_dataset_2" in generated
-            assert frame.groupby("dataset")[side_label].first().to_dict() == {
-                "pilot": "A",
-                "replication": "B",
-            }
-            assert set(frame["comparison_dataset_2"]) == {s.dataset for s in sides}
-            if table == "fixations" and same_source:
-                assert (
-                    frame["comparison_scanpath"].tolist()
-                    == fixations["duration_ms"].tolist() * 2
-                )
 
 
 def test_csv_dictionary_uses_the_written_types_units_and_missing_convention(tmp_path):

@@ -22,6 +22,8 @@ at the Technion and the University of Zurich.
 ## Cite Scanpath Studio
 
 Cite the software using its [Zenodo DOI](https://doi.org/10.5281/zenodo.22933884).
+In the app, :material/help: **Help** → :material/info: **About** → **Citation**
+gives the APA reference and a copyable BibTeX entry.
 Use `scanpath-studio cite` in a terminal or [`cite`][scanpath_studio.api.cite]
 in Python to get the citation. Both also offer RIS and CSL-JSON formats.
 
@@ -44,8 +46,9 @@ with Different Reading Regimes*, Scientific Data.
 
 With the desktop app or a local install, your recordings stay on your computer
 and are processed locally. The online demo processes the files you upload on
-its hosted server. :material/help: **Help** → :material/info: **About** says
-which of the two you are using.
+its hosted server. :material/help: **Help** → :material/info: **About** →
+**App details** shows where your files are processed and whether a recovery
+copy is saved.
 
 ### Your data
 
@@ -85,8 +88,8 @@ own analytics; see its [privacy policy](https://streamlit.io/privacy-policy).
 [Ask a question](https://github.com/lacclab/scanpath-studio/discussions/categories/q-a),
 [report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md),
 or [request a feature](https://github.com/lacclab/scanpath-studio/issues/new?template=feature_request.md).
-For a bug report, include the version, your operating system and how you run
-the app. The app shows its version in :material/help: **Help** → :material/info: **About**.
+For a bug report, :material/help: **Help** → :material/feedback: **Send feedback**
+gives you the exact app version and system details to copy.
 
 <div class="sps-development-note" markdown>
 

@@ -2363,7 +2363,7 @@ _FAQ_ITEMS = [
     ),
     (
         "How do I cite Scanpath Studio?",
-        f"See **{ICONS['about']} About** under {ICONS['help']} Help, or "
+        f"Open **{ICONS['help']} Help → {ICONS['about']} About → Citation**, or see "
         "`CITATION.cff` in the repository. If you use the bundled demo data, "
         "cite OneStop Eye Movements too.",
     ),

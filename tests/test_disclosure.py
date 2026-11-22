@@ -44,23 +44,32 @@ class TestTheNoteIsOnEverySurface:
     def test_it_points_somewhere_a_report_can_land(self, path):
         assert "scanpath-studio/issues" in _text(path), path
 
-    @pytest.mark.parametrize(
-        "path", ["README.md", "docs/index.md", "scanpath_studio/app.py"]
-    )
+    @pytest.mark.parametrize("path", ["README.md", "docs/index.md"])
     def test_the_surface_explicitly_welcomes_feature_requests(self, path):
         body = _text(path).lower()
         assert "feature request" in body or "request a feature" in body, path
 
-    def test_the_in_app_note_links_issues_via_the_citation_metadata(self):
-        """Not a hard-coded URL — the link lives in CITATION, and opens the
-        repository's feature-request template."""
+    def test_about_opens_the_feedback_form_with_the_project_issue_templates(self):
+        from streamlit.testing.v1 import AppTest
+
         from scanpath_studio.constants import CITATION
 
-        body = _text("scanpath_studio/app.py")
-        assert 'CITATION["feature_request_url"]' in body
-        assert CITATION["feature_request_url"].startswith(
-            f"{CITATION['url']}/issues/new?template="
-        )
+        def script():
+            import streamlit as st
+
+            from scanpath_studio import app, feedback
+
+            if st.session_state.get(feedback._REQUESTED_KEY):
+                feedback.maybe_show_feedback()
+            else:
+                app._about_dialog()
+
+        at = AppTest.from_function(script).run()
+        details = next(tab for tab in at.tabs if tab.label == "App details")
+        details.button(key="about_open_feedback").click().run()
+        assert not at.exception
+        urls = {button.proto.url for button in at.link_button}
+        assert {CITATION["bug_report_url"], CITATION["feature_request_url"]} <= urls
 
     def test_no_liability_disclaimer_language(self):
         """Deliberately not a warranty notice — MIT already carries that, and

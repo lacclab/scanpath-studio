@@ -152,14 +152,14 @@ Ask questions in
 Report a bug as a
 [GitHub issue](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md),
 with the version, your operating system and how you run the app (pip, the
-desktop app or the online demo). :material/help: **Help** → :material/info:
-**About** shows the version and links to both. On the command line, run
+desktop app or the online demo). On the command line, find the version with
 `scanpath-studio --version`.
 
 ### How do I update Scanpath Studio? { #updating }
 
-Open :material/help: **Help** → :material/info: **About** →
-:material/update: **Check for updates**. In the desktop app, choose
+In a local install or the desktop app, open :material/help: **Help** →
+:material/info: **About** → **App details** → :material/update: **Check for updates**.
+In the desktop app, choose
 **Update & restart**. For a Python install, run:
 
 ```bash

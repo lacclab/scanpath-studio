@@ -70,7 +70,7 @@ _HELP_PAGES = {
     # go when the other entries haven't answered your question.
     "help_feedback": ("Send feedback", ICONS["feedback"], "help-feedback"),
     # Debug is not listed here: it is a developer tool, opened from a small
-    # button at the foot of About (`app._about_dialog`).
+    # button under About → App details (`app._about_dialog`).
 }
 
 #: The nav section heading the entries above collapse under.

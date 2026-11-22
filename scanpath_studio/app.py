@@ -79,7 +79,12 @@ from scanpath_studio import updates as update_check
 from scanpath_studio.annotations import (
     filter_keys,
 )
-from scanpath_studio.build_info import DEV_APP_URL, STABLE_APP_URL, build_info
+from scanpath_studio.build_info import (
+    DEV_APP_URL,
+    STABLE_APP_URL,
+    BuildInfo,
+    build_info,
+)
 from scanpath_studio.color_picker_commit import render_color_picker_commit
 from scanpath_studio.column_names import (
     ACTIVE_COLUMN_NAMES_KEY,
@@ -246,6 +251,7 @@ from scanpath_studio.datasets import (
     POTEC_WORD_SCHEMA,
 )
 from scanpath_studio.debug_log import (
+    _arm_debug,
     debug_enabled,
     install_log_capture,
     log_state_change,
@@ -267,7 +273,7 @@ from scanpath_studio.experimental_setup import (
     font_size_px,
     stimulus_font_css,
 )
-from scanpath_studio.feedback import maybe_show_feedback
+from scanpath_studio.feedback import _arm_feedback, maybe_show_feedback
 from scanpath_studio.fields import row_label
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.keyboard import SCANPATH_SHORTCUTS
@@ -1738,54 +1744,42 @@ def maybe_show_about() -> None:
 
 
 def _about_privacy_line(*, local: bool, saving: bool) -> str:
-    """About's line on where the user's data goes, for this run alone.
-
-    ``local`` is the server's own bind address (``server_bound_to_loopback``)
-    and ``saving`` whether it keeps a recovery copy (``persistence_enabled``) —
-    the tests the FAQ's *Where does my data go?* answers by, which this line
-    points to. A server other machines reach is usually the online demo, but
-    can be anyone's deployment, so the hosted sentence names the demo's host
-    as an example rather than as a fact about this server.
-    """
+    """Where this instance processes uploads and whether it saves a recovery copy."""
     if local:
-        where = "It stays on this computer."
-        if saving:
-            where += " Your work is saved here until you clear it."
-    elif saving:
-        where = (
-            "Files you upload are processed on the server this app runs on, "
-            "and a recovery copy is kept there."
-        )
+        where = "Your files are processed on this computer."
+        saved = "Your work is saved here until you clear it."
     else:
-        where = (
-            "Files you upload are processed on the server this app runs on "
-            "(Streamlit Community Cloud, for the online demo) and not kept."
-        )
-    return (
-        f"**{ICONS['private']} Your data.** {where} More in {ICONS['help']} "
-        f"Help → {ICONS['faq']} FAQ → *Where does my data go?*"
-    )
+        where = "Your uploads are processed on this server."
+        saved = "The server keeps a recovery copy."
+    return f"{where} {saved}" if saving else f"{where} The app keeps no recovery copy."
 
 
-@st.dialog(f"{ICONS['about']} About Scanpath Studio", width="large")
+@st.dialog(f"{ICONS['about']} About Scanpath Studio", width="medium")
 @guarded()
 def _about_dialog() -> None:
-    """The About modal: version, authors, links, where your data goes,
-    citation, AI-assistance note."""
-    from scanpath_studio.citation import software_bibtex
+    """Project information, the software citation and details of this installation."""
+    from scanpath_studio.citation import CORPORA, software_apa, software_bibtex
 
-    # Triple-click the heading.
-    render_easter_egg()
+    info = build_info()
+    with st.container(gap=None):
+        st.markdown("Plot and replay eye movements over the text a participant read.")
+        release = f"v{info.release}"
+        if info.version != info.release:
+            release = f"Based on {release}"
+        st.caption(f"{info.channel.title()} · {release}")
+        render_easter_egg()
+    last = desktop_update.last_result()
+    if last is not None:
+        _render_last_update(last, info.version)
 
-    info = _build_info()
-    st.markdown(
-        f"**Scanpath Studio {info.channel.title()}** v{info.version} — interactive visualization of eye "
-        "movements in reading."
+    project, citation, details = st.tabs(
+        ["Project", "Citation", "App details"], key="about_sections"
     )
-    _render_build_and_updates()
-    st.markdown(
-        f"""
-Developed by [Omer Shubi](https://omershubi.github.io/),
+    with project:
+        st.markdown("Developed at the Technion and the University of Zurich.")
+        with st.expander("Project team"):
+            st.markdown(f"""
+[Omer Shubi](https://omershubi.github.io/),
 [Keren Gruteke Klein](https://kerengruteke.github.io/),
 [Maya Grossman](https://www.linkedin.com/in/maya-grossman-32b547292/),
 [Ella Lion](https://ella-lion.github.io/),
@@ -1793,69 +1787,53 @@ Developed by [Omer Shubi](https://omershubi.github.io/),
 [David R. Reich]({_DILI}/lab-members/reich.html),
 [Lena Jäger]({_DILI}/group-leader/jaeger.html), and
 [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/).
+""")
+        st.markdown(
+            f"[Documentation]({info.docs_url}) · [Source code]({CITATION['url']})"
+        )
+        st.caption("Built with AI assistance. Cross-check results before publishing.")
 
-[Open the Stable app]({STABLE_APP_URL}) · [Open the Dev app]({DEV_APP_URL})
+    with citation:
+        st.markdown(software_apa())
+        with st.expander("BibTeX"):
+            st.code(software_bibtex(), language="bibtex", wrap_lines=True)
+        demo = CORPORA["onestop"]
+        st.markdown(
+            f"If you use the bundled demo, also cite [{demo.name}](https://doi.org/{demo.doi}) "
+            f"(Berzak et al., {demo.year})."
+        )
 
-{ICONS["docs"]} [{info.channel.title()} documentation]({info.docs_url}) ↗ ·
-[Release notes for v{info.release}]({CITATION["url"]}/releases/tag/v{info.release}) ↗ ·
-{ICONS["code"]} [Code]({CITATION["url"]}) ↗ ·
-{ICONS["doi"]} [DOI](https://doi.org/{CITATION["doi"]}) ↗
-"""
-    )
-    st.markdown(
-        _about_privacy_line(
+    with details:
+        privacy = _about_privacy_line(
             local=server_bound_to_loopback(),
             saving=persistence_enabled(str(getattr(st.context, "url", "") or "")),
         )
-    )
-    # The BibTeX block is tall enough to push everything above it out of view,
-    # so it opens on demand — but it stays a named section of its own (a bold
-    # label) rather than a footnote, since "how do I cite this?" is the single
-    # most common reason to open About. No dividers between the blocks: on a
-    # modal this short the bold headings already carry the split, and three
-    # rules in half a screen read as clutter.
-    st.markdown(
-        f"**{ICONS['docs']} Citing Scanpath Studio.** A paper is in preparation."
-    )
-    with st.expander("Show BibTeX", expanded=False):
-        st.code(software_bibtex(), language="bibtex", wrap_lines=True)
         st.markdown(
-            """
-If you use the bundled demo data, also cite
-[OneStop Eye Movements](https://doi.org/10.1038/s41597-025-06272-2)
-(Berzak et al., 2025, *Scientific Data*).
-"""
+            f"**Your data**  \n{privacy} [Privacy details]({info.docs_url}about/#privacy)"
         )
-    # A bare "built with AI, there may be bugs" is unfalsifiable, so this
-    # points at what the reader can verify — not at how much effort went in,
-    # which they have no way to check. Deliberately not a liability disclaimer
-    # either: MIT already carries that. The heading says the "built with AI
-    # assistance" half, so the prose does not repeat it.
-    st.markdown(f"**{ICONS['ai']} Built with AI assistance**")
-    st.markdown(
-        f"""
-Cross-check results before publishing.
-
-{ICONS["bug"]} Something looks wrong? [Report a bug]({CITATION["bug_report_url"]}) ↗
-with the version above, your operating system, and how you run the app.
-
-{ICONS["question"]} Questions go to [Discussions → Q&A]({CITATION["questions_url"]}) ↗,
-and feature requests to [an issue]({CITATION["feature_request_url"]}) ↗.
-"""
-    )
-    # The Debug drawer opens from here, not from the ❓ Help menu.
-    # A full rerun closes this dialog; `maybe_show_debug` then opens the drawer.
-    if st.button(
-        "Debug",
-        icon=ICONS["debug"],
-        type="tertiary",
-        key="about_open_debug",
-        help="The debug log and a snapshot of what's loaded, for a bug report.",
-    ):
-        from scanpath_studio.debug_log import _arm_debug
-
-        _arm_debug()
-        st.rerun()
+        st.markdown(
+            f"**Versions**  \n[Release notes for v{info.release}]({CITATION['url']}/releases/tag/v{info.release})"
+            f" · [Stable app]({STABLE_APP_URL}) · [Dev app]({DEV_APP_URL})"
+        )
+        _render_build_and_updates(info)
+        with st.container(horizontal=True):
+            if st.button(
+                "Send feedback",
+                icon=ICONS["feedback"],
+                type="tertiary",
+                key="about_open_feedback",
+            ):
+                _arm_feedback()
+                st.rerun()
+            if st.button(
+                "Debug",
+                icon=ICONS["debug"],
+                type="tertiary",
+                key="about_open_debug",
+                help="Open the debug log and a snapshot of what's loaded.",
+            ):
+                _arm_debug()
+                st.rerun()
 
 
 def _update_check_offered() -> bool:
@@ -1871,11 +1849,6 @@ def _latest_release_cached() -> update_check.Release:
     session on this machine, doesn't spend another of the 60 anonymous requests
     an hour. A failure raises, and `st.cache_data` keeps no failed result."""
     return update_check.latest_release()
-
-
-def _build_info():
-    """This process's build (a seam the About tests pin)."""
-    return build_info()
 
 
 #: How long About goes on saying how the last update ended.
@@ -1912,15 +1885,10 @@ def _render_last_update(last: desktop_update.UpdateResult, current: str) -> None
         )
 
 
-def _render_build_and_updates() -> None:
+def _render_build_and_updates(info: BuildInfo) -> None:
     """Which build this is, and — on a local run — *Check for updates*."""
-    info = _build_info()
     if info.version != info.release:
-        st.caption(info.describe())
-    # How the desktop app's last update ended — None anywhere else.
-    last = desktop_update.last_result()
-    if last is not None:
-        _render_last_update(last, info.version)
+        st.caption(f"Build `{info.version}`", help=info.describe())
     if not _update_check_offered():
         return
     if st.button(
@@ -3803,7 +3771,7 @@ def mapping_failure_problem(exc: Exception) -> str:
         # traceback is in the log above.
         return (
             f"{MAPPING_FAILURE_LEAD}: a mapped column holds values the app "
-            "can't read (details in Help → About → Debug)"
+            "can't read (details in Help → About → App details → Debug)"
         )
     return f"{MAPPING_FAILURE_LEAD}: {exc}"
 
@@ -9725,7 +9693,7 @@ def _run_app() -> None:
         maybe_show_about()
         maybe_show_feedback()
         maybe_show_tutorial_library()
-        # ❓ Help → About → Debug, served early like its siblings.
+        # ❓ Help → About → App details → Debug, served early like its siblings.
         maybe_show_debug()
 
     # `active_view` was already resolved above (including the wizard

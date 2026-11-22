@@ -4490,8 +4490,8 @@ def check_for_updates(timeout: float = 5.0) -> UpdateCheck:
     The one call here that uses the network, and only when made. It reads the latest
     release from ``api.github.com`` (drafts and pre-releases excluded), compares it with
     [`version_info`][scanpath_studio.api.version_info], and never raises. The same check
-    is the app's Help → About → *Check for updates*, and ``scanpath-studio version
-    --check``.
+    is available under Help → About → App details → *Check for updates* in a
+    local install or the desktop app, and from ``scanpath-studio version --check``.
 
     | Field | What it holds |
     | --- | --- |

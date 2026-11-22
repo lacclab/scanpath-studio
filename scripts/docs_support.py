@@ -726,7 +726,7 @@ def embed(
     height = int(fig.layout.height or 600)
     # A replay keeps time on the app's own wall-clock player, not on
     # Plotly's frame queue; figures.js runs it once the plot is drawn — and the
-    # script rebuilds the frames the spec leaves out. It waits for ▶
+    # script reads frames from the packed data on demand. It waits for ▶
     # on detail pages; gallery previews instead loop while visible. The docs
     # keep the figure's own controls, which `figures.js` drives.
     page = replay_page(fig, toolbar=False)

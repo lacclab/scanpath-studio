@@ -6116,18 +6116,19 @@ _REPLAY_PLAYER_JS = """(function () {
   var terminal = gd._spsTerminal;
   if (terminal) {
     var clock = gd.layout.meta;
-    Plotly.addFrames(gd, clock.scanpath_frame_times_ms.map(function (ms, i) {
-      return frameAtTime(terminal, clock.scanpath_fixation_steps, ms, String(i));
-    }));
+    gd._spsFrameAt = function (i) {
+      return frameAtTime(terminal, clock.scanpath_fixation_steps, clock.scanpath_frame_times_ms[i], String(i));
+    };
   }
+  var readFrame = gd._spsFrameAt;
   var tries = 0;
-  // Frames live on gd._transitionData._frames (gd.frames is undefined) and are
-  // attached after newPlot resolves, so wait for them rather than a fixed delay.
+  // Plain Plotly HTML attaches named frames after newPlot resolves. Packed
+  // pages already have a reader and need no named frames.
   (function init() {
     var meta = gd.layout && gd.layout.meta;
     var td = gd._transitionData;
     if (typeof Plotly === 'undefined' || !gd.on || !meta ||
-        !(td && td._frames && td._frames.length)) {
+        !(readFrame || (td && td._frames && td._frames.length))) {
       if (++tries < 200) { setTimeout(init, 50); }
       return;
     }
@@ -6152,7 +6153,7 @@ _REPLAY_PLAYER_JS = """(function () {
       r.times.forEach(function (ms, index) { events.push({ms: ms, side: side, index: index}); });
     });
     events.sort(function (a, b) { return a.ms - b.ms || a.side - b.side || a.index - b.index; });
-    var template = terminal || gd._transitionData._frames[last];
+    var template = terminal;
 
     function frameAt(ms) {  // the last frame whose reading time has been reached
       var lo = 0, hi = last;
@@ -6162,10 +6163,19 @@ _REPLAY_PLAYER_JS = """(function () {
       }
       return lo;
     }
+    function draw(k, options) {
+      Plotly.animate(gd, readFrame ? readFrame(k) : [String(k)], options);
+      if (readFrame) {
+        if (bar) { bar.at(k); }
+        else if (gd.layout.sliders && gd.layout.sliders[0] && gd.layout.sliders[0].active !== k) {
+          Plotly.relayout(gd, {'sliders[0].active': k});
+        }
+      }
+    }
     function show(k) {
       shown = k;
       exactTime = null; eventIndex = -1;
-      Plotly.animate(gd, [String(k)], jump);
+      draw(k, jump);
     }
     // A late tick skips frames rather than falling behind the clock.
     function tick() {
@@ -6188,7 +6198,7 @@ _REPLAY_PLAYER_JS = """(function () {
       stop();
       exactTime = null; eventIndex = -1;
       shown = k;
-      Plotly.animate(gd, [String(k)], leap);
+      draw(k, leap);
     }
     function step(direction) {
       stop();
@@ -6201,6 +6211,7 @@ _REPLAY_PLAYER_JS = """(function () {
       } else { i = Math.max(0, Math.min(i + direction, events.length - 1)); }
       var e = events[i], r = readings[e.side], j = e.index;
       eventIndex = i; exactTime = e.ms; shown = frameAt(e.ms);
+      if (!template) { template = readFrame ? readFrame(last) : gd._transitionData._frames[last]; }
       var frame = frameAtTime(template, readings, e.ms, 'fixation-step');
       Plotly.animate(gd, frame, leap);
       var words = r.words[j], duration = r.durations[j];
@@ -6220,10 +6231,16 @@ _REPLAY_PLAYER_JS = """(function () {
       }
     });
     gd.on('plotly_buttonclicked', function (e) {
-      if (e && e.button && e.button.name === 'play') { play(); } else { stop(); }
+      var name = e && e.button && e.button.name;
+      if (name === 'play') { play(); }
+      else if (readFrame && name === 'restart') { seek(0); }
+      else { stop(); }
     });
     gd.on('plotly_sliderstart', stop);
-    gd.on('plotly_sliderchange', function (e) { if (e && e.interaction) { stop(); } });
+    gd.on('plotly_sliderchange', function (e) {
+      if (!e || !e.interaction) { return; }
+      if (readFrame && e.step) { seek(Number(e.step.args[0][0])); } else { stop(); }
+    });
     // A background tab gets no ticks; carry on from the same frame on return.
     function onVisibility() {
       if (!gd.isConnected) { stop(); leave(); return; }
@@ -6406,13 +6423,8 @@ def animation_player_post_script(fig) -> str | None:
     readout, with the figure's own labels. It goes in the element with id
     ``<plot id>-transport`` when the page has one, else straight above the plot.
 
-    It **polls** for Plotly and the figure's frames before starting. Two things
-    would make a one-shot kick-off silently never fire, both confirmed against
-    a live Plotly build: frames live on ``gd._transitionData._frames``,
-    **not** ``gd.frames`` (``undefined``), and the library can arrive late (CDN
-    latency, the true-scale iframe mount) and attaches its frames only after
-    ``newPlot`` resolves. Polling every 50 ms (capped at ~10 s) covers all of it,
-    on the live embed and saved HTML alike.
+    The player waits for Plotly and either the page's on-demand frame reader
+    or the named frames attached after ``newPlot`` by a plain Plotly export.
 
     Without the script — ``fig.show()``, or a plain ``write_html`` — the figure
     still plays on Plotly's own queue, at the frame duration the ▶ Play button
@@ -6430,11 +6442,8 @@ def animation_player_post_script(fig) -> str | None:
 # The replay's frames, as its HTML page carries them. Every frame
 # restates every animated trace at full length (see `_revealed_xy`), ~33 KB a
 # frame however little changed, so a 2,001-frame replay would be a 66 MB page. The
-# page instead carries frame 0 whole and, for each later frame, only what changed
-# since the one before; this decoder rebuilds the exact frame list in the browser
-# and hands it to `Plotly.addFrames`, ahead of the player (which already polls for
-# the frames). Delta-against-the-previous-frame can't be Plotly's own frames: the
-# slider jumps from any frame to any other, so each frame has to be complete.
+# page instead carries frame 0 whole and the subsequent changes. The player
+# asks the decoder for one complete frame at a time, including on a backwards seek.
 #
 # A delta node is `null` (unchanged), `[0, value]` (replaced), `[1, {key: node},
 # [dropped keys]?]` (an object's changed keys), or `[2, [indices], [values]]` (a
@@ -6464,7 +6473,7 @@ _REPLAY_FRAMES_JS = """(function () {
     return out;
   }
   var state = {};
-  var frames = packed.map(function (f) {
+  function unpack(f) {
     var frame = {}, k;
     for (k in f) { if (own.call(f, k) && k !== 'p') { frame[k] = f[k]; } }
     if (f.p) {
@@ -6475,8 +6484,14 @@ _REPLAY_FRAMES_JS = """(function () {
       });
     }
     return frame;
-  });
-  Plotly.addFrames(gd, frames);
+  }
+  // Keep only the current trace state. A backwards seek starts at frame zero.
+  var index = -1, frame;
+  gd._spsFrameAt = function (target) {
+    if (target < index) { state = {}; index = -1; }
+    while (index < target) { frame = unpack(packed[++index]); }
+    return frame;
+  };
 })();"""
 
 _ABSENT = object()
@@ -6588,8 +6603,8 @@ def pack_replay_frames(frames: Sequence[Mapping]) -> list[dict]:
 def replay_page(fig, *, toolbar: bool = True) -> tuple[dict, str] | None:
     """A replay as its HTML page carries it: ``(figure dict, post_script)``.
 
-    The dict is the figure without its ``frames``, and the script rebuilds them
-    in the browser from :func:`pack_replay_frames`' deltas, then runs
+    The dict is the figure without its ``frames``. The browser builds the requested
+    frame from fixation onsets or :func:`pack_replay_frames`' deltas and runs
     :func:`animation_player_post_script`'s player — a 2,001-frame replay's page
     is under 1 MB rather than 66 MB. Serialize the dict with
     ``to_html(…, validate=False, post_script=script)``; ``auto_play`` does not
@@ -6615,9 +6630,31 @@ def replay_page(fig, *, toolbar: bool = True) -> tuple[dict, str] | None:
     frames = fig_dict.get("frames") or []
     if not frames:
         return None
+    layout = fig_dict.get("layout") or {}
     if toolbar:
-        fig_dict = {**fig_dict, "layout": _toolbar_layout(fig_dict.get("layout"))}
-    if (fig_dict.get("layout", {}).get("meta") or {}).get(replay_frames.COMPACT):
+        fig_dict = {**fig_dict, "layout": _toolbar_layout(layout)}
+    compact = (layout.get("meta") or {}).get(replay_frames.COMPACT)
+    if not compact and any(
+        frame.get("baseframe") or not _packable(frame) for frame in frames
+    ):
+        # Plotly resolves inherited frames and non-list trace indices itself.
+        return fig_dict, player
+    if not (fig_dict["layout"].get("meta") or {}).get(_REPLAY_META_TOOLBAR):
+        # The native controls emit their click/seek events. The player draws
+        # the requested frame; Plotly has no list of named frames to animate.
+        layout = dict(fig_dict["layout"])
+        for group, field in (("updatemenus", "buttons"), ("sliders", "steps")):
+            layout[group] = [
+                {
+                    **item,
+                    field: [
+                        {**control, "execute": False} for control in item.get(field, [])
+                    ],
+                }
+                for item in layout.get(group, [])
+            ]
+        fig_dict = {**fig_dict, "layout": layout}
+    if compact:
         from plotly.io.json import to_json_plotly
 
         terminal = _script_json(to_json_plotly(frames[0]))
@@ -6625,10 +6662,6 @@ def replay_page(fig, *, toolbar: bool = True) -> tuple[dict, str] | None:
         return {
             k: v for k, v in fig_dict.items() if k != "frames"
         }, script + "\n" + player
-    if not all(_packable(frame) for frame in frames):
-        # Frames this encoding can't address (a typed-array `traces`) travel as
-        # plotly.py writes them, still on the player.
-        return fig_dict, player
     page = {key: value for key, value in fig_dict.items() if key != "frames"}
     return page, _packed_frames_script(frames) + "\n" + player
 

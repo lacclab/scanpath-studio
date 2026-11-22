@@ -596,13 +596,21 @@ def test_saved_replay_steps_and_scrubs_between_recorded_onsets(
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.goto(f"http://127.0.0.1:{server.server_port}/replay.html")
 
+            # Compact app pages and full Python figures both seek without retaining
+            # a second copy of the replay in Plotly's named frame registry.
+            def registered_frames():
+                return page.locator(".js-plotly-plot").evaluate(
+                    "gd => gd._transitionData?._frames?.length || 0"
+                )
+
             def expect_point(x):
                 page.wait_for_function(
                     "([i,x]) => document.querySelector('.js-plotly-plot')._fullData[i].x[0] === x",
-                    arg=[current, x],
+                    arg=[current, float(x)],
                     timeout=5000,
                 )
 
+            assert registered_frames() == 0
             for button, number, x, duration, word in (
                 ("Next fixation", 2, 135, 18, "The"),
                 ("Next fixation", 3, 225, 100, "cat"),
@@ -620,10 +628,67 @@ def test_saved_replay_steps_and_scrubs_between_recorded_onsets(
             expect_point(325)
             page.get_by_role("button", name="Previous fixation").click()
             assert "onset 220 ms" in page.get_by_role("status").inner_text()
+            page.get_by_role("slider", name="Replay time").press("Home")
+            expect_point(fixations.iloc[0]["x"])
+            assert registered_frames() == 0
             assert errors == []
         finally:
             server.shutdown()
             thread.join()
+
+
+def test_packed_replay_with_native_plotly_controls(browser, tmp_path):
+    """The docs keep Plotly's slider and buttons on the packed replay."""
+    import plotly.io as pio
+
+    from scanpath_studio import plots
+    from scanpath_studio.synthetic import load_synthetic_data
+
+    words, fixations = load_synthetic_data()
+    figure, _ = plots.build_scanpath_replay(
+        words,
+        fixations,
+        autoplay=False,
+        anim_grid_step_ms=100,
+        canvas_width=800,
+        canvas_height=600,
+        base_font_size=16,
+    )
+    data, player = plots.replay_page(figure, toolbar=False)
+    path = tmp_path / "native.html"
+    pio.write_html(data, path, validate=False, post_script=player)
+    group = figure.layout.meta["scanpath_fixation_steps"][0]
+    current = int(figure.frames[0].traces[group["current"]])
+    last = len(figure.frames) - 1
+    with browser.new_context() as context:
+        page = context.new_page()
+        page.goto(path.as_uri())
+
+        def expect_frame(index):
+            frame = figure.frames[index]
+            x = frame.data[list(frame.traces).index(current)].x[0]
+            page.wait_for_function(
+                """([index, current, x]) => {
+                  const gd = document.querySelector('.js-plotly-plot');
+                  return gd.layout.sliders[0].active === index && gd._fullData[current].x[0] === x;
+                }""",
+                arg=[index, current, float(x)],
+            )
+
+        rail = page.locator(".slider-rail-rect")
+        box = rail.bounding_box()
+        page.mouse.click(box["x"] + box["width"] - 1, box["y"] + box["height"] / 2)
+        expect_frame(last)
+        page.locator(".updatemenu-button").filter(has_text="Restart").click()
+        expect_frame(0)
+        page.locator(".updatemenu-button").filter(has_text="Play").click()
+        expect_frame(last)
+        assert (
+            page.locator(".js-plotly-plot").evaluate(
+                "gd => gd._transitionData._frames.length"
+            )
+            == 0
+        )
 
 
 def test_mixed_script_passage_keeps_each_label_in_its_box_in_html_and_svg(

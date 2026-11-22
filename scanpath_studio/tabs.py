@@ -1208,9 +1208,8 @@ def _true_scale_plot_html(
     serialized as is, skipping the deep copy `to_html` would make of ``fig``
     (2 s at 2,000 frames). The markup is byte-identical either way.
 
-    A replay's frames travel delta-encoded and are rebuilt in the browser
-    (`plots.replay_page`): a 2,001-frame replay's markup is under 1 MB rather
-    than 66 MB, and the player sees the same frames.
+    The browser reconstructs each displayed replay frame on demand from the
+    compact page written by `plots.replay_page`.
     """
     width, height, _toolbar = replay_page_box(
         fig if figure_dict is None else figure_dict
@@ -1218,7 +1217,7 @@ def _true_scale_plot_html(
     # An animated replay plays on the wall-clock player, never on Plotly's own
     # queue, which rounds every frame up to whole display ticks (Fine at ×1 would
     # run 25 % slow). The player also starts it on load when autoplay is on, and
-    # restores the frames the page carries packed. `None` for a static figure.
+    # reads the packed frames on demand. `None` for a static figure.
     page = replay_page(fig if figure_dict is None else figure_dict)
     player_script = None
     if page is not None:

@@ -506,9 +506,16 @@ class TestRealTimeClip:
         assert captured["n"] < n
         assert captured["dur"] >= shortest_ms - 1e-9
         assert captured["n"] * captured["dur"] == pytest.approx(n * 5.0)
-        # The clip still opens on the first fixation and ends on the whole path.
         assert captured["indices"][0] == 0
-        assert captured["indices"][-1] == n - 1
+        # At each actual display boundary the chosen state has already occurred.
+        times = anim_fig.layout.meta["scanpath_frame_times_ms"]
+        tick = 10 if fmt == "gif" else _MP4_DT_MS
+        for i, frame in enumerate(captured["indices"]):
+            boundary = round(i * captured["dur"] / tick) * tick
+            reading_time = boundary * times[-1] / (n * 5)
+            assert times[frame] <= reading_time
+            if frame + 1 < n:
+                assert times[frame + 1] > reading_time
 
 
 class TestEndToEnd:

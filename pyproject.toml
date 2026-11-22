@@ -144,6 +144,10 @@ include = ["scanpath_studio", "scanpath_studio.*"]
     "sample_data/*.parquet",
     "sample_data/images/*.png",
     "sample_data/images/*.csv",
+    "sample_data/coauthor/*.csv",
+    "sample_data/coauthor/*.json",
+    "sample_data/coauthor/*.md",
+    "sample_data/coauthor/*.sha256",
 ]
 
 [tool.ruff.lint]

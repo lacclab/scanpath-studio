@@ -11,6 +11,7 @@ from .data import (
     explain_read_error,
     header_only_error,
     read_table,
+    read_table_columns,
     trial_id_series,
     trial_mapping_columns,
 )
@@ -87,7 +88,7 @@ def _metadata_upload_name(uploads) -> str:
     return f"{first} + {plural(len(uploads) - 1, 'more file')}"
 
 
-def _read_metadata_uploads(uploads) -> pd.DataFrame:
+def _read_metadata_uploads(uploads, grain="participant", mapping=()) -> pd.DataFrame:
     """Every file uploaded for one metadata table, stacked into one table.
 
     A table split across files (one per session, one per lab) reads as one:
@@ -95,10 +96,20 @@ def _read_metadata_uploads(uploads) -> pd.DataFrame:
     The same reader turning up in two files is what the builders already
     handle — combined when the rows agree, dropped and reported when not.
     """
+    infer = {
+        "participant": md.infer_participant_id_column,
+        "trial": md.infer_trial_id_column,
+        "text": md.infer_text_id_column,
+    }[grain]
     frames = []
     for upload in uploads:
         try:
-            frame = read_table(upload)
+            header = read_table_columns(upload)
+            plan = md.id_read_plan(mapping, infer)(header)
+            if grain == "participant" and not mapping and not plan.identity and header:
+                # The single-column picker selects the first column by default.
+                plan = md.id_read_plan(header[0], infer)(header)
+            frame = read_table(upload, plan=plan)
         except Exception as exc:  # unreadable file — the caller names it
             raise _MetadataReadError(upload.name, exc) from exc
         if frame.empty and len(frame.columns):
@@ -141,19 +152,29 @@ def _metadata_upload(grain: str, help_text: str, upload_host) -> pd.DataFrame | 
 
     signature = _metadata_upload_signature(uploads)
     previous = st.session_state.get(file_key)
-    if previous != signature:
+    new_files = previous != signature
+    mapping_key = f"{grain}_metadata_id_column"
+    mapping = (
+        tuple(trial_mapping_columns(st.session_state.get(mapping_key) or ()))
+        if not new_files
+        else ()
+    )
+    raw = st.session_state.get(raw_key)
+    if new_files or raw is None or raw.attrs.get("metadata_id_mapping") != mapping:
         try:
-            raw = _read_metadata_uploads(uploads)
+            raw = _read_metadata_uploads(uploads, grain, mapping)
         except _MetadataReadError as exc:
             _clear_metadata(grain)
             exc.say()
             return None
+        raw.attrs["metadata_id_mapping"] = mapping
+        st.session_state[raw_key] = raw
+    if new_files:
         # Mapping can stop until the user picks an ID in the new table.
         # No field from the preceding attachment should remain active then.
         st.session_state.pop(attached_key, None)
         if not isinstance(previous, tuple) or not set(previous).intersection(signature):
             st.session_state.pop(f"{grain}_metadata_keep_fields", None)
-        st.session_state[raw_key] = raw
         st.session_state[file_key] = signature
         st.session_state[f"_{grain}_metadata_name"] = _metadata_upload_name(uploads)
         st.session_state.pop(f"{grain}_metadata_id_column", None)

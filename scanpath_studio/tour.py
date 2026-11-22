@@ -584,6 +584,13 @@ def _step_next() -> None:
     st.session_state["tour_step"] = st.session_state.get("tour_step", 0) + 1
 
 
+def _use_own_data() -> None:
+    from .wizard import _enter_add_data_wizard
+
+    _exit_spotlight()
+    _enter_add_data_wizard()
+
+
 @st.dialog("Quick tour", width="large")
 @guarded()
 def _tour_dialog() -> None:
@@ -945,6 +952,8 @@ def guide_folded(kind: str) -> bool:
 
 def _set_guide_folded(kind: str, folded: bool) -> None:
     st.session_state[_guide_folded_key(kind)] = folded
+    if kind == "wizard" and "_wizard_guide_auto" in st.session_state:
+        del st.session_state["_wizard_guide_auto"]
     if kind == "tour" and not folded:
         _send_tour_to_scanpath()
 
@@ -1230,6 +1239,9 @@ def _highlight_css(selector: str, accent: str) -> str:
     outline-offset: 3px;
     border-radius: 0.5rem;
     animation: tour-pulse 1.6s ease-in-out infinite;
+}}
+@media (prefers-reduced-motion: reduce) {{
+    {selector} {{ animation: none; }}
 }}
 @keyframes tour-pulse {{
     0%, 100% {{ box-shadow: 0 0 0 0 color-mix(in srgb, {accent} 50%, transparent); }}
@@ -1580,7 +1592,17 @@ def render_spotlight_tour() -> None:
             _render_tour_optout()
         # The ✕ in the corner closes the tour from any step, so the footer is
         # Back / Next (Skip tour / Next on the welcome, Back / Done on the last).
-        back_col, next_col = st.columns(2)
+        if step_idx == 0:
+            import_col, back_col, next_col = st.columns(3)
+            if import_col.button(
+                "Use my data",
+                key="tour_sp_import",
+                width="stretch",
+            ):
+                _use_own_data()
+                st.rerun(scope="app")
+        else:
+            back_col, next_col = st.columns(2)
         if step_idx == 0:
             # The welcome has nothing to go back to, so its left slot is a
             # plainly labelled way out instead of a disabled Back — a first-time
@@ -1798,11 +1820,11 @@ def _maybe_start_welcome_tour() -> None:
         return
     if st.session_state.get("tour_seen"):
         return
+    st.session_state["tour_seen"] = True
     if tour_suppressed(st.query_params):
         return
     if tour_opted_out():  # "Don't show this again", persisted in a cookie
         return
-    st.session_state["tour_seen"] = True  # before opening — see module docstring
     # A session recovered from *Saved on this computer* belongs to
     # someone who has used the app here before — a new browser, or cleared
     # site data, cleared the cookie opt-out, not their experience.
@@ -2272,7 +2294,10 @@ def render_use_case_tutorial() -> None:
                             if (++tries < 200) setTimeout(findAndScroll, 150);
                             return;
                         }}
-                        el.scrollIntoView({{behavior: "smooth", block: "center"}});
+                        el.scrollIntoView({{
+                            behavior: doc.defaultView.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+                            block: "center"
+                        }});
                     }})();
                 }})();
                 </script>""",
@@ -2633,7 +2658,33 @@ _WIZARD_GUIDE_STEPS = [
 #: whatever the card covers at the bottom can still be scrolled clear of it.
 _WIZARD_GUIDE_PAGE_CSS = """
 [data-testid="stMainBlockContainer"] { padding-bottom: 16rem !important; }
+@media (max-width: 44rem) {
+    .st-key-tour_card {
+        position: relative !important; inset: auto !important; transform: none !important;
+        width: 100% !important; max-width: 100% !important; max-height: 45dvh; overflow-y: auto;
+    }
+}
 """
+
+
+_NARROW_WIZARD_GUIDE = """<script>
+(() => {
+    const doc = window.parent.document;
+    const small = doc.defaultView.matchMedia("(max-width: 44rem)");
+    function fold() {
+        if (!small.matches) return false;
+        const button = doc.querySelector(".st-key-guide_fold_wizard button");
+        if (!button) return false;
+        button.click();
+        return true;
+    }
+    if (small.matches && !fold()) {
+        const observer = new MutationObserver(() => { if (fold()) observer.disconnect(); });
+        observer.observe(doc.body, {childList: true, subtree: true});
+        window.addEventListener("pagehide", () => observer.disconnect(), {once: true});
+    }
+})();
+</script>"""
 
 
 def _wizard_guide_steps() -> list[dict]:
@@ -2775,6 +2826,8 @@ def render_spotlight_wizard_guide() -> None:
             _render_wizard_guide_optout()
         back_col, exit_col, next_col = st.columns(3)
         _wizard_guide_buttons(back_col, exit_col, next_col, step_idx, n)
+    if st.session_state.get("_wizard_guide_auto"):
+        embed_html_iframe(_NARROW_WIZARD_GUIDE, height=0)
     embed_html_iframe(_guide_drag_script("wizard"), height=0)
     # Hide the guide instantly on Skip/Done, even while the wizard's first run
     # is still loading (see _dismiss_listener_script).
@@ -2820,6 +2873,7 @@ def maybe_show_wizard_guide() -> None:
     st.session_state["wizard_guide_seen"] = True  # before arming — see docstring
     st.session_state["wizard_guide_step"] = 0
     _set_guide_folded("wizard", False)
+    st.session_state["_wizard_guide_auto"] = True
     st.session_state["tour_mode"] = "wizard"
 
 

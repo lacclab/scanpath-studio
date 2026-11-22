@@ -1,0 +1,1 @@
+Categorical fixation colors stay consistent across readings, and the index chart respects the selected connector style, width and opacity. Figure descriptions count the fixations and gaze samples drawn. With stimulus redaction on, the Hover and Export panels identify selected text fields that can still appear in HTML.

@@ -8,8 +8,8 @@ be read next to the register.
 
 The default run uses the bundled demo. The numbers that matter come from a big
 corpus: point it at the OneStop EyeLink reports and cap the participant count,
-and the reader stops after that many participants instead of parsing the whole
-multi-gigabyte export.
+and both reports use the same readers. Delimited files are filtered in chunks
+so interleaved records are included without retaining the whole wide export.
 
     python benchmarks/computation_benchmark.py \\
         --words  /path/to/ia_P.tsv \\
@@ -19,7 +19,8 @@ multi-gigabyte export.
 ``--participants`` on its own is the scale knob: run it at 1, 4, 16, 64 and the
 growth exponent of each stage falls out of the JSON. ``--skip`` drops stages by
 name substring, which is how a run gets past a stage that is too slow to
-finish at the scale being measured.
+finish at the scale being measured. For first-trial, next-trial and marker-color
+reruns of the app, run ``python benchmarks/interaction_benchmark.py``.
 """
 
 from __future__ import annotations
@@ -50,7 +51,7 @@ from scanpath_studio import (
 )
 
 PROCESS = psutil.Process()
-DELIMITED_SUFFIXES = {".csv", ".tsv", ".txt"}
+DELIMITED_SUFFIXES = {".csv", ".tsv", ".tab", ".txt"}
 
 
 @dataclass
@@ -133,51 +134,71 @@ class Profiler:
         return result
 
 
-def read_table(path: Path, participants: int | None) -> pd.DataFrame:
-    """Read a words/fixations table, optionally stopping after N participants.
+def _reader_column(path: Path) -> str | None:
+    header = data_module.read_table_columns(path)
+    return data_module.pick_column(
+        pd.DataFrame(columns=header), data_module.PARTICIPANT_CANDIDATES
+    )
 
-    EyeLink exports are grouped by recording session, so a chunked read can
-    peel off a participant prefix without parsing the rest of a multi-gigabyte
-    file. Values are left exactly as pandas sees them — the "." missing marker
-    included — because that is what the app gets from an upload.
-    """
-    suffix = path.suffix.lower()
-    if suffix == ".parquet":
-        frame = pd.read_parquet(path)
-    elif participants is None or suffix not in DELIMITED_SUFFIXES:
-        sep = "\t" if suffix == ".tsv" else ","
-        frame = pd.read_csv(path, sep=sep, low_memory=False)
+
+def _reader_ids(path: Path, column: str | None) -> list[str]:
+    if column is None:
+        return []
+    plan = data_module.ReadPlan(columns=(column,), identity=(column,))
+    values = data_module.read_table(path, plan=plan)[column]
+    return values.dropna().astype(str).drop_duplicates().tolist()
+
+
+def _cohort(
+    words: Path, fixations: Path, limit: int
+) -> tuple[str | None, str | None, list[str]]:
+    """Choose shared reader IDs in Words file order. Stimulus-only words cover every reader."""
+    w_col, f_col = _reader_column(words), _reader_column(fixations)
+    w_ids, f_ids = _reader_ids(words, w_col), _reader_ids(fixations, f_col)
+    if w_col is not None and f_col is not None:
+        recorded = set(f_ids)
+        readers = [reader for reader in w_ids if reader in recorded]
+        if not readers:
+            raise SystemExit("The two tables have no participant IDs in common.")
     else:
-        sep = "\t" if suffix == ".tsv" else ","
-        chunks: list[pd.DataFrame] = []
-        seen: list[str] = []
-        column: str | None = None
-        for chunk in pd.read_csv(path, sep=sep, chunksize=250_000, low_memory=False):
-            chunk.columns = [str(name).lstrip("﻿") for name in chunk.columns]
-            if column is None:
-                column = data_module.pick_column(
-                    chunk, data_module.PARTICIPANT_CANDIDATES
-                )
-                if column is None:
-                    raise SystemExit(f"{path.name}: no participant column found")
-            labels = chunk[column].astype(str)
-            for label in labels.unique():
-                if label not in seen:
-                    seen.append(label)
-            keep = labels.isin(seen[:participants])
-            chunks.append(chunk[keep])
-            if len(seen) > participants:
-                break
-        frame = pd.concat(chunks, ignore_index=True)
-        return frame
+        readers = w_ids or f_ids
+    return w_col, f_col, readers[:limit]
 
-    frame.columns = [str(name).lstrip("﻿") for name in frame.columns]
-    if participants is not None:
-        column = data_module.pick_column(frame, data_module.PARTICIPANT_CANDIDATES)
-        if column is not None:
-            keep = frame[column].astype(str).unique()[:participants]
-            frame = frame[frame[column].astype(str).isin(keep)]
-    return frame
+
+def read_table(
+    path: Path, kind: str, column: str | None, readers: Sequence[str]
+) -> pd.DataFrame:
+    """Read with the app's schema, delimiter and encoding. Keep all rows for the chosen readers."""
+    if column is None:
+        return data_module.read_mapped_table(path, kind=kind)
+    header = data_module.read_table_columns(path)
+    if kind == "words":
+        schema, optional = (
+            data_module.propose_word_schema,
+            data_module.WORD_OPTIONAL_FIELDS,
+        )
+    else:
+        schema, optional = (
+            data_module.propose_fix_schema,
+            data_module.FIX_OPTIONAL_FIELDS,
+        )
+    plan = data_module.plan_table_read(
+        header, schema(pd.DataFrame(columns=header)), optional
+    )
+    selected = frozenset(readers)
+
+    def keep(rows: pd.DataFrame) -> pd.DataFrame:
+        return rows.loc[rows[column].astype("string").isin(selected)]
+
+    if path.suffix.lower() in DELIMITED_SUFFIXES:
+        return data_module._read_delimited(
+            path,
+            data_module._sniff_delimiter(path, path.name),
+            plan,
+            file_columns=header,
+            filter_chunk=keep,
+        )
+    return keep(data_module.read_table(path, plan=plan)).reset_index(drop=True)
 
 
 def _sample_paths() -> tuple[Path, Path]:
@@ -196,11 +217,18 @@ def profile(
     profiler = Profiler(skip)
 
     print("== load ==", flush=True)
+    w_col, f_col, cohort = (
+        (None, None, [])
+        if participants is None
+        else _cohort(words_path, fixations_path, participants)
+    )
     words_raw = profiler.run(
-        "io.read_words", [], lambda: read_table(words_path, participants)
+        "io.read_words", [], lambda: read_table(words_path, "words", w_col, cohort)
     )
     fixations_raw = profiler.run(
-        "io.read_fixations", [], lambda: read_table(fixations_path, participants)
+        "io.read_fixations",
+        [],
+        lambda: read_table(fixations_path, "fixations", f_col, cohort),
     )
     if words_raw is None or fixations_raw is None:
         raise SystemExit("could not read the input tables")
@@ -251,11 +279,17 @@ def profile(
     gc.collect()
 
     trial_keys = ["participant_id", "trial_id"]
-    n_trials = fixations.groupby(trial_keys, observed=True).ngroups
+    word_trials = data_module.trial_keys(words)
+    fixation_trials = data_module.trial_keys(fixations)
+    readers = sorted({reader for reader, _ in word_trials | fixation_trials})
+    n_trials = len(fixation_trials)
+    matched = word_trials & fixation_trials
+    print(f"  readers ({len(readers)}): {', '.join(readers)}", flush=True)
     print(
         f"  normalized words {words.shape[0]:,} x {words.shape[1]}   "
         f"fixations {fixations.shape[0]:,} x {fixations.shape[1]}   "
-        f"trials {n_trials:,}",
+        f"matched trials {len(matched):,}, words-only {len(word_trials - matched):,}, "
+        f"fixations-only {len(fixation_trials - matched):,}",
         flush=True,
     )
 
@@ -604,14 +638,20 @@ def profile(
         for m in profiler.measurements
         if m.scope == "corpus" and not m.error
     )
+    max_post_stage_rss = max(m.rss_after_mib for m in profiler.measurements)
     print(
-        f"\n== corpus-wide total {corpus_total:.1f}s   peak RSS "
-        f"{max(m.rss_after_mib for m in profiler.measurements):.0f} MiB ==",
+        f"\n== corpus-wide total {corpus_total:.1f}s   maximum observed post-stage RSS "
+        f"{max_post_stage_rss:.0f} MiB ==",
         flush=True,
     )
 
     return {
-        "participants": int(words["participant_id"].nunique()),
+        "participants": len(readers),
+        "participant_ids": readers,
+        "n_matched_trials": len(matched),
+        "n_words_only_trials": len(word_trials - matched),
+        "n_fixations_only_trials": len(fixation_trials - matched),
+        "max_post_stage_rss_mib": max_post_stage_rss,
         "n_words": len(words),
         "n_fixations": len(fixations),
         "n_trials": int(n_trials),
@@ -628,7 +668,7 @@ def main() -> None:
         "--participants",
         type=int,
         default=None,
-        help="stop after this many participants (the scale knob)",
+        help="use at most this many readers shared by both files, in Words file order",
     )
     parser.add_argument(
         "--skip", default="", help="comma-separated stage-name substrings to skip"

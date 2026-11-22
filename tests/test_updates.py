@@ -198,6 +198,49 @@ def test_a_git_install_reinstalls_from_its_own_url():
     )
 
 
+@pytest.mark.parametrize("ref", ["", "lab/reader-v2", "v0.35.0", "refs/tags/frozen"])
+def test_fork_update_uses_its_requested_ref_and_package_directory(ref):
+    import json
+
+    from scanpath_studio.build_info import read_vcs_install
+
+    url = "https://example.org/lab/fork.git"
+    vcs = {"vcs": "git", "commit_id": "abc1234" + "a" * 33}
+    if ref:
+        vcs["requested_revision"] = ref
+    direct = json.dumps({"url": url, "subdirectory": "packages/app", "vcs_info": vcs})
+    info = read_vcs_install("0.35.0", read_text=lambda name: direct)
+    assert "packages/app" in info.describe()
+    assert ref in info.describe()
+    suffix = f"@{ref}" if ref else ""
+    assert (
+        updates.update_command("vcs", info)
+        == f'pip install -U "git+{url}{suffix}#subdirectory=packages/app"'
+    )
+
+
+@pytest.mark.parametrize("ref", ["abc1234", "abc1234" + "a" * 33])
+def test_an_install_pinned_to_a_commit_explains_how_to_change_it(ref):
+    import json
+
+    from scanpath_studio.build_info import read_vcs_install
+
+    direct = json.dumps(
+        {
+            "url": "https://example.org/lab/fork.git",
+            "vcs_info": {
+                "vcs": "git",
+                "requested_revision": ref,
+                "commit_id": "abc1234" + "a" * 33,
+            },
+        }
+    )
+    info = read_vcs_install("0.35.0", read_text=lambda name: direct)
+    check = updates.check_for_updates(latest=_latest(), info=info, kind="vcs")
+    assert not check.command
+    assert f"pinned to commit {ref}" in check.message
+
+
 @pytest.mark.parametrize(
     ("ref", "branch"), [("dev", "dev"), ("stable", "stable"), ("v1.2.3", "stable")]
 )

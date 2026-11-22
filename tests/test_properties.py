@@ -20,6 +20,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from scanpath_studio import data, measures, plots, url_state
+from scanpath_studio.column_names import encode_field_list
 from scanpath_studio.constants import (
     LEGEND_ARRANGEMENTS,
     LEGEND_POSITIONS,
@@ -40,6 +41,14 @@ _ID_TEXT = st.text(
 
 
 # --- Round-trips -----------------------------------------------------------
+
+
+@given(st.lists(st.text(max_size=30), max_size=8))
+def test_shared_hover_fields_preserve_exact_names_and_order(fields):
+    value, as_json = encode_field_list(fields)
+    for table in ("word", "fixation"):
+        key = f"{table}_hover_fields" + ("_json" if as_json else "")
+        assert url_state._URL_PRESETS[key][1](value) == fields
 
 
 @given(st.lists(st.integers(), min_size=1, max_size=50, unique=True))

@@ -258,6 +258,9 @@ class TestTheWordHeatmapRangeIsInDwell:
         assert slider.proto.min == 0
         assert slider.proto.max >= 2
         assert "Fixations per word" in slider.proto.help
+        at.number_input(key=f"{HEAT_VIEW}__num_hi").set_value(20)
+        _rerun(at)
+        assert at.session_state["_viz"]["heatmap_range"] == (0.0, 20.0)
 
 
 class TestHeatmapValueBounds:

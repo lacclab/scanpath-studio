@@ -1,0 +1,59 @@
+{
+  "schema": 7,
+  "app": {
+    "name": "Scanpath Studio",
+    "version": "0.37.0"
+  },
+  "exported_at": "2026-11-22T21:51:35",
+  "data_source": "Canal (synthetic)",
+  "column_mapping": {
+    "col_map_fix_duration": "duration_ms",
+    "col_map_fix_fixation_id": "fixation_id",
+    "col_map_fix_participant": [
+      "participant_id"
+    ],
+    "col_map_fix_text_id": [
+      "text_id"
+    ],
+    "col_map_fix_timestamp": "timestamp_ms",
+    "col_map_fix_trial": [
+      "trial_id"
+    ],
+    "col_map_fix_word_id": "word_id",
+    "col_map_fix_x": "x",
+    "col_map_fix_y": "y",
+    "col_map_words_height": "height",
+    "col_map_words_measure_tfd": "IA_DWELL_TIME",
+    "col_map_words_participant": [
+      "participant_id"
+    ],
+    "col_map_words_text": "text",
+    "col_map_words_text_id": [
+      "text_id"
+    ],
+    "col_map_words_trial": [
+      "trial_id"
+    ],
+    "col_map_words_width": "width",
+    "col_map_words_word_id": "word_id",
+    "col_map_words_x": "x",
+    "col_map_words_y": "y"
+  },
+  "experimental_setup": {
+    "canvas_width": 640,
+    "canvas_height": 360,
+    "monitor_width_mm": 597.0,
+    "viewing_distance_mm": 800.0,
+    "base_font_size": 16,
+    "font_family": "monospace",
+    "line_spacing": 3.0,
+    "scale_text_to_boxes": true,
+    "provenance": {
+      "screen": "measured",
+      "geometry": "skipped",
+      "text": "assumed"
+    }
+  },
+  "filename_derive": null,
+  "keep_and_filter": null
+}

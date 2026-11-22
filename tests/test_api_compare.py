@@ -67,6 +67,35 @@ def _pair():
 
 
 class TestSameDataset:
+    @pytest.mark.parametrize("saccades", [False, True])
+    def test_print_marks_distinguish_overlapping_readings_without_colour(
+        self, saccades
+    ):
+        words, fixations = _pair()
+        fixations["y"] = [70, 120, 70, 120, 70, 120]
+        fig = api.compare_scanpaths(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            palette="print",
+            show_saccades=saccades,
+            show_order=False,
+            show_saccade_arrows=False,
+            show_legend=False,
+        )
+        marks = [
+            trace.marker
+            for trace in fig.data
+            if trace.type == "scatter"
+            and trace.mode == "markers"
+            and trace.hovertemplate
+        ]
+        assert (marks[0].color, marks[1].color) == ("#242424", "rgba(0,0,0,0)")
+        assert marks[1].line.color == "#666666"
+        lines = [trace.line.dash for trace in fig.data if trace.mode == "lines"]
+        assert lines == (["solid", "dash"] if saccades else [])
+
     def test_overlay_builds(self):
         words, fixations = _pair()
         fig = api.compare_scanpaths(

@@ -154,6 +154,8 @@ print(
 
 ::: scanpath_studio.api.save_figure
 
+::: scanpath_studio.api.save_panel_proof
+
 ::: scanpath_studio.api.save_figure_layers
 
 ## Recovery cache

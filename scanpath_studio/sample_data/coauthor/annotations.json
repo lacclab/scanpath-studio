@@ -1,0 +1,15 @@
+{
+  "schema": 3,
+  "dataset": "Canal (synthetic)",
+  "annotations": [
+    {
+      "participant_id": "p03",
+      "trial_id": "run-03",
+      "star": false,
+      "tags": [
+        "exclude"
+      ],
+      "note": "Calibration check failed before this reading."
+    }
+  ]
+}

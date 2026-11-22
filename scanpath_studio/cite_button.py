@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from .citation import CORPORA, cite, corpus_for
+from . import dataset_credit
+from .citation import CORPORA, corpus_for
 from .constants import ICONS
 from .session_keys import DATA_SOURCE_CHOICE
 
@@ -27,29 +28,36 @@ def render_cite_button(host, *, key: str, what: str = "this figure") -> None:
     """Draw the **Cite** popover in ``host``; ``key`` keeps its two download
     buttons apart from another Cite button's on the same page, and ``what``
     names the thing being cited in its first line."""
-    corpus = session_corpus()
+    refs = dataset_credit.references(st.session_state)
     with host.popover(
         "Cite",
         icon=ICONS["cite"],
         help=f"How to credit Scanpath Studio when you use {what}.",
         width="content",
     ):
-        data = f" and {CORPORA[corpus].name}, whose data it shows" if corpus else ""
+        names = [
+            CORPORA[ref["corpus"]].name
+            if ref.get("corpus")
+            else (ref["fields"].get("title") or ref["name"])
+            for ref in refs
+        ]
+        data = " and " + " and ".join(names) if names else ""
         st.markdown(
             f"Using {what} in a paper, a poster or a talk? Please cite "
-            f"Scanpath Studio{data}. Exported files already carry the citation "
-            "in their metadata."
+            f"Scanpath Studio{data}. The export bundle includes the references in CITATION.bib."
         )
         st.caption("Figure credit")
-        st.code(cite("credit", corpus), language=None, wrap_lines=True)
+        st.code(
+            dataset_credit.cited_text("credit", refs), language=None, wrap_lines=True
+        )
         st.caption("APA")
-        st.code(cite("apa", corpus), language=None, wrap_lines=True)
+        st.code(dataset_credit.cited_text("apa", refs), language=None, wrap_lines=True)
         st.caption("BibTeX")
-        st.code(cite("bibtex", corpus), language="bibtex")
+        st.code(dataset_credit.cited_text("bibtex", refs), language="bibtex")
         row = st.container(horizontal=True)
         row.download_button(
             "BibTeX (.bib)",
-            data=cite("bibtex", corpus) + "\n",
+            data=dataset_credit.cited_text("bibtex", refs) + "\n",
             file_name="scanpath_studio.bib",
             mime="application/x-bibtex",
             icon=ICONS["download"],
@@ -58,7 +66,7 @@ def render_cite_button(host, *, key: str, what: str = "this figure") -> None:
         )
         row.download_button(
             "RIS (.ris)",
-            data=cite("ris", corpus) + "\n",
+            data=dataset_credit.cited_text("ris", refs) + "\n",
             file_name="scanpath_studio.ris",
             mime="application/x-research-info-systems",
             icon=ICONS["download"],

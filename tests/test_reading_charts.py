@@ -44,6 +44,39 @@ def test_missing_timestamps_never_supply_elapsed_seconds():
     assert figure.layout.width <= 1000
 
 
+def test_legacy_counter_stays_estimated_on_a_replay_window_and_later_screen():
+    words, fix = example_import_tables()
+    words, fix = api.load_scanpath_data(words, fix.iloc[:3].copy(), names="canonical")
+    fix = fix.drop(columns=data.TIMESTAMP_SYNTHESIZED).assign(
+        timestamp_ms=[0, 1, 2], duration_ms=[100, 200, 300], order_in_trial=[1, 2, 3]
+    )
+    assert "timestamp_ms" not in data.shareable_frame(fix)
+    window = api.animate_scanpath(words, fix, fix_index_range=(2, 3))
+    assert window.layout.meta["scanpath_frame_times_ms"][-1] == 500
+    fix = fix.assign(screen_id=["first", "next", "next"], screen_index=[1, 2, 2])
+    later = api.animate_scanpath(None, fix, screen="next")
+    assert later.layout.meta["scanpath_frame_times_ms"][-1] == 500
+    assert data.TIMESTAMP_SYNTHESIZED not in fix
+
+
+def test_sharing_keeps_valid_raw_times_and_masks_invalid_fixation_times():
+    raw = pd.DataFrame(
+        {"timestamp_ms": [0, 1, np.inf, np.nan], "duration_ms": [100] * 4}
+    )
+    shown = data.shareable_frame(raw, table="raw_gaze")
+    assert shown.timestamp_ms.iloc[:2].tolist() == [0, 1]
+    assert shown.timestamp_ms.iloc[2:].isna().all()
+    fixed = raw.assign(**{data.TIMESTAMP_SYNTHESIZED: [False, True, False, False]})
+    assert data.shareable_frame(fixed).timestamp_ms.notna().tolist() == [
+        True,
+        False,
+        False,
+        False,
+    ]
+    # Metadata columns with these names belong to the lab.
+    pd.testing.assert_frame_equal(data.shareable_frame(raw, table="metadata"), raw)
+
+
 def test_no_recorded_clock_is_excluded_from_the_choices_and_chart():
     w, f = example_import_tables()
     w, f = api.load_scanpath_data(w, f.drop(columns="timestamp_ms"), names="canonical")

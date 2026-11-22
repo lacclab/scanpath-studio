@@ -15,6 +15,7 @@ avoids an app⇄wizard import cycle.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from pathlib import Path
@@ -23,7 +24,7 @@ from typing import NamedTuple
 import pandas as pd
 import streamlit as st
 
-from . import app, wizard_shell
+from . import app, dataset_credit, wizard_shell
 from .build_info import build_info
 from .column_names import (
     ColumnNames,
@@ -92,6 +93,7 @@ from .data import (
     frame_cache,
     frame_fingerprint,
     looks_like_condition,
+    mapping_blockers,
     normalization_issues,
     normalize_raw_gaze,
     pick_column,
@@ -105,9 +107,6 @@ from .data import (
     trial_id_series,
     trial_keys,
     trial_mapping_columns,
-    validate_fix_schema,
-    validate_raw_gaze_schema,
-    validate_word_schema,
     word_ids_set_aside,
     words_with_several_boxes,
 )
@@ -191,7 +190,8 @@ def _reset_wizard_widgets() -> None:
         # plus their Select-all/None button keys) share the "col_map_" table
         # names as a *suffix*, not a prefix — sweep "wizard_keep_" too, or a
         # new dataset would inherit the previous one's keep choices.
-        if isinstance(k, str) and k.startswith(("col_map_", "wizard_keep_"))
+        if isinstance(k, str)
+        and k.startswith(("col_map_", "wizard_keep_", "wizard_credit_"))
     ]:
         del st.session_state[key]
     for key in (
@@ -404,6 +404,11 @@ def _finalize_wizard_dataset() -> None:
             str(st.session_state.get(WIZARD_IMAGES_PATTERN_KEY) or ""),
         )
     store = st.session_state.setdefault("_datasets", {})
+    dataset_credit.save_credit(
+        st.session_state,
+        ds_name,
+        dataset_credit.form_credit(st.session_state, "wizard_credit"),
+    )
     store[ds_name] = payload
     dataset_share_id(st.session_state, ds_name)
     # Its recording setup is applied when it opens, on the next run, as every
@@ -484,6 +489,7 @@ def _remove_dataset(name: str) -> None:
     store = st.session_state.get("_datasets", {})
     store.pop(name, None)
     forget_dataset_identity(st.session_state, name)
+    dataset_credit.save_credit(st.session_state, name, {})
     # And its description, so a new dataset of that name starts without one.
     descriptions = dict(st.session_state.get(DATASET_DESCRIPTIONS_KEY) or {})
     if descriptions.pop(name, None) is not None:
@@ -2142,6 +2148,7 @@ def _apply_setup_config(config: dict, *, source: str, kind: str) -> None:
         st.session_state["_wizard_restored_setup"] = restored
         st.session_state.pop("_wizard_setup_restored_applied", None)
     st.session_state["_wizard_restored_meta"] = {
+        "column_mapping": config.get("column_mapping") or {},
         "data_source": config.get("data_source") or source,
         "exported_at": config.get("exported_at"),
         "kind": kind,
@@ -2209,7 +2216,7 @@ def _wizard_restore_config(host) -> None:
         return
     st.session_state["_wizard_config_last"] = signature
     try:
-        config = json.loads(uploaded.getvalue().decode("utf-8"))
+        config = json.loads(uploaded.getvalue())
     except (ValueError, UnicodeDecodeError):
         host.warning(
             "This file could not be read as a setup file. Choose a JSON file saved "
@@ -3152,6 +3159,13 @@ def _wizard_setup_step(
         canvas_height=int(canvas_h),
         monitor_width_mm=float(mon_mm),
         viewing_distance_mm=float(dist_mm),
+        viewing_distance_provenance=(
+            initial.viewing_distance_provenance
+            if initial is not None
+            else (
+                _restored_setup_snapshot() or SetupSnapshot()
+            ).viewing_distance_provenance
+        ),
         base_font_size=int(base_font),
         font_family=font_family,
         line_spacing=float(line_spacing),
@@ -3268,6 +3282,15 @@ def _restored_setup_answerable_groups() -> set:
     groups = set(SETUP_GROUPS)
     if payload.get("canvas_width") is None or payload.get("canvas_height") is None:
         groups.discard("screen")
+    width = payload.get("monitor_width_mm")
+    provenance = payload.get("provenance")
+    if isinstance(provenance, dict) and provenance.get("geometry") == "measured":
+        try:
+            width = float(width)
+        except (TypeError, ValueError):
+            width = 0.0
+        if not math.isfinite(width) or width <= 0:
+            groups.discard("geometry")
     return groups
 
 
@@ -3974,6 +3997,60 @@ def _map_cells(block, first_row, lines) -> dict:
     return cells
 
 
+def _mapping_blocker_links(groups: list) -> tuple[list[str], dict]:
+    """Markdown links in each error and their ordered, available control targets."""
+    lines, targets = [], {}
+    for label, prefix, issues in groups:
+        links = []
+        for issue in issues:
+            anchor = f"sps-map-{prefix}-{issue.fields[0]}"
+            targets[anchor] = [f"{prefix}_{field}" for field in issue.fields]
+            links.append(f"[{issue.message}](#{anchor})")
+            if (
+                prefix == "col_map_fix"
+                and len(issue.fields) > 1
+                and "word_id" in issue.fields
+            ):
+                word = "sps-map-col_map_fix-word-id"
+                targets[word] = ["col_map_fix_word_id"]
+                links.append(f"[Map Word ID](#{word})")
+        if links:
+            lines.append(f"{label}: " + " · ".join(links))
+    return lines, targets
+
+
+def _mapping_focus_script(targets: dict) -> str:
+    """Keyboard or pointer activation opens a collapsed section and focuses its field."""
+    return """<script>
+    (() => {
+      const doc = window.parent.document;
+      const targets = TARGETS;
+      doc._spsMappingLinks?.abort();
+      const handler = new doc.defaultView.AbortController();
+      doc._spsMappingLinks = handler;
+      doc.addEventListener("click", event => {
+        const anchor = event.target.closest?.("a");
+        const keys = anchor && targets[anchor.hash.slice(1)];
+        if (!keys) return;
+        const inputs = keys.map(key => doc.querySelector(
+          ".st-key-" + key + " input:not([type=hidden])"
+        )).filter(Boolean);
+        const input = inputs.find(node => node.getClientRects().length) || inputs[0];
+        if (!input) return;
+        event.preventDefault();
+        for (let node = input.parentElement; node; node = node.parentElement) {
+          if (node.tagName === "DETAILS") node.open = true;
+        }
+        doc.defaultView.requestAnimationFrame(() => {
+          input.scrollIntoView({block: "center"});
+          input.focus({preventScroll: true});
+        });
+      }, {capture: true, signal: handler.signal});
+      window.addEventListener("pagehide", () => handler.abort(), {once: true});
+    })();
+    </script>""".replace("TARGETS", json.dumps(targets))
+
+
 def _mark_add_attempted() -> None:
     """Record that **✅ Add dataset** was pressed on a still-incomplete wizard.
 
@@ -4026,6 +4103,8 @@ def _wizard_name_header(host, active: bool) -> None:
         # Streamlit 1.65: read only when Add dataset runs, so no rerun per edit.
         on_change="ignore",
     )
+
+    dataset_credit.credit_fields(box, st.session_state, "wizard_credit")
 
 
 def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:
@@ -4918,29 +4997,26 @@ def _render_data_setup(active: bool) -> _UploadResult:
         raw_gaze_schema = {}
         rg_kept, rg_meta = set(), []
 
-    words_problems = validate_word_schema(word_schema) if has_words else []
-    fix_problems = validate_fix_schema(fix_schema) if has_fix else []
-    raw_gaze_problems = (
-        validate_raw_gaze_schema(raw_gaze_schema) if not raw_gaze.empty else []
+    groups = []
+    if has_words:
+        groups.append(
+            ("Words table", "col_map_words", mapping_blockers("words", word_schema))
+        )
+    if has_fix:
+        groups.append(
+            ("Fixations", "col_map_fix", mapping_blockers("fixations", fix_schema))
+        )
+    raw_issues = (
+        mapping_blockers("raw_gaze", raw_gaze_schema) if not raw_gaze.empty else []
     )
-    problems: list = []
-    if words_problems:
-        line = "Words table: " + "; ".join(words_problems) + "."
-        if any(p.startswith("need either") for p in words_problems):
-            # Say what to do, not only what is missing.
-            line += (
-                " The text can't be drawn without word boxes. Map the box "
-                "columns, re-export the Interest Area Report with IA_LEFT, "
-                "IA_RIGHT, IA_TOP and IA_BOTTOM, or remove this table to see "
-                "the fixations alone."
-            )
-        problems.append(line)
-    if fix_problems:
-        problems.append("Fixations: " + "; ".join(fix_problems))
-    # A raw-gaze-ONLY upload: an incomplete raw-gaze mapping is the only thing
-    # blocking a usable dataset — fold it into `problems` so finalize is gated.
-    if not has_words and not has_fix and raw_gaze_problems:
-        problems.append("Raw gaze: " + "; ".join(raw_gaze_problems))
+    raw_gaze_problems = [issue.message for issue in raw_issues]
+    if not has_words and not has_fix and raw_issues:
+        groups.append(("Raw gaze", "col_map_raw_gaze", raw_issues))
+    problems = [
+        f"{label}: " + "; ".join(issue.message for issue in issues)
+        for label, _, issues in groups
+        if issues
+    ]
     st.session_state["_wizard_problems_last"] = list(problems)
 
     # No auto-detect summary card: every field shows its own state in place —
@@ -5093,8 +5169,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # So the problems are stated: red, and only once the user has
             # actually tried. Before that the page stays quiet.
             if st.session_state.get(ADD_ATTEMPTED_KEY):
-                for line in problems:
+                from .html_embed import embed_html_iframe
+
+                links, targets = _mapping_blocker_links(groups)
+                for line in links:
                     s6.error(line)
+                embed_html_iframe(_mapping_focus_script(targets), height=0)
             # Enabled, not disabled. A disabled button cannot be *tried*,
             # and "red when you try to add with it empty" needs the attempt: the
             # click sets ADD_ATTEMPTED_KEY, which is what turns every unmapped

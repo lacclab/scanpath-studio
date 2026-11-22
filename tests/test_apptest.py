@@ -64,22 +64,15 @@ def _make_apptest(*, synthetic: bool = False) -> AppTest:
 
 
 def _replay_tour(at: AppTest) -> None:
-    """Replay the tour through the compatibility action used by tests.
-
-    The visible entry lives in Tutorials; this bypasses the dialog so tests
-    focused on the tour itself do not also test the tutorial library.
-    """
+    """Invoke the same welcome-tour action as the Tutorials dialog."""
     from unittest.mock import patch
 
     import streamlit as st
 
-    from scanpath_studio import menu
+    from scanpath_studio import tour
 
-    # `_arm_help_action` writes through `st.session_state`, which outside a
-    # script run is not this AppTest's state — point it at the right one rather
-    # than restating which keys arming a tour sets.
     with patch.object(st, "session_state", at.session_state):
-        menu._arm_help_action("help_tour")
+        tour._arm_tour()
     at.run(timeout=30)
 
 
@@ -678,7 +671,7 @@ class TestDataInspectionTab:
         what it last mirrored itself; this pins it.
         """
         from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
-        from scanpath_studio.menu import _MIRROR_KEY, _NAV_PAGES, _PAGES, render_nav
+        from scanpath_studio.menu import _MIRROR_KEY, _NAV_PAGES, render_nav
 
         class _FakePage:
             def __init__(self, title):
@@ -696,7 +689,6 @@ class TestDataInspectionTab:
             ),
             mock.patch.object(menu_mod.st, "navigation", lambda *a, **k: clicked),
         ):
-            _PAGES.clear()
             with mock.patch.object(
                 menu_mod, "switch_to_view", lambda view: switched.append(view)
             ):
@@ -709,7 +701,7 @@ class TestDataInspectionTab:
     def test_nav_pages_cover_every_view(self):
         """The nav offers every top-level entry, in order.
 
-        `_PAGES` is what `switch_to_view` navigates through, so a missing entry
+        `_NAV_PAGES` is what `switch_to_view` navigates through, so a missing entry
         is a view nothing can reach programmatically. 🗂️ Data comes **last**:
         setup comes first in time, but the two analysis views are where the
         work happens.
@@ -3788,7 +3780,7 @@ class TestNavRegressions:
     def test_share_offers_link_code_and_file(self):
         """🔗 Share is one switch — Link · Code · File — and File holds the
         settings file."""
-        from scanpath_studio.url_state import SHARE_SECTION_KEY, SHARE_SECTIONS
+        from scanpath_studio.url_state import SHARE_LINK, SHARE_SECTION_KEY
 
         at = _make_apptest(synthetic=True)
         at.session_state[SUBTAB_KEY] = SUBTAB_SHARE
@@ -3796,7 +3788,12 @@ class TestNavRegressions:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         switch = [c for c in at.segmented_control if c.key == SHARE_SECTION_KEY]
         assert switch, "the Link · Code · File switch is missing"
-        assert list(switch[0].options) == list(SHARE_SECTIONS)
+        assert list(switch[0].options) == [
+            "Link · open this view",
+            "Code · recreate the figure",
+            "Settings file · restore settings",
+        ]
+        assert switch[0].value == SHARE_LINK
         # Link is the default, and only the chosen part draws.
         assert "_share_query_current" in at.session_state
         assert not [u for u in at.file_uploader if u.key == "plot_config_upload"]

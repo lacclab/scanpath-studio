@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .data import TIMESTAMP_SYNTHESIZED, assign_derived
+from .data import assign_derived, synthesized_onset_mask
 
 # This axis is computed on a complete reading, before selecting a screen or window.
 ELAPSED = "@elapsed_seconds"
@@ -20,10 +20,7 @@ _ORIGIN = "_sps_first_recorded_onset_ms"
 def recorded_onsets(fixations: pd.DataFrame) -> pd.Series:
     """Read only finite, measured onsets, preserving row alignment."""
     onset = pd.to_numeric(fixations["timestamp_ms"], errors="coerce")
-    missing = ~np.isfinite(onset)
-    if TIMESTAMP_SYNTHESIZED in fixations:
-        missing |= fixations[TIMESTAMP_SYNTHESIZED].fillna(False)
-    return onset.mask(missing)
+    return onset.mask(synthesized_onset_mask(fixations))
 
 
 def has_clock(fixations: pd.DataFrame) -> bool:
@@ -57,4 +54,22 @@ def raw_axes_available(fields: tuple[str, str], raw: pd.DataFrame | None) -> boo
     return all(
         field in allowed and ("timestamp_ms" if field == ELAPSED else field) in raw
         for field in fields
+    )
+
+
+def drawable_raw_samples(fields: tuple[str, str], raw: pd.DataFrame | None) -> bool:
+    """Whether a point on these axes has two recorded finite coordinates."""
+    if not raw_axes_available(fields, raw):
+        return False
+    x, y = ("timestamp_ms" if field == ELAPSED else field for field in fields)
+    # Normalized recordings usually answer from their first sample.
+    if np.isfinite(
+        pd.to_numeric([raw[x].iat[0], raw[y].iat[0]], errors="coerce")
+    ).all():
+        return True
+    return bool(
+        (
+            np.isfinite(pd.to_numeric(raw[x], errors="coerce"))
+            & np.isfinite(pd.to_numeric(raw[y], errors="coerce"))
+        ).any()
     )

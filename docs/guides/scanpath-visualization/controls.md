@@ -95,7 +95,8 @@ keyboard, see [Keyboard shortcuts](index.md#keyboard-shortcuts). Its **▾** hol
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/compare-menu.webp" title="Open full size"><img src="../../../assets/screenshots/controls/compare-menu.webp" alt="The Compare menu" loading="lazy"></a>
 
-The **Compare** switch shows a second scanpath, B, beside or over this one.
+**Compare readings** shows a second scanpath, B, beside or over this one.
+To find everyone who read the same text, open the **Comparisons** tab and match on text.
 Pick B in the [trial control bar](#trial-control-bar), above the plot. Its
 **▾** holds:
 
@@ -121,7 +122,7 @@ saved:
 | :material/palette: **My designs** | Your saved designs. Click one to apply it. :material/edit: renames it and :material/delete: deletes it. |
 | :material/palette: **My designs** → :material/save: | Save the settings on screen as a named design, to apply again later in one click. |
 | :material/palette: **My designs** → **Export** / **Import** | Download your designs as a file, or load a file of designs, to share a look with co-authors or move your designs to another computer. A design in the file replaces yours of the same name. |
-| **Palette** | A color scheme for the whole figure: **Default (colorblind-safe)**, **Print / grayscale** or **High contrast**. It reads **Custom** once you change one of its colors. |
+| **Palette** | Choose **Default (colorblind-safe)**, **Print / grayscale** or **High contrast**. For a grayscale comparison, A has filled markers and solid lines, and B has hollow markers and dashed lines. |
 
 ### :material/blur_on: Fixations
 
@@ -132,7 +133,7 @@ The **Fixations** switch draws the fixation markers. Its **▾** holds:
 
 | Control | What it does |
 | --- | --- |
-| **Marker** → **Color** | What decides each marker's color. **One color**, the default, paints them all alike. Pick a number column of the fixations, such as duration or time, and the markers follow a color scale: with the default blues, longer fixations show darker. Pick a category, such as **Text line** or a part-of-speech column, and each value gets a color, with a legend. |
+| **Marker** → **Color** | **One color** paints all fixations alike. A number such as duration uses a continuous scale. A category such as condition or part of speech keeps the same color across trials, even when filtering removes other categories. The legend identifies missing values separately. |
 | **Marker** → color box | With **One color**: the fixation marker color. With a number column: the color scale. |
 | **Marker** → **Range** | When markers are colored by a number: the values at the two ends of the color scale. **Auto** fits each trial. |
 | **Marker** → **Shape** | Choose the fixation marker shape: circle, square, diamond, triangle, cross, X, star, hexagon or heart. |
@@ -146,7 +147,7 @@ The **Fixations** switch draws the fixation markers. Its **▾** holds:
 | **Fixation index** → **Show** | Number each fixation in reading order. |
 | **Fixation index** → color, **Size** | Choose the numbers' size in every view. For one scanpath, choose their color here. When comparing two scanpaths, each number uses its scanpath’s fixation color, including during replay. |
 | **Fixation index** → **Position** | Put each number above its fixation, inside it, or below it. |
-| **Snap** → **To line** | Move each fixation up or down onto its line of text. This makes a schematic, labeled *Illustration*. |
+| **Snap** → **To line** | Move each fixation up or down onto its line of text. Choose **Show positions before snapping** above the figure to see the original trial coordinates beside the illustration, on the same axes. Downloads use the illustration. |
 | **Snap** → **Position** | Choose where on its line a snapped fixation sits. |
 
 ### :material/arrow_outward: Saccades
@@ -179,7 +180,7 @@ Recording setup, and changes here apply to the figure only. Its **▾** holds:
 | Control | What it does |
 | --- | --- |
 | **Text** → **Show** | Show the stimulus text, the words the participant read, at their place on the screen. |
-| **Text** → **Redact** | Replace each word with a rounded block in the text color and hide its text in tooltips. This preserves the text layout while concealing the words. |
+| **Text** → **Redact** | Mask stimulus words and their text IDs. Other columns selected under **Figure & canvas → Hover** still travel with the HTML figure. Review those selections and the separate **Stimulus image** switch before sharing. |
 | **Fit** → **Fit to word boxes** | Size the stimulus text from its word boxes, instead of a fixed font size. |
 | **Fit** → **Spacing** | With **Fit to word boxes** on: the distance between lines, in font sizes. The font size is that distance divided by this value, so 3 leaves a blank line above and below. |
 | **Size** | With **Fit to word boxes** on: the size of the axis and legend text, in px. Off: the stimulus text's size too, in px or pt. |
@@ -223,7 +224,7 @@ The **Heatmap** switch shows where reading concentrated. Its **▾** holds:
 | **Color** → **By** | Choose what the heatmap measures: total fixation duration (dwell time), or **Fixation count**. |
 | **Color** → **Colors** | Choose the heatmap colors (color scale). |
 | **Scale** | Choose a linear or log heatmap scale. |
-| **Range** | For word-box heatmaps, fix the color range across trials. **Auto** runs from 0 to the trial's highest value. Smoothed heatmaps are scaled to each figure's peak. |
+| **Range** | A word-box legend gives the reading’s dwell-time or count limits. Choose **Use this heatmap range for other trials** above the plot to keep those limits. Smoothed heatmaps scale to each figure’s peak. |
 | **Opacity** | Set the heatmap opacity. **Auto** uses 0.5 for word boxes and 0.45 for smoothed. |
 | **Color bar** → **Show**, orientation, **Angle**, **Size**, **Thickness**, **Length** | Show the heatmap color bar, and set its orientation, label angle and size, thickness and length. |
 
@@ -245,7 +246,7 @@ The **Raw gaze** switch draws the gaze samples as recorded. Its **▾** holds:
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/filters.webp" title="Open full size"><img src="../../../assets/screenshots/controls/filters.webp" alt="The Filters & highlights menu" loading="lazy"></a>
 
 
-Which fixations and saccades are drawn, and which stand out:
+These controls change the fixation marks and saccades drawn in the figure. The trial-list filter selects whole readings.
 
 | Control | What it does |
 | --- | --- |
@@ -351,3 +352,12 @@ The tabs under the figure. Essentials has **Export**, for the current figure, an
 | :material/share: **Share** | **Link** | Copy a link that reopens this trial and its settings. The bundled demo works anywhere. A public dataset has to be downloaded on the recipient's side. For each dataset you imported, send its data files and setup file (:material/edit: **Edit dataset** → **Download setup file**) so they can add it under the same name. If they have A but still need B for a comparison, the link opens A and names the dataset to add. On your own computer the link still works after either dataset is renamed. A `localhost` link opens where the app runs at the same address. |
 | | **Code** → **Python** / **CLI**, **Show every option** | Get the Python or command-line code that redraws this figure, for scripts and reproduction. |
 | | **Settings file** → **Download settings** / **Restore settings** | Save the plot settings to a file, or load (restore) a saved settings file. |
+
+### Inspect a fixation
+
+Click a fixation on a static scanpath, or open **Inspect a fixation** and choose
+its number. The coordinates next to the number are the plotted coordinates.
+The table shows the parsed input cells, their units and the values used by
+the figure. File rows start at one after the header. The inspector also shows
+whether the word came from a mapped ID or a word box. If the reading was
+imported before input rows were recorded, the location is shown as unavailable.

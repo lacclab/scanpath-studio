@@ -58,7 +58,7 @@ import pandas as pd
 
 import scanpath_studio.annotations as annotations_mod
 
-from . import progress
+from . import dataset_credit, progress
 from .constants import (
     DATASET_ALIASES_KEY,
     DATASET_COUNTS_STORE_KEY,
@@ -73,6 +73,7 @@ from .constants import (
     SETUP_OVERRIDE_SESSION_KEYS,
 )
 from .dataset_identity import DATASET_IDS_KEY, dataset_share_id, forget_dataset_identity
+from .file_lock import file_lock
 from .session_keys import (
     COLUMN_MAPPING_PREFIX,
     COMPARE_IDENTITY_STATE_KEY,
@@ -103,6 +104,9 @@ STATE_DIR_ENV_VAR = "SCANPATH_STUDIO_STATE_DIR"
 _RESTORED_KEY = "_local_persistence_restored"
 _RESTORED_PAYLOAD_KEY = "_local_persistence_restored_payload"
 _PAUSED_KEY = "_local_persistence_paused"
+_ANNOTATION_BASE_KEY = "_local_annotation_base"
+_MANIFEST_BASE_KEY = "_local_persistence_manifest_base"
+SAVE_CONFLICT_KEY = "_local_persistence_save_conflict"
 _LAST_FINGERPRINT_KEY = "_local_persistence_fingerprint"
 _LAST_DATASET_IDENTITY_KEY = "_local_persistence_dataset_identity"
 _LAST_DATASET_ENTRIES_KEY = "_local_persistence_dataset_entries"
@@ -166,6 +170,7 @@ _METADATA_FILE_RE = re.compile(r"^metadata(?:-[0-9a-f]+)?\.json$")
 _STALE_AFTER_S = 600.0
 _SWEPT_KEY = "_local_persistence_swept"
 _STATE_LOCK = threading.RLock()
+_CACHE_LOCK_FILE = ".scanpath-recovery.lock"
 _LOGGER = logging.getLogger(__name__)
 _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     "data_source_choice",
@@ -204,6 +209,7 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
     DATASET_ALIASES_KEY,
     DATASET_IDS_KEY,
     DATASET_DESCRIPTIONS_KEY,
+    dataset_credit.STORE_KEY,
     # Each dataset's stimulus-image folder and pattern, kept the same way and
     # for the same reason. A local path in a local cache.
     DATASET_STIMULUS_IMAGES_KEY,
@@ -597,6 +603,118 @@ def _save_metadata(
     }
 
 
+class RecoveryConflictError(ValueError):
+    """Publishing this tab's changes would overwrite newer saved work."""
+
+
+class AnnotationConflictError(RecoveryConflictError):
+    """Two sessions independently changed the same cached trial or screen."""
+
+
+def _merge_saved_annotations(base, local, disk):
+    """Apply this session's annotation edits to the latest saved annotations."""
+    if disk == base or disk == local:
+        return local
+    if local == base:
+        return disk
+
+    def entries(payload):
+        if isinstance(payload, list):
+            payload = {"unassigned": payload}
+        payload = payload or {}
+        by_dataset = {
+            **(payload.get("datasets") or {}),
+            None: payload.get("unassigned", []),
+        }
+        return {
+            (owner, key): value
+            for owner, records in by_dataset.items()
+            for key, value in annotations_mod.records_to_store(records).items()
+        }
+
+    before, edited, latest = map(entries, (base, local, disk))
+    result = latest.copy()
+    for key in before.keys() | edited.keys():
+        mine, old, saved = edited.get(key), before.get(key), latest.get(key)
+        if mine == old:
+            continue
+        if saved != old and saved != mine:
+            owner, reading = key
+            raise AnnotationConflictError(
+                f"Another session changed the annotation for {owner or 'unassigned dataset'}, "
+                f"{' / '.join(reading)}. Your local changes are still open. Export them from "
+                "Data Management → Annotations, then reopen the saved session and review the imported notes."
+            )
+        if mine is None:
+            result.pop(key, None)
+        else:
+            result[key] = mine
+    owners = {}
+    for (owner, key), entry in result.items():
+        owners.setdefault(owner, {})[key] = entry
+    unassigned = owners.pop(None, {})
+    merged = {
+        "datasets": {
+            owner: annotations_mod.store_to_records(store)
+            for owner, store in owners.items()
+        }
+    }
+    if unassigned:
+        merged["unassigned"] = annotations_mod.store_to_records(unassigned)
+    return merged
+
+
+def _cache_file_lock(root: Path, *, reading: bool = False):
+    # A failed dataset or metadata sidecar can outlive its directory.
+    return (
+        file_lock(root / _CACHE_LOCK_FILE, reading=reading)
+        if root.is_dir()
+        else contextlib.nullcontext()
+    )
+
+
+def _manifest_base(manifest: dict) -> str:
+    """Identify everything a save replaces wholesale. Annotations merge by trial."""
+    snapshot = {key: value for key, value in manifest.items() if key != "annotations"}
+    encoded = json.dumps(snapshot, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _check_saved_copy(session, root: Path) -> dict | None:
+    """Read under the cache lock, before writing or removing any files."""
+    try:
+        disk = _as_mapping(
+            json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+        )
+    except FileNotFoundError:
+        disk = None
+    except (OSError, ValueError) as exc:
+        raise RecoveryConflictError(
+            "This tab couldn't read the saved copy to check for changes. "
+            "Your edits are still open. Keep this tab open until you've copied or exported them."
+        ) from exc
+    disk_base = _manifest_base(disk) if disk is not None else None
+    if disk_base != session.get(_MANIFEST_BASE_KEY):
+        raise RecoveryConflictError(
+            "The saved work on this computer changed in another session. "
+            "Your edits are still in this tab and haven't been saved. "
+            "Copy or export them before closing or reloading. To download notes, open "
+            "Data Management → Annotations."
+        )
+    return disk
+
+
+def _can_discard_saved_files(session, root: Path) -> bool:
+    try:
+        _check_saved_copy(session, root)
+    except RecoveryConflictError as exc:
+        session[SAVE_CONFLICT_KEY] = str(exc)
+        return False
+    return True
+
+
 def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
     """Save local datasets and durable session preferences, all or nothing.
 
@@ -606,6 +724,9 @@ def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
     names as they were (the new files are removed again), so the next launch
     restores the whole previous session; after it, the whole new one. Files no
     manifest names any longer are removed only once the new one is in place.
+
+    Raises RecoveryConflictError if the saved copy changed since this session
+    restored or saved it. Independent annotation edits merge by trial.
     """
     with _STATE_LOCK:
         failed = _failed(session)
@@ -620,11 +741,30 @@ def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
         if session.get(_LAST_FINGERPRINT_KEY) == fingerprint:
             return False
         root.mkdir(parents=True, exist_ok=True)
+        return _publish_state(session, root, metadata_signature, fingerprint)
+
+
+def _publish_state(
+    session: MutableMapping[str, Any],
+    root: Path,
+    metadata_signature: list,
+    fingerprint: str,
+) -> bool:
+    """Write and retire files while the same disk revision stays exclusively ours."""
+    with file_lock(root / _CACHE_LOCK_FILE):
+        disk = _check_saved_copy(session, root)
         dataset_identity = _dataset_identity(session)
         written: list[Path] = []
         swapped = False
         try:
             manifest = _manifest_for(session, root, dataset_identity, written)
+            local_annotations = manifest["annotations"]
+            if disk is not None:
+                manifest["annotations"] = _merge_saved_annotations(
+                    session.get(_ANNOTATION_BASE_KEY, {"datasets": {}}),
+                    local_annotations,
+                    disk.get("annotations", {"datasets": {}}),
+                )
             metadata, metadata_bookkeeping = _save_metadata(
                 session, root, metadata_signature, written
             )
@@ -648,6 +788,9 @@ def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
                 # Named by no manifest: this save's files would only be litter.
                 for path in written:
                     _unlink_quietly(path)
+        session[_MANIFEST_BASE_KEY] = _manifest_base(manifest)
+        session[_ANNOTATION_BASE_KEY] = local_annotations
+        session.pop(SAVE_CONFLICT_KEY, None)
         session[_LAST_FINGERPRINT_KEY] = fingerprint
         session[_LAST_DATASET_IDENTITY_KEY] = dataset_identity
         # The live datasets' entries only: a held-back one is merged in by
@@ -786,42 +929,42 @@ def restore_state(
     if session.get(_RESTORED_KEY):
         return False
     session[_RESTORED_KEY] = True
-    with _STATE_LOCK:
-        return _restore_manifest(session, root, skip_session_keys)
+    if not root.is_dir():
+        return False
+    with _STATE_LOCK, contextlib.ExitStack() as locks:
+        try:
+            locks.enter_context(_cache_file_lock(root, reading=True))
+            path = root / "manifest.json"
+            if not path.exists():
+                return False
+            manifest = _as_mapping(json.loads(path.read_text(encoding="utf-8")))
+            schema = int(manifest.get("schema", 0))
+            if schema != SCHEMA_VERSION:
+                raise ValueError(
+                    f"it was saved by another version (format {schema}; this one "
+                    f"reads {SCHEMA_VERSION})"
+                )
+            stored_datasets = _as_mapping(manifest.get("datasets", {}))
+        except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+            # An empty session must never overwrite data it could not open.
+            session[_CACHE_FAILURE_KEY] = _failure_reason(exc)
+            session[_PAUSED_KEY] = True
+            _LOGGER.warning("Could not read the recovery cache at %s: %s", root, exc)
+            return False
+        return _restore_manifest(
+            session, root, skip_session_keys, manifest, stored_datasets
+        )
 
 
 def _restore_manifest(
-    session: MutableMapping[str, Any], root: Path, skip_session_keys
+    session: MutableMapping[str, Any],
+    root: Path,
+    skip_session_keys,
+    manifest,
+    stored_datasets,
 ) -> bool:
-    """The body of :func:`restore_state`, under its lock."""
-    path = root / "manifest.json"
-    if not path.exists():
-        return False
-    try:
-        # Read and check the manifest's *shape* before touching the session.
-        # It is a file on disk, so any JSON value can be in it — `[]`, `null`,
-        # a dataset entry that is a string — and each of those must fail here,
-        # as an unreadable cache, not escape as an AttributeError on every
-        # launch.
-        manifest = _as_mapping(json.loads(path.read_text(encoding="utf-8")))
-        schema = int(manifest.get("schema", 0))
-        if schema != SCHEMA_VERSION:
-            raise ValueError(
-                f"it was saved by another version (format {schema}; this one "
-                f"reads {SCHEMA_VERSION})"
-            )
-        stored_datasets = _as_mapping(manifest.get("datasets", {}))
-    except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
-        # The cache is there but cannot be read as a whole. Opening without
-        # it is right — a damaged cache must never stop the app — but
-        # overwriting it is not: the next save would replace whatever is
-        # still recoverable with this session's empty state. So saving
-        # pauses and the app says why (`cache_failure`), with a way to try
-        # again or to clear it.
-        session[_CACHE_FAILURE_KEY] = _failure_reason(exc)
-        session[_PAUSED_KEY] = True
-        _LOGGER.warning("Could not read the recovery cache at %s: %s", root, exc)
-        return False
+    """Apply the validated manifest while its referenced sidecars remain locked."""
+    session[_MANIFEST_BASE_KEY] = _manifest_base(manifest)
     # What the manifest on disk names, so the save that replaces it
     # removes what the new one no longer does.
     session[_LAST_REFERENCED_KEY] = sorted(_manifest_references(root, manifest))
@@ -891,6 +1034,7 @@ def _restore_manifest(
     # held-back dataset's annotations restore too: they are filed under
     # its name and written back with it.
     try:
+        session[_ANNOTATION_BASE_KEY] = manifest.get("annotations", {"datasets": {}})
         summary["annotations"] = annotations_mod.restore_payload(
             session, manifest.get("annotations")
         )
@@ -1011,7 +1155,7 @@ def retry_failed_datasets(session, root: Path | None = None) -> dict[str, str]:
     failed = _failed(session)
     if not failed:
         return {}
-    with _STATE_LOCK:
+    with _STATE_LOCK, _cache_file_lock(directory, reading=True):
         live = dict(session.get("_datasets", {}))
         entries = session.get(_LAST_DATASET_ENTRIES_KEY)
         # The reuse bookkeeping stays valid only if it described the session
@@ -1054,7 +1198,9 @@ def discard_failed_dataset(session, name: str, root: Path | None = None) -> bool
     record = failed.pop(str(name), None)
     if record is None:
         return False
-    with _STATE_LOCK:
+    with _STATE_LOCK, _cache_file_lock(directory):
+        if not _can_discard_saved_files(session, directory):
+            return False
         entry = record.get("entry")
         frames = entry.get("frames") if isinstance(entry, dict) else None
         # Only the files its entry names, never guessed from its name: a
@@ -1080,6 +1226,7 @@ def discard_failed_dataset(session, name: str, root: Path | None = None) -> bool
             and not failed_metadata(session)
         ):
             forget_dataset_identity(session, name)
+            dataset_credit.save_credit(session, name, {})
         _set_failed(session, failed)
     return True
 
@@ -1125,6 +1272,13 @@ def _restorable_session(stored: Any) -> dict:
         if not isinstance(key, str) or not (
             key in _SESSION_KEYS or key.startswith(COLUMN_MAPPING_PREFIX)
         ):
+            continue
+        if key == dataset_credit.STORE_KEY:
+            clean[key] = {
+                str(name): credit
+                for name, payload in _as_mapping(value).items()
+                if (credit := dataset_credit.clean_credit(payload))
+            }
             continue
         if key in (DATASET_DESCRIPTIONS_KEY, DATASET_ALIASES_KEY, DATASET_IDS_KEY):
             # ``{dataset: sentence}``; anything else is dropped.
@@ -1293,7 +1447,7 @@ def retry_failed_metadata(session, root: Path | None = None) -> str | None:
     directory = state_directory() if root is None else root
     from . import metadata as metadata_mod
 
-    with _STATE_LOCK:
+    with _STATE_LOCK, _cache_file_lock(directory, reading=True):
         try:
             payloads = _read_metadata_file(directory, held.get("pointer"))
             metadata_mod.restore_dataset_payloads(session, payloads)
@@ -1313,11 +1467,14 @@ def discard_failed_metadata(session, root: Path | None = None) -> bool:
     Only that copy: the datasets, their annotations and the tables attached
     this session are left alone, and the next save writes the latter.
     """
-    held = session.pop(_FAILED_METADATA_KEY, None)
+    held = session.get(_FAILED_METADATA_KEY)
     if not isinstance(held, dict):
         return False
     directory = state_directory() if root is None else root
-    with _STATE_LOCK:
+    with _STATE_LOCK, _cache_file_lock(directory):
+        if not _can_discard_saved_files(session, directory):
+            return False
+        session.pop(_FAILED_METADATA_KEY)
         try:
             path = _metadata_path(directory, held.get("pointer"))
         except ValueError:
@@ -1343,7 +1500,9 @@ def _metadata_files(root: Path) -> list[Path]:
 
 def forget_state(root: Path) -> None:
     """Remove the known persistence files without recursively deleting ``root``."""
-    with _STATE_LOCK:
+    if not root.is_dir():
+        return
+    with _STATE_LOCK, _cache_file_lock(root):
         manifest = root / "manifest.json"
         if manifest.exists():
             manifest.unlink()
@@ -1529,6 +1688,9 @@ def clear_local_state(session=None, root: Path | None = None) -> bool:
     if session is not None:
         for key in (
             _LAST_FINGERPRINT_KEY,
+            _MANIFEST_BASE_KEY,
+            _ANNOTATION_BASE_KEY,
+            SAVE_CONFLICT_KEY,
             _LAST_DATASET_IDENTITY_KEY,
             _LAST_DATASET_ENTRIES_KEY,
             _RESTORED_PAYLOAD_KEY,
@@ -1745,6 +1907,9 @@ def save_local_state(session, url: str) -> bool:
         return False
     try:
         return save_state(session, state_directory())
+    except RecoveryConflictError as exc:
+        session[SAVE_CONFLICT_KEY] = str(exc)
+        return False
     except Exception:
         # Persistence is a recovery convenience, never a reason for the app to
         # stop rendering (read-only homes, full disks, or unsupported Parquet

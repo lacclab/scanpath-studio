@@ -621,8 +621,14 @@ def _restore_config_app():
         "selection": {
             "participant_id": "p1",
             "trial_id": "t1",
-            # Schema 6 — scanpath B by identity, in the same dataset.
-            "compare": {"participant_id": "p2", "trial_id": "t1", "screen_id": "2"},
+            "fixation_window": [2, 4],
+            "window_all_trials": False,
+            "compare": {
+                "participant_id": "p2",
+                "trial_id": "t1",
+                "screen_id": "2",
+                "fixation_window": [3, 5],
+            },
         },
         "mode": {"animate": True, "compare": True},
         # The finer design choices.

@@ -444,106 +444,6 @@ class TestCompareStimulusSource:
         )
 
 
-class TestPairExportBundle:
-    def test_bundle_names_both_sources_and_both_setups(self):
-        import io
-        import json
-        import zipfile
-
-        from scanpath_studio.export import ComparisonSide, ExportOptions, pair_export
-
-        side_a = ComparisonSide(
-            participant="p1",
-            trial="t1",
-            words=_words("p1", "t1"),
-            fixations=_fixations("p1", "t1"),
-            setup=SetupSnapshot().to_dict(),
-        )
-        qualified_words = tabs._qualify_for_compare(_words("p1", "t1"), "PoTeC")
-        qualified_fix = tabs._qualify_for_compare(_fixations("p1", "t1"), "PoTeC")
-        side_b = ComparisonSide(
-            participant="p1",
-            trial="t1",
-            words=tabs._unqualify_for_export(qualified_words, "p1"),
-            fixations=tabs._unqualify_for_export(qualified_fix, "p1"),
-            dataset="PoTeC",
-            setup=SetupSnapshot(canvas_width=1680, canvas_height=1050).to_dict(),
-        )
-        data = pair_export(
-            None,  # no figure — Kaleido isn't available in CI
-            side_a,
-            side_b,
-            canvas_width=1000,
-            canvas_height=800,
-            x_field="x",
-            y_field="y",
-            settings={},
-            options=ExportOptions(
-                include_fixations=True, include_measures=True, table_format="csv"
-            ),
-        )
-        with zipfile.ZipFile(io.BytesIO(data)) as zf:
-            names = zf.namelist()
-            folder = "p1__t1__vs__p1__t1"
-            assert f"{folder}/plot_config.json" in names
-            assert f"{folder}/fixations.csv" in names
-            config = json.loads(zf.read(f"{folder}/plot_config.json"))
-            fixations = pd.read_csv(io.BytesIO(zf.read(f"{folder}/fixations.csv")))
-
-        assert config["datasets"]["a"]["source"] is None
-        assert config["datasets"]["b"]["source"] == "PoTeC"
-        assert config["datasets"]["b"]["setup"]["canvas_width"] == 1680
-        # The `dataset` column is what tells two identically-named readers apart
-        # in the exported table — the ids themselves are the corpus' own.
-        assert set(fixations["dataset"]) == {"(this dataset)", "PoTeC"}
-        assert set(fixations["participant_id"]) == {"p1"}
-
-
-class TestSelfComparisonBundle:
-    def test_each_scanpaths_rows_say_which_they_are(self):
-        """B can be A's own trial, whose rows then match A's on every
-        other column — participant, trial and `dataset` alike. The `scanpath`
-        column is what tells the two halves of the pair's tables apart."""
-        import io
-        import zipfile
-
-        from scanpath_studio.export import ComparisonSide, ExportOptions, pair_export
-
-        def side():
-            return ComparisonSide(
-                participant="p1",
-                trial="t1",
-                # A brought measure: the pair's measures file is the words
-                # table's own, never computed.
-                words=_words("p1", "t1").assign(total_fixation_duration_ms=1.0),
-                fixations=_fixations("p1", "t1"),
-            )
-
-        data = pair_export(
-            None,  # no figure — Kaleido isn't available in CI
-            side(),
-            side(),
-            canvas_width=1000,
-            canvas_height=800,
-            x_field="x",
-            y_field="y",
-            settings={},
-            options=ExportOptions(
-                include_fixations=True, include_measures=True, table_format="csv"
-            ),
-        )
-        folder = "p1__t1__vs__p1__t1"
-        with zipfile.ZipFile(io.BytesIO(data)) as zf:
-            fixations = pd.read_csv(io.BytesIO(zf.read(f"{folder}/fixations.csv")))
-            measures = pd.read_csv(io.BytesIO(zf.read(f"{folder}/measures.csv")))
-
-        assert fixations["scanpath"].value_counts().to_dict() == {
-            "A": len(_fixations("p1", "t1")),
-            "B": len(_fixations("p1", "t1")),
-        }
-        assert set(measures["scanpath"]) == {"A", "B"}
-
-
 class TestRestoredSetupCannotInventAMonitor:
     """A restored setup must not invent a measured monitor.
 
@@ -877,3 +777,11 @@ def test_a_cross_dataset_b_counts_its_own_gaze_samples(_synthetic_vs_demo):
     """B's samples are drawn, so B's chip counts them too."""
     table = next(t for t in _synthetic_vs_demo if "Number of gaze samples" in t)
     assert "2,233" in table, table
+
+
+def test_compare_qualification_preserves_the_labs_dataset_column_through_export():
+    source = _fixations("p1", "t1").assign(dataset="pilot")
+    restored = tabs._unqualify_for_export(
+        tabs._qualify_for_compare(source, "Corpus B"), "p1"
+    )
+    pd.testing.assert_frame_equal(restored, source)

@@ -1515,3 +1515,641 @@ def test_bundle_html_follows_the_self_contained_choice(
         page = zf.read("per_trial/p1__t1/figure.html").decode("utf-8")
     loads_from_a_host = bool(re.search(r'<script[^>]*\ssrc="https?://', page))
     assert loads_from_a_host is not self_contained
+
+
+@pytest.mark.parametrize(
+    ("scope", "selection", "expected"),
+    [
+        ("text", {"scope_text": "para1"}, 0),
+        ("participant", {}, 0),
+        ("trial", {"scope_participant": "p1"}, 0),
+        ("trial", {"scope_trial": "t1"}, 0),
+        ("participant", {"scope_participant": "missing"}, 0),
+        ("all", {}, 2),
+    ],
+)
+def test_an_unresolved_scope_never_widens_the_bundle(
+    minimal_combos, minimal_words, minimal_fixations, scope, selection, expected
+):
+    from scanpath_studio.export import plan_export
+
+    combos = minimal_combos.drop(columns="text_id")
+    options = ExportOptions(
+        include_png=False,
+        include_svg=False,
+        include_plot_config=False,
+        include_fixations=True,
+        scope=scope,
+        **selection,
+    )
+    plan = plan_export(combos, minimal_words, minimal_fixations, options)
+    assert (plan.trials, plan.units) == (expected, expected)
+    payload, progress = bulk_export(
+        combos,
+        minimal_words,
+        minimal_fixations,
+        canvas_width=800,
+        canvas_height=400,
+        base_font_size=14,
+        font_family="monospace",
+        x_field="x",
+        y_field="y",
+        settings={},
+        options=options,
+    )
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        assert (
+            sum(name.endswith("/fixations.csv") for name in archive.namelist())
+            == expected
+        )
+        assert progress.total_trials == expected
+
+
+def test_screen_discovery_skips_ordinary_trials_but_finds_sample_only_screens(
+    minimal_combos, monkeypatch
+):
+    from scanpath_studio import export
+
+    empty = pd.DataFrame()
+    with monkeypatch.context() as m:
+
+        def unexpected(*args):
+            pytest.fail(
+                "Sliced a trial to look for a screen column absent from every frame"
+            )
+
+        m.setattr(export, "extract_trial", unexpected)
+        assert export.export_units(minimal_combos, empty, minimal_combos).equals(
+            minimal_combos
+        )
+        assert export.export_units(
+            minimal_combos, empty, minimal_combos, screens=("intro",)
+        ).empty
+    raw = minimal_combos.assign(screen_id=["intro", "question"], screen_index=[1, 1])
+    units = export.export_units(minimal_combos, empty, empty, raw, screens=("intro",))
+    assert units[["trial_id", "screen_id"]].values.tolist() == [["t1", "intro"]]
+
+
+@pytest.mark.parametrize("other_recorded", [False, True])
+def test_scoped_text_metadata_respects_recorded_ids_in_zip_and_preview(
+    minimal_combos, minimal_words, minimal_fixations, base_settings, other_recorded
+):
+    from scanpath_studio.data import TEXT_ID_MAPPED
+    from scanpath_studio.export import bundle_contents
+
+    combos = minimal_combos.iloc[:1].assign(text_id="t1")
+    words = minimal_words.assign(text_id="textA", **{TEXT_ID_MAPPED: True})
+    fix = minimal_fixations.assign(text_id="t1", **{TEXT_ID_MAPPED: other_recorded})
+    settings = {
+        **base_settings,
+        "text_metadata": pd.DataFrame(
+            {"text_id": ["textA", "t1"], "credit": ["selected", "unrelated"]}
+        ),
+    }
+    options = ExportOptions(
+        include_png=False, include_svg=False, include_plot_config=False
+    )
+    preview = bundle_contents(
+        combos, words, fix, None, options=options, settings=settings
+    )
+    planned = {entry["Path"]: entry["Contents"] for entry in preview.files}
+    payload, _ = bulk_export(
+        combos,
+        words,
+        fix,
+        canvas_width=800,
+        canvas_height=400,
+        base_font_size=14,
+        font_family="monospace",
+        x_field="x",
+        y_field="y",
+        settings=settings,
+        options=options,
+    )
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        path = "metadata/texts.csv"
+        if other_recorded:
+            assert path not in planned and path not in archive.namelist()
+        else:
+            assert planned[path] == "Text metadata · 1 row"
+            assert pd.read_csv(archive.open(path)).to_dict("records") == [
+                {"text_id": "textA", "credit": "selected"}
+            ]
+
+
+def test_chunked_csv_preserves_exact_bytes_headers_and_paths():
+    from scanpath_studio.column_names import ColumnNames, SourceName
+    from scanpath_studio.export import _write_table
+
+    rows = 5003
+    frame = pd.DataFrame(
+        {
+            "x": [1.25] * rows,
+            "note": ["hé,\nשלום"] * rows,
+            "image_path": ["/private/stimuli/words.png"] * rows,
+        }
+    )
+    frame.loc[5001, "x"] = None
+    expected = (
+        frame.rename(columns={"x": "Gaze X"})
+        .assign(image_path="words.png")
+        .to_csv(index=False)
+        .encode()
+    )
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as archive:
+        count = _write_table(
+            archive,
+            "gaze.csv",
+            frame,
+            "csv",
+            ColumnNames({"x": SourceName(("Gaze X",))}),
+        )
+    with zipfile.ZipFile(out) as archive:
+        assert archive.read("gaze.csv") == expected
+        assert count == len(expected) == archive.getinfo("gaze.csv").file_size
+
+
+@pytest.mark.parametrize("screens", [("intro",), ("intro", "question"), None])
+def test_bundle_notes_follow_the_selected_reading_and_screen(screens):
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+
+    words, fixations = make_multipart_synthetic_data()
+    words, fixations = (
+        pd.concat(
+            [
+                frame.assign(participant_id="p1"),
+                frame.loc[frame["screen_id"] == "intro"].assign(participant_id="p2"),
+            ],
+            ignore_index=True,
+        )
+        for frame in (words, fixations)
+    )
+    combos = words[["participant_id", "trial_id"]].drop_duplicates()
+    records = [
+        {
+            "participant_id": p,
+            "trial_id": t,
+            **({"screen_id": screen} if screen else {}),
+            "note": f"{p}/{screen or 'trial'}",
+        }
+        for p, t in combos.itertuples(index=False, name=None)
+        for screen in (None, "intro", "question")
+    ]
+    options = ExportOptions(
+        include_png=False,
+        include_svg=False,
+        include_plot_config=False,
+        include_fixations=True,
+        include_annotations=True,
+        screens=screens,
+    )
+    payload, _ = bulk_export(
+        combos,
+        words,
+        fixations,
+        canvas_width=800,
+        canvas_height=400,
+        base_font_size=12,
+        font_family="monospace",
+        x_field="x",
+        y_field="y",
+        settings={},
+        options=options,
+        annotation_records=records,
+    )
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        notes = {
+            row["note"]
+            for row in json.loads(archive.read("annotations.json"))["annotations"]
+        }
+        inventory = pd.read_csv(archive.open("index.csv"))
+        tables = inventory[inventory["artifact"].eq("fixations")]
+        drawn = set(zip(tables["participant_id"], tables["screen_id"], strict=True))
+    assert notes == (
+        {"p1/trial", "p2/trial"} | {f"{p}/{s}" for p, s in drawn}
+        if screens is not None
+        else {r["note"] for r in records}
+    )
+
+
+def test_handoff_plan_matches_collision_paths_and_discloses_stimulus_text(
+    minimal_combos, minimal_words, minimal_fixations, base_settings
+):
+    from scanpath_studio.export import bundle_contents
+
+    words = minimal_words.assign(text="Juniper", total_fixation_duration_ms=12.0)
+    options = ExportOptions(
+        include_png=False,
+        include_svg=False,
+        include_html=True,
+        include_fixations=True,
+        include_measures=True,
+        include_annotations=True,
+        path_pattern="{artifact}.{ext}",
+        metadata_fields=("group",),
+    )
+    settings = {
+        **base_settings,
+        "redact_text": True,
+        "participant_metadata": pd.DataFrame(
+            {"participant_id": ["p1"], "group": ["c"], "initials": ["AB"]}
+        ),
+    }
+    records = [{"participant_id": "p1", "trial_id": "t2", "note": "review"}]
+    planned = bundle_contents(
+        minimal_combos,
+        words,
+        minimal_fixations,
+        None,
+        options=options,
+        settings=settings,
+        annotation_records=records,
+    )
+    payload, _ = bulk_export(
+        minimal_combos,
+        words,
+        minimal_fixations,
+        canvas_width=800,
+        canvas_height=400,
+        base_font_size=14,
+        font_family="monospace",
+        x_field="x",
+        y_field="y",
+        settings=settings,
+        options=options,
+        annotation_records=records,
+    )
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        assert {row["Path"] for row in planned.files} == set(archive.namelist())
+        for row in planned.files:
+            if row["Table columns"]:
+                assert row["Table columns"] == ", ".join(
+                    pd.read_csv(archive.open(row["Path"])).columns
+                )
+        assert pd.read_csv(archive.open("measures-2.csv"))["text"].tolist() == [
+            "Juniper",
+            "Juniper",
+        ]
+    paths = {row["Path"]: row for row in planned.files}
+    assert paths["figure-2.html"]["Trial"] == "t2"
+    assert (
+        paths["metadata/participants.csv"]["Table columns"] == "participant_id, group"
+    )
+    assert paths["annotations.json"]["Contents"] == "1 annotation record"
+    assert any("recorded stimulus words" in note for note in planned.notes)
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_a_figure_only_or_empty_bundle_has_no_csv_reader_or_schema(
+    minimal_combos, minimal_words, minimal_fixations, base_settings, empty
+):
+    from scanpath_studio.export import bundle_contents
+
+    combos = minimal_combos.iloc[:0] if empty else minimal_combos.iloc[:1]
+    options = ExportOptions(
+        include_png=False,
+        include_svg=False,
+        include_html=True,
+        include_plot_config=False,
+    )
+    preview = bundle_contents(
+        combos,
+        minimal_words,
+        minimal_fixations,
+        None,
+        options=options,
+        settings=base_settings,
+    )
+    data, _ = bulk_export(
+        combos,
+        minimal_words,
+        minimal_fixations,
+        canvas_width=800,
+        canvas_height=400,
+        base_font_size=14,
+        font_family="Arial",
+        x_field="x",
+        y_field="y",
+        options=options,
+        settings=base_settings,
+    )
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        assert {row["Path"] for row in preview.files} == set(archive.namelist())
+        assert {"columns.json", "read_csv.R"}.isdisjoint(archive.namelist())
+
+
+def test_retry_renders_only_failed_formats_and_reuses_successful_contents(
+    minimal_combos, minimal_words, minimal_fixations, base_settings, monkeypatch
+):
+    from contextlib import contextmanager
+
+    from scanpath_studio import export
+    from scanpath_studio.export_retry import retry_failed_figures
+
+    calls = []
+    fail = True
+
+    @contextmanager
+    def renderer(_enabled):
+        def render(_fig, fmt, *_dimensions):
+            calls.append(fmt)
+            if fmt == "pdf" and fail:
+                raise ValueError("Renderer unavailable")
+            return f"{fmt}:{len(calls)}".encode()
+
+        yield render
+
+    monkeypatch.setattr(export, "_figure_renderer", renderer)
+    options = ExportOptions(
+        include_png=True,
+        include_svg=False,
+        include_pdf=True,
+        include_fixations=True,
+        path_pattern="supplement",
+    )
+    args = dict(
+        canvas_width=800,
+        canvas_height=400,
+        base_font_size=14,
+        font_family="Arial",
+        x_field="x",
+        y_field="y",
+        settings=base_settings,
+        options=options,
+    )
+    frames = minimal_combos, minimal_words, minimal_fixations
+    original, partial = bulk_export(*frames, **args)
+    assert calls == ["png", "pdf", "png", "pdf"]
+    assert partial.retryable_figures == 2
+    cache = {"data": original, "sig": ("frames", "settings"), "progress": partial}
+    with pytest.raises(ValueError, match="changed"):
+        retry_failed_figures(cache, ("changed data", "settings"), *frames, **args)
+    assert len(calls) == 4
+    fail = False
+    repaired, progress = retry_failed_figures(cache, cache["sig"], *frames, **args)
+    assert calls[4:] == ["pdf", "pdf"]
+    assert (
+        progress.figures_written,
+        progress.figures_failed,
+        progress.retryable_figures,
+    ) == (4, 0, 0)
+    with (
+        zipfile.ZipFile(io.BytesIO(original)) as before,
+        zipfile.ZipFile(io.BytesIO(repaired)) as after,
+    ):
+        inventory = pd.read_csv(before.open("index.csv"))
+        previously_failed = set(inventory.loc[inventory.status == "failed", "path"])
+        assert set(after.namelist()) == set(before.namelist()) | previously_failed
+        assert all(
+            after.read(path) == before.read(path)
+            for path in before.namelist()
+            if path != "index.csv"
+        )
+        assert all(after.read(path).startswith(b"pdf:") for path in previously_failed)
+        assert set(pd.read_csv(after.open("index.csv")).status) == {"written"}
+
+
+def test_uploaded_study_references_are_carried_through_a_comparison_bundle(
+    minimal_combos, minimal_words, minimal_fixations, base_settings
+):
+    from scanpath_studio import dataset_credit, persistence
+
+    state = {
+        "data_source_choice": "upload-token-1",
+        "single_compare_toggle": True,
+        "_share_selection": {"compare": {"source": "upload-token-2"}},
+    }
+    dataset_credit.save_credit(
+        state,
+        "upload-token-1",
+        {
+            "title": "Pilot {one}",
+            "authors": "García, Ana\nCanal Lab",
+            "version": "2",
+            "credit": "Canal Lab unpublished pilot, revision two.",
+        },
+    )
+    dataset_credit.save_credit(
+        state,
+        "upload-token-2",
+        {
+            "title": "Repeat study",
+            "doi": "https://doi.org/10.1234/example",
+        },
+    )
+    restored = persistence._restorable_session(state)
+    assert restored[dataset_credit.STORE_KEY] == state[dataset_credit.STORE_KEY]
+    refs = dataset_credit.references(state)
+    assert [ref["side"] for ref in refs] == ["A", "B"]
+    bundle = _bulk(
+        minimal_combos,
+        minimal_words,
+        minimal_fixations,
+        {**base_settings, "dataset_references": refs},
+        include_fixations=True,
+    )
+    bib = bundle.read("CITATION.bib").decode()
+    assert bib.count("@misc{scanpath-dataset-") == 2
+    first, second = bib.split("@misc{scanpath-dataset-a,", 1)[1].split(
+        "@misc{scanpath-dataset-b,", 1
+    )
+    assert "doi " not in first and r"Pilot \{one\}" in first
+    assert "10.1234/example" in second
+    readme = bundle.read("README.md").decode()
+    assert "Dataset for the exported trials: Canal Lab unpublished pilot" in readme
+    assert "Second dataset in the on-screen comparison: Repeat study" in readme
+    state["single_compare_toggle"] = False
+    assert len(dataset_credit.references(state)) == 1
+    dataset_credit.save_credit(state, "upload-token-1", {})
+    assert dataset_credit.references(state) == []
+
+
+@pytest.mark.parametrize("first_set_failure", ["figure", "split"])
+def test_retry_layers_keeps_successful_files_and_retries_remaining_failures(
+    minimal_combos,
+    minimal_words,
+    minimal_fixations,
+    base_settings,
+    monkeypatch,
+    first_set_failure,
+):
+    from contextlib import contextmanager
+
+    from scanpath_studio import export
+    from scanpath_studio import progress as jobs
+    from scanpath_studio.export_retry import retry_failed_figures
+    from scanpath_studio.export_status import ExportStage
+
+    # A single reading on two screens exercises the unit key. The naming
+    # pattern omits both artifact and extension, so every filename collides.
+    combos = minimal_combos.iloc[:1]
+
+    def two_screens(frame):
+        return frame.assign(
+            screen_id=frame.trial_id.map({"t1": "A", "t2": "B"}),
+            screen_index=frame.trial_id.map({"t1": 1, "t2": 2}),
+            trial_id="t1",
+        )
+
+    frames = combos, two_screens(minimal_words), two_screens(minimal_fixations)
+    options = ExportOptions(
+        include_png=True,
+        include_svg=False,
+        include_pdf=True,
+        include_fixations=True,
+        separable_layers=True,
+        path_pattern="panels/supplement",
+    )
+    args = dict(
+        canvas_width=800,
+        canvas_height=400,
+        base_font_size=14,
+        font_family="Arial",
+        x_field="x",
+        y_field="y",
+        settings=base_settings,
+        options=options,
+    )
+    attempt = 0
+    calls = []
+    renderers = []
+    make = export.make_scanpath_figure
+
+    def make_for_screen(words, *rest, **kwargs):
+        screen = words["screen_id"].iloc[0]
+        if attempt == 0 and screen == "B" and first_set_failure == "figure":
+            raise ValueError("Figure setup unavailable")
+        return make(words, *rest, **kwargs).update_layout(meta={"screen": screen})
+
+    def split(fig, *, only=None):
+        screen = fig.layout.meta["screen"]
+        if attempt == 2:
+            assert only == ({"word_boxes"} if screen == "A" else {"fixations"})
+        if (attempt == 0 and screen == "B") or (attempt == 1 and screen == "A"):
+            raise ValueError("Split unavailable")
+        return {
+            layer: (screen, layer)
+            for layer in ("word_boxes", "fixations")
+            if only is None or layer in only
+        }
+
+    @contextmanager
+    def renderer(enabled):
+        renderers.append(enabled)
+
+        def render(fig, fmt, *_):
+            screen, layer = (
+                fig if isinstance(fig, tuple) else (fig.layout.meta["screen"], "figure")
+            )
+            key = screen, layer, fmt
+            calls.append(key)
+            if attempt == 0 and key in {
+                ("A", "word_boxes", "png"),
+                ("A", "figure", "pdf"),
+            }:
+                raise ValueError("First attempt")
+            if attempt == 1 and key == ("B", "fixations", "pdf"):
+                raise ValueError("PDF still unavailable")
+            return f"{attempt}/{screen}/{layer}/{fmt}".encode()
+
+        yield render
+
+    monkeypatch.setattr(export, "make_scanpath_figure", make_for_screen)
+    monkeypatch.setattr(export, "split_scanpath_layers", split)
+    monkeypatch.setattr(export, "_figure_renderer", renderer)
+
+    def contents(payload):
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            names = archive.namelist()
+            assert len(names) == len(set(names))
+            inventory = pd.read_csv(archive.open("index.csv"), keep_default_na=False)
+            paths = inventory.path[inventory.path.ne("")]
+            assert paths.is_unique
+            assert set(inventory.path[inventory.status.eq("written")]) == set(names) - {
+                "index.csv"
+            }
+            return inventory, {p: archive.read(p) for p in names if p != "index.csv"}
+
+    original, progress = bulk_export(*frames, **args)
+    before, retained = contents(original)
+    assert ("A", "fixations", "pdf") in calls  # Continued past the first failed layer.
+    assert progress.retryable_figures == (5 if first_set_failure == "figure" else 3)
+    assert set(before.loc[before.artifact == "layers", "screen_id"]) == {"B"}
+    path = before.loc[
+        (before.artifact == "layer:word_boxes") & (before.format == "png"), "path"
+    ].item()
+    assert path.startswith("panels/supplement")
+    cache = {"data": original, "sig": ("all data and settings",), "progress": progress}
+    attempt = 1
+    calls.clear()
+    updated, progress = retry_failed_figures(cache, cache["sig"], *frames, **args)
+    middle, written = contents(updated)
+    assert len(calls) == len(set(calls))
+    expected = {
+        ("A", "figure", "pdf"),
+        *(
+            ("B", layer, fmt)
+            for layer in ("word_boxes", "fixations")
+            for fmt in ("png", "pdf")
+        ),
+    }
+    if first_set_failure == "figure":
+        expected.update({("B", "figure", "png"), ("B", "figure", "pdf")})
+    assert set(calls) == expected
+    assert retained.items() <= written.items()
+    assert (progress.figures_failed, progress.retryable_figures) == (2, 2)
+    failures = middle[middle.status.eq("failed")]
+    assert set(zip(failures.screen_id, failures.artifact, failures.format)) == {
+        ("A", "layer:word_boxes", "png"),
+        ("B", "layer:fixations", "pdf"),
+    }
+    assert failures.loc[failures.screen_id.eq("A"), "path"].item() == path
+    assert set(
+        middle.path[middle.artifact.str.startswith("layer:")].str.startswith(
+            "panels/supplement"
+        )
+    ) == {True}
+
+    cache = {**cache, "data": updated, "progress": progress}
+    attempt = 2
+    stages = []
+
+    def cancel_on_merge(status):
+        stages.append(status.stage)
+        if (
+            status.stage == ExportStage.FINALIZING
+            and "original files" in status.message
+        ):
+            jobs.cancel("layer retry")
+
+    with (
+        pytest.raises(jobs.Cancelled),
+        jobs.task("layer retry", title="Repairing a bundle"),
+    ):
+        retry_failed_figures(
+            cache, cache["sig"], *frames, status_callback=cancel_on_merge, **args
+        )
+    assert ExportStage.READY not in stages
+    assert cache["data"] == updated
+    calls.clear()
+    stages.clear()
+    final, progress = retry_failed_figures(
+        cache,
+        cache["sig"],
+        *frames,
+        status_callback=lambda s: stages.append(s.stage),
+        **args,
+    )
+    done, files = contents(final)
+    assert stages.count(ExportStage.READY) == 1 and stages[-1] == ExportStage.READY
+    assert len(renderers) == 4  # One warm renderer per build/retry.
+    assert calls == [("A", "word_boxes", "png"), ("B", "fixations", "pdf")]
+    assert written.items() <= files.items()
+    assert files[path] == b"2/A/word_boxes/png"
+    assert set(done.status) == {"written"}
+    assert (
+        progress.figures_written,
+        progress.figures_failed,
+        progress.retryable_figures,
+    ) == (12, 0, 0)

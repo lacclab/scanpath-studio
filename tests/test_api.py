@@ -975,9 +975,43 @@ def test_save_figure_forwards_size(tmp_path, monkeypatch):
     """width/height/scale reach Kaleido for raster output (no Chrome needed)."""
     captured = {}
     fig = go.Figure()
-    monkeypatch.setattr(fig, "write_image", lambda path, **kw: captured.update(kw))
+
+    def raster(_figure, *, fmt, **kwargs):
+        assert fmt == "png"
+        captured.update(kwargs)
+        return b"raster"
+
+    monkeypatch.setattr("scanpath_studio.export.render_static_figure_bytes", raster)
     sps.save_figure(fig, tmp_path / "fig.png", scale=1, width=900, height=600)
     assert captured == {"scale": 1, "width": 900, "height": 600}
+
+
+def test_save_figure_reports_installed_renderer_readiness_separately(
+    tmp_path, monkeypatch
+):
+    import kaleido
+    import plotly.graph_objects as go
+
+    from scanpath_studio import animation_export
+
+    destination = tmp_path / "figure.svg"
+    monkeypatch.setattr(animation_export, "chrome_available", lambda: False)
+    with pytest.raises(RuntimeError) as missing:
+        sps.save_figure(go.Figure(), destination)
+    assert animation_export.CHROME_INSTALL_HINT in str(missing.value)
+    monkeypatch.setattr(animation_export, "chrome_available", lambda: True)
+    monkeypatch.setattr(animation_export, "chromium_browser_path", lambda: "installed")
+    monkeypatch.setattr(kaleido, "start_sync_server", lambda **_: None)
+    monkeypatch.setattr(kaleido, "stop_sync_server", lambda **_: None)
+
+    def not_ready(*_):
+        raise RuntimeError("ReferenceError: kaleido_scopes is not defined")
+
+    monkeypatch.setattr(animation_export, "warm_calc_fig", not_ready)
+    with pytest.raises(RuntimeError, match="scripts were ready") as installed:
+        sps.save_figure(go.Figure(), destination)
+    assert "install Chrome" not in str(installed.value)
+    assert not list(tmp_path.iterdir())
 
 
 def test_save_figure_layers_one_file_per_layer(sample, tmp_path, monkeypatch):

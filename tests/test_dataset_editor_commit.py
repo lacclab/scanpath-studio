@@ -636,6 +636,35 @@ class TestNameDescriptionAndMetadataWaitForSave:
         app.apply_editor_restore()
         assert state[md.SESSION_KEY] is table
 
+    def test_a_dataset_credit_can_be_committed_cleared_or_cancelled(
+        self, monkeypatch, tmp_path
+    ):
+        from scanpath_studio import app, dataset_credit, persistence
+
+        state = self._session(monkeypatch)
+        state["_datasets"] = {"Probe": {}}
+        app.hold_editor_staging("Probe")
+        prefix = app._credit_prefix("Probe")
+        state[f"{prefix}_title"] = "Pilot"
+        state[f"{prefix}_credit"] = "Credit the Canal Lab."
+        assert app.editor_staging_dirty() and dataset_credit.STORE_KEY not in state
+        app.commit_editor_staging("Probe")
+        assert persistence.save_state(state, tmp_path)
+        restored = {}
+        assert persistence.restore_state(restored, tmp_path)
+        assert restored[dataset_credit.STORE_KEY]["Probe"] == {
+            "title": "Pilot",
+            "credit": "Credit the Canal Lab.",
+        }
+        app.hold_editor_staging("Probe")
+        state[f"{prefix}_title"] = "Changed"
+        app._discard_editor_staging()
+        assert state[dataset_credit.STORE_KEY]["Probe"]["title"] == "Pilot"
+        app.hold_editor_staging("Probe")
+        state[f"{prefix}_title"] = ""
+        app.commit_editor_staging("Probe")
+        assert "Probe" not in state[dataset_credit.STORE_KEY]
+
     def test_a_description_is_a_draft_until_save(self, monkeypatch):
         from scanpath_studio import app
         from scanpath_studio.constants import DATASET_DESCRIPTIONS_KEY

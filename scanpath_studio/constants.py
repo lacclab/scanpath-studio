@@ -9,9 +9,11 @@ from typing import Literal
 
 from .build_info import DOCS_ROOT
 from .session_keys import (
+    GLOBAL_FIXATION_OPACITY,
     GLOBAL_ORDER_FONT_COLOR,
     GLOBAL_ORDER_FONT_SIZE,
     GLOBAL_ORDER_LABEL_POSITION,
+    GLOBAL_SACCADE_OPACITY,
 )
 
 PACKAGE_NAME = "scanpath_studio"
@@ -241,15 +243,15 @@ DEFAULT_ORDER_LABEL_POSITION = "above"
 
 
 @dataclass(frozen=True)
-class FixationLabelOption:
-    """One fixation-index setting on the rail, in a link or file, and on the CLI."""
+class FigureOption:
+    """One figure option shared by the rail, links, saved settings and the CLI."""
 
     state_key: str
-    default: int | str
-    kind: Literal["int", "color", "choice"]
+    default: int | float | str
+    kind: Literal["int", "float", "color", "choice"]
     description: str
     metavar: str | None = None
-    bounds: tuple[int, int] | None = None
+    bounds: tuple[float, float] | None = None
     choices: tuple[str, ...] = ()
 
     @property
@@ -261,7 +263,43 @@ class FixationLabelOption:
         return "--" + self.name.replace("_", "-")
 
 
-INDEX_SIZE = FixationLabelOption(
+# Both opacity sliders include fully transparent marks. Existing headless calls
+# can use any value in this interval, including those between slider steps.
+OPACITY_BOUNDS = (0.0, 1.0)
+FIXATION_OPACITY = FigureOption(
+    GLOBAL_FIXATION_OPACITY,
+    0.7,
+    "float",
+    "Opacity of fixation markers",
+    metavar="O",
+    bounds=OPACITY_BOUNDS,
+)
+SACCADE_OPACITY = FigureOption(
+    GLOBAL_SACCADE_OPACITY,
+    1.0,
+    "float",
+    "Opacity of saccade lines and arrows",
+    metavar="O",
+    bounds=OPACITY_BOUNDS,
+)
+OPACITY_OPTIONS = {
+    option.name: option for option in (FIXATION_OPACITY, SACCADE_OPACITY)
+}
+
+
+def parse_opacity(value: object) -> float:
+    """A finite opacity in the range shared by the slider and the figure."""
+    lo, hi = OPACITY_BOUNDS
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        number = float("nan")
+    if not lo <= number <= hi:
+        raise ValueError(f"expected an opacity from {lo:g} to {hi:g}, got {value!r}")
+    return number
+
+
+INDEX_SIZE = FigureOption(
     GLOBAL_ORDER_FONT_SIZE,
     DEFAULT_ORDER_FONT_SIZE,
     "int",
@@ -269,14 +307,14 @@ INDEX_SIZE = FixationLabelOption(
     metavar="PX",
     bounds=(6, 72),
 )
-INDEX_COLOR = FixationLabelOption(
+INDEX_COLOR = FigureOption(
     GLOBAL_ORDER_FONT_COLOR,
     DEFAULT_ORDER_FONT_COLOR,
     "color",
     "Color of the fixation index numbers for a single scanpath",
     metavar="COLOR",
 )
-INDEX_POSITION = FixationLabelOption(
+INDEX_POSITION = FigureOption(
     GLOBAL_ORDER_LABEL_POSITION,
     DEFAULT_ORDER_LABEL_POSITION,
     "choice",
@@ -353,6 +391,18 @@ def compare_palette_color(idx: int) -> str:
     (``plots._comparison_scanpath_style``), so the swatch shown in the controls can
     never drift from what's drawn."""
     return COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)]
+
+
+def comparison_palette_style(name: str, idx: int) -> dict:
+    """Comparison mark defaults for a named palette, shared by UI and API."""
+    printing = name == "Print / grayscale"
+    color = ("#242424", "#666666")[idx] if printing else compare_palette_color(idx)
+    return {
+        "fix_color": color,
+        "saccade_color": color,
+        "saccade_style": "dash" if printing and idx == 1 else "solid",
+        "hollow": printing and idx == 1,
+    }
 
 
 #: Each comparison scanpath's default marker alpha, shared the same way: the
@@ -593,8 +643,7 @@ PALETTES: dict[str, dict] = {
     # Lightness-only encoding: everything survives a black & white print or
     # photocopy, because nothing depends on hue at all.
     "Print / grayscale": {
-        "description": "Grays only, so it still reads in a black-and-white "
-        "print. Pair with marker shape.",
+        "description": "Grays for a black-and-white print. In Compare, A uses filled marks and solid lines. B uses hollow marks and dashed lines.",
         "fixation_color": "#1a1a1a",
         "fixation_colorscale": "Greys",
         "heatmap_colorscale": "Greys",

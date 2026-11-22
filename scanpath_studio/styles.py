@@ -216,7 +216,7 @@ def get_app_css() -> str:
     [class*="st-key-dsrow_current_"] > [class*="st-key-dataset_open_"] button {
         cursor: default;
     }
-    [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"] {
+    [class*="st-key-dsrow_"]:not(.st-key-dsrow_head) > [data-testid="stLayoutWrapper"] {
         position: relative;
         z-index: 1;
         pointer-events: none;
@@ -293,27 +293,25 @@ def get_app_css() -> str:
         outline-offset: 2px;
         border-radius: 0.25rem;
     }
-    /* Phone width: the name, its Current badge, the key count and Remove.
-       Everything else is in *What's in the dataset*, once it is open. */
+    /* On phones the name wraps beside the participant count and row actions. */
     @media (max-width: 640px) {
         [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_"]):not(:has(> [class*="st-key-dsc_name_"])):not(:has(> [class*="st-key-dsc_participants_"])):not(:has(> [class*="st-key-dsc_actions_"])),
-        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsh_"]):not(:has(> .st-key-dsh_name)):not(:has(> .st-key-dsh_participants)):not(:has(> .st-key-dsh_actions)) {
+        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsh_"]):not(:has(> .st-key-dsh_name)):not(:has(> .st-key-dsh_participants)):not(:has(> .st-key-dsh_actions)),
+        [class*="st-key-dsrow_"] > [data-testid="stElementContainer"]:has(> [data-testid="stSpace"]) {
             display: none !important;
-        }
-        [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]),
-        [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_name) {
-            min-width: 0;
         }
         [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_name_"]),
         [class*="st-key-dsrow_"] > [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_name) {
             position: relative;
+            flex: 1 1 0 !important;
+            min-width: 0;
         }
-        .st-key-dataset_table_grid [class*="st-key-dsrow_"] { min-width: 0; }
         [data-testid="stLayoutWrapper"]:has(> [class*="st-key-dsc_participants_"]),
         [data-testid="stLayoutWrapper"]:has(> .st-key-dsh_participants) {
-            width: auto !important;
-            min-width: 3.5rem;
+            width: 5rem !important;
         }
+        .st-key-dataset_table_grid .sps-ds-name { display: block; }
+        .st-key-dataset_table_grid [class*="st-key-dsrow_"] { min-width: 0; }
     }
 
     /* The 🗂️ Data page: denser, with larger small type. Scoped to the
@@ -2548,6 +2546,32 @@ def get_app_css() -> str:
            are what push the narrow rail's headers to two lines first. */
         .st-key-plot_controls_header h2, #scope, #figures, #also-include {
             font-size: 18px !important; line-height: 22px !important;
+        }
+    }
+
+    /* On a phone, the figure and its view choices share a single column.
+       Lift the two columns' contents into the same flex flow so opening a
+       tall subtab can never put Export between the figure and its controls. */
+    @media (max-width: 639px) {
+        .st-key-scanpath_workspace > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] {
+            flex-direction: column;
+            gap: 0.3rem !important;
+            reading-flow: flex-visual;
+        }
+        .st-key-scanpath_workspace > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+        .st-key-scanpath_workspace > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] > [data-testid="stVerticalBlock"],
+        .st-key-scanpath_workspace [data-testid="stLayoutWrapper"]:has(> .st-key-scanpath_rail),
+        .st-key-scanpath_rail {
+            display: contents;
+        }
+        .st-key-scanpath_rail > * { order: 1; }
+        .st-key-scanpath_workspace [data-testid="stLayoutWrapper"]:has(> .st-key-tour_grp_subtabs) { order: 2; }
+        .st-key-scanpath_rail > [data-testid="stLayoutWrapper"]:has(> :is(.st-key-tour_grp_viz_controls, .st-key-adv_only_rail_reset)) { order: 3; }
+        .st-key-scanpath_rail .st-key-tour_grp_simple_views button {
+            min-height: 44px;
+        }
+        .st-key-scanpath_rail .st-key-tour_grp_simple_views button > div > span {
+            flex-direction: row;
         }
     }
 

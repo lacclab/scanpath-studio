@@ -108,8 +108,8 @@ data tables and exported tables still hold the words.
 
 ### Will a refresh lose my work?
 
-Not on a local or desktop install. When the app listens only on this computer,
-as `scanpath-studio` and the desktop app do, it saves your datasets and
+When the app listens only on this computer, as `scanpath-studio` and the
+desktop app do, it saves your datasets and
 settings there. :material/database: **Data Management** → :material/history:
 **Saved on this computer** shows what it holds. The online demo keeps nothing
 and explains this after your first upload, so export your annotations and settings
@@ -121,6 +121,12 @@ keeps that saved copy unchanged, and offers **Retry** and **Remove saved
 copy**. Saved metadata tables that can't be read are kept the same way. If the
 whole saved copy can't be read, the app opens without it and stops saving over
 it until you retry or clear it.
+
+If two tabs use the same local recovery folder, edits to different trial
+annotations can be saved together. When a save would overwrite newer work,
+the older tab shows a warning and keeps your edits open. Copy or export them
+before reloading that tab. To save your notes, open **Data Management →
+Annotations** for the dataset and download the JSON file.
 
 ### How do I stop saving, or delete what is saved?
 

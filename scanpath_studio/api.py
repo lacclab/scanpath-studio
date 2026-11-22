@@ -31,29 +31,35 @@ from collections.abc import Iterable, Sequence
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 
-# Outside a Streamlit runtime the @st.cache_data decorators in `data` fall
-# back to bare-mode caching and log a "No runtime found" warning per cached
-# function — harmless but noisy for library/CLI users, so quiet those loggers.
-# Order matters twice over: streamlit must be imported first (its get_logger()
-# sets each module logger's level at import, clobbering anything set earlier),
-# and `.data` must be imported after (its decorators fire the warnings at
-# import time). Inside the app a runtime exists and these warnings never fire.
-import streamlit as _st  # noqa: F401  (imported for its logging side effect)
+# Install the bare-mode filter before importing modules that decorate cached
+# functions. Inside the app Streamlit's diagnostics keep their normal behavior.
+import streamlit as _st
 
-from . import chart_axes
+
+def _streamlit_message(record: logging.LogRecord) -> bool:
+    if _st.runtime.exists():
+        return True
+    message = record.getMessage()
+    return message != "No runtime found, using MemoryCacheStorageManager" and (
+        "missing ScriptRunContext! This warning can be ignored when running in bare mode."
+        not in message
+    )
+
 
 for _name in (
     "streamlit.runtime.caching.cache_data_api",
     "streamlit.runtime.scriptrunner_utils.script_run_context",
 ):
-    logging.getLogger(_name).setLevel(logging.ERROR)
+    logging.getLogger(_name).addFilter(_streamlit_message)
 
+from . import chart_axes  # noqa: E402
 from . import column_names as _cn  # noqa: E402
 from . import data as _data  # noqa: E402
 from . import export as _export  # noqa: E402
@@ -65,10 +71,12 @@ from .constants import (  # noqa: E402
     DEFAULT_STIMULUS_IMAGE_PATTERN,
     EXPERIMENTAL_ENV_VAR,
     FIXATION_LABEL_OPTIONS,
+    FIXATION_OPACITY,
     FONT_FAMILY,
     PLOTLY_CONFIG,
     SACCADE_CLASS_ORDER,
     UNIFORM_COLOR_FIELD,
+    comparison_palette_style,
     computed_measures_enabled,
     drift_correction_enabled,
     palette_settings,
@@ -76,8 +84,10 @@ from .constants import (  # noqa: E402
 from .experimental_setup import Provenance, SetupSnapshot  # noqa: E402
 from .export import annotate_figure, figure_text_style  # noqa: E402
 from .file_citation import stamp_file  # noqa: E402
+from .file_lock import file_lock  # noqa: E402
 from .multipart import (  # noqa: E402
     SCREEN_ID,
+    SCREEN_INDEX,
     apply_trial_parts_manifest,
     extract_part,
     part_catalog,
@@ -87,6 +97,7 @@ from .plots import (  # noqa: E402
     ANIMATION_FIGURE_OPTIONS,
     COMPARISON_FIGURE_OPTIONS,
     FIGURE_OPTION_CHOICES,
+    SCANPATH_LAYER_ORDER,
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
     _resolve_trial_display_name,
@@ -298,7 +309,7 @@ CANONICAL_FIGURE_DEFAULTS: dict = FigureSettings.defaults(
     show_heatmap=False,
     heatmap_metric="duration_ms",
     saccade_classes=list(SACCADE_CLASS_ORDER),
-    fixation_opacity=0.7,
+    fixation_opacity=FIXATION_OPACITY.default,
     background_color=DEFAULT_BACKGROUND_COLOR,
     fit_to_monitor=True,
     # The A/B legend is on, as in the app.
@@ -325,28 +336,6 @@ def _as_dataframe(
             )
     # A zip holding both EyeLink reports gives each table its own.
     return _data.read_tables(items, plan_for=plan_for, kind=kind)
-
-
-def _metadata_id_plan(id_column, infer, *extra):
-    """``plan_for`` for a metadata table: read its id column(s) as text.
-
-    The same protection the data tables get — read as numbers, readers ``1``
-    and ``01`` become one reader before the metadata ever sees them. The id
-    column is the caller's, else the one ``infer`` would pick from the header.
-    """
-
-    def plan(header) -> _data.ReadPlan:
-        names = [str(name) for name in header]
-        # `infer_*` treats a row-less frame as "no table" — give it one row.
-        resolved = id_column or infer(
-            pd.DataFrame([[None] * len(names)], columns=names)
-        )
-        columns = [*_data.trial_mapping_columns(resolved or []), *extra]
-        return _data.ReadPlan(
-            identity=tuple(c for c in dict.fromkeys(columns) if c and c in names)
-        )
-
-    return plan
 
 
 # ---------------------------------------------------------------------------
@@ -550,6 +539,10 @@ def _schema_error(
     spec = _SCHEMA_SPECS[kind]
     param = spec["param"]
     lines = [f"{spec['title']} column mapping problems: {'; '.join(problems)}"]
+    if sheet := frame.attrs.get("source_worksheet"):
+        lines.append(
+            f"Read worksheet {sheet!r}. Put the data sheet first or export it as CSV."
+        )
     unknown = _unknown_schema_keys(kind, frame, schema) if explicit else []
     if unknown:
         import difflib
@@ -719,6 +712,30 @@ class ScanpathData(tuple):
     def fixations(self) -> pd.DataFrame:
         return self[1]
 
+    def explain_fixation(
+        self, participant: str, trial: str, order: int, *, screen: str | None = None
+    ) -> dict:
+        """Inspect a recorded fixation by its one-based parent trial order.
+
+        Load with `include_source_cells=True` to keep original inputs and row numbers.
+        The report describes file records after parsing, with the header excluded.
+        """
+        from .fixation_source import explain
+
+        words = _cn.to_canonical_frame(self.words)
+        fixations = _cn.to_canonical_frame(self.fixations)
+        words, fixations, _, _, _ = _select_part(
+            words, fixations, participant, trial, screen
+        )
+        match = fixations.loc[fixations["order_in_trial"].eq(order)]
+        if len(match) != 1:
+            raise ValueError(
+                f"No single fixation has order {order} on this reading and screen."
+            )
+        return explain(
+            match.iloc[0], words, self.column_names.get("fixations", ColumnNames())
+        )
+
 
 def _check_names_choice(names: str) -> None:
     if names not in (NAMES_SOURCE, NAMES_CANONICAL):
@@ -831,6 +848,8 @@ def load_scanpath_data(
     image_pattern: str = DEFAULT_STIMULUS_IMAGE_PATTERN,
     keep_columns: Iterable[str] | None = None,
     names: str = NAMES_SOURCE,
+    include_source_cells: bool = False,
+    _row_counts: dict | None = None,
 ) -> ScanpathData:
     """Load and normalize a Words table, a Fixations table, or both.
 
@@ -844,6 +863,11 @@ def load_scanpath_data(
     snake_case names. Normalization keeps the mapped fields and the recognized optional
     ones (eye, EyeLink's interest-area measures, linguistic features …) and drops the
     rest, unless ``keep_columns`` names them.
+
+    Set ``include_source_cells=True`` to inspect original fixation cells with
+    ``data.explain_fixation(participant, trial, order)``. It reports file data
+    rows, parsed values, units and word assignments. Original cells are private
+    columns of that opt-in fixation frame.
 
     - **One table is enough.** Leave out the table a dataset doesn't have: it comes back
       as an empty frame, and the plots skip that layer.
@@ -946,6 +970,10 @@ def load_scanpath_data(
                 keep_columns, _data.WORD_OPTIONAL_FIELDS
             ),
         )
+        if _row_counts is not None:
+            _row_counts["words"] = _data.input_row_counts(
+                words_df, word_schema, len(words_norm)
+            )
         if trial_parts_manifest is not None:
             words_norm = apply_trial_parts_manifest(
                 words_norm, words_df, trial_parts_manifest, kind="words"
@@ -972,7 +1000,12 @@ def load_scanpath_data(
             fixations_df,
             fix_schema,
             keep_columns=_with_optional_fields(keep_columns, _data.FIX_OPTIONAL_FIELDS),
+            keep_source_cells=include_source_cells,
         )
+        if _row_counts is not None:
+            _row_counts["fixations"] = _data.input_row_counts(
+                fixations_df, fix_schema, len(fixations_norm)
+            )
         if trial_parts_manifest is not None:
             fixations_norm = apply_trial_parts_manifest(
                 fixations_norm,
@@ -1011,6 +1044,10 @@ def load_scanpath_data(
         table: names_map.through(prior[table]) if table in prior else names_map
         for table, names_map in maps.items()
     }
+    if not include_source_cells:
+        from .fixation_source import without_source_cells
+
+        fixations_norm = without_source_cells(fixations_norm)
     if names == NAMES_SOURCE:
         words_norm = _cn.attach(words_norm, "words", maps.get("words"))
         fixations_norm = _cn.attach(fixations_norm, "fixations", maps.get("fixations"))
@@ -1136,7 +1173,9 @@ def load_participant_metadata(
     frame = _as_dataframe(
         table,
         "participant metadata",
-        plan_for=_metadata_id_plan(id_column, _metadata.infer_participant_id_column),
+        plan_for=_metadata.id_read_plan(
+            id_column, _metadata.infer_participant_id_column
+        ),
     )
     resolved = id_column or _metadata.infer_participant_id_column(frame)
     if not resolved or resolved not in frame.columns:
@@ -1199,7 +1238,7 @@ def load_trial_metadata(
     frame = _as_dataframe(
         table,
         "trial metadata",
-        plan_for=_metadata_id_plan(
+        plan_for=_metadata.id_read_plan(
             id_column, _metadata.infer_trial_id_column, participant_column
         ),
     )
@@ -1265,7 +1304,7 @@ def load_text_metadata(
     frame = _as_dataframe(
         table,
         "text metadata",
-        plan_for=_metadata_id_plan(id_column, _metadata.infer_text_id_column),
+        plan_for=_metadata.id_read_plan(id_column, _metadata.infer_text_id_column),
     )
     resolved = id_column or _metadata.infer_text_id_column(frame)
     if not resolved or any(
@@ -1304,7 +1343,7 @@ def load_sample_data(*, names: str = NAMES_SOURCE) -> ScanpathData:
     """
     from .code_snippet import SOURCE_DEMO, source_canvas
 
-    data = load_scanpath_data(*_data.load_sample_data(), names=names)
+    data = load_scanpath_data(*_data.read_sample_tables(), names=names)
     screen = source_canvas(SOURCE_DEMO)
     for frame in data:
         frame.attrs[RECORDED_SCREEN_ATTR] = screen
@@ -1336,6 +1375,7 @@ def load_raw_gaze(
     *,
     raw_gaze_schema: dict | None = None,
     names: str = NAMES_SOURCE,
+    _row_counts: dict | None = None,
 ) -> pd.DataFrame:
     """Load and normalize a raw, sample-level gaze table, for ``raw_gaze=``.
 
@@ -1377,6 +1417,8 @@ def load_raw_gaze(
     if problems:
         raise _schema_error("raw_gaze", frame, schema, problems, explicit)
     normalized = _data.normalize_raw_gaze(frame, schema)
+    if _row_counts is not None:
+        _row_counts["raw_gaze"] = _data.input_row_counts(frame, schema, len(normalized))
     if names == NAMES_CANONICAL:
         return normalized
     return _cn.attach(
@@ -1397,7 +1439,7 @@ def load_sample_raw_gaze(*, names: str = NAMES_SOURCE) -> pd.DataFrame:
     Returns:
         The normalized samples.
     """
-    return load_raw_gaze(_data.load_sample_raw_gaze(), names=names)
+    return load_raw_gaze(_data.read_sample_raw_gaze(), names=names)
 
 
 def check_data_health(
@@ -1741,7 +1783,7 @@ def run_analysis_recipe(
     annotations: str | Path | None = None,
     column_names: dict | None = None,
 ) -> pd.DataFrame:
-    """Recreate a downloaded per-word cohort profile table.
+    """Recreate a per-word cohort profile or a two-group difference profile.
 
     Args:
         recipe: The downloaded recipe JSON path or its decoded object.
@@ -1755,7 +1797,7 @@ def run_analysis_recipe(
         column_names: Source column maps when supplying canonical frames.
 
     Returns:
-        The cohort profile under the dataset's own output column names.
+        The published table under the dataset's own output column names.
 
     Raises:
         ValueError: Unsupported recipe, missing filter fields or mismatched result.
@@ -1763,7 +1805,7 @@ def run_analysis_recipe(
     from .analysis_recipe import cohort_recipe_table
 
     if isinstance(recipe, (str, Path)):
-        recipe = json.loads(Path(recipe).read_text(encoding="utf-8"))
+        recipe = json.loads(Path(recipe).read_bytes())
     words, word_names = _named_in(words, "words")
     fixations, fix_names = _named_in(fixations, "fixations", optional=True)
     samples, _ = _named_in(raw_gaze, "raw_gaze", optional=True)
@@ -2008,26 +2050,10 @@ def list_parts(
     )
 
 
-def _resolve_trial(
-    words: pd.DataFrame,
-    fixations: pd.DataFrame,
-    participant: str | None,
-    trial: str | None,
-    *,
-    default_first: bool = False,
-    raw_gaze: pd.DataFrame | None = None,
-) -> tuple[str, str]:
-    """Resolve to one (participant_id, trial_id), validating what was given.
-
-    A nonexistent participant/trial always raises — naming which of the two ids
-    is unknown, a few valid values and the closest spellings. An underspecified
-    selection matching several trials raises too, unless ``default_first`` picks
-    the first match (the CLI's behavior, mirroring the app's default selection)
-    — but never for a trial id that several participants share: the
-    app's picker and its links refuse to guess the reader, so the CLI does too.
-    ``raw_gaze`` makes the trials only its samples cover selectable.
-    """
-    combos = _cn.to_canonical_frame(list_trials(words, fixations, raw_gaze=raw_gaze))
+def _matching_trials(
+    combos: pd.DataFrame, participant: str | None, trial: str | None
+) -> pd.DataFrame:
+    """Every matching reading. Unknown IDs are reported even for a screen listing."""
     if combos.empty:
         raise ValueError(
             "The data holds no trial with both a participant and a trial id."
@@ -2063,6 +2089,30 @@ def _resolve_trial(
                 f"trial{'' if len(scoped) == 1 else 's'}, none of them {str(trial)!r}. {_value_hint(scoped, 'trial_id', trial)}"
             )
         scoped = narrowed
+    return scoped
+
+
+def _resolve_trial(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    participant: str | None,
+    trial: str | None,
+    *,
+    default_first: bool = False,
+    raw_gaze: pd.DataFrame | None = None,
+) -> tuple[str, str]:
+    """Resolve to one (participant_id, trial_id), validating what was given.
+
+    A nonexistent participant/trial always raises — naming which of the two ids
+    is unknown, a few valid values and the closest spellings. An underspecified
+    selection matching several trials raises too, unless ``default_first`` picks
+    the first match (the CLI's behavior, mirroring the app's default selection)
+    — but never for a trial id that several participants share: the
+    app's picker and its links refuse to guess the reader, so the CLI does too.
+    ``raw_gaze`` makes the trials only its samples cover selectable.
+    """
+    combos = _cn.to_canonical_frame(list_trials(words, fixations, raw_gaze=raw_gaze))
+    scoped = _matching_trials(combos, participant, trial)
     if len(scoped) > 1 and not (default_first and trial is None):
         preview = ", ".join(
             f"({pid!r}, {tid!r})"
@@ -2123,7 +2173,7 @@ def _select_trial(
             "whose word/AOI ids match the fixations', so each fixation can be "
             "placed at its word box's center."
         )
-    return trial_words, trial_fixations, pid, tid
+    return trial_words, _data.with_onset_provenance(trial_fixations), pid, tid
 
 
 def _select_part(
@@ -2226,8 +2276,11 @@ def _apply_fix_index_range(
     return windowed
 
 
-def _figure_kwargs(overrides: dict) -> dict:
-    settings = {**CANONICAL_FIGURE_DEFAULTS, **_expand_palette(overrides)}
+def _figure_kwargs(overrides: dict, *, comparing: bool = False) -> dict:
+    settings = {
+        **CANONICAL_FIGURE_DEFAULTS,
+        **_expand_palette(overrides, comparing=comparing),
+    }
     if settings.get("heatmap_metric") == "counts":
         settings["heatmap_metric"] = None
     return settings
@@ -2260,7 +2313,7 @@ def _check_colorscales(overrides: dict) -> None:
             ) from None
 
 
-def _expand_palette(overrides: dict) -> dict:
+def _expand_palette(overrides: dict, *, comparing: bool = False) -> dict:
     """Expand a ``palette=`` override into the color kwargs it stands for.
 
     ``palette`` names a set of color defaults tuned for a medium — screen,
@@ -2291,6 +2344,12 @@ def _expand_palette(overrides: dict) -> dict:
     settings["text_color"] = settings.pop("word_label_color")
     for key, value in settings.items():
         expanded.setdefault(key, value)
+    if comparing:
+        for idx, side in enumerate(("style_a", "style_b")):
+            expanded[side] = {
+                **comparison_palette_style(name, idx),
+                **(expanded.get(side) or {}),
+            }
     return expanded
 
 
@@ -2977,7 +3036,11 @@ def animate_scanpath(
         )
     valid = set(_ANIMATION_FIGURE_PARAMS)
     explicit = set(animation_overrides) - {"palette"}
-    animation_overrides = _expand_palette(animation_overrides)
+    animation_overrides = _expand_palette(
+        animation_overrides,
+        comparing=trial_b is not None
+        or animation_overrides.get("fixations_b") is not None,
+    )
     # Only the keys the caller named are held to the "is this supported?" rule;
     # a palette's extras (heatmap colorscale, highlight text colour, …) that the
     # animation has no parameter for are simply dropped.
@@ -3206,6 +3269,8 @@ def _second_reading(
 
     trial_words_b = one_reading(words_b, "words_b")
     trial_fix_b = one_reading(fixations_b, "fixations_b")
+    if trial_fix_b is not None:
+        trial_fix_b = _data.with_onset_provenance(trial_fix_b)
     if trial_b is not None and (trial_fix_b is None or trial_fix_b.empty):
         raise ValueError(
             f"No fixations for the second scanpath participant={pid_b!r}, "
@@ -3406,7 +3471,8 @@ def render_parent_trial(
         renderer = animate_scanpath if animate else plot_scanpath
         return {"screen-1": renderer(words, fixations, pid, tid, **options)}
 
-    screen_ids = catalog[SCREEN_ID].astype(str).tolist()
+    screen_indices = dict(zip(catalog[SCREEN_ID].astype(str), catalog[SCREEN_INDEX]))
+    screen_ids = list(screen_indices)
     if isinstance(screens, str):
         screens = [screens]
     if screens is not None:
@@ -3446,7 +3512,7 @@ def render_parent_trial(
                 "participant_id": pid,
                 "trial_id": tid,
                 "screen_id": screen_id,
-                "screen_index": screen_ids.index(screen_id) + 1,
+                "screen_index": int(screen_indices[screen_id]),
                 "transition_mode": transition_mode,
                 "transition_after_ms": delay,
             }
@@ -3660,7 +3726,6 @@ def compare_scanpaths(
         _COMPARISON_FIGURE_PARAMS | {"palette"},
         "compare_scanpaths",
     )
-
     cross_dataset = words_b is not None or fixations_b is not None
     # A's names name the figure's text and its options; every frame,
     # A's or B's, is processed under the internal names.
@@ -3841,7 +3906,9 @@ def compare_scanpaths(
     merged_raw = None
     if not (trial_raw_a.empty and trial_raw_b.empty):
         merged_raw = pd.concat(align_compare_columns(trial_raw_a, trial_raw_b)[:2])
-    settings = _figure_kwargs(figure_overrides)
+    settings = _figure_kwargs(
+        dict(figure_overrides, style_a=style_a, style_b=style_b), comparing=True
+    )
     from .illustration import illustration_reasons, resolve_label_reasons
 
     label_mode = str(illustration_label).capitalize()
@@ -3868,8 +3935,6 @@ def compare_scanpaths(
         layout=resolved_layout,
         compare_stimulus=normalize_option_value("compare_stimulus", compare_stimulus),
         trial_labels=tuple(labels) if labels else None,
-        style_a=style_a,
-        style_b=style_b,
         column_labels=_column_labels(
             names, trial_words_a, trial_fix_a, words=word_side
         ),
@@ -3907,6 +3972,26 @@ def _compare_raw_gaze(
     return samples
 
 
+def save_panel_proof(fig: go.Figure, path: str | Path, *, width_mm: float) -> Path:
+    """Save a split comparison as an SVG with its manuscript width in millimetres.
+
+    Both readings must have matching screen dimensions. The panel order, letters,
+    shared scales, legends and relative size of the stimulus come from `compare_scanpaths`.
+    """
+    from .panel_proof import svg
+
+    path = Path(path)
+    if path.suffix.lower() != ".svg":
+        raise ValueError("A manuscript panel proof writes an .svg file.")
+    payload = svg(fig, width_mm)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(dir=path.parent, prefix=".scanpath-proof-") as stage:
+        ready = Path(stage) / path.name
+        ready.write_bytes(payload)
+        ready.replace(path)
+    return path
+
+
 def save_figure(
     fig: go.Figure,
     path: str | Path,
@@ -3917,6 +4002,7 @@ def save_figure(
     width_mm: float | None = None,
     width_in: float | None = None,
     dpi: int | None = None,
+    proof_width_mm: float | None = None,
 ) -> Path:
     """Save a figure as HTML, PNG, SVG or PDF.
 
@@ -3940,10 +4026,19 @@ def save_figure(
             figure's aspect, with the dpi written into the file. It replaces ``scale``.
         width_in: The same in inches.
         dpi: The resolution for ``width_mm`` / ``width_in``. Default 300.
+        proof_width_mm: Total manuscript width of a split comparison SVG, as in
+            [`save_panel_proof`][scanpath_studio.api.save_panel_proof].
 
     Returns:
         The path written.
     """
+    if proof_width_mm is not None:
+        if (
+            any(v is not None for v in (width, height, width_mm, width_in, dpi))
+            or scale != 2
+        ):
+            raise ValueError("A panel proof takes its size from proof_width_mm.")
+        return save_panel_proof(fig, path, width_mm=proof_width_mm)
     path = Path(path)
     suffix = path.suffix.lower()
     if suffix not in (".html", ".png", ".svg", ".pdf"):
@@ -3972,44 +4067,85 @@ def save_figure(
         raise ValueError(
             "dpi is the resolution of a print width: pass width_mm or width_in too."
         )
-    if suffix == ".html":
-        # An animation replays on the wall-clock player, which also autoplays
-        # it at the configured speed when asked. Plotly's own `auto_play` stays
-        # off — it ignores the frame duration. The frames are written packed
-        # and rebuilt by the page's own script, so a long replay writes a
-        # fraction of the bytes. Static figures are written as they are.
-        page = replay_page(fig)
-        if page is not None:
-            figure_dict, script = page
-            pio.write_html(
-                figure_dict,
-                str(path),
-                validate=False,
-                auto_play=False,
-                post_script=script,
-                config={**PLOTLY_CONFIG},
-            )
-        elif fig.frames:
-            fig.write_html(str(path), auto_play=False, config={**PLOTLY_CONFIG})
+    # Keep the existing figure until rendering, print metadata and citation
+    # stamping have all succeeded. A sibling stage stays on the same filesystem.
+    with TemporaryDirectory(dir=path.parent, prefix=".scanpath-figure-") as stage:
+        staged = Path(stage) / path.name
+        if suffix == ".html":
+            # An animation replays on the wall-clock player, which also autoplays
+            # it at the configured speed when asked. Plotly's own `auto_play` stays
+            # off — it ignores the frame duration. The frames are written packed
+            # and rebuilt by the page's own script, so a long replay writes a
+            # fraction of the bytes. Static figures are written as they are.
+            page = replay_page(fig)
+            if page is not None:
+                figure_dict, script = page
+                pio.write_html(
+                    figure_dict,
+                    str(staged),
+                    validate=False,
+                    auto_play=False,
+                    post_script=script,
+                    config={**PLOTLY_CONFIG},
+                )
+            elif fig.frames:
+                fig.write_html(str(staged), auto_play=False, config={**PLOTLY_CONFIG})
+            else:
+                fig.write_html(str(staged), config={**PLOTLY_CONFIG})
         else:
-            fig.write_html(str(path), config={**PLOTLY_CONFIG})
-        stamp_file(path)
-        return path
-    if suffix in (".png", ".svg", ".pdf"):
-        try:
-            fig.write_image(str(path), scale=scale, width=width, height=height)
+            raster = _export.render_static_figure_bytes(
+                fig,
+                fmt=suffix[1:],
+                width=width or fig.layout.width or pio.defaults.default_width,
+                height=height or fig.layout.height or pio.defaults.default_height,
+                scale=scale,
+            )
+            staged.write_bytes(raster)
             if dpi is not None:
-                _export.set_png_dpi(path, dpi)
-            stamp_file(path)
-        except OSError:
-            raise  # filesystem problem — the original error says it best
-        except Exception as exc:  # Kaleido raises various types
-            raise RuntimeError(
-                f"Static {suffix} export failed ({exc}). Kaleido needs Chrome, "
-                "Chromium or Edge — install one, or run `plotly_get_chrome -y` "
-                "once — or save as .html, which needs no browser."
-            ) from exc
+                _export.set_png_dpi(staged, dpi)
+        if suffix == ".html" or dpi is not None:
+            stamp_file(staged)
+        staged.replace(path)
     return path
+
+
+def _publish_layers(directory: Path, staged: Path, files: list[str], fmt: str) -> None:
+    """Commit a completed render and retire only this format's recorded layer files."""
+    manifest = f".scanpath-layers-{fmt}.json"
+    with file_lock(directory / ".scanpath-layers.lock"):
+        previous = directory / manifest
+        old = (
+            json.loads(previous.read_text(encoding="utf-8"))
+            if previous.is_file()
+            else []
+        )
+        known = {f"{layer}.{fmt}" for layer in SCANPATH_LAYER_ORDER}
+        if not isinstance(old, list) or not all(
+            isinstance(name, str) and name in known for name in old
+        ):
+            raise ValueError(f"Cannot identify the files owned by {previous}.")
+        (staged / manifest).write_text(
+            json.dumps(files, indent=2) + "\n", encoding="utf-8"
+        )
+        backups = staged / "previous"
+        backups.mkdir()
+        installed = []
+        try:
+            for name in sorted(set(files) | set(old) | {manifest}):
+                target = directory / name
+                if target.is_dir():
+                    raise IsADirectoryError(target)
+                if target.exists() or target.is_symlink():
+                    target.replace(backups / name)
+            for name in [*files, manifest]:
+                (staged / name).replace(directory / name)
+                installed.append(name)
+        except BaseException:
+            for name in installed:
+                (directory / name).unlink(missing_ok=True)
+            for original in backups.iterdir():
+                original.replace(directory / original.name)
+            raise
 
 
 def save_figure_layers(
@@ -4017,17 +4153,21 @@ def save_figure_layers(
     directory: str | Path,
     *,
     fmt: str = "svg",
-    scale: int = 2,
+    scale: float = 2,
     width: int | None = None,
     height: int | None = None,
-) -> dict:
+    width_mm: float | None = None,
+    width_in: float | None = None,
+    dpi: int | None = None,
+) -> dict[str, Path]:
     """Save a scanpath figure as one file per layer, for editing.
 
     Each *visible* layer (stimulus image, heatmap, word boxes, saccades, fixations, raw
     gaze, labels, frame) is the full figure with only that layer's elements, on a
     transparent background, at the same size and axis ranges. The files line up when
     stacked in Illustrator or Inkscape. The app's Export bundle writes the same files
-    under *Layers as separate files*.
+    under *Layers as separate files*. A successful revision replaces this format's
+    previous exported layers. An inventory in the directory identifies the owned files.
 
     Args:
         fig: A scanpath figure.
@@ -4038,25 +4178,39 @@ def save_figure_layers(
         scale: Passed to [`save_figure`][scanpath_studio.api.save_figure].
         width: Passed to [`save_figure`][scanpath_studio.api.save_figure].
         height: Passed to [`save_figure`][scanpath_studio.api.save_figure].
+        width_mm: PNG print width in millimetres.
+        width_in: PNG print width in inches.
+        dpi: Resolution for the print width, shared by every layer.
 
     Returns:
         ``{layer: Path}`` for each file written.
     """
     directory = Path(directory)
-    # A failed render (most often Kaleido with no Chrome) must not leave an
-    # empty `<output>_layers/` behind, which reads as "exported, but lost":
-    # whatever this call created is removed again if nothing was written to it.
+    fmt = fmt.lstrip(".").lower()
+    if fmt not in {"html", "png", "svg", "pdf"}:
+        raise ValueError("Choose html, png, svg or pdf for the layer format.")
     created = [path for path in (directory, *directory.parents) if not path.exists()]
     directory.mkdir(parents=True, exist_ok=True)
-    written: dict = {}
+    written: dict[str, Path] = {}
     try:
-        for layer, layer_fig in split_scanpath_layers(fig).items():
-            path = directory / f"{layer}.{fmt.lstrip('.')}"
-            written[layer] = save_figure(
-                layer_fig, path, scale=scale, width=width, height=height
-            )
+        with TemporaryDirectory(dir=directory, prefix=".scanpath-layers-") as stage:
+            staged = Path(stage)
+            for layer, layer_fig in split_scanpath_layers(fig).items():
+                name = f"{layer}.{fmt}"
+                save_figure(
+                    layer_fig,
+                    staged / name,
+                    scale=scale,
+                    width=width,
+                    height=height,
+                    width_mm=width_mm,
+                    width_in=width_in,
+                    dpi=dpi,
+                )
+                written[layer] = directory / name
+            _publish_layers(directory, staged, [p.name for p in written.values()], fmt)
     except Exception:
-        for path in created:  # deepest first
+        for path in created:
             if path.is_dir() and not any(path.iterdir()):
                 path.rmdir()
         raise
@@ -4197,7 +4351,12 @@ def figure_code(
         canvas_size = _snippet.source_canvas(source)
     state = _snippet.FigureState(
         kind=kind,
-        settings={**figure_options(kind), **_expand_palette(figure_overrides)},
+        settings={
+            **figure_options(kind),
+            **_expand_palette(
+                figure_overrides, comparing=kind == "comparison" or compare is not None
+            ),
+        },
         participant=participant,
         trial=trial,
         screen=screen,

@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from . import progress
+from . import fixation_source, progress
 from .constants import (
     DEFAULT_FIGURE_SIZE,
     DEFAULT_STIMULUS_IMAGE_PATTERN,
@@ -1836,63 +1836,61 @@ def propose_raw_gaze_schema(raw_gaze: pd.DataFrame) -> dict[str, str | None]:
     )
 
 
-def validate_word_schema(schema: dict[str, str | None]) -> list:
-    """Return a list of human-readable problems with a Words table schema.
-
-    Participant ID is optional: Words tables without one are treated as
-    stimulus-level (one row per word per *text*, not per reading) and are
-    broadcast across the participants found in the fixations — see
-    ``broadcast_stimulus_words``."""
-    problems = []
-    for key, label in [
-        ("trial", "Trial ID"),
-        ("word_id", "Word ID"),
-    ]:
-        if not schema.get(key):
-            problems.append(f"missing {label}")
-    has_xywh = all(schema.get(k) for k in ["x", "y", "width", "height"])
-    has_box = all(schema.get(k) for k in ["left", "right", "top", "bottom"])
-    if not has_xywh and not has_box:
-        problems.append("missing Word box (its edges, or x/y with width and height)")
-    return problems
+@dataclass(frozen=True)
+class MappingBlocker:
+    message: str
+    fields: tuple[str, ...]
 
 
-def validate_fix_schema(schema: dict[str, str | None]) -> list:
-    """Return a list of human-readable problems with a fixations schema.
+def mapping_blockers(table: str, schema: dict) -> list[MappingBlocker]:
+    """Each blocking requirement and the mapping controls that can satisfy it."""
+    required = {
+        "words": (("trial", "Trial ID"), ("word_id", "Word ID")),
+        "fixations": (("trial", "Trial ID"), ("duration", "Duration")),
+        "raw_gaze": (("trial", "Trial ID"), ("x", "X"), ("y", "Y")),
+    }
+    issues = [
+        MappingBlocker(f"missing {label}", (field,))
+        for field, label in required[table]
+        if not schema.get(field)
+    ]
+    if table == "words":
+        origin = ("x", "y", "width", "height")
+        edges = ("left", "right", "top", "bottom")
+        if not all(schema.get(k) for k in origin) and not all(
+            schema.get(k) for k in edges
+        ):
+            fields = tuple(k for k in (*origin, *edges) if not schema.get(k))
+            issues.append(
+                MappingBlocker(
+                    "missing Word box (its edges, or x/y with width and height)", fields
+                )
+            )
+    if table == "fixations" and not schema.get("word_id"):
+        missing = tuple(k for k in ("x", "y") if not schema.get(k))
+        if missing:
+            issues.append(
+                MappingBlocker(
+                    "missing X and Y, or a Word ID to place each fixation at its word's center",
+                    (*missing, "word_id"),
+                )
+            )
+    return issues
 
-    X/Y coordinates are optional when a Word ID is mapped: AOI-sequence
-    datasets (fixations recorded as "which word", not "which pixel") get
-    coordinates from the matching word-box centers — see
-    ``fill_fixation_xy_from_words``."""
-    problems = []
-    # Participant is optional — a dataset without it is treated as a single
-    # anonymous reader (see SYNTHETIC_PARTICIPANT).
-    for key, label in [
-        ("trial", "Trial ID"),
-        ("duration", "Duration"),
-    ]:
-        if not schema.get(key):
-            problems.append(f"missing {label}")
-    has_xy = schema.get("x") and schema.get("y")
-    if not has_xy and not schema.get("word_id"):
-        problems.append(
-            "missing X and Y, or a Word ID to place each fixation at its word's center"
-        )
-    return problems
+
+def validate_word_schema(schema: dict[str, str | None]) -> list[str]:
+    """Return blockers for words. A missing participant makes words stimulus-level."""
+    return [issue.message for issue in mapping_blockers("words", schema)]
 
 
-def validate_raw_gaze_schema(schema: dict[str, str | None]) -> list:
-    """Return a list of human-readable problems with a raw gaze schema."""
-    problems = []
-    # Participant optional — single anonymous reader when absent.
-    for key, label in [
-        ("trial", "Trial ID"),
-        ("x", "X"),
-        ("y", "Y"),
-    ]:
-        if not schema.get(key):
-            problems.append(f"missing {label}")
-    return problems
+def validate_fix_schema(schema: dict[str, str | None]) -> list[str]:
+    """Return blockers for fixations. Word IDs can supply positions from boxes."""
+    return [issue.message for issue in mapping_blockers("fixations", schema)]
+
+
+def validate_raw_gaze_schema(schema: dict[str, str | None]) -> list[str]:
+    """Return blockers for raw gaze, which can belong to one anonymous reader."""
+    return [issue.message for issue in mapping_blockers("raw_gaze", schema)]
 
 
 # Column added when concatenating several files (multi-file upload, glob, or a
@@ -2219,7 +2217,12 @@ def _read_by_extension(
                 file_columns=file_columns,
             )
         # First sheet.
-        frame = pd.read_excel(buf, **_excel_na_kwargs(buf, plan))
+        with pd.ExcelFile(buf) as book:
+            sheet = book.sheet_names[0]
+            frame = pd.read_excel(
+                book, sheet_name=sheet, **_excel_na_kwargs(book, plan)
+            )
+            frame.attrs["source_worksheet"] = sheet
         return frame[[c for c in columns if c in frame.columns]] if columns else frame
     return _read_delimited(
         buf, sep or _sniff_delimiter(buf, name), plan, file_columns=file_columns
@@ -2359,6 +2362,7 @@ def _read_delimited(
     plan: ReadPlan | None,
     *,
     file_columns: Sequence[str] | None = None,
+    filter_chunk: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
     **extra,
 ) -> pd.DataFrame:
     """``read_csv`` with the encoding fallback a non-UTF-8 export needs.
@@ -2374,17 +2378,21 @@ def _read_delimited(
     renamed ``.csv``) and is refused as such, rather than tokenized into a
     parser error.
 
-    A planned read (``plan.columns``) of a table held in memory (an upload)
-    leaves out the rows with more fields than its header, and says so in the
-    frame's `READ_NOTES_ATTR` — see :func:`_overflow_lines` for why `usecols`
-    alone would keep them.
+    Planned reads check logical records against the header. A projected read
+    skips overlong records and reports their physical lines in `READ_NOTES_ATTR`.
+    A whole-table read reports the offending line as an error.
 
     A whole-file read with verbatim columns needs the header (``file_columns``,
     else read off the file first) to name every other column's NA spellings;
     a stream that cannot be rewound is taken into memory for it.
     """
     rereadable = _can_reread(buf)
-    if plan is not None and plan.verbatim and not plan.columns and file_columns is None:
+    if (
+        plan is not None
+        and (plan.verbatim or plan.identity)
+        and not plan.columns
+        and file_columns is None
+    ):
         if not rereadable:
             data = buf.read()
             buf = io.BytesIO(data) if isinstance(data, bytes) else io.StringIO(data)
@@ -2396,18 +2404,30 @@ def _read_delimited(
     if not bom and b"\x00" in head:
         raise _not_text_error(str(getattr(buf, "name", buf)), head)
     kwargs = {**_read_kwargs(plan, file_columns), **extra}
-    skipped: list[int] = []
-    if plan is not None and plan.columns and "nrows" not in extra and rereadable:
-        header = _header(buf, sep)
+    if filter_chunk is not None:
+        kwargs["chunksize"] = 25_000
+    skipped = []
+    if plan is not None and "nrows" not in extra and rereadable:
+        header = file_columns if file_columns is not None else _header(buf, sep)
         _rewind(buf)
-        skipped = _overflow_lines(buf, sep, len(header))
+        skipped = _overflow_lines(buf, sep, len(header), bom)
         if skipped:
-            kwargs["skiprows"] = skipped
+            if not plan.columns:
+                raise _overflow_error(getattr(buf, "name", buf), skipped)
+            kwargs["skiprows"] = [record for record, _ in skipped]
+        kwargs["index_col"] = False
     for encoding in (bom,) if bom else _TEXT_ENCODINGS:
         try:
             frame = pd.read_csv(
                 buf, sep=sep, low_memory=False, encoding=encoding, **kwargs
             )
+            if filter_chunk is not None:
+                # Consume the chunks inside the encoding retry. A later chunk
+                # can contain the first byte the selected encoding cannot read.
+                with frame as chunks:
+                    frame = pd.concat(
+                        (filter_chunk(chunk) for chunk in chunks), ignore_index=True
+                    )
         except UnicodeDecodeError:
             if bom or encoding == _TEXT_ENCODINGS[-1] or not _can_reread(buf):
                 raise
@@ -2419,55 +2439,94 @@ def _read_delimited(
             )
             continue
         if skipped:
-            frame.attrs[READ_NOTES_ATTR] = [_skipped_rows_note(skipped)]
+            frame.attrs[READ_NOTES_ATTR] = [
+                _skipped_rows_note([line for _, line in skipped])
+            ]
         return frame
     raise AssertionError("unreachable: latin-1 decodes every byte")
 
 
-def _overflow_lines(buf, sep: str, n_fields: int) -> list[int]:
-    """The 0-based line numbers of an in-memory table's rows that hold more
-    fields than its header's ``n_fields``.
+def _overflow_lines(
+    buf, sep: str, n_fields: int, bom: str | None
+) -> list[tuple[int, int]]:
+    """Overlong CSV records as (zero-based record, first physical line).
 
-    A planned read hands ``read_csv`` a ``usecols``, and with one the parser
-    keeps such a row, cut to the planned columns, without a word — though the
-    extra field shifted every value after it into the wrong column (a trial
-    ID that is really an X). Asking the parser instead costs a second parse of
-    the whole file, so the delimiters are counted here: the whole buffer's
-    first, which settles a clean table at once, and line by line only when
-    that total is off (a long row, or a short or blank one beside it). Empty
-    trailing fields are not extra fields.
-
-    Only a buffer already in memory (an upload) is counted, and only text
-    whose delimiters can be counted as bytes: a file with quoted values
-    (whose delimiters may be data) or a UTF-16/32 export reads as before.
+    The parser's skiprows counts records, while a researcher opening the file
+    sees physical lines. Quoted separators and newlines are data. Empty extra
+    fields at the end of a record are common in exported spreadsheets.
     """
-    getvalue = getattr(buf, "getvalue", None)
-    if not callable(getvalue) or len(sep) != 1 or n_fields < 1:
-        return []
-    data = getvalue()
-    if not isinstance(data, bytes) or b'"' in data:
-        return []
-    if _bom_encoding(data[:4]) not in (None, "utf-8-sig"):
-        return []
-    delimiter = sep.encode()
-    end = len(data)
-    while end and data[end - 1] in b"\r\n \t" + delimiter:
-        end -= 1
-    n_lines = data.count(b"\n", 0, end) + 1
-    if data.count(delimiter, 0, end) == n_lines * (n_fields - 1):
-        return []
-    trailing = b"\r \t" + delimiter
-    long_lines: list[int] = []
-    start = data.find(b"\n", 0, end) + 1
-    line = 1
-    while 0 < start < end:
-        stop = data.find(b"\n", start, end)
-        stop = end if stop == -1 else stop
-        if data[start:stop].rstrip(trailing).count(delimiter) > n_fields - 1:
-            long_lines.append(line)
-        start = stop + 1
-        line += 1
-    return long_lines
+    if isinstance(buf, (str, os.PathLike)):
+        with open(buf, "rb") as source:
+            return _overflow_lines(source, sep, n_fields, bom)
+    # Only ASCII CSV syntax matters here. Latin-1 decodes every byte of both
+    # UTF-8 and legacy exports without changing delimiters or quotes.
+    text = isinstance(buf.read(0), str)
+    lines = (
+        buf if text else io.TextIOWrapper(buf, encoding=bom or "latin-1", newline="")
+    )
+    try:
+        skipped = [
+            (record, line)
+            for record, (line, width) in enumerate(_record_widths(lines, sep))
+            if record and width > n_fields
+        ]
+    finally:
+        if not text:
+            lines.detach()
+        if _can_reread(buf):
+            _rewind(buf)
+    return skipped
+
+
+def _record_widths(lines, sep: str):
+    """Yield the first line and last occupied field of each logical CSV row."""
+    quoted = False
+    for line_number, line in enumerate(lines):
+        line = line.rstrip("\r\n")
+        if not quoted:
+            first_line, field, width = line_number, 1, 0
+            if '"' not in line:
+                occupied = line.rstrip(sep)
+                yield first_line, occupied.count(sep) + 1 if occupied else 0
+                continue
+        offset = 0
+        while offset < len(line):
+            if not quoted and line[offset] == '"':
+                quoted = True
+                offset += 1
+            if quoted:
+                quote = line.find('"', offset)
+                if quote < 0:
+                    # The physical newline is part of this field.
+                    width = field
+                    break
+                if quote > offset:
+                    width = field
+                offset = quote + 1
+                if offset < len(line) and line[offset] == '"':
+                    width = field
+                    offset += 1
+                    continue
+                quoted = False
+            delimiter = line.find(sep, offset)
+            end = len(line) if delimiter < 0 else delimiter
+            if end > offset:
+                width = field
+            if delimiter < 0:
+                break
+            field += 1
+            offset = delimiter + 1
+        if not quoted:
+            yield first_line, width
+
+
+def _overflow_error(name, skipped) -> TableReadError:
+    line = skipped[0][1] + 1
+    return TableReadError(
+        str(name),
+        f"has more fields than its header at line {line}",
+        "Check for an unquoted delimiter in that record, then read the table again.",
+    )
 
 
 def _skipped_rows_note(lines: list[int]) -> str:
@@ -2601,7 +2660,12 @@ _PREVIEW_ROWS = 200
 
 
 def mapping_value_preview(
-    df: pd.DataFrame | None, field_key: str, column, *, limit: int = 3
+    df: pd.DataFrame | None,
+    field_key: str,
+    column,
+    *,
+    limit: int = 3,
+    show_time_input: bool = False,
 ) -> str:
     """A few of ``column``'s values and what the app reads them as.
 
@@ -2650,7 +2714,9 @@ def mapping_value_preview(
         for source, value in zip(values, parsed):
             if pd.isna(value):
                 shown.append(f"{source} (not a number)")
-            elif factor != 1.0:
+            elif factor != 1.0 or (
+                show_time_input and field_key in _PREVIEW_TIME_FIELDS
+            ):
                 shown.append(f"{source} → {number(value * factor)}{unit}")
             else:
                 shown.append(f"{number(value)}{unit}")
@@ -3145,6 +3211,29 @@ def _rows_missing_identity(
     return blank, missing & ~blank
 
 
+def input_row_counts(source: pd.DataFrame, schema: dict, normalized_rows: int) -> dict:
+    """Rows supplied and rows usable before stimulus words expand across readings."""
+    counts = {
+        "read": len(source),
+        "eligible": normalized_rows,
+        "blank": 0,
+        "missing_identity": 0,
+        "missing_id_columns": [],
+    }
+    if normalized_rows != len(source):
+        blank, unkeyed = _rows_missing_identity(source, schema)
+        counts.update(
+            blank=int(blank.sum()),
+            missing_identity=int(unkeyed.sum()),
+            missing_id_columns=[
+                c
+                for c in _identity_columns(source, schema)
+                if _id_missing(source.loc[unkeyed, c]).any()
+            ],
+        )
+    return counts
+
+
 def _drop_rows_missing_identity(source: pd.DataFrame, schema: dict) -> pd.DataFrame:
     """``source`` without the rows :func:`_rows_missing_identity` flags."""
     blank, unkeyed = _rows_missing_identity(source, schema)
@@ -3334,9 +3423,8 @@ def _read_kwargs(
     :func:`_read_by_extension` — `usecols=[]` would parse nothing at all, and
     the two must not disagree about what an empty plan means.
 
-    ``file_columns`` is the file's header, needed only by a whole-file read
-    (no ``columns``) with verbatim columns: :func:`_verbatim_na_kwargs` names
-    every column being read.
+    Whole-file reads use ``file_columns`` to distinguish identity and verbatim
+    columns from fields that use pandas' ordinary missing-value spellings.
     """
     if plan is None:
         return {}
@@ -3346,7 +3434,7 @@ def _read_kwargs(
     text = {column: str for column in (*plan.identity, *plan.verbatim)}
     if text:
         kwargs["dtype"] = text
-    if plan.verbatim:
+    if plan.verbatim or plan.identity:
         kwargs.update(_verbatim_na_kwargs(plan, plan.columns or file_columns or ()))
     elif plan.na_values:
         kwargs["na_values"] = plan.na_values
@@ -3366,6 +3454,11 @@ def _verbatim_na_kwargs(plan: ReadPlan, columns: Iterable[str]) -> dict:
         for column in columns
         if column not in plan.verbatim
     }
+    # Blank IDs are missing. Any nonempty spelling (including "NA" and
+    # "NULL") identifies a reader, trial, text or screen literally.
+    for column in plan.identity:
+        if column not in plan.verbatim:
+            na_values[column] = [""]
     return {"keep_default_na": False, "na_values": na_values}
 
 
@@ -3398,21 +3491,15 @@ PANDAS_DEFAULT_NA = frozenset(
 
 
 def _excel_na_kwargs(buf, plan: ReadPlan | None) -> dict:
-    """``read_excel`` keywords that keep a plan's verbatim columns literal.
-
-    A workbook is read whole and pruned after, so the NA spellings name every
-    column of its header (:func:`_verbatim_na_kwargs`), which is read first.
-    Excel is never the large-file format, so the second pass is cheap.
-    """
+    """Read the header from the open workbook to set each column's NA rules."""
     if plan is None:
         return {}
     kwargs: dict = {}
     if plan.identity:
         kwargs["dtype"] = {column: str for column in plan.identity}
-    if not plan.verbatim:
+    if not (plan.verbatim or plan.identity):
         return kwargs
-    header = list(pd.read_excel(buf, nrows=0).columns)
-    _rewind(buf)
+    header = list(pd.read_excel(buf, sheet_name=0, nrows=0).columns)
     return {**kwargs, **_verbatim_na_kwargs(plan, header)}
 
 
@@ -3558,11 +3645,8 @@ def read_table_columns(file_like_or_path, *, kind: str | None = None) -> list[st
     """A table's column names, without parsing its rows.
 
     The header pass that :func:`plan_table_read` plans from. Delimited text
-    reads zero rows and columnar formats read their schema; anything else
-    (Excel, a zip of several members) falls back to reading the table, because
-    there is no cheaper way to learn its columns and those formats are not the
-    ones that hurt. ``kind`` (``"words"`` / ``"fixations"``) picks a mixed
-    zip's members the way :func:`zip_member_split` does.
+    and workbooks read zero rows. Parquet and Feather V2 expose their schema
+    directly. ``kind`` picks a mixed zip's members as :func:`zip_member_split` does.
     """
     name = getattr(file_like_or_path, "name", str(file_like_or_path)).lower()
     _rewind(file_like_or_path)
@@ -3574,10 +3658,20 @@ def read_table_columns(file_like_or_path, *, kind: str | None = None) -> list[st
 
             return list(pq.read_schema(file_like_or_path).names)
         if name.endswith(".feather"):
-            from pyarrow import feather
+            import pyarrow as pa
 
-            return list(feather.read_table(file_like_or_path, columns=[]).schema.names)
-        if name.endswith((".tsv", ".tab", ".csv", ".txt")):
+            try:
+                return list(pa.ipc.open_file(file_like_or_path).schema.names)
+            except pa.ArrowInvalid:
+                # Feather V1 predates Arrow IPC and its zero-column projection
+                # returns no names. Let the regular reader validate it.
+                from pyarrow import feather
+
+                _rewind(file_like_or_path)
+                return list(feather.read_table(file_like_or_path).schema.names)
+        if name.endswith((".xlsx", ".xls")) and _is_workbook(file_like_or_path, name):
+            return list(pd.read_excel(file_like_or_path, nrows=0).columns)
+        if name.endswith((".tsv", ".tab", ".csv", ".txt", ".xls", ".xlsx")):
             return _header(file_like_or_path, _sniff_delimiter(file_like_or_path, name))
         # Rewound afterwards too (the `finally`): the caller reads the table
         # again, and a buffer left at its end reads as an empty file.
@@ -3929,7 +4023,25 @@ def _tag_and_concat(
         for df, label in zip(frames, labels):
             if source_column not in df.columns:
                 df[source_column] = label
+    # Store per-file record counts once, without adding a column to every raw
+    # words/sample table. Nested archives already know their member names.
+    spans = []
+    for frame, label, name in zip(frames, labels, names or labels):
+        nested = frame.attrs.get(fixation_source.FILE_SPANS)
+        if nested:
+            spans.extend(nested)
+        else:
+            actual = Path(str(name).replace("\\", "/")).name
+            stem = Path(actual).stem
+            prefix, _, tail = str(label).rpartition(stem)
+            filename = prefix + (
+                stem + tail if tail.startswith(Path(actual).suffix) else actual + tail
+            )
+            spans.append(
+                (filename if not filename.startswith("<") else None, len(frame))
+            )
     if len(frames) == 1:
+        frames[0].attrs[fixation_source.FILE_SPANS] = tuple(spans)
         return frames[0]
     # Each part's read notes, named by the file they are about (``names``,
     # where ``labels`` are the shortened source labels).
@@ -3939,6 +4051,7 @@ def _tag_and_concat(
         for note in pop_read_notes(df)
     ]
     out = pd.concat(frames, ignore_index=True, sort=False)
+    out.attrs[fixation_source.FILE_SPANS] = tuple(spans)
     if notes:
         out.attrs[READ_NOTES_ATTR] = notes
     return out
@@ -4370,6 +4483,22 @@ def _read_zipped_table(
                     member_plan = plan
                     if plan is not None and plan.columns:
                         member_plan = plan.narrowed_to(header)
+                    if member_plan is not None:
+                        # The projected parser can discard excess fields. A bounded
+                        # member stream cannot rewind, so validate on a separate pass.
+                        with zf.open(info) as validation:
+                            checked = io.BufferedReader(
+                                _BudgetedZipMember(
+                                    validation,
+                                    member_budget,
+                                    member,
+                                    limit_label=limit_label,
+                                )
+                            )
+                            bom = _bom_encoding(checked.peek(4)[:4])
+                            bad = _overflow_lines(checked, sep, len(header), bom)
+                            if bad:
+                                raise _overflow_error(member, bad)
                     try:
                         frames.append(
                             _read_by_extension(
@@ -4744,9 +4873,8 @@ def resolve_stimulus_image_paths(
     return match.apply(frame)
 
 
-@st.cache_data
-def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Load bundled demo IA and fixation tables (prefer Parquet).
+def read_sample_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Read bundled demo IA and fixation tables (prefer Parquet).
 
     The tables ship per-trial stimulus-image references (``image_path`` +
     ``image_x``/``image_y`` origin) pointing at the rendered paragraph PNGs
@@ -4756,18 +4884,28 @@ def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     words = _resolve_sample_image_paths(_load_bundled("ia"))
     fixations = _resolve_sample_image_paths(_load_bundled("fixations"))
     if words.empty or fixations.empty:
-        st.error(
-            "The bundled demo is missing from this installation. Reinstall "
-            "Scanpath Studio, then reload the page."
+        raise FileNotFoundError(
+            "The bundled demo is missing from this installation. Reinstall Scanpath Studio."
         )
-        return pd.DataFrame(), pd.DataFrame()
     return words, fixations
 
 
 @st.cache_data
-def load_sample_raw_gaze() -> pd.DataFrame:
-    """Load bundled raw gaze sample (millisecond-level x,y)."""
+def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The bundled demo for app sessions, with its missing-installation message."""
+    try:
+        return read_sample_tables()
+    except FileNotFoundError as exc:
+        st.error(str(exc))
+        return pd.DataFrame(), pd.DataFrame()
+
+
+def read_sample_raw_gaze() -> pd.DataFrame:
+    """Read the bundled raw gaze sample (millisecond-level x,y)."""
     return _load_bundled("raw_gaze")
+
+
+load_sample_raw_gaze = st.cache_data(read_sample_raw_gaze)
 
 
 def infer_raw_gaze_schema(raw_gaze: pd.DataFrame) -> dict[str, str] | None:
@@ -4915,6 +5053,8 @@ AOI_TRIAL_ID = "_aoi_trial_id"
 #: trial-id fallback — written by `normalize_*` from the schema, so a mapped
 #: Text ID whose values happen to equal the trial ids still counts.
 TEXT_ID_MAPPED = "_text_id_mapped"
+# A mapped blank Word ID is an explicit unassigned fixation.
+FIX_WORD_ID_MAPPED = "_fix_word_id_mapped"
 #: On a fixation: its `timestamp_ms` was made up by `normalize_fixations`
 #: because the table mapped no onset — the reading order 0, 1, 2, …, kept so
 #: fixations still sort, but not a time. Anything that needs elapsed time
@@ -4936,22 +5076,64 @@ INTERNAL_COLUMNS = frozenset(
         BASE_TRIAL_ID,
         AOI_TRIAL_ID,
         TEXT_ID_MAPPED,
+        FIX_WORD_ID_MAPPED,
+        *fixation_source.PRIVATE_COLUMNS,
         TIMESTAMP_SYNTHESIZED,
         SCREEN_ORDER_DERIVED,
     }
 )
 
 
-def timestamps_synthesized(fixations: pd.DataFrame | None) -> bool:
-    """Whether any of these fixations has a made-up ``timestamp_ms``.
+def synthesized_onset_mask(fixations: pd.DataFrame) -> pd.Series:
+    """Which onsets were supplied by normalization or cannot be read as time.
 
-    True for an unmapped onset, or for a missing or nonfinite value in a
-    mapped onset column (:data:`TIMESTAMP_SYNTHESIZED`). A frame without the
-    column — one built by hand, or stored by an older version — counts as
-    recorded."""
-    if fixations is None or TIMESTAMP_SYNTHESIZED not in fixations.columns:
-        return False
-    return bool(fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool).any())
+    A legacy frame without provenance may carry a 0,1,… counter instead of
+    timestamps. Recognize only that exact sequence, and only if a fixation
+    overlaps the next one on that apparent 1 ms clock. A single onset is valid.
+    """
+    if "timestamp_ms" not in fixations:
+        return pd.Series(True, index=fixations.index)
+    ts = pd.to_numeric(fixations["timestamp_ms"], errors="coerce")
+    missing = ~np.isfinite(ts)
+    if TIMESTAMP_SYNTHESIZED in fixations:
+        return missing | fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
+    if fixations.empty or "duration_ms" not in fixations:
+        return missing
+    # Normalization numbers the whole reading, including across screen changes.
+    groups = [fixations[key] for key in PARENT_KEY if key in fixations]
+    if not groups:
+        groups = [np.zeros(len(fixations), dtype=int)]
+    by_reading = ts.groupby(groups, sort=False, dropna=False)
+    rank = by_reading.rank(method="first") - 1
+    length = by_reading.transform("size")
+    ordinal = ts.eq(rank).groupby(groups, sort=False, dropna=False).transform("all")
+    durations = pd.to_numeric(fixations["duration_ms"], errors="coerce")
+    overlap = (
+        ((rank < length - 1) & (durations > 1))
+        .groupby(groups, sort=False, dropna=False)
+        .transform("any")
+    )
+    return missing | (ordinal & overlap)
+
+
+def timestamps_synthesized(fixations: pd.DataFrame | None) -> bool:
+    """Whether any fixation in the reading lacks a measured onset."""
+    return fixations is not None and bool(synthesized_onset_mask(fixations).any())
+
+
+def with_onset_provenance(fixations: pd.DataFrame) -> pd.DataFrame:
+    """Resolve an older reading's clock before selecting screens or fixations."""
+    if (
+        fixations.empty
+        or TIMESTAMP_SYNTHESIZED in fixations
+        or "timestamp_ms" not in fixations
+    ):
+        return fixations
+    result = fixations.assign(
+        **{TIMESTAMP_SYNTHESIZED: synthesized_onset_mask(fixations)}
+    )
+    assign_derived(result, "fixation_onset_provenance", fixations)
+    return result
 
 
 #: Scratch column the stimulus broadcast merges through.
@@ -4973,18 +5155,29 @@ def drop_internal_columns(frame: pd.DataFrame) -> pd.DataFrame:
     return frame.drop(columns=present) if present else frame
 
 
-def shareable_frame(frame: pd.DataFrame) -> pd.DataFrame:
+def shareable_frame(frame: pd.DataFrame, *, table: str | None = None) -> pd.DataFrame:
     """``frame`` as it leaves the app: no bookkeeping, no made-up clock.
 
     :func:`drop_internal_columns`, and also ``timestamp_ms`` when normalization
     numbered the fixations itself (:func:`timestamps_synthesized`): those
     numbers are a sort order, and a file that carried them under that name
     would read back as recorded milliseconds."""
-    if timestamps_synthesized(frame) and "timestamp_ms" in frame.columns:
-        synthesized = frame[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
-        if synthesized.all():
-            frame = frame.drop(columns="timestamp_ms")
+    if (
+        "timestamp_ms" in frame
+        and not frame.empty
+        and table in (None, "fixations", "raw_gaze")
+    ):
+        if table == "raw_gaze":
+            # A sample every millisecond can be a real clock. Only fixations
+            # were ever given an ordinal in place of a timestamp.
+            synthesized = ~np.isfinite(
+                pd.to_numeric(frame["timestamp_ms"], errors="coerce")
+            )
         else:
+            synthesized = synthesized_onset_mask(frame)
+        if synthesized.all() and table != "raw_gaze":
+            frame = frame.drop(columns="timestamp_ms")
+        elif synthesized.any():
             frame = frame.assign(timestamp_ms=frame["timestamp_ms"].mask(synthesized))
     return drop_internal_columns(frame)
 
@@ -5620,8 +5813,13 @@ def match_text_word_ids(
             number[known] = merged["word_id"].to_numpy(dtype=float)
         fixations = fixations.copy()
         fixations["word_id"] = number
+        if not words_text:
+            # An incompatible text key cannot identify a numbered word.
+            # The source's blank keys still mean that no word was assigned.
+            fixations.loc[fixations[WORD_KEY].notna(), FIX_WORD_ID_MAPPED] = False
     elif words_text and fixations["word_id"].notna().any():
         fixations = fixations.copy()
+        fixations.loc[fixations["word_id"].notna(), FIX_WORD_ID_MAPPED] = False
         fixations["word_id"] = np.nan
         rewrites.append(WORD_IDS_SET_ASIDE)
     return fixations, tuple(rewrites)
@@ -7089,14 +7287,21 @@ def normalize_fixations(
     schema: dict[str, str],
     *,
     keep_columns: set | None = None,
+    keep_source_cells: bool = True,
     _renormalizing: bool = False,
 ) -> pd.DataFrame:
     if not _renormalizing:
         fixations = _drop_reserved_columns(fixations, schema, table="Fixations")
     _warn_normalization_issues(fixations, schema, table="Fixations", fixations=True)
-    fixations = _drop_rows_missing_identity(fixations, schema)
+    blank, unkeyed = _rows_missing_identity(fixations, schema)
+    keep = np.flatnonzero(~(blank | unkeyed))
+    source = fixations
+    if len(keep) < len(source):
+        fixations = source.iloc[keep]
     # Explicit index so a constant participant placeholder fills every row.
     df = pd.DataFrame(index=fixations.index)
+    if keep_source_cells:
+        fixation_source.record_rows(df, source, keep, remap=_renormalizing)
     if schema.get("participant"):
         # str or list (a composite participant id, joined like the trial id).
         df["participant_id"] = trial_id_series(fixations, schema["participant"])
@@ -7179,15 +7384,24 @@ def normalize_fixations(
             df,
             fixations,
             keep_columns,
-            _schema_source_columns(schema) | emitted | {WORD_KEY},
+            _schema_source_columns(schema)
+            | emitted
+            | {WORD_KEY}
+            | fixation_source.PRIVATE_COLUMNS,
         )
 
+    if keep_source_cells:
+        fixation_source.record_cells(df, fixations, schema, remap=_renormalizing)
     df = _preserve_composite_columns(df, fixations, schema["trial"])
-    synthesized = _synthesized_timestamps(fixations, schema, _renormalizing)
-    if synthesized is None:
-        df = df.drop(columns=[TIMESTAMP_SYNTHESIZED], errors="ignore")
+    word_source = schema.get("word_id")
+    if _renormalizing and word_source == "word_id" and FIX_WORD_ID_MAPPED in fixations:
+        df[FIX_WORD_ID_MAPPED] = (
+            fixations[FIX_WORD_ID_MAPPED].fillna(False).astype(bool)
+        )
     else:
-        df[TIMESTAMP_SYNTHESIZED] = synthesized
+        df[FIX_WORD_ID_MAPPED] = bool(word_source)
+    synthesized = _synthesized_timestamps(fixations, schema, _renormalizing)
+    df[TIMESTAMP_SYNTHESIZED] = False if synthesized is None else synthesized
 
     df["order_in_trial"] = (
         df.sort_values(["timestamp_ms", "duration_ms"])
@@ -7319,15 +7533,11 @@ def _synthesized_timestamps(
     onset = schema.get("timestamp")
     if not onset:
         return pd.Series(True, index=fixations.index)
-    if (
-        renormalizing
-        and onset == "timestamp_ms"
-        and TIMESTAMP_SYNTHESIZED in fixations.columns
-    ):
-        previous = fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
-    else:
-        previous = False
-    missing = ~np.isfinite(_to_number(fixations[onset])) | previous
+    missing = (
+        synthesized_onset_mask(fixations)
+        if renormalizing and onset == "timestamp_ms"
+        else ~np.isfinite(_to_number(fixations[onset]))
+    )
     return missing if missing.any() else None
 
 

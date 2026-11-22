@@ -197,6 +197,8 @@ class TestCli:
         from scanpath_studio.data import load_sample_data as raw_demo
 
         words, fixations = raw_demo()
+        fixations = fixations.astype({"CURRENT_FIX_START": float})
+        fixations.loc[fixations.index[:2], "CURRENT_FIX_START"] = [0, float("nan")]
         words.to_csv(tmp_path / "ia.csv", index=False)
         fixations.to_csv(tmp_path / "fix.csv", index=False)
         out = tmp_path / "out"
@@ -211,8 +213,16 @@ class TestCli:
                 str(out),
             ]
         )
-        written = pd.read_csv(out / "fixations.csv", nrows=1)
+        written = pd.read_csv(out / "fixations.csv")
         assert "CURRENT_FIX_DURATION" in written
+        assert (
+            written.CURRENT_FIX_START.isna().sum()
+            == fixations.CURRENT_FIX_START.isna().sum()
+        )
+        assert (
+            written.CURRENT_FIX_START.eq(0).sum()
+            == fixations.CURRENT_FIX_START.eq(0).sum()
+        )
         manifest = json.loads((out / "columns.json").read_text())
         rows = {r["canonical"]: r["column"] for r in manifest["tables"]["fixations"]}
         assert rows["duration_ms"] == "CURRENT_FIX_DURATION"

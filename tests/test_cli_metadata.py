@@ -323,6 +323,26 @@ class TestTheAppReadsSeveralUploads:
         assert set(frame.columns) == {"participant_id", "age", "group"}
         assert _metadata_upload_name(uploads) == "a.csv + 1 more file"
 
+    @pytest.mark.parametrize(
+        ("grain", "mapping"),
+        [
+            ("participant", ("subject_code",)),
+            ("trial", ("subject_code", "item")),
+            ("text", ("subject_code", "item")),
+        ],
+    )
+    def test_mapped_columns_keep_their_original_identity(self, grain, mapping):
+        from scanpath_studio.metadata_editor import _read_metadata_uploads
+
+        upload = self._upload(
+            "codes.csv", "subject_code,item,age\n1,02,19\n01,2,30\nNA,02,31\n"
+        )
+        frame = _read_metadata_uploads([upload], grain, mapping)
+        assert frame["subject_code"].tolist() == ["1", "01", "NA"]
+        assert frame["age"].tolist() == [19, 30, 31]
+        if "item" in mapping:
+            assert frame["item"].tolist() == ["02", "2", "02"]
+
     def test_an_unreadable_file_is_named(self):
         from scanpath_studio.metadata_editor import (
             _MetadataReadError,

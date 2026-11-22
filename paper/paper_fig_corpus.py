@@ -19,8 +19,9 @@ import os
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
+from PIL.PngImagePlugin import PngInfo
 
-from scanpath_studio import aggregation, constants, datasets, plots
+from scanpath_studio import aggregation, citation, constants, datasets, plots
 from scanpath_studio.api import save_figure
 
 
@@ -50,25 +51,6 @@ MEASURE_LABEL = "Total dwell time (ms)"
 MAX_READERS = 24  # keep the heatmap rows legible in print
 
 
-PASSAGE = "passage_id"
-# OneStop's `text_id` is the paragraph NUMBER within an article, so on the full
-# corpus it pools different passages (and both difficulty versions) under one
-# label. A passage is only identified by batch + article + paragraph +
-# difficulty — the same key the bundled demo spells "2_1_1_Ele".
-PASSAGE_PARTS = ("article_batch", "article_id", "text_id", "difficulty_level")
-
-
-def _add_passage_id(words):
-    missing = [c for c in PASSAGE_PARTS if c not in words.columns]
-    if missing:
-        raise SystemExit(f"cannot build a passage id, missing: {missing}")
-    out = words.copy()
-    out[PASSAGE] = (
-        out[list(PASSAGE_PARTS)].astype(str).agg("_".join, axis=1).astype("string")
-    )
-    return out
-
-
 def _panel_font(size: int):
     """A real font for the A/B/C panel labels — PIL's built-in default is ~11 px."""
     for candidate in (
@@ -83,15 +65,11 @@ def _panel_font(size: int):
     return ImageFont.load_default()
 
 
-def _busiest_text(words, text_col):
-    counts = (
-        words[[text_col, "participant_id"]]
-        .drop_duplicates()
-        .groupby(text_col)["participant_id"]
-        .size()
-        .sort_values(ascending=False)
-    )
-    return counts.index[0], int(counts.iloc[0])
+def _busiest_text(words):
+    """Choose the largest reader cohort, then the first canonical passage ID."""
+    counts = words.groupby("text_id", sort=True)["participant_id"].nunique()
+    text_id = counts.idxmax()
+    return text_id, int(counts.loc[text_id])
 
 
 def _drop_boundary_words(words, text_col, text_id):
@@ -110,10 +88,9 @@ def _drop_boundary_words(words, text_col, text_id):
 
 
 def main():
-    words, _ = datasets.load_onestop(ONESTOP_ROOT, regime="ordinary")
-    words = _add_passage_id(words)
-    text_col = PASSAGE
-    text_id, n_readers = _busiest_text(words, text_col)
+    words, _ = datasets.load_onestop(ONESTOP_ROOT, regime="ordinary", names="canonical")
+    text_col = "text_id"
+    text_id, n_readers = _busiest_text(words)
     n_words = words.loc[words[text_col] == text_id, "word_id"].nunique()
     words, (lo, hi) = _drop_boundary_words(words, text_col, text_id)
     print(
@@ -184,7 +161,12 @@ def main():
         draw.text((14, y + 4), tag, fill="black", font=label_font)
         montage.paste(im, (0, y + pad), im)
         y += im.height + pad + gap
-    montage.convert("RGB").save(FIGS / "fig_corpus.png")
+    metadata = PngInfo()
+    for field, value in citation.file_metadata().items():
+        metadata.add_itxt(field, value)
+    corpus = citation.CORPORA["onestop"]
+    metadata.add_itxt("Dataset", f"{corpus.credit()} https://doi.org/{corpus.doi}")
+    montage.convert("RGB").save(FIGS / "fig_corpus.png", pnginfo=metadata)
     for _, p in paths:
         p.unlink(missing_ok=True)
     print(

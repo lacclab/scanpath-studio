@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import base64
+import colorsys
 import copy
+import hashlib
 import html
 import itertools
 import math
@@ -16,12 +18,13 @@ from contextvars import ContextVar
 from dataclasses import MISSING, dataclass, fields, replace
 from pathlib import Path
 from typing import Any
+from unicodedata import bidirectional
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from . import chart_axes, progress
+from . import chart_axes, progress, replay_frames
 from .constants import (
     APP_THEME,
     CANVAS_PAD_FRACTION,
@@ -65,6 +68,7 @@ from .constants import (
     LEGEND_KINDS,
     LEGEND_POSITIONS,
     MARKER_SIZE_SCALES,
+    OPACITY_OPTIONS,
     ORDER_LABEL_POSITIONS,
     OUT_OF_TEXT_COLOR,
     SACCADE_CLASS_COLORS,
@@ -87,6 +91,7 @@ from .constants import (
     WORD_LABEL_COLOR,
     canonical_legend_position,
     compare_palette_color,
+    parse_opacity,
 )
 from .illustration import MANUAL_LABEL_REASON
 from .multipart import SCREEN_ID
@@ -414,6 +419,11 @@ def normalize_option_value(name: str, value: object) -> object:
 
     Raises ``ValueError`` listing the choices for a value that is none of
     them. ``critical_span_style=None`` is the app's "None" (no marking)."""
+    if value is not None and (name in OPACITY_OPTIONS or name == "opacity"):
+        try:
+            return parse_opacity(value)
+        except ValueError as exc:
+            raise ValueError(f"{name}: {exc}") from None
     choices = FIGURE_OPTION_CHOICES.get(name)
     if choices is None:
         return value
@@ -559,6 +569,9 @@ def _finite_for_plotting(
     `DRAWABLE_PX_LIMIT` is read the same way: the browser rejects the SVG it
     would make. A row infinite in a ``drop_on`` column is left out (a word
     box). Copies only when there is one."""
+    from .fixation_source import without_source_cells
+
+    frame = without_source_cells(frame)
     if frame is None or frame.empty:
         return frame
     numbers = {
@@ -598,13 +611,10 @@ def redact_word_text(words: pd.DataFrame | None) -> pd.DataFrame | None:
     the masked text no longer shows."""
     if words is None or words.empty or "text" not in words.columns:
         return words
-    from .preprocessing import detect_right_to_left
-
     out = words.copy()
     present = words["text"].notna()
     text = words["text"].where(present, "").astype(str)
-    if "right_to_left" not in out.columns:
-        out["right_to_left"] = text.map(detect_right_to_left)
+    out["right_to_left"] = _word_label_rtl(words)
     masked = text.map(
         lambda word: "".join(
             _REDACTED_FULLWIDTH_CHAR if _is_fullwidth(ch) else _REDACTED_CHAR
@@ -670,13 +680,13 @@ def _compute_axis_ranges(
 
     x_range = [0, canvas_width]
     y_range = [canvas_height, 0]
+    x_candidates = [v for v in x_candidates if pd.notna(v) and np.isfinite(v)]
+    y_candidates = [v for v in y_candidates if pd.notna(v) and np.isfinite(v)]
     if not x_candidates or not y_candidates:
         return x_range, y_range, None, None, None, None
 
-    x_min = float(np.nanmin(x_candidates))
-    x_max = float(np.nanmax(x_candidates))
-    y_min = float(np.nanmin(y_candidates))
-    y_max = float(np.nanmax(y_candidates))
+    x_min, x_max = float(min(x_candidates)), float(max(x_candidates))
+    y_min, y_max = float(min(y_candidates)), float(max(y_candidates))
 
     if fit_to_monitor:
         # Show the whole monitor; the scanpath keeps its true on-screen position.
@@ -1377,12 +1387,7 @@ def _word_label_x(words: pd.DataFrame) -> np.ndarray:
     chars = words["text"].astype(str).str.len().to_numpy(dtype=float)
     width = x1 - x0
     half_padded = np.abs(width - chars * cell - pad / 2) <= max(1.5, _PADDED_TOL * cell)
-    rtl = words.get("right_to_left")
-    ltr = (
-        np.ones(len(words), dtype=bool)
-        if rtl is None
-        else ~rtl.fillna(False).astype(bool).to_numpy()
-    )
+    ltr = ~_word_label_rtl(words).to_numpy()
     lines = np.asarray(cluster_word_lines(words))
     first = np.zeros(len(words), dtype=bool)
     for line in pd.unique(lines):
@@ -1487,15 +1492,8 @@ def _resolve_marker_colors(
         return uniform_color, []
     if is_numeric_color:
         return color_data, []
-    series = color_data.fillna("(missing)").astype(str)
-    unique_vals = list(pd.unique(series))
-    cat_to_color = {
-        val: _QUALITATIVE_PALETTE[i % len(_QUALITATIVE_PALETTE)]
-        for i, val in enumerate(unique_vals)
-    }
-    marker_color = [cat_to_color[val] for val in series]
-    legend = [(val, cat_to_color[val]) for val in unique_vals]
-    return marker_color, legend
+    colors, legend = _shared_category_colors([color_data])
+    return colors[0], legend
 
 
 def _fixation_category_labels(
@@ -1529,7 +1527,26 @@ def _fixation_category_labels(
         or pd.api.types.is_numeric_dtype(fixations[color_by])
     ):
         return None
-    return fixations[color_by].fillna("(missing)").astype(str)
+    return fixations[color_by]
+
+
+def _category_color(label: str | None, avoid: set[str]) -> str:
+    """Stable across trial selections, workspaces and independent export processes."""
+    if label is None:
+        return "#777777" if "#777777" not in avoid else "#aaaaaa"
+    # Hue, lightness and saturation come from the label itself. Using a
+    # finite palette index here would give unrelated categories identical
+    # colours and make a subset depend on which other categories it contained.
+    digest = hashlib.sha256(label.encode("utf-8")).digest()
+    hue = int.from_bytes(digest[:2], "big") / 65536
+    light = 0.39 + 0.13 * digest[2] / 255
+    saturation = 0.55 + 0.22 * digest[3] / 255
+    while True:
+        rgb = colorsys.hls_to_rgb(hue, light, saturation)
+        color = "#" + "".join(f"{round(255 * channel):02x}" for channel in rgb)
+        if color not in avoid:
+            return color
+        hue = (hue + 0.381966) % 1
 
 
 def _shared_category_colors(
@@ -1539,25 +1556,34 @@ def _shared_category_colors(
     """One category→colour mapping across several scanpaths (Compare, the dual
     replay), so a category wears the same colour on A and on B.
 
-    Categories are numbered in order of first appearance, A's before B's.
+    A category's text determines its colour, independently of row order.
     ``avoid`` names the scanpaths' own colours, which outline their markers: a
     category never fills in one, or that scanpath's outline would vanish into
     its fill. Returns each scanpath's per-row colours (``None`` where it had no
     labels) and the shared legend.
     """
+    labels = [
+        None
+        if col is None
+        else col.astype("string").astype(object).where(col.notna(), None)
+        for col in labels
+    ]
     present = [series for series in labels if series is not None]
     if not present:
         return [None] * len(labels), []
     taken = {str(color).lower() for color in avoid if color}
-    palette = [c for c in _QUALITATIVE_PALETTE if c.lower() not in taken]
-    palette = palette or list(_QUALITATIVE_PALETTE)
     order = list(pd.unique(pd.concat(present, ignore_index=True)))
-    cat_to_color = {val: palette[i % len(palette)] for i, val in enumerate(order)}
+    cat_to_color = {val: _category_color(val, taken) for val in order}
+    missing = "(missing)"
+    while missing in cat_to_color:
+        missing = f"{missing} (no value)"
     colors = [
         None if series is None else [cat_to_color[val] for val in series]
         for series in labels
     ]
-    return colors, [(val, cat_to_color[val]) for val in order]
+    return colors, [
+        (missing if val is None else val, cat_to_color[val]) for val in order
+    ]
 
 
 def _add_category_legend(
@@ -1602,7 +1628,7 @@ def _add_category_legend(
 
 #: How much larger (font px) the outline layer behind a glyph marker is: a text
 #: glyph takes no stroke, so its outline is a second, larger glyph drawn under it.
-_GLYPH_OUTLINE_PX = 4.0
+_GLYPH_DIAMETER_PER_STROKE_PX = 2 * FIXATION_GLYPH_SIZE_SCALE
 #: The outline-only form of each glyph shape, for hollow markers.
 _HOLLOW_GLYPHS = {"♥": "♡"}
 
@@ -1664,12 +1690,18 @@ def _glyph_layers(marker: dict, glyph: str, n: int) -> list[dict]:
         outline = line.get("color")
         # A glyph skips the default hairline (either spelling) and an
         # outline whose width is 0; any other outline is a ring behind it.
+        width = float(line.get("width") or 0)
         if (
             isinstance(outline, str)
-            and outline.lower() not in _DEFAULT_OUTLINES
-            and float(line.get("width") or 0) > 0
+            and width > 0
+            and (
+                outline.lower() not in _DEFAULT_OUTLINES
+                or width > DEFAULT_FIXATION_OUTLINE_WIDTH
+            )
         ):
-            layers.append((glyph, outline, sizes + _GLYPH_OUTLINE_PX))
+            layers.append(
+                (glyph, outline, sizes + _GLYPH_DIAMETER_PER_STROKE_PX * width)
+            )
         layers.append((glyph, color, sizes))
     opacity = float(marker.get("opacity", 1.0))
     return [
@@ -1782,6 +1814,7 @@ def _compute_marker_sizes(
     size_range: tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
     scale: str = DEFAULT_MARKER_SIZE_SCALE,
     duration_range: tuple[float, float] = DEFAULT_MARKER_DURATION_RANGE,
+    relative_bounds: tuple[float, float] | None = None,
 ) -> np.ndarray:
     """Map fixation durations to marker sizes (px diameter).
 
@@ -1796,7 +1829,10 @@ def _compute_marker_sizes(
     durations = pd.to_numeric(durations, errors="coerce").fillna(0)
     min_size, max_size = size_range
     if scale == "relative":
-        d_min, d_max = float(durations.min()), float(durations.max())
+        d_min, d_max = relative_bounds or (
+            float(durations.min()),
+            float(durations.max()),
+        )
         if d_max - d_min > 0:
             return np.interp(durations, (d_min, d_max), (min_size, max_size))
         return np.full(len(durations), (min_size + max_size) / 2)
@@ -1814,6 +1850,27 @@ def _settings_size_scale(settings: FigureSettings) -> dict:
         "scale": settings.marker_size_scale,
         "duration_range": settings.marker_duration_range,
     }
+
+
+def _comparison_duration_scale(trials: list[dict], settings: FigureSettings) -> dict:
+    """Use the extents of both readings' visible fixations for relative sizing."""
+    scale = _settings_size_scale(settings)
+    if settings.marker_size_scale != "relative":
+        return scale
+    durations = []
+    for trial in trials:
+        fix = trial["trial_fix"]
+        if fix.empty:
+            continue
+        flags = _comparison_filters(trial["style"], settings)["fixation_flags"] or {}
+        if any(f.get("mode") == "Hide" for f in flags.values() if isinstance(f, dict)):
+            fix = _discard_flagged_fixations(fix, trial["trial_words"], flags)
+        durations.append(pd.to_numeric(fix["duration_ms"], errors="coerce").fillna(0))
+    if durations:
+        series = pd.concat(durations, ignore_index=True)
+        if not series.empty:
+            scale["relative_bounds"] = (float(series.min()), float(series.max()))
+    return scale
 
 
 def _duration_key_references(duration_range) -> list[tuple[float, str]]:
@@ -3033,10 +3090,12 @@ def _trace_layer(trace) -> str:
     fixation-flag overlays, the drift-correction ``drift`` connectors), so they
     all fall through to ``fixations`` — robust to those names changing."""
     name = trace.name or ""
+    if trace.meta == _COLORS_LEGEND_META:
+        return "fixations"
     low = name.lower()
     if name == "words":
         return "labels"
-    if "heatmap" in low:
+    if low in {"fixation heatmap", "heatmap colorbar"}:
         return "heatmap"
     if name == "Raw gaze":
         return "raw_gaze"
@@ -3047,7 +3106,9 @@ def _trace_layer(trace) -> str:
     return "fixations"
 
 
-def split_scanpath_layers(fig: go.Figure) -> dict[str, go.Figure]:
+def split_scanpath_layers(
+    fig: go.Figure, *, only: set[str] | None = None
+) -> dict[str, go.Figure]:
     """Split a `make_scanpath_figure` result into one figure per visible layer.
 
     Returns ``{layer_name: figure}`` in bottom-to-top draw order, keeping only the
@@ -3055,7 +3116,8 @@ def split_scanpath_layers(fig: go.Figure) -> dict[str, go.Figure]:
     with (a) only that layer's traces/shapes/images kept and (b) a transparent
     paper/plot background, so stacking the exported files in a vector editor
     reproduces the combined figure exactly (identical axis ranges + size ⇒ perfect
-    registration)."""
+    registration). ``only`` limits which layer figures are copied, as when
+    retrying one failed layer from a bundle."""
     # Which layers are present, and each trace's layer (computed once).
     trace_layers = [_trace_layer(tr) for tr in fig.data]
     shape_layers = [_shape_layer(sh) for sh in (fig.layout.shapes or ())]
@@ -3063,6 +3125,8 @@ def split_scanpath_layers(fig: go.Figure) -> dict[str, go.Figure]:
     if fig.layout.images:
         present.add("stimulus_image")
 
+    if only is not None:
+        present.intersection_update(only)
     out: dict[str, go.Figure] = {}
     for layer in SCANPATH_LAYER_ORDER:
         if layer not in present:
@@ -3577,6 +3641,21 @@ def _add_redaction_blocks(
             fig.add_trace(trace)
 
 
+def _word_label_rtl(words: pd.DataFrame) -> pd.Series:
+    """Use the word's first strong character, falling back to its passage for neutrals."""
+
+    def first_strong(word):
+        for char in str(word):
+            direction = bidirectional(char)
+            if direction in ("L", "R", "AL"):
+                return direction != "L"
+        return None
+
+    from_text = words["text"].fillna("").map(first_strong)
+    fallback = words.get("right_to_left", False)
+    return from_text.where(from_text.notna(), fallback).eq(True)
+
+
 def _add_word_label_trace(
     fig: go.Figure,
     words: pd.DataFrame,
@@ -3656,15 +3735,7 @@ def _add_word_label_trace(
     # (the box carries the following space) that draws every word flush left.
     # Centred text needs no LTR/RTL anchor; the Unicode direction isolates stay —
     # they are about *shaping* mixed Hebrew/Arabic + punctuation, not placement.
-    from .preprocessing import detect_right_to_left
-
-    rtl = words.get("right_to_left")
-    if rtl is None:
-        rtl = words["text"].astype(str).map(detect_right_to_left)
-    else:
-        # As object first: a float flag column (1.0 / NaN) cannot take a
-        # boolean fill value.
-        rtl = rtl.astype(object).fillna(False).astype(bool)
+    rtl = _word_label_rtl(words)
     label_x = _word_label_x(words)
     # The word drawn as its own characters (not as Plotly markup),
     # escaped before the direction isolates wrap it; the hover's `%{text}`
@@ -4243,6 +4314,8 @@ def _fixation_flag_masks(
     fixations: pd.DataFrame,
     words: pd.DataFrame,
     flags: dict | None,
+    *,
+    modes=("Hide", "Highlight"),
 ) -> dict[str, pd.Series]:
     """Boolean mask per fixation-flag category, over ``fixations``' index.
 
@@ -4253,24 +4326,36 @@ def _fixation_flag_masks(
     """
     if not flags or fixations.empty:
         return {}
-    dur = pd.to_numeric(fixations.get("duration_ms"), errors="coerce")
-    oob = pd.Series(False, index=fixations.index)
-    if not words.empty:
+    active = {name for name, spec in flags.items() if spec.get("mode") in modes}
+    masks = {}
+    if active & {"short", "long"}:
+        duration = pd.to_numeric(
+            fixations.get("duration_ms", pd.Series(np.nan, index=fixations.index)),
+            errors="coerce",
+        )
+        if "short" in active:
+            masks["short"] = duration.lt(
+                float(flags["short"].get("threshold_ms", _FIX_FLAG_SHORT_MS))
+            ).fillna(False)
+        if "long" in active:
+            masks["long"] = duration.gt(
+                float(flags["long"].get("threshold_ms", _FIX_FLAG_LONG_MS))
+            ).fillna(False)
+    if "oob" in active:
         from .measures import fixation_in_text_mask
 
-        oob = ~fixation_in_text_mask(fixations, words)
-    short_ms = float(flags.get("short", {}).get("threshold_ms", _FIX_FLAG_SHORT_MS))
-    long_ms = float(flags.get("long", {}).get("threshold_ms", _FIX_FLAG_LONG_MS))
-    blink = pd.Series(False, index=fixations.index)
-    for column in ("is_blink", "blink_before", "blink_after", "blink"):
-        if column in fixations:
-            blink |= fixations[column].fillna(False).astype(bool)
-    return {
-        "short": (dur < short_ms).fillna(False).astype(bool),
-        "long": (dur > long_ms).fillna(False).astype(bool),
-        "oob": oob.fillna(False).astype(bool),
-        "blink": blink,
-    }
+        masks["oob"] = (
+            ~fixation_in_text_mask(fixations, words)
+            if not words.empty
+            else pd.Series(False, index=fixations.index)
+        )
+    if "blink" in active:
+        blink = pd.Series(False, index=fixations.index)
+        for column in ("is_blink", "blink_before", "blink_after", "blink"):
+            if column in fixations:
+                blink |= fixations[column].fillna(False).astype(bool)
+        masks["blink"] = blink
+    return masks
 
 
 def _discard_flagged_fixations(
@@ -4284,14 +4369,18 @@ def _discard_flagged_fixations(
     fixation-index labels and the marker-size scaling; reading measures and
     exports are untouched. Returns ``fixations`` itself when nothing is dropped.
     """
-    masks = _fixation_flag_masks(fixations, words, flags)
+    masks = _fixation_flag_masks(fixations, words, flags, modes=("Hide",))
     if not masks:
         return fixations
     drop = pd.Series(False, index=fixations.index)
     for category, mask in masks.items():
         if (flags or {}).get(category, {}).get("mode") == "Hide":
             drop = drop | mask
-    return fixations[~drop] if bool(drop.any()) else fixations
+    if not drop.any():
+        return fixations
+    from .data import with_onset_provenance
+
+    return with_onset_provenance(fixations)[~drop]
 
 
 def _render_scanpath_figure(
@@ -4802,7 +4891,10 @@ def _render_scanpath_figure(
                     x=path[x_field],
                     y=path[y_field],
                     mode="lines",
-                    line=dict(color=saccade_color, width=1),
+                    line=dict(
+                        color=saccade_color, width=saccade_width, dash=saccade_style
+                    ),
+                    opacity=settings.saccade_opacity,
                     name="Fixation sequence",
                     showlegend=False,
                     hoverinfo="skip",
@@ -4932,6 +5024,7 @@ def _render_scanpath_figure(
                 name="Fixations",
                 showlegend=False,
             ):
+                trace.ids = ordered["order_in_trial"].astype(str)
                 fig.add_trace(trace)
             bar = _glyph_colorbar_trace(marker, color_data if is_numeric_color else ())
             if bar is not None:
@@ -4971,6 +5064,7 @@ def _render_scanpath_figure(
                     hovertemplate=hovertemplate,
                     customdata=customdata,
                     name="Fixations",
+                    ids=ordered["order_in_trial"].astype(str),
                     showlegend=False,
                 )
             )
@@ -5215,6 +5309,32 @@ def _apply_heatmap_norm(values, norm: str):
 _WORD_DWELL_TITLE = "Dwell time per word (ms)"
 
 
+def _heatmap_ticks(
+    z_min: float, z_max: float, norm: str, *, counts: bool = False
+) -> dict:
+    """Tick positions share the colour transform, labels keep the recorded units."""
+    if norm != "Log" or not np.isfinite(z_min + z_max) or z_min >= z_max:
+        return {}
+    lo, hi = np.expm1([z_min, z_max])
+    step = _nice_grid_spacing((hi - lo) / 4)
+    if counts:
+        step = max(step, 1.0)
+    ticks = [
+        lo,
+        *(
+            x
+            for x in np.arange(np.ceil(lo / step) * step, hi, step)
+            if lo < x < hi and not np.isclose(x, hi)
+        ),
+        hi,
+    ]
+    return {
+        "tickmode": "array",
+        "tickvals": np.log1p(ticks).tolist(),
+        "ticktext": [f"{v:.5g}" for v in ticks],
+    }
+
+
 def _heatmap_title(base: str, norm: str) -> str:
     """Colour-bar title, marked ``(log)`` when the log normalization is active."""
     return f"{base} (log)" if norm == "Log" else base
@@ -5247,31 +5367,8 @@ def _add_word_level_heatmap(
 ) -> list[dict]:
     """Tint each word box by the fixations in it; returns the tint rects for
     the caller to put on the figure (`_draw_word_value_heatmap`)."""
-    # Pull the fixation coordinates (and optional weights) into numpy arrays once,
-    # then test box membership per word against the arrays: O(words × fix) work
-    # without rebuilding pandas Series each iteration, and O(fix) memory (no
-    # full words × fix matrix).
-    fx = pd.to_numeric(fixations[x_field], errors="coerce").to_numpy(dtype=float)
-    fy = pd.to_numeric(fixations[y_field], errors="coerce").to_numpy(dtype=float)
-    w_arr = (
-        pd.to_numeric(weights, errors="coerce").to_numpy(dtype=float)
-        if weights is not None
-        else None
-    )
-    # Bin against the experiment's boxes with the assignment's own
-    # containment rule — the same boundary it uses and the heatmap then draws,
-    # and half-open, so a fixation on a shared edge counts towards one word.
-    from .measures import word_box_bounds, word_box_contains
-
-    word_values = []
-    for wx0, wy0, wx1, wy1 in zip(*word_box_bounds(words)):
-        in_word = word_box_contains(fx, fy, wx0, wy0, wx1, wy1)
-        val = (
-            float(np.nansum(w_arr[in_word]))
-            if w_arr is not None
-            else float(in_word.sum())
-        )
-        word_values.append(val)
+    values = _word_heatmap_values(words, fixations, weights)
+    word_values = _word_id_keys(words["word_id"]).map(values).fillna(0).tolist()
 
     return _draw_word_value_heatmap(
         fig,
@@ -5282,6 +5379,7 @@ def _add_word_level_heatmap(
         show_colorbars=show_colorbars,
         heatmap_norm=heatmap_norm,
         colorbar_title="Fixation count" if weights is None else _WORD_DWELL_TITLE,
+        unit="fixations" if weights is None else "ms",
         colorbar_style=colorbar_style,
         opacity=opacity,
     )
@@ -5317,6 +5415,7 @@ def _add_word_measure_heatmap(
         colorbar_title="Fixation count"
         if measure == "n_fixations"
         else _WORD_DWELL_TITLE,
+        unit="fixations" if measure == "n_fixations" else "ms",
         colorbar_style=colorbar_style,
         opacity=opacity,
     )
@@ -5332,6 +5431,7 @@ def _draw_word_value_heatmap(
     show_colorbars: bool,
     heatmap_norm: str = "Linear",
     colorbar_title: str,
+    unit: str = "",
     colorbar_style: dict | None = None,
     opacity: float | None = None,
 ) -> list[dict]:
@@ -5360,13 +5460,9 @@ def _draw_word_value_heatmap(
     z_max = float(_apply_heatmap_norm(z_max_raw, heatmap_norm))
     z_span = max(z_max - z_min, 1e-9)
 
-    positions = [
-        max(
-            0.0,
-            min(1.0, (float(_apply_heatmap_norm(v, heatmap_norm)) - z_min) / z_span),
-        )
-        for v in vals
-    ]
+    positions = np.clip(
+        (_apply_heatmap_norm(vals, heatmap_norm) - z_min) / z_span, 0, 1
+    ).tolist()
     # One call for every box: each call looks the scale up by name again.
     colors = sample_colorscale(heatmap_colorscale, positions)
     heatmap_shapes = []
@@ -5387,6 +5483,12 @@ def _draw_word_value_heatmap(
             )
         )
     if show_colorbars:
+        scope = "fixed range" if heatmap_range is not None else "this trial"
+        scale_title = _heatmap_title(colorbar_title, heatmap_norm)
+        # A caller supplying its own values can be drawing a cohort aggregate.
+        # Only the per-reading count/dwell heatmaps carry this scope.
+        if unit:
+            scale_title += f"<br>{z_min_raw:g}–{z_max_raw:g} {unit} · {scope}"
         fig.add_trace(
             go.Scatter(
                 x=[None],
@@ -5398,15 +5500,23 @@ def _draw_word_value_heatmap(
                     cmin=z_min,
                     cmax=z_max,
                     colorbar=_colorbar_dict(
-                        _heatmap_title(colorbar_title, heatmap_norm),
+                        scale_title,
                         **(colorbar_style or {}),
+                    )
+                    | _heatmap_ticks(
+                        z_min,
+                        z_max,
+                        heatmap_norm,
+                        counts=colorbar_title == "Fixation count",
                     ),
                 ),
                 showlegend=False,
                 hoverinfo="skip",
-                # The word-box heatmap's colorbar-carrier rides the heatmap
-                # layer (name contains "heatmap" → classified there).
+                # Keep this carrier with the coloured word boxes in a layer export.
                 name="heatmap colorbar",
+                # The UI can pin exactly the raw limits this reading drew,
+                # including when its visible colours use a log transform.
+                meta={"word_heatmap_range": (z_min_raw, z_max_raw)} if unit else None,
             )
         )
     return heatmap_shapes
@@ -5473,6 +5583,12 @@ def _add_density_heatmap(
             showscale=show_colorbars,
             colorbar=_colorbar_dict(
                 _heatmap_title(base_title, heatmap_norm), **(colorbar_style or {})
+            )
+            | _heatmap_ticks(
+                z_range[0] if heatmap_range else np.nanmin(z),
+                z_range[1] if heatmap_range else np.nanmax(z),
+                heatmap_norm,
+                counts=weights is None,
             ),
             zmin=z_range[0],
             zmax=z_range[1],
@@ -5676,8 +5792,11 @@ def _add_interpolated_heatmap(
             # so it autoscales from 0 rather than borrowing that range.
             zmin=0.0,
             colorbar=_colorbar_dict(
-                _heatmap_title(base_title, heatmap_norm), **(colorbar_style or {})
-            ),
+                _heatmap_title(base_title, heatmap_norm)
+                + "<br>Relative to this figure’s peak",
+                **(colorbar_style or {}),
+            )
+            | _heatmap_ticks(0.0, np.nanmax(z), heatmap_norm),
             hoverinfo="skip",
             name="Fixation heatmap",
         )
@@ -5777,9 +5896,7 @@ def _scanpath_anim_specs(
             continue
         ordered = fix_df.sort_values("timestamp_ms").reset_index(drop=True)
         dur = pd.to_numeric(ordered["duration_ms"], errors="coerce").fillna(0)
-        # Recorded-timestamp-vs-synthetic-index heuristic (shared with the
-        # similarity time-curve): trust recorded timestamps only when they look
-        # like real times, else lay fixations back-to-back by their durations.
+        # The replay and the reading summary use the same onset provenance.
         onsets, recorded_clock = fixation_clock(ordered)
         specs.append(
             dict(
@@ -5787,7 +5904,7 @@ def _scanpath_anim_specs(
                 dur=dur,
                 onsets=onsets,
                 recorded_clock=recorded_clock,
-                end=float(onsets[-1] + dur.iloc[-1]),
+                end=float(np.max(onsets + dur.to_numpy())),
                 color=color,
                 label=label,
                 size_range=tuple(size_range),
@@ -5995,14 +6112,23 @@ _REPLAY_META_TOOLBAR = "scanpath_toolbar"
 _REPLAY_PLAYER_JS = """(function () {
   var gd = document.getElementById('{plot_id}');
   if (!gd) { return; }
+  __FRAME_AT_TIME__
+  var terminal = gd._spsTerminal;
+  if (terminal) {
+    var clock = gd.layout.meta;
+    gd._spsFrameAt = function (i) {
+      return frameAtTime(terminal, clock.scanpath_fixation_steps, clock.scanpath_frame_times_ms[i], String(i));
+    };
+  }
+  var readFrame = gd._spsFrameAt;
   var tries = 0;
-  // Frames live on gd._transitionData._frames (gd.frames is undefined) and are
-  // attached after newPlot resolves, so wait for them rather than a fixed delay.
+  // Plain Plotly HTML attaches named frames after newPlot resolves. Packed
+  // pages already have a reader and need no named frames.
   (function init() {
     var meta = gd.layout && gd.layout.meta;
     var td = gd._transitionData;
     if (typeof Plotly === 'undefined' || !gd.on || !meta ||
-        !(td && td._frames && td._frames.length)) {
+        !(readFrame || (td && td._frames && td._frames.length))) {
       if (++tries < 200) { setTimeout(init, 50); }
       return;
     }
@@ -6021,6 +6147,13 @@ _REPLAY_PLAYER_JS = """(function () {
     var leap = {mode: 'immediate', frame: {duration: 0, redraw: true},
                 transition: {duration: 0}};
     var shown = 0, raf = null, t0 = 0, resume = false, bar = null;
+    var exactTime = null, eventIndex = -1;
+    var readings = meta.scanpath_fixation_steps || [], events = [];
+    readings.forEach(function (r, side) {
+      r.times.forEach(function (ms, index) { events.push({ms: ms, side: side, index: index}); });
+    });
+    events.sort(function (a, b) { return a.ms - b.ms || a.side - b.side || a.index - b.index; });
+    var template = terminal;
 
     function frameAt(ms) {  // the last frame whose reading time has been reached
       var lo = 0, hi = last;
@@ -6030,9 +6163,19 @@ _REPLAY_PLAYER_JS = """(function () {
       }
       return lo;
     }
+    function draw(k, options) {
+      Plotly.animate(gd, readFrame ? readFrame(k) : [String(k)], options);
+      if (readFrame) {
+        if (bar) { bar.at(k); }
+        else if (gd.layout.sliders && gd.layout.sliders[0] && gd.layout.sliders[0].active !== k) {
+          Plotly.relayout(gd, {'sliders[0].active': k});
+        }
+      }
+    }
     function show(k) {
       shown = k;
-      Plotly.animate(gd, [String(k)], jump);
+      exactTime = null; eventIndex = -1;
+      draw(k, jump);
     }
     // A late tick skips frames rather than falling behind the clock.
     function tick() {
@@ -6046,14 +6189,36 @@ _REPLAY_PLAYER_JS = """(function () {
     }
     function play() {
       if (raf !== null) { return; }  // already playing: keep the clock
-      show(shown < last ? shown : 0);  // at the end, Play starts over
-      t0 = performance.now() - times[shown] / speed;
+      var start = exactTime;
+      if (start === null) { show(shown < last ? shown : 0); start = times[shown]; }
+      t0 = performance.now() - start / speed;
       raf = requestAnimationFrame(tick);
     }
     function seek(k) {  // Restart, and the toolbar's time slider
       stop();
+      exactTime = null; eventIndex = -1;
       shown = k;
-      Plotly.animate(gd, [String(k)], leap);
+      draw(k, leap);
+    }
+    function step(direction) {
+      stop();
+      var i = eventIndex;
+      if (i < 0) {
+        var ms = times[shown];
+        i = direction > 0 ? events.findIndex(function (e) { return e.ms > ms; })
+                          : events.findLastIndex(function (e) { return e.ms < ms; });
+        if (i < 0) { i = direction > 0 ? events.length - 1 : 0; }
+      } else { i = Math.max(0, Math.min(i + direction, events.length - 1)); }
+      var e = events[i], r = readings[e.side], j = e.index;
+      eventIndex = i; exactTime = e.ms; shown = frameAt(e.ms);
+      if (!template) { template = readFrame ? readFrame(last) : gd._transitionData._frames[last]; }
+      var frame = frameAtTime(template, readings, e.ms, 'fixation-step');
+      Plotly.animate(gd, frame, leap);
+      var words = r.words[j], duration = r.durations[j];
+      var detail = (r.label ? r.label + ' · ' : '') + 'Fixation ' + (r.ids[j] || (j + 1)) +
+        ', ' + (r.recorded ? 'onset ' : 'estimated onset ') + e.ms + ' ms' +
+        (duration == null ? '' : ', duration ' + duration + ' ms') + (words ? ', ' + words : '');
+      bar.at(shown, detail);
     }
 
     // Whatever put a frame on screen — this clock, the slider, Restart — Play
@@ -6066,10 +6231,16 @@ _REPLAY_PLAYER_JS = """(function () {
       }
     });
     gd.on('plotly_buttonclicked', function (e) {
-      if (e && e.button && e.button.name === 'play') { play(); } else { stop(); }
+      var name = e && e.button && e.button.name;
+      if (name === 'play') { play(); }
+      else if (readFrame && name === 'restart') { seek(0); }
+      else { stop(); }
     });
     gd.on('plotly_sliderstart', stop);
-    gd.on('plotly_sliderchange', function (e) { if (e && e.interaction) { stop(); } });
+    gd.on('plotly_sliderchange', function (e) {
+      if (!e || !e.interaction) { return; }
+      if (readFrame && e.step) { seek(Number(e.step.args[0][0])); } else { stop(); }
+    });
     // A background tab gets no ticks; carry on from the same frame on return.
     function onVisibility() {
       if (!gd.isConnected) { stop(); leave(); return; }
@@ -6136,6 +6307,10 @@ _REPLAY_PLAYER_JS = """(function () {
         b.type = 'button';
         b.textContent = label(name, fallback);
         b.setAttribute('data-name', name);
+        if (name === 'previous' || name === 'next') {
+          b.title = name === 'previous' ? 'Previous fixation' : 'Next fixation';
+          b.setAttribute('aria-label', b.title);
+        }
         var bs = b.style;
         bs.height = (px - 8) + 'px';
         bs.padding = '0 8px';
@@ -6152,6 +6327,10 @@ _REPLAY_PLAYER_JS = """(function () {
       button('play', 'Play', play);
       button('pause', 'Pause', stop);
       button('restart', 'Restart', function () { seek(0); });
+      if (events.length) {
+        button('previous', '‹', function () { step(-1); });
+        button('next', '›', function () { step(1); });
+      }
       var range = document.createElement('input');
       range.type = 'range';
       range.min = '0';
@@ -6193,17 +6372,31 @@ _REPLAY_PLAYER_JS = """(function () {
       readout.style.minWidth = widest.length + 'ch';
       readout.style.textAlign = 'right';
       slot.appendChild(readout);
-      function at(k) {
+      var detail = document.createElement('span');
+      detail.setAttribute('role', 'status');
+      detail.setAttribute('aria-live', 'polite');
+      detail.style.position = 'absolute';
+      detail.style.width = '1px';
+      detail.style.height = '1px';
+      detail.style.overflow = 'hidden';
+      detail.style.clipPath = 'inset(50%)';
+      slot.appendChild(detail);
+      function at(k, announcement) {
         var text = prefix + ((steps[k] && steps[k].label) || '');
         range.value = String(k);
         range.setAttribute('aria-valuetext', text);
-        readout.textContent = text;
+        readout.textContent = announcement || text;
+        readout.title = readout.textContent;
+        readout.style.overflow = 'hidden';
+        readout.style.textOverflow = 'ellipsis';
+        readout.style.maxWidth = announcement ? '50%' : '';
+        detail.textContent = announcement || '';
       }
       at(shown);
       return {at: at};
     }
   }
-})();"""
+})();""".replace("__FRAME_AT_TIME__", replay_frames.FRAME_AT_JS)
 
 
 def animation_player_post_script(fig) -> str | None:
@@ -6230,13 +6423,8 @@ def animation_player_post_script(fig) -> str | None:
     readout, with the figure's own labels. It goes in the element with id
     ``<plot id>-transport`` when the page has one, else straight above the plot.
 
-    It **polls** for Plotly and the figure's frames before starting. Two things
-    would make a one-shot kick-off silently never fire, both confirmed against
-    a live Plotly build: frames live on ``gd._transitionData._frames``,
-    **not** ``gd.frames`` (``undefined``), and the library can arrive late (CDN
-    latency, the true-scale iframe mount) and attaches its frames only after
-    ``newPlot`` resolves. Polling every 50 ms (capped at ~10 s) covers all of it,
-    on the live embed and saved HTML alike.
+    The player waits for Plotly and either the page's on-demand frame reader
+    or the named frames attached after ``newPlot`` by a plain Plotly export.
 
     Without the script — ``fig.show()``, or a plain ``write_html`` — the figure
     still plays on Plotly's own queue, at the frame duration the ▶ Play button
@@ -6254,11 +6442,8 @@ def animation_player_post_script(fig) -> str | None:
 # The replay's frames, as its HTML page carries them. Every frame
 # restates every animated trace at full length (see `_revealed_xy`), ~33 KB a
 # frame however little changed, so a 2,001-frame replay would be a 66 MB page. The
-# page instead carries frame 0 whole and, for each later frame, only what changed
-# since the one before; this decoder rebuilds the exact frame list in the browser
-# and hands it to `Plotly.addFrames`, ahead of the player (which already polls for
-# the frames). Delta-against-the-previous-frame can't be Plotly's own frames: the
-# slider jumps from any frame to any other, so each frame has to be complete.
+# page instead carries frame 0 whole and the subsequent changes. The player
+# asks the decoder for one complete frame at a time, including on a backwards seek.
 #
 # A delta node is `null` (unchanged), `[0, value]` (replaced), `[1, {key: node},
 # [dropped keys]?]` (an object's changed keys), or `[2, [indices], [values]]` (a
@@ -6288,7 +6473,7 @@ _REPLAY_FRAMES_JS = """(function () {
     return out;
   }
   var state = {};
-  var frames = packed.map(function (f) {
+  function unpack(f) {
     var frame = {}, k;
     for (k in f) { if (own.call(f, k) && k !== 'p') { frame[k] = f[k]; } }
     if (f.p) {
@@ -6299,8 +6484,14 @@ _REPLAY_FRAMES_JS = """(function () {
       });
     }
     return frame;
-  });
-  Plotly.addFrames(gd, frames);
+  }
+  // Keep only the current trace state. A backwards seek starts at frame zero.
+  var index = -1, frame;
+  gd._spsFrameAt = function (target) {
+    if (target < index) { state = {}; index = -1; }
+    while (index < target) { frame = unpack(packed[++index]); }
+    return frame;
+  };
 })();"""
 
 _ABSENT = object()
@@ -6412,8 +6603,8 @@ def pack_replay_frames(frames: Sequence[Mapping]) -> list[dict]:
 def replay_page(fig, *, toolbar: bool = True) -> tuple[dict, str] | None:
     """A replay as its HTML page carries it: ``(figure dict, post_script)``.
 
-    The dict is the figure without its ``frames``, and the script rebuilds them
-    in the browser from :func:`pack_replay_frames`' deltas, then runs
+    The dict is the figure without its ``frames``. The browser builds the requested
+    frame from fixation onsets or :func:`pack_replay_frames`' deltas and runs
     :func:`animation_player_post_script`'s player — a 2,001-frame replay's page
     is under 1 MB rather than 66 MB. Serialize the dict with
     ``to_html(…, validate=False, post_script=script)``; ``auto_play`` does not
@@ -6439,12 +6630,38 @@ def replay_page(fig, *, toolbar: bool = True) -> tuple[dict, str] | None:
     frames = fig_dict.get("frames") or []
     if not frames:
         return None
+    layout = fig_dict.get("layout") or {}
     if toolbar:
-        fig_dict = {**fig_dict, "layout": _toolbar_layout(fig_dict.get("layout"))}
-    if not all(_packable(frame) for frame in frames):
-        # Frames this encoding can't address (a typed-array `traces`) travel as
-        # plotly.py writes them, still on the player.
+        fig_dict = {**fig_dict, "layout": _toolbar_layout(layout)}
+    compact = (layout.get("meta") or {}).get(replay_frames.COMPACT)
+    if not compact and any(
+        frame.get("baseframe") or not _packable(frame) for frame in frames
+    ):
+        # Plotly resolves inherited frames and non-list trace indices itself.
         return fig_dict, player
+    if not (fig_dict["layout"].get("meta") or {}).get(_REPLAY_META_TOOLBAR):
+        # The native controls emit their click/seek events. The player draws
+        # the requested frame; Plotly has no list of named frames to animate.
+        layout = dict(fig_dict["layout"])
+        for group, field in (("updatemenus", "buttons"), ("sliders", "steps")):
+            layout[group] = [
+                {
+                    **item,
+                    field: [
+                        {**control, "execute": False} for control in item.get(field, [])
+                    ],
+                }
+                for item in layout.get(group, [])
+            ]
+        fig_dict = {**fig_dict, "layout": layout}
+    if compact:
+        from plotly.io.json import to_json_plotly
+
+        terminal = _script_json(to_json_plotly(frames[0]))
+        script = f"document.getElementById('{{plot_id}}')._spsTerminal = {terminal};"
+        return {
+            k: v for k, v in fig_dict.items() if k != "frames"
+        }, script + "\n" + player
     page = {key: value for key, value in fig_dict.items() if key != "frames"}
     return page, _packed_frames_script(frames) + "\n" + player
 
@@ -6518,12 +6735,15 @@ def _packed_frames_script(frames: Sequence[Mapping]) -> str:
     """`_REPLAY_FRAMES_JS` carrying ``frames``, packed."""
     from plotly.io.json import to_json_plotly
 
-    packed = to_json_plotly(pack_replay_frames(frames))
+    packed = _script_json(to_json_plotly(pack_replay_frames(frames)))
+    return _REPLAY_FRAMES_JS.replace(_PACKED_FRAMES_TOKEN, packed)
+
+
+def _script_json(value: str) -> str:
     # Inside a <script>: no `<` may close it, and plotly.py substitutes
     # `{plot_id}` across the whole script — both only ever occur inside a JSON
     # string, where the escapes decode to the same text.
-    packed = packed.replace("<", "\\u003c").replace("{plot_id}", "\\u007bplot_id}")
-    return _REPLAY_FRAMES_JS.replace(_PACKED_FRAMES_TOKEN, packed)
+    return value.replace("<", "\\u003c").replace("{plot_id}", "\\u007bplot_id}")
 
 
 def animation_clip_frame_ms(fig) -> float | None:
@@ -6722,6 +6942,7 @@ def _render_scanpath_animation(
     fixations: pd.DataFrame,
     *,
     settings: FigureSettings,
+    compact: bool = False,
     fixations_b: pd.DataFrame | None = None,
     words_b: pd.DataFrame | None = None,
 ) -> tuple[go.Figure, float]:
@@ -6943,6 +7164,8 @@ def _render_scanpath_animation(
             (fixations, fixations_b), styles, (label_a, label_b)
         )
     ]
+    if compact:
+        progress.report(0, 4, unit="stages", detail="Preparing the reading")
     specs = _scanpath_anim_specs(
         entries,
         marker_size_range,
@@ -6967,6 +7190,8 @@ def _render_scanpath_animation(
         spec["flags"] = spec_flags
         spec["style"] = spec_style
     dual = len(specs) > 1
+    if compact:
+        progress.report(1, 4, unit="stages", detail="Drawing fixation layers")
     if not dual and specs:
         # A lone scanpath always wears the canonical single-replay colour,
         # whether it arrived as `fixations` or (degenerately) only as
@@ -7322,10 +7547,12 @@ def _render_scanpath_animation(
         s["flag_overlays"] = []
         s_flags = s.get("flags", flags)
         if s_flags:
-            overlay_masks = _fixation_flag_masks(ordered, s["words"], s_flags)
+            overlay_masks = _fixation_flag_masks(
+                ordered, s["words"], s_flags, modes=("Highlight",)
+            )
             for category in FIXATION_FLAG_CATEGORIES:
                 spec_flags = s_flags.get(category, {})
-                if spec_flags.get("mode") != "Highlight":
+                if category not in overlay_masks:
                     continue
                 hit = overlay_masks[category].to_numpy()
                 if not hit.any():
@@ -7401,113 +7628,123 @@ def _render_scanpath_animation(
         if bar is not None:
             fig.add_trace(bar)
 
+    if compact:
+        progress.report(2, 4, unit="stages", detail="Preparing recorded playback times")
     frame_times, frame_step_ms, reading_span_ms = _anim_timeline(
         specs,
         grid_step_ms=anim_grid_step_ms,
         max_frames=anim_max_frames,
     )
 
-    # Frames are plain dicts, validated once, by the `fig.frames` assignment
-    # below. Built from `go.Scatter`/`go.Frame` they would be validated (and
-    # deep-copied) three times over — each trace, each frame, then the figure —
-    # which on a long replay is most of the build: every frame restates the
-    # trail's full-length sizes and colours (see `_trail_marker`).
-    frames = []
-    n_frames = len(frame_times)
-    for k, t in enumerate(frame_times):
-        # The loading card's "120 of 360 frames" — and a cancel checkpoint, so an
-        # abandoned build stops within a frame. A no-op outside a card.
-        progress.report(k + 1, n_frames, unit="frames")
-        traces_in_frame = []
-        traces_idx_in_frame = []
-        for s in specs:
-            all_x = s["all_x"]
-            all_y = s["all_y"]
-            # Fixations whose recorded onset has been reached by time t.
-            kk = max(int(np.searchsorted(s["onsets"], t, side="right")), 1)
+    # Every timed state shares these trace styles and final coordinates. The
+    # UI caches this one template and lets its player reveal the coordinates.
+    traces_in_frame = []
+    traces_idx_in_frame = []
+    for s in specs:
+        all_x = s["all_x"]
+        all_y = s["all_y"]
+        kk = len(all_x)
 
-            # Trail: full-length, fixations past kk masked to None. The marker
-            # (sizes/colours) and `text` are full-length and identical every
-            # frame, so only positions change — `redraw=False` then re-renders
-            # just this trace, not the whole figure.
-            tx, ty = _revealed_xy(all_x, all_y, kk)
-            for idx, trace in zip(s["idx_trails"], _trail_traces(s, tx, ty, make=dict)):
-                traces_in_frame.append(trace)
-                traces_idx_in_frame.append(idx)
+        # Trail: full-length, fixations past kk masked to None. The marker
+        # (sizes/colours) and `text` are full-length and identical every
+        # frame, so only positions change — `redraw=False` then re-renders
+        # just this trace, not the whole figure.
+        tx, ty = _revealed_xy(all_x, all_y, kk)
+        for idx, trace in zip(s["idx_trails"], _trail_traces(s, tx, ty, make=dict)):
+            traces_in_frame.append(trace)
+            traces_idx_in_frame.append(idx)
 
-            if show_order:
-                # Same full-length positions/text as the base order trace; the
-                # reveal is purely the un-masking of x/y for reached fixations,
-                # so numbers appear in place (and `redraw=False` shows them).
-                ox, oy = _revealed_xy(all_x, all_y, kk)
-                traces_in_frame.append(
-                    dict(
-                        x=ox,
-                        y=oy,
-                        mode="text",
-                        text=s["order_text"],
-                        textfont=dict(
-                            color=s["text_color"],
-                            size=order_font_size,
-                            family=font_settings["family"],
-                        ),
-                        textposition=order_textposition,
-                    )
-                )
-                traces_idx_in_frame.append(s["idx_order"])
-
-            if show_saccades:
-                sac_x, sac_y = _revealed_saccade_xy(all_x, all_y, kk)
-                traces_in_frame.append(
-                    dict(
-                        x=sac_x,
-                        y=sac_y,
-                        mode="lines",
-                        line=dict(
-                            color=s["sac_color"],
-                            width=s["sac_width"],
-                            dash=s["sac_dash"],
-                        ),
-                    )
-                )
-                traces_idx_in_frame.append(s["idx_sac"])
-
-            if s["idx_arrow"] is not None:
-                # Arrowheads reveal with the saccades above: same constant-length
-                # array, only the mask moves (angles are set on the base trace).
-                arw_x, arw_y = _revealed_arrow_xy(
-                    s["arrow_x"], s["arrow_y"], s["arrow_seg"], kk
-                )
-                traces_in_frame.append(dict(x=arw_x, y=arw_y, mode="markers"))
-                traces_idx_in_frame.append(s["idx_arrow"])
-
-            ci = kk - 1
+        if show_order:
+            # Same full-length positions/text as the base order trace; the
+            # reveal is purely the un-masking of x/y for reached fixations,
+            # so numbers appear in place (and `redraw=False` shows them).
+            ox, oy = _revealed_xy(all_x, all_y, kk)
             traces_in_frame.append(
                 dict(
-                    x=[all_x[ci]],
-                    y=[all_y[ci]],
-                    mode="markers",
-                    marker=dict(
-                        size=[float(s["sizes"][ci]) + 8],
-                        color=CURRENT_FIX_COLOR,
-                        line=dict(color=s["curr_outline"], width=s["curr_outline_w"]),
+                    x=ox,
+                    y=oy,
+                    mode="text",
+                    text=s["order_text"],
+                    textfont=dict(
+                        color=s["text_color"],
+                        size=order_font_size,
+                        family=font_settings["family"],
+                    ),
+                    textposition=order_textposition,
+                )
+            )
+            traces_idx_in_frame.append(s["idx_order"])
+
+        if show_saccades:
+            sac_x, sac_y = _revealed_saccade_xy(all_x, all_y, kk)
+            traces_in_frame.append(
+                dict(
+                    x=sac_x,
+                    y=sac_y,
+                    mode="lines",
+                    line=dict(
+                        color=s["sac_color"],
+                        width=s["sac_width"],
+                        dash=s["sac_dash"],
                     ),
                 )
             )
-            traces_idx_in_frame.append(s["idx_curr"])
+            traces_idx_in_frame.append(s["idx_sac"])
 
-            for overlay in s["flag_overlays"]:
-                # A flagged fixation's highlight appears with the fixation itself.
-                ox_f, oy_f = _revealed_xy(overlay["x"], overlay["y"], kk)
-                traces_in_frame.append(
-                    dict(x=ox_f, y=oy_f, mode="markers", marker=overlay["marker"])
-                )
-                traces_idx_in_frame.append(overlay["idx"])
+        if s["idx_arrow"] is not None:
+            # Arrowheads reveal with the saccades above: same constant-length
+            # array, only the mask moves (angles are set on the base trace).
+            arw_x, arw_y = _revealed_arrow_xy(
+                s["arrow_x"], s["arrow_y"], s["arrow_seg"], kk
+            )
+            traces_in_frame.append(dict(x=arw_x, y=arw_y, mode="markers"))
+            traces_idx_in_frame.append(s["idx_arrow"])
 
-        frames.append(
-            dict(data=traces_in_frame, name=str(k), traces=traces_idx_in_frame)
+        ci = kk - 1
+        traces_in_frame.append(
+            dict(
+                x=[all_x[ci]],
+                y=[all_y[ci]],
+                mode="markers",
+                marker=dict(
+                    size=[float(s["sizes"][ci]) + 8],
+                    color=CURRENT_FIX_COLOR,
+                    line=dict(color=s["curr_outline"], width=s["curr_outline_w"]),
+                ),
+            )
         )
-    fig.frames = frames
+        traces_idx_in_frame.append(s["idx_curr"])
+
+        for overlay in s["flag_overlays"]:
+            # A flagged fixation's highlight appears with the fixation itself.
+            ox_f, oy_f = _revealed_xy(overlay["x"], overlay["y"], kk)
+            traces_in_frame.append(
+                dict(x=ox_f, y=oy_f, mode="markers", marker=overlay["marker"])
+            )
+            traces_idx_in_frame.append(overlay["idx"])
+
+    if compact:
+        progress.report(3, 4, unit="stages", detail="Preparing the playback template")
+    readings = []
+    if frame_times:
+        slots = {idx: slot for slot, idx in enumerate(traces_idx_in_frame)}
+        readings = [
+            replay_frames.reading(s, slots, redact=settings.redact_text, comparing=dual)
+            for s in specs
+        ]
+        terminal = dict(
+            data=traces_in_frame, traces=traces_idx_in_frame, name="terminal"
+        )
+        if compact:
+            fig.frames = [terminal]
+        else:
+            frames = []
+            for k, time_ms in enumerate(frame_times):
+                progress.report(k + 1, len(frame_times), unit="frames")
+                frames.append(
+                    replay_frames.at_time(terminal, readings, time_ms, str(k))
+                )
+            fig.frames = frames
 
     if settings.show_plot_frame:
         shapes.append(
@@ -7650,8 +7887,16 @@ def _render_scanpath_animation(
     # intent, which that player reads on load (Plotly's own `auto_play` ignores
     # the frame duration). No frames → no times, so no player and no autoplay.
     fig.layout.meta = _replay_clock_meta(
-        [round(float(t), 3) for t in frame_times], playback_speed, autoplay
+        list(map(float, frame_times)), playback_speed, autoplay
     )
+    if readings:
+        fig.layout.meta = {
+            **fig.layout.meta,
+            replay_frames.READINGS: readings,
+            **({replay_frames.COMPACT: True} if compact else {}),
+        }
+    if compact:
+        progress.report(4, 4, unit="stages", detail="Replay ready")
     return fig, frame_step_ms
 
 
@@ -7704,15 +7949,17 @@ def _comparison_scanpath_style(
     if override:
         # Drop falsy values (None / "") so a blank colour can't override the
         # palette default and reach Plotly as a dark/None marker colour. The
-        # per-scanpath filters are the exception: an empty one is a
-        # real answer — "no filter on this scanpath" — not a missing colour.
+        # filters can be empty, and zero opacity hides the layer.
         base.update(
             {
                 k: v
                 for k, v in override.items()
                 if v
                 or (
-                    k in COMPARE_FILTER_STYLE_KEYS | COMPARE_BOX_OPACITY_STYLE_KEYS
+                    k
+                    in COMPARE_FILTER_STYLE_KEYS
+                    | COMPARE_BOX_OPACITY_STYLE_KEYS
+                    | {"opacity"}
                     and v is not None
                 )
             }
@@ -8163,7 +8410,9 @@ def _add_comparison_fixation_trace(
             )
         )
     if flags:
-        overlay = _fixation_flag_masks(trial_fix, words_for_flags, flags)
+        overlay = _fixation_flag_masks(
+            trial_fix, words_for_flags, flags, modes=("Highlight",)
+        )
         for cat in FIXATION_FLAG_CATEGORIES:
             spec = flags.get(cat, {})
             if spec.get("mode") != "Highlight" or cat not in overlay:
@@ -8230,6 +8479,22 @@ def _word_id_keys(values: pd.Series) -> pd.Series:
     return text.mask(integral, numeric.where(integral, 0).astype("int64").astype(str))
 
 
+def _word_heatmap_values(
+    words: pd.DataFrame, fixations: pd.DataFrame, weights: pd.Series | None
+) -> dict[str, float]:
+    """Count or sum dwell by the fixation's word. A recorded blank stays blank."""
+    if words.empty or fixations.empty or "word_id" not in words:
+        return {}
+    from .measures import assign_fixations_to_words
+
+    ids = assign_fixations_to_words(fixations, words)["word_id"]
+    valid = ids.notna()
+    keys = _word_id_keys(ids[valid])
+    if weights is None:
+        return keys.value_counts().to_dict()
+    return pd.to_numeric(weights[valid], errors="coerce").groupby(keys).sum().to_dict()
+
+
 def _comparison_word_heatmap_data(
     trial_specs: Sequence[dict],
     *,
@@ -8243,20 +8508,11 @@ def _comparison_word_heatmap_data(
     duration_weighted = metric == "duration_ms"
     for spec in trial_specs:
         fixations = spec["trial_fix"]
-        if fixations.empty or "word_id" not in fixations.columns:
-            values: dict[str, float] = {}
-        else:
-            valid = fixations[fixations["word_id"].notna()].copy()
-            keys = _word_id_keys(valid["word_id"])
-            if duration_weighted and "duration_ms" in valid.columns:
-                grouped = (
-                    pd.to_numeric(valid["duration_ms"], errors="coerce")
-                    .groupby(keys)
-                    .sum()
-                )
-            else:
-                grouped = valid.groupby(keys).size()
-            values = {str(key): float(value) for key, value in grouped.items()}
+        values = _word_heatmap_values(
+            spec["trial_words"],
+            fixations,
+            fixations.get("duration_ms") if duration_weighted else None,
+        )
         value_maps.append(values)
         all_values.extend(value for value in values.values() if value > 0)
     if heatmap_range is not None:
@@ -8300,17 +8556,22 @@ def _comparison_heatmap_shapes(
     if "word_id" not in words.columns:
         return []
     keys = _word_id_keys(words["word_id"])
-    for key, (x0, y0, x1, y1) in zip(keys, zip(*word_box_bounds(words))):
-        value = values.get(key, 0.0)
-        if value <= 0:
-            continue
+    raw = keys.map(values).fillna(0).to_numpy(dtype=float)
+    active = raw > 0
+    if not active.any():
+        return []
+    positions = np.clip(
+        (_apply_heatmap_norm(raw[active], heatmap_norm) - z_min) / z_span, 0, 1
+    )
+    colors = sample_colorscale(heatmap_colorscale, positions.tolist())
+    for (x0, y0, x1, y1), color in zip(
+        zip(*(v[active] for v in word_box_bounds(words))), colors
+    ):
         midpoint = (x0 + x1) / 2.0
         if half == "left":
             x1 = midpoint
         elif half == "right":
             x0 = midpoint
-        transformed = float(_apply_heatmap_norm(value, heatmap_norm))
-        position = max(0.0, min(1.0, (transformed - z_min) / z_span))
         shape = dict(
             type="rect",
             x0=x0,
@@ -8318,7 +8579,7 @@ def _comparison_heatmap_shapes(
             x1=x1,
             y1=y1,
             line=dict(width=0),
-            fillcolor=sample_colorscale(heatmap_colorscale, [position])[0],
+            fillcolor=color,
             opacity=heatmap_style_opacity("Word boxes", opacity),
             layer="below",
             name=_shape_layer_tag("heatmap"),
@@ -8351,6 +8612,9 @@ def _comparison_heatmap_colorbar_trace(
             cmax=z_max,
             colorbar=_colorbar_dict(
                 _heatmap_title(title, heatmap_norm), **colorbar_style
+            )
+            | _heatmap_ticks(
+                z_min, z_max, heatmap_norm, counts=title == "Fixation count"
             ),
         ),
         showlegend=False,
@@ -8590,6 +8854,7 @@ def _make_split_comparison_figure(
             )
         )
 
+    duration_scale = _comparison_duration_scale(trial_specs, settings)
     heatmap_maps, heatmap_min, heatmap_max, heatmap_title = (
         _comparison_word_heatmap_data(
             trial_specs,
@@ -8833,7 +9098,7 @@ def _make_split_comparison_figure(
             col=col,
             trial_words=spec["trial_words"],
             **_comparison_filters(spec["style"], settings),
-            duration_scale=_settings_size_scale(settings),
+            duration_scale=duration_scale,
             category_colors=category_colors[idx],
         )
 
@@ -8930,10 +9195,27 @@ def _make_split_comparison_figure(
     names_row_px = _panel_names_px(fig)
     legend_px = _default_legend_height(fig)
     top_px = names_row_px + legend_px
+    heatmap_limits = None
+    if show_heatmap:
+        heatmap_limits = (
+            [float(np.expm1(heatmap_min)), float(np.expm1(heatmap_max))]
+            if heatmap_norm == "Log"
+            else [heatmap_min, heatmap_max]
+        )
     fig.update_layout(
         height=figure_height + top_px,
         margin_t=top_px,
         legend_y=1.0 + names_row_px / plot_area[1],
+        meta={
+            **(fig.layout.meta or {}),
+            "scanpath_panels": {
+                "layout": orientation,
+                "canvases": panel_canvas,
+                "fixation_range": metric_range,
+                "heatmap_range": heatmap_limits,
+                "labels": subplot_titles,
+            },
+        },
     )
     return fig
 
@@ -9133,6 +9415,7 @@ def _render_comparison_figure(
             )
         )
 
+    duration_scale = _comparison_duration_scale(trial_specs, settings)
     heatmap_maps, heatmap_min, heatmap_max, heatmap_title = (
         _comparison_word_heatmap_data(
             trial_specs,
@@ -9253,7 +9536,7 @@ def _render_comparison_figure(
             fixation_hover_fields=fixation_hover_fields,
             trial_words=spec["trial_words"],
             **_comparison_filters(spec["style"], settings),
-            duration_scale=_settings_size_scale(settings),
+            duration_scale=duration_scale,
             category_colors=category_colors[_idx],
         )
         if show_words and draws_stimulus[_idx]:
@@ -9692,9 +9975,9 @@ def make_small_multiples_figure(
             row=i,
             col=1,
         )
-    title = f"{measure_label} per participant (word profile)"
+    title = measure_label
     if n_total > n:
-        title += f" (showing {n} of {n_total} participants)"
+        title += f"<br><sup>showing {n} of {n_total} participants</sup>"
     margin_top = 50 + title_gap_px
     margin_bottom = 40
     fig.update_layout(
@@ -9809,25 +10092,32 @@ def make_word_profile_figure(
     for i, (label, prof) in enumerate(entries):
         prof = prof.sort_values("word_id")
         xs = prof["word_id"].to_numpy()
-        ys = prof["value"].to_numpy()
+        supported = prof["value"].notna()
+        if "enough" in prof:
+            supported &= prof["enough"]
+        ys = prof["value"].where(supported).to_numpy()
         color_choices = tuple(colors or COMPARISON_PALETTE)
         color = color_choices[i % len(color_choices)]
         rgba = _hex_to_rgba(color, 0.15)
         if {"lo", "hi"} <= set(prof.columns):
             lo = prof["lo"].to_numpy()
             hi = prof["hi"].to_numpy()
-            fig.add_trace(
-                go.Scatter(
-                    x=np.concatenate([xs, xs[::-1]]),
-                    y=np.concatenate([hi, lo[::-1]]),
-                    fill="toself",
-                    fillcolor=rgba,
-                    line=dict(width=0),
-                    hoverinfo="skip",
-                    showlegend=False,
-                    name=f"{label} {spread_label}",
-                )
-            )
+            # Runs use positions in the word catalog: IDs need not be consecutive.
+            positions = np.flatnonzero(supported & np.isfinite(lo) & np.isfinite(hi))
+            for run in np.split(positions, np.flatnonzero(np.diff(positions) > 1) + 1):
+                if run.size:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=np.concatenate([xs[run], xs[run][::-1]]),
+                            y=np.concatenate([hi[run], lo[run][::-1]]),
+                            fill="toself",
+                            fillcolor=rgba,
+                            line=dict(width=0),
+                            hoverinfo="skip",
+                            showlegend=False,
+                            name=f"{label} {spread_label}",
+                        )
+                    )
         fig.add_trace(
             go.Scatter(
                 x=xs,
@@ -10559,6 +10849,7 @@ def build_scanpath_replay(
     fixations: pd.DataFrame,
     *,
     settings: FigureSettings | Mapping[str, Any] | None = None,
+    compact: bool = False,
     fixations_b: pd.DataFrame | None = None,
     words_b: pd.DataFrame | None = None,
     **overrides: Any,
@@ -10601,6 +10892,7 @@ def build_scanpath_replay(
         fig, frame_step_ms = _render_scanpath_animation(
             words,
             fixations,
+            compact=compact,
             settings=resolved,
             fixations_b=fixations_b,
             words_b=words_b,

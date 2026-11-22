@@ -239,6 +239,23 @@ def _examples(frame: pd.DataFrame, mask: pd.Series, columns, n: int) -> tuple:
     return tuple(shown.to_dict("records"))
 
 
+def affected_rows(frame: pd.DataFrame, finding: HealthFinding) -> pd.DataFrame:
+    """All affected rows of one check, using the same predicates as its totals."""
+    check = next((c for c in CHECKS if c.key == finding.check), None)
+    if check is None or not set(check.columns) <= set(frame):
+        return frame.iloc[:0]
+    masks = check.masks(frame).values()
+    selected = np.logical_or.reduce(
+        [m.fillna(False).to_numpy(dtype=bool) for m in masks]
+    )
+    columns = dict.fromkeys(
+        (*_EXAMPLE_KEYS, "source_file", "fixation_id", "word_id", *check.columns)
+    )
+    return frame.loc[selected, [c for c in columns if c in frame]].reset_index(
+        drop=True
+    )
+
+
 def check_data_health(
     words: pd.DataFrame | None,
     fixations: pd.DataFrame | None,

@@ -60,6 +60,11 @@ scanpath-studio
 **Help** shows which channel you are running. **Help → What’s new** opens
 its release notes.
 
+For a Git installation, the update command keeps your repository, requested
+ref and package subdirectory. An install from an official release tag follows
+the Stable channel for updates. If you selected a commit hash, choose the new
+revision in your original install command when you are ready to move.
+
 ## Your first figure { #explore }
 
 Start with the bundled demo, a subset of the [OneStop corpus](guides/loading-data/index.md#onestop).

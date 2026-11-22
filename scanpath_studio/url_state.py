@@ -49,7 +49,12 @@ from .code_snippet import (
     reproduction_code,
     upload_source,
 )
-from .column_names import is_multipleye_entry
+from .column_names import (
+    encode_field_list,
+    is_multipleye_entry,
+    json_field_list,
+    split_field_list,
+)
 from .constants import (
     _VIEW_DATA,
     _VIEW_SCANPATH,
@@ -68,6 +73,7 @@ from .constants import (
     FIXATION_FLAG_MARKERS,
     FIXATION_FLAG_MODES,
     FIXATION_LABEL_OPTIONS,
+    FIXATION_OPACITY,
     FIXATION_OUTLINE_WIDTH_BOUNDS,
     FIXATION_SYMBOLS,
     GRID_FONT_SIZE_BOUNDS,
@@ -86,6 +92,7 @@ from .constants import (
     ONESTOP_REGIME_LABELS,
     ONESTOP_REGIME_SOURCE_TOKENS,
     ONESTOP_VARIANT_LABELS,
+    OPACITY_OPTIONS,
     PALETTES,
     PUBLIC_DATASETS_CHOICE,
     SACCADE_ARROW_SIZE_BOUNDS,
@@ -147,14 +154,17 @@ from .session_keys import (
     PARAM_DATASET_ID,
     PARAM_SHOW_TITLE_CAPTION,
     PENDING_COMPARE_STATE_KEY,
+    PLOT_CONFIG_SCHEMA_VERSION,
     PUBLIC_DATASET_CHOICE,
     SAME_DATASET,
     SETUP_PARAMS,
     SETUP_PROVENANCE_PARAM,
     SETUP_PROVENANCE_STATE_KEY,
     SINGLE_ANIMATE,
+    SINGLE_COMPARE_FIX_RANGE,
     SINGLE_COMPARE_SCREEN_ID,
     SINGLE_COMPARE_TOGGLE,
+    SINGLE_FIX_RANGE,
 )
 from .utils import (
     combo_reading_keys,
@@ -234,11 +244,6 @@ def _parse_float_range(v) -> tuple:
     return _parse_pair(v, _parse_finite_float)
 
 
-def _parse_field_list(v) -> list[str]:
-    """Comma-separated hover fields carried by a Share link."""
-    return [part.strip() for part in str(v).split(",") if part.strip()]
-
-
 def _parse_saccade_classes(v) -> list[str]:
     """The saccade reading-class filter carried by a Share link.
 
@@ -314,11 +319,15 @@ def _parse_hex_color(v) -> str:
 #: draws a small HTML subset in a figure's title and caption, and `<a href>` in
 #: it is a working link. Requiring a letter after `<` keeps a literal `<->` or
 #: `a < b` in a title intact.
-_MARKUP_TAG = re.compile(r"</?[A-Za-z][^<>]*>")
+_MARKUP_TAG = re.compile(
+    r"</?(?:a|b|br|em|i|s|sub|sup|span|strong|u|img|iframe|script|style|svg)"
+    r"(?=[\s/>])[^<>]*>",
+    re.IGNORECASE,
+)
 
 
 def _strip_markup(v) -> str:
-    """``v`` with every markup tag removed.
+    """Remove active HTML tags from imported labels, preserving linguistic tags.
 
     For figure text that arrives from someone else — a share link, a saved
     config — which must not be able to put a clickable link to anywhere in the
@@ -854,8 +863,10 @@ _URL_PRESETS = {
     # covers the same param): the drift-correction picker rejects any value
     # outside its options, so the link's spelling is checked here.
     "align_algorithm": ("global_align_algorithm", _parse_align_algorithm),
-    "word_hover_fields": ("global_word_hover_fields", _parse_field_list),
-    "fixation_hover_fields": ("global_fixation_hover_fields", _parse_field_list),
+    "word_hover_fields": ("global_word_hover_fields", split_field_list),
+    "fixation_hover_fields": ("global_fixation_hover_fields", split_field_list),
+    "word_hover_fields_json": ("global_word_hover_fields", json_field_list),
+    "fixation_hover_fields_json": ("global_fixation_hover_fields", json_field_list),
     # The saccade reading-class filter — validated like `align_algorithm`
     # above, and for the same reason: the multiselect raises on a value outside
     # its options, so an unknown class name has to be rejected here rather than
@@ -950,7 +961,7 @@ _URL_BOUNDED = {
     "global_heatmap_sigma_px": HEATMAP_SIGMA_BOUNDS,
     "global_line_spacing": (1.0, 10.0),
     "global_saccade_width": SACCADE_WIDTH_BOUNDS,
-    "global_saccade_opacity": (0.1, 1.0),
+    **{option.state_key: option.bounds for option in OPACITY_OPTIONS.values()},
     **{
         option.state_key: option.bounds
         for option in FIXATION_LABEL_OPTIONS.values()
@@ -960,7 +971,6 @@ _URL_BOUNDED = {
     "global_anim_max_frames": (30, 2000),
     "global_marker_size_range": (4, 40),
     "global_marker_duration_range": MARKER_DURATION_BOUNDS,
-    "global_fixation_opacity": (0.1, 1.0),
     "global_fixation_snap_position": SNAP_POSITION_BOUNDS,
     "global_stimulus_image_opacity": (0.1, 1.0),
     # Image-alignment nudge — clamp a hand-crafted link to sane ranges.
@@ -1004,7 +1014,7 @@ _URL_BOUNDED = {
     "export_figure_width": PRINT_WIDTH_BOUNDS,
     "export_figure_dpi": PRINT_DPI_BOUNDS,
     "global_stimulus_font_pt": (4.0, 144.0),
-    **{f"cmp{i}_opacity": (0.1, 1.0) for i in (0, 1)},
+    **{f"cmp{i}_opacity": FIXATION_OPACITY.bounds for i in (0, 1)},
     **{
         f"cmp{i}_box_{part}_opacity": (0.0, 1.0)
         for i in (0, 1)
@@ -1252,7 +1262,7 @@ def _apply_url_palette(qp) -> None:
     if name not in PALETTES:
         return
     explicit = {_URL_PRESETS[k][0] for k in qp if k in _URL_PRESETS}
-    for state_key, value in palette_state(name).items():
+    for state_key, value in palette_state(name, include_compare=True).items():
         if state_key not in explicit:
             st.session_state.setdefault(state_key, value)
 
@@ -2104,7 +2114,7 @@ def sanitize_session_value(key: str, value):
 # time. The field-by-field reader already tolerates *missing* sections, so a
 # migration is only needed when an old key must be *translated*, not merely when
 # new keys are added.
-PLOT_CONFIG_SCHEMA = 9
+PLOT_CONFIG_SCHEMA = PLOT_CONFIG_SCHEMA_VERSION
 
 
 def _detect_config_schema(config: dict) -> int:
@@ -2286,6 +2296,8 @@ _PLOT_CONFIG_MIGRATIONS = {
     7: _migrate_config_7_to_8,
     # Without an upload ID, a saved name still resolves by its original store key.
     8: dict,
+    # Earlier files leave existing fixation windows and their scope alone.
+    9: dict,
 }
 
 
@@ -2662,6 +2674,29 @@ class _RestoreContext:
             self.put(key, max(lo, min(float(number), hi)))
 
 
+def _restore_window(
+    selection: dict, key: str, trial_key: str, restore: _RestoreContext
+) -> None:
+    if "fixation_window" not in selection:
+        return
+    window = selection["fixation_window"]
+    if window is not None:
+        if not (
+            isinstance(window, list)
+            and len(window) == 2
+            and all(type(bound) is int for bound in window)
+            and window[0] <= window[1]
+        ):
+            restore.skipped.append("fixation index window")
+            return
+        window = tuple(window)
+    restore.put(key, window)
+    restore.put(f"{key}_user_set", window is not None)
+    # A previous selection in this session must not clear the incoming window.
+    # The slider clamps it against the selected screen's indices when it mounts.
+    st.session_state.pop(trial_key, None)
+
+
 def _restore_plot_config(
     config: dict, combos: pd.DataFrame, fixations: pd.DataFrame
 ) -> tuple[int, list]:
@@ -2764,7 +2799,9 @@ def _restore_plot_config(
     palette = coloring.get("palette")
     if palette is not None:
         if palette in PALETTES:
-            for state_key, value in palette_state(palette).items():
+            for state_key, value in palette_state(
+                palette, include_compare=True
+            ).items():
                 put(state_key, value)
             put("global_palette", palette)
         elif palette != CUSTOM_PALETTE:
@@ -2932,9 +2969,8 @@ def _restore_plot_config(
     if "fixation_opacity" in coloring:
         put_float(
             coloring["fixation_opacity"],
-            "global_fixation_opacity",
-            0.1,
-            1.0,
+            FIXATION_OPACITY.state_key,
+            *FIXATION_OPACITY.bounds,
             "fixation opacity",
         )
     if "stimulus_image_opacity" in coloring:
@@ -3001,7 +3037,7 @@ def _restore_plot_config(
         "fixation_range": bool(layers.get("fixations"))
         and coloring.get("color_by") not in (None, UNIFORM_COLOR_FIELD, "line"),
         "heatmap_range": bool(layers.get("heatmap"))
-        and coloring.get("heatmap_metric") == "duration_ms",
+        and coloring.get("heatmap_metric") in ("duration_ms", "counts"),
     }
     for cfg_key, state_key, label in (
         ("fixation_range", "global_fixation_color_range", "fixation color range"),
@@ -3513,8 +3549,7 @@ def _restore_plot_config(
                 put_float(
                     entry["opacity"],
                     f"cmp{idx}_opacity",
-                    0.1,
-                    1.0,
+                    *FIXATION_OPACITY.bounds,
                     f"scanpath {idx + 1} opacity",
                 )
             # The A/B legend label override.
@@ -3531,11 +3566,23 @@ def _restore_plot_config(
     if selection:
         if _restore_selection(selection, combos):
             restore.applied += 1
+            _restore_window(selection, SINGLE_FIX_RANGE, "_fix_range_trial", restore)
+            if isinstance(selection.get("window_all_trials"), bool):
+                put("single_fix_range_all_trials", selection["window_all_trials"])
         else:
             _row, reason = _match_selection(selection, combos)
             skipped.append(f"trial selection ({reason})")
 
     _restore_figure_mode(config, selection, combos, put, skipped)
+    compare = selection.get("compare")
+    if (
+        isinstance(compare, dict)
+        and section("mode").get("compare") is True
+        and st.session_state.get(SINGLE_COMPARE_TOGGLE)
+    ):
+        _restore_window(
+            compare, SINGLE_COMPARE_FIX_RANGE, "_compare_fix_range_trial", restore
+        )
 
     return restore.applied, skipped
 
@@ -3654,7 +3701,7 @@ def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -
     st.session_state["_plot_config_last_import"] = signature
     st.session_state.pop("_plot_config_skipped", None)
     try:
-        config = json.loads(uploaded.getvalue().decode("utf-8"))
+        config = json.loads(uploaded.getvalue())
         if not isinstance(config, dict):
             raise ValueError("expected a JSON object")
     except (ValueError, UnicodeDecodeError):
@@ -3884,6 +3931,12 @@ def _build_share_query(
             continue  # don't put a gated setting on a link
         value = st.session_state.get(state_key)
         if value not in (None, ""):
+            if url_key in {"word_hover_fields", "fixation_hover_fields"} and isinstance(
+                value, (list, tuple)
+            ):
+                fields, as_json = encode_field_list(value)
+                params[f"{url_key}_json" if as_json else url_key] = fields
+                continue
             params[url_key] = (
                 ",".join(str(item) for item in value)
                 if isinstance(value, (list, tuple))
@@ -3966,6 +4019,9 @@ def _build_share_query(
     # re-declared. The styles additionally need a comparison to describe — the
     # same rule as `cmp_layout` / `cmp_stimulus`.
     defaults = _link_defaults(data_choice)
+    if COMPARE_PARAM in params and (palette := params.get("palette")) in PALETTES:
+        # The link reader seeds the palette before applying individual overrides.
+        defaults.update(palette_state(palette, include_compare=True))
     for url_key, state_key in {**SETUP_PARAMS, **COMPARE_STYLE_PARAMS}.items():
         if url_key not in params:
             continue
@@ -4533,6 +4589,11 @@ def _render_share_body(
         st.segmented_control(
             "Share as",
             SHARE_SECTIONS,
+            format_func={
+                SHARE_LINK: "Link · open this view",
+                SHARE_CODE: "Code · recreate the figure",
+                SHARE_FILE: "Settings file · restore settings",
+            }.__getitem__,
             default=SHARE_LINK,
             key=SHARE_SECTION_KEY,
             label_visibility="collapsed",
@@ -4540,6 +4601,20 @@ def _render_share_body(
         or SHARE_LINK
     )
     stored = st.session_state.get("_datasets", {}).get(data_choice, {})
+    if (
+        visible
+        and data_choice not in _SHAREABLE_SOURCES
+        and not _selected_corpus(data_choice)[0]
+        and not stored.get("authoring")
+        and data_choice not in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE)
+    ):
+        st.caption(
+            {
+                SHARE_LINK: "The recipient needs this dataset to open the view. For a first import, send the original files and the dataset setup from Edit dataset.",
+                SHARE_CODE: "Send the input files with the code so the recipient can recreate this reading.",
+                SHARE_FILE: "Send the original data with the settings file. The recipient opens the dataset first, then restores the settings.",
+            }[choice]
+        )
     if visible and choice in (SHARE_LINK, SHARE_CODE):
         payload = stored.get("authoring")
         if data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):

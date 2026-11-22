@@ -1,10 +1,9 @@
 #!/usr/bin/env python
-"""Record one short GIF per workflow in the running app, with the clicks counted.
+"""Record one short video per workflow in the running app, with the clicks counted.
 
 ``record_app_demo.py`` records the README's opening animation. This records
 the workflows one at a time — exporting a figure, adding your own data, styling
-the plot, filtering trials, comparing readers — each as its own clip, for the
-README's *See it in action* and the docs Gallery's *The app at work*. A bar in
+the plot, filtering trials, comparing readers — each as its own clip for the docs site. A bar in
 the app's header counts the clicks as they happen and names each step, a ripple
 marks every click, and the last frame says how many it took::
 
@@ -12,10 +11,8 @@ marks every click, and the last frame says how many it took::
     uv run --with playwright python scripts/record_workflow_demos.py compare   # one
     uv run --with playwright python scripts/record_workflow_demos.py --list
 
-Each workflow is written twice from one recording: a GIF to ``assets/workflows/``
-for the README, and an MP4 with its poster to ``docs/assets/workflows/`` for the
-Gallery, which plays video at a fraction of a GIF's size (``DEMO_OUT`` writes
-both to one folder instead). It starts
+Each recording produces an MP4 and a WebP poster in ``docs/assets/workflows/``
+(or ``DEMO_OUT`` when set). The script starts
 its own app on a free port, so every workflow starts from the bundled demo at
 its defaults; set ``DEMO_APP_URL`` to record an app that is already running
 instead. Each workflow gets a fresh browser context, so nothing one does
@@ -51,7 +48,6 @@ from record_app_demo import (
     HIDE_CSS,
     Pointer,
     Screencast,
-    encode_gif,
     encode_mp4,
 )
 from record_app_demo import PARK as APP_DEMO_PARK
@@ -59,9 +55,7 @@ from record_app_demo import VIEWPORT as APP_DEMO_VIEWPORT
 
 ROOT = Path(__file__).resolve().parent.parent
 URL = os.environ.get("DEMO_APP_URL")
-#: The README's GIFs, and the Gallery's MP4s (beside the docs' other assets).
-OUT = Path(os.environ.get("DEMO_OUT", ROOT / "assets" / "workflows"))
-VIDEO_OUT = Path(os.environ.get("DEMO_OUT", ROOT / "docs" / "assets" / "workflows"))
+OUT = Path(os.environ.get("DEMO_OUT", ROOT / "docs" / "assets" / "workflows"))
 SAMPLE = ROOT / "scanpath_studio" / "sample_data"
 
 #: The app demo's: wide enough for the trial picker to stay on one line, and
@@ -1017,9 +1011,8 @@ def main() -> None:
                         )
                         failed.append(flow.name)
                         continue
-                    encode_gif(listing, OUT / f"{flow.name}.gif")
-                    VIDEO_OUT.mkdir(parents=True, exist_ok=True)
-                    encode_mp4(listing, VIDEO_OUT / f"{flow.name}.mp4")
+                    OUT.mkdir(parents=True, exist_ok=True)
+                    encode_mp4(listing, OUT / f"{flow.name}.mp4")
             browser.close()
         if failed:
             raise SystemExit(f"not recorded: {', '.join(failed)}")

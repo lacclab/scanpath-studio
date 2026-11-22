@@ -1,0 +1,1 @@
+After Add dataset identifies an unresolved mapping, activate its message to focus the matching control. Selecting the duration column clears its warning and shows how two source values convert to milliseconds.

@@ -435,3 +435,28 @@ class TestAMalformedSetupFile:
         assert "filename_derive" not in config
         assert "wizard_keep_by_table" not in config["keep_and_filter"]
         assert _applied_summary(config) == "nothing this screen uses"
+
+
+def test_mapping_blocker_links_follow_the_fields_and_duration_units():
+    from scanpath_studio import data
+
+    schema = {"trial": "trial_id", "x": "gaze_x"}
+    errors = data.mapping_blockers("fixations", schema)
+    assert [issue.message for issue in errors] == data.validate_fix_schema(schema)
+    links, targets = wizard._mapping_blocker_links(
+        [("Fixations", "col_map_fix", errors)]
+    )
+    assert targets["sps-map-col_map_fix-duration"] == ["col_map_fix_duration"]
+    assert targets["sps-map-col_map_fix-y"] == ["col_map_fix_y", "col_map_fix_word_id"]
+    assert targets["sps-map-col_map_fix-word-id"] == ["col_map_fix_word_id"]
+    assert all(f"#{anchor}" in links[0] for anchor in targets)
+    raw = pd.DataFrame({"FPOGD": [0.12, 0.245]})
+    assert (
+        data.mapping_value_preview(
+            raw, "duration", "FPOGD", limit=2, show_time_input=True
+        )
+        == "0.12 → 120 ms, 0.245 → 245 ms"
+    )
+    assert not data.mapping_blockers(
+        "fixations", {"trial": "trial", "word_id": "word", "duration": "FPOGD"}
+    )

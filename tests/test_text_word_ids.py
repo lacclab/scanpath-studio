@@ -391,7 +391,7 @@ class TestConsumersLineUp:
     def test_heatmap_keys_join_the_word_boxes(self, pair):
         words, fixations = pair
         values, *_ = plots._comparison_word_heatmap_data(
-            [{"trial_fix": fixations}],
+            [{"trial_words": words, "trial_fix": fixations}],
             metric="count",
             heatmap_range=None,
             heatmap_norm="Linear",

@@ -1642,6 +1642,9 @@ class TestSplitScanpathLayers:
     ):
         fig = self._rich_figure(tmp_path, normalized_words_df, normalized_fixations_df)
         layers = split_scanpath_layers(fig)
+        retry = split_scanpath_layers(fig, only={"word_boxes"})
+        assert tuple(retry) == ("word_boxes",)
+        assert retry["word_boxes"].to_json() == layers["word_boxes"].to_json()
         # Every trace and shape lands in exactly one layer (no drops, no dupes).
         assert sum(len(g.data) for g in layers.values()) == len(fig.data)
         assert sum(len(g.layout.shapes or ()) for g in layers.values()) == len(

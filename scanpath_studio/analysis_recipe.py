@@ -135,7 +135,11 @@ def analysis_choices(
             "z-score per participant" if normalize and not rate else "none"
         )
     if spread:
-        out["spread"] = spread
+        from .aggregation import effective_spread
+
+        out["spread"] = effective_spread(spread, aggregation)
+        if out["spread"] != spread:
+            out["requested_spread"] = spread
     if min_readers is not None:
         out["min_readers"] = int(min_readers)
     if feature:
@@ -460,17 +464,61 @@ def _select_words(
             raise ValueError("Invalid annotation filter in the recipe.")
         for key in ("required_tags", "excluded_tags"):
             _list(annotation.get(key, []), key)
-        store = deserialize(Path(annotations).read_text(encoding="utf-8"))
+        store = deserialize(Path(annotations).read_bytes())
         keys = select_keys(store, list(data.trial_keys(words)), **annotation)
         words = data.filter_frame_to_keys(words, set(keys))
     return words
+
+
+def _recipe_group(group, words, fixations):
+    from .aggregation import resolve_group_spec
+
+    group = _object(group, "group")
+    constraints = group.get("constraints")
+    if not isinstance(constraints, list):
+        raise ValueError("Each group needs a list of constraints.")
+    spec = {}
+    for constraint in constraints:
+        constraint = _object(constraint, "group constraint")
+        field = constraint.get("field")
+        values = constraint.get("values")
+        if isinstance(field, list):
+            field = tuple(_list(field, "group ID columns"))
+            if (
+                not field
+                or not isinstance(values, list)
+                or any(
+                    not isinstance(row, list) or len(row) != len(field)
+                    for row in values
+                )
+            ):
+                raise ValueError("Each composite group ID needs one value per column.")
+            values = [tuple(_list(row, "group ID", strings=False)) for row in values]
+        elif isinstance(field, str) and field:
+            values = _list(values, "group values", strings=False)
+        else:
+            raise ValueError("A group constraint needs a field name.")
+        if field in spec:
+            raise ValueError(f"Repeated group constraint for {field!r}.")
+        spec[field] = values
+    result = resolve_group_spec(spec, words, fixations)
+    if result.missing:
+        raise ValueError(
+            f"The group needs fields missing from the source tables: {result.missing}."
+        )
+    return result.spec
 
 
 def cohort_recipe_table(
     recipe, words, fixations, *, metadata, annotations, raw_gaze=None
 ) -> pd.DataFrame:
     """Reproduce the selected cohort profile from canonical frames."""
-    from .aggregation import MEASURES, cohort_word_profile, text_screen_options
+    from .aggregation import (
+        MEASURES,
+        cohort_word_profile,
+        group_word_difference,
+        text_screen_options,
+    )
 
     recipe = _object(recipe, "recipe")
     if (
@@ -480,8 +528,12 @@ def cohort_recipe_table(
     ):
         raise ValueError("Unsupported analysis recipe kind or version.")
     a = _object(recipe.get("analysis"), "analysis")
-    if (a.get("section"), a.get("view")) != ("Per text", "Cohort profile"):
-        raise ValueError("The recipe runner supports Per text → Cohort profile.")
+    view = (a.get("section"), a.get("view"))
+    difference = view == ("Groups", "Difference word profile")
+    if not difference and view != ("Per text", "Cohort profile"):
+        raise ValueError(
+            "The recipe runner supports Per text → Cohort profile and Groups → Difference word profile."
+        )
     text = _object(a.get("text"), "text")
     field, text_id = text.get("field"), text.get("id")
     if (
@@ -501,11 +553,21 @@ def cohort_recipe_table(
     agg, spread, norm, minimum = (
         a.get(k) for k in ("aggregation", "spread", "normalization", "min_readers")
     )
-    if agg not in ("mean", "median", "sum") or spread not in (
-        "SD",
-        "SEM",
-        "IQR",
-        "Bootstrap CI",
+    if difference:
+        if norm not in (None, "none") or spread is not None:
+            raise ValueError(
+                "Difference word profiles use unnormalized group values and have no spread band."
+            )
+        norm = "none"
+    if agg not in ("mean", "median", "sum") or (
+        not difference
+        and spread
+        not in (
+            "SD",
+            "SEM",
+            "IQR",
+            "Bootstrap CI",
+        )
     ):
         raise ValueError(
             "Unsupported aggregation or spread in the cohort profile recipe."
@@ -532,18 +594,37 @@ def cohort_recipe_table(
         raise ValueError(
             f"Screen {screen!r} of text {text_id!r} is missing after filtering."
         )
-    table = cohort_word_profile(
-        words,
-        field,
-        text_id,
-        measure,
-        agg=agg,
-        spread=spread,
-        normalize=norm != "none",
-        min_readers=minimum,
-        screen_id=screen,
-    )
-    if minimum > 1:
+    if difference:
+        groups = a.get("groups")
+        if not isinstance(groups, list) or len(groups) != 2:
+            raise ValueError(
+                "A difference word profile needs exactly two group definitions."
+            )
+        spec_a, spec_b = (_recipe_group(group, words, fixations) for group in groups)
+        table = group_word_difference(
+            words,
+            field,
+            text_id,
+            measure,
+            spec_a,
+            spec_b,
+            agg=agg,
+            min_readers=minimum,
+            screen_id=screen,
+        )
+    else:
+        table = cohort_word_profile(
+            words,
+            field,
+            text_id,
+            measure,
+            agg=agg,
+            spread=spread,
+            normalize=norm != "none",
+            min_readers=minimum,
+            screen_id=screen,
+        )
+    if minimum > 1 or not difference:
         table = table.loc[table["enough"].eq(True)]
     expected = _object(recipe.get("result"), "result").get("rows")
     if type(expected) is not int or expected != len(table):

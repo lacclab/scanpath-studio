@@ -1,0 +1,1 @@
+Publication-sized PNG layers use the composite’s dimensions and print density. Re-exporting layers removes obsolete files from the previous export. A failed render preserves the previous figure or layer set. Multipart figures retain their recorded screen numbers.

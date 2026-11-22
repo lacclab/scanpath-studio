@@ -261,6 +261,30 @@ def test_named_drawing_keeps_gaze_and_respects_screen_edits(
 class TestBuildShareQuery:
     """The Share button's deep-link builder (inverse of the URL preset parser)."""
 
+    @pytest.mark.parametrize("use_palette_styles", [True, False])
+    def test_print_comparison_round_trips_both_readers_styles(
+        self, fake_st, use_palette_styles
+    ):
+        from scanpath_studio.controls import compare_style_defaults, palette_state
+
+        palette = "Print / grayscale"
+        styles = palette_state(palette, include_compare=True)
+        fake_st.session_state.update(styles, global_palette=palette)
+        if not use_palette_styles:
+            fake_st.session_state.update(compare_style_defaults())
+        fake_st.session_state["_share_selection"] = {
+            "participant_id": "a",
+            "trial_id": "1",
+            "compare": {"participant_id": "b", "trial_id": "2"},
+        }
+        expected = {k: fake_st.session_state[k] for k in styles if k.startswith("cmp")}
+        query, _ = _build_share_query(DEMO_CHOICE)
+        fake_st.query_params = {k: v[0] for k, v in parse_qs(query).items()}
+        fake_st.session_state.clear()
+        _apply_url_preset()
+        for key, value in expected.items():
+            assert fake_st.session_state[key] == value
+
     def test_renamed_drawing_shares_its_display_name_and_portable_draft(self, fake_st):
         from scanpath_studio.authoring import authoring_json, sample_draft
         from scanpath_studio.constants import DATASET_ALIASES_KEY

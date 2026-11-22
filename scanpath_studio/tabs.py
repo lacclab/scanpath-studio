@@ -7,6 +7,7 @@ import contextlib
 import functools
 import hashlib
 import html
+import io
 import itertools
 import json
 import pickle
@@ -25,7 +26,15 @@ import pandas as pd
 import plotly.io as pio
 import streamlit as st
 
-from scanpath_studio import alignment, chart_axes, loading, progress, ui_mode
+from scanpath_studio import (
+    alignment,
+    chart_axes,
+    dataset_credit,
+    loading,
+    progress,
+    replay_frames,
+    ui_mode,
+)
 from scanpath_studio import metadata as _metadata_mod
 from scanpath_studio.aggregation import (
     MEASURES,
@@ -38,6 +47,7 @@ from scanpath_studio.aggregation import (
     available_measures,
     cohort_word_profile,
     distinct_group_labels,
+    effective_spread,
     ensure_fixation_enrichment,
     group_mean_difference,
     group_word_difference,
@@ -54,13 +64,16 @@ from scanpath_studio.aggregation import (
     reader_summary,
     reader_summary_table,
     reader_vs_cohort_values,
+    reading_word_contributions,
     resolve_group_spec,
     saccade_vs_duration,
+    stimulus_revisions,
     text_read_counts,
     text_screen_options,
     trial_summary_table,
     two_group_values,
     two_group_word_profiles,
+    within_reader_contrast,
     word_box_aggregate,
     word_measure_vs_feature,
     word_rate_profile,
@@ -199,6 +212,7 @@ from scanpath_studio.controls import (
     field_help,
     format_filter_item,
     has_active_trial_filters,
+    pin_word_heatmap_range,
     plot_popover_on_change,
     read_trial_filters,
     render_compare_filters,
@@ -209,6 +223,7 @@ from scanpath_studio.controls import (
     render_trial_chip_picker,
     render_trial_filters,
     render_viz_reset,
+    selected_hover_text,
 )
 from scanpath_studio.data import (
     IDENTITY_SCHEMA_FIELDS,
@@ -261,6 +276,7 @@ from scanpath_studio.data import (
     validate_raw_gaze_schema,
     validate_word_schema,
     verbatim_text_plan,
+    with_onset_provenance,
 )
 from scanpath_studio.debug_log import timed
 from scanpath_studio.export import (
@@ -270,10 +286,12 @@ from scanpath_studio.export import (
     annotate_figure,
     apply_export_scope,
     bulk_export,
+    bundle_contents,
     count_export,
     describe_plan,
     figure_text_style,
     html_plotlyjs,
+    naming_example,
     pattern_fields,
     plan_from_counts,
     print_width_px,
@@ -545,12 +563,51 @@ def _figure_alt(fig, fallback: str) -> str:
     return _plain_title(title) or fallback
 
 
-def _scanpath_alt(participant, text, n_fixations: int) -> str:
-    """A screen reader's summary of one trial's scanpath."""
-    noun = "fixation" if n_fixations == 1 else "fixations"
-    return (
-        f"Scanpath of participant {participant} on text {text}: {n_fixations:,} {noun}"
-    )
+def _scanpath_alt(participant, text, n_fixations: int, figure=None) -> str:
+    """Describe marks that the current layers and axes actually place on the figure."""
+
+    def count(label, n):
+        return f"{n:,} {label}{'' if n == 1 else 's'}"
+
+    def coordinates(values):
+        # The Streamlit cache can restore Plotly's typed-array encoding where
+        # a freshly built figure holds an ndarray.
+        if isinstance(values, dict) and "bdata" in values:
+            return np.frombuffer(
+                base64.b64decode(values["bdata"]), dtype=values["dtype"]
+            )
+        return pd.to_numeric(np.asarray(values), errors="coerce")
+
+    name = f"Scanpath of participant {participant} on text {text}"
+    if figure is None:
+        return f"{name}: {count('fixation', n_fixations)}"
+    axes = [
+        getattr(getattr(figure.layout, axis).title, "text", None)
+        for axis in ("xaxis", "yaxis")
+    ]
+    if all(axes):
+        name = f"{_plain_title(axes[1])} by {_plain_title(axes[0])} for participant {participant} on text {text}"
+    shown = {}
+    for trace in figure.data:
+        if (
+            trace.name in ("Fixations", "Raw gaze")
+            and trace.x is not None
+            and trace.y is not None
+        ):
+            xs, ys = coordinates(trace.x), coordinates(trace.y)
+            shown[trace.name] = int(np.count_nonzero(np.isfinite(xs) & np.isfinite(ys)))
+    points = shown.get("Fixations", 0)
+    if not n_fixations:
+        fixation_text = "no fixations recorded"
+    elif points == n_fixations:
+        fixation_text = count("fixation", points)
+    else:
+        fixation_text = f"{count('fixation', points)} shown of {n_fixations:,} recorded"
+    details = []
+    if samples := shown.get("Raw gaze"):
+        details.append(count("raw gaze sample", samples))
+    details.append(fixation_text)
+    return f"{name}: {', '.join(details)}"
 
 
 def _plain_title(title: str | None) -> str:
@@ -1151,9 +1208,8 @@ def _true_scale_plot_html(
     serialized as is, skipping the deep copy `to_html` would make of ``fig``
     (2 s at 2,000 frames). The markup is byte-identical either way.
 
-    A replay's frames travel delta-encoded and are rebuilt in the browser
-    (`plots.replay_page`): a 2,001-frame replay's markup is under 1 MB rather
-    than 66 MB, and the player sees the same frames.
+    The browser reconstructs each displayed replay frame on demand from the
+    compact page written by `plots.replay_page`.
     """
     width, height, _toolbar = replay_page_box(
         fig if figure_dict is None else figure_dict
@@ -1161,11 +1217,15 @@ def _true_scale_plot_html(
     # An animated replay plays on the wall-clock player, never on Plotly's own
     # queue, which rounds every frame up to whole display ticks (Fine at ×1 would
     # run 25 % slow). The player also starts it on load when autoplay is on, and
-    # restores the frames the page carries packed. `None` for a static figure.
+    # reads the packed frames on demand. `None` for a static figure.
     page = replay_page(fig if figure_dict is None else figure_dict)
     player_script = None
     if page is not None:
         figure_dict, player_script = page
+    elif key == "single":
+        from .fixation_inspector import PLOT_CLICK
+
+        player_script = PLOT_CLICK
     config: dict = {
         **PLOTLY_CONFIG,
         "responsive": False,
@@ -2390,15 +2450,13 @@ def _cached_scanpath_animation(
     """Build + cache the animated scanpath, as ``_cached_scanpath_figure`` does
     for the static one. Returns ``(figure, frame_step_ms)``.
 
-    Uncached, every click anywhere while 🎬 Animate is on — opening a subtab,
-    ticking a checkbox back to what it was — would rebuild every frame: ~3 s on
-    the demo at the default smoothness, 22 s at the finest. ``anim_key`` is every
+    The compact player stores a trace template and its reading timeline.
+    ``anim_key`` is every
     ``FigureSettings`` field plus both scanpaths' fingerprints, so any change that
     reaches the builder still rebuilds — except the playback speed, autoplay and
     the Illustration reasons, which the caller fixes before building:
     the frames depend on none of them, and `set_replay_clock` stamps the real
-    speed and autoplay onto the copy each hit returns. Few entries: a replay is
-    megabytes.
+    speed and autoplay onto the copy each hit returns.
     """
     with timed(
         "build scanpath animation (cache miss)",
@@ -2409,6 +2467,7 @@ def _cached_scanpath_animation(
             _words,
             _fixations,
             settings=_settings,
+            compact=True,
             fixations_b=_fixations_b,
             words_b=_words_b,
         )
@@ -2421,12 +2480,10 @@ class _ReplayView:
     A cached `go.Figure` would be unpickled on every hit — plotly re-validates
     every frame, 9 s at 2,000 frames — and `to_html` would then write it into
     the page again, 12 s more. This keeps the embed's markup and
-    the finished figure as compressed bytes (zlib cuts the markup ~10×): a
-    rerun decompresses the markup, 30 ms at 2,000 frames, and only an export
-    unpickles the figure. It is kept as the ``to_dict()`` the markup was written
-    from: pickling the figure itself would deep-copy it all over again (2 s at
-    2,000 frames), and the HTML download serializes the dict with no figure at
-    all. ``signature`` names the clip that figure exports to.
+    the finished figure as compressed bytes. Its sole frame holds the final
+    coordinates and styles. The HTML player reconstructs each frame using the
+    recorded onsets, and a movie requests the complete figure on demand.
+    ``signature`` names the clip that figure exports to.
     """
 
     plot_html_z: bytes
@@ -2456,7 +2513,7 @@ class _ReplayView:
             ),
             width=int(fig.layout.width or 900),
             height=int(fig.layout.height or 600),
-            n_frames=len(fig.frames or ()),
+            n_frames=len((fig.layout.meta or {}).get("scanpath_frame_times_ms", ())),
             plot_height=plot_height,
             toolbar=toolbar,
             clip_frame_ms=animation_clip_frame_ms(fig),
@@ -2477,7 +2534,7 @@ class _ReplayView:
         re-validates every frame, 9 s at 2,000 frames."""
         import plotly.graph_objects as go
 
-        return go.Figure(self.figure_dict())
+        return go.Figure(replay_frames.expand_figure(self.figure_dict()))
 
 
 @st.cache_data(show_spinner=False, max_entries=8)
@@ -4348,7 +4405,10 @@ def _build_studio_config(
         compare_styles=compare_styles,
         state=st.session_state,
         setup_provenance=(
-            {"provenance": {g: str(p) for g, p in snapshot.provenance.items()}}
+            {
+                "provenance": {g: str(p) for g, p in snapshot.provenance.items()},
+                "viewing_distance_provenance": snapshot.viewing_distance_provenance,
+            }
             if snapshot is not None
             else None
         ),
@@ -4357,7 +4417,7 @@ def _build_studio_config(
     )
 
 
-def render_settings_file(
+def _current_figure_config(
     selected_participant: str,
     selected_trial: str,
     canvas_width: int,
@@ -4370,19 +4430,8 @@ def render_settings_file(
     trial_raw_gaze: pd.DataFrame,
     *,
     font_family: str,
-) -> None:
-    """🗺️ Scanpath → 🔗 Share → **File**: download and restore a settings file.
-
-    The file is :func:`_build_studio_config`'s — the figure's full settings and
-    trial selection, with provenance — a copy that works offline and at any
-    address, unlike a link. The upload is *applied* in
-    ``url_state._apply_uploaded_plot_config``, early in the next run, before any
-    widget renders; it is deduped by the file's name and size, so leaving the
-    file in the uploader does not re-apply it on every rerun.
-
-    The file covers the figure only (see :func:`_build_studio_config`). It is
-    not in a dialog, so an upload reruns the whole app on its own.
-    """
+) -> dict:
+    """The current figure and both readers' styles for Share and manuscript proofs."""
     from datetime import datetime
 
     from scanpath_studio import __version__
@@ -4431,7 +4480,7 @@ def render_settings_file(
         for cat, spec in b_filters["fixation_flags"].items()
     }
     compare_styles[1]["saccade_classes"] = b_filters["saccade_classes"]
-    plot_config = _build_studio_config(
+    return _build_studio_config(
         selected_participant=selected_participant,
         selected_trial=selected_trial,
         canvas_width=canvas_width,
@@ -4447,6 +4496,36 @@ def render_settings_file(
         app_version=__version__,
         exported_at=datetime.now().isoformat(timespec="seconds"),
         compare_styles=compare_styles,
+    )
+
+
+def render_settings_file(
+    selected_participant: str,
+    selected_trial: str,
+    canvas_width: int,
+    canvas_height: int,
+    x_field: str,
+    y_field: str,
+    figure_settings: dict,
+    viz_settings: dict,
+    base_font_size: int,
+    trial_raw_gaze: pd.DataFrame,
+    *,
+    font_family: str,
+) -> None:
+    """Download the current figure settings and restore a previously saved file."""
+    plot_config = _current_figure_config(
+        selected_participant,
+        selected_trial,
+        canvas_width,
+        canvas_height,
+        x_field,
+        y_field,
+        figure_settings,
+        viz_settings,
+        base_font_size,
+        trial_raw_gaze,
+        font_family=font_family,
     )
     # The file's boundary, as `_build_studio_config` draws it — the
     # Corpus Analysis tutorial explains the excluded choices at more length.
@@ -4634,6 +4713,7 @@ def _build_compare_meta(
             )
     compare_words = extract_trial(words_filtered, compare_participant, compare_trial)
     compare_fix = extract_trial(fixations_filtered, compare_participant, compare_trial)
+    compare_fix = with_onset_provenance(compare_fix)
     if compare_screen is not None:
         if not compare_words.empty:
             if SCREEN_ID not in compare_words.columns:
@@ -4979,6 +5059,7 @@ def _title_caption_fields(
         "show_fixations": viz_settings.get("show_fix", True),
         "show_saccades": viz_settings.get("show_saccades", True),
         "show_heatmap": viz_settings.get("show_heatmap", False),
+        "show_raw_gaze": viz_settings.get("caption_raw_gaze", False),
         "color_by": viz_settings.get("color_by"),
         "palette": viz_settings.get("palette"),
     }
@@ -5596,6 +5677,22 @@ def _render_export_panel(
     a comparison or animation — round-trips exactly; the bulk section rebuilds
     static figures across many trials."""
     st.markdown("## Current figure")
+    if viz_settings.get("redact_text"):
+        selected = selected_hover_text(
+            words_filtered,
+            fixations_filtered,
+            viz_settings.get("word_hover_fields"),
+            viz_settings.get("fixation_hover_fields"),
+        )
+        if selected:
+            st.caption(
+                "These selected tooltip fields can appear in saved HTML. Review them under Figure & canvas → Hover."
+            )
+            st.text(", ".join(selected))
+        if viz_settings.get("show_stimulus_image"):
+            st.caption(
+                "The stimulus image can contain readable text. Turn it off under Stimulus to omit it."
+            )
     if animate and replay is not None:
         _render_animation_export(replay, file_stem=file_stem or "animation")
         render_cite_button(st, key="anim_export", what="this replay")
@@ -5611,6 +5708,27 @@ def _render_export_panel(
             plot_key=plot_key,
         )
         render_cite_button(st, key="single_export")
+        if (displayed_fig.layout.meta or {}).get("scanpath_panels"):
+            from . import panel_proof_ui
+
+            def panel_settings():
+                return _current_figure_config(
+                    selected_participant,
+                    selected_trial,
+                    canvas_width,
+                    canvas_height,
+                    viz_settings.get("x_field", "x"),
+                    viz_settings.get("y_field", "y"),
+                    _build_figure_settings(
+                        viz_settings, bool(viz_settings.get("show_raw_gaze"))
+                    ),
+                    viz_settings,
+                    base_font_size,
+                    raw_gaze,
+                    font_family=font_family,
+                )
+
+            panel_proof_ui.render(displayed_fig, _print_size_setting(), panel_settings)
 
     if not include_bundle:
         ui_mode.render_export_pointer(st)
@@ -5644,6 +5762,7 @@ def _render_export_panel(
     )
     bulk_settings["data_source"] = st.session_state.get("data_source_choice")
     bulk_settings["data_source_label"] = current_dataset_name()
+    bulk_settings["dataset_references"] = dataset_credit.references(st.session_state)
     bulk_settings["synthetic_source"] = bulk_settings["data_source"] in (
         AUTHOR_CHOICE,
         MANUAL_SAMPLE_CHOICE,
@@ -6276,7 +6395,8 @@ def render_single_trial_tab(
     # chips + plot + per-trial subtabs live in the left column. The narrow rail
     # stays in page flow, so it can extend below a short plot without pushing
     # the subtabs away from the figure.
-    plot_col, rail_col = st.columns([4, 1], gap="large")
+    with st.container(key="scanpath_workspace"):
+        plot_col, rail_col = st.columns([4, 1], gap="large")
     # Rail containers filled after the rail itself (B's filters).
     rail_slots: dict = {}
     with rail_col:
@@ -6308,10 +6428,13 @@ def render_single_trial_tab(
                 "Filter the trial list",
                 icon=_FILTER_ICON,
                 width="content",
-                help="Filter the trial list",
+                help="Select the whole readings available in the trial list.",
                 key="iconpop_filter_trials",
             )
             box = pop.container(key="tour_grp_narrow_by")
+            box.caption(
+                "Select whole readings. Each selected reading keeps all of its fixations."
+            )
             _render_pool_filters(box, words_all, fixations_all, raw_gaze_all)
             # The chips' menu closes A's cluster (◀ ▶ ⇅ 🔎 ✏️), so the chip
             # table below has the plot's whole width, and hiding it
@@ -6321,7 +6444,9 @@ def render_single_trial_tab(
                 ui_mode.advanced_only(host, "chip_fields"), words_all, fixations_all
             )
             ui_mode.render_more_popover(
-                ui_mode.simple_only(host, "picker_more"), "picker"
+                ui_mode.simple_only(host, "picker_more"),
+                "picker",
+                multiple_trials=len(combos) > 1,
             )
 
         # A dataset with screens gets the screen navigator at the trial row's
@@ -6397,6 +6522,7 @@ def render_single_trial_tab(
     parent_fixations = extract_trial(
         fixations_filtered, selected_participant, selected_trial
     )
+    parent_fixations = with_onset_provenance(parent_fixations)
     if chart_axes.ELAPSED in (
         st.session_state.get("global_x_field"),
         st.session_state.get("global_y_field"),
@@ -6413,6 +6539,11 @@ def render_single_trial_tab(
         else _part_catalog_for_display(parent_words, parent_fixations)
     )
     selected_screen = _render_screen_navigator(screens, host=screen_slot)
+    from .annotations import render_disputed_note
+
+    render_disputed_note(
+        plot_notes_slot, selected_participant, selected_trial, selected_screen
+    )
     if selected_screen is not None:
         trial_words = extract_part(
             parent_words, selected_participant, selected_trial, selected_screen
@@ -6772,10 +6903,11 @@ def render_single_trial_tab(
                 st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, False)
                 # `wrap=True` for the same reason as Animate above.
                 compare_requested = st.toggle(
-                    f"{ICONS['compare']} Compare",
+                    f"{ICONS['compare']} Compare readings",
                     key=SINGLE_COMPARE_TOGGLE,
                     persist_state="session",
                     wrap=True,
+                    help="Add a second scanpath to the figure, overlaid or in a separate panel.",
                 )
                 # Compare is built from two readings' fixations (its
                 # raw-gaze layer only sits under them), so a trial without
@@ -7027,7 +7159,18 @@ def render_single_trial_tab(
             # The title / caption fields the figure renders with — its
             # fixations within the fixation window, as `{n_fixations}` counts.
             title_fields=lambda settings: _title_caption_fields(
-                settings,
+                {
+                    **settings,
+                    "caption_raw_gaze": bool(settings.get("show_raw_gaze"))
+                    and not animate
+                    and chart_axes.drawable_raw_samples(
+                        (
+                            settings.get("x_field") or "x",
+                            settings.get("y_field") or "y",
+                        ),
+                        trial_raw_gaze,
+                    ),
+                },
                 trial_words,
                 _slice_fix_range(trial_fixations, settings.get("fix_index_range")),
                 selected_participant,
@@ -7207,6 +7350,17 @@ def render_single_trial_tab(
         comparing
         and draw_compare_raw_gaze
         and (trial_has_raw_gaze or not compare_raw_gaze.empty)
+    )
+    viz_settings["caption_raw_gaze"] = (
+        not animate
+        and global_raw_toggle
+        and (
+            chart_axes.drawable_raw_samples(fields, trial_raw_gaze)
+            or (
+                compare_shows_raw_gaze
+                and chart_axes.drawable_raw_samples(("x", "y"), compare_raw_gaze)
+            )
+        )
     )
     if compare_shows_raw_gaze:
         # Never while animating: `show_raw_gaze` is part of the replay's cache
@@ -7915,18 +8069,108 @@ def render_single_trial_tab(
                     selected_trial,
                     combo_row=primary_combo_row,
                 )
-                _render_true_scale_chart(
-                    displayed_fig,
-                    key="single",
-                    download_name=f"scanpath_{_safe_filename(save_slug)}",
-                    alt=_scanpath_alt(
+                if (
+                    static_settings.show_heatmap
+                    and static_settings.heatmap_range is None
+                ):
+                    for trace in displayed_fig.data:
+                        if trace.name == "heatmap colorbar" and trace.meta:
+                            bounds = tuple(trace.meta["word_heatmap_range"])
+                            plot_notes_slot.button(
+                                "Use this heatmap range for other trials",
+                                key="pin_word_heatmap_range",
+                                on_click=pin_word_heatmap_range,
+                                args=(bounds,),
+                                help="Keep the raw values shown on this reading’s word-box legend as the fixed range.",
+                            )
+                            break
+                preview_positions = False
+                if (
+                    "fixations snapped to lines" in detected_reasons
+                    and not trial_words.empty
+                ):
+                    preview_scope = (
+                        st.session_state.get("data_source_choice"),
                         selected_participant,
-                        _metadata_mod.trial_text_id(plot_fixations, trial_words)
-                        or selected_trial,
-                        len(plot_fixations),
-                    ),
-                    fit_window=True,
+                        selected_trial,
+                        selected_screen,
+                    )
+                    if st.session_state.get("_position_preview_scope") != preview_scope:
+                        st.session_state.pop("preview_unsnapped_positions", None)
+                        st.session_state["_position_preview_scope"] = preview_scope
+                    preview_positions = plot_notes_slot.toggle(
+                        "Show positions before snapping",
+                        key="preview_unsnapped_positions",
+                        help="Compare the illustration with the trial’s original fixation coordinates on identical axes. Imports with missing coordinates may use word-box centers.",
+                    )
+                panels = (
+                    st.columns(2) if preview_positions else (contextlib.nullcontext(),)
                 )
+                with panels[0]:
+                    if preview_positions:
+                        st.caption("Illustration · figure selected for export")
+                    _render_true_scale_chart(
+                        displayed_fig,
+                        key="single",
+                        download_name=f"scanpath_{_safe_filename(save_slug)}",
+                        alt=_scanpath_alt(
+                            selected_participant,
+                            _metadata_mod.trial_text_id(plot_fixations, trial_words)
+                            or selected_trial,
+                            len(trial_fixations),
+                            displayed_fig,
+                        ),
+                        fit_window=True,
+                    )
+                if preview_positions:
+                    reasons = [
+                        reason
+                        for reason in detected_reasons
+                        if reason != "fixations snapped to lines"
+                        and not reason.startswith("drift correction:")
+                    ]
+                    original = static_settings.with_overrides(
+                        fixation_snap_to_line=False,
+                        show_connectors=False,
+                        illustration_reasons=tuple(
+                            resolve_label_reasons(
+                                viz_settings.get("illustration_label", "Auto"), reasons
+                            )
+                        ),
+                    )
+                    preview = _cached_scanpath_figure(
+                        trial_words,
+                        fig_fixations,
+                        original,
+                        figure_raw_gaze,
+                        fig_key=_figure_input_key(
+                            trial_words,
+                            fig_fixations,
+                            {
+                                **original.for_builder(STATIC_FIGURE_OPTIONS),
+                                "raw_gaze": figure_raw_gaze,
+                                "column_labels": original.column_labels,
+                            },
+                        ),
+                    )
+                    preview.update_layout(
+                        xaxis_range=displayed_fig.layout.xaxis.range,
+                        yaxis_range=displayed_fig.layout.yaxis.range,
+                        width=displayed_fig.layout.width,
+                        height=displayed_fig.layout.height,
+                    )
+                    with panels[1]:
+                        st.caption("Trial coordinates before snapping")
+                        _render_true_scale_chart(
+                            preview,
+                            key="unsnapped_preview",
+                            fit_window=True,
+                            alt=f"Fixation positions before snapping for {selected_participant}, {selected_trial}.",
+                        )
+            if displayed_fig is not None and not comparing and not animate:
+                from .fixation_inspector import render as render_fixation_inspector
+
+                render_fixation_inspector(displayed_fig, trial_words, plot_fixations)
             note = _full_screen_note(viz_settings, canvas_width, canvas_height)
             if note and (static_settings.x_field, static_settings.y_field) == (
                 "x",
@@ -8101,12 +8345,12 @@ def _bulk_export_task_key() -> tuple:
     return ("bulk_export", loading.session_id())
 
 
-def _stop_bulk_export(task_key: tuple) -> None:
-    """Stop on a running bundle build: it ends before its next screen, and no
-    bundle is offered. Session state and annotations are left as they were."""
+def _stop_bulk_export(task_key: tuple, retry: bool = False) -> None:
+    """Stop the build. A cancelled retry leaves its original download available."""
     progress.cancel(task_key)
-    st.session_state[_BULK_EXPORT_STOPPED] = True
-    st.session_state.pop("_bulk_export_cache", None)
+    st.session_state[_BULK_EXPORT_STOPPED] = "retry" if retry else "build"
+    if not retry:
+        st.session_state.pop("_bulk_export_cache", None)
 
 
 @st.cache_data(show_spinner=False, max_entries=16)
@@ -8185,6 +8429,23 @@ def _render_bulk_export(
             frame_fingerprint(every_raw_gaze),
         ),
     )
+
+    def example_for(options: ExportOptions, scoped: pd.DataFrame):
+        frames = (
+            (words_all, fixations_all, every_raw_gaze)
+            if options.export_unfiltered
+            else (words_filtered, fixations_filtered, raw_gaze)
+        )
+        return naming_example(
+            options,
+            scoped,
+            *frames,
+            settings=figure_settings,
+            axes=(x_field, y_field),
+            column_names=active_all(st.session_state),
+            metadata_rows_for=_metadata_mod.pattern_rows,
+        )
+
     options = render_export_options(
         st,
         combos,
@@ -8195,6 +8456,7 @@ def _render_bulk_export(
         selected_participant=selected_participant,
         selected_trial=selected_trial,
         screen_options=screen_options,
+        example_for=example_for,
     )
     # Tick "Export the whole dataset" → export the unfiltered frames.
     active_raw_gaze = raw_gaze
@@ -8234,25 +8496,28 @@ def _render_bulk_export(
                 options.screens,
             ),
         )
-    # Screens no trial in scope shows would build an empty bundle.
-    no_screens = options.screens is not None and counts == (0, 0)
     run_col, info_col = st.columns([1, 3])
     with run_col:
         nothing_ticked = not (
-            options.figure_formats()
+            options.needs_figure()
             or options.include_plot_config
             or options.include_annotations
             or options.any_table()
         )
+        blocked = (
+            "Correct the file path pattern above."
+            if not options.path_pattern
+            else "Choose at least one file to include."
+            if nothing_ticked
+            else "No trial matches the selected scope and screens."
+            if active_combos.empty or counts == (0, 0)
+            else None
+        )
         run = st.button(
             "Build export",
             type="primary",
-            disabled=active_combos.empty or nothing_ticked or no_screens,
-            help="Tick at least one thing to include above."
-            if nothing_ticked
-            else "No trial here shows the screens picked above."
-            if no_screens
-            else None,
+            disabled=bool(blocked),
+            help=blocked,
         )
         stop_slot = st.empty()
     task_key = _bulk_export_task_key()
@@ -8262,10 +8527,12 @@ def _render_bulk_export(
         progress.cancel(task_key)
     if counts is not None:
         info_col.caption(describe_plan(plan_from_counts(*counts, options)))
-    if st.session_state.pop(_BULK_EXPORT_STOPPED, False) and not run:
+    stopped = st.session_state.pop(_BULK_EXPORT_STOPPED, None)
+    if stopped and not run:
         info_col.warning(
-            "Export stopped, so no bundle was built. Click **Build export** to "
-            "start again.",
+            "Retry stopped. The previous bundle is still available."
+            if stopped == "retry"
+            else "Export stopped, so no bundle was built. Click **Build export** to start again.",
             icon=ICONS["warning"],
         )
     # The session's annotations, only when the bundle asks for them —
@@ -8284,6 +8551,36 @@ def _render_bulk_export(
         from scanpath_studio.app import _dataset_display_name
 
         annotation_dataset = _dataset_display_name(annotation_owner)
+    preview = st.expander(
+        "Preview bundle contents", key="bulk_export_contents", on_change="rerun"
+    )
+    if preview.open and options.path_pattern:
+        preview_settings = {
+            **figure_settings,
+            **{
+                f"{grain}_metadata": st.session_state.get(f"_export_{grain}_metadata")
+                for grain in ("participant", "trial", "text")
+            },
+        }
+        try:
+            contents = bundle_contents(
+                active_combos,
+                active_words,
+                active_fix,
+                active_raw_gaze,
+                options=options,
+                settings=preview_settings,
+                axes=(x_field, y_field),
+                column_names=_dataset_table_names(),
+                metadata_rows_for=_metadata_mod.pattern_rows,
+                annotation_records=annotation_records,
+            )
+        except ValueError as error:
+            preview.error(str(error))
+        else:
+            for note in contents.notes:
+                preview.caption(note)
+            preview.dataframe(pd.DataFrame(contents.files), hide_index=True)
     sig = (
         *frame_keys,
         int(canvas_width),
@@ -8308,7 +8605,12 @@ def _render_bulk_export(
         st.session_state.pop("_bulk_export_cache", None)
         cache = None
 
-    if run:
+    retry = bool(
+        st.session_state.pop("_bulk_retry_requested", False)
+        and cache
+        and cache["progress"].retryable_figures
+    )
+    if run or retry:
         status_box = info_col.status("Preparing the export bundle…", expanded=True)
         progress_slot = info_col.empty()
         progress_bar = None
@@ -8337,12 +8639,19 @@ def _render_bulk_export(
             "Stop",
             key="bulk_export_stop",
             on_click=_stop_bulk_export,
-            args=(task_key,),
-            help="Stops after the trial (or screen) being written; no bundle is offered.",
+            args=(task_key, retry),
+            help="Stop this retry and keep the existing bundle."
+            if retry
+            else "Stop after the current reading or screen.",
         )
         try:
             with progress.task(task_key, title="Building the export bundle"):
-                zip_bytes, built_progress = bulk_export(
+                build = bulk_export
+                if retry:
+                    from scanpath_studio.export_retry import retry_failed_figures
+
+                    build = functools.partial(retry_failed_figures, cache, sig)
+                zip_bytes, built_progress = build(
                     active_combos,
                     active_words,
                     active_fix,
@@ -8368,9 +8677,10 @@ def _render_bulk_export(
             stop_slot.empty()
             progress_slot.empty()
             status_box.update(label="Export failed", state="error")
-            st.session_state.pop("_bulk_export_cache", None)
+            if not retry:
+                st.session_state.pop("_bulk_export_cache", None)
+                cache = None
             st.warning(f"Couldn't build the export bundle: {exc}")
-            cache = None
         else:
             stop_slot.empty()
             progress_slot.empty()
@@ -8398,6 +8708,13 @@ def _render_bulk_export(
             ):
                 for err in built_progress.errors:
                     st.write(err)
+        if built_progress.retryable_figures:
+            st.button(
+                "Retry failed figure files",
+                on_click=st.session_state.__setitem__,
+                args=("_bulk_retry_requested", True),
+                help="Keep the successful files and retry the failed figures and layers.",
+            )
         st.download_button(
             "⬇ Download bundle (zip)",
             data=zip_bytes,
@@ -8857,9 +9174,22 @@ def _c_cohort_profile(
 
 
 @st.cache_data(show_spinner=False)
-def _c_word_box_aggregate(_words, text_col, text_id, mkey, agg, fkey, screen=None):
+def _c_stimulus_revisions(_words, text_col, text_id, fkey, screen=None):
+    return stimulus_revisions(_words, text_col, text_id, screen)
+
+
+@st.cache_data(show_spinner=False)
+def _c_word_box_aggregate(
+    _words, text_col, text_id, mkey, agg, fkey, screen=None, readings=None
+):
     return word_box_aggregate(
-        _words, text_col, text_id, MEASURES[mkey], agg=agg, screen_id=screen
+        _words,
+        text_col,
+        text_id,
+        MEASURES[mkey],
+        agg=agg,
+        screen_id=screen,
+        readings=readings,
     )
 
 
@@ -9125,7 +9455,7 @@ def _download_tidy(
     recipe = dict(recipe)
     counts = result_counts(df, recipe.pop("counts", None))
     cohort_csv = None
-    if recipe.get("view") == "Cohort profile":
+    if recipe.get("view") in ("Cohort profile", "Difference word profile"):
         entry = (st.session_state.get("_datasets") or {}).get(
             context.get("dataset", {}).get("source")
         )
@@ -9160,6 +9490,19 @@ def _download_tidy(
         counts["headers"] = as_written(df.iloc[:0], names).columns.tolist()
     row = host.container(horizontal=True, gap="small")
     row.download_button(label, **button)
+    if recipe.get("view") == "Cohort profile":
+        from .cohort_audit import profile_methods
+
+        row.download_button(
+            "Methods draft",
+            data=lambda: profile_methods(
+                json.loads(_recipe_json(context, recipe, name, counts))
+            ),
+            file_name="cohort_methods.txt",
+            mime="text/plain",
+            key=f"{key}_methods",
+            on_click="ignore",
+        )
     row.download_button(
         "⬇ Download the recipe (JSON)",
         data=partial(_recipe_json, context, recipe, name, counts, cohort_csv),
@@ -9167,8 +9510,8 @@ def _download_tidy(
         mime="application/json",
         key=f"{key}_recipe",
         on_click="ignore",
-        help="Rerun this cohort profile with scanpath-studio recipe and the same source tables."
-        if recipe.get("view") == "Cohort profile"
+        help="Reproduce this table with scanpath-studio recipe and the same source files."
+        if recipe.get("view") in ("Cohort profile", "Difference word profile")
         else (
             "A record of the dataset name, trial filters, analysis choices and counts"
             " used for this table. Keep your data separately; the recipe contains no "
@@ -9213,7 +9556,7 @@ def _recipe_json(
             pool=context.get("pool") or {},
             analysis=analysis,
             selection=context.get("selection")
-            if analysis.get("view") == "Cohort profile"
+            if analysis.get("view") in ("Cohort profile", "Difference word profile")
             else None,
             table_file=name,
             counts=counts,
@@ -10165,16 +10508,6 @@ def _render_corpus_analysis_body(
             has_aoi_table=not words_filtered.empty, has_raw_gaze=has_raw_gaze
         )
         return
-    viz_settings = corpus_style_controls(
-        fixations_filtered,
-        base_font_size,
-        words=words_filtered,
-        host=st,
-        # This view renders true-to-scale stimulus figures from the
-        # canvas / typography settings, so it hosts that panel too — the rail
-        # (its other home) doesn't exist here.
-        canvas_renderer=canvas_renderer,
-    )
     common = dict(
         canvas_width=canvas_width,
         canvas_height=canvas_height,
@@ -10204,6 +10537,16 @@ def _render_corpus_analysis_body(
             bind="query-params",
         )
         opened = dict(zip(names, panes, strict=True))
+    viz_settings = corpus_style_controls(
+        fixations_filtered,
+        base_font_size,
+        words=words_filtered,
+        host=st,
+        # This view renders true-to-scale stimulus figures from the
+        # canvas / typography settings, so it hosts that panel too — the rail
+        # (its other home) doesn't exist here.
+        canvas_renderer=canvas_renderer,
+    )
     text_tab, reader_tab, groups_tab = (
         opened["Per text"],
         opened["Per participant"],
@@ -10508,10 +10851,6 @@ def render_per_text_tab(
     scale_text_to_boxes: bool = True,
 ) -> None:
     """*What does this text look like?* — one text, many readers."""
-    st.caption(
-        "Compare participants on one **text**. Choose a text, a view and a "
-        "measure. Your current trial filters apply."
-    )
     if words_filtered.empty or "word_id" not in words_filtered.columns:
         st.info("Per-text views need a Words table (word ids + reading measures).")
         return
@@ -10580,17 +10919,25 @@ def render_per_text_tab(
         )
         return
 
-    c = st.columns([3, 1, 1, 1])
+    if view == "Per-participant profiles":
+        measure_col, agg_col = st.columns([3, 1])
+        profile_chart = st.container()
+        options = st.container(horizontal=True)
+        extra_col = norm_col = options
+        note_host = st
+    else:
+        measure_col, agg_col, extra_col, norm_col = st.columns([3, 1, 1, 1])
+        note_host = measure_col
     measure = _measure_picker(
         words_filtered,
         fixations_filtered,
         key="ptext_measure",
-        host=c[0],
+        host=measure_col,
         per_word_only=True,
     )
     if measure is None:
         return
-    agg = c[1].selectbox(
+    agg = agg_col.selectbox(
         "Aggregate",
         _AGG_OPTIONS,
         format_func=str.capitalize,
@@ -10602,12 +10949,12 @@ def render_per_text_tab(
     # of the stimulus view, so disable the toggle there rather than show an
     # inert control.
     normalize = _normalize_toggle(
-        c[3],
+        norm_col,
         key="ptext_norm",
         disabled=measure.is_rate or view == "Measure on the stimulus",
     )
     _measure_note(
-        c[0],
+        note_host,
         measure,
         (
             f"Each value is one participant on one word (the {agg} of their "
@@ -10619,7 +10966,7 @@ def render_per_text_tab(
     )
 
     if view == "Per-participant profiles":
-        overlay = c[2].checkbox(f"Cohort {agg}", value=True, key="ptext1_overlay")
+        overlay = extra_col.checkbox(f"Cohort {agg}", value=True, key="ptext1_overlay")
         per = _c_per_reader_word(
             words_filtered,
             text_col,
@@ -10645,15 +10992,16 @@ def render_per_text_tab(
                 screen_id,
             )
             cohort = coh[["word_id", "value"]] if not coh.empty else None
-        _chart(
-            make_small_multiples_figure(
-                per,
-                measure_label=measure.axis_label,
-                cohort=cohort,
-                aggregate=agg,
-                **fw,
+        with profile_chart:
+            _chart(
+                make_small_multiples_figure(
+                    per,
+                    measure_label=measure.value_label(normalize),
+                    cohort=cohort,
+                    aggregate=agg,
+                    **fw,
+                )
             )
-        )
         _download_tidy(
             st,
             per,
@@ -10684,7 +11032,7 @@ def render_per_text_tab(
                 per,
                 row_col="participant_id",
                 row_label=active_all(st.session_state).field_label("participant_id"),
-                measure_label=measure.axis_label,
+                measure_label=measure.value_label(normalize),
                 colorscale=viz_settings.get(
                     "heatmap_colorscale", DEFAULT_HEATMAP_COLORSCALE
                 ),
@@ -10706,7 +11054,7 @@ def render_per_text_tab(
             ),
         )
     elif view == "Cohort profile":
-        spread = c[2].selectbox(
+        spread = extra_col.selectbox(
             "Spread",
             _SPREAD_OPTIONS,
             key="ptext3_spread",
@@ -10727,12 +11075,18 @@ def render_per_text_tab(
             fkey,
             screen_id,
         )
-        prof = _apply_min_readers(st, prof, min_readers, key="ptext3_min_note")
+        supported = _apply_min_readers(st, prof, min_readers, key="ptext3_min_note")
+        if not supported.empty:
+            supported = supported[supported["enough"]]
         _chart(
             make_word_profile_figure(
-                {f"Cohort ({measure.label})": prof},
-                measure_label=measure.axis_label,
-                spread_label=spread,
+                {
+                    f"Cohort ({measure.value_label(True) if normalize and not measure.is_rate else measure.label})": prof
+                },
+                measure_label=measure.value_label(normalize),
+                spread_label="95% bootstrap CI"
+                if effective_spread(spread, agg) == "Bootstrap CI"
+                else spread,
                 aggregate=agg,
                 colors=_corpus_series_colors(viz_settings),
                 **fw,
@@ -10740,7 +11094,7 @@ def render_per_text_tab(
         )
         _download_tidy(
             st,
-            prof,
+            supported,
             name=f"cohort_profile_{measure.key}_{text_id}.csv",
             key="dl_ptext3",
             recipe=dict(
@@ -10754,9 +11108,135 @@ def render_per_text_tab(
                 min_readers=min_readers,
             ),
         )
+        detail = st.expander(
+            "Readings behind a word", key="ptext3_readings", on_change="rerun"
+        )
+        if detail.open and not prof.empty:
+            labels = prof.set_index("word_id")["word_text"].to_dict()
+            word = detail.selectbox(
+                "Word to inspect",
+                list(labels),
+                format_func=lambda wid: f"{wid} · {labels[wid]}",
+                key="ptext3_inspect_word",
+            )
+            contributions = reading_word_contributions(
+                words_filtered,
+                text_col,
+                text_id,
+                measure,
+                normalize=normalize,
+                screen_id=screen_id,
+            )
+            rows = contributions[contributions["word_id"].eq(word)].copy()
+            reader_values = _c_per_reader_word(
+                words_filtered,
+                text_col,
+                text_id,
+                measure.key,
+                agg,
+                normalize,
+                fkey,
+                screen_id,
+            )
+            reader_values = reader_values[reader_values["word_id"].eq(word)].set_index(
+                "participant_id"
+            )["value"]
+            rows["reader_value"] = rows["participant_id"].map(reader_values)
+            detail.caption(
+                f"Source values use {measure.unit or 'the recorded scale'}. Reader values combine repeated readings by {agg}."
+            )
+            detail.dataframe(rows, hide_index=True)
+        audit = st.expander(
+            "Compare profile revisions", key="ptext3_revisions", on_change="rerun"
+        )
+        if audit.open:
+            from .cohort_audit import compare_profiles, profile_snapshot
+
+            context = _RECIPE_CONTEXT.get() or {}
+            inputs = reading_word_contributions(
+                words_filtered,
+                text_col,
+                text_id,
+                measure,
+                normalize=normalize,
+                screen_id=screen_id,
+            )
+            written = _tidy_csv(supported, active_all(st.session_state).identity())
+            choices = analysis_choices(
+                text=(text_col, text_id),
+                screen=screen_id,
+                measure=measure,
+                aggregation=agg,
+                normalize=normalize,
+                spread=spread,
+                min_readers=min_readers,
+            )
+            snapshot = profile_snapshot(
+                inputs,
+                supported,
+                written,
+                {**choices, "filters": context.get("trial_filters", [])},
+            )
+            audit.caption(
+                "This file contains participant and reading IDs, words and individual observations."
+            )
+            audit.download_button(
+                "Download profile snapshot",
+                data=json.dumps(snapshot, ensure_ascii=False),
+                file_name="cohort_snapshot.json",
+                mime="application/json",
+                on_click="ignore",
+            )
+            prior = audit.file_uploader(
+                "Earlier profile snapshot",
+                type=["json"],
+                key="ptext3_earlier",
+                max_upload_size=upload_limit_mb(),
+            )
+            if prior is not None:
+                try:
+                    changes, note = compare_profiles(
+                        json.loads(prior.getvalue()), snapshot
+                    )
+                except (UnicodeError, ValueError) as exc:
+                    audit.error(str(exc))
+                else:
+                    audit.caption(note)
+                    if not changes.empty:
+                        audit.dataframe(changes, hide_index=True)
+                    else:
+                        audit.caption(
+                            "Reading membership and contributions are identical."
+                        )
     elif view == "Measure on the stimulus":  # reads viz_settings
+        revisions = _c_stimulus_revisions(
+            words_filtered, text_col, text_id, fkey, screen_id
+        )
+        chosen = None
+        if len(revisions) > 1:
+            st.warning(
+                "This text has different wording or word boxes across readings. Choose the version to include in the figure."
+            )
+            chosen = st.selectbox(
+                "Stimulus version, by representative reading",
+                list(revisions),
+                index=None,
+                format_func=lambda k: (
+                    f"{' / '.join(map(str, k))} · {len(revisions[k])} reading(s)"
+                ),
+                key="ptext_stimulus_revision",
+            )
+            if chosen is None:
+                return
         agg_words = _c_word_box_aggregate(
-            words_filtered, text_col, text_id, measure.key, agg, fkey, screen_id
+            words_filtered,
+            text_col,
+            text_id,
+            measure.key,
+            agg,
+            fkey,
+            screen_id,
+            tuple(revisions[chosen]) if chosen else None,
         )
         if agg_words.empty:
             st.info("This text has no word geometry to tint.")
@@ -10809,10 +11289,22 @@ def render_per_text_tab(
             word_heatmap_col="value",
             word_heatmap_title=measure.axis_label,
         )
+        if chosen:
+            fig.update_layout(
+                meta={**(fig.layout.meta or {}), "representative_reading": list(chosen)}
+            )
+            st.caption(
+                f"Stimulus layout from {md_literal(str(chosen[0]))} / {md_literal(str(chosen[1]))}."
+            )
         _render_true_scale_chart(fig, key="ptext_stimulus")
+        values = agg_words[["word_id", "value"]]
+        if chosen:
+            values = values.assign(
+                representative_participant=chosen[0], representative_trial=chosen[1]
+            )
         _download_tidy(
             st,
-            agg_words[["word_id", "value"]],
+            values,
             name=f"stimulus_{measure.key}_{text_id}.csv",
             key="dl_ptext4",
             recipe=dict(
@@ -10832,7 +11324,7 @@ def render_per_text_tab(
                 "`universal_pos`."
             )
             return
-        feat_label = c[2].selectbox("Feature", list(feats), key="ptext5_feat")
+        feat_label = extra_col.selectbox("Feature", list(feats), key="ptext5_feat")
         feature_col, categorical = feats[feat_label]
         df = _c_word_feature(
             words_filtered,
@@ -10848,7 +11340,7 @@ def render_per_text_tab(
         _chart(
             make_feature_scatter_figure(
                 df,
-                measure_label=measure.axis_label,
+                measure_label=measure.value_label(normalize),
                 feature_label=feat_label,
                 categorical=categorical,
                 **fw,
@@ -10959,7 +11451,7 @@ def render_per_reader_tab(
         _chart(
             make_distribution_figure(
                 groups,
-                metric_label=measure.axis_label,
+                metric_label=measure.value_label(normalize),
                 kind=kind,
                 colors=_corpus_series_colors(viz_settings),
                 **fw,
@@ -11345,7 +11837,7 @@ def render_per_group_tab(
         _chart(
             make_distribution_figure(
                 {label: vals},
-                metric_label=measure.axis_label,
+                metric_label=measure.value_label(normalize),
                 kind=kind,
                 colors=_corpus_series_colors(viz_settings),
                 **fw,
@@ -11401,12 +11893,12 @@ def render_per_group_tab(
                 f"**{grp_screens[0]}**. Word ids restart on each screen, so a "
                 "profile across screens would mix different words."
             )
-        prof = _apply_min_readers(st, prof, min_readers, key="pgrp15_note")
+        supported = _apply_min_readers(st, prof, min_readers, key="pgrp15_note")
         _chart(
             make_word_profile_figure(
                 {label: prof},
                 measure_label=measure.axis_label,
-                spread_label=spread,
+                spread_label=effective_spread(spread, agg),
                 aggregate=agg,
                 colors=_corpus_series_colors(viz_settings),
                 **fw,
@@ -11414,7 +11906,7 @@ def render_per_group_tab(
         )
         _download_tidy(
             st,
-            prof,
+            supported,
             name=f"group_profile_{measure.key}_{text_id}.csv",
             key="dl_pgrp15",
             recipe=dict(
@@ -11620,6 +12112,7 @@ def render_group_comparison_tab(
             "Difference word profile",
             "Side-by-side summary bars",
             _GROUP_MEANS_VIEW,
+            "Within-participant contrast",
             "Two-group word heatmap",
         ],
         key="cmp_view",
@@ -11655,7 +12148,7 @@ def render_group_comparison_tab(
         _chart(
             make_distribution_figure(
                 groups,
-                metric_label=measure.axis_label,
+                metric_label=measure.value_label(normalize),
                 kind=kind,
                 colors=_corpus_series_colors(viz_settings),
                 **fw,
@@ -11705,6 +12198,10 @@ def render_group_comparison_tab(
             min_readers=min_readers,
             screen_id=screen_id,
         )
+        if "word_text_b" in diff:
+            st.warning(
+                "The groups use different word text at one or more word IDs. The CSV includes both labels for those positions."
+            )
         diff = _apply_min_readers(st, diff, min_readers, key="cmp19_note")
         _chart(
             make_difference_profile_figure(
@@ -11792,6 +12289,42 @@ def render_group_comparison_tab(
                 measures=measures,
                 aggregation=agg,
                 counts={"group_a_readers": readers_a, "group_b_readers": readers_b},
+            ),
+        )
+    elif view == "Within-participant contrast":
+        measure = _measure_picker(words_filtered, fixations_filtered, key="cmp_measure")
+        if measure is None:
+            return
+        frame = fixations_filtered if measure.frame == "fixations" else words_filtered
+        table = within_reader_contrast(
+            apply_group(frame, use_a),
+            apply_group(frame, use_b),
+            measure,
+            participants=ids_a | ids_b,
+        )
+        differences = table["difference_a_minus_b"].dropna()
+        st.caption(
+            f"A = {md_literal(label_a)}. B = {md_literal(label_b)}. Each cell is one participant’s "
+            f"mean for {measure.value_label(False)}. {len(differences)} complete pairs. "
+            f"{table['value_a'].isna().sum()} missing A and {table['value_b'].isna().sum()} missing B."
+        )
+        if not differences.empty:
+            st.metric(
+                "Mean within-participant difference (A − B)",
+                _fmt_stat(differences.mean()) + f" {measure.unit}",
+            )
+        st.dataframe(table, hide_index=True)
+        _download_tidy(
+            st,
+            table,
+            name=f"within_participant_{measure.key}.csv",
+            key="dl_cmp_within",
+            recipe=dict(
+                view=view,
+                groups=[(label_a, spec_a), (label_b, spec_b)],
+                measure=measure,
+                aggregation="mean",
+                counts={"complete_pairs": len(differences)},
             ),
         )
     elif view == _GROUP_MEANS_VIEW:  # descriptive only
@@ -12686,6 +13219,9 @@ def render_multiple_comparison_tab(
     ``trial_raw_gaze`` / ``raw_gaze`` are the selected trial's samples and the
     filtered pool's, for the chip table's gaze-sample count.
     """
+    st.caption(
+        "Browse related readings by selecting a field they share with this trial."
+    )
     if trial_words.empty or trial_fixations.empty:
         st.info("This trial has no word boxes or no fixations. Pick another trial.")
         return
@@ -13042,7 +13578,7 @@ def _render_raw_table(
     single chokepoint (``export.strip_local_paths``).
     """
     # Bookkeeping columns (`data.INTERNAL_COLUMNS`) are not data.
-    shown = shareable_frame(df)
+    shown = shareable_frame(df, table=table)
     # Headed by the dataset's own names (``table`` says whose).
     names = active_column_names(st.session_state, table) if table else EMPTY_NAMES
     # A copy of a partner from the same source column is shown once — left out
@@ -14889,6 +15425,67 @@ def pending_census(frames: dict, pending: dict, metadata: dict) -> list[dict]:
 _PREVIEW_CENSUS_KEY = "_remap_preview_census"
 
 
+def remap_reading_changes(frames, pending, annotations) -> pd.DataFrame:
+    """Distinct current and proposed reading keys, including merges, splits and unmatched notes."""
+    transitions = []
+    for kind, frame in frames.items():
+        if (
+            frame is None
+            or frame.empty
+            or not {"participant_id", "trial_id"} <= set(frame)
+        ):
+            continue
+        fields = ("participant", "trial")
+        old = _current_keys(frame, fields).reset_index(drop=True)
+        schema = {
+            "participant": "participant_id",
+            "trial": "trial_id",
+            **(pending.get(kind) or {}),
+        }
+        new = _pending_keys(frame, schema, fields).reset_index(drop=True)
+        transitions.append(
+            pd.concat(
+                [old.add_prefix("old_"), new.add_prefix("new_")], axis=1
+            ).drop_duplicates()
+        )
+    if not transitions:
+        return pd.DataFrame()
+    pairs = pd.concat(transitions, ignore_index=True).drop_duplicates()
+    old_cols, new_cols = (
+        ["old_participant", "old_trial"],
+        ["new_participant", "new_trial"],
+    )
+    outs = pairs.groupby(old_cols).size()
+    ins = pairs.groupby(new_cols).size()
+    remaining = set(ins.index)
+    notes = {}
+    for key, entry in annotations.items():
+        if key[:2] not in remaining:
+            label = "Whole trial" if len(key) == 2 else f"Screen {key[2]}"
+            notes.setdefault(key[:2], []).append(
+                f"{label} · {entry.get('note') or ', '.join(entry.get('tags', [])) or 'Favorite'}"
+            )
+    changes = []
+    for p, t, new_p, new_t in pairs.itertuples(index=False, name=None):
+        old, new = (p, t), (new_p, new_t)
+        split, merged = outs[old] > 1, ins[new] > 1
+        if old != new or split or merged:
+            kind = (
+                "Split and merged"
+                if split and merged
+                else "Split"
+                if split
+                else "Merged"
+                if merged
+                else "Renamed"
+            )
+            changes.append([p, t, new_p, new_t, kind, "\n".join(notes.get(old, []))])
+    return pd.DataFrame(
+        changes,
+        columns=[*old_cols, *new_cols, "change", "annotations losing their reading"],
+    )
+
+
 def _render_pending_change_preview(name: str, stored: dict, pending: dict) -> None:
     """What ✅ Save changes would do to the ids and coordinates — before it does.
 
@@ -14985,6 +15582,18 @@ def _render_pending_change_preview(name: str, stored: dict, pending: dict) -> No
             "merged into one scanpath.",
             icon=ICONS["warning"],
         )
+    from .annotations import store_for
+
+    affected = remap_reading_changes(
+        {**frames, "raw_gaze": stored.get("raw_gaze")},
+        pending,
+        store_for(st.session_state, name),
+    )
+    if not affected.empty:
+        box.caption(
+            "Reading IDs after saving this mapping. Existing annotations stay under their original keys."
+        )
+        box.dataframe(affected, hide_index=True)
 
 
 #: ✏️ Edit dataset's own widget namespace — ``remap_<dataset>_…``: every
@@ -15873,6 +16482,12 @@ def _render_setup_provenance_note(host=None) -> None:
             "</div>",
             unsafe_allow_html=True,
         )
+    if snapshot.px_per_degree is not None:
+        box.caption(
+            f"{snapshot.px_per_degree:.2f} px per degree using a {snapshot.monitor_width_mm:g} mm "
+            f"monitor width ({snapshot.geometry_provenance}) and a {snapshot.viewing_distance_mm:g} mm "
+            f"viewing distance ({snapshot.viewing_distance_provenance or 'measurement status unknown'})."
+        )
     _render_arrived_provenance_note(snapshot, host=box)
 
 
@@ -16322,6 +16937,46 @@ def render_data_health(
 
     findings = _dataset_health_findings(words, fixations, raw_gaze)
     with st.container(key="dataset_health"):
+        sheet = st.expander(
+            "Compare with the experiment run sheet",
+            key="data_run_sheet",
+            on_change="rerun",
+        )
+        if sheet.open:
+            from .study_checks import reconcile_run_sheet
+
+            sheet.caption(
+                "Upload a CSV with participant_id and trial_id. Add screen_id for individual screens and a planned_omission reason for readings you intended to omit."
+            )
+            run_sheet = sheet.file_uploader(
+                "Expected readings (CSV)",
+                type=["csv"],
+                key="expected_readings",
+                max_upload_size=upload_limit_mb(),
+            )
+            if run_sheet is not None:
+                try:
+                    expected = pd.read_csv(
+                        io.BytesIO(run_sheet.getvalue()),
+                        dtype=str,
+                        keep_default_na=False,
+                        encoding="utf-8-sig",
+                    )
+                    report = reconcile_run_sheet(
+                        expected,
+                        {"words": words, "fixations": fixations, "raw_gaze": raw_gaze},
+                    )
+                except (UnicodeError, ValueError) as exc:
+                    sheet.error(str(exc))
+                else:
+                    sheet.dataframe(report, hide_index=True)
+                    sheet.download_button(
+                        "Download run sheet reconciliation",
+                        data=report.to_csv(index=False),
+                        file_name="run_sheet_reconciliation.csv",
+                        mime="text/csv",
+                        on_click="ignore",
+                    )
         st.caption(
             "**Data checks**"
             + (" · whole dataset, before the trial filters" if filtered else "")
@@ -16357,6 +17012,61 @@ def render_data_health(
                         hide_index=True,
                         width="stretch",
                     )
+        reviewable = [f for f in findings if f.rows and f.trials]
+        review = st.expander(
+            "Review affected readings", key="data_health_readings", on_change="rerun"
+        )
+        if review.open and reviewable:
+            from .data_health import affected_rows
+
+            finding = review.selectbox(
+                "Data check",
+                reviewable,
+                format_func=lambda f: f.title,
+                key="health_review_check",
+            )
+            source = {"words": words, "fixations": fixations, "raw_gaze": raw_gaze}[
+                finding.table
+            ]
+            rows = affected_rows(source, finding)
+            keys = [c for c in ("participant_id", "trial_id", "screen_id") if c in rows]
+            if keys and not rows.empty:
+                groups = rows.groupby(keys, sort=False, dropna=False).indices
+                readings = list(groups)
+                key = f"health_review_reading_{finding.check}"
+                selected = review.selectbox(
+                    "Affected reading",
+                    readings,
+                    key=key,
+                    format_func=lambda reading: " / ".join(map(str, reading)),
+                )
+                index = readings.index(selected)
+                review.caption(
+                    f"Reading {index + 1} of {len(readings)}. Values are in the normalized table's units."
+                )
+                review.dataframe(
+                    rows.iloc[groups[selected]].rename(
+                        columns=active(st.session_state, finding.table).label
+                    ),
+                    hide_index=True,
+                )
+
+                def move(position):
+                    st.session_state[key] = readings[position]
+
+                back, forward = review.columns(2)
+                back.button(
+                    "Previous affected reading",
+                    disabled=index == 0,
+                    on_click=move,
+                    args=(index - 1,),
+                )
+                forward.button(
+                    "Next affected reading",
+                    disabled=index + 1 == len(readings),
+                    on_click=move,
+                    args=(index + 1,),
+                )
 
 
 def render_data_inspection_tab(

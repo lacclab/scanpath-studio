@@ -103,10 +103,18 @@ The Python API loads the same datasets with
 | write each layer to its own file | `--separable-layers` |
 | print the equivalent code | `--print-code python` (or `cli` / `both`), plus `--print-code-explicit` |
 
+Hover fields appear in the order you list them. For a column named
+`pupil, left`, preserve the comma with
+`--keep-columns 'pupil, left' --fixation-hover-fields-json '["duration_ms","pupil, left"]'`.
+Use `--fixation-hover-fields-json '[]'` to clear that selection. The Words
+layer accepts `--word-hover-fields-json` in the same way.
+
 ### Compare two scanpaths
 
-`--compare-with PARTICIPANT:TRIAL` draws a second trial, B, beside or over the
-first. It does what the app's :material/compare: **Compare** does.
+`--compare-participant ID --compare-trial ID` selects the second reading, B.
+For example, `--compare-participant B --compare-trial 'round:2'` preserves the
+colon in the trial ID. The shorthand `--compare-with PARTICIPANT:TRIAL` splits
+at the last colon.
 
 ```bash
 # Two participants on the same paragraph, overlaid
@@ -140,7 +148,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 
 | Goal | Flags |
 | --- | --- |
-| pick B | `--compare-with PARTICIPANT:TRIAL` |
+| pick B | `--compare-participant ID --compare-trial ID` |
 | pick each screen of a multipart trial | `--screen ID` (A), `--compare-screen ID` (B); each defaults to its trial's first screen |
 | arrange the panels | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`) |
 | choose whose stimulus an overlay draws | `--compare-stimulus {both,a,b}` (default `both`) |
@@ -174,7 +182,7 @@ scanpath's default.
 | `saccade_style` | `solid`, `dash`, `dot` or `dashdot` | that scanpath's default |
 | `saccade_width` | px | that scanpath's default |
 | `marker_size_range` | `MIN:MAX` | that scanpath's default |
-| `opacity` | 0.1–1 | that scanpath's default |
+| `opacity` | 0–1 | that scanpath's default |
 | `hollow` | `true` or `false` | that scanpath's default |
 
 The `--animate` replay draws one set of word boxes and no raw gaze, so it
@@ -327,7 +335,11 @@ the app does with them. `check` changes nothing and exits 0 whatever it finds.
 `--json` prints the table
 [`check_data_health`][scanpath_studio.api.check_data_health] returns. In example rows,
 missing values are `null` and infinite values are the strings `"Infinity"` or
-`"-Infinity"`.
+`"-Infinity"`. To save a QC record, use `--json-report`. Its `tables` object
+counts the source rows read, the rows with usable identifiers, and the
+normalized rows checked. Stimulus words shared across readings can expand into
+more checked rows. The report distinguishes empty tables, blank rows and rows
+with missing participant or trial IDs. Its `findings` list matches `--json`.
 
 ```bash
 scanpath-studio check --words ia.csv --fixations fixations.csv

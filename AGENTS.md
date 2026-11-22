@@ -195,7 +195,8 @@ looked up by its exact text in its trial's words, and a text ID is never
 matched to a number, nor a number to a text ID. Only when it has
 none does `measures.assign_fixations_to_words` derive it from geometry:
 box containment, else `word_id = NaN` (no snapping to a nearby word). That
-assignment feeds the reading measures and the "out-of-text" flag
+assignment feeds the reading measures. The "out-of-text" flag uses the recorded
+coordinates and actual box containment, independently of the mapped Word ID
 (`measures.fixation_in_text_mask`); "color by line" derives visual lines from
 word-box `y` clustering (`measures.cluster_word_lines`) because `line_idx` is
 often a constant in IA exports.

@@ -1,18 +1,4 @@
-"""A replay's page carries its frames packed, and the browser rebuilds them.
-
-Every frame of a replay restates every animated trace at full length, ~33 KB a
-frame, so unpacked the demo's longest trial would be a 12 MB page at the default
-361 frames and 66 MB at the finest grid's 2,001. `plots.replay_page` leaves the
-frames out of the figure the page serializes and prepends a decoder to the
-wall-clock replay player: frame 0 whole, then only what changed since the frame
-before, rebuilt with `Plotly.addFrames` before the player starts.
-
-The figure itself keeps its frames, so the GIF/MP4 export and the API are
-untouched. What has to hold is that the browser ends up with the *same* frames:
-these tests run the real decoder under node (`fixtures/replay_frames_harness.js`)
-and compare what it hands `Plotly.addFrames` with the frames `to_html` would
-write.
-"""
+"""Check the exact frames that HTML replays draw on demand, including after a seek."""
 
 from __future__ import annotations
 
@@ -95,9 +81,12 @@ def _replay(kind: str):
     )
 
 
-def _decode(script: str, tmp_path) -> dict:
+def _decode(script: str, tmp_path, count, layout=None) -> dict:
     path = tmp_path / "config.json"
-    path.write_text(json.dumps({"script": script}), encoding="utf-8")
+    path.write_text(
+        to_json_plotly({"script": script, "layout": layout, "count": count}),
+        encoding="utf-8",
+    )
     done = subprocess.run(
         [NODE, str(HARNESS), str(path)],
         capture_output=True,
@@ -128,15 +117,55 @@ def _as_written(frames) -> list:
 
 class TestTheBrowserGetsTheSameFrames:
     @needs_node
+    @pytest.mark.parametrize("dual", [False, True])
+    def test_compact_streamlit_frames_match_every_full_trace(self, dual, tmp_path):
+        from scanpath_studio import plots, replay_frames
+        from scanpath_studio.synthetic import load_synthetic_data
+
+        words, fixations = load_synthetic_data()
+        other = fixations.iloc[:4].assign(
+            timestamp_ms=[0, 51, 123, 287], duration_ms=[20, 30, 25, 37]
+        )
+        kwargs = dict(
+            canvas_width=800,
+            canvas_height=600,
+            base_font_size=16,
+            autoplay=False,
+            fixations_b=other if dual else None,
+            words_b=words if dual else None,
+            show_order=True,
+            show_saccade_arrows=True,
+            fixation_symbol="heart",
+            fixation_outline_color="magenta",
+            fixation_flags={"short": {"mode": "Highlight", "threshold_ms": 110}},
+            anim_grid_step_ms=70,
+        )
+        full, _ = plots.build_scanpath_replay(words, fixations, **kwargs)
+        compact, _ = plots.build_scanpath_replay(
+            words, fixations, compact=True, **kwargs
+        )
+        assert len(compact.frames) == 1 < len(full.frames)
+        page, script = plots.replay_page(compact)
+        assert "frames" not in page
+        expected = _as_written(full.to_dict()["frames"])
+        assert _same(
+            _decode(script, tmp_path, len(expected), page["layout"])["frames"], expected
+        )
+        assert _same(
+            _as_written(replay_frames.expand_figure(compact.to_dict())["frames"]),
+            expected,
+        )
+
+    @needs_node
     @pytest.mark.parametrize("kind", ["single", "dual"])
     def test_decoded_frames_equal_the_frames_the_page_used_to_carry(
         self, kind, tmp_path
     ):
         fig = _replay(kind)
         _page, script = replay_page(fig)
-        decoded = _decode(script, tmp_path)
+        decoded = _decode(script, tmp_path, len(fig.frames))
         expected = _as_written(fig.to_dict()["frames"])
-        assert decoded["calls"] == 1
+        assert decoded["calls"] == 0
         assert len(decoded["frames"]) == len(expected) > 50
         assert _same(decoded["frames"], expected)
 
@@ -188,7 +217,7 @@ class TestTheBrowserGetsTheSameFrames:
             },
             {"name": "5"},
         ]
-        decoded = _decode(_packed_frames_script(frames), tmp_path)
+        decoded = _decode(_packed_frames_script(frames), tmp_path, len(frames))
         assert _same(decoded["frames"], _as_written(frames))
 
 
@@ -225,10 +254,12 @@ class TestValuesTheEncoderMustNotMisjudge:
         packed = pack_replay_frames([{"name": "0", "data": None}])
         assert packed == [{"name": "0", "data": None}]
 
-    def test_typed_array_traces_travel_unpacked_on_the_player(self):
+    @pytest.mark.parametrize(
+        "custom", [{"traces": {"dtype": "i1", "bdata": "AQI="}}, {"baseframe": "0"}]
+    )
+    def test_frames_requiring_plotly_resolution_keep_named_frames(self, custom):
         fig_dict = _replay("single").to_dict()
-        for frame in fig_dict["frames"]:
-            frame["traces"] = {"dtype": "i1", "bdata": "AQI="}
+        fig_dict["frames"][1].update(custom)
         figure, script = replay_page(fig_dict)
         assert figure["frames"] is fig_dict["frames"]
         assert script == animation_player_post_script(fig_dict)

@@ -46,6 +46,7 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | Comparisons | Full only; NLD similarity scores only with `SCANPATH_EXPERIMENTAL=1` |
 | Line assignment | Experimental only |
 | Export | Figures + tables for the filtered trials; every file carries the citation |
+| Export retry | Fail one layer format and one whole layer set in a multi-reading bundle. Retry lists just the remaining failures in `index.csv` and preserves the contents and names of every successful file. |
 | Share → Link / Code / File | The link reopens both readings from uploads or locally available public corpora. Missing B leaves A open with recovery instructions. The code reproduces the figure (`test_render_every_option`) and the settings file restores it |
 
 ## Corpus Analysis
@@ -53,7 +54,9 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | Feature | Works when |
 | --- | --- |
 | Measures from the dataset | Only the measures the dataset brought (`measure_*` fields); a notice and greyed sections without one |
-| Recipe download | The JSON beside each table re-creates it |
+| Recipe download | The Cohort profile and Difference word profile recipes reproduce the downloaded CSV with the original source files and selections |
+| Study revision | Inspect a word with an unmeasured reading, compare two snapshots after a source correction, and find the participant and reading that changed |
+| Participant contrast | An unpaired reader appears in the CSV and the mean difference uses only complete pairs |
 
 ## Data Management
 
@@ -63,13 +66,19 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | Draw a scanpath | Draw word 1 → word 3 → word 1, change the last duration, preview, save and reopen by name. The draft and Share code reproduce the three visits. |
 | ✏️ Edit dataset | A change re-normalizes and keeps the column-name map |
 | 📂 Available datasets | Lists every dataset; renaming an upload preserves its annotations, saved selection and comparison identity |
+| Mapping recovery | Upload a Fixations table with an unrecognized duration, press Add dataset, activate the blocker with Enter, and map a seconds column. The duration picker receives focus and shows two converted values. |
+| Dataset credit | Credit an unpublished lab dataset and a second comparison dataset. The saved README identifies which supplies the exported trials and BibTeX contains both references. |
 | Metadata tables | Their columns appear as trial filters, chips and in the export bundle |
 | Data checks | Each check that found rows says how many, where, and what happens to them |
+| Run sheet | A missing planned reading, a raw-gaze-only reading and a planned omission have separate outcomes |
+| Reviewer notes | A disputed screen note can be inspected before import and independent edits in two local sessions survive reopening |
 
 ## Headless surfaces
 
 | Surface | Smoke check |
 | --- | --- |
+| Coauthor handoff | Copy the packaged Canal example into an empty folder. Its documented commands reproduce a specific reading and the original two-reader result CSV checksum. |
+| Input counts | Check a header-only and an all-unkeyed fixation file with `--json-report`. The findings-only `--json` still returns a list. |
 | Cohort recipe | `recipe profile.recipe.json --sample -o profile.csv` reproduces the CSV downloaded for a demo Per text cohort profile |
 | CLI | `scanpath-studio render --sample -o out.html` writes a figure; `--list-trials` lists 24 |
 | API | `load_sample_data()` → `plot_scanpath(..., participant=, trial=)` → `save_figure` |

@@ -465,8 +465,8 @@ def test_color_by_offers_retained_numeric_columns_after_the_familiar_ones():
     fixations = fixations.assign(saccade_ok=True, label=["a", "b", "c", "d"])
     options = color_field_options(fixations)
     assert options.index("pupil_size") > options.index("timestamp_ms")
-    # Identifiers, positions, flags and text are not colour scales.
-    for column in ("x", "y", "fixation_id", "saccade_ok", "label"):
+    assert "label" in options  # a categorical colour, independent of row order
+    for column in ("x", "y", "fixation_id", "saccade_ok"):
         assert column not in options
     # Bookkeeping never shows.
     assert "_timestamp_synthesized" not in color_field_options(

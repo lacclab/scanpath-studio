@@ -1,0 +1,1 @@
+The desktop launcher waits for Streamlit's health response before opening the window. Update instructions preserve VCS branches, forks and package subdirectories and identify installs pinned to a commit.

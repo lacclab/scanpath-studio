@@ -129,15 +129,12 @@ def test_b_on_a_screen_without_its_own_canvas_takes_its_datasets():
 
 
 def _image_app(folder: str, scenario: str) -> None:
-    import io
-    import zipfile
 
     import pandas as pd
     import streamlit as st
     from PIL import Image
 
     from scanpath_studio import api, tabs
-    from scanpath_studio.export import ComparisonSide, ExportOptions, pair_export
     from scanpath_studio.plots import FigureSettings, _background_image_spec
     from scanpath_studio.utils import separate_self_compare
 
@@ -239,22 +236,10 @@ def _image_app(folder: str, scenario: str) -> None:
         image.xref: next((n for n, s in sources.items() if s == image.source), "?")
         for image in fig.layout.images
     }
-    bundle = pair_export(
-        fig,
-        ComparisonSide("p", "t1", wa, fa),
-        ComparisonSide(b[0], b[1], wb, fb),
-        canvas_width=800,
-        canvas_height=900,
-        x_field="x",
-        y_field="y",
-        settings={},
-        options=ExportOptions(include_png=False, include_svg=False, include_html=True),
+    download = tabs._figure_download_data(
+        fig, "HTML", canvas_width=800, canvas_height=900
     )
-    with zipfile.ZipFile(io.BytesIO(bundle)) as zf:
-        # The page's JSON escapes "/" — undone so a data URI reads as itself.
-        html = next(
-            zf.read(name).decode() for name in zf.namelist() if name.endswith(".html")
-        ).replace("\\u002f", "/")
+    html = download().replace("\\u002f", "/")
     st.session_state["exported"] = {
         name: value in html for name, value in sources.items()
     }
@@ -271,7 +256,7 @@ def _images(tmp_path, scenario: str):
 def test_each_split_panel_shows_its_own_texts_image(tmp_path):
     state = _images(tmp_path, "different_text")
     assert state["panels"] == {"x": "red", "x2": "blue"}
-    # The bundle's figure is the one drawn, B's page included.
+    # The downloaded figure includes B's stimulus, just as the on-screen figure does.
     assert state["same_figure"]
     assert state["exported"] == {"red": True, "blue": True}
 

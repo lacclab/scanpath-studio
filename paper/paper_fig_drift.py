@@ -39,7 +39,9 @@ READER, TEXT, ALGORITHM = 0, "b0", "warp"
 
 
 def main() -> None:
-    words, fixations = sps.load_potec(POTEC_ROOT, readers=[READER], texts=[TEXT])
+    words, fixations = sps.load_potec(
+        POTEC_ROOT, readers=[READER], texts=[TEXT], names="canonical"
+    )
     combos = sps.list_trials(words, fixations)
     pid, tid = combos.iloc[0]["participant_id"], combos.iloc[0]["trial_id"]
     tw = words[(words.participant_id == pid) & (words.trial_id == tid)]
@@ -66,7 +68,8 @@ def main() -> None:
         marker_size_range=constants.DEFAULT_MARKER_SIZE_RANGE,
         order_font_size=16,
         order_font_color=constants.DEFAULT_ORDER_FONT_COLOR,
-        show_colorbars=False,
+        show_fixation_colorbar=False,
+        show_heatmap_colorbar=False,
         fixation_color_range=None,
         heatmap_range=None,
         color_by_line=True,

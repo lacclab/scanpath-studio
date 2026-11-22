@@ -111,8 +111,10 @@ layer accepts `--word-hover-fields-json` in the same way.
 
 ### Compare two scanpaths
 
-`--compare-with PARTICIPANT:TRIAL` draws a second trial, B, beside or over the
-first. It does what the app's :material/compare: **Compare** does.
+`--compare-participant ID --compare-trial ID` selects the second reading, B.
+For example, `--compare-participant B --compare-trial 'round:2'` preserves the
+colon in the trial ID. The shorthand `--compare-with PARTICIPANT:TRIAL` splits
+at the last colon.
 
 ```bash
 # Two participants on the same paragraph, overlaid
@@ -146,7 +148,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 
 | Goal | Flags |
 | --- | --- |
-| pick B | `--compare-with PARTICIPANT:TRIAL` |
+| pick B | `--compare-participant ID --compare-trial ID` |
 | pick each screen of a multipart trial | `--screen ID` (A), `--compare-screen ID` (B); each defaults to its trial's first screen |
 | arrange the panels | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`) |
 | choose whose stimulus an overlay draws | `--compare-stimulus {both,a,b}` (default `both`) |

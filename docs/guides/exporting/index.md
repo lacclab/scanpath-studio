@@ -107,8 +107,13 @@ For a scripted batch, loop over the trial list.
 ## Replay export { #replays-as-gif-or-mp4 }
 
 With :material/movie: **Animate** on, **Export** → **Current figure** saves the
-replay as HTML, GIF or MP4. The CLI's `render --animate` saves interactive HTML
-only. For a GIF or MP4 in Python:
+replay as HTML, GIF or MP4. In a saved HTML replay, **Previous fixation** and
+**Next fixation** move to individual onsets and show the fixation’s duration and
+assigned word when available. The time slider scrubs through the whole reading.
+A GIF or MP4 with a low frame cap shows the state reached at each frame’s start.
+A fixation after the last frame starts can be absent from the clip.
+
+The CLI’s `render --animate` saves interactive HTML. For a GIF or MP4 in Python:
 
 ??? example "Python: save a GIF or MP4"
 
@@ -127,3 +132,15 @@ only. For a GIF or MP4 in Python:
 
 [Export setup and troubleshooting](../../faq.md#export-fails) ·
 [Python save options](../../api.md#save) · [CLI options](../../cli.md#common-tasks)
+## Proof two manuscript panels
+
+In **Compare**, choose two readings with the same screen dimensions and a
+side-by-side or stacked layout. In **Export → Current figure → Manuscript
+panel proof**, enter the total print width. The proof shows the resulting
+label sizes in points and the numeric color limits shared by the two panels.
+Use the Fixations or Heatmap controls to choose your own limits.
+
+**Prepare manuscript SVG** provides the lettered vector panels at that
+physical width. **Save panel settings** preserves their order, styles, width
+and selected limits. Open the settings file in **Share → File**, replace
+one reading and prepare the revised SVG.

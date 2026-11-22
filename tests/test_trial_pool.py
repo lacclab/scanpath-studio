@@ -117,7 +117,8 @@ class TestEverySurfaceListsTheSameTrials:
             ]
         )
         out = capsys.readouterr()
-        assert "3 trials." in out.err
+        assert len(out.out.splitlines()) == 1 + len(EVERY)
+        assert out.err == ""
         for _, trial in EVERY:
             assert trial in out.out
 

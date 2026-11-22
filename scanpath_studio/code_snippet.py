@@ -257,13 +257,18 @@ def _synthetic_python(source: SnippetSource) -> list[str]:
     ]
 
 
+def _file_tables(source: SnippetSource) -> tuple[list, list]:
+    if "words" not in source.options and "fixations" not in source.options:
+        return ["words.csv"], ["fixations.csv"]
+    return source.options.get("words") or [], source.options.get("fixations") or []
+
+
 def _files_python(source: SnippetSource) -> list[str]:
-    words = source.options.get("words") or ["words.csv"]
-    fixations = source.options.get("fixations") or ["fixations.csv"]
+    words, fixations = _file_tables(source)
     return [
         "words, fixations = sps.load_scanpath_data(",
-        f"    {_py(_one_or_list(words))},",
-        f"    {_py(_one_or_list(fixations))},",
+        f"    {_py(_one_or_list(words) if words else None)},",
+        f"    {_py(_one_or_list(fixations) if fixations else None)},",
         *_schema_python(source),
         *_keep_python(source),
         ")",
@@ -351,13 +356,12 @@ def _demo_cli(source: SnippetSource) -> list[str]:
 
 
 def _files_cli(source: SnippetSource) -> list[str]:
-    argv = []
-    words = source.options.get("words") or ["words.csv"]
-    fixations = source.options.get("fixations") or ["fixations.csv"]
-    argv += ["--words", *[str(p) for p in words]]
+    words, fixations = _file_tables(source)
+    argv = ["--words", *map(str, words)] if words else []
     if schema := source.options.get("word_schema"):
         argv += ["--word-schema", json.dumps(schema, separators=(",", ":"))]
-    argv += ["--fixations", *[str(p) for p in fixations]]
+    if fixations:
+        argv += ["--fixations", *map(str, fixations)]
     if schema := source.options.get("fix_schema"):
         argv += ["--fix-schema", json.dumps(schema, separators=(",", ":"))]
     return argv + _keep_cli(source)
@@ -2066,6 +2070,16 @@ def cli_snippet(
         argv += ["-p", str(state.participant)]
     if state.trial:
         argv += ["-t", str(state.trial)]
+    if state.kind == "comparison" or (
+        state.kind == "animation" and state.compare is not None and state.compare.trial
+    ):
+        compare = state.compare or CompareTarget()
+        for flag, value in (
+            ("--compare-participant", str(compare.participant)),
+            ("--compare-trial", str(compare.trial)),
+        ):
+            # argparse otherwise reads a leading hyphen in an ID as another flag.
+            argv.extend([f"{flag}={value}"] if value.startswith("-") else [flag, value])
     if state.screen:
         argv += ["--screen", str(state.screen)]
     if _names_screen_b(state):
@@ -2095,13 +2109,8 @@ def cli_snippet(
         # it, and the replay's B-side options (`--compare-stimulus`, the
         # labels, the legend) are refused without it. A second dataset's B is
         # named in that dataset's own tables, as in Python.
-        if state.compare is not None and state.compare.trial:
-            argv += [
-                "--compare-with",
-                f"{state.compare.participant}:{state.compare.trial}",
-            ]
-            if other is not None:
-                argv += _second_dataset_cli(other, explicit=explicit)
+        if other is not None:
+            argv += _second_dataset_cli(other, explicit=explicit)
     else:
         if state.drift_correction:
             # Both flags exist only behind SCANPATH_EXPERIMENTAL=1, so
@@ -2136,7 +2145,6 @@ def cli_snippet(
         argv.append("--no-raw-gaze")
     if state.kind == "comparison":
         compare = state.compare or CompareTarget()
-        argv += ["--compare-with", f"{compare.participant}:{compare.trial}"]
         if other is not None:
             argv += _second_dataset_cli(other, explicit=explicit)
         raw_gaze_b = _second_raw_gaze(state)
@@ -2186,7 +2194,15 @@ def cli_snippet(
     # three flags, so a translated invocation has to carry them or write a
     # differently-sized file than the Python form beside it.
     # So do the print width + dpi `save_figure` takes, as `render`'s flags.
-    for name in ("width", "height", "scale", "width_mm", "width_in", "dpi"):
+    for name in (
+        "width",
+        "height",
+        "scale",
+        "width_mm",
+        "width_in",
+        "dpi",
+        "proof_width_mm",
+    ):
         value = (save_kwargs or {}).get(name)
         if value is not None:
             argv += [f"--{name.replace('_', '-')}", _num(value)]

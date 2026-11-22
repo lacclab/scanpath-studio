@@ -4406,7 +4406,10 @@ def _build_studio_config(
         compare_styles=compare_styles,
         state=st.session_state,
         setup_provenance=(
-            {"provenance": {g: str(p) for g, p in snapshot.provenance.items()}}
+            {
+                "provenance": {g: str(p) for g, p in snapshot.provenance.items()},
+                "viewing_distance_provenance": snapshot.viewing_distance_provenance,
+            }
             if snapshot is not None
             else None
         ),
@@ -4415,7 +4418,7 @@ def _build_studio_config(
     )
 
 
-def render_settings_file(
+def _current_figure_config(
     selected_participant: str,
     selected_trial: str,
     canvas_width: int,
@@ -4428,19 +4431,8 @@ def render_settings_file(
     trial_raw_gaze: pd.DataFrame,
     *,
     font_family: str,
-) -> None:
-    """🗺️ Scanpath → 🔗 Share → **File**: download and restore a settings file.
-
-    The file is :func:`_build_studio_config`'s — the figure's full settings and
-    trial selection, with provenance — a copy that works offline and at any
-    address, unlike a link. The upload is *applied* in
-    ``url_state._apply_uploaded_plot_config``, early in the next run, before any
-    widget renders; it is deduped by the file's name and size, so leaving the
-    file in the uploader does not re-apply it on every rerun.
-
-    The file covers the figure only (see :func:`_build_studio_config`). It is
-    not in a dialog, so an upload reruns the whole app on its own.
-    """
+) -> dict:
+    """The current figure and both readers' styles for Share and manuscript proofs."""
     from datetime import datetime
 
     from scanpath_studio import __version__
@@ -4489,7 +4481,7 @@ def render_settings_file(
         for cat, spec in b_filters["fixation_flags"].items()
     }
     compare_styles[1]["saccade_classes"] = b_filters["saccade_classes"]
-    plot_config = _build_studio_config(
+    return _build_studio_config(
         selected_participant=selected_participant,
         selected_trial=selected_trial,
         canvas_width=canvas_width,
@@ -4505,6 +4497,36 @@ def render_settings_file(
         app_version=__version__,
         exported_at=datetime.now().isoformat(timespec="seconds"),
         compare_styles=compare_styles,
+    )
+
+
+def render_settings_file(
+    selected_participant: str,
+    selected_trial: str,
+    canvas_width: int,
+    canvas_height: int,
+    x_field: str,
+    y_field: str,
+    figure_settings: dict,
+    viz_settings: dict,
+    base_font_size: int,
+    trial_raw_gaze: pd.DataFrame,
+    *,
+    font_family: str,
+) -> None:
+    """Download the current figure settings and restore a previously saved file."""
+    plot_config = _current_figure_config(
+        selected_participant,
+        selected_trial,
+        canvas_width,
+        canvas_height,
+        x_field,
+        y_field,
+        figure_settings,
+        viz_settings,
+        base_font_size,
+        trial_raw_gaze,
+        font_family=font_family,
     )
     # The file's boundary, as `_build_studio_config` draws it — the
     # Corpus Analysis tutorial explains the excluded choices at more length.
@@ -5687,6 +5709,27 @@ def _render_export_panel(
             plot_key=plot_key,
         )
         render_cite_button(st, key="single_export")
+        if (displayed_fig.layout.meta or {}).get("scanpath_panels"):
+            from . import panel_proof_ui
+
+            def panel_settings():
+                return _current_figure_config(
+                    selected_participant,
+                    selected_trial,
+                    canvas_width,
+                    canvas_height,
+                    viz_settings.get("x_field", "x"),
+                    viz_settings.get("y_field", "y"),
+                    _build_figure_settings(
+                        viz_settings, bool(viz_settings.get("show_raw_gaze"))
+                    ),
+                    viz_settings,
+                    base_font_size,
+                    raw_gaze,
+                    font_family=font_family,
+                )
+
+            panel_proof_ui.render(displayed_fig, _print_size_setting(), panel_settings)
 
     if not include_bundle:
         ui_mode.render_export_pointer(st)

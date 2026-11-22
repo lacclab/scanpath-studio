@@ -36,6 +36,7 @@ __all__ = [
     "run_analysis_recipe",
     "save_figure",
     "save_figure_layers",
+    "save_panel_proof",
     "version_info",
 ]
 # The release this tree descends from: the number `/release` bumps (with

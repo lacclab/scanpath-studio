@@ -9137,10 +9137,27 @@ def _make_split_comparison_figure(
     names_row_px = _panel_names_px(fig)
     legend_px = _default_legend_height(fig)
     top_px = names_row_px + legend_px
+    heatmap_limits = None
+    if show_heatmap:
+        heatmap_limits = (
+            [float(np.expm1(heatmap_min)), float(np.expm1(heatmap_max))]
+            if heatmap_norm == "Log"
+            else [heatmap_min, heatmap_max]
+        )
     fig.update_layout(
         height=figure_height + top_px,
         margin_t=top_px,
         legend_y=1.0 + names_row_px / plot_area[1],
+        meta={
+            **(fig.layout.meta or {}),
+            "scanpath_panels": {
+                "layout": orientation,
+                "canvases": panel_canvas,
+                "fixation_range": metric_range,
+                "heatmap_range": heatmap_limits,
+                "labels": subplot_titles,
+            },
+        },
     )
     return fig
 

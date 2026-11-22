@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+import json
 import shlex
 
 import pytest
@@ -33,6 +34,80 @@ def _state(kind: str = "static", **overrides) -> cs.FigureState:
 
 
 DEMO = cs.SnippetSource(kind=cs.SOURCE_DEMO, label="Bundled demo")
+
+
+@pytest.fixture
+def lab_fixations(tmp_path):
+    path = tmp_path / "lab.csv"
+    path.write_text(
+        'participant_id,trial_id,x,y,duration_ms,fixation_id,timestamp_ms,"pupil, left"\n'
+        "A,1,10,100,110,1,1000,17\nA,1,20,100,120,2,1250,18\n"
+        "B,round:2,248,100,110,1,1000,27\nB,round:2,258,100,120,2,1250,28\n"
+        "B:round,2,718,100,110,1,1000,37\nB:round,2,728,100,120,2,1250,38\n"
+    )
+    return path
+
+
+def _reproduced_traces(source, state, path):
+    import re
+
+    command, unsupported = cs.cli_snippet(source, state, output=str(path))
+    assert not unsupported
+    cli.main(shlex.split(command.replace("\\\n", " "))[1:])
+    page = path.read_text()
+    # Plotly's document embeds the trace array directly after the figure ID.
+    call = list(re.finditer(r'Plotly\.newPlot\(\s*"[^"]+",\s*', page))[-1]
+    return json.JSONDecoder().raw_decode(page[call.end() :])[0]
+
+
+@pytest.mark.parametrize("kind", ["comparison", "animation"])
+@pytest.mark.parametrize(
+    ("reader", "trial", "first_x"), [("B", "round:2", 248), ("B:round", "2", 718)]
+)
+def test_generated_command_compares_the_intended_reading(
+    lab_fixations, tmp_path, kind, reader, trial, first_x
+):
+    source = cs.SnippetSource(
+        kind=cs.SOURCE_FILES, options={"fixations": [lab_fixations]}
+    )
+    state = cs.FigureState(
+        kind=kind,
+        settings=api.figure_options(kind),
+        participant="A",
+        trial="1",
+        compare=cs.CompareTarget(
+            participant=reader, trial=trial, layout="side_by_side"
+        ),
+    )
+    data = _reproduced_traces(source, state, tmp_path / "comparison.html")
+    label = "Scanpath B" if kind == "animation" else f"{trial} · {reader}"
+    trace = next(
+        t for t in data if t.get("name") == label and isinstance(t.get("x"), list)
+    )
+    assert trace["x"][0] == first_x
+
+
+@pytest.mark.parametrize("fields", [["duration_ms", "pupil, left"], []])
+def test_generated_hover_command_preserves_order_values_and_empty_selection(
+    lab_fixations, tmp_path, fields
+):
+    source = cs.SnippetSource(
+        kind=cs.SOURCE_FILES, options={"fixations": [lab_fixations]}
+    )
+    state = cs.FigureState(
+        kind="static",
+        settings={**api.figure_options(), "fixation_hover_fields": fields},
+        participant="A",
+        trial="1",
+    )
+    data = _reproduced_traces(source, state, tmp_path / "hover.html")
+    trace = next(t for t in data if t.get("name") == "Fixations")
+    if fields:
+        assert "pupil, left: %{customdata[1]}" in trace["hovertemplate"]
+        assert trace["customdata"] == [["110 ms", 17], ["120 ms", 18]]
+    else:
+        assert trace["hovertemplate"] == "<extra></extra>"
+        assert not trace.get("customdata")
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +193,7 @@ def test_a_raw_gaze_file_is_named_in_both_forms():
     )
     code = cs.reproduction_code(source, _state(figure={"show_raw_gaze": True}))
     assert "sps.load_raw_gaze('gaze.csv', raw_gaze_schema=" in code.python
-    flat = code.cli.replace(" \\\n ", " ")
+    flat = _one_line(code.cli)
     assert "--raw-gaze gaze.csv" in flat
     assert "--raw-gaze-schema" in flat
     assert not code.caveats
@@ -334,7 +409,7 @@ def test_a_comparison_names_both_scanpaths():
     assert "('p1', 't1')" in code.python
     assert "('p2', 't2')" in code.python
     assert "layout='side_by_side'" in code.python
-    assert "--compare-with p2:t2" in code.cli
+    assert "--compare-participant p2 --compare-trial t2" in _one_line(code.cli)
     # The settings vocabulary's `side_by_side` is `side-by-side` on the CLI.
     assert "--compare-layout side-by-side" in code.cli
 
@@ -1266,7 +1341,7 @@ def test_a_dual_animation_names_scanpath_b_in_both_forms():
     )
     code = cs.reproduction_code(DEMO, state)
     assert "trial_b=('p2', 't2')" in code.python
-    assert "--compare-with p2:t2" in code.cli
+    assert "--compare-participant p2 --compare-trial t2" in _one_line(code.cli)
     assert not any("replays A alone" in note for note in code.caveats)
 
 
@@ -1291,7 +1366,8 @@ def test_a_second_datasets_b_is_named_in_its_own_tables(kind):
         assert keyword in code.python, keyword
     assert "('p2', 't2')" in code.python
     cli_line = _one_line(code.cli)
-    assert "--compare-with p2:t2 --compare-words B_WORDS" in cli_line
+    assert "--compare-participant p2 --compare-trial t2" in cli_line
+    assert "--compare-words B_WORDS" in cli_line
     assert "--compare-fixations B_FIXATIONS --compare-dataset-name PoTeC" in cli_line
     # No screen stated, so neither half invents one.
     assert "setup_b" not in code.python and "--compare-canvas" not in cli_line
@@ -1355,7 +1431,7 @@ def test_render_accepts_a_second_datasets_command_line(kind, capsys):
     command = cs.reproduction_code(DEMO, state, explicit=True).cli
     argv = shlex.split(command.replace(" \\\n", " "))[2:]
     args = cli._render_parser().parse_args(argv)
-    assert args.compare_with == "p2:t2"
+    assert cli._comparison_ids(args) == ("p2", "t2")
     assert args.compare_words == ["B_WORDS"]
     assert args.compare_fixations == ["B_FIXATIONS"]
     assert args.compare_dataset_name == "PoTeC"
@@ -1630,7 +1706,7 @@ def test_hand_set_comparison_labels_reach_both_flavours():
     `compare_stimulus`, which have the same shape for the same reason."""
     code = cs.reproduction_code(DEMO, _compare_state(labels=("Reader A", "Reader B")))
     assert "    labels=('Reader A', 'Reader B')," in code.python
-    flat = code.cli.replace(" \\\n ", " ")
+    flat = _one_line(code.cli)
     assert "--label-a 'Reader A' --label-b 'Reader B'" in flat
     assert not code.cli_unsupported
 
@@ -1657,12 +1733,12 @@ def test_the_co_animations_labels_are_no_longer_cli_unsupported():
         compare=cs.CompareTarget(participant="p2", trial="t2"),
     )
     code = cs.reproduction_code(DEMO, state)
-    flat = code.cli.replace(" \\\n ", " ")
+    flat = _one_line(code.cli)
     assert "--label-a A" in flat
     assert "--label-b B" in flat
     # `render` refuses the labels without the second reading, so the command
     # names it — without it, the copied command would fail.
-    assert "--compare-with p2:t2" in flat
+    assert "--compare-participant p2 --compare-trial t2" in _one_line(flat)
     assert not code.cli_unsupported
 
 

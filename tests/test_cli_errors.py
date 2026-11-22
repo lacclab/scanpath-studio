@@ -8,6 +8,91 @@ import pytest
 from scanpath_studio import cli
 
 
+def test_fresh_headless_commands_leave_stderr_for_diagnostics(tmp_path):
+    import os
+    import subprocess
+    import sys
+
+    env = {
+        **os.environ,
+        "SCANPATH_STUDIO_PERSIST": "0",
+        "SCANPATH_STUDIO_STATE_DIR": str(tmp_path),
+    }
+    for args, expected in (
+        (["-c", "from scanpath_studio import api"], ""),
+        (["-m", "scanpath_studio", "recipe", "--help"], "RECIPE.json"),
+        (
+            ["-m", "scanpath_studio", "render", "--sample", "--list-trials"],
+            "participant_id",
+        ),
+    ):
+        result = subprocess.run(
+            [sys.executable, *args], capture_output=True, text=True, env=env, check=True
+        )
+        assert expected in result.stdout
+        assert result.stderr == ""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scanpath_studio",
+            "render",
+            "--sample",
+            "--no-raw-gaze",
+            "--list-trials",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=True,
+    )
+    assert "--no-raw-gaze hides the raw-gaze layer" in result.stderr
+
+
+@pytest.mark.parametrize("encoding", ["utf-8", "utf-8-sig", "utf-16", "utf-32"])
+def test_mapping_file_encodings_and_inline_json(tmp_path, encoding):
+    text = '{"trial":"Séance"}'
+    path = tmp_path / "mapping.json"
+    path.write_text(text, encoding=encoding)
+    assert (
+        cli._parse_schema_arg(str(path), "--fix-schema")
+        == cli._parse_schema_arg(text, "--fix-schema")
+        == {"trial": "Séance"}
+    )
+
+
+def test_mapping_errors_name_the_file_and_recovery(tmp_path):
+    path = tmp_path / "lab.json"
+    path.write_bytes(b'{"trial":"\xff"}')
+    with pytest.raises(SystemExit, match=r"--fix-schema.*lab\.json.*UTF-8"):
+        cli._parse_schema_arg(str(path), "--fix-schema")
+
+
+@pytest.mark.parametrize(
+    "ids",
+    [
+        ["--compare-participant", "A"],
+        ["--compare-trial", "t"],
+        ["--compare-with", "B:t", "--compare-participant", "A", "--compare-trial", "r"],
+    ],
+)
+def test_comparison_requires_one_complete_selection(ids):
+    with pytest.raises(SystemExit, match="--compare-participant"):
+        cli.main(["render", "--sample", *ids, "-o", "unused.html"])
+
+
+def test_screen_listing_reports_missing_readings(tmp_path, capsys):
+    path = tmp_path / "fixations.csv"
+    path.write_text("participant_id,trial_id,x,y,duration_ms\nA,1,2,3,45\nB,1,4,5,67\n")
+    base = ["render", "--fixations", str(path), "--list-parts"]
+    for ids in (["-p", "A", "-t", "absent"], ["-p", "absent"], ["-t", "absent"]):
+        with pytest.raises(SystemExit, match="absent.*--list-trials"):
+            cli.main([*base, *ids])
+        assert capsys.readouterr().out == ""
+    cli.main([*base, "-t", "1"])
+    assert "single-screen" in capsys.readouterr().out
+
+
 def test_a_misspelt_flag_is_three_lines_ending_in_a_suggestion(capsys):
     with pytest.raises(SystemExit) as excinfo:
         cli.main(["render", "--sample", "--no-heatmaps", "-o", "x.png"])
@@ -90,7 +175,10 @@ def test_layer_flags_left_out_are_not_given():
         assert getattr(args, dest) is None, dest
 
 
-def test_list_trials_says_trials_and_shows_the_text_id(capsys):
+def test_list_trials_says_trials_and_shows_the_text_id(capsys, monkeypatch):
+    import sys
+
+    monkeypatch.setattr(sys.stderr, "isatty", lambda: True)
     cli.main(["render", "--sample", "--list-trials"])
     captured = capsys.readouterr()
     assert captured.err.startswith("24 trials.")

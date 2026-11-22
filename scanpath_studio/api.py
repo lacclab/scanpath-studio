@@ -31,6 +31,7 @@ from collections.abc import Iterable, Sequence
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -83,8 +84,10 @@ from .constants import (  # noqa: E402
 from .experimental_setup import Provenance, SetupSnapshot  # noqa: E402
 from .export import annotate_figure, figure_text_style  # noqa: E402
 from .file_citation import stamp_file  # noqa: E402
+from .file_lock import file_lock  # noqa: E402
 from .multipart import (  # noqa: E402
     SCREEN_ID,
+    SCREEN_INDEX,
     apply_trial_parts_manifest,
     extract_part,
     part_catalog,
@@ -94,6 +97,7 @@ from .plots import (  # noqa: E402
     ANIMATION_FIGURE_OPTIONS,
     COMPARISON_FIGURE_OPTIONS,
     FIGURE_OPTION_CHOICES,
+    SCANPATH_LAYER_ORDER,
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
     _resolve_trial_display_name,
@@ -2046,26 +2050,10 @@ def list_parts(
     )
 
 
-def _resolve_trial(
-    words: pd.DataFrame,
-    fixations: pd.DataFrame,
-    participant: str | None,
-    trial: str | None,
-    *,
-    default_first: bool = False,
-    raw_gaze: pd.DataFrame | None = None,
-) -> tuple[str, str]:
-    """Resolve to one (participant_id, trial_id), validating what was given.
-
-    A nonexistent participant/trial always raises — naming which of the two ids
-    is unknown, a few valid values and the closest spellings. An underspecified
-    selection matching several trials raises too, unless ``default_first`` picks
-    the first match (the CLI's behavior, mirroring the app's default selection)
-    — but never for a trial id that several participants share: the
-    app's picker and its links refuse to guess the reader, so the CLI does too.
-    ``raw_gaze`` makes the trials only its samples cover selectable.
-    """
-    combos = _cn.to_canonical_frame(list_trials(words, fixations, raw_gaze=raw_gaze))
+def _matching_trials(
+    combos: pd.DataFrame, participant: str | None, trial: str | None
+) -> pd.DataFrame:
+    """Every matching reading. Unknown IDs are reported even for a screen listing."""
     if combos.empty:
         raise ValueError(
             "The data holds no trial with both a participant and a trial id."
@@ -2101,6 +2089,30 @@ def _resolve_trial(
                 f"trial{'' if len(scoped) == 1 else 's'}, none of them {str(trial)!r}. {_value_hint(scoped, 'trial_id', trial)}"
             )
         scoped = narrowed
+    return scoped
+
+
+def _resolve_trial(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    participant: str | None,
+    trial: str | None,
+    *,
+    default_first: bool = False,
+    raw_gaze: pd.DataFrame | None = None,
+) -> tuple[str, str]:
+    """Resolve to one (participant_id, trial_id), validating what was given.
+
+    A nonexistent participant/trial always raises — naming which of the two ids
+    is unknown, a few valid values and the closest spellings. An underspecified
+    selection matching several trials raises too, unless ``default_first`` picks
+    the first match (the CLI's behavior, mirroring the app's default selection)
+    — but never for a trial id that several participants share: the
+    app's picker and its links refuse to guess the reader, so the CLI does too.
+    ``raw_gaze`` makes the trials only its samples cover selectable.
+    """
+    combos = _cn.to_canonical_frame(list_trials(words, fixations, raw_gaze=raw_gaze))
+    scoped = _matching_trials(combos, participant, trial)
     if len(scoped) > 1 and not (default_first and trial is None):
         preview = ", ".join(
             f"({pid!r}, {tid!r})"
@@ -3455,7 +3467,8 @@ def render_parent_trial(
         renderer = animate_scanpath if animate else plot_scanpath
         return {"screen-1": renderer(words, fixations, pid, tid, **options)}
 
-    screen_ids = catalog[SCREEN_ID].astype(str).tolist()
+    screen_indices = dict(zip(catalog[SCREEN_ID].astype(str), catalog[SCREEN_INDEX]))
+    screen_ids = list(screen_indices)
     if isinstance(screens, str):
         screens = [screens]
     if screens is not None:
@@ -3495,7 +3508,7 @@ def render_parent_trial(
                 "participant_id": pid,
                 "trial_id": tid,
                 "screen_id": screen_id,
-                "screen_index": screen_ids.index(screen_id) + 1,
+                "screen_index": int(screen_indices[screen_id]),
                 "transition_mode": transition_mode,
                 "transition_after_ms": delay,
             }
@@ -3960,6 +3973,26 @@ def _compare_raw_gaze(
     return samples
 
 
+def save_panel_proof(fig: go.Figure, path: str | Path, *, width_mm: float) -> Path:
+    """Save a split comparison as an SVG with its manuscript width in millimetres.
+
+    Both readings must have matching screen dimensions. The panel order, letters,
+    shared scales, legends and relative size of the stimulus come from `compare_scanpaths`.
+    """
+    from .panel_proof import svg
+
+    path = Path(path)
+    if path.suffix.lower() != ".svg":
+        raise ValueError("A manuscript panel proof writes an .svg file.")
+    payload = svg(fig, width_mm)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(dir=path.parent, prefix=".scanpath-proof-") as stage:
+        ready = Path(stage) / path.name
+        ready.write_bytes(payload)
+        ready.replace(path)
+    return path
+
+
 def save_figure(
     fig: go.Figure,
     path: str | Path,
@@ -3970,6 +4003,7 @@ def save_figure(
     width_mm: float | None = None,
     width_in: float | None = None,
     dpi: int | None = None,
+    proof_width_mm: float | None = None,
 ) -> Path:
     """Save a figure as HTML, PNG, SVG or PDF.
 
@@ -3993,10 +4027,19 @@ def save_figure(
             figure's aspect, with the dpi written into the file. It replaces ``scale``.
         width_in: The same in inches.
         dpi: The resolution for ``width_mm`` / ``width_in``. Default 300.
+        proof_width_mm: Total manuscript width of a split comparison SVG, as in
+            [`save_panel_proof`][scanpath_studio.api.save_panel_proof].
 
     Returns:
         The path written.
     """
+    if proof_width_mm is not None:
+        if (
+            any(v is not None for v in (width, height, width_mm, width_in, dpi))
+            or scale != 2
+        ):
+            raise ValueError("A panel proof takes its size from proof_width_mm.")
+        return save_panel_proof(fig, path, width_mm=proof_width_mm)
     path = Path(path)
     suffix = path.suffix.lower()
     if suffix not in (".html", ".png", ".svg", ".pdf"):
@@ -4025,44 +4068,85 @@ def save_figure(
         raise ValueError(
             "dpi is the resolution of a print width: pass width_mm or width_in too."
         )
-    if suffix == ".html":
-        # An animation replays on the wall-clock player, which also autoplays
-        # it at the configured speed when asked. Plotly's own `auto_play` stays
-        # off — it ignores the frame duration. The frames are written packed
-        # and rebuilt by the page's own script, so a long replay writes a
-        # fraction of the bytes. Static figures are written as they are.
-        page = replay_page(fig)
-        if page is not None:
-            figure_dict, script = page
-            pio.write_html(
-                figure_dict,
-                str(path),
-                validate=False,
-                auto_play=False,
-                post_script=script,
-                config={**PLOTLY_CONFIG},
-            )
-        elif fig.frames:
-            fig.write_html(str(path), auto_play=False, config={**PLOTLY_CONFIG})
+    # Keep the existing figure until rendering, print metadata and citation
+    # stamping have all succeeded. A sibling stage stays on the same filesystem.
+    with TemporaryDirectory(dir=path.parent, prefix=".scanpath-figure-") as stage:
+        staged = Path(stage) / path.name
+        if suffix == ".html":
+            # An animation replays on the wall-clock player, which also autoplays
+            # it at the configured speed when asked. Plotly's own `auto_play` stays
+            # off — it ignores the frame duration. The frames are written packed
+            # and rebuilt by the page's own script, so a long replay writes a
+            # fraction of the bytes. Static figures are written as they are.
+            page = replay_page(fig)
+            if page is not None:
+                figure_dict, script = page
+                pio.write_html(
+                    figure_dict,
+                    str(staged),
+                    validate=False,
+                    auto_play=False,
+                    post_script=script,
+                    config={**PLOTLY_CONFIG},
+                )
+            elif fig.frames:
+                fig.write_html(str(staged), auto_play=False, config={**PLOTLY_CONFIG})
+            else:
+                fig.write_html(str(staged), config={**PLOTLY_CONFIG})
         else:
-            fig.write_html(str(path), config={**PLOTLY_CONFIG})
-        stamp_file(path)
-        return path
-    if suffix in (".png", ".svg", ".pdf"):
-        try:
-            fig.write_image(str(path), scale=scale, width=width, height=height)
+            raster = _export.render_static_figure_bytes(
+                fig,
+                fmt=suffix[1:],
+                width=width or fig.layout.width or pio.defaults.default_width,
+                height=height or fig.layout.height or pio.defaults.default_height,
+                scale=scale,
+            )
+            staged.write_bytes(raster)
             if dpi is not None:
-                _export.set_png_dpi(path, dpi)
-            stamp_file(path)
-        except OSError:
-            raise  # filesystem problem — the original error says it best
-        except Exception as exc:  # Kaleido raises various types
-            raise RuntimeError(
-                f"Static {suffix} export failed ({exc}). Kaleido needs Chrome, "
-                "Chromium or Edge — install one, or run `plotly_get_chrome -y` "
-                "once — or save as .html, which needs no browser."
-            ) from exc
+                _export.set_png_dpi(staged, dpi)
+        if suffix == ".html" or dpi is not None:
+            stamp_file(staged)
+        staged.replace(path)
     return path
+
+
+def _publish_layers(directory: Path, staged: Path, files: list[str], fmt: str) -> None:
+    """Commit a completed render and retire only this format's recorded layer files."""
+    manifest = f".scanpath-layers-{fmt}.json"
+    with file_lock(directory / ".scanpath-layers.lock"):
+        previous = directory / manifest
+        old = (
+            json.loads(previous.read_text(encoding="utf-8"))
+            if previous.is_file()
+            else []
+        )
+        known = {f"{layer}.{fmt}" for layer in SCANPATH_LAYER_ORDER}
+        if not isinstance(old, list) or not all(
+            isinstance(name, str) and name in known for name in old
+        ):
+            raise ValueError(f"Cannot identify the files owned by {previous}.")
+        (staged / manifest).write_text(
+            json.dumps(files, indent=2) + "\n", encoding="utf-8"
+        )
+        backups = staged / "previous"
+        backups.mkdir()
+        installed = []
+        try:
+            for name in sorted(set(files) | set(old) | {manifest}):
+                target = directory / name
+                if target.is_dir():
+                    raise IsADirectoryError(target)
+                if target.exists() or target.is_symlink():
+                    target.replace(backups / name)
+            for name in [*files, manifest]:
+                (staged / name).replace(directory / name)
+                installed.append(name)
+        except BaseException:
+            for name in installed:
+                (directory / name).unlink(missing_ok=True)
+            for original in backups.iterdir():
+                original.replace(directory / original.name)
+            raise
 
 
 def save_figure_layers(
@@ -4070,17 +4154,21 @@ def save_figure_layers(
     directory: str | Path,
     *,
     fmt: str = "svg",
-    scale: int = 2,
+    scale: float = 2,
     width: int | None = None,
     height: int | None = None,
-) -> dict:
+    width_mm: float | None = None,
+    width_in: float | None = None,
+    dpi: int | None = None,
+) -> dict[str, Path]:
     """Save a scanpath figure as one file per layer, for editing.
 
     Each *visible* layer (stimulus image, heatmap, word boxes, saccades, fixations, raw
     gaze, labels, frame) is the full figure with only that layer's elements, on a
     transparent background, at the same size and axis ranges. The files line up when
     stacked in Illustrator or Inkscape. The app's Export bundle writes the same files
-    under *Layers as separate files*.
+    under *Layers as separate files*. A successful revision replaces this format's
+    previous exported layers. An inventory in the directory identifies the owned files.
 
     Args:
         fig: A scanpath figure.
@@ -4091,25 +4179,39 @@ def save_figure_layers(
         scale: Passed to [`save_figure`][scanpath_studio.api.save_figure].
         width: Passed to [`save_figure`][scanpath_studio.api.save_figure].
         height: Passed to [`save_figure`][scanpath_studio.api.save_figure].
+        width_mm: PNG print width in millimetres.
+        width_in: PNG print width in inches.
+        dpi: Resolution for the print width, shared by every layer.
 
     Returns:
         ``{layer: Path}`` for each file written.
     """
     directory = Path(directory)
-    # A failed render (most often Kaleido with no Chrome) must not leave an
-    # empty `<output>_layers/` behind, which reads as "exported, but lost":
-    # whatever this call created is removed again if nothing was written to it.
+    fmt = fmt.lstrip(".").lower()
+    if fmt not in {"html", "png", "svg", "pdf"}:
+        raise ValueError("Choose html, png, svg or pdf for the layer format.")
     created = [path for path in (directory, *directory.parents) if not path.exists()]
     directory.mkdir(parents=True, exist_ok=True)
-    written: dict = {}
+    written: dict[str, Path] = {}
     try:
-        for layer, layer_fig in split_scanpath_layers(fig).items():
-            path = directory / f"{layer}.{fmt.lstrip('.')}"
-            written[layer] = save_figure(
-                layer_fig, path, scale=scale, width=width, height=height
-            )
+        with TemporaryDirectory(dir=directory, prefix=".scanpath-layers-") as stage:
+            staged = Path(stage)
+            for layer, layer_fig in split_scanpath_layers(fig).items():
+                name = f"{layer}.{fmt}"
+                save_figure(
+                    layer_fig,
+                    staged / name,
+                    scale=scale,
+                    width=width,
+                    height=height,
+                    width_mm=width_mm,
+                    width_in=width_in,
+                    dpi=dpi,
+                )
+                written[layer] = directory / name
+            _publish_layers(directory, staged, [p.name for p in written.values()], fmt)
     except Exception:
-        for path in created:  # deepest first
+        for path in created:
             if path.is_dir() and not any(path.iterdir()):
                 path.rmdir()
         raise

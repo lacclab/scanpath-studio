@@ -1605,6 +1605,12 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="IN",
         help="Print width of a PNG in inches, drawn at --dpi.",
     )
+    print_width.add_argument(
+        "--proof-width-mm",
+        type=float,
+        metavar="MM",
+        help="Total manuscript width of a side-by-side or stacked comparison SVG in mm.",
+    )
     viz.add_argument(
         "--dpi",
         type=int,
@@ -1732,9 +1738,21 @@ def _render_parser() -> argparse.ArgumentParser:
     cmp_group.add_argument(
         "--compare-with",
         metavar="PARTICIPANT:TRIAL",
-        help="The second scanpath, B, as PARTICIPANT:TRIAL. It comes from the "
+        help="The second scanpath, B, as PARTICIPANT:TRIAL. The last colon "
+        "separates the IDs. Use --compare-participant and --compare-trial "
+        "when the trial ID contains a colon. B comes from the "
         "loaded dataset unless --compare-words / --compare-fixations load a "
         "second one.",
+    )
+    cmp_group.add_argument(
+        "--compare-participant",
+        metavar="ID",
+        help="B's participant ID, paired with --compare-trial.",
+    )
+    cmp_group.add_argument(
+        "--compare-trial",
+        metavar="ID",
+        help="B's trial ID, paired with --compare-participant.",
     )
     cmp_group.add_argument(
         "--compare-screen",
@@ -2047,14 +2065,8 @@ def _compare_labels(args) -> tuple[str, str] | None:
     return (str(args.label_a), str(args.label_b))
 
 
-def _parse_compare_with(value: str) -> tuple:
-    """``"p01:t03"`` → ``("p01", "t03")``, or a clear SystemExit.
-
-    Split on the LAST colon: a participant id may legitimately contain one
-    (MultiplEYE's ``001_ZH_CH_1_ET1`` style ids do not, but composite trial ids
-    joined with ``_`` sit next to corpora that use colons), while a trial id
-    naming a screen never trails one.
-    """
+def _parse_compare_with(value: str) -> tuple[str, str]:
+    """Read the legacy PARTICIPANT:TRIAL form using its last colon."""
     text = str(value or "")
     participant, sep, trial = text.rpartition(":")
     if not sep or not participant.strip() or not trial.strip():
@@ -2063,6 +2075,23 @@ def _parse_compare_with(value: str) -> tuple:
             "Use --list-trials to see the available pairs."
         )
     return participant.strip(), trial.strip()
+
+
+def _comparison_ids(args: argparse.Namespace) -> tuple[str, str] | None:
+    """Resolve B once for rendering, diagnostics, and printed reproductions."""
+    if args.compare_participant is None and args.compare_trial is None:
+        return (
+            None
+            if args.compare_with is None
+            else _parse_compare_with(args.compare_with)
+        )
+    if args.compare_with is not None:
+        raise SystemExit(
+            "Choose --compare-with or the separate --compare-participant and --compare-trial options."
+        )
+    if not args.compare_participant or not args.compare_trial:
+        raise SystemExit("--compare-participant and --compare-trial require both IDs.")
+    return args.compare_participant, args.compare_trial
 
 
 def _compare_second_dataset(api, args, words, fixations):
@@ -2168,12 +2197,12 @@ def _report_render_metadata(args, words, fixations, raw_gaze, column_names) -> N
     combos["text_id"] = combos.pop("text_id")
     if attached_texts is not None:
         combos = _metadata.project_texts(attached_texts, combos)
-    print(
-        f"{len(combos)} trial{'' if len(combos) == 1 else 's'}. Pass the "
-        "participant as -p and the trial as -t; the app shows a trial by "
-        "its participant and text.",
-        file=sys.stderr,
-    )
+    if sys.stderr.isatty():
+        print(
+            f"{len(combos)} trial{'' if len(combos) == 1 else 's'}. Pass the "
+            "participant as -p and the trial as -t.",
+            file=sys.stderr,
+        )
     # The ids under the dataset's own names.
     print(_listed(combos, column_names).to_string(index=False))
 
@@ -2199,7 +2228,7 @@ def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
     from .data import respell_reading, trial_keys
     from .utils import extract_trial
 
-    participant_b, trial_b = _parse_compare_with(args.compare_with)
+    participant_b, trial_b = args.compare_with
     words_b, fixations_b, cross_dataset = _compare_second_dataset(
         api, args, words, fixations
     )
@@ -2604,7 +2633,7 @@ def _print_reproduction_code(
                 settings["label_a"], settings["label_b"] = labels
     compare = None
     if args.compare_with is not None:
-        compare_participant, compare_trial = _parse_compare_with(args.compare_with)
+        compare_participant, compare_trial = args.compare_with
         second = bool(args.compare_words or args.compare_fixations)
         compare = cs.CompareTarget(
             participant=compare_participant,
@@ -2775,6 +2804,8 @@ def _apply_shared_colorbar_flags(args: argparse.Namespace) -> None:
 def _save_kwargs(args) -> dict:
     """`api.save_figure`'s size keywords from the render flags; the print
     width only when one was given."""
+    if args.proof_width_mm is not None:
+        return {"proof_width_mm": args.proof_width_mm}
     kwargs = {"scale": args.scale, "width": args.width, "height": args.height}
     if args.width_mm is not None:
         kwargs["width_mm"] = args.width_mm
@@ -2798,6 +2829,28 @@ def _parse_screen_list(value: str | None) -> tuple[str, ...] | None:
 def render(argv: list[str]) -> None:
     parser = _render_parser()
     args = parser.parse_args(argv)
+    args.compare_with = _comparison_ids(args)
+    if args.proof_width_mm is not None:
+        if not 1 <= args.proof_width_mm <= 2000:
+            parser.error("--proof-width-mm must be between 1 and 2000 mm.")
+        if not args.compare_with or args.compare_layout == "overlay" or args.animate:
+            parser.error(
+                "--proof-width-mm requires a static side-by-side or stacked comparison."
+            )
+        if not str(args.output).lower().endswith(".svg"):
+            parser.error(
+                "--proof-width-mm writes a comparison SVG. Choose an .svg output."
+            )
+        if (
+            args.separable_layers
+            or args.width
+            or args.height
+            or args.dpi
+            or args.scale != 2
+        ):
+            parser.error(
+                "--proof-width-mm sets both panel dimensions. Omit other image sizing and layer options."
+            )
     _apply_shared_colorbar_flags(args)
     # A print width sizes a PNG; say so before the data loads.
     printed = args.width_mm is not None or args.width_in is not None
@@ -2975,7 +3028,10 @@ def render(argv: list[str]) -> None:
     # Each fixed-screen source's monitor is `code_snippet.source_canvas`, the
     # table `api.figure_code` reads too, so both flavours of a recipe agree.
     if args.sample:
-        data = api.load_sample_data(names="canonical")
+        try:
+            data = api.load_sample_data(names="canonical")
+        except FileNotFoundError as exc:
+            raise SystemExit(str(exc)) from None
         words, fixations = data
         column_names = dict(data.column_names)
         canvas = canvas or source_canvas(SOURCE_DEMO)
@@ -3040,14 +3096,7 @@ def render(argv: list[str]) -> None:
         # the screen is read off the data.
         canvas = canvas or source_canvas(SOURCE_MULTIPLEYE)
     else:
-        manifest = None
-        if args.trial_parts_manifest:
-            try:
-                manifest = json.loads(
-                    Path(args.trial_parts_manifest).read_text(encoding="utf-8")
-                )
-            except (OSError, json.JSONDecodeError) as exc:
-                raise SystemExit(f"Could not read trial-parts manifest: {exc}") from exc
+        manifest = _trial_parts_manifest(args.trial_parts_manifest)
         # Guarded like every other input branch: otherwise a missing file or an
         # unrecognised column ends the run in a traceback whose hint names a
         # `word_schema=` argument the command line cannot pass.
@@ -3118,6 +3167,16 @@ def render(argv: list[str]) -> None:
             words, fixations, args.participant, args.trial, raw_gaze=raw_gaze
         )
         if parts.empty:
+            if args.participant is not None or args.trial is not None:
+                combos = api.list_trials(words, fixations, raw_gaze=raw_gaze)
+                try:
+                    api._matching_trials(
+                        _cn.to_canonical_frame(combos), args.participant, args.trial
+                    )
+                except ValueError as exc:
+                    raise SystemExit(
+                        f"{exc} Use --list-trials to see the available readings."
+                    ) from None
             print("No multipart screens (the selected data is single-screen).")
         else:
             print(_listed(parts, column_names).to_string(index=False))
@@ -3159,7 +3218,11 @@ def render(argv: list[str]) -> None:
                     "raw gaze samples, which Scanpath Studio does not turn into "
                     f"fixations. Drop {flag} to draw the samples."
                 )
-    against = f", compared with {args.compare_with}" if args.compare_with else ""
+    against = (
+        f", compared with participant={args.compare_with[0]!r} trial={args.compare_with[1]!r}"
+        if args.compare_with
+        else ""
+    )
     print(
         f"Rendering participant={participant} trial={trial}{against}",
         file=sys.stderr,
@@ -3551,7 +3614,7 @@ def render(argv: list[str]) -> None:
             # nor the static path's per-layer extras.
             from .experimental_setup import IncomparableScreensError
 
-            compare_participant, compare_trial = _parse_compare_with(args.compare_with)
+            compare_participant, compare_trial = args.compare_with
             loaded_b, loaded_fix_b, cross_dataset = _compare_second_dataset(
                 api, args, words, fixations
             )
@@ -3696,9 +3759,7 @@ def render(argv: list[str]) -> None:
                     fig,
                     layer_dir,
                     fmt=suffix,
-                    scale=int(args.scale),
-                    width=args.width,
-                    height=args.height,
+                    **_save_kwargs(args),
                 )
     except (ValueError, RuntimeError, OSError) as exc:
         raise SystemExit(str(exc))
@@ -3783,14 +3844,7 @@ def analyze(argv: list[str]) -> None:
 
     from . import api
 
-    manifest = None
-    if args.trial_parts_manifest:
-        try:
-            manifest = json.loads(
-                Path(args.trial_parts_manifest).read_text(encoding="utf-8")
-            )
-        except (OSError, json.JSONDecodeError) as exc:
-            raise SystemExit(f"Could not read trial-parts manifest: {exc}") from exc
+    manifest = _trial_parts_manifest(args.trial_parts_manifest)
     try:
         words, fixations = api.load_scanpath_data(
             args.words,

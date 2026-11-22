@@ -725,7 +725,8 @@ def test_the_co_animation_round_trips(monkeypatch, capsys):
             "0.5",
         ],
     )
-    assert f"--compare-with {OTHER[0]}:{OTHER[1]}" in printed
+    assert f"--compare-participant {OTHER[0]}" in printed
+    assert f"--compare-trial {OTHER[1]}" in printed
     assert "--label-a 'Reader A'" in printed
     assert first.to_json() == second.to_json()
 

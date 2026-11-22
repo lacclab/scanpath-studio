@@ -2040,6 +2040,12 @@ def _comment_lines(note: str, width: int = 79) -> list[str]:
     return [f"# {line}" for line in textwrap.wrap(plain, width - 2)]
 
 
+def _id_argument(flag: str, value: str) -> list[str]:
+    """Keep an ID beginning with a hyphen attached to its argparse option."""
+    value = str(value)
+    return [f"{flag}={value}"] if value.startswith("-") else [flag, value]
+
+
 def cli_snippet(
     source: SnippetSource,
     state: FigureState,
@@ -2067,23 +2073,19 @@ def cli_snippet(
         argv += _image_folder_cli(source)
 
     if state.participant:
-        argv += ["-p", str(state.participant)]
+        argv += _id_argument("-p", state.participant)
     if state.trial:
-        argv += ["-t", str(state.trial)]
+        argv += _id_argument("-t", state.trial)
     if state.kind == "comparison" or (
         state.kind == "animation" and state.compare is not None and state.compare.trial
     ):
         compare = state.compare or CompareTarget()
-        for flag, value in (
-            ("--compare-participant", str(compare.participant)),
-            ("--compare-trial", str(compare.trial)),
-        ):
-            # argparse otherwise reads a leading hyphen in an ID as another flag.
-            argv.extend([f"{flag}={value}"] if value.startswith("-") else [flag, value])
+        argv += _id_argument("--compare-participant", compare.participant)
+        argv += _id_argument("--compare-trial", compare.trial)
     if state.screen:
-        argv += ["--screen", str(state.screen)]
+        argv += _id_argument("--screen", state.screen)
     if _names_screen_b(state):
-        argv += ["--compare-screen", str(state.compare.screen)]
+        argv += _id_argument("--compare-screen", state.compare.screen)
     if state.canvas:
         argv += ["--canvas", f"{int(state.canvas[0])}x{int(state.canvas[1])}"]
     if explicit or state.base_font_size != 16:

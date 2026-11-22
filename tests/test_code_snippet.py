@@ -1320,6 +1320,30 @@ def test_each_scanpaths_screen_is_named_in_both_forms(kind):
     assert not any("extract_part" in note for note in code.caveats)
 
 
+def test_render_parses_option_like_ids_for_both_readings_and_screens():
+    state = cs.FigureState(
+        kind="comparison",
+        participant="-reader",
+        trial="--animate",
+        screen="-page",
+        compare=cs.CompareTarget(
+            participant="--reader", trial="-trial", screen="--page"
+        ),
+    )
+    command, _ = cs.cli_snippet(DEMO, state)
+    args = cli._render_parser().parse_args(shlex.split(_one_line(command))[2:])
+    assert (args.participant, args.trial, args.screen) == (
+        "-reader",
+        "--animate",
+        "-page",
+    )
+    assert (args.compare_participant, args.compare_trial, args.compare_screen) == (
+        "--reader",
+        "-trial",
+        "--page",
+    )
+
+
 def test_the_raster_geometry_reaches_both_flavours():
     """A translated invocation has to write the same-sized file, not just the
     same picture."""

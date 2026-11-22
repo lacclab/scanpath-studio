@@ -2355,10 +2355,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#rerun-a-cohort-profile" class="md-nav__link">
+  <a href="#rerun-a-cohort-or-group-difference-profile" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Rerun a cohort profile
+        Rerun a cohort or group difference profile
       
     </span>
   </a>
@@ -2502,6 +2502,11 @@ that match your filters.</p>
 For views with a shaded band, <strong>Spread</strong> controls what the band shows.
 For word profiles, <strong>Min participants per word</strong> sets how many participants
 must have a value for a word to be included.</p>
+<p><strong>Readings behind a word</strong> shows the source measurements and the value each
+participant contributes after combining repeated readings. A blank or infinite
+measurement contributes no value. The profile leaves a gap at a word below
+the participant threshold. When two readings of a text differ in their wording
+or layout, <strong>Measure on the stimulus</strong> lets you choose which version to tint.</p>
 <h2 id="supply-reading-measures">Include reading measures in your Words table<a class="headerlink" href="#supply-reading-measures" title="Permanent link">&para;</a></h2>
 <p>Word-level views use the <a href="../loading-data/#reading-measures">reading measures in your data</a>,
 such as first fixation duration or total fixation duration. Map those columns
@@ -2513,14 +2518,25 @@ values of a column, or <strong>Independent filter sets</strong> to define a grou
 Turn on <strong>Compare a second group</strong> to define group B. You can then compare
 the groups side by side, including their means and the difference between them.
 These views provide descriptive summaries; they do not run significance tests.</p>
+<p>For a repeated-measures design, <strong>Within-participant contrast</strong> shows each
+participant's mean in A and B and the difference A − B. The summary averages
+only complete pairs. The CSV keeps readers who are missing either condition.</p>
+<p><strong>Study inclusion and exclusions</strong> downloads participant and reading counts
+for the active pool. The separate per-reading file names all matching
+exclusion reasons, so a reading that fails two rules counts only once.</p>
 <h2 id="save-results">Save results<a class="headerlink" href="#save-results" title="Permanent link">&para;</a></h2>
 <p>Under each result, <strong>⬇ Download this table (CSV)</strong> saves the table and
 <strong>⬇ Download the recipe (JSON)</strong> saves a record of the analysis: the dataset name,
 trial filters, analysis choices and counts. Keep your source data separately;
 the recipe contains neither the data nor the figure settings. To inspect
 individual trials, return to the Scanpath view.</p>
-<h3 id="rerun-a-cohort-profile">Rerun a cohort profile<a class="headerlink" href="#rerun-a-cohort-profile" title="Permanent link">&para;</a></h3>
-<p>For <strong>Per text → Cohort profile</strong>, save the recipe and keep the source tables.
+<p>A cohort profile's <strong>Methods draft</strong> records its measure, grouping,
+normalization, spread, reader threshold, trial filters and software version.
+<strong>Compare profile revisions</strong> saves a separate snapshot with individual reader
+IDs and measurements. After correcting a source file, open an earlier
+snapshot there to see which readings or word values changed.</p>
+<h3 id="rerun-a-cohort-or-group-difference-profile">Rerun a cohort or group difference profile<a class="headerlink" href="#rerun-a-cohort-or-group-difference-profile" title="Permanent link">&para;</a></h3>
+<p>Save the recipe alongside the CSV from <strong>Per text → Cohort profile</strong> or <strong>Groups → Difference word profile</strong>. Keep the source tables. For a difference profile, the recipe records each group’s constraints and which group was subtracted.
 New recipes save the column mappings, filename-derived columns and character-box
 merges used at import. Supply the original files to reproduce the CSV.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio<span class="w"> </span>recipe<span class="w"> </span>profile.recipe.json<span class="w"> </span>--words<span class="w"> </span>words.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>-o<span class="w"> </span>profile.csv

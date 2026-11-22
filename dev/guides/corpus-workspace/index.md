@@ -14,6 +14,8 @@ Open a tab, then pick a figure in its **View** menu.
 
 Choose a **Measure** and use **Aggregate** to choose how values are combined. For views with a shaded band, **Spread** controls what the band shows. For word profiles, **Min participants per word** sets how many participants must have a value for a word to be included.
 
+**Readings behind a word** shows the source measurements and the value each participant contributes after combining repeated readings. A blank or infinite measurement contributes no value. The profile leaves a gap at a word below the participant threshold. When two readings of a text differ in their wording or layout, **Measure on the stimulus** lets you choose which version to tint.
+
 ## Include reading measures in your Words table
 
 Word-level views use the [reading measures in your data](https://lacclab.github.io/scanpath-studio/dev/guides/loading-data/#reading-measures), such as first fixation duration or total fixation duration. Map those columns when you import. Views of single fixations, such as **Fixation duration over time**, use the Fixations table.
@@ -22,13 +24,19 @@ Word-level views use the [reading measures in your data](https://lacclab.github.
 
 Under **Define groups by**, choose **Split a field** to group trials by the values of a column, or **Independent filter sets** to define a group using filters. Turn on **Compare a second group** to define group B. You can then compare the groups side by side, including their means and the difference between them. These views provide descriptive summaries; they do not run significance tests.
 
+For a repeated-measures design, **Within-participant contrast** shows each participant's mean in A and B and the difference A − B. The summary averages only complete pairs. The CSV keeps readers who are missing either condition.
+
+**Study inclusion and exclusions** downloads participant and reading counts for the active pool. The separate per-reading file names all matching exclusion reasons, so a reading that fails two rules counts only once.
+
 ## Save results
 
 Under each result, **⬇ Download this table (CSV)** saves the table and **⬇ Download the recipe (JSON)** saves a record of the analysis: the dataset name, trial filters, analysis choices and counts. Keep your source data separately; the recipe contains neither the data nor the figure settings. To inspect individual trials, return to the Scanpath view.
 
-### Rerun a cohort profile
+A cohort profile's **Methods draft** records its measure, grouping, normalization, spread, reader threshold, trial filters and software version. **Compare profile revisions** saves a separate snapshot with individual reader IDs and measurements. After correcting a source file, open an earlier snapshot there to see which readings or word values changed.
 
-For **Per text → Cohort profile**, save the recipe and keep the source tables. New recipes save the column mappings, filename-derived columns and character-box merges used at import. Supply the original files to reproduce the CSV.
+### Rerun a cohort or group difference profile
+
+Save the recipe alongside the CSV from **Per text → Cohort profile** or **Groups → Difference word profile**. Keep the source tables. For a difference profile, the recipe records each group’s constraints and which group was subtracted. New recipes save the column mappings, filename-derived columns and character-box merges used at import. Supply the original files to reproduce the CSV.
 
 ```
 scanpath-studio recipe profile.recipe.json --words words.csv --fixations fixations.csv -o profile.csv

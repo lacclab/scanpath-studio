@@ -3325,9 +3325,16 @@ has a flag.</p>
 </tr>
 </tbody>
 </table>
+<p>Hover fields appear in the order you list them. For a column named
+<code>pupil, left</code>, preserve the comma with
+<code>--keep-columns 'pupil, left' --fixation-hover-fields-json '["duration_ms","pupil, left"]'</code>.
+Use <code>--fixation-hover-fields-json '[]'</code> to clear that selection. The Words
+layer accepts <code>--word-hover-fields-json</code> in the same way.</p>
 <h3 id="compare-two-scanpaths">Compare two scanpaths<a class="headerlink" href="#compare-two-scanpaths" title="Permanent link">&para;</a></h3>
-<p><code>--compare-with PARTICIPANT:TRIAL</code> draws a second trial, B, beside or over the
-first. It does what the app's <span class="sps-icon" data-icon="compare" aria-hidden="true"></span> <strong>Compare</strong> does.</p>
+<p><code>--compare-participant ID --compare-trial ID</code> selects the second reading, B.
+For example, <code>--compare-participant B --compare-trial 'round:2'</code> preserves the
+colon in the trial ID. The shorthand <code>--compare-with PARTICIPANT:TRIAL</code> splits
+at the last colon.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Two participants on the same paragraph, overlaid</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>l37_1129<span class="w"> </span>-t<span class="w"> </span>l37_1129_2_1_1_Ele<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--compare-with<span class="w"> </span>l7_1090:l7_1090_2_1_1_Ele<span class="w"> </span>-o<span class="w"> </span>compare.html
@@ -3366,7 +3373,7 @@ first. It does what the app's <span class="sps-icon" data-icon="compare" aria-hi
 <tbody>
 <tr>
 <td>pick B</td>
-<td><code>--compare-with PARTICIPANT:TRIAL</code></td>
+<td><code>--compare-participant ID --compare-trial ID</code></td>
 </tr>
 <tr>
 <td>pick each screen of a multipart trial</td>
@@ -3478,7 +3485,7 @@ scanpath's default.</p>
 </tr>
 <tr>
 <td><code>opacity</code></td>
-<td>0.1–1</td>
+<td>0–1</td>
 <td>that scanpath's default</td>
 </tr>
 <tr>
@@ -3859,7 +3866,7 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--fixation-opacity</code></td>
 <td><code>O</code></td>
 <td>—</td>
-<td>Fixation marker opacity, 0.1–1.0 (default: 0.7, so overlapping fixations show through).</td>
+<td>Opacity of fixation markers, 0–1 (default: 0.7).</td>
 </tr>
 <tr>
 <td><code>--fixation-outline-width</code></td>
@@ -3991,12 +3998,6 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>Saccade line width in px, 0.5–10 (default: 2).</td>
 </tr>
 <tr>
-<td><code>--saccade-opacity</code></td>
-<td><code>O</code></td>
-<td>—</td>
-<td>Opacity of the saccade lines and arrows, 0.1–1.0 (default: 1). In a comparison, both scanpaths share it.</td>
-</tr>
-<tr>
 <td><code>--saccade-arrow-size</code></td>
 <td><code>PX</code></td>
 <td>—</td>
@@ -4025,6 +4026,12 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>switch</td>
 <td>—</td>
 <td>Draw saccades as upward arcs instead of straight lines (the app's Shape: Arc).</td>
+</tr>
+<tr>
+<td><code>--saccade-opacity</code></td>
+<td><code>O</code></td>
+<td>—</td>
+<td>Opacity of saccade lines and arrows, 0–1 (default: 1).</td>
 </tr>
 </tbody>
 </table>
@@ -4564,13 +4571,25 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--word-hover-fields</code></td>
 <td><code>FIELDS</code></td>
 <td>—</td>
-<td>Comma-separated Words table columns shown on hover (e.g. text,word_id,gpt2_surprisal).</td>
+<td>Comma-separated word columns to show on hover, in order.</td>
+</tr>
+<tr>
+<td><code>--word-hover-fields-json</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Ordered JSON array of word column names. Use this for names containing commas, or pass '[]' to leave the tooltip empty.</td>
 </tr>
 <tr>
 <td><code>--fixation-hover-fields</code></td>
 <td><code>FIELDS</code></td>
 <td>—</td>
-<td>Comma-separated Fixations table columns shown on hover (e.g. order_in_trial,duration_ms,eye).</td>
+<td>Comma-separated fixation columns to show on hover, in order.</td>
+</tr>
+<tr>
+<td><code>--fixation-hover-fields-json</code></td>
+<td><code>JSON</code></td>
+<td>—</td>
+<td>Ordered JSON array of fixation column names. Use this for names containing commas, or pass '[]' to leave the tooltip empty.</td>
 </tr>
 <tr>
 <td><code>--word-hover-measure</code></td>
@@ -4708,6 +4727,12 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td>Print width of a PNG in inches, drawn at <code>--dpi</code>.</td>
 </tr>
 <tr>
+<td><code>--proof-width-mm</code></td>
+<td><code>MM</code></td>
+<td>—</td>
+<td>Total manuscript width of a side-by-side or stacked comparison SVG in mm.</td>
+</tr>
+<tr>
 <td><code>--dpi</code></td>
 <td><code>N</code></td>
 <td>—</td>
@@ -4750,7 +4775,19 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--compare-with</code></td>
 <td><code>PARTICIPANT:TRIAL</code></td>
 <td>—</td>
-<td>The second scanpath, B, as PARTICIPANT:TRIAL. It comes from the loaded dataset unless <code>--compare-words</code> / <code>--compare-fixations</code> load a second one.</td>
+<td>The second scanpath, B, as PARTICIPANT:TRIAL. The last colon separates the IDs. Use <code>--compare-participant</code> and <code>--compare-trial</code> when the trial ID contains a colon. B comes from the loaded dataset unless <code>--compare-words</code> / <code>--compare-fixations</code> load a second one.</td>
+</tr>
+<tr>
+<td><code>--compare-participant</code></td>
+<td><code>ID</code></td>
+<td>—</td>
+<td>B's participant ID, paired with <code>--compare-trial</code>.</td>
+</tr>
+<tr>
+<td><code>--compare-trial</code></td>
+<td><code>ID</code></td>
+<td>—</td>
+<td>B's trial ID, paired with <code>--compare-participant</code>.</td>
 </tr>
 <tr>
 <td><code>--compare-screen</code></td>
@@ -4792,13 +4829,13 @@ and help that <code>--help</code> prints. The figure flags are grouped like the
 <td><code>--style-a</code></td>
 <td><code>SPEC</code></td>
 <td>—</td>
-<td>Style for scanpath A, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-a</code> fix_color=#D55E00,opacity=0.5. A two-scanpath replay uses the fixation and saccade styles.</td>
+<td>Style for scanpath A, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-a</code> fix_color=#D55E00,opacity=0.5. A two-scanpath replay uses the fixation and saccade styles.</td>
 </tr>
 <tr>
 <td><code>--style-b</code></td>
 <td><code>SPEC</code></td>
 <td>—</td>
-<td>Style for scanpath B, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-b</code> fix_color=#D55E00,opacity=0.5. A two-scanpath replay uses the fixation and saccade styles.</td>
+<td>Style for scanpath B, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-b</code> fix_color=#D55E00,opacity=0.5. A two-scanpath replay uses the fixation and saccade styles.</td>
 </tr>
 <tr>
 <td><code>--compare-fixation-flag</code></td>
@@ -5076,7 +5113,11 @@ the app does with them. <code>check</code> changes nothing and exits 0 whatever 
 <code>--json</code> prints the table
 <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;check_data_health&lt;/span&gt;" href="../api/#scanpath_studio.api.check_data_health"><code>check_data_health</code></a> returns. In example rows,
 missing values are <code>null</code> and infinite values are the strings <code>"Infinity"</code> or
-<code>"-Infinity"</code>.</p>
+<code>"-Infinity"</code>. To save a QC record, use <code>--json-report</code>. Its <code>tables</code> object
+counts the source rows read, the rows with usable identifiers, and the
+normalized rows checked. Stimulus words shared across readings can expand into
+more checked rows. The report distinguishes empty tables, blank rows and rows
+with missing participant or trial IDs. Its <code>findings</code> list matches <code>--json</code>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv
 <a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>scanpath-studio<span class="w"> </span>check<span class="w"> </span>--raw-gaze<span class="w"> </span>gaze_samples.csv<span class="w"> </span>--json
 </code></pre></div>
@@ -5132,6 +5173,12 @@ missing values are <code>null</code> and infinite values are the strings <code>"
 <td>switch</td>
 <td>—</td>
 <td>Print the findings as JSON (the rows api.check_data_health returns).</td>
+</tr>
+<tr>
+<td><code>--json-report</code></td>
+<td>switch</td>
+<td>—</td>
+<td>Include input, eligible and checked row counts beside the findings as JSON.</td>
 </tr>
 <tr>
 <td><code>--word-schema</code></td>

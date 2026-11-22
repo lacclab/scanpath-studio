@@ -1652,6 +1652,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Under the plot">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#inspect-a-fixation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inspect a fixation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -2718,6 +2735,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Under the plot">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#inspect-a-fixation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inspect a fixation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -2976,7 +3010,8 @@ keyboard, see <a href="../#keyboard-shortcuts">Keyboard shortcuts</a>. Its <stro
 </table>
 <h3 id="compare"><span class="sps-icon" data-icon="compare" aria-hidden="true"></span> Compare<a class="headerlink" href="#compare" title="Permanent link">&para;</a></h3>
 <p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/compare-menu.webp" title="Open full size"><img src="../../../assets/screenshots/controls/compare-menu.webp" alt="The Compare menu" loading="lazy"></a></p>
-<p>The <strong>Compare</strong> switch shows a second scanpath, B, beside or over this one.
+<p><strong>Compare readings</strong> shows a second scanpath, B, beside or over this one.
+To find everyone who read the same text, open the <strong>Comparisons</strong> tab and match on text.
 Pick B in the <a href="#trial-control-bar">trial control bar</a>, above the plot. Its
 <strong>▾</strong> holds:</p>
 <table>
@@ -3043,7 +3078,7 @@ saved:</p>
 </tr>
 <tr>
 <td><strong>Palette</strong></td>
-<td>A color scheme for the whole figure: <strong>Default (colorblind-safe)</strong>, <strong>Print / grayscale</strong> or <strong>High contrast</strong>. It reads <strong>Custom</strong> once you change one of its colors.</td>
+<td>Choose <strong>Default (colorblind-safe)</strong>, <strong>Print / grayscale</strong> or <strong>High contrast</strong>. For a grayscale comparison, A has filled markers and solid lines, and B has hollow markers and dashed lines.</td>
 </tr>
 </tbody>
 </table>
@@ -3060,7 +3095,7 @@ saved:</p>
 <tbody>
 <tr>
 <td><strong>Marker</strong> → <strong>Color</strong></td>
-<td>What decides each marker's color. <strong>One color</strong>, the default, paints them all alike. Pick a number column of the fixations, such as duration or time, and the markers follow a color scale: with the default blues, longer fixations show darker. Pick a category, such as <strong>Text line</strong> or a part-of-speech column, and each value gets a color, with a legend.</td>
+<td><strong>One color</strong> paints all fixations alike. A number such as duration uses a continuous scale. A category such as condition or part of speech keeps the same color across trials, even when filtering removes other categories. The legend identifies missing values separately.</td>
 </tr>
 <tr>
 <td><strong>Marker</strong> → color box</td>
@@ -3116,7 +3151,7 @@ saved:</p>
 </tr>
 <tr>
 <td><strong>Snap</strong> → <strong>To line</strong></td>
-<td>Move each fixation up or down onto its line of text. This makes a schematic, labeled <em>Illustration</em>.</td>
+<td>Move each fixation up or down onto its line of text. Choose <strong>Show positions before snapping</strong> above the figure to see the original trial coordinates beside the illustration, on the same axes. Downloads use the illustration.</td>
 </tr>
 <tr>
 <td><strong>Snap</strong> → <strong>Position</strong></td>
@@ -3191,7 +3226,7 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 </tr>
 <tr>
 <td><strong>Text</strong> → <strong>Redact</strong></td>
-<td>Replace each word with a rounded block in the text color and hide its text in tooltips. This preserves the text layout while concealing the words.</td>
+<td>Mask stimulus words and their text IDs. Other columns selected under <strong>Figure &amp; canvas → Hover</strong> still travel with the HTML figure. Review those selections and the separate <strong>Stimulus image</strong> switch before sharing.</td>
 </tr>
 <tr>
 <td><strong>Fit</strong> → <strong>Fit to word boxes</strong></td>
@@ -3313,7 +3348,7 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 </tr>
 <tr>
 <td><strong>Range</strong></td>
-<td>For word-box heatmaps, fix the color range across trials. <strong>Auto</strong> runs from 0 to the trial's highest value. Smoothed heatmaps are scaled to each figure's peak.</td>
+<td>A word-box legend gives the reading’s dwell-time or count limits. Choose <strong>Use this heatmap range for other trials</strong> above the plot to keep those limits. Smoothed heatmaps scale to each figure’s peak.</td>
 </tr>
 <tr>
 <td><strong>Opacity</strong></td>
@@ -3352,7 +3387,7 @@ Recording setup, and changes here apply to the figure only. Its <strong>▾</str
 </table>
 <h3 id="filters-highlights"><span class="sps-icon" data-icon="filter_list" aria-hidden="true"></span> Filters &amp; highlights<a class="headerlink" href="#filters-highlights" title="Permanent link">&para;</a></h3>
 <p><a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/filters.webp" title="Open full size"><img src="../../../assets/screenshots/controls/filters.webp" alt="The Filters & highlights menu" loading="lazy"></a></p>
-<p>Which fixations and saccades are drawn, and which stand out:</p>
+<p>These controls change the fixation marks and saccades drawn in the figure. The trial-list filter selects whole readings.</p>
 <table>
 <thead>
 <tr>
@@ -3667,6 +3702,13 @@ several menus split into a <strong>Scanpath A</strong> and a <strong>Scanpath B<
 </tr>
 </tbody>
 </table>
+<h3 id="inspect-a-fixation">Inspect a fixation<a class="headerlink" href="#inspect-a-fixation" title="Permanent link">&para;</a></h3>
+<p>Click a fixation on a static scanpath, or open <strong>Inspect a fixation</strong> and choose
+its number. The coordinates next to the number are the plotted coordinates.
+The table shows the parsed input cells, their units and the values used by
+the figure. File rows start at one after the header. The inspector also shows
+whether the word came from a mapped ID or a word box. If the reading was
+imported before input rows were recorded, the location is shown as unavailable.</p>
 
 
 

@@ -41,7 +41,7 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 | list_trials                                   | List every plottable trial: one row per participant and trial.                  |
 | list_parts                                    | List the ordered screens of multipart data, optionally for one trial.           |
 | check_data_health                             | Check durations, positions and word boxes for data problems.                    |
-| run_analysis_recipe                           | Recreate a downloaded per-word cohort profile table.                            |
+| run_analysis_recipe                           | Recreate a per-word cohort profile or a two-group difference profile.           |
 | **Plot**                                      |                                                                                 |
 | plot_scanpath                                 | Build one trial's scanpath figure, by default in the app's Scanpath design.     |
 | animate_scanpath                              | Build the animated replay of one trial's scanpath, or of two on one clock.      |
@@ -54,6 +54,7 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 | figure_code                                   | Write the API or CLI code that reproduces a figure.                             |
 | **Save**                                      |                                                                                 |
 | save_figure                                   | Save a figure as HTML, PNG, SVG or PDF.                                         |
+| save_panel_proof                              | Save a split comparison as an SVG with its manuscript width in millimetres.     |
 | save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                      |
 | **Recovery cache**                            |                                                                                 |
 | cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.       |
@@ -107,6 +108,8 @@ load_scanpath_data(
     image_pattern=DEFAULT_STIMULUS_IMAGE_PATTERN,
     keep_columns=None,
     names=NAMES_SOURCE,
+    include_source_cells=False,
+    _row_counts=None,
 )
 ```
 
@@ -115,6 +118,8 @@ Load and normalize a Words table, a Fixations table, or both.
 Columns keep the names your files give them: `CURRENT_FIX_DURATION`, not `duration_ms`. A column Scanpath Studio built, converted, computed or changed keeps its internal name, and `data.column_names` records what every column was called. Every API function takes these frames, and every column option (`color_by=`, the hover fields …) takes either name.
 
 Columns are auto-detected from EyeLink, Gazepoint, Tobii, SMI, Pupil Labs and snake_case names. Normalization keeps the mapped fields and the recognized optional ones (eye, EyeLink's interest-area measures, linguistic features …) and drops the rest, unless `keep_columns` names them.
+
+Set `include_source_cells=True` to inspect original fixation cells with `data.explain_fixation(participant, trial, order)`. It reports file data rows, parsed values, units and word assignments. Original cells are private columns of that opt-in fixation frame.
 
 - **One table is enough.** Leave out the table a dataset doesn't have: it comes back as an empty frame, and the plots skip that layer.
 - **Stimulus-level words.** A Words table without a participant column holds each text's word boxes once, and they are copied onto every trial in the fixations. Each trial is matched by its trial ID, else the trial ID it had before a repeat's `_r2` suffix, else its `text_id` (for trial IDs that embed the participant). Trials that match none raise a `data.StimulusJoinWarning` (a `UserWarning`).
@@ -154,6 +159,16 @@ The `(words, fixations)` frames `load_scanpath_data` returns, with their names.
 It is a tuple, so `words, fixations = load_scanpath_data(…)` unpacks it, and `.words` / `.fixations` name the two frames. `column_names` holds the dataset's own name for every canonical column, per table: `{"words": ColumnNames, "fixations": ColumnNames}`.
 
 With `names="source"` (the default) the frames' columns are the dataset's own names and each frame carries its map, so any API function takes it, sliced, filtered or merged, and the names it writes are yours. With `names="canonical"` they are the internal names, the same for every dataset.
+
+#### explain_fixation
+
+```
+explain_fixation(participant, trial, order, *, screen=None)
+```
+
+Inspect a recorded fixation by its one-based parent trial order.
+
+Load with `include_source_cells=True` to keep original inputs and row numbers. The report describes file records after parsing, with the header excluded.
 
 ### propose_schema
 
@@ -228,7 +243,9 @@ sps.plot_scanpath(words, fixations, show_stimulus_image=True)
 ### load_raw_gaze
 
 ```
-load_raw_gaze(table, *, raw_gaze_schema=None, names=NAMES_SOURCE)
+load_raw_gaze(
+    table, *, raw_gaze_schema=None, names=NAMES_SOURCE, _row_counts=None
+)
 ```
 
 Load and normalize a raw, sample-level gaze table, for `raw_gaze=`.
@@ -596,7 +613,7 @@ run_analysis_recipe(
 )
 ```
 
-Recreate a downloaded per-word cohort profile table.
+Recreate a per-word cohort profile or a two-group difference profile.
 
 Parameters:
 
@@ -612,7 +629,7 @@ Parameters:
 
 Returns:
 
-- `DataFrame` – The cohort profile under the dataset's own output column names.
+- `DataFrame` – The published table under the dataset's own output column names.
 
 Raises:
 
@@ -988,7 +1005,7 @@ Examples:
 | `color_by_line` `--color-by-line`                                     | `False`       | Color each fixation by the text line it lands on, with the lines found from the word boxes. Overrides `--color-by`. Same as `--color-by` line.                                                                                                                                                                                                                  |
 | `fixation_colorscale` `--fixation-colorscale`                         | `'Blues'`     | Color scale for `--color-by`, e.g. Viridis.                                                                                                                                                                                                                                                                                                                     |
 | `fixation_color_range` `--fixation-color-range`                       | `None`        | Fix the `--color-by` color scale to LO..HI instead of the trial's range, so several figures share one scale.                                                                                                                                                                                                                                                    |
-| `fixation_opacity` `--fixation-opacity`                               | `0.7`         | Fixation marker opacity, 0.1–1.0. For two scanpaths, set `opacity` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                                                                                                                                     |
+| `fixation_opacity` `--fixation-opacity`                               | `0.7`         | Opacity of fixation markers, 0–1. For two scanpaths, set `opacity` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                                                                                                                                     |
 | `fixation_symbol` `--fixation-symbol`                                 | `'circle'`    | Fixation marker shape. Unlike color, shape survives a grayscale print. One of `'circle'`, `'square'`, `'diamond'`, `'triangle-up'`, `'cross'`, `'x'`, `'star'`, `'hexagon'`, `'heart'`.                                                                                                                                                                         |
 | `hollow_fixations` `--hollow-fixations`                               | `False`       | Draw the fixations as outlines instead of filled markers. For two scanpaths, set `hollow` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                                                                                                              |
 | `fixation_outline_color` `--fixation-outline-color`                   | `'#111111'`   | Color of that outline.                                                                                                                                                                                                                                                                                                                                          |
@@ -1017,7 +1034,7 @@ Examples:
 | `saccade_color` `--saccade-color`                                             | `'#CC79A7'`   | Saccade line and arrow color, as hex or a CSS name. For two scanpaths, set `saccade_color` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                                             |
 | `saccade_style` `--saccade-style`                                             | `'solid'`     | Saccade line dash style. One of `'solid'`, `'dash'`, `'dot'`, `'dashdot'`. For two scanpaths, set `saccade_style` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                      |
 | `saccade_width` `--saccade-width`                                             | `2.0`         | Saccade line width in px, 0.5–10. For two scanpaths, set `saccade_width` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                                                               |
-| `saccade_opacity` `--saccade-opacity`                                         | `1.0`         | Opacity of the saccade lines and arrows, 0.1–1.0. In a comparison, both scanpaths share it.                                                                                                                                                                                                     |
+| `saccade_opacity` `--saccade-opacity`                                         | `1.0`         | Opacity of saccade lines and arrows, 0–1.                                                                                                                                                                                                                                                       |
 | `show_saccade_arrows` `--saccade-arrows`                                      | `False`       | Draw an arrowhead on each saccade (the app's Direction arrows).                                                                                                                                                                                                                                 |
 | `saccade_arrow_size` `--saccade-arrow-size`                                   | `12.0`        | Size of the `--saccade-arrows` arrowheads, 4–40 px.                                                                                                                                                                                                                                             |
 | `saccade_render_mode` `--saccade-arcs`                                        | `'Straight'`  | Draw saccades as upward arcs instead of straight lines (the app's Shape: Arc). One of `'Straight'`, `'Arc'`. *Single plot.*                                                                                                                                                                     |
@@ -1118,11 +1135,11 @@ Examples:
 
 ### Hover
 
-| Option and `render` flag                          | Default                        | Description                                                                                   |
-| ------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------- |
-| `word_hover_fields` `--word-hover-fields`         | `list`, see `figure_options()` | Comma-separated Words table columns shown on hover (e.g. text,word_id,gpt2_surprisal).        |
-| `word_hover_measure` `--word-hover-measure`       | `'total_fixation_duration_ms'` | The reading measure a word's hover shows.                                                     |
-| `fixation_hover_fields` `--fixation-hover-fields` | `list`, see `figure_options()` | Comma-separated Fixations table columns shown on hover (e.g. order_in_trial,duration_ms,eye). |
+| Option and `render` flag                          | Default                        | Description                                                  |
+| ------------------------------------------------- | ------------------------------ | ------------------------------------------------------------ |
+| `word_hover_fields` `--word-hover-fields`         | `list`, see `figure_options()` | Comma-separated word columns to show on hover, in order.     |
+| `word_hover_measure` `--word-hover-measure`       | `'total_fixation_duration_ms'` | The reading measure a word's hover shows.                    |
+| `fixation_hover_fields` `--fixation-hover-fields` | `list`, see `figure_options()` | Comma-separated fixation columns to show on hover, in order. |
 
 ### Legends
 
@@ -1299,6 +1316,7 @@ save_figure(
     width_mm=None,
     width_in=None,
     dpi=None,
+    proof_width_mm=None,
 )
 ```
 
@@ -1316,35 +1334,58 @@ Parameters:
 - **`width_mm`** (`float | None`, default: `None` ) – A PNG's print width in mm, as the app's Export → Current figure sets it: 180 mm at 600 dpi is a 4,252 px wide PNG, its height following the figure's aspect, with the dpi written into the file. It replaces scale.
 - **`width_in`** (`float | None`, default: `None` ) – The same in inches.
 - **`dpi`** (`int | None`, default: `None` ) – The resolution for width_mm / width_in. Default 300.
+- **`proof_width_mm`** (`float | None`, default: `None` ) – Total manuscript width of a split comparison SVG, as in save_panel_proof.
 
 Returns:
 
 - `Path` – The path written.
 
+### save_panel_proof
+
+```
+save_panel_proof(fig, path, *, width_mm)
+```
+
+Save a split comparison as an SVG with its manuscript width in millimetres.
+
+Both readings must have matching screen dimensions. The panel order, letters, shared scales, legends and relative size of the stimulus come from `compare_scanpaths`.
+
 ### save_figure_layers
 
 ```
 save_figure_layers(
-    fig, directory, *, fmt="svg", scale=2, width=None, height=None
+    fig,
+    directory,
+    *,
+    fmt="svg",
+    scale=2,
+    width=None,
+    height=None,
+    width_mm=None,
+    width_in=None,
+    dpi=None,
 )
 ```
 
 Save a scanpath figure as one file per layer, for editing.
 
-Each *visible* layer (stimulus image, heatmap, word boxes, saccades, fixations, raw gaze, labels, frame) is the full figure with only that layer's elements, on a transparent background, at the same size and axis ranges. The files line up when stacked in Illustrator or Inkscape. The app's Export bundle writes the same files under *Layers as separate files*.
+Each *visible* layer (stimulus image, heatmap, word boxes, saccades, fixations, raw gaze, labels, frame) is the full figure with only that layer's elements, on a transparent background, at the same size and axis ranges. The files line up when stacked in Illustrator or Inkscape. The app's Export bundle writes the same files under *Layers as separate files*. A successful revision replaces this format's previous exported layers. An inventory in the directory identifies the owned files.
 
 Parameters:
 
 - **`fig`** (`Figure`) – A scanpath figure.
 - **`directory`** (`str | Path`) – The folder to write <layer>.<fmt> into.
 - **`fmt`** (`str`, default: `'svg'` ) – Any save_figure extension without the dot. svg and pdf are vector and the best to edit; png and html work too.
-- **`scale`** (`int`, default: `2` ) – Passed to save_figure.
+- **`scale`** (`float`, default: `2` ) – Passed to save_figure.
 - **`width`** (`int | None`, default: `None` ) – Passed to save_figure.
 - **`height`** (`int | None`, default: `None` ) – Passed to save_figure.
+- **`width_mm`** (`float | None`, default: `None` ) – PNG print width in millimetres.
+- **`width_in`** (`float | None`, default: `None` ) – PNG print width in inches.
+- **`dpi`** (`int | None`, default: `None` ) – Resolution for the print width, shared by every layer.
 
 Returns:
 
-- `dict` – {layer: Path} for each file written.
+- `dict[str, Path]` – {layer: Path} for each file written.
 
 ## Recovery cache
 

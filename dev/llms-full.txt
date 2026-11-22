@@ -50,6 +50,8 @@ scanpath-studio
 
 **Help** shows which channel you are running. **Help → What’s new** opens its release notes.
 
+For a Git installation, the update command keeps your repository, requested ref and package subdirectory. An install from an official release tag follows the Stable channel for updates. If you selected a commit hash, choose the new revision in your original install command when you are ready to move.
+
 ## Your first figure
 
 Start with the bundled demo, a subset of the [OneStop corpus](https://lacclab.github.io/scanpath-studio/dev/guides/loading-data/#onestop). You can explore it without preparing any files. Choose a view, then save an interactive figure.
@@ -253,6 +255,8 @@ In **Annotations**, tag the trial `review` and write what you observed in **Note
 ## 5. Save the review
 
 Export favorites, tags and notes from **Data Management** → **Annotations** → **Export**. The file includes participant and trial IDs. **Open** on an annotation row returns to that trial.
+
+To reconcile a second reviewer's notes, choose **Import**. The preview counts new, identical and differing entries. **Open disputed reading** displays both entries beside the scanpath for that reading. You can download the differences for discussion. **Apply import** adds new entries and keeps the current version of a differing note unless you select the replacement option.
 
 For exclusion decisions, follow [Exclude unsuitable trials](https://lacclab.github.io/scanpath-studio/dev/tutorials/data-filtering/exclude-unsuitable-trials/index.md).
 
@@ -486,6 +490,8 @@ Open a tab, then pick a figure in its **View** menu.
 
 Choose a **Measure** and use **Aggregate** to choose how values are combined. For views with a shaded band, **Spread** controls what the band shows. For word profiles, **Min participants per word** sets how many participants must have a value for a word to be included.
 
+**Readings behind a word** shows the source measurements and the value each participant contributes after combining repeated readings. A blank or infinite measurement contributes no value. The profile leaves a gap at a word below the participant threshold. When two readings of a text differ in their wording or layout, **Measure on the stimulus** lets you choose which version to tint.
+
 ## Include reading measures in your Words table
 
 Word-level views use the [reading measures in your data](https://lacclab.github.io/scanpath-studio/dev/guides/loading-data/#reading-measures), such as first fixation duration or total fixation duration. Map those columns when you import. Views of single fixations, such as **Fixation duration over time**, use the Fixations table.
@@ -494,13 +500,19 @@ Word-level views use the [reading measures in your data](https://lacclab.github.
 
 Under **Define groups by**, choose **Split a field** to group trials by the values of a column, or **Independent filter sets** to define a group using filters. Turn on **Compare a second group** to define group B. You can then compare the groups side by side, including their means and the difference between them. These views provide descriptive summaries; they do not run significance tests.
 
+For a repeated-measures design, **Within-participant contrast** shows each participant's mean in A and B and the difference A − B. The summary averages only complete pairs. The CSV keeps readers who are missing either condition.
+
+**Study inclusion and exclusions** downloads participant and reading counts for the active pool. The separate per-reading file names all matching exclusion reasons, so a reading that fails two rules counts only once.
+
 ## Save results
 
 Under each result, **⬇ Download this table (CSV)** saves the table and **⬇ Download the recipe (JSON)** saves a record of the analysis: the dataset name, trial filters, analysis choices and counts. Keep your source data separately; the recipe contains neither the data nor the figure settings. To inspect individual trials, return to the Scanpath view.
 
-### Rerun a cohort profile
+A cohort profile's **Methods draft** records its measure, grouping, normalization, spread, reader threshold, trial filters and software version. **Compare profile revisions** saves a separate snapshot with individual reader IDs and measurements. After correcting a source file, open an earlier snapshot there to see which readings or word values changed.
 
-For **Per text → Cohort profile**, save the recipe and keep the source tables. New recipes save the column mappings, filename-derived columns and character-box merges used at import. Supply the original files to reproduce the CSV.
+### Rerun a cohort or group difference profile
+
+Save the recipe alongside the CSV from **Per text → Cohort profile** or **Groups → Difference word profile**. Keep the source tables. For a difference profile, the recipe records each group’s constraints and which group was subtracted. New recipes save the column mappings, filename-derived columns and character-box merges used at import. Supply the original files to reproduce the CSV.
 
 ```
 scanpath-studio recipe profile.recipe.json --words words.csv --fixations fixations.csv -o profile.csv
@@ -549,6 +561,16 @@ To export multiple trials, switch to Full and open **Export bundle**. Essentials
 
 For step-by-step instructions, see the [export tutorials](https://lacclab.github.io/scanpath-studio/dev/tutorials/exporting-figures/index.md).
 
+## Reproduce a coauthor's results
+
+The installed package includes a fictional three-reader study, its raw tables, recording setup, one tagged exclusion, figure settings and a cohort recipe. To work through it in an empty folder, copy the example and follow its README.
+
+```
+python -c "from importlib.resources import files; from shutil import copytree; copytree(files('scanpath_studio') / 'sample_data' / 'coauthor', 'canal-study')"
+```
+
+The commands recreate a figure and a two-word results table. A checksum from the original release lets the recipient verify the table byte for byte.
+
 ## Cite what you export
 
 Files saved through **Export** include citation information in their metadata. To add a visible credit to the figure, use **Figure & canvas** → **Credit**.
@@ -572,7 +594,13 @@ For a PNG at print size, pass `width_mm` and `dpi` to `save_figure`, or `--width
 
 ## Batch export
 
-In the app, **Export bundle** → **Trials to include** picks the trials: **This trial**, **All filtered trials**, **All trials of one participant**, **All trials of one text** or **All trials, ignoring filters**. For a scripted batch, loop over the trial list:
+In the app, **Export bundle** → **Trials to include** picks the trials: **This trial**, **All filtered trials**, **All trials of one participant**, **All trials of one text** or **All trials, ignoring filters**. Open **Preview bundle contents** to see the selected readings, their filenames and the columns in their tables. A word-measures CSV can contain the original stimulus words even when the figure masks them. When you select specific screens, the bundle includes notes on those screens and their parent trials.
+
+If a figure fails, the download includes the files that succeeded. With the same data and settings still open, choose **Retry failed figure files**. The app retries each missing format or layer and keeps the successful files. If it could not split a figure into layers, it tries that step again. Check `index.csv` for any files that still failed. Stopping a retry leaves the previous download available.
+
+CSV bundles include `columns.json` and an editable `read_csv.R`. In R, set the working directory to the extracted bundle and run `source("read_csv.R")` with the jsonlite package installed. The example preserves reader IDs such as `01` and `1` as text. A blank measurement becomes `NA` and zero stays zero.
+
+For a scripted batch, loop over the trial list.
 
 Python: one HTML figure per trial
 
@@ -594,7 +622,9 @@ Use the [data loaders](https://lacclab.github.io/scanpath-studio/dev/guides/load
 
 ## Replay export
 
-With **Animate** on, **Export** → **Current figure** saves the replay as HTML, GIF or MP4. The CLI's `render --animate` saves interactive HTML only. For a GIF or MP4 in Python:
+With **Animate** on, **Export** → **Current figure** saves the replay as HTML, GIF or MP4. In a saved HTML replay, **Previous fixation** and **Next fixation** move to individual onsets and show the fixation’s duration and assigned word when available. The time slider scrubs through the whole reading. A GIF or MP4 with a low frame cap shows the state reached at each frame’s start. A fixation after the last frame starts can be absent from the clip.
+
+The CLI’s `render --animate` saves interactive HTML. For a GIF or MP4 in Python:
 
 Python: save a GIF or MP4
 
@@ -612,6 +642,12 @@ Path("replay.mp4").write_bytes(export_animation(replay, fmt="mp4"))
 Use `fmt="gif"` and a `.gif` filename for GIF output.
 
 [Export setup and troubleshooting](https://lacclab.github.io/scanpath-studio/dev/faq/#export-fails) · [Python save options](https://lacclab.github.io/scanpath-studio/dev/api/#save) · [CLI options](https://lacclab.github.io/scanpath-studio/dev/cli/#common-tasks)
+
+## Proof two manuscript panels
+
+In **Compare**, choose two readings with the same screen dimensions and a side-by-side or stacked layout. In **Export → Current figure → Manuscript panel proof**, enter the total print width. The proof shows the resulting label sizes in points and the numeric color limits shared by the two panels. Use the Fixations or Heatmap controls to choose your own limits.
+
+**Prepare manuscript SVG** provides the lettered vector panels at that physical width. **Save panel settings** preserves their order, styles, width and selected limits. Open the settings file in **Share → File**, replace one reading and prepare the revised SVG.
 
 # Data Management
 
@@ -642,6 +678,8 @@ The bundled demo comes from [OneStop Eye Movements](https://github.com/lacclab/O
 ## What your data needs
 
 Start with a Fixations, Words or Raw gaze table. You can add the other tables whenever you need them.
+
+To try a right-to-left passage, import the bundled `sample_data/mixed_script_words.csv` and `sample_data/mixed_script_fixations.csv`. The two synthetic lines combine Hebrew, Arabic, English, digits and punctuation. Use an 800 × 250 px canvas to see the recorded layout. The tenth fixation revisits the Arabic word on the second line.
 
 | Table                  | Contents                                                       |
 | ---------------------- | -------------------------------------------------------------- |
@@ -714,6 +752,12 @@ Click a dataset in the dataset list to open it. Below the list, **What's in *‹
 Use **Edit dataset** to change its name, column mapping, recording setup or metadata, then click **Save changes**. **Download setup file** saves the mapping, recording setup and character-box merge, so you can apply them to similar data.
 
 The editor offers only the columns kept when the dataset was added. To use a column that isn't listed, remove the dataset and add it again from its files, mapping the column or keeping it under **Extra fields to keep**.
+
+Under **Data checks**, **Compare with the experiment run sheet** accepts a CSV with `participant_id` and `trial_id`. Add `screen_id` to check an individual screen. Enter a reason in `planned_omission` for readings you intended to omit and leave it blank for the rest. The report distinguishes missing readings, unscheduled recordings, and readings with raw gaze alone. **Review affected readings** shows all the rows behind a finding, one reading at a time, while your trial filters stay in place.
+
+Excel imports use the first worksheet and show its name. ID columns preserve literal labels such as `01` and `NA`. Leave a cell empty for a missing ID. On restoring a pilot setup, the wizard names files whose headers or time units differ from the saved mapping.
+
+Under **Name → Dataset citation**, an upload can carry its title, authors or lab, version, DOI, and preferred credit. An unpublished study can supply just its preferred wording. Reopen **Edit dataset** to revise the credit. **Cite** and the export bundle include these references alongside the software citation.
 
 # Scanpath visualization
 
@@ -907,7 +951,7 @@ The **Animate** switch turns the figure into an animation, a video of the readin
 
 ### Compare
 
-The **Compare** switch shows a second scanpath, B, beside or over this one. Pick B in the [trial control bar](#trial-control-bar), above the plot. Its **▾** holds:
+**Compare readings** shows a second scanpath, B, beside or over this one. To find everyone who read the same text, open the **Comparisons** tab and match on text. Pick B in the [trial control bar](#trial-control-bar), above the plot. Its **▾** holds:
 
 | Control                         | What it does                                                                                                                                                     |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -921,37 +965,37 @@ The **Compare** switch shows a second scanpath, B, beside or over this one. Pick
 
 Restyle the whole figure in one click, with a ready-made design or one you saved:
 
-| Control                                       | What it does                                                                                                                                                                                |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Scanpath** / **Heatmap** / **Illustration** | Ready-made designs: fixations and saccades over the text, a word-box heatmap, or a clean schematic.                                                                                         |
-| **Custom**                                    | Your most recent custom settings.                                                                                                                                                           |
-| **My designs**                                | Your saved designs. Click one to apply it. renames it and deletes it.                                                                                                                       |
-| **My designs** →                              | Save the settings on screen as a named design, to apply again later in one click.                                                                                                           |
-| **My designs** → **Export** / **Import**      | Download your designs as a file, or load a file of designs, to share a look with co-authors or move your designs to another computer. A design in the file replaces yours of the same name. |
-| **Palette**                                   | A color scheme for the whole figure: **Default (colorblind-safe)**, **Print / grayscale** or **High contrast**. It reads **Custom** once you change one of its colors.                      |
+| Control                                       | What it does                                                                                                                                                                                   |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Scanpath** / **Heatmap** / **Illustration** | Ready-made designs: fixations and saccades over the text, a word-box heatmap, or a clean schematic.                                                                                            |
+| **Custom**                                    | Your most recent custom settings.                                                                                                                                                              |
+| **My designs**                                | Your saved designs. Click one to apply it. renames it and deletes it.                                                                                                                          |
+| **My designs** →                              | Save the settings on screen as a named design, to apply again later in one click.                                                                                                              |
+| **My designs** → **Export** / **Import**      | Download your designs as a file, or load a file of designs, to share a look with co-authors or move your designs to another computer. A design in the file replaces yours of the same name.    |
+| **Palette**                                   | Choose **Default (colorblind-safe)**, **Print / grayscale** or **High contrast**. For a grayscale comparison, A has filled markers and solid lines, and B has hollow markers and dashed lines. |
 
 ### Fixations
 
 The **Fixations** switch draws the fixation markers. Its **▾** holds:
 
-| Control                                                                                       | What it does                                                                                                                                                                                                                                                                                                                                                     |
-| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Marker** → **Color**                                                                        | What decides each marker's color. **One color**, the default, paints them all alike. Pick a number column of the fixations, such as duration or time, and the markers follow a color scale: with the default blues, longer fixations show darker. Pick a category, such as **Text line** or a part-of-speech column, and each value gets a color, with a legend. |
-| **Marker** → color box                                                                        | With **One color**: the fixation marker color. With a number column: the color scale.                                                                                                                                                                                                                                                                            |
-| **Marker** → **Range**                                                                        | When markers are colored by a number: the values at the two ends of the color scale. **Auto** fits each trial.                                                                                                                                                                                                                                                   |
-| **Marker** → **Shape**                                                                        | Choose the fixation marker shape: circle, square, diamond, triangle, cross, X, star, hexagon or heart.                                                                                                                                                                                                                                                           |
-| **Marker** → **Size**                                                                         | Set the marker size range: the smallest and largest marker diameter, in px.                                                                                                                                                                                                                                                                                      |
-| **Marker** → **Scale**                                                                        | Choose how duration sets marker size: square root (the default), linear, log, or relative to this figure (its shortest to its longest fixation).                                                                                                                                                                                                                 |
-| **Marker** → **Durations**                                                                    | Set the durations (ms) that get the smallest and the largest marker. Not used on the relative scale.                                                                                                                                                                                                                                                             |
-| **Marker** → **Opacity**                                                                      | Set the fixation marker opacity. Lower it to see overlapping fixations.                                                                                                                                                                                                                                                                                          |
-| **Marker** → **Outline**                                                                      | Set the width (px) and color of the ring around each marker. A width of 0 draws none.                                                                                                                                                                                                                                                                            |
-| **Color bar** → **Show**                                                                      | Show the color scale's bar, when markers are colored by a number.                                                                                                                                                                                                                                                                                                |
-| **Color bar** → **Vertical** / **Horizontal**, **Angle**, **Size**, **Thickness**, **Length** | Set the bar's direction (right of the plot or below it), its tick-label angle and size, and its thickness and length.                                                                                                                                                                                                                                            |
-| **Fixation index** → **Show**                                                                 | Number each fixation in reading order.                                                                                                                                                                                                                                                                                                                           |
-| **Fixation index** → color, **Size**                                                          | Choose the numbers' size in every view. For one scanpath, choose their color here. When comparing two scanpaths, each number uses its scanpath’s fixation color, including during replay.                                                                                                                                                                        |
-| **Fixation index** → **Position**                                                             | Put each number above its fixation, inside it, or below it.                                                                                                                                                                                                                                                                                                      |
-| **Snap** → **To line**                                                                        | Move each fixation up or down onto its line of text. This makes a schematic, labeled *Illustration*.                                                                                                                                                                                                                                                             |
-| **Snap** → **Position**                                                                       | Choose where on its line a snapped fixation sits.                                                                                                                                                                                                                                                                                                                |
+| Control                                                                                       | What it does                                                                                                                                                                                                                                                                   |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Marker** → **Color**                                                                        | **One color** paints all fixations alike. A number such as duration uses a continuous scale. A category such as condition or part of speech keeps the same color across trials, even when filtering removes other categories. The legend identifies missing values separately. |
+| **Marker** → color box                                                                        | With **One color**: the fixation marker color. With a number column: the color scale.                                                                                                                                                                                          |
+| **Marker** → **Range**                                                                        | When markers are colored by a number: the values at the two ends of the color scale. **Auto** fits each trial.                                                                                                                                                                 |
+| **Marker** → **Shape**                                                                        | Choose the fixation marker shape: circle, square, diamond, triangle, cross, X, star, hexagon or heart.                                                                                                                                                                         |
+| **Marker** → **Size**                                                                         | Set the marker size range: the smallest and largest marker diameter, in px.                                                                                                                                                                                                    |
+| **Marker** → **Scale**                                                                        | Choose how duration sets marker size: square root (the default), linear, log, or relative to this figure (its shortest to its longest fixation).                                                                                                                               |
+| **Marker** → **Durations**                                                                    | Set the durations (ms) that get the smallest and the largest marker. Not used on the relative scale.                                                                                                                                                                           |
+| **Marker** → **Opacity**                                                                      | Set the fixation marker opacity. Lower it to see overlapping fixations.                                                                                                                                                                                                        |
+| **Marker** → **Outline**                                                                      | Set the width (px) and color of the ring around each marker. A width of 0 draws none.                                                                                                                                                                                          |
+| **Color bar** → **Show**                                                                      | Show the color scale's bar, when markers are colored by a number.                                                                                                                                                                                                              |
+| **Color bar** → **Vertical** / **Horizontal**, **Angle**, **Size**, **Thickness**, **Length** | Set the bar's direction (right of the plot or below it), its tick-label angle and size, and its thickness and length.                                                                                                                                                          |
+| **Fixation index** → **Show**                                                                 | Number each fixation in reading order.                                                                                                                                                                                                                                         |
+| **Fixation index** → color, **Size**                                                          | Choose the numbers' size in every view. For one scanpath, choose their color here. When comparing two scanpaths, each number uses its scanpath’s fixation color, including during replay.                                                                                      |
+| **Fixation index** → **Position**                                                             | Put each number above its fixation, inside it, or below it.                                                                                                                                                                                                                    |
+| **Snap** → **To line**                                                                        | Move each fixation up or down onto its line of text. Choose **Show positions before snapping** above the figure to see the original trial coordinates beside the illustration, on the same axes. Downloads use the illustration.                                               |
+| **Snap** → **Position**                                                                       | Choose where on its line a snapped fixation sits.                                                                                                                                                                                                                              |
 
 ### Saccades
 
@@ -973,24 +1017,24 @@ The **Saccades** switch draws the lines between fixations. Its **▾** holds:
 
 The **Stimulus** switch draws the text and the stimulus image. The text rows start from the dataset's Recording setup, and changes here apply to the figure only. Its **▾** holds:
 
-| Control                           | What it does                                                                                                                                                              |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Text** → **Show**               | Show the stimulus text, the words the participant read, at their place on the screen.                                                                                     |
-| **Text** → **Redact**             | Replace each word with a rounded block in the text color and hide its text in tooltips. This preserves the text layout while concealing the words.                        |
-| **Fit** → **Fit to word boxes**   | Size the stimulus text from its word boxes, instead of a fixed font size.                                                                                                 |
-| **Fit** → **Spacing**             | With **Fit to word boxes** on: the distance between lines, in font sizes. The font size is that distance divided by this value, so 3 leaves a blank line above and below. |
-| **Size**                          | With **Fit to word boxes** on: the size of the axis and legend text, in px. Off: the stimulus text's size too, in px or pt.                                               |
-| **Font**                          | Choose the stimulus text font (typeface). *Other font…* takes any font name.                                                                                              |
-| **Color** → text color            | Choose the stimulus text color.                                                                                                                                           |
-| **Color** → **Background**        | Choose the plot background color: a preset, or any color in the box beside it.                                                                                            |
-| **Highlight words** → **Show**    | Highlight words in the stimulus text, such as the answer span.                                                                                                            |
-| **Highlight words** → word column | Choose which words to highlight: a true/false word column, such as the critical span.                                                                                     |
-| **Style**                         | Choose the word highlight style, **Mark text** (colored text) or **Mark border** (a border around the words), and the highlight color.                                    |
-| **Image** → **Show**              | Show the stimulus image, the screen as shown in the experiment, under the scanpath.                                                                                       |
-| **File**                          | Upload a stimulus image (PNG, JPEG, GIF or WebP) to draw under the scanpath. It replaces the dataset's image and is not included in Share links.                          |
-| **Opacity**                       | Set the stimulus image opacity. Lower it so the scanpath reads over it.                                                                                                   |
-| **Offset** → **X** / **Y**        | Move (nudge) the stimulus image left, right, up or down, in px, to line it up with the word boxes.                                                                        |
-| **Scale**                         | Resize (scale) the stimulus image so its text matches the word boxes.                                                                                                     |
+| Control                           | What it does                                                                                                                                                                                                           |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Text** → **Show**               | Show the stimulus text, the words the participant read, at their place on the screen.                                                                                                                                  |
+| **Text** → **Redact**             | Mask stimulus words and their text IDs. Other columns selected under **Figure & canvas → Hover** still travel with the HTML figure. Review those selections and the separate **Stimulus image** switch before sharing. |
+| **Fit** → **Fit to word boxes**   | Size the stimulus text from its word boxes, instead of a fixed font size.                                                                                                                                              |
+| **Fit** → **Spacing**             | With **Fit to word boxes** on: the distance between lines, in font sizes. The font size is that distance divided by this value, so 3 leaves a blank line above and below.                                              |
+| **Size**                          | With **Fit to word boxes** on: the size of the axis and legend text, in px. Off: the stimulus text's size too, in px or pt.                                                                                            |
+| **Font**                          | Choose the stimulus text font (typeface). *Other font…* takes any font name.                                                                                                                                           |
+| **Color** → text color            | Choose the stimulus text color.                                                                                                                                                                                        |
+| **Color** → **Background**        | Choose the plot background color: a preset, or any color in the box beside it.                                                                                                                                         |
+| **Highlight words** → **Show**    | Highlight words in the stimulus text, such as the answer span.                                                                                                                                                         |
+| **Highlight words** → word column | Choose which words to highlight: a true/false word column, such as the critical span.                                                                                                                                  |
+| **Style**                         | Choose the word highlight style, **Mark text** (colored text) or **Mark border** (a border around the words), and the highlight color.                                                                                 |
+| **Image** → **Show**              | Show the stimulus image, the screen as shown in the experiment, under the scanpath.                                                                                                                                    |
+| **File**                          | Upload a stimulus image (PNG, JPEG, GIF or WebP) to draw under the scanpath. It replaces the dataset's image and is not included in Share links.                                                                       |
+| **Opacity**                       | Set the stimulus image opacity. Lower it so the scanpath reads over it.                                                                                                                                                |
+| **Offset** → **X** / **Y**        | Move (nudge) the stimulus image left, right, up or down, in px, to line it up with the word boxes.                                                                                                                     |
+| **Scale**                         | Resize (scale) the stimulus image so its text matches the word boxes.                                                                                                                                                  |
 
 ### Word boxes
 
@@ -1007,16 +1051,16 @@ The **Word boxes** switch draws each word's box (its interest area). Its **▾**
 
 The **Heatmap** switch shows where reading concentrated. Its **▾** holds:
 
-| Control                                                                               | What it does                                                                                                                                                     |
-| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Style**                                                                             | Choose the heatmap style: **Word boxes** colors each word box, **Smoothed** blurs the fixations with a Gaussian. Compare always uses word boxes.                 |
-| **Blur**                                                                              | For **Smoothed**: how far each fixation spreads, in px. **Auto** picks it from the size of the data.                                                             |
-| **Color** → **By**                                                                    | Choose what the heatmap measures: total fixation duration (dwell time), or **Fixation count**.                                                                   |
-| **Color** → **Colors**                                                                | Choose the heatmap colors (color scale).                                                                                                                         |
-| **Scale**                                                                             | Choose a linear or log heatmap scale.                                                                                                                            |
-| **Range**                                                                             | For word-box heatmaps, fix the color range across trials. **Auto** runs from 0 to the trial's highest value. Smoothed heatmaps are scaled to each figure's peak. |
-| **Opacity**                                                                           | Set the heatmap opacity. **Auto** uses 0.5 for word boxes and 0.45 for smoothed.                                                                                 |
-| **Color bar** → **Show**, orientation, **Angle**, **Size**, **Thickness**, **Length** | Show the heatmap color bar, and set its orientation, label angle and size, thickness and length.                                                                 |
+| Control                                                                               | What it does                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Style**                                                                             | Choose the heatmap style: **Word boxes** colors each word box, **Smoothed** blurs the fixations with a Gaussian. Compare always uses word boxes.                                                         |
+| **Blur**                                                                              | For **Smoothed**: how far each fixation spreads, in px. **Auto** picks it from the size of the data.                                                                                                     |
+| **Color** → **By**                                                                    | Choose what the heatmap measures: total fixation duration (dwell time), or **Fixation count**.                                                                                                           |
+| **Color** → **Colors**                                                                | Choose the heatmap colors (color scale).                                                                                                                                                                 |
+| **Scale**                                                                             | Choose a linear or log heatmap scale.                                                                                                                                                                    |
+| **Range**                                                                             | A word-box legend gives the reading’s dwell-time or count limits. Choose **Use this heatmap range for other trials** above the plot to keep those limits. Smoothed heatmaps scale to each figure’s peak. |
+| **Opacity**                                                                           | Set the heatmap opacity. **Auto** uses 0.5 for word boxes and 0.45 for smoothed.                                                                                                                         |
+| **Color bar** → **Show**, orientation, **Angle**, **Size**, **Thickness**, **Length** | Show the heatmap color bar, and set its orientation, label angle and size, thickness and length.                                                                                                         |
 
 ### Raw gaze
 
@@ -1030,7 +1074,7 @@ The **Raw gaze** switch draws the gaze samples as recorded. Its **▾** holds:
 
 ### Filters & highlights
 
-Which fixations and saccades are drawn, and which stand out:
+These controls change the fixation marks and saccades drawn in the figure. The trial-list filter selects whole readings.
 
 | Control                         | What it does                                                                                                                                                                                                                                                       |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -1124,6 +1168,10 @@ The tabs under the figure. Essentials has **Export**, for the current figure, an
 |                        | **Code** → **Python** / **CLI**, **Show every option**           | Get the Python or command-line code that redraws this figure, for scripts and reproduction.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 |                        | **Settings file** → **Download settings** / **Restore settings** | Save the plot settings to a file, or load (restore) a saved settings file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
+### Inspect a fixation
+
+Click a fixation on a static scanpath, or open **Inspect a fixation** and choose its number. The coordinates next to the number are the plotted coordinates. The table shows the parsed input cells, their units and the values used by the figure. File rows start at one after the header. The inspector also shows whether the word came from a mapped ID or a word box. If the reading was imported before input rows were recorded, the location is shown as unavailable.
+
 # FAQ
 
 ## Loading data
@@ -1186,9 +1234,11 @@ Yes. Turn on **Stimulus** ▾ → **Text** → **Redact**. Each word becomes a r
 
 ### Will a refresh lose my work?
 
-Not on a local or desktop install. When the app listens only on this computer, as `scanpath-studio` and the desktop app do, it saves your datasets and settings there. **Data Management** → **Saved on this computer** shows what it holds. The online demo keeps nothing and explains this after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#back-up-your-work)).
+When the app listens only on this computer, as `scanpath-studio` and the desktop app do, it saves your datasets and settings there. **Data Management** → **Saved on this computer** shows what it holds. The online demo keeps nothing and explains this after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#back-up-your-work)).
 
 If the files of one saved dataset go missing or are damaged, the rest of the session still comes back. The app names the dataset it could not restore, keeps that saved copy unchanged, and offers **Retry** and **Remove saved copy**. Saved metadata tables that can't be read are kept the same way. If the whole saved copy can't be read, the app opens without it and stops saving over it until you retry or clear it.
+
+If two tabs use the same local recovery folder, edits to different trial annotations can be saved together. When a save would overwrite newer work, the older tab shows a warning and keeps your edits open. Copy or export them before reloading that tab. To save your notes, open **Data Management → Annotations** for the dataset and download the JSON file.
 
 ### How do I stop saving, or delete what is saved?
 
@@ -1264,7 +1314,7 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 | list_trials                                   | List every plottable trial: one row per participant and trial.                  |
 | list_parts                                    | List the ordered screens of multipart data, optionally for one trial.           |
 | check_data_health                             | Check durations, positions and word boxes for data problems.                    |
-| run_analysis_recipe                           | Recreate a downloaded per-word cohort profile table.                            |
+| run_analysis_recipe                           | Recreate a per-word cohort profile or a two-group difference profile.           |
 | **Plot**                                      |                                                                                 |
 | plot_scanpath                                 | Build one trial's scanpath figure, by default in the app's Scanpath design.     |
 | animate_scanpath                              | Build the animated replay of one trial's scanpath, or of two on one clock.      |
@@ -1277,6 +1327,7 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 | figure_code                                   | Write the API or CLI code that reproduces a figure.                             |
 | **Save**                                      |                                                                                 |
 | save_figure                                   | Save a figure as HTML, PNG, SVG or PDF.                                         |
+| save_panel_proof                              | Save a split comparison as an SVG with its manuscript width in millimetres.     |
 | save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                      |
 | **Recovery cache**                            |                                                                                 |
 | cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.       |
@@ -1330,6 +1381,8 @@ load_scanpath_data(
     image_pattern=DEFAULT_STIMULUS_IMAGE_PATTERN,
     keep_columns=None,
     names=NAMES_SOURCE,
+    include_source_cells=False,
+    _row_counts=None,
 )
 ```
 
@@ -1338,6 +1391,8 @@ Load and normalize a Words table, a Fixations table, or both.
 Columns keep the names your files give them: `CURRENT_FIX_DURATION`, not `duration_ms`. A column Scanpath Studio built, converted, computed or changed keeps its internal name, and `data.column_names` records what every column was called. Every API function takes these frames, and every column option (`color_by=`, the hover fields …) takes either name.
 
 Columns are auto-detected from EyeLink, Gazepoint, Tobii, SMI, Pupil Labs and snake_case names. Normalization keeps the mapped fields and the recognized optional ones (eye, EyeLink's interest-area measures, linguistic features …) and drops the rest, unless `keep_columns` names them.
+
+Set `include_source_cells=True` to inspect original fixation cells with `data.explain_fixation(participant, trial, order)`. It reports file data rows, parsed values, units and word assignments. Original cells are private columns of that opt-in fixation frame.
 
 - **One table is enough.** Leave out the table a dataset doesn't have: it comes back as an empty frame, and the plots skip that layer.
 - **Stimulus-level words.** A Words table without a participant column holds each text's word boxes once, and they are copied onto every trial in the fixations. Each trial is matched by its trial ID, else the trial ID it had before a repeat's `_r2` suffix, else its `text_id` (for trial IDs that embed the participant). Trials that match none raise a `data.StimulusJoinWarning` (a `UserWarning`).
@@ -1377,6 +1432,16 @@ The `(words, fixations)` frames `load_scanpath_data` returns, with their names.
 It is a tuple, so `words, fixations = load_scanpath_data(…)` unpacks it, and `.words` / `.fixations` name the two frames. `column_names` holds the dataset's own name for every canonical column, per table: `{"words": ColumnNames, "fixations": ColumnNames}`.
 
 With `names="source"` (the default) the frames' columns are the dataset's own names and each frame carries its map, so any API function takes it, sliced, filtered or merged, and the names it writes are yours. With `names="canonical"` they are the internal names, the same for every dataset.
+
+#### explain_fixation
+
+```
+explain_fixation(participant, trial, order, *, screen=None)
+```
+
+Inspect a recorded fixation by its one-based parent trial order.
+
+Load with `include_source_cells=True` to keep original inputs and row numbers. The report describes file records after parsing, with the header excluded.
 
 ### propose_schema
 
@@ -1451,7 +1516,9 @@ sps.plot_scanpath(words, fixations, show_stimulus_image=True)
 ### load_raw_gaze
 
 ```
-load_raw_gaze(table, *, raw_gaze_schema=None, names=NAMES_SOURCE)
+load_raw_gaze(
+    table, *, raw_gaze_schema=None, names=NAMES_SOURCE, _row_counts=None
+)
 ```
 
 Load and normalize a raw, sample-level gaze table, for `raw_gaze=`.
@@ -1819,7 +1886,7 @@ run_analysis_recipe(
 )
 ```
 
-Recreate a downloaded per-word cohort profile table.
+Recreate a per-word cohort profile or a two-group difference profile.
 
 Parameters:
 
@@ -1835,7 +1902,7 @@ Parameters:
 
 Returns:
 
-- `DataFrame` – The cohort profile under the dataset's own output column names.
+- `DataFrame` – The published table under the dataset's own output column names.
 
 Raises:
 
@@ -2211,7 +2278,7 @@ Examples:
 | `color_by_line` `--color-by-line`                                     | `False`       | Color each fixation by the text line it lands on, with the lines found from the word boxes. Overrides `--color-by`. Same as `--color-by` line.                                                                                                                                                                                                                  |
 | `fixation_colorscale` `--fixation-colorscale`                         | `'Blues'`     | Color scale for `--color-by`, e.g. Viridis.                                                                                                                                                                                                                                                                                                                     |
 | `fixation_color_range` `--fixation-color-range`                       | `None`        | Fix the `--color-by` color scale to LO..HI instead of the trial's range, so several figures share one scale.                                                                                                                                                                                                                                                    |
-| `fixation_opacity` `--fixation-opacity`                               | `0.7`         | Fixation marker opacity, 0.1–1.0. For two scanpaths, set `opacity` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                                                                                                                                     |
+| `fixation_opacity` `--fixation-opacity`                               | `0.7`         | Opacity of fixation markers, 0–1. For two scanpaths, set `opacity` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                                                                                                                                     |
 | `fixation_symbol` `--fixation-symbol`                                 | `'circle'`    | Fixation marker shape. Unlike color, shape survives a grayscale print. One of `'circle'`, `'square'`, `'diamond'`, `'triangle-up'`, `'cross'`, `'x'`, `'star'`, `'hexagon'`, `'heart'`.                                                                                                                                                                         |
 | `hollow_fixations` `--hollow-fixations`                               | `False`       | Draw the fixations as outlines instead of filled markers. For two scanpaths, set `hollow` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                                                                                                              |
 | `fixation_outline_color` `--fixation-outline-color`                   | `'#111111'`   | Color of that outline.                                                                                                                                                                                                                                                                                                                                          |
@@ -2240,7 +2307,7 @@ Examples:
 | `saccade_color` `--saccade-color`                                             | `'#CC79A7'`   | Saccade line and arrow color, as hex or a CSS name. For two scanpaths, set `saccade_color` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                                             |
 | `saccade_style` `--saccade-style`                                             | `'solid'`     | Saccade line dash style. One of `'solid'`, `'dash'`, `'dot'`, `'dashdot'`. For two scanpaths, set `saccade_style` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                      |
 | `saccade_width` `--saccade-width`                                             | `2.0`         | Saccade line width in px, 0.5–10. For two scanpaths, set `saccade_width` in `style_a` or `style_b`. *Single plot, Single replay.*                                                                                                                                                               |
-| `saccade_opacity` `--saccade-opacity`                                         | `1.0`         | Opacity of the saccade lines and arrows, 0.1–1.0. In a comparison, both scanpaths share it.                                                                                                                                                                                                     |
+| `saccade_opacity` `--saccade-opacity`                                         | `1.0`         | Opacity of saccade lines and arrows, 0–1.                                                                                                                                                                                                                                                       |
 | `show_saccade_arrows` `--saccade-arrows`                                      | `False`       | Draw an arrowhead on each saccade (the app's Direction arrows).                                                                                                                                                                                                                                 |
 | `saccade_arrow_size` `--saccade-arrow-size`                                   | `12.0`        | Size of the `--saccade-arrows` arrowheads, 4–40 px.                                                                                                                                                                                                                                             |
 | `saccade_render_mode` `--saccade-arcs`                                        | `'Straight'`  | Draw saccades as upward arcs instead of straight lines (the app's Shape: Arc). One of `'Straight'`, `'Arc'`. *Single plot.*                                                                                                                                                                     |
@@ -2341,11 +2408,11 @@ Examples:
 
 ### Hover
 
-| Option and `render` flag                          | Default                        | Description                                                                                   |
-| ------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------- |
-| `word_hover_fields` `--word-hover-fields`         | `list`, see `figure_options()` | Comma-separated Words table columns shown on hover (e.g. text,word_id,gpt2_surprisal).        |
-| `word_hover_measure` `--word-hover-measure`       | `'total_fixation_duration_ms'` | The reading measure a word's hover shows.                                                     |
-| `fixation_hover_fields` `--fixation-hover-fields` | `list`, see `figure_options()` | Comma-separated Fixations table columns shown on hover (e.g. order_in_trial,duration_ms,eye). |
+| Option and `render` flag                          | Default                        | Description                                                  |
+| ------------------------------------------------- | ------------------------------ | ------------------------------------------------------------ |
+| `word_hover_fields` `--word-hover-fields`         | `list`, see `figure_options()` | Comma-separated word columns to show on hover, in order.     |
+| `word_hover_measure` `--word-hover-measure`       | `'total_fixation_duration_ms'` | The reading measure a word's hover shows.                    |
+| `fixation_hover_fields` `--fixation-hover-fields` | `list`, see `figure_options()` | Comma-separated fixation columns to show on hover, in order. |
 
 ### Legends
 
@@ -2522,6 +2589,7 @@ save_figure(
     width_mm=None,
     width_in=None,
     dpi=None,
+    proof_width_mm=None,
 )
 ```
 
@@ -2539,35 +2607,58 @@ Parameters:
 - **`width_mm`** (`float | None`, default: `None` ) – A PNG's print width in mm, as the app's Export → Current figure sets it: 180 mm at 600 dpi is a 4,252 px wide PNG, its height following the figure's aspect, with the dpi written into the file. It replaces scale.
 - **`width_in`** (`float | None`, default: `None` ) – The same in inches.
 - **`dpi`** (`int | None`, default: `None` ) – The resolution for width_mm / width_in. Default 300.
+- **`proof_width_mm`** (`float | None`, default: `None` ) – Total manuscript width of a split comparison SVG, as in save_panel_proof.
 
 Returns:
 
 - `Path` – The path written.
 
+### save_panel_proof
+
+```
+save_panel_proof(fig, path, *, width_mm)
+```
+
+Save a split comparison as an SVG with its manuscript width in millimetres.
+
+Both readings must have matching screen dimensions. The panel order, letters, shared scales, legends and relative size of the stimulus come from `compare_scanpaths`.
+
 ### save_figure_layers
 
 ```
 save_figure_layers(
-    fig, directory, *, fmt="svg", scale=2, width=None, height=None
+    fig,
+    directory,
+    *,
+    fmt="svg",
+    scale=2,
+    width=None,
+    height=None,
+    width_mm=None,
+    width_in=None,
+    dpi=None,
 )
 ```
 
 Save a scanpath figure as one file per layer, for editing.
 
-Each *visible* layer (stimulus image, heatmap, word boxes, saccades, fixations, raw gaze, labels, frame) is the full figure with only that layer's elements, on a transparent background, at the same size and axis ranges. The files line up when stacked in Illustrator or Inkscape. The app's Export bundle writes the same files under *Layers as separate files*.
+Each *visible* layer (stimulus image, heatmap, word boxes, saccades, fixations, raw gaze, labels, frame) is the full figure with only that layer's elements, on a transparent background, at the same size and axis ranges. The files line up when stacked in Illustrator or Inkscape. The app's Export bundle writes the same files under *Layers as separate files*. A successful revision replaces this format's previous exported layers. An inventory in the directory identifies the owned files.
 
 Parameters:
 
 - **`fig`** (`Figure`) – A scanpath figure.
 - **`directory`** (`str | Path`) – The folder to write <layer>.<fmt> into.
 - **`fmt`** (`str`, default: `'svg'` ) – Any save_figure extension without the dot. svg and pdf are vector and the best to edit; png and html work too.
-- **`scale`** (`int`, default: `2` ) – Passed to save_figure.
+- **`scale`** (`float`, default: `2` ) – Passed to save_figure.
 - **`width`** (`int | None`, default: `None` ) – Passed to save_figure.
 - **`height`** (`int | None`, default: `None` ) – Passed to save_figure.
+- **`width_mm`** (`float | None`, default: `None` ) – PNG print width in millimetres.
+- **`width_in`** (`float | None`, default: `None` ) – PNG print width in inches.
+- **`dpi`** (`int | None`, default: `None` ) – Resolution for the print width, shared by every layer.
 
 Returns:
 
-- `dict` – {layer: Path} for each file written.
+- `dict[str, Path]` – {layer: Path} for each file written.
 
 ## Recovery cache
 
@@ -2777,9 +2868,11 @@ The Python API loads the same datasets with load_potec and load_onestop.
 | write each layer to its own file | `--separable-layers`                                                                                                                                                                                                                                  |
 | print the equivalent code        | `--print-code python` (or `cli` / `both`), plus `--print-code-explicit`                                                                                                                                                                               |
 
+Hover fields appear in the order you list them. For a column named `pupil, left`, preserve the comma with `--keep-columns 'pupil, left' --fixation-hover-fields-json '["duration_ms","pupil, left"]'`. Use `--fixation-hover-fields-json '[]'` to clear that selection. The Words layer accepts `--word-hover-fields-json` in the same way.
+
 ### Compare two scanpaths
 
-`--compare-with PARTICIPANT:TRIAL` draws a second trial, B, beside or over the first. It does what the app's **Compare** does.
+`--compare-participant ID --compare-trial ID` selects the second reading, B. For example, `--compare-participant B --compare-trial 'round:2'` preserves the colon in the trial ID. The shorthand `--compare-with PARTICIPANT:TRIAL` splits at the last colon.
 
 ```
 # Two participants on the same paragraph, overlaid
@@ -2813,7 +2906,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 
 | Goal                                                       | Flags                                                                                                                |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| pick B                                                     | `--compare-with PARTICIPANT:TRIAL`                                                                                   |
+| pick B                                                     | `--compare-participant ID --compare-trial ID`                                                                        |
 | pick each screen of a multipart trial                      | `--screen ID` (A), `--compare-screen ID` (B); each defaults to its trial's first screen                              |
 | arrange the panels                                         | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`)                                                |
 | choose whose stimulus an overlay draws                     | `--compare-stimulus {both,a,b}` (default `both`)                                                                     |
@@ -2843,7 +2936,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 | `saccade_style`                        | `solid`, `dash`, `dot` or `dashdot`                                                         | that scanpath's default                              |
 | `saccade_width`                        | px                                                                                          | that scanpath's default                              |
 | `marker_size_range`                    | `MIN:MAX`                                                                                   | that scanpath's default                              |
-| `opacity`                              | 0.1–1                                                                                       | that scanpath's default                              |
+| `opacity`                              | 0–1                                                                                         | that scanpath's default                              |
 | `hollow`                               | `true` or `false`                                                                           | that scanpath's default                              |
 
 The `--animate` replay draws one set of word boxes and no raw gaze, so it ignores the `box_*` keys and `raw_gaze_color`.
@@ -2959,7 +3052,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--marker-size-range`               | `MIN MAX`                                                                              | —       | Smallest and largest fixation marker size in px, e.g. 4 12 (default: 8 24). A smaller range suits thumbnails.                                                                                                                                                                                                               |
 | `--marker-size-scale`               | `sqrt`, `linear`, `log`, `relative`                                                    | —       | How duration sets marker size (default: sqrt). sqrt, linear and log map `--marker-duration-range` onto `--marker-size-range`, so a duration gets the same size in every trial, comparison and replay. With sqrt, marker area grows with duration. relative stretches each figure from its shortest to its longest fixation. |
 | `--marker-duration-range`           | `LO HI`                                                                                | —       | The durations in ms that get the smallest and largest marker (default: 50 600). Shorter and longer fixations are clamped to them. Not used by `--marker-size-scale` relative.                                                                                                                                               |
-| `--fixation-opacity`                | `O`                                                                                    | —       | Fixation marker opacity, 0.1–1.0 (default: 0.7, so overlapping fixations show through).                                                                                                                                                                                                                                     |
+| `--fixation-opacity`                | `O`                                                                                    | —       | Opacity of fixation markers, 0–1 (default: 0.7).                                                                                                                                                                                                                                                                            |
 | `--fixation-outline-width`          | `PX`                                                                                   | —       | Outline width around each filled fixation marker, 0–5 px; 0 draws none (default: 0.5).                                                                                                                                                                                                                                      |
 | `--fixation-outline-color`          | `COLOR`                                                                                | —       | Color of that outline (default: #111111).                                                                                                                                                                                                                                                                                   |
 | `--hollow-fixations`                | switch                                                                                 | —       | Draw the fixations as outlines instead of filled markers.                                                                                                                                                                                                                                                                   |
@@ -2984,12 +3077,12 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--saccade-color`              | `COLOR`                           | —       | Saccade line and arrow color, as hex or a CSS name (default: #CC79A7).                                                                                                                                                                                                           |
 | `--saccade-style`              | `solid`, `dash`, `dot`, `dashdot` | —       | Saccade line dash style (default: solid).                                                                                                                                                                                                                                        |
 | `--saccade-width`              | `PX`                              | —       | Saccade line width in px, 0.5–10 (default: 2).                                                                                                                                                                                                                                   |
-| `--saccade-opacity`            | `O`                               | —       | Opacity of the saccade lines and arrows, 0.1–1.0 (default: 1). In a comparison, both scanpaths share it.                                                                                                                                                                         |
 | `--saccade-arrow-size`         | `PX`                              | —       | Size of the `--saccade-arrows` arrowheads, 4–40 px (default: 12).                                                                                                                                                                                                                |
 | `--saccade-color-by-type`      | switch                            | —       | Color each saccade by its type: forward, skip, refixation, return sweep or regression (the app's By type).                                                                                                                                                                       |
 | `--saccade-color-by-direction` | switch                            | —       | Color each saccade as forward or regression (the app's Forward / regression).                                                                                                                                                                                                    |
 | `--saccade-type-color`         | `CLASS=COLOR`                     | —       | Set one saccade type's color, e.g. `--saccade-type-color` regression=#000000. Repeatable. Types: forward, skip, refixation, return_sweep, regression. Implies `--saccade-color-by-type`. With `--saccade-color-by-direction`, it sets the forward and regression colors instead. |
 | `--saccade-arcs`               | switch                            | —       | Draw saccades as upward arcs instead of straight lines (the app's Shape: Arc).                                                                                                                                                                                                   |
+| `--saccade-opacity`            | `O`                               | —       | Opacity of saccade lines and arrows, 0–1 (default: 1).                                                                                                                                                                                                                           |
 
 ### Stimulus
 
@@ -3097,11 +3190,13 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 
 ### Hover
 
-| Option                    | Value    | Default | Description                                                                                   |
-| ------------------------- | -------- | ------- | --------------------------------------------------------------------------------------------- |
-| `--word-hover-fields`     | `FIELDS` | —       | Comma-separated Words table columns shown on hover (e.g. text,word_id,gpt2_surprisal).        |
-| `--fixation-hover-fields` | `FIELDS` | —       | Comma-separated Fixations table columns shown on hover (e.g. order_in_trial,duration_ms,eye). |
-| `--word-hover-measure`    | `FIELD`  | —       | The reading measure a word's hover shows (default: total_fixation_duration_ms; '' for none).  |
+| Option                         | Value    | Default | Description                                                                                                                 |
+| ------------------------------ | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `--word-hover-fields`          | `FIELDS` | —       | Comma-separated word columns to show on hover, in order.                                                                    |
+| `--word-hover-fields-json`     | `JSON`   | —       | Ordered JSON array of word column names. Use this for names containing commas, or pass '[]' to leave the tooltip empty.     |
+| `--fixation-hover-fields`      | `FIELDS` | —       | Comma-separated fixation columns to show on hover, in order.                                                                |
+| `--fixation-hover-fields-json` | `JSON`   | —       | Ordered JSON array of fixation column names. Use this for names containing commas, or pass '[]' to leave the tooltip empty. |
+| `--word-hover-measure`         | `FIELD`  | —       | The reading measure a word's hover shows (default: total_fixation_duration_ms; '' for none).                                |
 
 ### Legends
 
@@ -3131,6 +3226,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--scale`               | `X`                     | `2.0`   | Pixel-density multiplier for PNG, SVG and PDF (default: 2.0).                                                                                                                                                                                                     |
 | `--width-mm`            | `MM`                    | —       | Print width of a PNG in mm, drawn at `--dpi` (replaces `--scale`).                                                                                                                                                                                                |
 | `--width-in`            | `IN`                    | —       | Print width of a PNG in inches, drawn at `--dpi`.                                                                                                                                                                                                                 |
+| `--proof-width-mm`      | `MM`                    | —       | Total manuscript width of a side-by-side or stacked comparison SVG in mm.                                                                                                                                                                                         |
 | `--dpi`                 | `N`                     | —       | Resolution of `--width-mm` / `--width-in` (default: 300).                                                                                                                                                                                                         |
 | `--separable-layers`    | switch                  | —       | Also write one file per layer (word boxes, fixations, saccades, heatmap, labels, stimulus image) to a `&lt;output&gt;_layers/` folder, to restyle each in Illustrator or Inkscape. The layers line up when stacked. Static image output only: .svg, .pdf or .png. |
 | `--print-code`          | `python`, `cli`, `both` | —       | Print the Python or CLI code that reproduces this figure (python, cli or both), then render as usual. The code sets only the options that differ from the defaults.                                                                                               |
@@ -3140,7 +3236,9 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 
 | Option                                   | Value                                | Default     | Description                                                                                                                                                                                                                                                                                                                               |
 | ---------------------------------------- | ------------------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--compare-with`                         | `PARTICIPANT:TRIAL`                  | —           | The second scanpath, B, as PARTICIPANT:TRIAL. It comes from the loaded dataset unless `--compare-words` / `--compare-fixations` load a second one.                                                                                                                                                                                        |
+| `--compare-with`                         | `PARTICIPANT:TRIAL`                  | —           | The second scanpath, B, as PARTICIPANT:TRIAL. The last colon separates the IDs. Use `--compare-participant` and `--compare-trial` when the trial ID contains a colon. B comes from the loaded dataset unless `--compare-words` / `--compare-fixations` load a second one.                                                                 |
+| `--compare-participant`                  | `ID`                                 | —           | B's participant ID, paired with `--compare-trial`.                                                                                                                                                                                                                                                                                        |
+| `--compare-trial`                        | `ID`                                 | —           | B's trial ID, paired with `--compare-participant`.                                                                                                                                                                                                                                                                                        |
 | `--compare-screen`                       | `SCREEN_ID`                          | —           | B's screen in a multipart trial, looked up in B's trial (default: its first screen). `--screen` picks A's. Each scanpath is drawn from one screen.                                                                                                                                                                                        |
 | `--compare-layout`                       | `overlay`, `side-by-side`, `stacked` | `overlay`   | How A and B are arranged (default: overlay). Across two datasets, overlay needs canvases of the same size. Different canvases are refused, so use side-by-side or stacked for them. Matching canvases that a dataset did not record still overlay, with a warning.                                                                        |
 | `--compare-stimulus`                     | `both`, `a`, `b`                     | `both`      | On an overlay, whose word boxes and text to draw (default: both). Two datasets' word boxes line up only when the text is the same. A two-scanpath replay shows B's text for 'b' and A's text for 'a' or 'both'.                                                                                                                           |
@@ -3221,7 +3319,7 @@ scanpath-studio recipe profile.recipe.json --words words.csv --fixations fixatio
 - word boxes with no area, or no finite position or size within a million pixels;
 - screen sizes that are not finite and positive.
 
-Each finding gives the rows and trials affected, a few example rows, and what the app does with them. `check` changes nothing and exits 0 whatever it finds. `--json` prints the table check_data_health returns. In example rows, missing values are `null` and infinite values are the strings `"Infinity"` or `"-Infinity"`.
+Each finding gives the rows and trials affected, a few example rows, and what the app does with them. `check` changes nothing and exits 0 whatever it finds. `--json` prints the table check_data_health returns. In example rows, missing values are `null` and infinite values are the strings `"Infinity"` or `"-Infinity"`. To save a QC record, use `--json-report`. Its `tables` object counts the source rows read, the rows with usable identifiers, and the normalized rows checked. Stimulus words shared across readings can expand into more checked rows. The report distinguishes empty tables, blank rows and rows with missing participant or trial IDs. Its `findings` list matches `--json`.
 
 ```
 scanpath-studio check --words ia.csv --fixations fixations.csv
@@ -3237,6 +3335,7 @@ scanpath-studio check --raw-gaze gaze_samples.csv --json
 | `--raw-gaze-schema`      | `JSON`                | —       | Column mapping for the `--raw-gaze` table, replacing auto-detection, in the form `--fix-schema` takes.                                                                                                                                                                                                                                                              |
 | `--trial-parts-manifest` | `PATH`                | —       | JSON manifest assigning source rows to ordered screens.                                                                                                                                                                                                                                                                                                             |
 | `--json`                 | switch                | —       | Print the findings as JSON (the rows api.check_data_health returns).                                                                                                                                                                                                                                                                                                |
+| `--json-report`          | switch                | —       | Include input, eligible and checked row counts beside the findings as JSON.                                                                                                                                                                                                                                                                                         |
 | `--word-schema`          | `JSON`                | —       | Column mapping for the `--words` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from.     |
 | `--fix-schema`           | `JSON`                | —       | Column mapping for the `--fixations` table, replacing auto-detection. A JSON object from each field to a column name, or the path of a JSON file holding one, e.g. '{"trial": "TRIAL_INDEX", "word_id": "IA_ID", ...}'. It is the dict api.load_scanpath_data takes. Needed only when a column isn't recognized, and the error then prints a mapping to start from. |
 | `--keep-columns`         | `COLUMN [COLUMN ...]` | —       | More columns to keep through loading, under the names they have in your files (e.g. a pupil size), from whichever table has them. Without it, loading keeps only the mapped and recognized fields. A kept fixation column can be used by `--color-by`, an axis or a hover. Same as keep_columns= in api.load_scanpath_data.                                         |
@@ -3960,6 +4059,67 @@ Developed with AI assistance. Cross-check results before publishing.
 ### Added
 
 - Use the arrow keys to browse trials and Space to play or pause a scanpath replay, including from the replay time slider.
+- The check command reports how many rows were read and checked, including why a table supplied no usable rows. Use --json-report to save these counts alongside the findings.
+- Inspect the readings behind a cohort value, compare profile revisions, download a methods draft, calculate within-participant contrasts, and rerun a two-group word difference from its recipe.
+- CSV bundles now include a type and unit dictionary and an editable R reader that preserves identifiers such as 01, literal NA identifiers, and missing measurements.
+- Preview bundle contents lists planned per-trial paths, table columns and selected annotations, and identifies stimulus words and images that may accompany a figure.
+- Click a fixation or choose it by number to inspect its input file and data row, original units and word assignment. Merged fixations list their contributing source rows. Original input cells stay out of figure and bundle downloads.
+- The interaction benchmark measures opening a first trial, switching readings and recoloring markers, with counts of data reads, normalization, selections and figure builds for each action.
+- A packaged synthetic study includes two source tables, recording setup, a tagged exclusion, figure settings and a cohort recipe written by Scanpath Studio v0.37.0. The example recreates its manuscript figure and checks the original results table.
+- Export can proof a side-by-side or stacked comparison at its manuscript width. Check the label sizes in points, save a vector SVG with physical dimensions, and restore the panel selection and shared color limits for a revision.
+- Use Previous fixation and Next fixation above a replay to inspect the fixation’s onset, duration and assigned word. The shared HTML replay keeps these controls when downloaded. Long replays now build the live view from a single trace template.
+- Retry failed figures and individual layer files in the last export bundle while the selected data and settings still match. Successful files keep their contents and paths.
+- Review incoming trial and screen annotations before applying them, inspect both versions of disputed notes, and keep independent edits from two local sessions.
+- Compare received readings with the experiment run sheet, inspect data-check findings by reading, preview changed reading IDs, and download inclusion counts and individual exclusion reasons.
+- Labs can attach a title, authors, version, DOI or preferred wording to an uploaded dataset. Cite and export bundles include the saved credits and identify the second dataset of a comparison. Programmatic comparison bundles include both dataset references in `CITATION.bib`. Open an included settings file to restore both readings, their selected screens and the comparison layout.
+
+### Changed
+
+- Corpus Analysis shows the participant profiles immediately after the measure and aggregation pickers. The cohort overlay, normalization and measure definition sit below the chart.
+- Fixation markers and saccades accept opacity from 0 to 1 in the app, shared settings, CLI and Python API, including fully transparent marks.
+- Open the import wizard directly from the welcome tour, find upload buttons by table name, and use the guide with reduced motion.
+- Choose a tool in the Essentials trial picker to open it in Full. Undo and Redo describe the value they will restore, Share explains what the recipient needs, and the import guide opens folded on narrow screens.
+- Large bundles use less memory when writing gaze CSVs and spend less time assigning duplicate filenames and preparing single-screen trials.
+- Switching trials reuses the current table’s position index, matching metadata is folded in groups, and out-of-text tests and cohort bootstrap intervals use bounded memory.
+- After Add dataset identifies an unresolved mapping, activate its message to focus the matching control. Selecting the duration column clears its warning and shows how two source values convert to milliseconds.
+- On phones, the Scanpath view choices sit directly below the figure, ahead of Export and the other trial panels.
+- Word-box heatmaps show the current reading’s dwell-time or count limits and can reuse those limits on other readings. Grayscale comparisons distinguish readers with filled and hollow markers and solid and dashed lines. A snapped illustration can be viewed beside the same trial’s original coordinates.
+- Data Management puts Add dataset above the list, shows full names on phones and restores click-to-sort column headers. Corpus Analysis opens with the analysis controls and keeps figure styling and the inclusion report below the results.
+
+### Removed
+
+- Removed the undocumented Python helpers `scanpath_studio.export.pair_export` and `ComparisonSide`. Comparison figures can be saved from the app or with `save_figure`.
+- Retired the individual workflow GIFs in `assets/workflows/`. The docs carry the videos and posters, and the README keeps its overview animation.
+
+### Fixed
+
+- Cohort figures use finite observations, weight repeated readings consistently, distinguish stimulus versions, and show gaps and units for the selected estimate.
+- Setting a reading’s fixation opacity to zero now makes its markers transparent in comparisons and two-reading replays.
+- Single and comparison heatmaps use the same word assignments and label log scales in their original units. Relative marker sizing uses both visible readings in Compare. Heart outlines respond to the selected width, and a category containing “heatmap” stays in the fixation export layer.
+- Two local app processes saving different review notes to the same recovery folder now preserve both edits. Clearing a folder waits for an active save or restore to finish.
+- Corpus Analysis distribution charts label within-participant z-scores in standard deviation units.
+- Comparison tables preserve lab columns that share a name with the dataset or A/B labels, and replacing attached metadata keeps the fields explicitly selected for publication.
+- Export previews follow the selected format, screen and file pattern. Incomplete scopes produce no trials, and screen selections include only those screens’ annotations and their parent trial notes.
+- Figure settings files restore narrowed fixation windows for both readings. Shared titles and captions preserve linguistic tags such as `<NP>`. Generated captions include raw gaze when the figure draws usable samples.
+- Importing large fixation tables uses less memory when recording source filenames.
+- Headless trial listings leave stderr quiet. Render and Share → Code preserve comparison IDs containing colons, uploaded column names containing commas, single-table inputs, and exact hover field selections.
+- Recipes, annotations, column mappings and multipart manifests accept UTF-8 BOMs and Unicode JSON encodings. An unmatched reading in a screen listing points to the available trials.
+- Table imports preserve literal reader IDs, report overlong records by line, identify the worksheet read, and show differences from a pilot’s saved mapping.
+- The OneStop manuscript figures include the full recorded scanpaths, and the replay montage preserves the bottom of its final frame.
+- Word labels in mixed-script passages follow each word's writing direction. Two sample CSVs show a Hebrew and Arabic reading with English, numbers, punctuation and a return fixation.
+- Opening a direct link to Corpus Analysis, Data Management, or Help on a first visit now opens the requested destination without the welcome tour taking over.
+- The manuscript scripts use canonical data columns and compare geometry-derived reading measures against EyeLink values. The corpus figure identifies the passage by its recorded ID and selects it consistently when reader counts tie. The benchmark uses the same readers in both input tables and labels post-stage memory measurements. The change verifier checks restored options and fresh output files.
+- Custom bundle paths extract on Windows even when participant or trial IDs use reserved device names or end in a period.
+- Publication-sized PNG layers use the composite’s dimensions and print density. Re-exporting layers removes obsolete files from the previous export. A failed render preserves the previous figure or layer set. Multipart figures retain their recorded screen numbers.
+- The desktop launcher waits for Streamlit's health response before opening the window. Update instructions preserve VCS branches, forks and package subdirectories and identify installs pinned to a commit.
+- Categorical fixation colors stay consistent across readings, and the index chart respects the selected connector style, width and opacity. Figure descriptions count the fixations and gaze samples drawn. With stimulus redaction on, the Hover and Export panels identify selected text fields that can still appear in HTML.
+- Replays preserve recorded gaps before long fixations. At a low GIF or MP4 frame cap, each image shows the fixations reached by its display time. A late fixation can fall after the last image.
+- If the local recovery cache cannot be locked, the app opens with saving paused and keeps the saved session available for a later launch.
+- HTML replays build frames as you play or seek, reducing memory use for long readings in the app and in saved files.
+- Commands copied from Share now accept participant, trial and screen IDs that start with a hyphen on either side of a comparison.
+- Comparison links and generated Python and CLI commands preserve each reader’s marker fill, colors and line styles when using the print palette.
+- A tab with an older recovery copy warns you before it can overwrite newer saved work. Your edits stay available in the tab to export.
+- Saving a static figure uses the shared renderer and reports when an installed browser has not finished starting Kaleido. HTML, PNG, SVG and PDF retain their citation.
 
 ## Release v0.47.0
 

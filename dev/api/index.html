@@ -2284,6 +2284,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" ScanpathData">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.ScanpathData.explain_fixation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;explain_fixation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -2806,6 +2823,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;save_figure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.save_panel_proof" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;save_panel_proof
       
     </span>
   </a>
@@ -3123,6 +3151,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" ScanpathData">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.ScanpathData.explain_fixation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;explain_fixation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -3652,6 +3697,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.save_panel_proof" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;save_panel_proof
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.save_figure_layers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3960,7 +4016,7 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;run_analysis_recipe&lt;/span&gt;" href="#scanpath_studio.api.run_analysis_recipe"><code>run_analysis_recipe</code></a></td>
-<td>Recreate a downloaded per-word cohort profile table.</td>
+<td>Recreate a per-word cohort profile or a two-group difference profile.</td>
 </tr>
 <tr>
 <td><strong>Plot</strong></td>
@@ -4009,6 +4065,10 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;save_figure&lt;/span&gt;" href="#scanpath_studio.api.save_figure"><code>save_figure</code></a></td>
 <td>Save a figure as HTML, PNG, SVG or PDF.</td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;save_panel_proof&lt;/span&gt;" href="#scanpath_studio.api.save_panel_proof"><code>save_panel_proof</code></a></td>
+<td>Save a split comparison as an SVG with its manuscript width in millimetres.</td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;save_figure_layers&lt;/span&gt;" href="#scanpath_studio.api.save_figure_layers"><code>save_figure_layers</code></a></td>
@@ -4095,7 +4155,9 @@ across datasets. The example below shows the names returned for the bundled demo
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">image_pattern</span><span class="o">=</span><span class="n">DEFAULT_STIMULUS_IMAGE_PATTERN</span><span class="p">,</span>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">keep_columns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">names</span><span class="o">=</span><span class="n">NAMES_SOURCE</span><span class="p">,</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="p">)</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">include_source_cells</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">_row_counts</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -4110,6 +4172,10 @@ called. Every API function takes these frames, and every column option
 snake_case names. Normalization keeps the mapped fields and the recognized optional
 ones (eye, EyeLink's interest-area measures, linguistic features …) and drops the
 rest, unless <code>keep_columns</code> names them.</p>
+<p>Set <code>include_source_cells=True</code> to inspect original fixation cells with
+<code>data.explain_fixation(participant, trial, order)</code>. It reports file data
+rows, parsed values, units and word assignments. Original cells are private
+columns of that opt-in fixation frame.</p>
 <ul>
 <li><strong>One table is enough.</strong> Leave out the table a dataset doesn't have: it comes back
   as an empty frame, and the plots skip that layer.</li>
@@ -4352,6 +4418,28 @@ the internal names, the same for every dataset.</p>
 
 
 
+<div class="doc doc-object doc-function">
+
+
+<h4 id="scanpath_studio.api.ScanpathData.explain_fixation" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">explain_fixation</span>
+
+
+<a href="#scanpath_studio.api.ScanpathData.explain_fixation" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">explain_fixation</span><span class="p">(</span><span class="n">participant</span><span class="p">,</span> <span class="n">trial</span><span class="p">,</span> <span class="n">order</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">screen</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Inspect a recorded fixation by its one-based parent trial order.</p>
+<p>Load with <code>include_source_cells=True</code> to keep original inputs and row numbers.
+The report describes file records after parsing, with the header excluded.</p>
+
+
+    </div>
+
+</div>
+
 
 
   </div>
@@ -4543,7 +4631,9 @@ climbs out of it.</p>
 
 
 <a href="#scanpath_studio.api.load_raw_gaze" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_raw_gaze</span><span class="p">(</span><span class="n">table</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">raw_gaze_schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">names</span><span class="o">=</span><span class="n">NAMES_SOURCE</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_raw_gaze</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">table</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">raw_gaze_schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">names</span><span class="o">=</span><span class="n">NAMES_SOURCE</span><span class="p">,</span> <span class="n">_row_counts</span><span class="o">=</span><span class="kc">None</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -5633,7 +5723,7 @@ finite and positive. Nothing is changed or dropped.</p>
 
     <div class="doc doc-contents first">
 
-        <p>Recreate a downloaded per-word cohort profile table.</p>
+        <p>Recreate a per-word cohort profile or a two-group difference profile.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -5733,7 +5823,7 @@ finite and positive. Nothing is changed or dropped.</p>
               <code><a class="autorefs autorefs-external" title="&lt;code&gt;pandas.DataFrame&lt;/code&gt;" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame">DataFrame</a></code>
           –
           <div class="doc-md-description">
-            <p>The cohort profile under the dataset's own output column names.</p>
+            <p>The published table under the dataset's own output column names.</p>
           </div>
         </li>
     </ul>
@@ -7361,7 +7451,7 @@ listing them for anything else.</p>
 <tr>
 <td><code>fixation_opacity</code><br><code>--fixation-opacity</code></td>
 <td><code>0.7</code></td>
-<td>Fixation marker opacity, 0.1–1.0. For two scanpaths, set <code>opacity</code> in <code>style_a</code> or <code>style_b</code>.<br><em>Single plot, Single replay.</em></td>
+<td>Opacity of fixation markers, 0–1. For two scanpaths, set <code>opacity</code> in <code>style_a</code> or <code>style_b</code>.<br><em>Single plot, Single replay.</em></td>
 </tr>
 <tr>
 <td><code>fixation_symbol</code><br><code>--fixation-symbol</code></td>
@@ -7495,7 +7585,7 @@ listing them for anything else.</p>
 <tr>
 <td><code>saccade_opacity</code><br><code>--saccade-opacity</code></td>
 <td><code>1.0</code></td>
-<td>Opacity of the saccade lines and arrows, 0.1–1.0. In a comparison, both scanpaths share it.</td>
+<td>Opacity of saccade lines and arrows, 0–1.</td>
 </tr>
 <tr>
 <td><code>show_saccade_arrows</code><br><code>--saccade-arrows</code></td>
@@ -7922,7 +8012,7 @@ listing them for anything else.</p>
 <tr>
 <td><code>word_hover_fields</code><br><code>--word-hover-fields</code></td>
 <td><code>list</code>, see <code>figure_options()</code></td>
-<td>Comma-separated Words table columns shown on hover (e.g. text,word_id,gpt2_surprisal).</td>
+<td>Comma-separated word columns to show on hover, in order.</td>
 </tr>
 <tr>
 <td><code>word_hover_measure</code><br><code>--word-hover-measure</code></td>
@@ -7932,7 +8022,7 @@ listing them for anything else.</p>
 <tr>
 <td><code>fixation_hover_fields</code><br><code>--fixation-hover-fields</code></td>
 <td><code>list</code>, see <code>figure_options()</code></td>
-<td>Comma-separated Fixations table columns shown on hover (e.g. order_in_trial,duration_ms,eye).</td>
+<td>Comma-separated fixation columns to show on hover, in order.</td>
 </tr>
 </tbody>
 </table>
@@ -8024,12 +8114,12 @@ listing them for anything else.</p>
 <tr>
 <td><code>style_a</code><br><code>--style-a</code></td>
 <td><code>None</code></td>
-<td>Style for scanpath A, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-a</code> fix_color=#D55E00,opacity=0.5. A two-scanpath replay uses the fixation and saccade styles.<br><em>Compare, Compare + Animate.</em></td>
+<td>Style for scanpath A, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-a</code> fix_color=#D55E00,opacity=0.5. A two-scanpath replay uses the fixation and saccade styles.<br><em>Compare, Compare + Animate.</em></td>
 </tr>
 <tr>
 <td><code>style_b</code><br><code>--style-b</code></td>
 <td><code>None</code></td>
-<td>Style for scanpath B, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-b</code> fix_color=#D55E00,opacity=0.5. A two-scanpath replay uses the fixation and saccade styles.<br><em>Compare, Compare + Animate.</em></td>
+<td>Style for scanpath B, repeatable: KEY=VALUE[,...]. Colors (#RRGGBB): fix_color, saccade_color, box_color (word-box outline; default fix_color), box_fill_color (default <code>--word-box-fill-color</code>), raw_gaze_color (default fix_color). Also heatmap_colorscale (default <code>--heatmap-colorscale</code>, on the shared range), saccade_style (solid|dash|dot|dashdot), saccade_width (px), marker_size_range (MIN:MAX), opacity (0–1), box_line_opacity / box_fill_opacity (0–1; default <code>--word-box-line-opacity</code> / <code>--word-box-fill-opacity</code>), hollow (true|false). E.g. <code>--style-b</code> fix_color=#D55E00,opacity=0.5. A two-scanpath replay uses the fixation and saccade styles.<br><em>Compare, Compare + Animate.</em></td>
 </tr>
 <tr>
 <td><code>show_legend</code><br><code>--no-compare-legend</code></td>
@@ -8539,7 +8629,8 @@ as <code># Note:</code> comments, as the app's ⚠️ captions and the <code>Not
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">width_mm</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">width_in</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">dpi</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="p">)</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">proof_width_mm</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -8635,6 +8726,17 @@ figure's aspect, with the dpi written into the file. It replaces <code>scale</co
             <p>The resolution for <code>width_mm</code> / <code>width_in</code>. Default 300.</p>
           </div>
         </li>
+        <li class="doc-section-item field-body">
+            <b><code>proof_width_mm</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#float">float</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Total manuscript width of a split comparison SVG, as in
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;save_panel_proof&lt;/span&gt;" href="#scanpath_studio.api.save_panel_proof"><code>save_panel_proof</code></a>.</p>
+          </div>
+        </li>
     </ul>
 
 
@@ -8657,14 +8759,45 @@ figure's aspect, with the dpi written into the file. It replaces <code>scale</co
 <div class="doc doc-object doc-function">
 
 
+<h3 id="scanpath_studio.api.save_panel_proof" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">save_panel_proof</span>
+
+
+<a href="#scanpath_studio.api.save_panel_proof" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">save_panel_proof</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">width_mm</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Save a split comparison as an SVG with its manuscript width in millimetres.</p>
+<p>Both readings must have matching screen dimensions. The panel order, letters,
+shared scales, legends and relative size of the stimulus come from <code>compare_scanpaths</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="scanpath_studio.api.save_figure_layers" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">save_figure_layers</span>
 
 
 <a href="#scanpath_studio.api.save_figure_layers" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">save_figure_layers</span><span class="p">(</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">fig</span><span class="p">,</span> <span class="n">directory</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">"svg"</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="kc">None</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">fig</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">directory</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">fmt</span><span class="o">=</span><span class="s2">"svg"</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">scale</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">width</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">height</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">width_mm</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">width_in</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">dpi</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -8674,7 +8807,8 @@ figure's aspect, with the dpi written into the file. It replaces <code>scale</co
 gaze, labels, frame) is the full figure with only that layer's elements, on a
 transparent background, at the same size and axis ranges. The files line up when
 stacked in Illustrator or Inkscape. The app's Export bundle writes the same files
-under <em>Layers as separate files</em>.</p>
+under <em>Layers as separate files</em>. A successful revision replaces this format's
+previous exported layers. An inventory in the directory identifies the owned files.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -8709,7 +8843,7 @@ dot. <code>svg</code> and <code>pdf</code> are vector and the best to edit; <cod
         </li>
         <li class="doc-section-item field-body">
             <b><code>scale</code></b>
-              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a></code>, default:
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#float">float</a></code>, default:
                   <code>2</code>
 )
           –
@@ -8737,13 +8871,43 @@ dot. <code>svg</code> and <code>pdf</code> are vector and the best to edit; <cod
             <p>Passed to <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;save_figure&lt;/span&gt;" href="#scanpath_studio.api.save_figure"><code>save_figure</code></a>.</p>
           </div>
         </li>
+        <li class="doc-section-item field-body">
+            <b><code>width_mm</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#float">float</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>PNG print width in millimetres.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>width_in</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#float">float</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>PNG print width in inches.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>dpi</code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/functions.html#int">int</a> | None</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Resolution for the print width, shared by every layer.</p>
+          </div>
+        </li>
     </ul>
 
 
 <p><span class="doc-section-title">Returns:</span></p>
     <ul>
         <li class="doc-section-item field-body">
-              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a></code>
+              <code><a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#dict">dict</a>[<a class="autorefs autorefs-external" href="https://docs.python.org/3/builtins/stdtypes.html#str">str</a>, <a class="autorefs autorefs-external" title="&lt;code&gt;pathlib.Path&lt;/code&gt;" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path">Path</a>]</code>
           –
           <div class="doc-md-description">
             <p><code>{layer: Path}</code> for each file written.</p>

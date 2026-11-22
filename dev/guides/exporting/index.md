@@ -15,6 +15,16 @@ To export multiple trials, switch to Full and open **Export bundle**. Essentials
 
 For step-by-step instructions, see the [export tutorials](https://lacclab.github.io/scanpath-studio/dev/tutorials/exporting-figures/index.md).
 
+## Reproduce a coauthor's results
+
+The installed package includes a fictional three-reader study, its raw tables, recording setup, one tagged exclusion, figure settings and a cohort recipe. To work through it in an empty folder, copy the example and follow its README.
+
+```
+python -c "from importlib.resources import files; from shutil import copytree; copytree(files('scanpath_studio') / 'sample_data' / 'coauthor', 'canal-study')"
+```
+
+The commands recreate a figure and a two-word results table. A checksum from the original release lets the recipient verify the table byte for byte.
+
 ## Cite what you export
 
 Files saved through **Export** include citation information in their metadata. To add a visible credit to the figure, use **Figure & canvas** → **Credit**.
@@ -38,7 +48,13 @@ For a PNG at print size, pass `width_mm` and `dpi` to `save_figure`, or `--width
 
 ## Batch export
 
-In the app, **Export bundle** → **Trials to include** picks the trials: **This trial**, **All filtered trials**, **All trials of one participant**, **All trials of one text** or **All trials, ignoring filters**. For a scripted batch, loop over the trial list:
+In the app, **Export bundle** → **Trials to include** picks the trials: **This trial**, **All filtered trials**, **All trials of one participant**, **All trials of one text** or **All trials, ignoring filters**. Open **Preview bundle contents** to see the selected readings, their filenames and the columns in their tables. A word-measures CSV can contain the original stimulus words even when the figure masks them. When you select specific screens, the bundle includes notes on those screens and their parent trials.
+
+If a figure fails, the download includes the files that succeeded. With the same data and settings still open, choose **Retry failed figure files**. The app retries each missing format or layer and keeps the successful files. If it could not split a figure into layers, it tries that step again. Check `index.csv` for any files that still failed. Stopping a retry leaves the previous download available.
+
+CSV bundles include `columns.json` and an editable `read_csv.R`. In R, set the working directory to the extracted bundle and run `source("read_csv.R")` with the jsonlite package installed. The example preserves reader IDs such as `01` and `1` as text. A blank measurement becomes `NA` and zero stays zero.
+
+For a scripted batch, loop over the trial list.
 
 Python: one HTML figure per trial
 
@@ -60,7 +76,9 @@ Use the [data loaders](https://lacclab.github.io/scanpath-studio/dev/guides/load
 
 ## Replay export
 
-With **Animate** on, **Export** → **Current figure** saves the replay as HTML, GIF or MP4. The CLI's `render --animate` saves interactive HTML only. For a GIF or MP4 in Python:
+With **Animate** on, **Export** → **Current figure** saves the replay as HTML, GIF or MP4. In a saved HTML replay, **Previous fixation** and **Next fixation** move to individual onsets and show the fixation’s duration and assigned word when available. The time slider scrubs through the whole reading. A GIF or MP4 with a low frame cap shows the state reached at each frame’s start. A fixation after the last frame starts can be absent from the clip.
+
+The CLI’s `render --animate` saves interactive HTML. For a GIF or MP4 in Python:
 
 Python: save a GIF or MP4
 
@@ -78,3 +96,9 @@ Path("replay.mp4").write_bytes(export_animation(replay, fmt="mp4"))
 Use `fmt="gif"` and a `.gif` filename for GIF output.
 
 [Export setup and troubleshooting](https://lacclab.github.io/scanpath-studio/dev/faq/#export-fails) · [Python save options](https://lacclab.github.io/scanpath-studio/dev/api/#save) · [CLI options](https://lacclab.github.io/scanpath-studio/dev/cli/#common-tasks)
+
+## Proof two manuscript panels
+
+In **Compare**, choose two readings with the same screen dimensions and a side-by-side or stacked layout. In **Export → Current figure → Manuscript panel proof**, enter the total print width. The proof shows the resulting label sizes in points and the numeric color limits shared by the two panels. Use the Fixations or Heatmap controls to choose your own limits.
+
+**Prepare manuscript SVG** provides the lettered vector panels at that physical width. **Save panel settings** preserves their order, styles, width and selected limits. Open the settings file in **Share → File**, replace one reading and prepare the revised SVG.

@@ -3097,8 +3097,8 @@ Also turn off the stimulus image, since it shows the screen as it was. On the
 command line, use <code>render --redact-text</code>, and in Python <code>redact_text=True</code>. The
 data tables and exported tables still hold the words.</p>
 <h3 id="will-a-refresh-lose-my-work">Will a refresh lose my work?<a class="headerlink" href="#will-a-refresh-lose-my-work" title="Permanent link">&para;</a></h3>
-<p>Not on a local or desktop install. When the app listens only on this computer,
-as <code>scanpath-studio</code> and the desktop app do, it saves your datasets and
+<p>When the app listens only on this computer, as <code>scanpath-studio</code> and the
+desktop app do, it saves your datasets and
 settings there. <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management</strong> → <span class="sps-icon" data-icon="history" aria-hidden="true"></span>
 <strong>Saved on this computer</strong> shows what it holds. The online demo keeps nothing
 and explains this after your first upload, so export your annotations and settings
@@ -3109,6 +3109,11 @@ keeps that saved copy unchanged, and offers <strong>Retry</strong> and <strong>R
 copy</strong>. Saved metadata tables that can't be read are kept the same way. If the
 whole saved copy can't be read, the app opens without it and stops saving over
 it until you retry or clear it.</p>
+<p>If two tabs use the same local recovery folder, edits to different trial
+annotations can be saved together. When a save would overwrite newer work,
+the older tab shows a warning and keeps your edits open. Copy or export them
+before reloading that tab. To save your notes, open <strong>Data Management →
+Annotations</strong> for the dataset and download the JSON file.</p>
 <h3 id="how-do-i-stop-saving-or-delete-what-is-saved">How do I stop saving, or delete what is saved?<a class="headerlink" href="#how-do-i-stop-saving-or-delete-what-is-saved" title="Permanent link">&para;</a></h3>
 <p>Start the app with <code>scanpath-studio run --no-persist</code> to save nothing. To
 delete what is saved and start over, use <strong>Clear what is saved…</strong> under

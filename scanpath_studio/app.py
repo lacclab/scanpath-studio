@@ -926,13 +926,7 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
 
     def _annotation_step(name: str, keys: tuple, **kwargs):
         def _apply(w, f):
-            frame = w if f.empty else f
-            if frame.empty:
-                return w, f
-            present = {
-                (str(p), str(t))
-                for p, t in zip(frame["participant_id"], frame["trial_id"])
-            }
+            present = trial_keys(w) | trial_keys(f)
             return filter_to_keys(w, f, set(filter_keys(list(present), **kwargs)))
 
         steps.append((name, _apply, keys))
@@ -958,6 +952,39 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
             excluded_tags=tags,
         )
     return steps
+
+
+def _render_inclusion_report(words, fixes, samples, kept, filters) -> None:
+    panel = st.expander(
+        "Study inclusion and exclusions", key="study_inclusion", on_change="rerun"
+    )
+    if not panel.open:
+        return
+    from .study_checks import inclusion_report
+
+    w, f = pool_filter_frames(words, fixes, samples)
+    # Samples-only readings beside the main tables have unknown conditions.
+    # Supply their IDs to the same predicates that decide the normal pool.
+    extra = trial_keys(samples) - trial_keys(w) - trial_keys(f)
+    if extra:
+        extra_ids = pd.DataFrame(sorted(extra), columns=["participant_id", "trial_id"])
+        w = pd.concat([w, extra_ids], ignore_index=True)
+    summary, detail = inclusion_report(w, f, kept, _filter_diagnosis_steps(filters))
+    panel.dataframe(summary, hide_index=True)
+    panel.download_button(
+        "Download inclusion counts",
+        data=summary.to_csv(index=False),
+        file_name="inclusion_counts.csv",
+        mime="text/csv",
+        on_click="ignore",
+    )
+    panel.download_button(
+        "Download readings and exclusion reasons",
+        data=detail.to_csv(index=False),
+        file_name="reading_exclusions.csv",
+        mime="text/csv",
+        on_click="ignore",
+    )
 
 
 def _render_empty_after_filtering(
@@ -4510,11 +4537,8 @@ def _upload_header(uploaded, *, multi: bool, kind: str | None = None) -> list:
 def _upload_columns_cached(_uploaded, file_key, kind: str | None = None) -> list:
     """One uploaded file's column names, read once per file (the header pass).
 
-    Keyed like the planned read. A delimited file's header is cheap, but a
-    workbook or a zipped Parquet / Feather / Excel member has no header-only
-    read — :func:`data.read_table_columns` parses it whole — so an uncached pass
-    would re-parse the file on every rerun of the wizard: 1.4 s a click on a full
-    ``.xls`` sheet, and a second decompressed copy of a large zip held at once.
+    Archives may need to decompress a member to inspect its schema. Keep that
+    work, and the workbook header pass, off subsequent mapping reruns.
     """
     return read_table_columns(_uploaded, kind=kind)
 
@@ -4652,6 +4676,52 @@ def _read_uploaded_frame(
     # that took it, the way the metadata uploaders do, instead of a
     # traceback over the whole page.
     try:
+        pilot = (st.session_state.get("_wizard_restored_meta") or {}).get(
+            "column_mapping", {}
+        )
+        sources = list(uploaded) if multi else [uploaded]
+        if pilot and st.session_state.get("_show_upload_wizard"):
+            from .study_checks import compare_file_mapping
+
+            prefix = state_prefix + "_"
+            fields = {
+                "participant",
+                "trial",
+                "text_id",
+                "screen_id",
+                "word_id",
+                "duration",
+                "timestamp",
+                "text",
+                "x",
+                "y",
+                "width",
+                "height",
+                "left",
+                "right",
+                "top",
+                "bottom",
+            }
+            mapping = {
+                k.removeprefix(prefix): v
+                for k, v in pilot.items()
+                if k.startswith(prefix)
+                and (
+                    k.removeprefix(prefix) in fields
+                    or k.removeprefix(prefix).startswith("measure_")
+                )
+            }
+            differences = []
+            for source in sources:
+                header = _upload_columns_cached(
+                    source, _uploaded_file_key(source), kind
+                )
+                differences.extend(compare_file_mapping(source.name, header, mapping))
+            if differences:
+                messages.warning(
+                    "These files differ from the saved column mapping. Check the affected fields before combining readings."
+                )
+                messages.dataframe(pd.DataFrame(differences), hide_index=True)
         frame = _read_upload(uploaded, state_prefix, multi=multi, kind=kind)
     except Exception as exc:  # unreadable file — say so, keep the page
         logging.getLogger(__name__).warning(
@@ -4666,6 +4736,8 @@ def _read_uploaded_frame(
     adopt_source(frame)
     files = uploaded if multi else [uploaded]
     named = str(getattr(files[0], "name", "the file")) if len(files) == 1 else ""
+    if sheet := frame.attrs.get("source_worksheet"):
+        messages.caption(f"Read worksheet {md_literal(str(sheet))}.")
     for note in pop_read_notes(frame):
         messages.warning(f"**{named}**: {note}" if named else note)
     if frame.empty and len(frame.columns):
@@ -10614,6 +10686,9 @@ def _run_app() -> None:
                     raw_gaze_all,
                 ),
             )
+            _render_inclusion_report(
+                words_all, fixations_all, raw_gaze_all, set(), trial_filters
+            )
         _finish_page()
         _render_datasets_table(words_all, fixations_all, raw_gaze_all)
         _end_loading()
@@ -10972,6 +11047,13 @@ def _run_app() -> None:
                 raw_gaze_all=raw_gaze_all,
                 combos=combos,
                 combos_all=combos_all,
+            )
+            _render_inclusion_report(
+                words_all,
+                fixations_all,
+                raw_gaze_all,
+                trial_keys(combos),
+                trial_filters,
             )
             # What each table's recipe shares — the dataset by the name
             # the picker shows (and its stable token), and the pool above.

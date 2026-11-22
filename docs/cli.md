@@ -327,7 +327,11 @@ the app does with them. `check` changes nothing and exits 0 whatever it finds.
 `--json` prints the table
 [`check_data_health`][scanpath_studio.api.check_data_health] returns. In example rows,
 missing values are `null` and infinite values are the strings `"Infinity"` or
-`"-Infinity"`.
+`"-Infinity"`. To save a QC record, use `--json-report`. Its `tables` object
+counts the source rows read, the rows with usable identifiers, and the
+normalized rows checked. Stimulus words shared across readings can expand into
+more checked rows. The report distinguishes empty tables, blank rows and rows
+with missing participant or trial IDs. Its `findings` list matches `--json`.
 
 ```bash
 scanpath-studio check --words ia.csv --fixations fixations.csv

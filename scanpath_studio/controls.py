@@ -3662,6 +3662,12 @@ def column_mapping_ui(
                 "bottom": "bottom edge",
             }[field_key]
             field_col.caption(f"Choose the {coordinate} column for the Words table.")
+        if field_key == "duration" and chosen:
+            samples = mapping_value_preview(
+                df, field_key, chosen, limit=2, show_time_input=True
+            )
+            if samples:
+                field_col.caption(samples)
         if wrong_column:
             state = "invalid"
             field_col.caption(f"{ICONS['warning']} {wrong_column}")

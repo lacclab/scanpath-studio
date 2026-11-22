@@ -3654,7 +3654,7 @@ def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -
     st.session_state["_plot_config_last_import"] = signature
     st.session_state.pop("_plot_config_skipped", None)
     try:
-        config = json.loads(uploaded.getvalue().decode("utf-8"))
+        config = json.loads(uploaded.getvalue())
         if not isinstance(config, dict):
             raise ValueError("expected a JSON object")
     except (ValueError, UnicodeDecodeError):

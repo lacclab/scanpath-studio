@@ -37,23 +37,28 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 
-# Outside a Streamlit runtime the @st.cache_data decorators in `data` fall
-# back to bare-mode caching and log a "No runtime found" warning per cached
-# function — harmless but noisy for library/CLI users, so quiet those loggers.
-# Order matters twice over: streamlit must be imported first (its get_logger()
-# sets each module logger's level at import, clobbering anything set earlier),
-# and `.data` must be imported after (its decorators fire the warnings at
-# import time). Inside the app a runtime exists and these warnings never fire.
-import streamlit as _st  # noqa: F401  (imported for its logging side effect)
+# Install the bare-mode filter before importing modules that decorate cached
+# functions. Inside the app Streamlit's diagnostics keep their normal behavior.
+import streamlit as _st
 
-from . import chart_axes
+
+def _streamlit_message(record: logging.LogRecord) -> bool:
+    if _st.runtime.exists():
+        return True
+    message = record.getMessage()
+    return message != "No runtime found, using MemoryCacheStorageManager" and (
+        "missing ScriptRunContext! This warning can be ignored when running in bare mode."
+        not in message
+    )
+
 
 for _name in (
     "streamlit.runtime.caching.cache_data_api",
     "streamlit.runtime.scriptrunner_utils.script_run_context",
 ):
-    logging.getLogger(_name).setLevel(logging.ERROR)
+    logging.getLogger(_name).addFilter(_streamlit_message)
 
+from . import chart_axes  # noqa: E402
 from . import column_names as _cn  # noqa: E402
 from . import data as _data  # noqa: E402
 from . import export as _export  # noqa: E402
@@ -327,28 +332,6 @@ def _as_dataframe(
     return _data.read_tables(items, plan_for=plan_for, kind=kind)
 
 
-def _metadata_id_plan(id_column, infer, *extra):
-    """``plan_for`` for a metadata table: read its id column(s) as text.
-
-    The same protection the data tables get — read as numbers, readers ``1``
-    and ``01`` become one reader before the metadata ever sees them. The id
-    column is the caller's, else the one ``infer`` would pick from the header.
-    """
-
-    def plan(header) -> _data.ReadPlan:
-        names = [str(name) for name in header]
-        # `infer_*` treats a row-less frame as "no table" — give it one row.
-        resolved = id_column or infer(
-            pd.DataFrame([[None] * len(names)], columns=names)
-        )
-        columns = [*_data.trial_mapping_columns(resolved or []), *extra]
-        return _data.ReadPlan(
-            identity=tuple(c for c in dict.fromkeys(columns) if c and c in names)
-        )
-
-    return plan
-
-
 # ---------------------------------------------------------------------------
 # Schema diagnostics
 #
@@ -550,6 +533,10 @@ def _schema_error(
     spec = _SCHEMA_SPECS[kind]
     param = spec["param"]
     lines = [f"{spec['title']} column mapping problems: {'; '.join(problems)}"]
+    if sheet := frame.attrs.get("source_worksheet"):
+        lines.append(
+            f"Read worksheet {sheet!r}. Put the data sheet first or export it as CSV."
+        )
     unknown = _unknown_schema_keys(kind, frame, schema) if explicit else []
     if unknown:
         import difflib
@@ -719,6 +706,30 @@ class ScanpathData(tuple):
     def fixations(self) -> pd.DataFrame:
         return self[1]
 
+    def explain_fixation(
+        self, participant: str, trial: str, order: int, *, screen: str | None = None
+    ) -> dict:
+        """Inspect a recorded fixation by its one-based parent trial order.
+
+        Load with `include_source_cells=True` to keep original inputs and row numbers.
+        The report describes file records after parsing, with the header excluded.
+        """
+        from .fixation_source import explain
+
+        words = _cn.to_canonical_frame(self.words)
+        fixations = _cn.to_canonical_frame(self.fixations)
+        words, fixations, _, _, _ = _select_part(
+            words, fixations, participant, trial, screen
+        )
+        match = fixations.loc[fixations["order_in_trial"].eq(order)]
+        if len(match) != 1:
+            raise ValueError(
+                f"No single fixation has order {order} on this reading and screen."
+            )
+        return explain(
+            match.iloc[0], words, self.column_names.get("fixations", ColumnNames())
+        )
+
 
 def _check_names_choice(names: str) -> None:
     if names not in (NAMES_SOURCE, NAMES_CANONICAL):
@@ -831,6 +842,8 @@ def load_scanpath_data(
     image_pattern: str = DEFAULT_STIMULUS_IMAGE_PATTERN,
     keep_columns: Iterable[str] | None = None,
     names: str = NAMES_SOURCE,
+    include_source_cells: bool = False,
+    _row_counts: dict | None = None,
 ) -> ScanpathData:
     """Load and normalize a Words table, a Fixations table, or both.
 
@@ -844,6 +857,11 @@ def load_scanpath_data(
     snake_case names. Normalization keeps the mapped fields and the recognized optional
     ones (eye, EyeLink's interest-area measures, linguistic features …) and drops the
     rest, unless ``keep_columns`` names them.
+
+    Set ``include_source_cells=True`` to inspect original fixation cells with
+    ``data.explain_fixation(participant, trial, order)``. It reports file data
+    rows, parsed values, units and word assignments. Original cells are private
+    columns of that opt-in fixation frame.
 
     - **One table is enough.** Leave out the table a dataset doesn't have: it comes back
       as an empty frame, and the plots skip that layer.
@@ -946,6 +964,10 @@ def load_scanpath_data(
                 keep_columns, _data.WORD_OPTIONAL_FIELDS
             ),
         )
+        if _row_counts is not None:
+            _row_counts["words"] = _data.input_row_counts(
+                words_df, word_schema, len(words_norm)
+            )
         if trial_parts_manifest is not None:
             words_norm = apply_trial_parts_manifest(
                 words_norm, words_df, trial_parts_manifest, kind="words"
@@ -972,7 +994,12 @@ def load_scanpath_data(
             fixations_df,
             fix_schema,
             keep_columns=_with_optional_fields(keep_columns, _data.FIX_OPTIONAL_FIELDS),
+            keep_source_cells=include_source_cells,
         )
+        if _row_counts is not None:
+            _row_counts["fixations"] = _data.input_row_counts(
+                fixations_df, fix_schema, len(fixations_norm)
+            )
         if trial_parts_manifest is not None:
             fixations_norm = apply_trial_parts_manifest(
                 fixations_norm,
@@ -1011,6 +1038,10 @@ def load_scanpath_data(
         table: names_map.through(prior[table]) if table in prior else names_map
         for table, names_map in maps.items()
     }
+    if not include_source_cells:
+        from .fixation_source import without_source_cells
+
+        fixations_norm = without_source_cells(fixations_norm)
     if names == NAMES_SOURCE:
         words_norm = _cn.attach(words_norm, "words", maps.get("words"))
         fixations_norm = _cn.attach(fixations_norm, "fixations", maps.get("fixations"))
@@ -1136,7 +1167,9 @@ def load_participant_metadata(
     frame = _as_dataframe(
         table,
         "participant metadata",
-        plan_for=_metadata_id_plan(id_column, _metadata.infer_participant_id_column),
+        plan_for=_metadata.id_read_plan(
+            id_column, _metadata.infer_participant_id_column
+        ),
     )
     resolved = id_column or _metadata.infer_participant_id_column(frame)
     if not resolved or resolved not in frame.columns:
@@ -1199,7 +1232,7 @@ def load_trial_metadata(
     frame = _as_dataframe(
         table,
         "trial metadata",
-        plan_for=_metadata_id_plan(
+        plan_for=_metadata.id_read_plan(
             id_column, _metadata.infer_trial_id_column, participant_column
         ),
     )
@@ -1265,7 +1298,7 @@ def load_text_metadata(
     frame = _as_dataframe(
         table,
         "text metadata",
-        plan_for=_metadata_id_plan(id_column, _metadata.infer_text_id_column),
+        plan_for=_metadata.id_read_plan(id_column, _metadata.infer_text_id_column),
     )
     resolved = id_column or _metadata.infer_text_id_column(frame)
     if not resolved or any(
@@ -1304,7 +1337,7 @@ def load_sample_data(*, names: str = NAMES_SOURCE) -> ScanpathData:
     """
     from .code_snippet import SOURCE_DEMO, source_canvas
 
-    data = load_scanpath_data(*_data.load_sample_data(), names=names)
+    data = load_scanpath_data(*_data.read_sample_tables(), names=names)
     screen = source_canvas(SOURCE_DEMO)
     for frame in data:
         frame.attrs[RECORDED_SCREEN_ATTR] = screen
@@ -1336,6 +1369,7 @@ def load_raw_gaze(
     *,
     raw_gaze_schema: dict | None = None,
     names: str = NAMES_SOURCE,
+    _row_counts: dict | None = None,
 ) -> pd.DataFrame:
     """Load and normalize a raw, sample-level gaze table, for ``raw_gaze=``.
 
@@ -1377,6 +1411,8 @@ def load_raw_gaze(
     if problems:
         raise _schema_error("raw_gaze", frame, schema, problems, explicit)
     normalized = _data.normalize_raw_gaze(frame, schema)
+    if _row_counts is not None:
+        _row_counts["raw_gaze"] = _data.input_row_counts(frame, schema, len(normalized))
     if names == NAMES_CANONICAL:
         return normalized
     return _cn.attach(
@@ -1397,7 +1433,7 @@ def load_sample_raw_gaze(*, names: str = NAMES_SOURCE) -> pd.DataFrame:
     Returns:
         The normalized samples.
     """
-    return load_raw_gaze(_data.load_sample_raw_gaze(), names=names)
+    return load_raw_gaze(_data.read_sample_raw_gaze(), names=names)
 
 
 def check_data_health(

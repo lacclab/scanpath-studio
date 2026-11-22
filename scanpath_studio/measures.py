@@ -321,8 +321,14 @@ def assign_fixations_to_words(
     if "word_id" not in out.columns or overwrite:
         out["word_id"] = np.nan
 
+    from .data import FIX_WORD_ID_MAPPED
+
     need_idx = out["word_id"].isna()
-    if not need_idx.all():
+    if not overwrite and "word_id" in fixations and FIX_WORD_ID_MAPPED in out:
+        need_idx &= ~out[FIX_WORD_ID_MAPPED].fillna(False).astype(bool)
+        if not need_idx.any():
+            return out
+    elif not need_idx.all():
         return out
 
     # Per (participant, trial), do a fast vectorized box-test against that
@@ -603,10 +609,23 @@ def _in_any_box(fix_chunk: pd.DataFrame, word_chunk: pd.DataFrame) -> np.ndarray
     x0, y0, x1, y1 = word_box_bounds(word_chunk)
     fx = pd.to_numeric(fix_chunk["x"], errors="coerce").to_numpy(dtype=float)
     fy = pd.to_numeric(fix_chunk["y"], errors="coerce").to_numpy(dtype=float)
-    inside = word_box_contains(
-        fx[:, None], fy[:, None], x0[None, :], y0[None, :], x1[None, :], y1[None, :]
-    )
-    return inside.any(axis=1)
+    result = np.zeros(len(fx), dtype=bool)
+    # Bound both dimensions for tall recordings and unusually large word catalogs.
+    box_batch = min(len(x0), 4096) or 1
+    point_batch = max(1, 262_144 // box_batch)
+    for i in range(0, len(fx), point_batch):
+        points = slice(i, i + point_batch)
+        for j in range(0, len(x0), box_batch):
+            boxes = slice(j, j + box_batch)
+            result[points] |= word_box_contains(
+                fx[points, None],
+                fy[points, None],
+                x0[boxes],
+                y0[boxes],
+                x1[boxes],
+                y1[boxes],
+            ).any(axis=1)
+    return result
 
 
 def cluster_word_lines(words: pd.DataFrame, tol_frac: float = 0.5) -> pd.Series:

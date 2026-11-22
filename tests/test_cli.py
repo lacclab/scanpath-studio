@@ -2310,3 +2310,37 @@ def test_a_failed_version_check_exits_1(capsys, monkeypatch):
 def test_version_is_a_listed_command(capsys):
     cli.main(["--help"])
     assert "scanpath-studio version [--check]" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("rows", "read", "eligible", "message"),
+    [
+        ("", 0, 0, "header and no data rows"),
+        ("p1,,100,200,120\n", 1, 0, "missing ID in trial_id"),
+        ("p1,t1,100,200,120\n", 1, 1, "every check passed"),
+    ],
+)
+def test_check_distinguishes_empty_unkeyed_and_clean_rows(
+    tmp_path, capsys, rows, read, eligible, message
+):
+    import json
+
+    source = tmp_path / "fixations.csv"
+    source.write_text("participant_id,trial_id,x,y,duration_ms\n" + rows)
+    args = ["check", "--fixations", str(source)]
+    cli.main(args)
+    report = capsys.readouterr().out
+    assert message in report
+    if not eligible:
+        assert "no rows were checked" in report and "every check passed" not in report
+    cli.main([*args, "--json-report"])
+    report = json.loads(capsys.readouterr().out)
+    counts = report["tables"]["fixations"]
+    assert (counts["read"], counts["eligible"], counts["checked"]) == (
+        read,
+        eligible,
+        eligible,
+    )
+    assert counts["missing_id_columns"] == (["trial_id"] if read > eligible else [])
+    cli.main([*args, "--json"])
+    assert json.loads(capsys.readouterr().out) == report["findings"] == []

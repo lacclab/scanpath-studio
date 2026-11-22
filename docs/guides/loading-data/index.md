@@ -57,6 +57,12 @@ is available as four public datasets: **OneStop · Ordinary reading**,
 Start with a Fixations, Words or Raw gaze table. You can add the other tables
 whenever you need them.
 
+To try a right-to-left passage, import the bundled
+`sample_data/mixed_script_words.csv` and `sample_data/mixed_script_fixations.csv`.
+The two synthetic lines combine Hebrew, Arabic, English, digits and punctuation.
+Use an 800 × 250 px canvas to see the recorded layout. The tenth fixation revisits
+the Arabic word on the second line.
+
 | Table | Contents |
 | --- | --- |
 | Fixations | One row per fixation: trial ID, duration, and x/y or a word ID |
@@ -171,3 +177,21 @@ merge, so you can apply them to similar data.
 The editor offers only the columns kept when the dataset was added. To use a
 column that isn't listed, remove the dataset and add it again from its files,
 mapping the column or keeping it under **Extra fields to keep**.
+
+Under **Data checks**, **Compare with the experiment run sheet** accepts a
+CSV with `participant_id` and `trial_id`. Add `screen_id` to check an
+individual screen. Enter a reason in `planned_omission` for readings you
+intended to omit and leave it blank for the rest. The report distinguishes
+missing readings, unscheduled recordings, and readings with raw gaze alone.
+**Review affected readings** shows all the rows behind a finding, one reading
+at a time, while your trial filters stay in place.
+
+Excel imports use the first worksheet and show its name. ID columns preserve
+literal labels such as `01` and `NA`. Leave a cell empty for a missing ID.
+On restoring a pilot setup, the wizard names files whose headers or time
+units differ from the saved mapping.
+
+Under **Name → Dataset citation**, an upload can carry its title, authors or lab,
+version, DOI, and preferred credit. An unpublished study can supply just its
+preferred wording. Reopen **Edit dataset** to revise the credit. **Cite** and
+the export bundle include these references alongside the software citation.

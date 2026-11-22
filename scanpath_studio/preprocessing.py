@@ -141,6 +141,9 @@ def merge_short_fixations(
                             candidates.append((distance, neighbor))
             if candidates:
                 _, target = min(candidates)
+                from .fixation_source import merge_sources
+
+                merge_sources(out, target, index)
                 out.at[target, "duration_ms"] = (
                     float(out.at[target, "duration_ms"]) + duration
                 )

@@ -216,6 +216,17 @@ def _add_schema_flags(group) -> None:
     )
 
 
+def _trial_parts_manifest(path: str | None) -> dict | None:
+    if path is None:
+        return None
+    try:
+        return json.loads(Path(path).read_bytes())
+    except (OSError, ValueError) as exc:
+        raise SystemExit(
+            f"Could not read trial-parts manifest {path!r}: {exc}"
+        ) from None
+
+
 def _parse_schema_arg(value: str | None, flag: str) -> dict | None:
     """``--word-schema`` / ``--fix-schema`` → the mapping dict.
 
@@ -224,19 +235,27 @@ def _parse_schema_arg(value: str | None, flag: str) -> dict | None:
     if value is None:
         return None
     text = str(value).strip()
+    source: str | bytes = text
+    location = flag
     if not text.startswith("{"):
+        location = f"{flag} ({text})"
         try:
-            text = Path(text).expanduser().read_text(encoding="utf-8")
+            source = Path(text).expanduser().read_bytes()
         except OSError as exc:
             raise SystemExit(
                 f"{flag}: {value!r} is neither a JSON object nor a readable file "
                 f"({exc.strerror or exc})."
             )
     try:
-        mapping = json.loads(text)
+        mapping = json.loads(source)
+    except UnicodeDecodeError:
+        raise SystemExit(
+            f"{location}: the file has an invalid text encoding. Save the mapping "
+            "as UTF-8, UTF-16 or UTF-32 JSON."
+        ) from None
     except json.JSONDecodeError as exc:
         raise SystemExit(
-            f"{flag}: not valid JSON ({exc.msg}, line {exc.lineno} column "
+            f"{location}: not valid JSON ({exc.msg}, line {exc.lineno} column "
             f'{exc.colno}). Expected an object such as \'{{"trial": "TRIAL_INDEX"}}\'.'
         )
 
@@ -482,8 +501,6 @@ def launch_app(extra_args: list[str]) -> None:
 
 
 def _render_parser() -> argparse.ArgumentParser:
-    from .alignment import ALGORITHMS
-
     parser = _ShortErrorParser(
         prog="scanpath-studio render",
         description=(
@@ -999,6 +1016,8 @@ def _render_parser() -> argparse.ArgumentParser:
     # carries the attributes below via `set_defaults`, so no downstream branch
     # needs to know whether the flag exists.
     if drift_correction_enabled():
+        from .alignment import ALGORITHMS
+
         viz.add_argument(
             "--drift-correction",
             metavar="ALGORITHM",
@@ -3815,13 +3834,15 @@ def analyze(argv: list[str]) -> None:
     written: dict[str, list] = {}
     for name, table in tables.items():
         found = _cn.frame_names(table)
-        if found is not None and name in ("fixations", "word_measures"):
-            written[name] = _cn.written_columns(
-                shareable_frame(_cn.to_canonical_frame(table)), found[1]
-            )
-        # The paths a stimulus image was found at are this machine's, not data.
-        table = strip_local_paths(shareable_frame(table))
-        table.to_csv(destination / f"{name}.csv", index=False)
+        names = found[1] if found is not None else None
+        # Mask unmeasured onsets and local image paths under the canonical names
+        # where they are recognized, then restore this lab's output headers.
+        public = strip_local_paths(
+            shareable_frame(_cn.to_canonical_frame(table), table=name)
+        )
+        if names is not None and name in ("fixations", "word_measures"):
+            written[name] = _cn.written_columns(public, names)
+        _cn.as_written(public, names).to_csv(destination / f"{name}.csv", index=False)
     if any(written.values()):
         (destination / "columns.json").write_text(
             json.dumps(_cn.columns_manifest(written), indent=2), encoding="utf-8"
@@ -4267,21 +4288,47 @@ def _check_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="JSON manifest assigning source rows to ordered screens.",
     )
-    parser.add_argument(
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument(
         "--json",
         action="store_true",
         help="Print the findings as JSON (the rows api.check_data_health returns).",
+    )
+    output.add_argument(
+        "--json-report",
+        action="store_true",
+        help="Include input, eligible and checked row counts beside the findings as JSON.",
     )
     _add_schema_flags(parser)
     return parser
 
 
-def _health_report(findings, counts: dict[str, int]) -> str:
+def _health_report(findings, counts: dict[str, dict]) -> str:
     """The data-check findings as plain text for a terminal."""
-    checked = ", ".join(f"{name} {n:,} rows" for name, n in counts.items())
-    if not findings:
-        return f"Data checks: every check passed ({checked})."
-    lines = [f"Data checks: {_count(len(findings), 'finding')} ({checked})."]
+    checked = ", ".join(
+        f"{name} {row['checked']:,} rows" for name, row in counts.items()
+    )
+    if findings:
+        lines = [f"Data checks: {_count(len(findings), 'finding')} ({checked})."]
+    elif not any(row["checked"] for row in counts.values()):
+        lines = ["Data checks: no rows were checked."]
+    else:
+        lines = [f"Data checks: every check passed ({checked})."]
+    for name, row in counts.items():
+        label = name.replace("_", " ").capitalize()
+        lines.append(
+            f"{label}: {row['read']:,} rows read, {row['eligible']:,} eligible, "
+            f"{row['checked']:,} checked."
+        )
+        if not row["read"]:
+            lines.append("  The table contained a header and no data rows.")
+        if row["blank"]:
+            lines.append(f"  Empty rows: {row['blank']:,}.")
+        if row["missing_identity"]:
+            columns = ", ".join(row["missing_id_columns"])
+            lines.append(
+                f"  Rows left out for a missing ID in {columns}: {row['missing_identity']:,}."
+            )
     for f in findings:
         trials = f" in {_count(f.trials, 'trial')}" if f.trials else ""
         label = "note" if f.severity == "note" else "warning"
@@ -4326,17 +4373,16 @@ def check(argv: list[str]) -> None:
     from . import api
 
     words = fixations = raw_gaze = None
+    # The findings-only JSON response keeps its established list shape.
+    counts = None if args.json else {}
     if args.sample:
-        words, fixations = api.load_sample_data()
+        from .data import read_sample_tables
+
+        words, fixations = api.load_scanpath_data(
+            *read_sample_tables(), _row_counts=counts
+        )
     elif args.words or args.fixations:
-        manifest = None
-        if args.trial_parts_manifest:
-            try:
-                manifest = json.loads(
-                    Path(args.trial_parts_manifest).read_text(encoding="utf-8")
-                )
-            except (OSError, json.JSONDecodeError) as exc:
-                raise SystemExit(f"Could not read trial-parts manifest: {exc}") from exc
+        manifest = _trial_parts_manifest(args.trial_parts_manifest)
         try:
             words, fixations = api.load_scanpath_data(
                 args.words,
@@ -4345,6 +4391,7 @@ def check(argv: list[str]) -> None:
                 fix_schema=fix_schema,
                 trial_parts_manifest=manifest,
                 keep_columns=args.keep_columns,
+                _row_counts=counts,
             )
         except (ValueError, OSError) as exc:
             raise SystemExit(_load_error_message(exc)) from exc
@@ -4356,24 +4403,28 @@ def check(argv: list[str]) -> None:
             fixations = None
     if args.raw_gaze:
         try:
-            raw_gaze = api.load_raw_gaze(args.raw_gaze, raw_gaze_schema=raw_gaze_schema)
+            raw_gaze = api.load_raw_gaze(
+                args.raw_gaze, raw_gaze_schema=raw_gaze_schema, _row_counts=counts
+            )
         except (ValueError, OSError) as exc:
             raise SystemExit("--raw-gaze: " + _load_error_message(exc)) from exc
 
     findings = api._health_findings(words, fixations, raw_gaze)
-    if args.json:
-        records = [finding.to_json_record() for finding in findings]
-        print(json.dumps(records, indent=2, allow_nan=False, default=str))
-        return
-    counts = {
-        name: len(frame)
+    if counts is not None:
         for name, frame in (
             ("words", words),
             ("fixations", fixations),
             ("raw_gaze", raw_gaze),
+        ):
+            if frame is not None:
+                counts[name]["checked"] = len(frame)
+    if args.json or args.json_report:
+        records = [finding.to_json_record() for finding in findings]
+        report = (
+            {"tables": counts, "findings": records} if args.json_report else records
         )
-        if frame is not None
-    }
+        print(json.dumps(report, indent=2, allow_nan=False, default=str))
+        return
     print(_health_report(findings, counts))
 
 

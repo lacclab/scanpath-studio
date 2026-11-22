@@ -7,6 +7,7 @@ import contextlib
 import functools
 import hashlib
 import html
+import io
 import itertools
 import json
 import pickle
@@ -1166,6 +1167,10 @@ def _true_scale_plot_html(
     player_script = None
     if page is not None:
         figure_dict, player_script = page
+    elif key == "single":
+        from .fixation_inspector import PLOT_CLICK
+
+        player_script = PLOT_CLICK
     config: dict = {
         **PLOTLY_CONFIG,
         "responsive": False,
@@ -13042,7 +13047,7 @@ def _render_raw_table(
     single chokepoint (``export.strip_local_paths``).
     """
     # Bookkeeping columns (`data.INTERNAL_COLUMNS`) are not data.
-    shown = shareable_frame(df)
+    shown = shareable_frame(df, table=table)
     # Headed by the dataset's own names (``table`` says whose).
     names = active_column_names(st.session_state, table) if table else EMPTY_NAMES
     # A copy of a partner from the same source column is shown once — left out
@@ -14889,6 +14894,67 @@ def pending_census(frames: dict, pending: dict, metadata: dict) -> list[dict]:
 _PREVIEW_CENSUS_KEY = "_remap_preview_census"
 
 
+def remap_reading_changes(frames, pending, annotations) -> pd.DataFrame:
+    """Distinct current and proposed reading keys, including merges, splits and unmatched notes."""
+    transitions = []
+    for kind, frame in frames.items():
+        if (
+            frame is None
+            or frame.empty
+            or not {"participant_id", "trial_id"} <= set(frame)
+        ):
+            continue
+        fields = ("participant", "trial")
+        old = _current_keys(frame, fields).reset_index(drop=True)
+        schema = {
+            "participant": "participant_id",
+            "trial": "trial_id",
+            **(pending.get(kind) or {}),
+        }
+        new = _pending_keys(frame, schema, fields).reset_index(drop=True)
+        transitions.append(
+            pd.concat(
+                [old.add_prefix("old_"), new.add_prefix("new_")], axis=1
+            ).drop_duplicates()
+        )
+    if not transitions:
+        return pd.DataFrame()
+    pairs = pd.concat(transitions, ignore_index=True).drop_duplicates()
+    old_cols, new_cols = (
+        ["old_participant", "old_trial"],
+        ["new_participant", "new_trial"],
+    )
+    outs = pairs.groupby(old_cols).size()
+    ins = pairs.groupby(new_cols).size()
+    remaining = set(ins.index)
+    notes = {}
+    for key, entry in annotations.items():
+        if key[:2] not in remaining:
+            label = "Whole trial" if len(key) == 2 else f"Screen {key[2]}"
+            notes.setdefault(key[:2], []).append(
+                f"{label} · {entry.get('note') or ', '.join(entry.get('tags', [])) or 'Favorite'}"
+            )
+    changes = []
+    for p, t, new_p, new_t in pairs.itertuples(index=False, name=None):
+        old, new = (p, t), (new_p, new_t)
+        split, merged = outs[old] > 1, ins[new] > 1
+        if old != new or split or merged:
+            kind = (
+                "Split and merged"
+                if split and merged
+                else "Split"
+                if split
+                else "Merged"
+                if merged
+                else "Renamed"
+            )
+            changes.append([p, t, new_p, new_t, kind, "\n".join(notes.get(old, []))])
+    return pd.DataFrame(
+        changes,
+        columns=[*old_cols, *new_cols, "change", "annotations losing their reading"],
+    )
+
+
 def _render_pending_change_preview(name: str, stored: dict, pending: dict) -> None:
     """What ✅ Save changes would do to the ids and coordinates — before it does.
 
@@ -14985,6 +15051,18 @@ def _render_pending_change_preview(name: str, stored: dict, pending: dict) -> No
             "merged into one scanpath.",
             icon=ICONS["warning"],
         )
+    from .annotations import store_for
+
+    affected = remap_reading_changes(
+        {**frames, "raw_gaze": stored.get("raw_gaze")},
+        pending,
+        store_for(st.session_state, name),
+    )
+    if not affected.empty:
+        box.caption(
+            "Reading IDs after saving this mapping. Existing annotations stay under their original keys."
+        )
+        box.dataframe(affected, hide_index=True)
 
 
 #: ✏️ Edit dataset's own widget namespace — ``remap_<dataset>_…``: every
@@ -15873,6 +15951,12 @@ def _render_setup_provenance_note(host=None) -> None:
             "</div>",
             unsafe_allow_html=True,
         )
+    if snapshot.px_per_degree is not None:
+        box.caption(
+            f"{snapshot.px_per_degree:.2f} px per degree using a {snapshot.monitor_width_mm:g} mm "
+            f"monitor width ({snapshot.geometry_provenance}) and a {snapshot.viewing_distance_mm:g} mm "
+            f"viewing distance ({snapshot.viewing_distance_provenance or 'measurement status unknown'})."
+        )
     _render_arrived_provenance_note(snapshot, host=box)
 
 
@@ -16322,6 +16406,46 @@ def render_data_health(
 
     findings = _dataset_health_findings(words, fixations, raw_gaze)
     with st.container(key="dataset_health"):
+        sheet = st.expander(
+            "Compare with the experiment run sheet",
+            key="data_run_sheet",
+            on_change="rerun",
+        )
+        if sheet.open:
+            from .study_checks import reconcile_run_sheet
+
+            sheet.caption(
+                "Upload a CSV with participant_id and trial_id. Add screen_id for individual screens and a planned_omission reason for readings you intended to omit."
+            )
+            run_sheet = sheet.file_uploader(
+                "Expected readings (CSV)",
+                type=["csv"],
+                key="expected_readings",
+                max_upload_size=upload_limit_mb(),
+            )
+            if run_sheet is not None:
+                try:
+                    expected = pd.read_csv(
+                        io.BytesIO(run_sheet.getvalue()),
+                        dtype=str,
+                        keep_default_na=False,
+                        encoding="utf-8-sig",
+                    )
+                    report = reconcile_run_sheet(
+                        expected,
+                        {"words": words, "fixations": fixations, "raw_gaze": raw_gaze},
+                    )
+                except (UnicodeError, ValueError) as exc:
+                    sheet.error(str(exc))
+                else:
+                    sheet.dataframe(report, hide_index=True)
+                    sheet.download_button(
+                        "Download run sheet reconciliation",
+                        data=report.to_csv(index=False),
+                        file_name="run_sheet_reconciliation.csv",
+                        mime="text/csv",
+                        on_click="ignore",
+                    )
         st.caption(
             "**Data checks**"
             + (" · whole dataset, before the trial filters" if filtered else "")
@@ -16357,6 +16481,61 @@ def render_data_health(
                         hide_index=True,
                         width="stretch",
                     )
+        reviewable = [f for f in findings if f.rows and f.trials]
+        review = st.expander(
+            "Review affected readings", key="data_health_readings", on_change="rerun"
+        )
+        if review.open and reviewable:
+            from .data_health import affected_rows
+
+            finding = review.selectbox(
+                "Data check",
+                reviewable,
+                format_func=lambda f: f.title,
+                key="health_review_check",
+            )
+            source = {"words": words, "fixations": fixations, "raw_gaze": raw_gaze}[
+                finding.table
+            ]
+            rows = affected_rows(source, finding)
+            keys = [c for c in ("participant_id", "trial_id", "screen_id") if c in rows]
+            if keys and not rows.empty:
+                groups = rows.groupby(keys, sort=False, dropna=False).indices
+                readings = list(groups)
+                key = f"health_review_reading_{finding.check}"
+                selected = review.selectbox(
+                    "Affected reading",
+                    readings,
+                    key=key,
+                    format_func=lambda reading: " / ".join(map(str, reading)),
+                )
+                index = readings.index(selected)
+                review.caption(
+                    f"Reading {index + 1} of {len(readings)}. Values are in the normalized table's units."
+                )
+                review.dataframe(
+                    rows.iloc[groups[selected]].rename(
+                        columns=active(st.session_state, finding.table).label
+                    ),
+                    hide_index=True,
+                )
+
+                def move(position):
+                    st.session_state[key] = readings[position]
+
+                back, forward = review.columns(2)
+                back.button(
+                    "Previous affected reading",
+                    disabled=index == 0,
+                    on_click=move,
+                    args=(index - 1,),
+                )
+                forward.button(
+                    "Next affected reading",
+                    disabled=index + 1 == len(readings),
+                    on_click=move,
+                    args=(index + 1,),
+                )
 
 
 def render_data_inspection_tab(

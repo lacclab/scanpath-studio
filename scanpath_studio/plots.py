@@ -559,6 +559,9 @@ def _finite_for_plotting(
     `DRAWABLE_PX_LIMIT` is read the same way: the browser rejects the SVG it
     would make. A row infinite in a ``drop_on`` column is left out (a word
     box). Copies only when there is one."""
+    from .fixation_source import without_source_cells
+
+    frame = without_source_cells(frame)
     if frame is None or frame.empty:
         return frame
     numbers = {
@@ -4243,6 +4246,8 @@ def _fixation_flag_masks(
     fixations: pd.DataFrame,
     words: pd.DataFrame,
     flags: dict | None,
+    *,
+    modes=("Hide", "Highlight"),
 ) -> dict[str, pd.Series]:
     """Boolean mask per fixation-flag category, over ``fixations``' index.
 
@@ -4253,24 +4258,36 @@ def _fixation_flag_masks(
     """
     if not flags or fixations.empty:
         return {}
-    dur = pd.to_numeric(fixations.get("duration_ms"), errors="coerce")
-    oob = pd.Series(False, index=fixations.index)
-    if not words.empty:
+    active = {name for name, spec in flags.items() if spec.get("mode") in modes}
+    masks = {}
+    if active & {"short", "long"}:
+        duration = pd.to_numeric(
+            fixations.get("duration_ms", pd.Series(np.nan, index=fixations.index)),
+            errors="coerce",
+        )
+        if "short" in active:
+            masks["short"] = duration.lt(
+                float(flags["short"].get("threshold_ms", _FIX_FLAG_SHORT_MS))
+            ).fillna(False)
+        if "long" in active:
+            masks["long"] = duration.gt(
+                float(flags["long"].get("threshold_ms", _FIX_FLAG_LONG_MS))
+            ).fillna(False)
+    if "oob" in active:
         from .measures import fixation_in_text_mask
 
-        oob = ~fixation_in_text_mask(fixations, words)
-    short_ms = float(flags.get("short", {}).get("threshold_ms", _FIX_FLAG_SHORT_MS))
-    long_ms = float(flags.get("long", {}).get("threshold_ms", _FIX_FLAG_LONG_MS))
-    blink = pd.Series(False, index=fixations.index)
-    for column in ("is_blink", "blink_before", "blink_after", "blink"):
-        if column in fixations:
-            blink |= fixations[column].fillna(False).astype(bool)
-    return {
-        "short": (dur < short_ms).fillna(False).astype(bool),
-        "long": (dur > long_ms).fillna(False).astype(bool),
-        "oob": oob.fillna(False).astype(bool),
-        "blink": blink,
-    }
+        masks["oob"] = (
+            ~fixation_in_text_mask(fixations, words)
+            if not words.empty
+            else pd.Series(False, index=fixations.index)
+        )
+    if "blink" in active:
+        blink = pd.Series(False, index=fixations.index)
+        for column in ("is_blink", "blink_before", "blink_after", "blink"):
+            if column in fixations:
+                blink |= fixations[column].fillna(False).astype(bool)
+        masks["blink"] = blink
+    return masks
 
 
 def _discard_flagged_fixations(
@@ -4284,14 +4301,18 @@ def _discard_flagged_fixations(
     fixation-index labels and the marker-size scaling; reading measures and
     exports are untouched. Returns ``fixations`` itself when nothing is dropped.
     """
-    masks = _fixation_flag_masks(fixations, words, flags)
+    masks = _fixation_flag_masks(fixations, words, flags, modes=("Hide",))
     if not masks:
         return fixations
     drop = pd.Series(False, index=fixations.index)
     for category, mask in masks.items():
         if (flags or {}).get(category, {}).get("mode") == "Hide":
             drop = drop | mask
-    return fixations[~drop] if bool(drop.any()) else fixations
+    if not drop.any():
+        return fixations
+    from .data import with_onset_provenance
+
+    return with_onset_provenance(fixations)[~drop]
 
 
 def _render_scanpath_figure(
@@ -4932,6 +4953,7 @@ def _render_scanpath_figure(
                 name="Fixations",
                 showlegend=False,
             ):
+                trace.ids = ordered["order_in_trial"].astype(str)
                 fig.add_trace(trace)
             bar = _glyph_colorbar_trace(marker, color_data if is_numeric_color else ())
             if bar is not None:
@@ -4971,6 +4993,7 @@ def _render_scanpath_figure(
                     hovertemplate=hovertemplate,
                     customdata=customdata,
                     name="Fixations",
+                    ids=ordered["order_in_trial"].astype(str),
                     showlegend=False,
                 )
             )

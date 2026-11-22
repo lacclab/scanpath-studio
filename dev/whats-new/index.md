@@ -15,6 +15,7 @@
 - Full adds fixation-index and elapsed-time charts for horizontal and vertical screen position. Switching between Essentials and Full keeps the current plot and export choices. Choosing a design or resetting the visualization now replaces earlier axis and styling choices even after their controls have been closed. Shared links check imported recording tables before opening a view, and the import wizard identifies missing word-box fields.
 - Fixation index size, color, and position now share one definition across plot controls, saved settings, share links, and generated commands.
 - Draw and replay fixations directly on a passage, reopen named drawings to edit them, and share the matching draft for use in the app or a script.
+- Updated the documentation screenshots and demos to show the current controls.
 
 ### Fixed
 

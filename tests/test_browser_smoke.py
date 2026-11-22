@@ -396,3 +396,257 @@ def test_simple_opens_on_the_replay_with_its_own_controls(simple_page):
     page.keyboard.press("Escape")
     assert not page.locator('[data-testid="stException"]').count()
     assert page.errors == []
+
+
+def test_index_chart_announces_its_visible_fixations_and_axes(app_url, browser):
+    url = (
+        f"{app_url}/?ui=full&source=synthetic&animate=0&x_field=order_in_trial"
+        "&fixclass_short_mode=Hide&fixclass_short_threshold_ms=160"
+    )
+    page = _open(browser, url)
+    try:
+        frame = _plot_frame(page, "single")
+        iframe = frame.frame_element()
+        name = iframe.get_attribute("title") or iframe.get_attribute("aria-label") or ""
+        assert "1 fixation shown of 9 recorded" in name
+        assert "fixation order" in name.lower() and "vertical" in name.lower()
+        assert page.errors == []
+    finally:
+        page.context.close()
+
+
+@pytest.mark.parametrize("surface", ["api", "app"])
+def test_saved_replay_steps_and_scrubs_between_recorded_onsets(
+    browser, tmp_path, surface
+):
+    """Press the shared transport buttons on a real, self-contained HTML download."""
+    from functools import partial
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+    from threading import Thread
+
+    from scanpath_studio import api, plots, tabs
+    from scanpath_studio.synthetic import PARTICIPANT, TRIAL, load_synthetic_data
+
+    words, fixations = load_synthetic_data()
+    fixations = fixations.iloc[:4].assign(
+        timestamp_ms=[0, 30, 60, 220],
+        duration_ms=[10, 18, 100, 50],
+        word_id=[0, 0, 1, 2],
+    )
+    options = dict(autoplay=False, anim_grid_step_ms=100)
+    target = tmp_path / "replay.html"
+    if surface == "api":
+        figure = api.animate_scanpath(words, fixations, PARTICIPANT, TRIAL, **options)
+        api.save_figure(figure, target)
+    else:
+        figure, _ = plots.build_scanpath_replay(
+            words,
+            fixations,
+            compact=True,
+            canvas_width=800,
+            canvas_height=600,
+            base_font_size=16,
+            **options,
+        )
+        view = tabs._ReplayView.from_figure(
+            figure, plot_key="browser", download_name="reading", signature="test"
+        )
+        target.write_text(
+            tabs._replay_page_html(view, self_contained=True), encoding="utf-8"
+        )
+    group = figure.layout.meta["scanpath_fixation_steps"][0]
+    current = int(figure.frames[0].traces[group["current"]])
+    handler = partial(SimpleHTTPRequestHandler, directory=tmp_path)
+    with (
+        ThreadingHTTPServer(("127.0.0.1", 0), handler) as server,
+        browser.new_context() as context,
+    ):
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            page = context.new_page()
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.goto(f"http://127.0.0.1:{server.server_port}/replay.html")
+
+            def expect_point(x):
+                page.wait_for_function(
+                    "([i,x]) => document.querySelector('.js-plotly-plot')._fullData[i].x[0] === x",
+                    arg=[current, x],
+                    timeout=5000,
+                )
+
+            for button, number, x, duration, word in (
+                ("Next fixation", 2, 135, 18, "The"),
+                ("Next fixation", 3, 225, 100, "cat"),
+                ("Previous fixation", 2, 135, 18, "The"),
+            ):
+                page.get_by_role("button", name=button).click()
+                expect_point(x)
+                detail = page.get_by_role("status").inner_text()
+                assert (
+                    f"Fixation {number}" in detail
+                    and f"duration {duration} ms" in detail
+                    and word in detail
+                )
+            page.get_by_role("slider", name="Replay time").press("End")
+            expect_point(325)
+            page.get_by_role("button", name="Previous fixation").click()
+            assert "onset 220 ms" in page.get_by_role("status").inner_text()
+            assert errors == []
+        finally:
+            server.shutdown()
+            thread.join()
+
+
+def test_mixed_script_passage_keeps_each_label_in_its_box_in_html_and_svg(
+    browser, tmp_path
+):
+    from scanpath_studio.api import save_figure
+    from tests.test_mixed_script_reading import mixed_script_figure
+
+    figure, words, _ = mixed_script_figure()
+    labels = words.text.tolist()
+    target = tmp_path / "passage.html"
+    save_figure(figure, target)
+    # Inspect the glyph boxes in the Plotly figure and in the saved, standalone vector.
+    inspect = """labels => {
+        const boxes = [...document.querySelectorAll('.shapelayer path')]
+            .map(p => p.getBoundingClientRect());
+        return labels.map(label => {
+            const node = [...document.querySelectorAll('.textpoint text')].find(el =>
+                el.textContent.replace(/[\u2067\u2069]/g, '') === label);
+            if (!node) return false;
+            const b = node.getBoundingClientRect();
+            return b.width > 0 && b.height > 0 && boxes.some(rect =>
+                b.x >= rect.x - 1 && b.right <= rect.right + 1 &&
+                b.y >= rect.y - 1 && b.bottom <= rect.bottom + 1);
+        });
+    }"""
+    with browser.new_context() as context:
+        page = context.new_page()
+        page.goto(target.as_uri())
+        page.wait_for_selector(".textpoint text")
+        assert dict(zip(labels, page.evaluate(inspect, labels))) == dict.fromkeys(
+            labels, True
+        )
+        vector = page.evaluate("""async () => {
+            const gd = document.querySelector('.js-plotly-plot');
+            const url = await Plotly.toImage(gd, {format: 'svg', width: gd.layout.width, height: gd.layout.height});
+            return decodeURIComponent(url.slice(url.indexOf(',') + 1));
+        }""")
+        page.set_content(vector)
+        assert dict(zip(labels, page.evaluate(inspect, labels))) == dict.fromkeys(
+            labels, True
+        )
+
+
+def test_clicking_a_live_fixation_opens_its_local_source_record(app_url, browser):
+    with browser.new_context() as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/?ui=full&source=synthetic&animate=0")
+        _settle(page)
+        _close_tour(page)
+        assert not page.locator('[data-testid="stException"]').count()
+        frame = _plot_frame(page, "single")
+        uid = frame.evaluate(
+            """document.getElementById('truescale-single')._fullData.find(t => t.name === 'Fixations').uid"""
+        )
+        frame.locator(f".trace{uid} .point").nth(6).click(force=True)
+        page.get_by_text("Fixation 7 · Contained by word box", exact=False).wait_for(
+            timeout=15000
+        )
+
+
+def test_live_comparison_exports_a_physical_svg_and_reopenable_panel_settings(
+    app_url, browser
+):
+    import json
+    import xml.etree.ElementTree as ET
+
+    from scanpath_studio.animation_export import chrome_available
+
+    if not chrome_available():
+        pytest.skip("native SVG renderer is unavailable")
+    with browser.new_context(accept_downloads=True) as context:
+        page = context.new_page()
+        page.goto(
+            f"{app_url}/?ui=full&source=synthetic&compare=synthetic:synthetic_2line_demo&cmp_layout=Side+by+side"
+        )
+        _settle(page)
+        _close_tour(page)
+        page.get_by_role("tab", name=re.compile("Export")).click()
+        page.get_by_text("Manuscript panel proof", exact=True).click()
+        page.get_by_text(re.compile("Stimulus words · .* pt")).wait_for()
+        _settle(page)
+        assert not page.locator('[data-testid="stException"]').count()
+        with page.expect_download() as download:
+            page.get_by_role("button", name="Save panel settings", exact=True).click()
+        config = json.loads(download.value.path().read_text())
+        assert config["selection"]["participant_id"] == "synthetic"
+        assert config["selection"]["compare"]["participant_id"] == "synthetic"
+        assert config["mode"] == {"animate": False, "compare": True}
+        page.get_by_role("button", name="Prepare manuscript SVG", exact=True).click()
+        with page.expect_download(timeout=60000) as download:
+            page.get_by_role(
+                "button", name="Download manuscript SVG", exact=True
+            ).click(timeout=60000)
+        root = ET.parse(download.value.path()).getroot()
+        assert root.get("width") == f"{config['export']['width']:g}mm"
+        assert "A · " in "".join(root.itertext()) and "B · " in "".join(root.itertext())
+
+
+def test_upload_blocker_focuses_duration_then_shows_two_conversions(app_url, browser):
+    page = _open(browser, f"{app_url}/?ui=full")
+    try:
+        upload = page.locator(".st-key-col_map_fix_upload input[type=file]")
+        page.locator(".st-key-add_dataset_menu button").first.click()
+        page.get_by_role("button", name="Import files", exact=True).click()
+        _settle(page)
+        upload.set_input_files(
+            {
+                "name": "pilot.csv",
+                "mimeType": "text/csv",
+                "buffer": b"participant_id,trial_id,x,y,looking [s]\np1,t1,20,30,0.12\np1,t1,23,35,0.245\n",
+            }
+        )
+        page.locator(".st-key-col_map_fix_duration input").first.wait_for()
+        _settle(page)
+        page.get_by_role("button", name="Add dataset", exact=True).click()
+        blocker = page.get_by_role("link", name="missing Duration")
+        blocker.focus()
+        blocker.press("Enter")
+        page.wait_for_function(
+            "document.activeElement?.closest('.st-key-col_map_fix_duration') !== null"
+        )
+        field = page.locator(".st-key-col_map_fix_duration input")
+        field.fill("looking")
+        page.get_by_role("option", name="looking [s]", exact=True).click()
+        page.get_by_text("0.12 → 120 ms, 0.245 → 245 ms", exact=False).wait_for()
+        assert not blocker.count()
+    finally:
+        page.context.close()
+
+
+def test_reduced_motion_keeps_a_steady_tour_target_as_the_keyboard_advances(
+    app_url, browser
+):
+    with browser.new_context(reduced_motion="reduce") as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/?ui=full")
+        advance = page.locator(".st-key-tour_sp_next button")
+        for target in ("plot", "data_source", "trial_picker"):
+            advance.focus()
+            advance.press("Enter")
+            page.wait_for_function(
+                """selector => {
+                    const el = document.querySelector(selector);
+                    if (!el || !el.getBoundingClientRect().width) return false;
+                    const style = getComputedStyle(el);
+                    return style.outlineStyle === "solid"
+                        && parseFloat(style.outlineWidth) >= 2
+                        && style.animationName === "none";
+                }""",
+                arg=f".st-key-tour_grp_{target}",
+                timeout=60000,
+            )

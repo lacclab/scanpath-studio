@@ -6428,10 +6428,13 @@ def render_single_trial_tab(
                 "Filter the trial list",
                 icon=_FILTER_ICON,
                 width="content",
-                help="Filter the trial list",
+                help="Select the whole readings available in the trial list.",
                 key="iconpop_filter_trials",
             )
             box = pop.container(key="tour_grp_narrow_by")
+            box.caption(
+                "Select whole readings. Each selected reading keeps all of its fixations."
+            )
             _render_pool_filters(box, words_all, fixations_all, raw_gaze_all)
             # The chips' menu closes A's cluster (◀ ▶ ⇅ 🔎 ✏️), so the chip
             # table below has the plot's whole width, and hiding it
@@ -6441,7 +6444,9 @@ def render_single_trial_tab(
                 ui_mode.advanced_only(host, "chip_fields"), words_all, fixations_all
             )
             ui_mode.render_more_popover(
-                ui_mode.simple_only(host, "picker_more"), "picker"
+                ui_mode.simple_only(host, "picker_more"),
+                "picker",
+                multiple_trials=len(combos) > 1,
             )
 
         # A dataset with screens gets the screen navigator at the trial row's
@@ -6898,10 +6903,11 @@ def render_single_trial_tab(
                 st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, False)
                 # `wrap=True` for the same reason as Animate above.
                 compare_requested = st.toggle(
-                    f"{ICONS['compare']} Compare",
+                    f"{ICONS['compare']} Compare two readings",
                     key=SINGLE_COMPARE_TOGGLE,
                     persist_state="session",
                     wrap=True,
+                    help="Add a second scanpath to the figure, overlaid or in a separate panel.",
                 )
                 # Compare is built from two readings' fixations (its
                 # raw-gaze layer only sits under them), so a trial without
@@ -13204,6 +13210,9 @@ def render_multiple_comparison_tab(
     ``trial_raw_gaze`` / ``raw_gaze`` are the selected trial's samples and the
     filtered pool's, for the chip table's gaze-sample count.
     """
+    st.caption(
+        "Browse related readings by selecting a field they share with this trial."
+    )
     if trial_words.empty or trial_fixations.empty:
         st.info("This trial has no word boxes or no fixations. Pick another trial.")
         return

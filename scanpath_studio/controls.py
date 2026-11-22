@@ -7042,11 +7042,12 @@ def render_viz_reset(host) -> None:
     history = _record_plot_edit()
     row = host.container(horizontal=True, gap="xsmall", key="plot_history_actions")
     for action, stack in (("Undo", history.past), ("Redo", history.future)):
+        label = stack[-1].action_label(redo=action == "Redo") if stack else action
         row.button(
-            spoken(action),
+            spoken(label),
             icon=ICONS[action.lower()],
             key=f"viz_{action.lower()}",
-            help=f"{action} the last plot change",
+            help=label if stack else f"No plot change to {action.lower()}.",
             disabled=not stack,
             on_click=_step_plot_history,
             args=(action == "Redo",),
@@ -7464,6 +7465,9 @@ def render_plot_controls(
         slug="filter",
         name="Filters & highlights",
         note=no_fixations_note,
+    )
+    filter_grp.caption(
+        "Hide or highlight fixations in the drawing. The trial list and corpus measures stay the same."
     )
     # Sub-slots up front so each block below renders into the right half of the
     # section from wherever it sits in this file (the same trick the sections

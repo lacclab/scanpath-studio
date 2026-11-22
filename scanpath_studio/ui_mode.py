@@ -291,14 +291,83 @@ def _switch_to_advanced() -> None:
     _choose_mode(ADVANCED)
 
 
-def render_more_list(host: DeltaGenerator, area: str) -> None:
+_PICKER_TARGETS = (
+    (".st-key-iconpop_filter_trials button", ".st-key-tour_grp_narrow_by input"),
+    (".st-key-iconpop_sort_trial_single button", ".st-key-single_trial_sort input"),
+    (
+        ".st-key-single_trial_pos [role='slider'], .st-key-single_trial_pos input[type='range']",
+        "",
+    ),
+    (".st-key-iconpop_chip_fields button", ".st-key-single_show_chips input"),
+)
+
+
+def _open_full_picker_tool(index: int) -> None:
+    import streamlit as st
+
+    _switch_to_advanced()
+    st.session_state["_full_picker_focus"] = index
+
+
+def _picker_focus_script(index: int) -> str:
+    import json
+
+    target, inside = _PICKER_TARGETS[index]
+    return """<script>
+    (() => {
+        const doc = window.parent.document;
+        const [target, inside] = TARGET;
+        const observer = new MutationObserver(focus);
+        const visible = selector => Array.from(doc.querySelectorAll(selector)).find(
+            el => el.getClientRects().length && el.checkVisibility()
+        );
+        let activated = false;
+        function focus() {
+            const button = visible(target);
+            if (!button) return;
+            if (!activated) {
+                activated = true;
+                const previous = doc.querySelector(".st-key-iconpop_more_picker button[aria-expanded='true']");
+                if (previous) previous.click();
+                button.focus();
+                if (inside && button.getAttribute("aria-expanded") !== "true") button.click();
+            }
+            const control = inside ? visible(inside) : button;
+            if (control && control.getClientRects().length) {
+                control.focus();
+                observer.disconnect();
+            }
+        }
+        observer.observe(doc.body, {subtree: true, childList: true, attributes: true});
+        focus();
+        window.setTimeout(() => observer.disconnect(), 4000);
+    })();
+    </script>""".replace("TARGET", json.dumps([target, inside]))
+
+
+def render_more_list(
+    host: DeltaGenerator, area: str, *, multiple_trials: bool = True
+) -> None:
     """Draw ``area``'s list of Full-only features, ending in a switch button.
 
-    The list names features only and holds no control, so opening it never
-    changes anything.
+    The picker tools open their control in Full. Opening More alone preserves
+    the current mode.
     """
-    for title, line in MORE_IN_ADVANCED[area]:
-        host.markdown(f"**{title}**  \n{line}")
+    for index, (title, line) in enumerate(MORE_IN_ADVANCED[area]):
+        if area == "picker":
+            needs_readings = index in (1, 2) and not multiple_trials
+            host.button(
+                title.split(" ", 1)[1],
+                key=f"more_picker_tool_{index}",
+                help="Available with two or more readings in the trial list."
+                if needs_readings
+                else line,
+                disabled=needs_readings,
+                on_click=_open_full_picker_tool,
+                args=(index,),
+            )
+        else:
+            host.markdown(f"**{title}**  \n{line}")
     host.button(
         "Switch to Full",
         key=f"more_to_advanced_{area}",
@@ -306,7 +375,13 @@ def render_more_list(host: DeltaGenerator, area: str) -> None:
     )
 
 
-def render_more_popover(host: DeltaGenerator, area: str, label: str = "More") -> None:
+def render_more_popover(
+    host: DeltaGenerator,
+    area: str,
+    label: str = "More",
+    *,
+    multiple_trials: bool = True,
+) -> None:
     """Draw ``area``'s ＋ More popover, the list of what Full adds there."""
     popover = host.popover(
         label,
@@ -315,7 +390,7 @@ def render_more_popover(host: DeltaGenerator, area: str, label: str = "More") ->
         help="What Full adds here",
         key=f"iconpop_more_{area}",
     )
-    render_more_list(popover, area)
+    render_more_list(popover, area, multiple_trials=multiple_trials)
 
 
 #: What each hidden setting in play is called in the note, in the order it is
@@ -537,3 +612,6 @@ def render_switch(host: DeltaGenerator, *, visible: bool = True) -> None:
     if st.session_state.get(CHOSEN_KEY):
         with cookie:
             embed_html_iframe(cookie_script(cookie_mode()), height=0)
+            target = st.session_state.pop("_full_picker_focus", None)
+            if target is not None:
+                embed_html_iframe(_picker_focus_script(target), height=0)

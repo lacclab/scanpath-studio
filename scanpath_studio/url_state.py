@@ -4586,6 +4586,11 @@ def _render_share_body(
         st.segmented_control(
             "Share as",
             SHARE_SECTIONS,
+            format_func={
+                SHARE_LINK: "Link · open this view",
+                SHARE_CODE: "Code · recreate the figure",
+                SHARE_FILE: "Settings file · restore settings",
+            }.__getitem__,
             default=SHARE_LINK,
             key=SHARE_SECTION_KEY,
             label_visibility="collapsed",
@@ -4593,6 +4598,20 @@ def _render_share_body(
         or SHARE_LINK
     )
     stored = st.session_state.get("_datasets", {}).get(data_choice, {})
+    if (
+        visible
+        and data_choice not in _SHAREABLE_SOURCES
+        and not _selected_corpus(data_choice)[0]
+        and not stored.get("authoring")
+        and data_choice not in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE)
+    ):
+        st.caption(
+            {
+                SHARE_LINK: "The recipient needs this dataset to open the view. For a first import, send the original files and the dataset setup from Edit dataset.",
+                SHARE_CODE: "Send the input files with the code so the recipient can recreate this reading.",
+                SHARE_FILE: "Send the original data with the settings file. The recipient opens the dataset first, then restores the settings.",
+            }[choice]
+        )
     if visible and choice in (SHARE_LINK, SHARE_CODE):
         payload = stored.get("authoring")
         if data_choice in (AUTHOR_CHOICE, MANUAL_SAMPLE_CHOICE):

@@ -111,7 +111,12 @@ def wizard_holds_work() -> bool:
         return False
     if any(ss.get(key) for key in _UPLOAD_KEYS):
         return True
-    if str(ss.get("wizard_dataset_description") or "").strip():
+    from .dataset_credit import form_credit
+
+    if (
+        form_credit(ss, "wizard_credit")
+        or str(ss.get("wizard_dataset_description") or "").strip()
+    ):
         return True
     from .wizard import _default_dataset_name
 

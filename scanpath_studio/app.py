@@ -660,6 +660,20 @@ _A11Y_NAMES_SCRIPT = """
                     var fixed = clean(value);
                     if (fixed !== value) { el.setAttribute("aria-label", fixed); }
                 });
+            document.querySelectorAll('[data-testid="stFileUploader"]').forEach(function (widget) {
+                var label = widget.querySelector('label');
+                if (!label) { return; }
+                var field = clean(label.textContent).trim()
+                    .replace(/ table(?:\\(s\\))?(?: \\(optional\\))?$/i, "");
+                if (!field) { return; }
+                var name = "Upload " + field.charAt(0).toLowerCase() + field.slice(1);
+                widget.querySelectorAll('[data-testid="stFileUploaderDropzone"] button, input[type="file"]')
+                    .forEach(function (control) {
+                        if (control.getAttribute("aria-label") !== name) {
+                            control.setAttribute("aria-label", name);
+                        }
+                    });
+            });
             document.querySelectorAll(GLYPH).forEach(function (g) {
                 if (g.getAttribute("aria-hidden") === "true") { return; }
                 var owner = g.closest(NAMED);
@@ -9585,7 +9599,12 @@ def _run_app() -> None:
                 "here. The link's view settings still apply to whatever you open."
             )
     elif url_source == "upload":
-        st.session_state.setdefault("_show_upload_wizard", True)
+        if "_show_upload_wizard" not in st.session_state:
+            st.session_state["_show_upload_wizard"] = True
+            st.session_state["main_nav"] = _VIEW_DATA
+            # Switching to Data clears the URL. Keep the deep link's welcome
+            # suppression so the tour cannot navigate back out of the wizard.
+            st.session_state["tour_seen"] = True
     elif private_choice is not None:
         linked_choice = private_choice
         if st.session_state.get(_LINK_DATASET_OPENED_KEY) != private_choice:

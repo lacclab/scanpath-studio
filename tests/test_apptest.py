@@ -3788,7 +3788,7 @@ class TestNavRegressions:
     def test_share_offers_link_code_and_file(self):
         """🔗 Share is one switch — Link · Code · File — and File holds the
         settings file."""
-        from scanpath_studio.url_state import SHARE_SECTION_KEY, SHARE_SECTIONS
+        from scanpath_studio.url_state import SHARE_LINK, SHARE_SECTION_KEY
 
         at = _make_apptest(synthetic=True)
         at.session_state[SUBTAB_KEY] = SUBTAB_SHARE
@@ -3796,7 +3796,12 @@ class TestNavRegressions:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         switch = [c for c in at.segmented_control if c.key == SHARE_SECTION_KEY]
         assert switch, "the Link · Code · File switch is missing"
-        assert list(switch[0].options) == list(SHARE_SECTIONS)
+        assert list(switch[0].options) == [
+            "Link · open this view",
+            "Code · recreate the figure",
+            "Settings file · restore settings",
+        ]
+        assert switch[0].value == SHARE_LINK
         # Link is the default, and only the chosen part draws.
         assert "_share_query_current" in at.session_state
         assert not [u for u in at.file_uploader if u.key == "plot_config_upload"]

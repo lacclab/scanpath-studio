@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from streamlit.testing.v1 import AppTest
 
@@ -333,6 +335,52 @@ def test_more_button_switches_to_advanced():
     assert at.session_state["ui_mode"] == "full"
     assert at.session_state["_ui_mode_chosen"] is True
     assert at.segmented_control(key=SWITCH).value == "full"
+
+
+@pytest.mark.parametrize("index", range(4))
+def test_every_picker_tool_opens_full_mode(index):
+    at = _boot()
+    at.button(key=f"more_picker_tool_{index}").click().run()
+    assert not at.exception
+    assert at.segmented_control(key=SWITCH).value == "full"
+
+
+def test_heatmap_range_and_position_preview_follow_the_selected_reading(monkeypatch):
+    charts = {}
+
+    def chart(fig, *, key, **kwargs):
+        charts[key] = fig
+
+    monkeypatch.setattr(tabs, "_render_true_scale_chart", chart)
+    at = _boot(mode="full")
+    at.checkbox(key="global_fixation_snap_to_line").check().run()
+    # Compare two cached figures: Plotly discards empty axis-title dictionaries
+    # on the first pickle round trip.
+    at.run()
+    illustration = json.loads(charts["single"].to_json())
+    at.toggle(key="preview_unsnapped_positions").set_value(True).run()
+    assert not at.exception
+    assert json.loads(charts["single"].to_json()) == illustration
+    original = charts["unsnapped_preview"]
+    assert original.layout.yaxis.range == charts["single"].layout.yaxis.range
+    assert original.layout.xaxis.range == charts["single"].layout.xaxis.range
+
+    def positions(fig):
+        return next(
+            tuple(t.y) for t in fig.data if t.name == "Fixations" and t.y is not None
+        )
+
+    assert positions(original) != positions(charts["single"])
+    at.toggle(key="preview_unsnapped_positions").set_value(False).run()
+    assert json.loads(charts["single"].to_json()) == illustration
+    at.button(key="viz_view_heatmap").click().run()
+    bar = next(t for t in charts["single"].data if t.name == "heatmap colorbar")
+    at.button(key="pin_word_heatmap_range").click().run()
+    at.button(key="single_next_trial").click().run()
+    assert not at.exception
+    pinned = next(t for t in charts["single"].data if t.name == "heatmap colorbar")
+    assert pinned.meta["word_heatmap_range"] == bar.meta["word_heatmap_range"]
+    assert "fixed range" in pinned.marker.colorbar.title.text
 
 
 def test_simple_picker_keeps_every_widget_alive():

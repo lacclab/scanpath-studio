@@ -18,6 +18,22 @@ def _axis_pair(at):
     return tuple(at.selectbox(key=f"global_{axis}_field").value for axis in ("x", "y"))
 
 
+def test_undo_names_the_restored_value_after_navigating_to_another_trial():
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()
+    at.checkbox(key="global_show_order").check().run()
+    _click(at, "single_next_trial")
+    held = at.selectbox(key="single_trial_id").value
+    undo = at.button(key="viz_undo")
+    assert "Undo fixation index labels change, restore off" in undo.label
+    assert "restore off" in undo.proto.help
+    _click(at, "viz_undo")
+    assert (
+        "Redo fixation index labels change, restore on"
+        in at.button(key="viz_redo").label
+    )
+    assert held == at.selectbox(key="single_trial_id").value
+
+
 def test_presets_reset_and_edits_round_trip_on_the_current_trial():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()
     assert at.button(key="viz_undo").disabled and at.button(key="viz_redo").disabled

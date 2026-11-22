@@ -42,7 +42,7 @@ pencil (:material/edit:), which are in Full.
 | :material/add: → :material/upload: **Import files** | Upload your own Fixations and Words tables as a new dataset. |
 | **Select trial** | The trial to show. Click it and type to narrow the list. |
 | Slider | Move through the trials in the list. |
-| **◀ ▶** | The previous or next trial. |
+| **◀ ▶** | The previous or next trial. You can also use ++left++ and ++right++ from the page or plot background. |
 | **⇅** → **Sort trials by** | Reorder the trial list by a statistic (such as reading time), a participant, text or condition field, or a column of a metadata table you attached. |
 | **⇅** → **Descending** | Reverse that order. |
 | :material/filter_alt: → **Text** / **Participant** | Keep only these texts or participants. Empty keeps all. |
@@ -78,7 +78,8 @@ view tiles and **Palette**; the rest of this section is in Full.
 The **Animate** switch turns the figure into an animation, a video of the
 reading played back fixation by fixation, with play and pause buttons and a
 time slider above the plot. While it is on, the **Fixations**, **Heatmap** and
-**Raw gaze** switches are grayed. Its **▾** holds:
+**Raw gaze** switches are grayed. For playback and frame stepping from the
+keyboard, see [Keyboard shortcuts](index.md#keyboard-shortcuts). Its **▾** holds:
 
 | Control | What it does |
 | --- | --- |

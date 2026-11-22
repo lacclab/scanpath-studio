@@ -1706,7 +1706,7 @@ def _select_trial_none_mode(
             args=(-1,),
             disabled=current_idx == 0
             and (not linked or at_list_end(compare_snapshot, COMPARE_TRIAL_KEY, -1)),
-            help="Previous trial." + step_help,
+            help="Previous trial (Left arrow)." + step_help,
         )
         steps.button(
             f"▶ {spoken('Next trial')}",
@@ -1716,7 +1716,7 @@ def _select_trial_none_mode(
             args=(1,),
             disabled=current_idx == n_trials - 1
             and (not linked or at_list_end(compare_snapshot, COMPARE_TRIAL_KEY, 1)),
-            help="Next trial." + step_help,
+            help="Next trial (Right arrow)." + step_help,
         )
 
     selected_key = resolve_reading(selected_trial_label, position, by_trial)[0]

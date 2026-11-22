@@ -159,21 +159,16 @@ def capture_overview(page: Page) -> None:
 
 
 def capture(page: Page) -> None:
-    ui.deep_link(page, ui.DEMO_TRIAL)
-    ui.reset_viz(page)
-
-    # The numbered overview (scanpath-view) is `--overview`'s: it needs a
-    # dataset with screens, which the demo is not.
-
     print("corpus analysis")
+    ui.deep_link(page, {})
     ui.nav(page, "Corpus Analysis")
-    page.wait_for_timeout(2000)
+    page.locator(".st-key-tutorial_corpus_subtabs").wait_for(state="visible")
     ui.shot(page, "corpus-analysis")
     _webp("corpus-analysis")
 
     print("data page")
-    ui.nav(page, "Data")
-    page.wait_for_timeout(1500)
+    ui.nav(page, "Data Management")
+    page.get_by_role("heading", name="Data Management", exact=True).wait_for()
     ui.shot(page, "data-page")
     _webp("data-page")
 

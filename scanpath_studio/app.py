@@ -270,6 +270,7 @@ from scanpath_studio.experimental_setup import (
 from scanpath_studio.feedback import maybe_show_feedback
 from scanpath_studio.fields import row_label
 from scanpath_studio.html_embed import embed_html_iframe
+from scanpath_studio.keyboard import SCANPATH_SHORTCUTS
 from scanpath_studio.menu import (
     render_nav,
     render_top_menu,
@@ -746,6 +747,7 @@ def configure_page() -> None:
     embed_html_iframe(_A11Y_NAMES_SCRIPT, height=0)
     embed_html_iframe(_FIELD_TIP_PLACEMENT_SCRIPT, height=0)
     embed_html_iframe(loading.trial_loading_script(), height=0)
+    embed_html_iframe(SCANPATH_SHORTCUTS, height=0)
 
 
 #: The app's wordmark, shown in Streamlit's own header. Inside the

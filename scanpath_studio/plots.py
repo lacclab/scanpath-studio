@@ -6315,6 +6315,8 @@ _REPLAY_PLAYER_JS = """(function () {
       range.max = String(last);
       range.step = '1';
       range.setAttribute('aria-label', 'Replay time');
+      range.setAttribute('aria-keyshortcuts', 'Space');
+      range.title = 'Use the arrow keys to step one frame, Home or End to jump, and Space to play or pause.';
       range.style.flex = '1 1 auto';
       range.style.minWidth = '80px';
       range.style.margin = '0 4px';
@@ -6322,6 +6324,22 @@ _REPLAY_PLAYER_JS = """(function () {
       range.addEventListener('pointerdown', stop);
       range.addEventListener('input', function () {
         seek(parseInt(range.value, 10) || 0);
+      });
+      function togglePlayback() {
+        if (raf === null) { play(); } else { stop(); }
+      }
+      slot.addEventListener('sps-toggle-replay', togglePlayback);
+      range.addEventListener('keydown', function (e) {
+        if (e.defaultPrevented || e.isComposing ||
+            e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+        if (e.key === ' ') {
+          e.preventDefault();
+          if (!e.repeat) togglePlayback();
+        } else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+                    'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) {
+          // Even at a limit, where the native slider emits no input event.
+          stop();
+        }
       });
       slot.appendChild(range);
       var readout = document.createElement('span');

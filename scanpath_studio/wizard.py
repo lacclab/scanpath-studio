@@ -3,8 +3,7 @@
 Everything from the upload-table reading UI through the wizard's parts (name →
 upload and map each table → recording setup → stimulus images → add) and the
 MultiplEYE format, which reads a session set from a folder or from uploaded
-files. ``app.py`` drives this from ``resolve_data_source`` /
-``main`` and re-exports a few helpers for tests.
+files. The app opens the wizard from Data Management.
 
 A handful of data-IO / normalization helpers (``_read_uploaded_frame``,
 ``_normalize_pair``, ``_stash_active_mapping``, ``_render_unmapped_view``) stay in

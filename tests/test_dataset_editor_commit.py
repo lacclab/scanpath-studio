@@ -103,6 +103,17 @@ def _close_and_reopen(at: AppTest) -> AppTest:
     return at
 
 
+def test_saving_a_changed_mapping_requests_a_trial_identity_check():
+    from scanpath_studio.constants import TRIAL_IDENTITY_CHECK_KEY
+
+    at = AppTest.from_function(_editor_app).run()
+    at.multiselect(key="remap_Probe_fixations_trial").set_value(["item"]).run()
+    assert TRIAL_IDENTITY_CHECK_KEY not in at.session_state
+    next(button for button in at.button if button.label == "Save").click().run()
+    assert not at.exception
+    assert at.session_state[TRIAL_IDENTITY_CHECK_KEY] == "edit"
+
+
 class TestCancelledMappingDoesNotReturn:
     def test_a_cancelled_x_pick_reopens_on_the_saved_column(self):
         at = AppTest.from_function(_editor_app).run()

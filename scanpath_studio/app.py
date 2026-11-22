@@ -352,7 +352,6 @@ from scanpath_studio.url_state import (
     _apply_uploaded_plot_config,
     _apply_url_preset,
     _apply_url_trial_selection,
-    _build_share_query,  # noqa: F401  re-exported for tests
     _go_data,
     _go_scanpath,
     _render_share_body,
@@ -381,31 +380,10 @@ from scanpath_studio.utils import (
     trial_id_layout,
 )
 
-# Re-exported under a private alias so tests can import it from `app`; keep the
-# F401 silence (it's not used by app.py itself).
-from scanpath_studio.utils import (  # noqa: F401
-    build_comparison_options as _build_comparison_options,
-)
-
 from .dataset_identity import dataset_share_id
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from streamlit.delta_generator import DeltaGenerator
-
-
-def __getattr__(name):
-    """Lazily re-export the wizard helpers from ``app``.
-
-    ``scanpath_studio.wizard`` can't be imported at module load (it imports
-    ``app`` back, forming a cycle — see the note above the utils import), but
-    ``from scanpath_studio.app import _remove_dataset`` (and the other wizard
-    helpers named below) is used by tests. Resolving it here, on attribute
-    access, defers the wizard import until app is fully loaded."""
-    if name in ("_enter_add_data_wizard", "_remove_dataset", "_render_data_setup"):
-        from scanpath_studio import wizard
-
-        return getattr(wizard, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def public_datasets_enabled() -> bool:

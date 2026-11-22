@@ -2470,7 +2470,9 @@ def render_simple_views(host, *, animating: bool, active: str | None = None) -> 
     st.session_state[SIMPLE_VIEW_LIT_KEY] = current
     grid = host.container(key="tour_grp_simple_views")
     for names in (SIMPLE_VIEWS[:2], SIMPLE_VIEWS[2:]):
-        for cell, name in zip(grid.columns(2, gap="small"), names, strict=True):
+        for cell, name in zip(
+            grid.columns(2, gap="small", wrap=False), names, strict=True
+        ):
             label, icon, help_text = _SIMPLE_VIEW_TILES[name]
             cell.button(
                 label,
@@ -7144,11 +7146,7 @@ def render_plot_controls(
         )
         st.stop()
 
-    # The keyed container is the spotlight-tour target
-    # (`.st-key-tour_grp_viz_controls`). Values for controls not rendered this run
-    # are read back from session_state by `_collect_viz_settings`, so the returned
-    # dict always carries every key the figure builders depend on.
-    viz = (host if host is not None else st).container(key="tour_grp_viz_controls")
+    rail = host if host is not None else st
 
     # --- Design presets ---------------------------------------------------
     # The three built-in designs and 🛠️ Custom in a 2x2 grid, and the user's
@@ -7158,7 +7156,7 @@ def render_plot_controls(
     # want to keep is what "My designs" is for. The remaining preset keys
     # (`reading_order`, `everything`) stay in `_VIEW_PRESETS` for any deep link.
     # Essentials mode draws its View tiles in their place (below).
-    presets = advanced_only(viz, "rail_presets")
+    presets = advanced_only(rail, "rail_presets")
     presets.markdown(
         '<div class="sps-control-label">Design presets</div>',
         unsafe_allow_html=True,
@@ -7166,7 +7164,7 @@ def render_plot_controls(
     # A 2×2 grid keeps the labels readable in the narrow rail.
     _active = _active_quick_view()
     _qv_grid = presets.container(key="quick_views_grid")
-    _qv_top = _qv_grid.columns(2, gap="small")
+    _qv_top = _qv_grid.columns(2, gap="small", wrap=False)
     _qv_top[0].button(
         f"{ICONS['preset_scanpath']} Scanpath",
         key="viz_view_scanpath",
@@ -7186,7 +7184,7 @@ def render_plot_controls(
         on_click=_apply_view_preset,
         args=("heatmap",),
     )
-    _qv_bottom = _qv_grid.columns(2, gap="small")
+    _qv_bottom = _qv_grid.columns(2, gap="small", wrap=False)
     _qv_bottom[0].button(
         f"{ICONS['illustration']} Illustration",
         key="viz_view_illustration",
@@ -7207,12 +7205,15 @@ def render_plot_controls(
         on_click=_apply_view_preset,
         args=(_CUSTOM_VIEW,),
     )
-    _render_saved_designs(advanced_only(viz, "rail_designs"))
     # Essentials mode's one choice: which view of this trial. It reuses the preset
     # lookup above rather than syncing the quick-view state a second time.
-    views = simple_only(viz, "views")
+    views = simple_only(rail, "views")
     views.markdown('<div class="sps-control-label">View</div>', unsafe_allow_html=True)
     render_simple_views(views, animating=animating, active=_active)
+
+    # Keep the tour's target around the detailed controls on both desktop and phone.
+    viz = rail.container(key="tour_grp_viz_controls")
+    _render_saved_designs(advanced_only(viz, "rail_designs"))
 
     # The Illustration *label* (the publication-disclosure override) lives in
     # the "📐 Figure & canvas" group below, with the other figure-level

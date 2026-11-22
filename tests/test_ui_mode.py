@@ -544,9 +544,9 @@ def test_rail_wrappers_are_keyed_for_the_mode_css():
         "rail_filter",
         "rail_figure",
     ):
-        assert re.search(rf'advanced_only\(\s*viz,\s*"{name}"\s*\)', source), name
-    assert 'simple_only(viz, "views")' in source
-    assert 'simple_only(viz, "rail_more")' in source
+        assert re.search(rf'advanced_only\(\s*\w+,\s*"{name}"\s*\)', source), name
+    for name in ("views", "rail_more"):
+        assert re.search(rf'simple_only\(\s*\w+,\s*"{name}"\s*\)', source), name
 
 
 def test_picker_wrappers_are_keyed_for_the_mode_css():

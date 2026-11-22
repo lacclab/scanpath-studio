@@ -6395,7 +6395,8 @@ def render_single_trial_tab(
     # chips + plot + per-trial subtabs live in the left column. The narrow rail
     # stays in page flow, so it can extend below a short plot without pushing
     # the subtabs away from the figure.
-    plot_col, rail_col = st.columns([4, 1], gap="large")
+    with st.container(key="scanpath_workspace"):
+        plot_col, rail_col = st.columns([4, 1], gap="large")
     # Rail containers filled after the rail itself (B's filters).
     rail_slots: dict = {}
     with rail_col:

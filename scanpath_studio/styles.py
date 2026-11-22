@@ -2549,6 +2549,32 @@ def get_app_css() -> str:
         }
     }
 
+    /* On a phone, the figure and its view choices share a single column.
+       Lift the two columns' contents into the same flex flow so opening a
+       tall subtab can never put Export between the figure and its controls. */
+    @media (max-width: 639px) {
+        .st-key-scanpath_workspace > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] {
+            flex-direction: column;
+            gap: 0.3rem !important;
+            reading-flow: flex-visual;
+        }
+        .st-key-scanpath_workspace > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+        .st-key-scanpath_workspace > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] > [data-testid="stVerticalBlock"],
+        .st-key-scanpath_workspace [data-testid="stLayoutWrapper"]:has(> .st-key-scanpath_rail),
+        .st-key-scanpath_rail {
+            display: contents;
+        }
+        .st-key-scanpath_rail > * { order: 1; }
+        .st-key-scanpath_workspace [data-testid="stLayoutWrapper"]:has(> .st-key-tour_grp_subtabs) { order: 2; }
+        .st-key-scanpath_rail > [data-testid="stLayoutWrapper"]:has(> :is(.st-key-tour_grp_viz_controls, .st-key-adv_only_rail_reset)) { order: 3; }
+        .st-key-scanpath_rail .st-key-tour_grp_simple_views button {
+            min-height: 44px;
+        }
+        .st-key-scanpath_rail .st-key-tour_grp_simple_views button > div > span {
+            flex-direction: row;
+        }
+    }
+
     /* The rail keeps a floor of 260px; the figure takes the rest
        (it scales uniformly, so a narrower plot column costs nothing but
        size). At a ⅕ share the rail would fall to ~170px at 1024px, and its

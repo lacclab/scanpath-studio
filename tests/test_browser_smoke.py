@@ -204,6 +204,39 @@ def test_phone_dataset_list_sorts_by_participant_count(app_url, browser):
         sync_api.expect(counts.first).to_have_text(largest)
 
 
+def test_phone_view_choices_stay_with_figure_in_both_modes(app_url, browser):
+    with browser.new_context(viewport={"width": 390, "height": 844}) as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/?source=demo&ui=essentials&animate=0")
+        _plot_frame(page, "single").locator(".scatterlayer .trace").first.wait_for()
+        _settle(page)
+        _close_tour(page)
+
+        def box(key):
+            return page.locator(f".st-key-{key}").bounding_box()
+
+        def below(lower, upper):
+            a, b = box(lower), box(upper)
+            assert a["y"] >= b["y"] + b["height"] - 1
+
+        below("tour_grp_simple_views", "tour_grp_plot")
+        below("tour_grp_subtabs", "tour_grp_simple_views")
+        below("global_palette", "tour_grp_subtabs")
+        views = box("tour_grp_simple_views")
+        assert views["y"] + views["height"] <= 844
+        page.get_by_role("button", name="Heatmap", exact=True).click()
+        _settle(page)
+        page.locator(".st-key-ui_mode_switch").get_by_text("Full", exact=True).click()
+        _settle(page)
+        below("tour_grp_view_modes", "tour_grp_plot")
+        below("tour_grp_subtabs", "quick_views_grid")
+        assert box("tour_grp_viz_controls")["height"] > 0
+        page.set_viewport_size({"width": 1440, "height": 900})
+        plot = box("tour_grp_plot")
+        assert box("scanpath_rail")["x"] >= plot["x"] + plot["width"]
+        assert abs(box("tour_grp_subtabs")["x"] - plot["x"]) < 1
+
+
 def test_the_page_renders_without_an_exception(page):
     assert page.locator('[data-testid="stTopNavLink"]').count() >= 3
     assert not page.locator('[data-testid="stException"]').count()

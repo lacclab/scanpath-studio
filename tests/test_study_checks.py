@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import json
 import weakref
 
 import pandas as pd
@@ -11,6 +12,34 @@ from scanpath_studio import cohort_audit, study_checks, utils
 from scanpath_studio.data import filter_to_keys
 from scanpath_studio.experimental_setup import Provenance, SetupSnapshot
 from scanpath_studio.tabs import remap_reading_changes
+from tests.conftest import APP_SCRIPT, pin_view
+
+
+@pytest.mark.parametrize(
+    ("section", "compare", "normalize"),
+    [
+        ("Per participant", False, "prdr7_norm"),
+        ("Groups", False, "pgrp14_norm"),
+        ("Groups", True, "cmp18_norm"),
+    ],
+)
+def test_distribution_chart_labels_follow_normalization(section, compare, normalize):
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(APP_SCRIPT)
+    pin_view(at, "Corpus Analysis")
+    at.session_state["corpus_subtab"] = section
+    at.session_state["groups_compare"] = compare
+    at.run(timeout=60)
+    for normalized in (False, True):
+        if normalized:
+            at.toggle(key=normalize).set_value(True).run(timeout=60)
+        assert not at.exception
+        (chart,) = at.get("plotly_chart")
+        layout = json.loads(chart.proto.spec)["layout"]
+        label = agg.MEASURES["tfd"].value_label(normalized)
+        assert layout["yaxis"]["title"]["text"] == label
+        assert layout["title"]["text"] == f"{label} distribution"
 
 
 def test_insufficient_word_breaks_profile_and_uncertainty_band():

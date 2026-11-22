@@ -11446,7 +11446,7 @@ def render_per_reader_tab(
         _chart(
             make_distribution_figure(
                 groups,
-                metric_label=measure.axis_label,
+                metric_label=measure.value_label(normalize),
                 kind=kind,
                 colors=_corpus_series_colors(viz_settings),
                 **fw,
@@ -11832,7 +11832,7 @@ def render_per_group_tab(
         _chart(
             make_distribution_figure(
                 {label: vals},
-                metric_label=measure.axis_label,
+                metric_label=measure.value_label(normalize),
                 kind=kind,
                 colors=_corpus_series_colors(viz_settings),
                 **fw,
@@ -12143,7 +12143,7 @@ def render_group_comparison_tab(
         _chart(
             make_distribution_figure(
                 groups,
-                metric_label=measure.axis_label,
+                metric_label=measure.value_label(normalize),
                 kind=kind,
                 colors=_corpus_series_colors(viz_settings),
                 **fw,

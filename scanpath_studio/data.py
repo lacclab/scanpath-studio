@@ -4781,7 +4781,11 @@ def infer_raw_gaze_schema(raw_gaze: pd.DataFrame) -> dict[str, str] | None:
 
 
 def normalize_raw_gaze(
-    raw_gaze: pd.DataFrame, schema: dict[str, str], *, keep_columns: set | None = None
+    raw_gaze: pd.DataFrame,
+    schema: dict,
+    *,
+    keep_columns: set | None = None,
+    _renormalizing: bool = False,
 ) -> pd.DataFrame:
     """Normalize raw gaze data to canonical column names.
 
@@ -4825,9 +4829,14 @@ def normalize_raw_gaze(
     # trial_id — a raw-gaze-only dataset still needs *a* text_id column for
     # the trial picker (utils.build_combo_options).
     if schema.get("text_id"):
-        df["text_id"] = raw_gaze[schema["text_id"]].astype(str)
+        df["text_id"] = trial_id_series(raw_gaze, schema["text_id"])
     else:
         df["text_id"] = df["trial_id"]
+    mapped = _text_id_mapped_flag(
+        raw_gaze, schema, renormalizing=_renormalizing, paragraph_fallback=False
+    )
+    if mapped is not None:
+        df[TEXT_ID_MAPPED] = mapped
     df = _copy_screen_fields(df, raw_gaze, schema)
     if schema.get("text"):
         df["text"] = raw_gaze[schema["text"]].astype(str)
@@ -6804,12 +6813,16 @@ def _text_id_values(
 
 
 def _text_id_mapped_flag(
-    source: pd.DataFrame, schema: dict, *, renormalizing: bool
+    source: pd.DataFrame,
+    schema: dict,
+    *,
+    renormalizing: bool,
+    paragraph_fallback: bool = True,
 ) -> bool | np.ndarray | None:
     """What ``normalize_*`` write to ``_text_id_mapped`` (``None``: nothing).
 
     A schema Text ID — auto-detected or picked — or a literal
-    ``unique_paragraph_id`` is mapped. On ✏️ Edit dataset the proposal maps
+    ``unique_paragraph_id`` fallback (Words and Fixations) is mapped. On ✏️ Edit dataset the proposal maps
     Text ID to the stored ``text_id`` column itself, which says nothing new: the
     stored frame's own flag is kept, and a frame stored without one gets none
     (so its values decide)."""
@@ -6818,7 +6831,9 @@ def _text_id_mapped_flag(
         if TEXT_ID_MAPPED in source.columns:
             return source[TEXT_ID_MAPPED].fillna(False).astype(bool).to_numpy()
         return None
-    return bool(text) or "unique_paragraph_id" in source.columns
+    return bool(text) or (
+        paragraph_fallback and "unique_paragraph_id" in source.columns
+    )
 
 
 def _drop_reserved_columns(
@@ -7436,7 +7451,9 @@ def remap_normalized_frame(
             working, schema, keep_columns=keep, _renormalizing=True
         )
     elif kind == "raw_gaze":
-        result = normalize_raw_gaze(working, schema, keep_columns=keep)
+        result = normalize_raw_gaze(
+            working, schema, keep_columns=keep, _renormalizing=True
+        )
     else:
         raise ValueError(f"unknown frame kind: {kind!r}")
     if "unique_trial_id" not in result.columns and "trial_id" in result.columns:

@@ -10,16 +10,19 @@ from scanpath_studio import app as app_module
 from scanpath_studio.app import (
     DEMO_CHOICE,
     UPLOAD_CHOICE,
-    _apply_url_preset,
-    _apply_url_trial_selection,
-    _build_comparison_options,
-    _build_share_query,
-    build_combo_options,
 )
 from scanpath_studio.data import compute_canvas_size
-
-# Imported from its real home (utils); app.py does not re-export it.
-from scanpath_studio.utils import compute_trial_stats, reading_key
+from scanpath_studio.url_state import (
+    _apply_url_preset,
+    _apply_url_trial_selection,
+    _build_share_query,
+)
+from scanpath_studio.utils import (
+    build_combo_options,
+    build_comparison_options,
+    compute_trial_stats,
+    reading_key,
+)
 
 
 class TestBuildComboOptions:
@@ -126,7 +129,7 @@ class TestComputeTrialStats:
 
 
 class TestBuildComparisonOptions:
-    """Tests for _build_comparison_options function."""
+    """Tests for build_comparison_options function."""
 
     def test_build_comparison_options_text_mode(self):
         combos = pd.DataFrame(
@@ -136,7 +139,7 @@ class TestBuildComparisonOptions:
                 "text_id": ["para1", "para1", "para1"],
             }
         )
-        options = _build_comparison_options(
+        options = build_comparison_options(
             combos, "Text", "p1", "t1", "para1", include_primary=False
         )
         # (participant, trial, label, markers). p1/t2 is same participant AND same
@@ -154,7 +157,7 @@ class TestBuildComparisonOptions:
                 "text_id": ["para1", "para1", "para2"],
             }
         )
-        options = _build_comparison_options(
+        options = build_comparison_options(
             combos, "Participant", "p1", "t1", "para1", include_primary=False
         )
         # Same-text (📄) trial leads, then the different-text one (no marker).
@@ -170,7 +173,7 @@ class TestBuildComparisonOptions:
                 "text_id": ["para1", "para2"],
             }
         )
-        options = _build_comparison_options(
+        options = build_comparison_options(
             combos, "None", "p1", "t1", None, include_primary=False
         )
         assert len(options) > 0
@@ -185,7 +188,7 @@ class TestBuildComparisonOptions:
                 "unique_text_id": ["up1", "up1"],
             }
         )
-        options = _build_comparison_options(combos, "Text", "p1", "t1", "up1")
+        options = build_comparison_options(combos, "Text", "p1", "t1", "up1")
         assert len(options) > 0
 
 

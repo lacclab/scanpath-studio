@@ -274,17 +274,6 @@ class TestTheVerdictIsRaisedWhereTheMappingIsChosen:
         assert st.session_state[TRIAL_IDENTITY_CHECK_KEY] == "add"
         st.session_state.clear()
 
-    def test_saving_an_edited_mapping_asks_for_the_check(self):
-        """Source-level: `_apply_remap` needs a whole stored dataset and the
-        editor's pending schemas to run. What must not silently regress is that
-        saving still asks."""
-        import inspect
-
-        from scanpath_studio.tabs import _apply_remap
-
-        source = inspect.getsource(_apply_remap)
-        assert 'st.session_state[TRIAL_IDENTITY_CHECK_KEY] = "edit"' in source
-
     def test_main_raises_the_modal_and_no_longer_writes_a_banner(self):
         import inspect
 

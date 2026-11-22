@@ -660,7 +660,7 @@ def _collect_mapping_app():
     """Seed session_state like an active upload, then collect the mapping."""
     import streamlit as st
 
-    from scanpath_studio.tabs import _collect_column_mapping
+    from scanpath_studio.wizard import _collect_column_mapping
 
     class _FakeUpload:
         name = "data.csv.zip"

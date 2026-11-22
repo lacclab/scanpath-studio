@@ -162,6 +162,7 @@ from scanpath_studio.controls import (
     column_mapping_from_state,
     column_mapping_ui,
     has_active_trial_filters,
+    metadata_readings,
     read_trial_filters,
     reassert_pending_writes,
     shadow_widget_key,
@@ -188,7 +189,6 @@ from scanpath_studio.data import (
     diagnose_trial_identity,
     empty_fixations_frame,
     empty_words_frame,
-    explain_read_error,
     filter_data,
     filter_frame_to_keys,
     filter_to_keys,
@@ -273,6 +273,11 @@ from scanpath_studio.menu import (
     render_top_menu,
     view_label,
 )
+from scanpath_studio.metadata_editor import (
+    render_participant_metadata_section,
+    render_text_metadata_section,
+    render_trial_metadata_section,
+)
 from scanpath_studio.multipart import SCREEN_ID, extract_part, part_catalog
 from scanpath_studio.persistence import (
     PERSIST_ENV_VAR,
@@ -329,12 +334,9 @@ from scanpath_studio.tabs import (
     render_data_inspection_tab,
     render_dataset_capabilities,
     render_dataset_editor_footer,
-    render_participant_metadata_section,
     render_settings_file,
     render_single_trial_tab,
-    render_text_metadata_section,
     render_trial_identity_section,
-    render_trial_metadata_section,
 )
 from scanpath_studio.tour import (
     build_tutorial_context,
@@ -346,13 +348,13 @@ from scanpath_studio.tour import (
     stash_tutorial_context,
 )
 from scanpath_studio.truncation_tooltip import render_truncation_tooltips
+from scanpath_studio.upload_ui import say_read_error
 from scanpath_studio.url_state import (
     CORPUS_SOURCE_TOKEN,
     _apply_pending_trial_selection,
     _apply_uploaded_plot_config,
     _apply_url_preset,
     _apply_url_trial_selection,
-    _build_share_query,  # noqa: F401  re-exported for tests
     _go_data,
     _go_scanpath,
     _render_share_body,
@@ -381,31 +383,10 @@ from scanpath_studio.utils import (
     trial_id_layout,
 )
 
-# Re-exported under a private alias so tests can import it from `app`; keep the
-# F401 silence (it's not used by app.py itself).
-from scanpath_studio.utils import (  # noqa: F401
-    build_comparison_options as _build_comparison_options,
-)
-
 from .dataset_identity import dataset_share_id
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from streamlit.delta_generator import DeltaGenerator
-
-
-def __getattr__(name):
-    """Lazily re-export the wizard helpers from ``app``.
-
-    ``scanpath_studio.wizard`` can't be imported at module load (it imports
-    ``app`` back, forming a cycle — see the note above the utils import), but
-    ``from scanpath_studio.app import _remove_dataset`` (and the other wizard
-    helpers named below) is used by tests. Resolving it here, on attribute
-    access, defers the wizard import until app is fully loaded."""
-    if name in ("_enter_add_data_wizard", "_remove_dataset", "_render_data_setup"):
-        from scanpath_studio import wizard
-
-        return getattr(wizard, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def public_datasets_enabled() -> bool:
@@ -923,6 +904,23 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
                 (keys_by_col.get(col, f"filter_{col}_range"),),
             )
         )
+
+    if (allowed := trial_filters.get("trial_keys")) is not None:
+        trial_widgets = tuple(trial_filters.get("trial_filter_keys") or ())
+        text_widgets = tuple(trial_filters.get("text_filter_keys") or ())
+        groups = [
+            name
+            for name, keys in (("trial", trial_widgets), ("text", text_widgets))
+            if keys
+        ]
+        if groups:
+            steps.append(
+                (
+                    f"By {' and '.join(groups)} metadata",
+                    lambda w, f, keys=allowed: filter_to_keys(w, f, keys),
+                    (*trial_widgets, *text_widgets),
+                )
+            )
 
     def _annotation_step(name: str, keys: tuple, **kwargs):
         def _apply(w, f):
@@ -4313,18 +4311,6 @@ def _render_dataset_load_failure(name: str, problems: list) -> None:
         )
 
 
-@st.cache_data(show_spinner=False)
-def _cached_participant_ids(_words, _fixations, cache_key) -> list:
-    """Every reader id in the dataset, memoized per frame pair.
-
-    Underscore-prefixed frames + an explicit `frame_fingerprint` key, the house
-    convention: this is a `.unique()` over the *unfiltered* corpus, which is
-    hundreds of milliseconds on a full-size one.
-    """
-    del cache_key
-    return metadata_mod.participant_ids(_words, _fixations)
-
-
 def _refresh_participant_metadata(participants) -> None:
     """Re-report an attached participant table against the loaded readers.
 
@@ -4689,22 +4675,6 @@ def _read_uploaded_frame(
             + " To remove the file, click the ✕ next to its name."
         )
     return frame
-
-
-def say_read_error(host, name: str, exc: BaseException) -> None:
-    """A table file the readers refused, said in ``host``: what is wrong in
-    plain words, then the reader's own message folded away beneath it.
-
-    One wording for every upload box — the wizard's tables, the Data page's raw
-    gaze and the metadata tables."""
-    error = explain_read_error(name, exc)
-    shown = name if error.name == Path(str(name)).name else error.name
-    host.error(
-        error.sentence(f"**{shown}**")
-        + " To remove the file, click the ✕ next to its name."
-    )
-    if error.detail:
-        host.expander("Technical detail").code(error.detail, language=None)
 
 
 def _read_upload(uploaded, state_prefix: str, *, multi: bool, kind) -> pd.DataFrame:
@@ -10380,26 +10350,14 @@ def _run_app() -> None:
     # ignoring the current filters.
     words_all, fixations_all = words_df, fixations_df
     raw_gaze_all = raw_gaze_df
-    # Every reader in the dataset, before any narrowing — what the
-    # participant-metadata join is reported against.
-    #
-    # Gated and cached, both deliberately. `participant_ids` is a `.unique()`
-    # over *both unfiltered corpus frames* — ~0.5 s on full OneStop — and on
-    # the default path (no table attached, not on the Data page) the answer is
-    # thrown away, so an unconditional call put half a second on every rail
-    # toggle and every ◀ ▶ step for nothing. The fingerprints are the ones
-    # computed just below for the identity report, so the cache key is free.
-    participants_all: list = []
-    if data_view or metadata_mod.active() is not None:
-        participants_all = _cached_participant_ids(
-            words_all,
-            fixations_all,
-            cache_key=(
-                frame_fingerprint(words_all),
-                frame_fingerprint(fixations_all),
-            ),
-        )
-        _refresh_participant_metadata(participants_all)
+    metadata_keys = None
+    if (
+        data_view
+        or metadata_mod.active() is not None
+        or metadata_mod.active_texts() is not None
+    ):
+        metadata_keys = metadata_readings(words_all, fixations_all, raw_gaze_all)
+        _refresh_participant_metadata(metadata_mod.participant_ids(metadata_keys))
 
     # The dataset is loaded and normalized — one line saying *what*, and
     # only when it changes. A rerun re-executes all of this, so an unconditional
@@ -10648,7 +10606,10 @@ def _run_app() -> None:
                 words_all,
                 fixations_all,
                 trial_filters,
-                pool_filter_frames(words_all, fixations_all, raw_gaze_all),
+                (
+                    *pool_filter_frames(words_all, fixations_all, raw_gaze_all),
+                    raw_gaze_all,
+                ),
             )
         _finish_page()
         _render_datasets_table(words_all, fixations_all, raw_gaze_all)
@@ -10667,6 +10628,14 @@ def _run_app() -> None:
     # — and it is enough: trial sorting, the trial labels and everything else
     # downstream discovers its columns from this frame, with no allowlist to
     # extend per surface.
+    if metadata_mod.active_texts() is not None:
+        # Use the same recorded identity that the table's join report used.
+        by_reading = ["participant_id", "trial_id"]
+        combos = combos.drop(columns="text_id", errors="ignore").merge(
+            metadata_mod.unambiguous_readings(metadata_keys), on=by_reading, how="left"
+        )
+        if "unique_text_id" in combos:
+            combos["unique_text_id"] = combos["text_id"]
     combos = metadata_mod.project(metadata_mod.active(), combos)
     # And the one place the *trial* table is joined, onto the same
     # small frame. Everything downstream (the chip picker, trial sorting, Data
@@ -10889,9 +10858,7 @@ def _run_app() -> None:
             # `_edit` suffix, since a container key may be used once per run
             # and the offscreen editor is built even while the wizard is open.
             #
-            # The *unfiltered* pool feeds every report (participants_all /
-            # combos_all): the join describes the dataset, not whatever the
-            # current trial filters left standing. `live_join` stays on, unlike
+            # Validate attachments against the unfiltered dataset. `live_join` stays on, unlike
             # the wizard's — here the dataset exists, so the join is a
             # real answer rather than a provisional one.
             from scanpath_studio.controls import inline_field_label
@@ -10909,13 +10876,17 @@ def _run_app() -> None:
                 emphasis=True,
             )
             for slug, renderer, ids in (
-                ("participant", render_participant_metadata_section, participants_all),
+                (
+                    "participant",
+                    render_participant_metadata_section,
+                    metadata_mod.participant_ids(metadata_keys),
+                ),
                 # Same reasoning one grain down, and the text table one more.
-                ("trial", render_trial_metadata_section, combos_all),
+                ("trial", render_trial_metadata_section, metadata_keys),
                 (
                     "text",
                     render_text_metadata_section,
-                    metadata_mod.text_keys(combos_all),
+                    metadata_mod.text_keys(metadata_keys),
                 ),
             ):
                 block = st.container(key=f"wiz_map_block_meta_{slug}_edit")

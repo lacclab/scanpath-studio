@@ -303,7 +303,10 @@ class TestTheUploadBoxSaysIt:
 
 class TestMetadataSlotsSayItTheSameWay:
     def test_an_unreadable_file(self):
-        from scanpath_studio.tabs import _MetadataReadError, _read_metadata_uploads
+        from scanpath_studio.metadata_editor import (
+            _MetadataReadError,
+            _read_metadata_uploads,
+        )
 
         with pytest.raises(_MetadataReadError) as raised:
             _read_metadata_uploads([_upload("broken.parquet", b"not parquet")])
@@ -312,7 +315,10 @@ class TestMetadataSlotsSayItTheSameWay:
         )
 
     def test_a_header_only_file(self):
-        from scanpath_studio.tabs import _MetadataReadError, _read_metadata_uploads
+        from scanpath_studio.metadata_editor import (
+            _MetadataReadError,
+            _read_metadata_uploads,
+        )
 
         with pytest.raises(_MetadataReadError) as raised:
             _read_metadata_uploads([_upload("p.csv", b"participant_id,age\n")])

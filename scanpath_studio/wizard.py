@@ -3,8 +3,7 @@
 Everything from the upload-table reading UI through the wizard's parts (name →
 upload and map each table → recording setup → stimulus images → add) and the
 MultiplEYE format, which reads a session set from a folder or from uploaded
-files. ``app.py`` drives this from ``resolve_data_source`` /
-``main`` and re-exports a few helpers for tests.
+files. The app opens the wizard from Data Management.
 
 A handful of data-IO / normalization helpers (``_read_uploaded_frame``,
 ``_normalize_pair``, ``_stash_active_mapping``, ``_render_unmapped_view``) stay in
@@ -131,9 +130,14 @@ from .experimental_setup import (
 )
 from .fields import row_label, switch, tooltip
 from .menu import view_label
+from .metadata_editor import (
+    commit_deferred_metadata,
+    render_participant_metadata_section,
+    render_text_metadata_section,
+    render_trial_metadata_section,
+)
 from .persistence import is_loopback_url, persistence_enabled
 from .styles import mapping_menu_css
-from .tabs import _collect_column_mapping
 from .tour import (
     maybe_show_wizard_guide,
     render_spotlight_wizard_guide,
@@ -313,43 +317,6 @@ def _new_dataset_token(label: str) -> str:
     return token
 
 
-def _wizard_finalize_metadata_pools(payload: dict) -> tuple:
-    """The just-finalized dataset's own participant/trial/text pools.
-
-    Unlike ``_wizard_reader_ids``/``_wizard_trial_combos``/
-    ``_wizard_text_ids`` (which read the *raw*, pre-normalization frames,
-    because those run live while mapping is still being worked out), this
-    reads the *normalized* ``words``/``fixations`` already in ``payload`` —
-    the canonical ``participant_id``/``trial_id``/``text_id`` columns are
-    exactly what the real dataset will carry, so there is no re-deriving to
-    do. Called once, from ``_finalize_wizard_dataset``.
-    """
-    words = payload.get("words")
-    fixations = payload.get("fixations")
-    combo_frames = [
-        frame[["participant_id", "trial_id"]]
-        for frame in (fixations, words)
-        if frame is not None and not frame.empty and "participant_id" in frame.columns
-    ]
-    combos = (
-        pd.concat(combo_frames, ignore_index=True).drop_duplicates()
-        if combo_frames
-        else pd.DataFrame(columns=["participant_id", "trial_id"])
-    )
-    participants = sorted(combos["participant_id"].dropna().astype(str).unique())
-    text_series = [
-        frame["text_id"]
-        for frame in (fixations, words)
-        if frame is not None and not frame.empty and "text_id" in frame.columns
-    ]
-    texts = (
-        sorted(pd.concat(text_series).dropna().astype(str).unique())
-        if text_series
-        else []
-    )
-    return participants, combos, texts
-
-
 def _source_recipe(
     schemas: dict, uploaded_columns: dict, *, aggregated: bool = False
 ) -> dict:
@@ -415,10 +382,7 @@ def _finalize_wizard_dataset() -> None:
     # this dataset is being assembled — do it now, against the
     # pools this dataset actually ends up with. No UI here: a callback runs
     # before the widgets that would host it exist for this run.
-    from scanpath_studio.tabs import commit_deferred_metadata
-
-    participants, combos, texts = _wizard_finalize_metadata_pools(payload)
-    commit_deferred_metadata(participants, combos, texts)
+    commit_deferred_metadata(payload)
     ds_name = _new_dataset_token(
         _safe_dataset_name(st.session_state.get("wizard_dataset_name"))
     )
@@ -1821,125 +1785,6 @@ def wide_frame_warning(n_extra_fields: int, n_rows: int) -> str | None:
     )
 
 
-def _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema) -> list:
-    """The reader ids the finished dataset will have, read from the raw tables.
-
-    The participant metadata table attaches in the wizard, **before** the
-    frames are normalized (normalization needs the keep-columns chosen there),
-    so the join report can't be built from `metadata.participant_ids`. The mapped
-    participant column is only *renamed* by `normalize_*` — its values are
-    untouched — so reading it off the raw frame gives the same id set the join
-    will see, which is what makes "no row for reader p7" trustworthy here.
-
-    Cached and **gated**, following `app._cached_participant_ids`: this is a
-    `.unique()` over the *raw* (unfiltered, un-normalized) frames, the largest
-    version there is, and the wizard reruns on every keystroke. Only the join
-    report consumes the list, so nothing is scanned until a
-    table is actually being attached.
-    """
-    from scanpath_studio import metadata as metadata_mod
-
-    if st.session_state.get(metadata_mod.RAW_SESSION_KEY) is None:
-        return []
-    found: set = set()
-    for frame, schema in ((raw_fix, fix_schema), (raw_words, word_schema)):
-        column = (schema or {}).get("participant")
-        if not column or frame is None or frame.empty or column not in frame.columns:
-            continue
-        found |= set(_wizard_reader_ids_cached(frame, column, frame_fingerprint(frame)))
-    return sorted(found)
-
-
-def _wizard_trial_combos(raw_words, word_schema, raw_fix, fix_schema):
-    """The ``(participant_id, trial_id)`` pairs the finished dataset will have.
-
-    The trial metadata table attaches in the wizard, **before** the frames are
-    normalized — so, exactly as :func:`_wizard_reader_ids` does one grain up,
-    the keys are read off the raw tables through the mapping the user has just
-    made. ``trial_id_series`` is what `normalize_*` itself uses to compose a
-    trial id, including the multi-column case, so the pairs here are the pairs
-    the join will really see.
-
-    An unmapped participant column yields an empty reader half rather than no
-    rows: the dataset has no reader identity, so a trial-keyed table still joins
-    and a reader-keyed one correctly matches nothing.
-
-    Gated on a table actually being attached, and cached per frame — this
-    walks the whole raw frame, and the wizard reruns on every keystroke.
-    """
-    from scanpath_studio import metadata as metadata_mod
-
-    empty = pd.DataFrame(columns=["participant_id", "trial_id"])
-    if st.session_state.get(metadata_mod.TRIAL_RAW_SESSION_KEY) is None:
-        return empty
-    parts = []
-    for frame, schema in ((raw_fix, fix_schema), (raw_words, word_schema)):
-        trial_mapping = (schema or {}).get("trial")
-        if not trial_mapping or frame is None or frame.empty:
-            continue
-        columns = trial_mapping_columns(trial_mapping)
-        if any(column not in frame.columns for column in columns):
-            continue
-        participant = (schema or {}).get("participant")
-        if participant and participant not in frame.columns:
-            participant = None
-        parts.append(
-            _wizard_trial_combos_cached(
-                frame,
-                tuple(columns),
-                participant,
-                frame_fingerprint(frame),
-            )
-        )
-    if not parts:
-        return empty
-    return pd.concat(parts, ignore_index=True).drop_duplicates()
-
-
-@st.cache_data(show_spinner=False)
-def _wizard_trial_combos_cached(_frame, columns: tuple, participant, fingerprint: str):
-    """Distinct ``(participant_id, trial_id)`` pairs in one raw frame."""
-    trial = trial_id_series(_frame, list(columns)).astype(str)
-    reader = (
-        _frame[participant].astype(str)
-        if participant
-        else pd.Series([""] * len(_frame), index=_frame.index)
-    )
-    out = pd.DataFrame({"participant_id": reader, "trial_id": trial})
-    return out.drop_duplicates().reset_index(drop=True)
-
-
-@st.cache_data(show_spinner=False)
-def _wizard_reader_ids_cached(_frame, column: str, fingerprint: str) -> list:
-    """Distinct reader ids in one raw frame's mapped participant column.
-
-    Underscore-prefixed frame + an explicit `frame_fingerprint` key, the house
-    convention — see `app._cached_participant_ids`.
-    """
-    return sorted({str(value) for value in _frame[column].dropna().unique()})
-
-
-def _wizard_text_ids(raw_words, word_schema, raw_fix, fix_schema) -> list:
-    """The text ids the finished dataset will have, read from the raw tables.
-
-    The third-grain sibling of :func:`_wizard_reader_ids` — same reasoning:
-    runs before normalization, so the join report is built off the raw
-    frames through the mapping the user has just made, gated on a text table
-    actually being attached, and cached per frame.
-    """
-    from scanpath_studio import metadata as metadata_mod
-
-    if st.session_state.get(metadata_mod.TEXT_RAW_SESSION_KEY) is None:
-        return []
-    found: set = set()
-    for frame, schema in ((raw_fix, fix_schema), (raw_words, word_schema)):
-        column = (schema or {}).get("text_id")
-        if not column or frame is None or frame.empty or column not in frame.columns:
-            continue
-        found |= set(_wizard_reader_ids_cached(frame, column, frame_fingerprint(frame)))
-    return sorted(found)
-
-
 def _row_body(host):
     """Indent to where the field-mapping pickers start (`_MAP_ROW_W`'s name
     column), for a row that has no name of its own — the "Extra fields to
@@ -2554,6 +2399,21 @@ def _keep_and_filter_section() -> dict | None:
         "wizard_filter_by": filter_fields,
         "wizard_keep_extra": sorted({c for cols in by_table.values() for c in cols})
         or None,
+    }
+
+
+def _collect_column_mapping() -> dict:
+    """The column-mapping selections from session_state, for a setup file.
+
+    The upload boxes share the ``col_map_*`` prefix (``state_prefix="col_map_fix"``
+    etc.), so their ``file_uploader`` widgets land in this sweep too. Their value
+    is an ``UploadedFile`` (or list of them), which isn't JSON serializable and
+    isn't part of the column mapping — so the ``_upload`` widget keys are
+    excluded."""
+    return {
+        k: st.session_state[k]
+        for k in sorted(st.session_state.keys())
+        if isinstance(k, str) and k.startswith("col_map_") and not k.endswith("_upload")
     }
 
 
@@ -4542,24 +4402,15 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # only the intro note.
     raw_fix, raw_words, raw_gaze = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-    def _render_metadata_uploads(word_schema, fix_schema) -> None:
+    def _render_metadata_uploads() -> None:
         """The participant, trial and text metadata tables: three more rows of
         the same "left = upload, right = mapping" format Fixations/AOI/Raw gaze
-        use above, under a small **Metadata** heading. `word_schema` /
-        `fix_schema` are `{}` pre-upload — there is nothing to derive a join
-        report from yet, which is also the correct answer — and the real
-        mapping once the identity pickers have resolved it. Only while
+        use above, under a small **Metadata** heading. Only while
         `active`: the collapsed *Data & mapping* review panel would otherwise
         build the same widget keys as the 🗂️ Data page's section.
         """
         if not active:
             return
-        from scanpath_studio.tabs import (
-            render_participant_metadata_section,
-            render_text_metadata_section,
-            render_trial_metadata_section,
-        )
-
         meta_host.markdown(
             '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
         )
@@ -4589,46 +4440,30 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
         from scanpath_studio import metadata as metadata_mod
 
-        def _meta_row(slug, renderer, ids):
+        def _meta_row(slug, renderer):
             block = meta_host.container(key=f"wiz_map_block_meta_{slug}")
             row = block.columns(_META_ROW_W, gap="small")
             # What the table is for, until one is attached.
             if not st.session_state.get(metadata_mod.upload_key(slug)):
                 row[1].caption(META_ROW_CAPTIONS[slug])
-            # `live_join=False` — there is no finished dataset to join
-            # against yet (the pools below are provisional, still shifting as
-            # identity mapping is worked out), so the wizard only collects the
-            # upload + id-column + keep-fields choices here. The real join
-            # runs once, in `_finalize_wizard_dataset`, against the dataset's
-            # own settled pools — see `tabs.commit_deferred_metadata`.
+            # The wizard matches metadata once, after normalization has settled
+            # composite IDs and the readings contributed by all three tables.
             renderer(
-                ids,
+                None,
                 host=row[1],
                 live_join=False,
                 upload_host=row[0].container(key=f"wiz_map_upload_meta_{slug}"),
             )
 
-        _meta_row(
-            "participant",
-            render_participant_metadata_section,
-            _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema),
-        )
+        _meta_row("participant", render_participant_metadata_section)
         meta_host.markdown(
             '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
         )
-        _meta_row(
-            "trial",
-            render_trial_metadata_section,
-            _wizard_trial_combos(raw_words, word_schema, raw_fix, fix_schema),
-        )
+        _meta_row("trial", render_trial_metadata_section)
         meta_host.markdown(
             '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
         )
-        _meta_row(
-            "text",
-            render_text_metadata_section,
-            _wizard_text_ids(raw_words, word_schema, raw_fix, fix_schema),
-        )
+        _meta_row("text", render_text_metadata_section)
 
     # === Data tables & column mapping: per-table upload + mapping rows ================
 
@@ -5152,7 +4987,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # others. Called down here, after the identity pickers have resolved the
     # real mapping, so the join report reads the up-to-date
     # schema rather than the `{}` an earlier call would have had to use.
-    _render_metadata_uploads(word_schema, fix_schema)
+    _render_metadata_uploads()
 
     # "Recording setup" is its own numbered part.
     s_setup = _part("setup")

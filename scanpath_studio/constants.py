@@ -286,6 +286,43 @@ FIXATION_LABEL_OPTIONS = {
     option.name: option for option in (INDEX_SIZE, INDEX_COLOR, INDEX_POSITION)
 }
 
+
+@dataclass(frozen=True)
+class FixationFlagCategory:
+    label: str
+    help: str
+    has_threshold: bool = False
+
+
+FIXATION_FLAG_CATEGORIES = {
+    "short": FixationFlagCategory(
+        "Short", "Fixations shorter than the ms threshold.", has_threshold=True
+    ),
+    "long": FixationFlagCategory(
+        "Long", "Fixations longer than the ms threshold.", has_threshold=True
+    ),
+    "oob": FixationFlagCategory(
+        "Outside the text", "Fixations in no word box (gaps between lines count)."
+    ),
+    "blink": FixationFlagCategory(
+        "Near a blink", "Fixations at or next to a blink; needs a blink column."
+    ),
+}
+FIXATION_DURATION_FLAGS = frozenset(
+    k for k, category in FIXATION_FLAG_CATEGORIES.items() if category.has_threshold
+)
+FIXATION_FLAG_MODES = ("Off", "Highlight", "Hide")
+FIXATION_FLAG_MARKERS = {
+    "x": "✕ Cross",
+    "circle-open": "○ Circle",
+    "diamond-open": "◇ Diamond",
+    "square-open": "□ Square",
+    "star": "★ Star",
+    "triangle-up-open": "△ Triangle",
+    "triangle-down-open": "▽ Triangle (down)",
+}
+
+
 WORD_BOX_COLOR = "#6c757d"
 #: The outline's opacity; 1 draws it solid.
 WORD_BOX_LINE_OPACITY = 1.0

@@ -37,7 +37,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from .constants import FIXATION_LABEL_OPTIONS
+from .constants import FIXATION_DURATION_FLAGS, FIXATION_LABEL_OPTIONS
 from .figure_views import (
     SECOND_SCANPATH_OPTIONS,
     STATIC_COMPARISON_LAYER_STYLES,
@@ -1077,7 +1077,7 @@ def _active_flags(flags) -> dict:
         if not isinstance(spec, dict) or str(spec.get("mode") or "Off") == "Off":
             continue
         entry = {"mode": spec.get("mode")}
-        if category in ("short", "long") and spec.get("threshold_ms") is not None:
+        if category in FIXATION_DURATION_FLAGS and spec.get("threshold_ms") is not None:
             entry["threshold_ms"] = float(spec["threshold_ms"])
         out[category] = entry
     return out
@@ -1230,7 +1230,7 @@ def _fixation_flags(value, flag: str = "--fixation-flag"):
         parts = [f"{category}={mode.lower()}"]
         # Only for the two categories that have one — `oob` / `blink` carry a
         # stale default threshold in the app's dict that the CLI would reject.
-        if category in ("short", "long") and spec.get("threshold_ms") is not None:
+        if category in FIXATION_DURATION_FLAGS and spec.get("threshold_ms") is not None:
             parts.append(f"threshold_ms={_num(spec['threshold_ms'])}")
         if spec.get("symbol"):
             parts.append(f"symbol={spec['symbol']}")

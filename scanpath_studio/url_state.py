@@ -63,6 +63,10 @@ from .constants import (
     CUSTOM_PALETTE,
     DEFAULT_HEATMAP_SIGMA_PX,
     DEMO_CHOICE,
+    FIXATION_DURATION_FLAGS,
+    FIXATION_FLAG_CATEGORIES,
+    FIXATION_FLAG_MARKERS,
+    FIXATION_FLAG_MODES,
     FIXATION_LABEL_OPTIONS,
     FIXATION_OUTLINE_WIDTH_BOUNDS,
     FIXATION_SYMBOLS,
@@ -105,8 +109,6 @@ from .constants import (
 )
 from .controls import (
     _ALIGN_OPTIONS,
-    _FIXCLASS_MODES,
-    _OUT_OF_TEXT_MARKERS,
     claim_mapping,
     color_field_options,
     forget_color_range,
@@ -403,12 +405,12 @@ def _parse_print_unit(v) -> str:
 
 
 def _parse_fixclass_mode(v) -> str:
-    return _parse_choice(v, tuple(_FIXCLASS_MODES), "fixation-flag mode")
+    return _parse_choice(v, tuple(FIXATION_FLAG_MODES), "fixation-flag mode")
 
 
 def _parse_fixclass_symbol(v) -> str:
     name = str(v).strip()
-    if name not in _OUT_OF_TEXT_MARKERS:
+    if name not in FIXATION_FLAG_MARKERS:
         raise ValueError(f"unknown fixation-flag marker {name!r}")
     return name
 
@@ -682,7 +684,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "span_border_color": "global_span_border_color",
     **{
         f"fixclass_{cat}_{part}": f"global_fixclass_{cat}_{part}"
-        for cat in ("short", "long", "oob", "blink")
+        for cat in FIXATION_FLAG_CATEGORIES
         for part in ("mode", "symbol", "color")
     },
     # Compare's per-scanpath colours, line style and legend label.
@@ -701,7 +703,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "cmp_b_saccade_classes": "cmp1_saccade_classes",
     **{
         f"cmp_b_fixclass_{cat}_mode": f"cmp1_fixclass_{cat}_mode"
-        for cat in ("short", "long", "oob", "blink")
+        for cat in FIXATION_FLAG_CATEGORIES
     },
 }
 #: The `_SHARE_VALUE_PARAMS` that carry a colour — read through
@@ -898,7 +900,7 @@ _URL_PRESETS = {
     },
     **{
         f"fixclass_{cat}_{part}": (f"global_fixclass_{cat}_{part}", parse)
-        for cat in ("short", "long", "oob", "blink")
+        for cat in FIXATION_FLAG_CATEGORIES
         for part, parse in (
             ("mode", _parse_fixclass_mode),
             ("symbol", _parse_fixclass_symbol),
@@ -910,7 +912,7 @@ _URL_PRESETS = {
             f"cmp1_fixclass_{cat}_mode",
             _parse_fixclass_mode,
         )
-        for cat in ("short", "long", "oob", "blink")
+        for cat in FIXATION_FLAG_CATEGORIES
     },
     # The per-scanpath line style is a selectbox (raises on anything else),
     # and the legend label is figure text from someone else.
@@ -1854,7 +1856,6 @@ _PLOT_CONFIG_LAYER_KEYS = {
 # `_URL_BOUNDED` (the widget bounds both the link and the saved config use), the
 # `#rrggbb` colour check, and the closed vocabularies whose widgets raise on
 # anything else.
-_FIXCLASS_CATEGORIES = ("short", "long", "oob", "blink")
 #: Every session key that holds a colour — all of them on the link.
 _COLOR_STATE_KEYS = frozenset(_SHARE_VALUE_PARAMS[p] for p in _SHARE_COLOR_PARAMS)
 #: Keys whose widget is a toggle or checkbox: a stored non-bool is not a setting.
@@ -1981,13 +1982,13 @@ _CHOICE_STATE_PARSERS = {
     "global_critical_span_style": _closed_choice(("Mark text", "Mark border", "None")),
     "global_palette": _closed_choice((*PALETTES, CUSTOM_PALETTE)),
     **{
-        f"{side}_fixclass_{c}_mode": _closed_choice(tuple(_FIXCLASS_MODES))
+        f"{side}_fixclass_{c}_mode": _closed_choice(tuple(FIXATION_FLAG_MODES))
         for side in ("global", "cmp1")
-        for c in _FIXCLASS_CATEGORIES
+        for c in FIXATION_FLAG_CATEGORIES
     },
     **{
-        f"global_fixclass_{c}_symbol": _closed_choice(tuple(_OUT_OF_TEXT_MARKERS))
-        for c in _FIXCLASS_CATEGORIES
+        f"global_fixclass_{c}_symbol": _closed_choice(tuple(FIXATION_FLAG_MARKERS))
+        for c in FIXATION_FLAG_CATEGORIES
     },
 }
 
@@ -3309,14 +3310,14 @@ def _restore_plot_config(
     flags = highlighting.get("fixation_flags")
     if isinstance(flags, dict):
         # `blink` too — the writer saves all four categories.
-        for cat in _FIXCLASS_CATEGORIES:
+        for cat in FIXATION_FLAG_CATEGORIES:
             spec = flags.get(cat)
             if not isinstance(spec, dict):
                 continue
             mode = spec.get("mode")
-            if mode in _FIXCLASS_MODES:
+            if mode in FIXATION_FLAG_MODES:
                 put(f"global_fixclass_{cat}_mode", mode)
-            if cat in ("short", "long") and spec.get("threshold_ms") is not None:
+            if cat in FIXATION_DURATION_FLAGS and spec.get("threshold_ms") is not None:
                 try:
                     put(
                         f"global_fixclass_{cat}_threshold_ms",
@@ -3325,7 +3326,7 @@ def _restore_plot_config(
                 except (TypeError, ValueError):
                     pass
             sym = spec.get("symbol")
-            if sym in _OUT_OF_TEXT_MARKERS:
+            if sym in FIXATION_FLAG_MARKERS:
                 put(f"global_fixclass_{cat}_symbol", sym)
             col = spec.get("color")
             if isinstance(col, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", col):
@@ -4031,13 +4032,13 @@ def _restore_compare_b_filters(entry: dict, put) -> None:
     A's), so only each category's mode and threshold are read."""
     flags = entry.get("fixation_flags")
     if isinstance(flags, dict):
-        for cat in _FIXCLASS_CATEGORIES:
+        for cat in FIXATION_FLAG_CATEGORIES:
             spec = flags.get(cat)
             if not isinstance(spec, dict):
                 continue
-            if spec.get("mode") in _FIXCLASS_MODES:
+            if spec.get("mode") in FIXATION_FLAG_MODES:
                 put(f"cmp1_fixclass_{cat}_mode", spec["mode"])
-            if cat in ("short", "long") and spec.get("threshold_ms") is not None:
+            if cat in FIXATION_DURATION_FLAGS and spec.get("threshold_ms") is not None:
                 try:
                     put(
                         f"cmp1_fixclass_{cat}_threshold_ms",

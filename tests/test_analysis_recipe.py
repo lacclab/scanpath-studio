@@ -476,3 +476,62 @@ def test_replay_keeps_its_screen_and_minimum_per_word():
     )
     assert out["word_id"].tolist() == [1]
     assert out.iloc[0]["value"] == 55
+
+
+def test_recipe_replays_text_ids_supplied_by_raw_gaze(tmp_path, monkeypatch):
+    from scanpath_studio import api, cli, controls, data, metadata
+
+    source = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p2"],
+            "trial_id": "story",
+            "word_id": 1,
+            "text": "A",
+            "x": 0,
+            "y": 0,
+            "width": 10,
+            "height": 10,
+            "IA_DWELL_TIME": [100, 50],
+        }
+    )
+    gaze = source[["participant_id", "trial_id", "x", "y"]].assign(book_code=["a", "b"])
+    schema = dict(data.propose_raw_gaze_schema(gaze), text_id="book_code")
+    samples = api.load_raw_gaze(gaze, raw_gaze_schema=schema, names="canonical")
+    words, fixations = api.load_scanpath_data(source, names="canonical")
+    texts = pd.DataFrame({"text_id": ["a", "b"], "genre": ["poem", "story"]})
+    attached = metadata.build_text_metadata(texts, "text_id", keys={"a", "b"})
+    monkeypatch.setattr(
+        controls.st,
+        "session_state",
+        {
+            metadata.TEXT_SESSION_KEY: attached,
+            controls.text_metadata_filter_key("genre"): ["poem"],
+        },
+    )
+    selection = controls._compute_trial_filters(words, fixations, samples)
+    assert selection["trial_keys"] == {("p1", "story")}
+    recipe = _cohort_recipe(
+        selection=jsonable(selection["recipe_selection"]),
+        inputs={"schemas": {"raw_gaze": schema}},
+    )
+    with pytest.raises(ValueError, match="Supply --raw-gaze"):
+        api.run_analysis_recipe(recipe, words, fixations, text_metadata=texts)
+    expected = api.run_analysis_recipe(
+        recipe, words, fixations, raw_gaze=samples, text_metadata=texts
+    )
+    assert expected.iloc[0][["value", "n"]].tolist() == [100, 1]
+
+    saved = tmp_path / "profile.json"
+    saved.write_text(json.dumps(recipe))
+    arguments = ["recipe", str(saved)]
+    for flag, frame in (
+        ("words", source),
+        ("text-metadata", texts),
+        ("raw-gaze", gaze),
+    ):
+        path = tmp_path / f"{flag}.csv"
+        frame.to_csv(path, index=False)
+        arguments.extend([f"--{flag}", str(path)])
+    output = tmp_path / "profile.csv"
+    cli.main([*arguments, "-o", str(output)])
+    assert pd.read_csv(output).iloc[0][["value", "n"]].tolist() == [100, 1]

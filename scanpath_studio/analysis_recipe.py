@@ -321,7 +321,7 @@ def _metadata_join_columns(grain, mapping, header):
     raise ValueError(f"The {grain} metadata needs its ID columns {columns!r}.")
 
 
-def _metadata_matches(grain, spec, supplied, words, fixations):
+def _metadata_matches(grain, spec, supplied, words, fixations, raw_gaze):
     from . import api, data
     from . import metadata as md
 
@@ -361,10 +361,17 @@ def _metadata_matches(grain, spec, supplied, words, fixations):
         )
         matches = md.participants_matching(table, **kwargs)
     elif grain == "text":
-        table = md.build_text_metadata(
-            frame, columns, keys=data.text_ids(words, fixations)
-        )
-        matches = md.texts_matching(table, **kwargs)
+        col = spec.get("column")
+        if col not in ("text_id", "unique_text_id") or col not in {*words, *fixations}:
+            raise ValueError("The recipe's text filter needs its text ID column.")
+        if spec.get("requires_raw_gaze") and (raw_gaze is None or raw_gaze.empty):
+            raise ValueError(
+                "This recipe uses text IDs from the Raw gaze table. Supply --raw-gaze."
+            )
+        readings = md.recording_keys(fixations, words, raw_gaze)
+        table = md.build_text_metadata(frame, columns, keys=md.text_keys(readings))
+        texts = md.texts_matching(table, **kwargs)
+        matches = None if texts is None else md.readings_for_texts(readings, texts)
     else:
         keys = data.trial_keys(words) | data.trial_keys(fixations)
         if reader and reader not in frame:
@@ -383,7 +390,9 @@ def _metadata_matches(grain, spec, supplied, words, fixations):
     return matches
 
 
-def _select_words(words, fixations, selection: Mapping, metadata: Mapping, annotations):
+def _select_words(
+    words, fixations, selection: Mapping, metadata: Mapping, annotations, raw_gaze=None
+):
     from pathlib import Path
 
     from . import data
@@ -422,23 +431,13 @@ def _select_words(words, fixations, selection: Mapping, metadata: Mapping, annot
         if grain not in metadata:
             raise ValueError(f"Unsupported metadata grain {grain!r}.")
         spec = _object(spec, grain)
-        matches = _metadata_matches(grain, spec, metadata[grain], words, fixations)
+        matches = _metadata_matches(
+            grain, spec, metadata[grain], words, fixations, raw_gaze
+        )
         if grain == "participant":
             participants = matches if participants is None else participants & matches
-        elif grain == "trial":
-            trial_keys = matches
         else:
-            col = spec.get("column")
-            if not isinstance(col, str) or col not in {*words, *fixations}:
-                raise ValueError("The recipe's text filter needs its text ID column.")
-            combined = (
-                matches
-                if col not in conditions
-                else matches.intersection(conditions[col])
-            )
-            if not combined:
-                return words.iloc[0:0]
-            conditions[col] = combined
+            trial_keys = matches if trial_keys is None else trial_keys & matches
     if missing := (set(conditions) | set(ranges)) - {*words, *fixations}:
         raise ValueError(
             f"Missing trial filter field(s): {', '.join(sorted(missing))}."
@@ -468,7 +467,7 @@ def _select_words(words, fixations, selection: Mapping, metadata: Mapping, annot
 
 
 def cohort_recipe_table(
-    recipe, words, fixations, *, metadata, annotations
+    recipe, words, fixations, *, metadata, annotations, raw_gaze=None
 ) -> pd.DataFrame:
     """Reproduce the selected cohort profile from canonical frames."""
     from .aggregation import MEASURES, cohort_word_profile, text_screen_options
@@ -525,7 +524,7 @@ def cohort_recipe_table(
         if "selection" in recipe
         else _legacy_selection(filters)
     )
-    words = _select_words(words, fixations, selection, metadata, annotations)
+    words = _select_words(words, fixations, selection, metadata, annotations, raw_gaze)
     screen = a.get("screen")
     if screen is not None and str(screen) not in text_screen_options(
         words, field, text_id
@@ -558,6 +557,7 @@ def load_recipe_sources(
     recipe,
     words,
     fixations,
+    raw_gaze=None,
     *,
     word_schema=None,
     fix_schema=None,
@@ -571,7 +571,8 @@ def load_recipe_sources(
     schemas = _object(inputs.get("schemas", {}), "schemas")
     word_schema = word_schema if word_schema is not None else schemas.get("words")
     fix_schema = fix_schema if fix_schema is not None else schemas.get("fixations")
-    for schema in (word_schema, fix_schema):
+    gaze_schema = schemas.get("raw_gaze")
+    for schema in (word_schema, fix_schema, gaze_schema):
         if schema is not None:
             _object(schema, "column mapping")
             if any(
@@ -603,17 +604,25 @@ def load_recipe_sources(
             kind="words",
             plan_for=lambda header: data.verbatim_text_plan(header, word_schema),
         )
+        if raw_gaze is not None:
+            frames["Raw gaze"] = api._as_dataframe(
+                raw_gaze,
+                "raw gaze",
+                plan_for=lambda header: data.identity_text_plan(
+                    header, gaze_schema, kind="raw_gaze"
+                ),
+            )
         for rule in derive:
             rule = _object(rule, "column derivation")
             column = rule.get("column", data.SOURCE_FILE_COLUMN)
             if not isinstance(column, str):
                 raise ValueError("Invalid source column in the recipe's derivation.")
             target = rule.get("table")
-            if target == "Raw gaze":
+            if target == "Raw gaze" and raw_gaze is None:
                 continue
             if target is None:
                 target = next((t for t, f in frames.items() if column in f), None)
-            if target not in ("Words table", "Fixations") or target not in frames:
+            if not isinstance(target, str) or target not in frames:
                 raise ValueError(
                     f"The column derivation needs its {target or 'original'} table."
                 )
@@ -638,6 +647,7 @@ def load_recipe_sources(
             else:
                 raise ValueError("Unsupported column derivation in the recipe.")
         words, fixations = frames["Words table"], frames.get("Fixations")
+        raw_gaze = frames.get("Raw gaze")
         if "aggregate_char_boxes" in steps:
             words = data.aggregate_char_boxes(
                 words, word_schema or data.propose_word_schema(words)
@@ -646,7 +656,7 @@ def load_recipe_sources(
     kept = set(_list(inputs.get("keep_columns", []), "keep_columns"))
     for key in ("word_fields", "fixation_fields"):
         kept.update(_list(selection.get(key, []), key))
-    return api.load_scanpath_data(
+    tables = api.load_scanpath_data(
         words,
         fixations,
         word_schema=word_schema,
@@ -654,3 +664,9 @@ def load_recipe_sources(
         keep_columns=sorted(kept | set(keep_columns or ())),
         trial_parts_manifest=trial_parts_manifest,
     )
+    samples = (
+        api.load_raw_gaze(raw_gaze, raw_gaze_schema=gaze_schema)
+        if raw_gaze is not None
+        else None
+    )
+    return tables, samples

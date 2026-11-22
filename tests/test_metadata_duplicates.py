@@ -90,7 +90,7 @@ def test_a_repeated_index_label_does_not_spread_a_value():
 
 
 def test_the_status_line_names_the_combined_rows():
-    from scanpath_studio.tabs import _combined_rows_note
+    from scanpath_studio.metadata_editor import _combined_rows_note
 
     assert _combined_rows_note(_build("text", ROWS).report) == (
         "combined 2 compatible duplicate rows"

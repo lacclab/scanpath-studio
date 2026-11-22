@@ -303,17 +303,21 @@ def _trial_positions(frame: pd.DataFrame) -> dict[tuple[str, str], np.ndarray]:
 
 
 def extract_trial(frame: pd.DataFrame, participant_id, trial_id) -> pd.DataFrame:
-    """Rows of one (participant, trial), sliced via the cached position index.
+    """Rows of one (participant, trial) in source order, via the cached index.
 
-    Equivalent to ``frame[(frame.participant_id == p) & (frame.trial_id == t)]``
-    but O(trial) instead of O(corpus) once the index is built — the per-rerun win
-    on large datasets, where every tab extracts the selected trial."""
+    Slice contiguous rows so Arrow can reuse their buffers. Gathering the
+    same rows by integer position can copy whole chunks of a string column.
+    """
     if frame is None or getattr(frame, "empty", True):
         return frame
     positions = _trial_positions(frame)
     pos = positions.get((str(participant_id), str(trial_id)))
     if pos is None or len(pos) == 0:
         return frame.iloc[0:0]
+    # Group positions are unique and in source order.
+    start, stop = pos[0], pos[-1] + 1
+    if stop - start == len(pos):
+        return frame.iloc[start:stop]
     return frame.iloc[pos]
 
 

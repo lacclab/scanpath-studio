@@ -25,6 +25,7 @@ from scanpath_studio.constants import (
     LEGEND_ARRANGEMENTS,
     LEGEND_POSITIONS,
 )
+from scanpath_studio.utils import extract_trial
 
 # No per-example deadline: under ``pytest -n auto`` on a busy CI runner a
 # pandas call can take longer than Hypothesis' 200 ms default, and a test that
@@ -108,6 +109,21 @@ def test_trial_id_series_matches_compose_id(rows):
         for row in rows
     ]
     assert vectorised == expected
+
+
+@given(st.lists(st.sampled_from([("p", "a"), ("p", "b"), ("q", "a")]), min_size=1))
+def test_extract_trial_preserves_source_rows_and_slices_contiguous_readings(keys):
+    frame = pd.DataFrame(keys, columns=["participant_id", "trial_id"])
+    frame["position"] = np.arange(len(frame))
+    frame.index = frame.index // 2  # Source index labels can repeat.
+    reading = extract_trial(frame, "p", "a")
+    expected = frame[(frame["participant_id"] == "p") & (frame["trial_id"] == "a")]
+    pd.testing.assert_frame_equal(reading, expected)
+    rows = expected["position"].to_numpy()
+    if len(rows) and rows[-1] - rows[0] + 1 == len(rows):
+        assert np.shares_memory(
+            reading["position"].to_numpy(), frame["position"].to_numpy()
+        )
 
 
 @given(

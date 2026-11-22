@@ -20,6 +20,19 @@ Essentials offers **Current figure** for the figure or replay on screen.
 
 For step-by-step instructions, see the [export tutorials](../../tutorials/exporting-figures/index.md).
 
+## Reproduce a coauthor's results
+
+The installed package includes a fictional three-reader study, its raw tables,
+recording setup, one tagged exclusion, figure settings and a cohort recipe.
+To work through it in an empty folder, copy the example and follow its README.
+
+```sh
+python -c "from importlib.resources import files; from shutil import copytree; copytree(files('scanpath_studio') / 'sample_data' / 'coauthor', 'canal-study')"
+```
+
+The commands recreate a figure and a two-word results table. A checksum from
+the original release lets the recipient verify the table byte for byte.
+
 ## Cite what you export { #cite }
 
 Files saved through **Export** include citation information in their metadata.

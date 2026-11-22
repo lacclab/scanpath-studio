@@ -1,0 +1,7 @@
+participant_id,trial_id,text_id,word_id,text,x,y,width,height,IA_DWELL_TIME
+p01,run-01,canal,1,Rain,80,100,60,24,120
+p01,run-01,canal,2,fell,150,100,52,24,180
+p02,run-02,canal,1,Rain,80,100,60,24,200
+p02,run-02,canal,2,fell,150,100,52,24,260
+p03,run-03,canal,1,Rain,80,100,60,24,800
+p03,run-03,canal,2,fell,150,100,52,24,900

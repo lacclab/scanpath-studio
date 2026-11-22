@@ -1,0 +1,7 @@
+participant_id,trial_id,text_id,fixation_id,word_id,x,y,duration_ms,timestamp_ms
+p01,run-01,canal,1,1,98,110,120,0
+p01,run-01,canal,2,2,166,114,180,150
+p02,run-02,canal,1,1,106,111,200,0
+p02,run-02,canal,2,2,179,113,260,230
+p03,run-03,canal,1,1,90,107,800,0
+p03,run-03,canal,2,2,158,108,900,830

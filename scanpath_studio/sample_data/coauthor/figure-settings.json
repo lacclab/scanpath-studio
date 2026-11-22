@@ -1,0 +1,184 @@
+{
+  "schema": 7,
+  "app": {
+    "name": "Scanpath Studio",
+    "version": "0.37.0"
+  },
+  "exported_at": "2026-11-22T21:51:35",
+  "data_source": "Canal (synthetic)",
+  "selection": {
+    "participant_id": "p02",
+    "trial_id": "run-02"
+  },
+  "mode": {
+    "animate": false,
+    "compare": false
+  },
+  "canvas_px": {
+    "width": 640,
+    "height": 360
+  },
+  "experimental_setup": {
+    "monitor_width_mm": 597.0,
+    "viewing_distance_mm": 800.0,
+    "display_dpi": 96.0,
+    "stimulus_font_pt": 12.0,
+    "use_stimulus_font_pt": false
+  },
+  "axes": {
+    "x_field": "x",
+    "y_field": "y",
+    "coordinate_grid": false,
+    "coordinate_grid_auto": true,
+    "coordinate_grid_spacing": 100.0
+  },
+  "layers": {
+    "words": true,
+    "word_labels": true,
+    "stimulus": true,
+    "fixations": true,
+    "order_labels": false,
+    "saccades": true,
+    "saccade_arrows": false,
+    "heatmap": false,
+    "raw_gaze": false,
+    "stimulus_image": false,
+    "full_monitor": true,
+    "autoplay": true
+  },
+  "illustration": {
+    "label_mode": "Auto",
+    "text": "",
+    "reasons": []
+  },
+  "preprocessing": {
+    "enabled": false,
+    "short_policy": "Off",
+    "short_threshold_ms": 80.0,
+    "merge_distance_chars": 1.0,
+    "discard_blink_adjacent": true
+  },
+  "animation": {
+    "grid_step_ms": 100,
+    "max_frames": 360,
+    "playback_speed": 1.0
+  },
+  "export": {
+    "width": null,
+    "unit": "mm",
+    "dpi": 300
+  },
+  "coloring": {
+    "color_by": "duration_ms",
+    "heatmap_metric": "counts",
+    "heatmap_style": "Word boxes",
+    "heatmap_sigma_auto": true,
+    "heatmap_sigma_px": 20.0,
+    "heatmap_norm": "Linear",
+    "show_fixation_colorbar": true,
+    "show_heatmap_colorbar": true,
+    "fixation_range": null,
+    "heatmap_range": null,
+    "fixation_colorscale": "Blues",
+    "heatmap_colorscale": "Blues",
+    "saccade_color": "#CC79A7",
+    "saccade_style": "solid",
+    "saccade_width": 2.0,
+    "saccade_color_mode": "Uniform",
+    "saccade_type_legend": true,
+    "saccade_class_colors": {},
+    "saccade_classes": [
+      "forward",
+      "skip",
+      "refixation",
+      "return_sweep",
+      "regression",
+      "other"
+    ],
+    "saccade_render_mode": "Straight",
+    "fixation_snap_to_word": false,
+    "drift_correction": "Off",
+    "drift_connectors": false,
+    "hollow_fixations": false,
+    "fixation_opacity": 0.5,
+    "fixation_color": "#0072B2",
+    "fixation_symbol": "circle",
+    "palette": "Default (colourblind-safe)",
+    "stimulus_image_opacity": 1.0,
+    "stimulus_image_offset_x": 0.0,
+    "stimulus_image_offset_y": 0.0,
+    "stimulus_image_scale": 1.0,
+    "fixation_colorbar_orientation": "Vertical",
+    "fixation_colorbar_tickangle": 0,
+    "fixation_colorbar_tickfont_size": 12,
+    "heatmap_colorbar_orientation": "Vertical",
+    "heatmap_colorbar_tickangle": 0,
+    "heatmap_colorbar_tickfont_size": 12
+  },
+  "sizing": {
+    "marker_size_range": [
+      8,
+      24
+    ],
+    "marker_size_scale": "sqrt",
+    "marker_duration_range": [
+      50,
+      600
+    ],
+    "duration_size_legend": true,
+    "order_font_size": 10,
+    "order_font_color": "#111111",
+    "base_font_size": 16
+  },
+  "text": {
+    "scale_text_to_boxes": true,
+    "line_spacing": 3.0,
+    "font_family": "monospace",
+    "text_color": "#000000",
+    "word_hover_fields": [
+      "text",
+      "word_id",
+      "line_idx",
+      "total_fixation_duration_ms"
+    ],
+    "fixation_hover_fields": [
+      "order_in_trial",
+      "duration_ms",
+      "word_id"
+    ]
+  },
+  "labels": {
+    "show_title": false,
+    "show_caption": false,
+    "title_pattern": "",
+    "caption_pattern": ""
+  },
+  "highlighting": {
+    "critical_span_style": "Mark text",
+    "highlight_column": "is_in_aspan",
+    "fixation_flags": null,
+    "highlight_text_color": "#D55E00",
+    "background_color": "#ffffff",
+    "span_border_color": "#000000"
+  },
+  "raw_gaze": {
+    "available": false,
+    "points": 0,
+    "synthesized": false,
+    "color": "#888888",
+    "marker_size": 4.0,
+    "opacity": 0.6
+  },
+  "word_boxes": {
+    "color": "#6c757d",
+    "line_opacity": 1.0,
+    "fill_color": "#646464",
+    "fill_opacity": 0.05
+  },
+  "compare": null,
+  "compare_view": {
+    "layout": "Overlay",
+    "stimulus": "Both",
+    "legend": true
+  }
+}

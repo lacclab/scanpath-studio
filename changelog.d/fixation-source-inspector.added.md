@@ -1,1 +1,0 @@
-Click a fixation or choose it by number to inspect its input file and data row, original units and word assignment. Merged fixations list their contributing source rows. Original input cells stay out of figure and bundle downloads.

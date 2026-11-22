@@ -28,7 +28,7 @@ PRIVATE_COLUMNS = frozenset(
 
 
 def without_source_cells(frame: pd.DataFrame | None) -> pd.DataFrame | None:
-    """Keep input cells inside the inspector, outside figures and public tables."""
+    """Exclude private input cells from figures and public tables."""
     if frame is None:
         return None
     private = PRIVATE_COLUMNS.intersection(frame.columns)

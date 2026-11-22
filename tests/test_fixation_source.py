@@ -66,6 +66,24 @@ def test_parsed_input_row_source_units_assignment_and_missing_identity(tmp_path)
     }
 
 
+def test_remapping_retains_only_previously_recorded_input_cells():
+    raw = pd.DataFrame(
+        [{"participant_id": "p", "trial_id": "t", "x": 21, "y": 20, "FPOGD": 0.04}]
+    )
+    schema = data.infer_fix_schema(raw)
+    ordinary = data.normalize_fixations(raw, schema)
+    recorded = data.normalize_fixations(raw, schema, keep_source_cells=True)
+    mapping = data.infer_fix_schema(ordinary)
+
+    remapped = data.remap_normalized_frame(ordinary, mapping, kind="fixations")
+    assert not fixation_source.PRIVATE_COLUMNS.intersection(ordinary)
+    assert not fixation_source.PRIVATE_COLUMNS.intersection(remapped)
+
+    remapped = data.remap_normalized_frame(recorded, mapping, kind="fixations")
+    columns = [fixation_source.SOURCE_ROW, fixation_source.INPUT_CELLS["duration_ms"]]
+    pd.testing.assert_frame_equal(remapped[columns], recorded[columns])
+
+
 def test_source_cells_stay_out_of_saved_redacted_figures_and_bundle(tmp_path):
     words, paths = load_reading(tmp_path)
     words, fixations = api.load_scanpath_data(

@@ -1734,6 +1734,7 @@ def run_analysis_recipe(
     words: pd.DataFrame,
     fixations: pd.DataFrame | None = None,
     *,
+    raw_gaze: pd.DataFrame | None = None,
     participant_metadata: TablesLike | None = None,
     trial_metadata: TablesLike | None = None,
     text_metadata: TablesLike | None = None,
@@ -1746,6 +1747,7 @@ def run_analysis_recipe(
         recipe: The downloaded recipe JSON path or its decoded object.
         words: Normalized Words table from `load_scanpath_data` or a corpus loader.
         fixations: The matching normalized Fixations table, when present.
+        raw_gaze: Normalized samples from `load_raw_gaze` when the text filter uses their IDs.
         participant_metadata: The original participant metadata table for a reader filter.
         trial_metadata: The original trial metadata table for a trial filter.
         text_metadata: The original text metadata table for a text filter.
@@ -1764,10 +1766,12 @@ def run_analysis_recipe(
         recipe = json.loads(Path(recipe).read_text(encoding="utf-8"))
     words, word_names = _named_in(words, "words")
     fixations, fix_names = _named_in(fixations, "fixations", optional=True)
+    samples, _ = _named_in(raw_gaze, "raw_gaze", optional=True)
     table = cohort_recipe_table(
         recipe,
         words,
         fixations,
+        raw_gaze=samples,
         metadata={
             "participant": participant_metadata,
             "trial": trial_metadata,

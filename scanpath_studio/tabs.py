@@ -9135,7 +9135,7 @@ def _download_tidy(
             else {"schemas": st.session_state.get("_active_column_mapping") or {}}
         )
         # Only the mapping and file transformations travel. A local session-set path does not.
-        tables = ("words", "fixations")
+        tables = ("words", "fixations", "raw_gaze")
         mapping = {
             t: inputs["schemas"][t]
             for t in tables

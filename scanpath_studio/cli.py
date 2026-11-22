@@ -3868,6 +3868,11 @@ def _recipe_parser() -> argparse.ArgumentParser:
     source.add_argument("--words", nargs="+", help="Original Words table(s).")
     parser.add_argument("--fixations", nargs="+", help="Original Fixations table(s).")
     parser.add_argument(
+        "--raw-gaze",
+        nargs="+",
+        help="Original raw gaze table(s) when a text metadata filter uses their IDs.",
+    )
+    parser.add_argument(
         "--trial-parts-manifest", help="Multipart trial manifest used at import."
     )
     _add_schema_flags(parser)
@@ -3894,6 +3899,7 @@ def recipe(argv: list[str]) -> None:
     if args.sample and any(
         (
             args.fixations,
+            args.raw_gaze,
             args.word_schema,
             args.fix_schema,
             args.trial_parts_manifest,
@@ -3913,10 +3919,11 @@ def recipe(argv: list[str]) -> None:
             if args.trial_parts_manifest
             else None
         )
-        tables = load_recipe_sources(
+        tables, raw_gaze = load_recipe_sources(
             saved,
             words,
             fixations,
+            data.load_sample_raw_gaze() if args.sample else args.raw_gaze,
             word_schema=_parse_schema_arg(args.word_schema, "--word-schema"),
             fix_schema=_parse_schema_arg(args.fix_schema, "--fix-schema"),
             keep_columns=args.keep_columns,
@@ -3925,6 +3932,7 @@ def recipe(argv: list[str]) -> None:
         result = api.run_analysis_recipe(
             saved,
             *tables,
+            raw_gaze=raw_gaze,
             participant_metadata=args.participant_metadata,
             trial_metadata=args.trial_metadata,
             text_metadata=args.text_metadata,

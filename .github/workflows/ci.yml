@@ -60,6 +60,24 @@ jobs:
         # runtime, so this is a ~3x wall-clock win.
         run: pytest -q -n auto
 
+  windows-export:
+    name: Check lab exports and recovery on Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - run: uv pip install --system -e ".[test]"
+      - run: >-
+          python -m pytest -q
+          tests/test_export_naming.py::test_extract_portable_bundle_preserves_original_ids
+          tests/test_persistence.py::test_two_processes_cannot_replace_the_same_annotation_snapshot
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest

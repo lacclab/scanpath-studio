@@ -69,8 +69,21 @@ save each layer to a separate file with `save_figure_layers` or
 
 In the app, **Export bundle** → **Trials to include** picks the trials:
 **This trial**, **All filtered trials**, **All trials of one participant**,
-**All trials of one text** or **All trials, ignoring filters**. For a scripted
-batch, loop over the trial list:
+**All trials of one text** or **All trials, ignoring filters**. Open **Preview
+bundle contents** to see the selected readings, their filenames and the columns
+in their tables. A word-measures CSV can contain the original stimulus words
+even when the figure masks them. When you select specific screens, the bundle
+includes notes on those screens and their parent trials.
+
+If a figure fails, the download includes the files that succeeded. With the same data
+and settings still open, choose **Retry failed figure files** to fill in missing figures.
+
+CSV bundles include `columns.json` and an editable `read_csv.R`. In R, set
+the working directory to the extracted bundle and run `source("read_csv.R")`
+with the jsonlite package installed. The example preserves reader IDs such as
+`01` and `1` as text. A blank measurement becomes `NA` and zero stays zero.
+
+For a scripted batch, loop over the trial list.
 
 ??? example "Python: one HTML figure per trial"
 

@@ -173,7 +173,7 @@ class TestBulkExport:
     def test_without_names_the_bundle_keeps_the_internal_names(self, frames):
         with _export(frames) as zf:
             fix = pd.read_csv(zf.open("per_trial/p1__t1/fixations.csv"))
-            assert "columns.json" not in zf.namelist()
+            assert json.loads(zf.read("columns.json"))["tables"] == {}
         assert "duration_ms" in fix
 
 
@@ -225,7 +225,8 @@ class TestPairExport:
     def test_a_pair_across_datasets_keeps_the_shared_internal_names(self, frames):
         zf, fix = self._pair(frames, "Other corpus")
         assert "duration_ms" in fix
-        assert not any(n.endswith("columns.json") for n in zf.namelist())
+        dictionary = next(n for n in zf.namelist() if n.endswith("columns.json"))
+        assert json.loads(zf.read(dictionary))["tables"] == {}
 
 
 # --- Aliases, app datasets and rewritten columns ----------------------------
@@ -271,7 +272,7 @@ def test_a_derived_table_names_only_its_ids():
 def test_a_dataset_with_no_map_exports_as_before(frames):
     """An app dataset with no names (synthetic, authored) passes empty maps."""
     with _export(frames, column_names={"fixations": cn.EMPTY, "words": cn.EMPTY}) as zf:
-        assert "columns.json" not in zf.namelist()
+        assert json.loads(zf.read("columns.json"))["tables"] == {}
         readme = zf.read("README.md").decode("utf-8")
     assert "Column names (Scanpath Studio's standard names)" in readme
 
@@ -359,3 +360,128 @@ class TestRewrites:
         names = ColumnNames.from_payload(payload)
         assert names.kind_of("word_id") == cn.CONVERTED
         assert names.label("word_id").endswith(" − 1")
+
+
+@pytest.mark.parametrize("same_source", [True, False])
+def test_comparison_labels_preserve_the_labs_columns_and_source_headers(
+    frames, same_source
+):
+    _, words, fixations = frames
+    sides = [
+        ComparisonSide(
+            "p1",
+            "t1",
+            words.assign(
+                dataset=study, scanpath="word review", comparison_dataset="lab label"
+            ),
+            fixations.assign(
+                dataset=study,
+                scanpath="manual review",
+                comparison_scanpath_2="lab field",
+            ),
+            dataset=source,
+        )
+        for study, source in (
+            ("pilot", "Lab A"),
+            ("replication", "Lab A" if same_source else "Lab B"),
+        )
+    ]
+    maps = {
+        "fixations": ColumnNames({"duration_ms": SourceName(("comparison_scanpath",))})
+    }
+    payload = pair_export(
+        None,
+        *sides,
+        canvas_width=800,
+        canvas_height=400,
+        x_field="x",
+        y_field="y",
+        settings={},
+        column_names=maps,
+        options=ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_fixations=True,
+            include_measures=True,
+        ),
+    )
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        folder = f"{sides[0].slug}__vs__{sides[1].slug}"
+        columns = json.loads(archive.read(f"{folder}/columns.json"))["tables"]
+        for table, artifact, lab_label in (
+            ("words", "measures", "word review"),
+            ("fixations", "fixations", "manual review"),
+        ):
+            frame = pd.read_csv(archive.open(f"{folder}/{artifact}.csv"))
+            assert set(frame["dataset"]) == {"pilot", "replication"}
+            assert set(frame["scanpath"]) == {lab_label}
+            generated = {
+                field["column"]: field["note"]
+                for field in columns[table]
+                if field["kind"] == cn.GENERATED
+            }
+            side_label = (
+                "comparison_scanpath_3" if same_source else "comparison_scanpath"
+            )
+            assert side_label in generated and "comparison_dataset_2" in generated
+            assert frame.groupby("dataset")[side_label].first().to_dict() == {
+                "pilot": "A",
+                "replication": "B",
+            }
+            assert set(frame["comparison_dataset_2"]) == {s.dataset for s in sides}
+            if table == "fixations" and same_source:
+                assert (
+                    frame["comparison_scanpath"].tolist()
+                    == fixations["duration_ms"].tolist() * 2
+                )
+
+
+def test_csv_dictionary_uses_the_written_types_units_and_missing_convention(tmp_path):
+    from scanpath_studio.export import bulk_export
+
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["01", "1", "NA"],
+            "trial_id": ["1"] * 3,
+            "duration_ms": [0.0, None, 24.0],
+            "x": [0, 1, 2],
+        }
+    )
+    payload, _ = bulk_export(
+        fixations[["participant_id", "trial_id"]],
+        pd.DataFrame(),
+        fixations,
+        options=ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_plot_config=False,
+            include_fixations=True,
+            combine_trials=True,
+        ),
+        settings={},
+        canvas_width=100,
+        canvas_height=100,
+        x_field="x",
+        y_field="y",
+        base_font_size=12,
+        font_family="Arial",
+        column_names=MAPS,
+    )
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        archive.extractall(tmp_path)
+        manifest = json.loads(archive.read("columns.json"))
+    path = "aggregate/all_fixations.csv"
+    cols = {
+        f["column"]: f for f in manifest["csv_schemas"][manifest["csv_files"][path]]
+    }
+    assert cols["RECORDING_SESSION_LABEL"]["r_type"] == "character"
+    assert cols["RECORDING_SESSION_LABEL"]["identifier"] is True
+    assert cols["CURRENT_FIX_DURATION"]["r_type"] == "numeric"
+    assert cols["CURRENT_FIX_DURATION"]["unit"] == "ms"
+    assert manifest["csv_missing_values"]["empty_field"] == "missing"
+    assert (tmp_path / "read_csv.R").is_file()
+    observed = pd.read_csv(
+        tmp_path / path, dtype={"RECORDING_SESSION_LABEL": str}, keep_default_na=False
+    )
+    assert observed["RECORDING_SESSION_LABEL"].tolist() == ["01", "1", "NA"]
+    assert observed["CURRENT_FIX_DURATION"].tolist() == ["0.0", "", "24.0"]

@@ -324,8 +324,186 @@ def test_the_example_shows_the_name_a_clashing_pattern_gets():
     def example():
         return next(c.value for c in at.caption if c.value.startswith("Example:"))
 
-    assert example() == "Example: `per_trial/p1__t1/figure.png`"
+    assert example() == "Example: `per_trial/p1__t1/figure.pdf`"
     at.text_input(key="bulk_path_pattern").set_value("README.md").run(timeout=30)
     assert not at.exception, at.exception
     assert not at.error, [e.value for e in at.error]
     assert example().startswith("Example: `README-2.md` (`README.md` is taken")
+
+
+def test_extract_portable_bundle_preserves_original_ids(tmp_path):
+    import io
+    import re
+    import zipfile
+
+    from scanpath_studio.export import bulk_export
+
+    readers = ["CON", "_CON", "LPT¹.txt", "run.", "run", "clock?"]
+    combos = pd.DataFrame({"participant_id": readers, "trial_id": ["t"] * len(readers)})
+    payload, _ = bulk_export(
+        combos,
+        pd.DataFrame(),
+        combos.assign(x=1, y=1),
+        settings={},
+        canvas_width=100,
+        canvas_height=100,
+        base_font_size=12,
+        font_family="Arial",
+        x_field="x",
+        y_field="y",
+        options=ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_fixations=True,
+            include_plot_config=False,
+            path_pattern="{participant_id}/{artifact}.{ext}",
+        ),
+    )
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        archive.extractall(tmp_path)
+    manifest = pd.read_csv(tmp_path / "index.csv")
+    rows = manifest[manifest["artifact"].eq("fixations")]
+    assert set(rows["participant_id"]) == set(readers)
+    assert len(set(rows["path"].str.casefold())) == len(readers)
+    for row in rows.itertuples():
+        parts = row.path.split("/")
+        assert all(not part.endswith((".", " ")) for part in parts)
+        assert all(
+            not re.fullmatch(r"(?:CON|LPT[1-9¹²³])(?:\..*)?", part, re.IGNORECASE)
+            for part in parts
+        )
+        assert pd.read_csv(tmp_path / row.path)["participant_id"].tolist() == [
+            row.participant_id
+        ]
+
+
+def test_suffixes_skip_explicit_claims_and_keep_folder_reuse():
+    used = ArchiveNames(["fig.csv", "dir"])
+    assert used.claim("fig-3.csv") == "fig-3.csv"
+    assert used.claim("fig.csv", record=False) == "fig-2.csv"
+    assert used.claim("Fig.CSV") == "Fig-2.CSV"
+    assert used.claim("fig.csv") == "fig-4.csv"
+    assert used.claim("dir/first.csv") == "dir-2/first.csv"
+    assert used.claim("dir/second.csv") == "dir-2/second.csv"
+    assert used.claim("dir-2") == "dir-2-2"
+
+
+def _real_bundle_panel():
+    import pandas as pd
+
+    from scanpath_studio import api
+    from scanpath_studio.tabs import _render_bulk_export
+
+    combos = pd.DataFrame({"participant_id": ["p1", "p2"], "trial_id": ["t1", "t2"]})
+    demo = api.build_authored_scanpath("Cat")
+    words, fixations = (
+        pd.concat(
+            [
+                frame.assign(participant_id=pid, trial_id=tid)
+                for pid, tid in combos.itertuples(index=False, name=None)
+            ],
+            ignore_index=True,
+        )
+        for frame in demo
+    )
+    _render_bulk_export(
+        combos,
+        words,
+        fixations,
+        combos,
+        words,
+        fixations,
+        pd.DataFrame(),
+        canvas_width=800,
+        canvas_height=400,
+        base_font_size=16,
+        font_family="Arial",
+        x_field="x",
+        y_field="y",
+        figure_settings={},
+        selected_participant="p2",
+        selected_trial="t2",
+    )
+
+
+def test_invalid_pattern_disables_build_and_preview_matches_real_html_and_table_files():
+    import io
+    import zipfile
+
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_real_bundle_panel).run()
+    assert not at.exception
+
+    def build():
+        return next(btn for btn in at.button if btn.label == "Build export")
+
+    def assert_example(expected):
+        assert any(c.value.startswith(f"Example: `{expected}`") for c in at.caption)
+        build().click().run()
+        assert not at.exception
+        with zipfile.ZipFile(
+            io.BytesIO(at.session_state["_bulk_export_cache"]["data"])
+        ) as archive:
+            assert expected in archive.namelist()
+
+    at.pills(key="bulk_export_figfmts").set_value(["HTML"]).run()
+    assert_example("per_trial/p1__t1/figure.html")
+    at.text_input(key="bulk_export_path_pattern").set_value(
+        "{missing}/{artifact}.{ext}"
+    ).run()
+    assert build().disabled
+    assert (
+        at.text_input(key="bulk_export_path_pattern").value
+        == "{missing}/{artifact}.{ext}"
+    )
+    assert any("{missing}" in err.value for err in at.error)
+    assert not any(c.value.startswith("Example:") for c in at.caption)
+    at.text_input(key="bulk_export_path_pattern").set_value("README.md")
+    at.pills(key="bulk_export_figfmts").set_value([])
+    at.toggle(key="bulk_export_cfg").set_value(False)
+    at.pills(key="bulk_export_tabular").set_value(["Fixations"])
+    at.radio(key="bulk_export_scope").set_value("This trial").run()
+    assert_example("README-2.md")
+    at.text_input(key="bulk_export_path_pattern").set_value(
+        "{participant_id}/{n_fixations}-{artifact}.{ext}"
+    ).run()
+    assert_example("p2/1-fixations.csv")
+    at.toggle(key="bulk_export_combine").set_value(True).run()
+    assert_example("aggregate/all_fixations.csv")
+
+
+def test_partial_bundle_immediately_offers_retry_and_removes_it_after_repair(
+    monkeypatch,
+):
+    from contextlib import contextmanager
+
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import export
+
+    calls = []
+
+    @contextmanager
+    def renderer(_):
+        def draw(_figure, fmt, *_dimensions):
+            calls.append(fmt)
+            if len(calls) == 1:
+                raise ValueError("First PDF failed")
+            return b"published figure"
+
+        yield draw
+
+    monkeypatch.setattr(export, "_figure_renderer", renderer)
+    at = AppTest.from_function(_real_bundle_panel).run()
+    next(b for b in at.button if b.label == "Build export").click().run()
+    retry = next(b for b in at.button if b.label == "Retry failed figure files")
+    assert (
+        len(calls) == 2
+        and at.session_state["_bulk_export_cache"]["progress"].retryable_figures == 1
+    )
+    retry.click().run()
+    assert not at.exception
+    assert len(calls) == 3
+    assert at.session_state["_bulk_export_cache"]["progress"].retryable_figures == 0
+    assert all(b.label != "Retry failed figure files" for b in at.button)

@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
-EXPORTER_VERSION = "exp6-v2"
+EXPORTER_VERSION = "exp6-v3"
 
 
 class ExportStage(str, Enum):

@@ -286,10 +286,12 @@ from scanpath_studio.export import (
     annotate_figure,
     apply_export_scope,
     bulk_export,
+    bundle_contents,
     count_export,
     describe_plan,
     figure_text_style,
     html_plotlyjs,
+    naming_example,
     pattern_fields,
     plan_from_counts,
     print_width_px,
@@ -8378,6 +8380,23 @@ def _render_bulk_export(
             frame_fingerprint(every_raw_gaze),
         ),
     )
+
+    def example_for(options: ExportOptions, scoped: pd.DataFrame):
+        frames = (
+            (words_all, fixations_all, every_raw_gaze)
+            if options.export_unfiltered
+            else (words_filtered, fixations_filtered, raw_gaze)
+        )
+        return naming_example(
+            options,
+            scoped,
+            *frames,
+            settings=figure_settings,
+            axes=(x_field, y_field),
+            column_names=active_all(st.session_state),
+            metadata_rows_for=_metadata_mod.pattern_rows,
+        )
+
     options = render_export_options(
         st,
         combos,
@@ -8388,6 +8407,7 @@ def _render_bulk_export(
         selected_participant=selected_participant,
         selected_trial=selected_trial,
         screen_options=screen_options,
+        example_for=example_for,
     )
     # Tick "Export the whole dataset" → export the unfiltered frames.
     active_raw_gaze = raw_gaze
@@ -8427,25 +8447,28 @@ def _render_bulk_export(
                 options.screens,
             ),
         )
-    # Screens no trial in scope shows would build an empty bundle.
-    no_screens = options.screens is not None and counts == (0, 0)
     run_col, info_col = st.columns([1, 3])
     with run_col:
         nothing_ticked = not (
-            options.figure_formats()
+            options.needs_figure()
             or options.include_plot_config
             or options.include_annotations
             or options.any_table()
         )
+        blocked = (
+            "Correct the file path pattern above."
+            if not options.path_pattern
+            else "Choose at least one file to include."
+            if nothing_ticked
+            else "No trial matches the selected scope and screens."
+            if active_combos.empty or counts == (0, 0)
+            else None
+        )
         run = st.button(
             "Build export",
             type="primary",
-            disabled=active_combos.empty or nothing_ticked or no_screens,
-            help="Tick at least one thing to include above."
-            if nothing_ticked
-            else "No trial here shows the screens picked above."
-            if no_screens
-            else None,
+            disabled=bool(blocked),
+            help=blocked,
         )
         stop_slot = st.empty()
     task_key = _bulk_export_task_key()
@@ -8477,6 +8500,36 @@ def _render_bulk_export(
         from scanpath_studio.app import _dataset_display_name
 
         annotation_dataset = _dataset_display_name(annotation_owner)
+    preview = st.expander(
+        "Preview bundle contents", key="bulk_export_contents", on_change="rerun"
+    )
+    if preview.open and options.path_pattern:
+        preview_settings = {
+            **figure_settings,
+            **{
+                f"{grain}_metadata": st.session_state.get(f"_export_{grain}_metadata")
+                for grain in ("participant", "trial", "text")
+            },
+        }
+        try:
+            contents = bundle_contents(
+                active_combos,
+                active_words,
+                active_fix,
+                active_raw_gaze,
+                options=options,
+                settings=preview_settings,
+                axes=(x_field, y_field),
+                column_names=_dataset_table_names(),
+                metadata_rows_for=_metadata_mod.pattern_rows,
+                annotation_records=annotation_records,
+            )
+        except ValueError as error:
+            preview.error(str(error))
+        else:
+            for note in contents.notes:
+                preview.caption(note)
+            preview.dataframe(pd.DataFrame(contents.files), hide_index=True)
     sig = (
         *frame_keys,
         int(canvas_width),
@@ -8501,7 +8554,12 @@ def _render_bulk_export(
         st.session_state.pop("_bulk_export_cache", None)
         cache = None
 
-    if run:
+    retry = bool(
+        st.session_state.pop("_bulk_retry_requested", False)
+        and cache
+        and cache["progress"].retryable_figures
+    )
+    if run or retry:
         status_box = info_col.status("Preparing the export bundle…", expanded=True)
         progress_slot = info_col.empty()
         progress_bar = None
@@ -8535,7 +8593,12 @@ def _render_bulk_export(
         )
         try:
             with progress.task(task_key, title="Building the export bundle"):
-                zip_bytes, built_progress = bulk_export(
+                build = bulk_export
+                if retry:
+                    from scanpath_studio.export_retry import retry_failed_figures
+
+                    build = functools.partial(retry_failed_figures, cache, sig)
+                zip_bytes, built_progress = build(
                     active_combos,
                     active_words,
                     active_fix,
@@ -8561,9 +8624,10 @@ def _render_bulk_export(
             stop_slot.empty()
             progress_slot.empty()
             status_box.update(label="Export failed", state="error")
-            st.session_state.pop("_bulk_export_cache", None)
+            if not retry:
+                st.session_state.pop("_bulk_export_cache", None)
+                cache = None
             st.warning(f"Couldn't build the export bundle: {exc}")
-            cache = None
         else:
             stop_slot.empty()
             progress_slot.empty()
@@ -8591,6 +8655,13 @@ def _render_bulk_export(
             ):
                 for err in built_progress.errors:
                     st.write(err)
+        if built_progress.retryable_figures:
+            st.button(
+                "Retry failed figure files",
+                on_click=st.session_state.__setitem__,
+                args=("_bulk_retry_requested", True),
+                help="Reuse the successful files and render only the failed figures in this bundle.",
+            )
         st.download_button(
             "⬇ Download bundle (zip)",
             data=zip_bytes,

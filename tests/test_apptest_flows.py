@@ -547,7 +547,13 @@ class TestBulkExportFlow:
         assert options.export_unfiltered is False
 
         # The demo's column-name map travels with its tables.
-        expected = {"README.md", "CITATION.bib", "index.csv", "columns.json"}
+        expected = {
+            "README.md",
+            "CITATION.bib",
+            "index.csv",
+            "columns.json",
+            "read_csv.R",
+        }
         for trial in pool:
             expected.add(f"per_trial/l7_1090__{trial}/fixations.csv")
             expected.add(f"per_trial/l7_1090__{trial}/plot_config.json")
@@ -621,9 +627,9 @@ class TestBulkExportFlow:
             if name.startswith("per_trial/")
         }
         assert exported == {"l7_1090", "l37_1129"}
-        # README, CITATION.bib, index.csv and columns.json, then two files
+        # README, citation, inventory, dictionary and R reader, then two files
         # per trial.
-        assert len(names_all) == 4 + 2 * DEMO_TRIALS_IN_PICKER
+        assert len(names_all) == 5 + 2 * DEMO_TRIALS_IN_PICKER
 
     def test_the_plan_is_said_and_a_stopped_build_offers_no_bundle(self, monkeypatch):
         """Before the build, the panel says what it will write; Stop mid-build

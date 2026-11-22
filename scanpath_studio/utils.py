@@ -2047,7 +2047,9 @@ def qualify_for_compare(frame: pd.DataFrame, dataset: str) -> pd.DataFrame:
     if frame.empty:
         return frame
     out = frame.copy()
-    out["dataset"] = dataset
+    out.attrs["_comparison_added_dataset"] = "dataset" not in out
+    if out.attrs["_comparison_added_dataset"]:
+        out["dataset"] = dataset
     out["participant_id"] = (
         dataset + COMPARE_DATASET_SEP + out["participant_id"].astype(str)
     )
@@ -2084,12 +2086,14 @@ def unqualify_for_export(frame: pd.DataFrame, participant: str) -> pd.DataFrame:
 
     The namespace exists so `make_comparison_figure` can slice two colliding
     ``(participant, trial)`` pairs apart. An exported table must carry the id the
-    corpus actually uses, or it won't join back to anything. The
-    stamped ``dataset`` column is kept — that is what disambiguates the rows.
+    corpus actually uses, or it won't join back to anything. Remove the
+    figure-only label before the pair writer names both sides' columns.
     """
-    if frame is None or frame.empty or "dataset" not in frame.columns:
+    if frame is None or frame.empty or "_comparison_added_dataset" not in frame.attrs:
         return frame
     out = frame.copy()
+    if out.attrs.pop("_comparison_added_dataset"):
+        out = out.drop(columns="dataset")
     out["participant_id"] = str(participant)
     return out
 

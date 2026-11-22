@@ -202,6 +202,96 @@ def test_a_trial_change_covers_the_figure_until_the_next_one_draws(page):
     assert frame.locator("#truescale-single .main-svg").count() >= 1
 
 
+def test_keyboard_steps_trials_from_the_page_and_plot(app_url, browser):
+    page = _open(browser, f"{app_url}/?ui=full")
+    try:
+        previous = page.locator(".st-key-single_prev_trial button").first
+        next_trial = page.locator(".st-key-single_next_trial button").first
+        picker = page.locator(".st-key-single_trial_id input").first
+        sync_api.expect(previous).to_be_disabled()
+
+        picker.focus()
+        page.keyboard.press("ArrowRight")
+        sync_api.expect(previous).to_be_disabled()
+        page.keyboard.press("Escape")
+        picker.blur()
+        page.keyboard.press("ArrowRight")
+        sync_api.expect(previous).to_be_enabled(timeout=30_000)
+        _settle(page)
+
+        frame = _plot_frame(page, "single")
+        frame.locator(".plotly .nsewdrag").first.click()
+        page.keyboard.press("ArrowLeft")
+        sync_api.expect(previous).to_be_disabled(timeout=30_000)
+        _settle(page)
+        next_trial.focus()
+        page.keyboard.press("ArrowRight")
+        sync_api.expect(previous).to_be_enabled(timeout=30_000)
+        assert page.errors == []
+    finally:
+        page.context.close()
+
+
+def test_keyboard_controls_replay_without_changing_trial(simple_page):
+    page = simple_page
+    frame = _plot_frame(page, "single_anim")
+    timeline = frame.get_by_role("slider", name="Replay time")
+    timeline.focus()
+    page.keyboard.press("End")
+    sync_api.expect(timeline).to_have_value(timeline.get_attribute("max"))
+    page.keyboard.press("Home")
+    page.keyboard.press("ArrowRight")
+    sync_api.expect(timeline).to_have_value("1")
+    page.keyboard.press("ArrowLeft")
+    sync_api.expect(timeline).to_have_value("0")
+    page.keyboard.press("Space")
+    sync_api.expect(timeline).not_to_have_value("0")
+    page.keyboard.press("Space")
+
+    # Space on the page controls this same player without moving focus.
+    next_trial = page.locator(".st-key-single_next_trial button").first
+    next_trial.focus()
+    next_trial.blur()
+    paused = timeline.input_value()
+    page.keyboard.press("Space")
+    sync_api.expect(timeline).not_to_have_value(paused)
+    page.keyboard.press("Space")
+    sync_api.expect(
+        page.locator(".st-key-single_prev_trial button").first
+    ).to_be_disabled()
+    assert page.errors == []
+
+
+def test_keyboard_steps_comparison_b_at_a_boundary(app_url, browser):
+    page = _open(browser, f"{app_url}/?ui=full")
+    try:
+        page.locator(".st-key-single_compare_toggle label").click()
+        _settle(page)
+        position = page.locator(".st-key-single_compare_pos").get_by_role("slider")
+        position.focus()
+        page.keyboard.press("End")
+        next_b = page.locator(".st-key-single_compare_next button").first
+        sync_api.expect(next_b).to_be_disabled(timeout=30_000)
+        _settle(page)
+        previous_b = page.locator(".st-key-single_compare_prev button").first
+        previous_b.focus()
+        page.keyboard.press("Shift+ArrowLeft")
+        sync_api.expect(next_b).to_be_enabled(timeout=30_000)
+        _settle(page)
+        next_b.focus()
+        page.keyboard.press("Shift+ArrowRight")
+        sync_api.expect(next_b).to_be_disabled(timeout=30_000)
+        _settle(page)
+        page.keyboard.press("Shift+ArrowLeft")
+        sync_api.expect(next_b).to_be_enabled(timeout=30_000)
+        sync_api.expect(
+            page.locator(".st-key-single_prev_trial button").first
+        ).to_be_disabled()
+        assert page.errors == []
+    finally:
+        page.context.close()
+
+
 def test_the_tour_card_shows_nothing_until_its_stylesheet_applies(page):
     """Streamlit draws a markdown block's raw HTML — the card's stylesheet —
     only once it has fetched its HTML renderer, a script of its own. Without

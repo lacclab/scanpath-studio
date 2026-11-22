@@ -64,6 +64,21 @@ participant in brackets, such as `3 [p2]`.
 [All controls → Trial control bar](controls.md#trial-control-bar) describes
 each control.
 
+### Keyboard shortcuts
+
+| With focus on | Keys | Action |
+| --- | --- | --- |
+| The page, plot background or trial arrow buttons | ++left++ / ++right++ | Previous or next trial in the current list (A in Compare) |
+| The page, plot background or trial arrow buttons | ++shift+left++ / ++shift+right++ | Previous or next trial for B in Compare |
+| The page or plot background | ++space++ | Play or pause the replay |
+| The **Replay time** slider | ++left++ / ++right++ | Pause and step one frame |
+| The **Replay time** slider | ++home++ / ++end++ | Jump to the first or last frame |
+| The **Replay time** slider | ++space++ | Play or pause from the current frame |
+
+With **A and B together** on, either pair of trial shortcuts steps both
+readings. Use ++tab++ and ++shift+tab++ to reach the replay controls. The slider keys
+also work in downloaded HTML replays.
+
 ## Control the layers
 
 The :material/tune: **Plot controls** column, on the right of the plot, holds

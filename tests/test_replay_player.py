@@ -401,6 +401,27 @@ class TestToolbar:
         assert [(int(n), at) for n, at in log["shown"] if at >= 5010] == [(0, 5010)]
         assert log["toolbar"]["range"]["value"] == "0"
 
+    def test_slider_keys_pause_at_zero_and_resume_after_a_held_space(self, tmp_path):
+        log = _run_page(
+            _replay(),
+            [
+                ["key", {"key": "Home"}],  # autoplay is still on frame zero
+                ["run_until", 1000],
+                ["key", {"key": " "}],
+                ["run_until", 2010],
+                ["key", {"key": " "}],
+                ["key", {"key": " ", "repeat": True}],
+                ["run_until", 4010],
+                ["key", {"key": " "}],
+                ["run_until", 5010],
+            ],
+            tmp_path,
+        )
+        assert not [at for _, at in log["shown"] if 0 < at < 1000 or 2010 < at < 4010]
+        before = [int(n) for n, at in log["shown"] if 1000 <= at <= 2010]
+        resumed = [int(n) for n, at in log["shown"] if at >= 4010]
+        assert 0 < before[-1] == resumed[0] < resumed[-1]
+
     def test_seeking_shows_that_frame_and_stops_the_clock(self, tmp_path):
         fig = _replay()
         log = _run_page(

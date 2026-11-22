@@ -3333,7 +3333,7 @@ def _render_compare_selector(
             args=(-1,),
             disabled=current_idx == 0
             and (not linked or at_list_end(primary_options, "single_trial_id", -1)),
-            help="Previous trial for scanpath B." + step_help,
+            help="Previous trial for scanpath B (Shift + Left arrow)." + step_help,
         )
         step_col.button(
             f"▶ {spoken('Next comparison trial')}",
@@ -3343,7 +3343,7 @@ def _render_compare_selector(
             args=(1,),
             disabled=current_idx == n - 1
             and (not linked or at_list_end(primary_options, "single_trial_id", 1)),
-            help="Next trial for scanpath B." + step_help,
+            help="Next trial for scanpath B (Shift + Right arrow)." + step_help,
         )
 
     if selected_compare_label:

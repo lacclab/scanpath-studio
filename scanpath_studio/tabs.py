@@ -8345,12 +8345,12 @@ def _bulk_export_task_key() -> tuple:
     return ("bulk_export", loading.session_id())
 
 
-def _stop_bulk_export(task_key: tuple) -> None:
-    """Stop on a running bundle build: it ends before its next screen, and no
-    bundle is offered. Session state and annotations are left as they were."""
+def _stop_bulk_export(task_key: tuple, retry: bool = False) -> None:
+    """Stop the build. A cancelled retry leaves its original download available."""
     progress.cancel(task_key)
-    st.session_state[_BULK_EXPORT_STOPPED] = True
-    st.session_state.pop("_bulk_export_cache", None)
+    st.session_state[_BULK_EXPORT_STOPPED] = "retry" if retry else "build"
+    if not retry:
+        st.session_state.pop("_bulk_export_cache", None)
 
 
 @st.cache_data(show_spinner=False, max_entries=16)
@@ -8527,10 +8527,12 @@ def _render_bulk_export(
         progress.cancel(task_key)
     if counts is not None:
         info_col.caption(describe_plan(plan_from_counts(*counts, options)))
-    if st.session_state.pop(_BULK_EXPORT_STOPPED, False) and not run:
+    stopped = st.session_state.pop(_BULK_EXPORT_STOPPED, None)
+    if stopped and not run:
         info_col.warning(
-            "Export stopped, so no bundle was built. Click **Build export** to "
-            "start again.",
+            "Retry stopped. The previous bundle is still available."
+            if stopped == "retry"
+            else "Export stopped, so no bundle was built. Click **Build export** to start again.",
             icon=ICONS["warning"],
         )
     # The session's annotations, only when the bundle asks for them —
@@ -8637,8 +8639,10 @@ def _render_bulk_export(
             "Stop",
             key="bulk_export_stop",
             on_click=_stop_bulk_export,
-            args=(task_key,),
-            help="Stops after the trial (or screen) being written; no bundle is offered.",
+            args=(task_key, retry),
+            help="Stop this retry and keep the existing bundle."
+            if retry
+            else "Stop after the current reading or screen.",
         )
         try:
             with progress.task(task_key, title="Building the export bundle"):
@@ -8709,7 +8713,7 @@ def _render_bulk_export(
                 "Retry failed figure files",
                 on_click=st.session_state.__setitem__,
                 args=("_bulk_retry_requested", True),
-                help="Reuse the successful files and render only the failed figures in this bundle.",
+                help="Keep the successful files and retry the failed figures and layers.",
             )
         st.download_button(
             "⬇ Download bundle (zip)",

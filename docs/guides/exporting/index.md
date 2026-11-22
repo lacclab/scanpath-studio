@@ -89,7 +89,10 @@ even when the figure masks them. When you select specific screens, the bundle
 includes notes on those screens and their parent trials.
 
 If a figure fails, the download includes the files that succeeded. With the same data
-and settings still open, choose **Retry failed figure files** to fill in missing figures.
+and settings still open, choose **Retry failed figure files**. The app retries each
+missing format or layer and keeps the successful files. If it could not split a figure
+into layers, it tries that step again. Check `index.csv` for any files that still failed.
+Stopping a retry leaves the previous download available.
 
 CSV bundles include `columns.json` and an editable `read_csv.R`. In R, set
 the working directory to the extracted bundle and run `source("read_csv.R")`

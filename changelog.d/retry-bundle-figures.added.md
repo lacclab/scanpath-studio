@@ -1,1 +1,1 @@
-Retry failed figure files in the last export bundle without rendering its successful figures again while the selected data and settings still match.
+Retry failed figures and individual layer files in the last export bundle while the selected data and settings still match. Successful files keep their contents and paths.

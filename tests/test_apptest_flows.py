@@ -631,6 +631,44 @@ class TestBulkExportFlow:
         # per trial.
         assert len(names_all) == 5 + 2 * DEMO_TRIALS_IN_PICKER
 
+    def test_stopping_a_layer_retry_keeps_the_partial_bundle(self, monkeypatch):
+        from contextlib import contextmanager
+
+        from scanpath_studio import export, tabs
+
+        @contextmanager
+        def unavailable(_enabled):
+            def render(*_args):
+                raise RuntimeError("Layer renderer unavailable")
+
+            yield render
+
+        monkeypatch.setattr(export, "_figure_renderer", unavailable)
+        at = _boot(subtab=SUBTAB_EXPORT)
+        at.radio(key="bulk_export_scope").set_value("This trial")
+        at.pills(key="bulk_export_figfmts").set_value(["HTML"])
+        at.toggle(key="bulk_export_layers").set_value(True)
+        at.run(timeout=60)
+        next(b for b in at.button if b.label == "Build export").click().run(timeout=60)
+        _clean(at, "after the layer failures:")
+        original = at.session_state["_bulk_export_cache"]["data"]
+
+        @contextmanager
+        def stopped(_enabled):
+            tabs._stop_bulk_export(tabs._bulk_export_task_key(), retry=True)
+            yield None  # The cancellation checkpoint fires before rendering.
+
+        monkeypatch.setattr(export, "_figure_renderer", stopped)
+        next(
+            b for b in at.button if b.label == "Retry failed figure files"
+        ).click().run(timeout=60)
+        at.run(timeout=60)
+        _clean(at, "after stopping the retry:")
+        assert any("Retry stopped" in str(w.value) for w in at.warning)
+        assert at.session_state["_bulk_export_cache"]["data"] == original
+        assert "⬇ Download bundle (zip)" in self._download_labels(at)
+        assert any(b.label == "Retry failed figure files" for b in at.button)
+
     def test_the_plan_is_said_and_a_stopped_build_offers_no_bundle(self, monkeypatch):
         """Before the build, the panel says what it will write; Stop mid-build
         ends it before the next screen, says so, and offers no zip."""

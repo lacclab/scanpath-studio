@@ -1533,7 +1533,16 @@ def _plain_tables(options, words, fixations, raw_gaze):
 
 
 def _plan_unit(
-    row, frames, options, settings, axes, names, metadata_rows_for, members
+    row,
+    frames,
+    options,
+    settings,
+    axes,
+    names,
+    metadata_rows_for,
+    members,
+    *,
+    paths=None,
 ) -> UnitFiles:
     pid, tid = row["participant_id"], row["trial_id"]
     words, fixations, raw_gaze = frames
@@ -1554,6 +1563,9 @@ def _plan_unit(
         if metadata_rows_for
         else None,
     )
+    if paths is not None:
+        # Retry keeps names already assigned by the original full-scope plan.
+        return UnitFiles(fields, paths)
     requests = [("figure", fmt) for fmt in options.figure_formats()]
     if options.include_plot_config:
         requests.append(("plot_config", "json"))
@@ -3053,6 +3065,7 @@ def bulk_export(
     annotation_dataset: str | None = None,
     column_names: Mapping[str, ColumnNames] | None = None,
     stimulus_image_resolver: Callable | None = None,
+    _retry=None,
 ) -> tuple[bytes, ExportProgress]:
     """Build a zip archive of selected artifacts and return its bytes.
 
@@ -3090,6 +3103,8 @@ def bulk_export(
         # Only the trials that show a chosen screen are exported — for the
         # annotations, the README and every per-trial table alike.
         combos = _keep_unit_trials(combos, units)
+    if _retry is not None:
+        units = _retry.select_units(units)
     # The annotations, cut to the exported trials once: the README says the
     # file is there exactly when the writer below writes it.
     annotations_kept = (
@@ -3142,7 +3157,10 @@ def bulk_export(
     # like another trial's, gets a `-2` instead of a second member of that name —
     # which would hide the README behind a plot config, and leave the inventory
     # pointing at whichever one a reader happened to open.
-    members = ArchiveNames(bundle_member_names(options))
+    reserved = set(bundle_member_names(options))
+    if _retry is not None:
+        reserved.update(_retry.reserved)
+    members = ArchiveNames(reserved)
     # The bundle's inventory, written last as `index.csv`: every file in it at
     # its actual path, and every requested file that failed, with the reading
     # and screen it belongs to.
@@ -3329,8 +3347,6 @@ def bulk_export(
     # instead of cold-starting Chrome on each render. HTML needs no browser, so
     # only spin Kaleido up when a raster/vector format was requested (combined
     # figure or the per-layer breakdown).
-    figure_formats = options.figure_formats()
-    layer_formats = options.layer_formats()
     # A user pattern can map two trials to the same path (one that omits
     # the trial id, say). Two zip entries at one name silently loses a file, so
     # `resolve_export_path` disambiguates against `members` — every name given
@@ -3345,22 +3361,25 @@ def bulk_export(
     text_metadata = _selected_text_metadata_columns(
         text_metadata, options.text_metadata_fields
     )
+    needs_kaleido = (
+        options.needs_kaleido() if _retry is None else _retry.needs_kaleido()
+    )
     emit_status(
         status_callback,
         (
             ExportStage.STARTING_RENDERER
-            if options.needs_kaleido()
+            if needs_kaleido
             else ExportStage.ENCODING_WRITING
         ),
         (
             "Starting the browser that draws the figures…"
-            if options.needs_kaleido()
+            if needs_kaleido
             else "Writing selected files…"
         ),
         started_at=started,
     )
     axes = (x_field, y_field)
-    if options.separable_layers or options.include_analysis_family:
+    if (options.separable_layers or options.include_analysis_family) and _retry is None:
         readings = [
             (row, plan)
             for row, plan, _frames in _readings_with_files(
@@ -3381,7 +3400,7 @@ def bulk_export(
             (dict(zip(units.columns, values, strict=True)), None)
             for values in units.itertuples(index=False, name=None)
         )
-    with _figure_renderer(options.needs_kaleido()) as render_figure:
+    with _figure_renderer(needs_kaleido) as render_figure:
         for combo, layout in readings:
             # The cancel checkpoint (`progress.Cancelled`), between units so a
             # stopped build never leaves one half-written; a no-op headlessly.
@@ -3475,6 +3494,21 @@ def bulk_export(
                 reasons,
             )
 
+            retry_unit = (
+                _retry.units[(str(participant), str(trial), unit_ids["screen_id"])]
+                if _retry is not None
+                else None
+            )
+            figure_formats = [
+                fmt
+                for fmt in options.figure_formats()
+                if retry_unit is None or retry_unit.wants("figure", fmt)
+            ]
+            layer_formats = (
+                options.layer_formats()
+                if retry_unit is None or retry_unit.layer_failures
+                else []
+            )
             if layout is None:
                 layout = _plan_unit(
                     combo,
@@ -3485,16 +3519,15 @@ def bulk_export(
                     every_table,
                     metadata_rows_for,
                     members,
+                    paths=retry_unit.paths if retry_unit is not None else None,
                 )
             fields = layout.fields
 
             def _path(
-                artifact: str, ext: str, _layout=layout, _slug=screen_slug, reserve=True
+                artifact: str, ext: str, _layout=layout, _slug=screen_slug
             ) -> str:
                 if (artifact, ext) in _layout.paths:
                     return _layout.paths[artifact, ext]
-                # `reserve=False` names a file that failed: the path it would
-                # have had, for the inventory, without taking it from the next.
                 if _slug:
                     artifact = f"screens/{_slug}/{artifact}"
                 return resolve_export_path(
@@ -3503,7 +3536,6 @@ def bulk_export(
                     artifact=artifact,
                     ext=ext,
                     used=members,
-                    record=reserve,
                 )
 
             title = (
@@ -3517,7 +3549,23 @@ def bulk_export(
                 else ""
             )
 
-            if options.needs_figure():
+            def record_failure(path, artifact, fmt, exc, unit=unit_ids, name=slug):
+                progress.figures_failed += 1
+                progress.retryable_figures += 1
+                label = "layer" if artifact == "layers" else f"{fmt.upper()} {artifact}"
+                progress.errors.append(f"{name}: {label} export failed ({exc})")
+                _inventory(path, artifact, "failed", unit, str(exc), fmt=fmt)
+
+            def record_layer_set_failure(exc, retry=retry_unit):
+                # Before a successful split we cannot know which layers exist.
+                # If only named layers were retried, keep those exact names.
+                failed = (
+                    retry.layer_failures if retry is not None else [("layers", "", "")]
+                )
+                for artifact, fmt, path in failed:
+                    record_failure(path, artifact, fmt, exc)
+
+            if figure_formats or layer_formats:
                 emit_status(
                     status_callback,
                     ExportStage.RASTERIZING,
@@ -3576,21 +3624,10 @@ def bulk_export(
                     )
                 except Exception as exc:
                     fig = None
-                    # Its formats, and its layer set when one was asked for.
-                    progress.figures_failed += len(figure_formats) + bool(layer_formats)
-                    progress.retryable_figures += len(figure_formats)
-                    progress.errors.append(f"{slug}: figure export failed ({exc})")
                     for fmt in figure_formats:
-                        _inventory(
-                            _path("figure", fmt, reserve=False),
-                            "figure",
-                            "failed",
-                            unit_ids,
-                            str(exc),
-                            fmt=fmt,
-                        )
+                        record_failure(_path("figure", fmt), "figure", fmt, exc)
                     if layer_formats:
-                        _inventory("", "layers", "failed", unit_ids, str(exc), fmt="")
+                        record_layer_set_failure(exc)
                 # Each format on its own, so a missing browser costs the
                 # PNG/SVG/PDF and still leaves the trial's HTML in the zip.
                 if fig is not None:
@@ -3618,51 +3655,47 @@ def bulk_export(
                             path = _path("figure", fmt)
                             zf.writestr(path, data)
                         except Exception as exc:
-                            progress.figures_failed += 1
-                            progress.retryable_figures += 1
-                            progress.errors.append(
-                                f"{slug}: {fmt.upper()} figure export failed ({exc})"
-                            )
-                            _inventory(
-                                _path("figure", fmt, reserve=False),
-                                "figure",
-                                "failed",
-                                unit_ids,
-                                str(exc),
-                                fmt=fmt,
-                            )
+                            record_failure(_path("figure", fmt), "figure", fmt, exc)
                             continue
                         _inventory(path, "figure", "written", unit_ids, fmt=fmt)
                         progress.bytes_written += len(data)
                         progress.figures_written += 1
 
-                # Per-layer breakdown into `layers/<layer>.<fmt>` — each a
-                # copy of the figure with only one layer's elements, same
-                # size/ranges so they register when stacked in Illustrator. Kept in
-                # its own try so a layer-render failure is reported as such and
-                # doesn't get misattributed to the combined figure (which may have
-                # already been written above).
                 if layer_formats and fig is not None:
                     try:
-                        out_w = int(fig.layout.width or unit_width)
-                        out_h = int(fig.layout.height or unit_height)
-                        for layer_name, layer_fig in split_scanpath_layers(fig).items():
+                        names = (
+                            retry_unit.layer_names if retry_unit is not None else None
+                        )
+                        layers = (
+                            split_scanpath_layers(fig)
+                            if names is None
+                            else split_scanpath_layers(fig, only=names)
+                        )
+                    except Exception as exc:
+                        record_layer_set_failure(exc)
+                    else:
+                        for layer_name, layer_fig in layers.items():
+                            artifact = f"layer:{layer_name}"
                             for fmt in layer_formats:
-                                scale = options.png_scale if fmt == "png" else 1
-                                data = render_figure(
-                                    layer_fig, fmt, out_w, out_h, scale
-                                )
+                                if retry_unit is not None and not retry_unit.wants(
+                                    artifact, fmt
+                                ):
+                                    continue
+                                # Claim the name even on failure. No later
+                                # layer can take the path offered for retry.
                                 path = _path(f"layers/{layer_name}", fmt)
-                                zf.writestr(path, data)
-                                _inventory(
-                                    path, f"layer:{layer_name}", "written", unit_ids
-                                )
+                                try:
+                                    scale = options.png_scale if fmt == "png" else 1
+                                    data = render_figure(
+                                        layer_fig, fmt, out_w, out_h, scale
+                                    )
+                                    zf.writestr(path, data)
+                                except Exception as exc:
+                                    record_failure(path, artifact, fmt, exc)
+                                    continue
+                                _inventory(path, artifact, "written", unit_ids, fmt=fmt)
                                 progress.bytes_written += len(data)
                                 progress.figures_written += 1
-                    except Exception as exc:
-                        progress.figures_failed += 1
-                        progress.errors.append(f"{slug}: layer export failed ({exc})")
-                        _inventory("", "layers", "failed", unit_ids, str(exc), fmt="")
 
             if options.include_plot_config:
                 # Same guard as _drift_corrected_for_figure: correction runs

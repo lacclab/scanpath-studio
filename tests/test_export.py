@@ -1963,3 +1963,193 @@ def test_uploaded_study_references_are_carried_through_a_comparison_bundle(
     assert len(dataset_credit.references(state)) == 1
     dataset_credit.save_credit(state, "upload-token-1", {})
     assert dataset_credit.references(state) == []
+
+
+@pytest.mark.parametrize("first_set_failure", ["figure", "split"])
+def test_retry_layers_keeps_successful_files_and_retries_remaining_failures(
+    minimal_combos,
+    minimal_words,
+    minimal_fixations,
+    base_settings,
+    monkeypatch,
+    first_set_failure,
+):
+    from contextlib import contextmanager
+
+    from scanpath_studio import export
+    from scanpath_studio import progress as jobs
+    from scanpath_studio.export_retry import retry_failed_figures
+    from scanpath_studio.export_status import ExportStage
+
+    # A single reading on two screens exercises the unit key. The naming
+    # pattern omits both artifact and extension, so every filename collides.
+    combos = minimal_combos.iloc[:1]
+
+    def two_screens(frame):
+        return frame.assign(
+            screen_id=frame.trial_id.map({"t1": "A", "t2": "B"}),
+            screen_index=frame.trial_id.map({"t1": 1, "t2": 2}),
+            trial_id="t1",
+        )
+
+    frames = combos, two_screens(minimal_words), two_screens(minimal_fixations)
+    options = ExportOptions(
+        include_png=True,
+        include_svg=False,
+        include_pdf=True,
+        include_fixations=True,
+        separable_layers=True,
+        path_pattern="panels/supplement",
+    )
+    args = dict(
+        canvas_width=800,
+        canvas_height=400,
+        base_font_size=14,
+        font_family="Arial",
+        x_field="x",
+        y_field="y",
+        settings=base_settings,
+        options=options,
+    )
+    attempt = 0
+    calls = []
+    renderers = []
+    make = export.make_scanpath_figure
+
+    def make_for_screen(words, *rest, **kwargs):
+        screen = words["screen_id"].iloc[0]
+        if attempt == 0 and screen == "B" and first_set_failure == "figure":
+            raise ValueError("Figure setup unavailable")
+        return make(words, *rest, **kwargs).update_layout(meta={"screen": screen})
+
+    def split(fig, *, only=None):
+        screen = fig.layout.meta["screen"]
+        if attempt == 2:
+            assert only == ({"word_boxes"} if screen == "A" else {"fixations"})
+        if (attempt == 0 and screen == "B") or (attempt == 1 and screen == "A"):
+            raise ValueError("Split unavailable")
+        return {
+            layer: (screen, layer)
+            for layer in ("word_boxes", "fixations")
+            if only is None or layer in only
+        }
+
+    @contextmanager
+    def renderer(enabled):
+        renderers.append(enabled)
+
+        def render(fig, fmt, *_):
+            screen, layer = (
+                fig if isinstance(fig, tuple) else (fig.layout.meta["screen"], "figure")
+            )
+            key = screen, layer, fmt
+            calls.append(key)
+            if attempt == 0 and key in {
+                ("A", "word_boxes", "png"),
+                ("A", "figure", "pdf"),
+            }:
+                raise ValueError("First attempt")
+            if attempt == 1 and key == ("B", "fixations", "pdf"):
+                raise ValueError("PDF still unavailable")
+            return f"{attempt}/{screen}/{layer}/{fmt}".encode()
+
+        yield render
+
+    monkeypatch.setattr(export, "make_scanpath_figure", make_for_screen)
+    monkeypatch.setattr(export, "split_scanpath_layers", split)
+    monkeypatch.setattr(export, "_figure_renderer", renderer)
+
+    def contents(payload):
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            names = archive.namelist()
+            assert len(names) == len(set(names))
+            inventory = pd.read_csv(archive.open("index.csv"), keep_default_na=False)
+            paths = inventory.path[inventory.path.ne("")]
+            assert paths.is_unique
+            assert set(inventory.path[inventory.status.eq("written")]) == set(names) - {
+                "index.csv"
+            }
+            return inventory, {p: archive.read(p) for p in names if p != "index.csv"}
+
+    original, progress = bulk_export(*frames, **args)
+    before, retained = contents(original)
+    assert ("A", "fixations", "pdf") in calls  # Continued past the first failed layer.
+    assert progress.retryable_figures == (5 if first_set_failure == "figure" else 3)
+    assert set(before.loc[before.artifact == "layers", "screen_id"]) == {"B"}
+    path = before.loc[
+        (before.artifact == "layer:word_boxes") & (before.format == "png"), "path"
+    ].item()
+    assert path.startswith("panels/supplement")
+    cache = {"data": original, "sig": ("all data and settings",), "progress": progress}
+    attempt = 1
+    calls.clear()
+    updated, progress = retry_failed_figures(cache, cache["sig"], *frames, **args)
+    middle, written = contents(updated)
+    assert len(calls) == len(set(calls))
+    expected = {
+        ("A", "figure", "pdf"),
+        *(
+            ("B", layer, fmt)
+            for layer in ("word_boxes", "fixations")
+            for fmt in ("png", "pdf")
+        ),
+    }
+    if first_set_failure == "figure":
+        expected.update({("B", "figure", "png"), ("B", "figure", "pdf")})
+    assert set(calls) == expected
+    assert retained.items() <= written.items()
+    assert (progress.figures_failed, progress.retryable_figures) == (2, 2)
+    failures = middle[middle.status.eq("failed")]
+    assert set(zip(failures.screen_id, failures.artifact, failures.format)) == {
+        ("A", "layer:word_boxes", "png"),
+        ("B", "layer:fixations", "pdf"),
+    }
+    assert failures.loc[failures.screen_id.eq("A"), "path"].item() == path
+    assert set(
+        middle.path[middle.artifact.str.startswith("layer:")].str.startswith(
+            "panels/supplement"
+        )
+    ) == {True}
+
+    cache = {**cache, "data": updated, "progress": progress}
+    attempt = 2
+    stages = []
+
+    def cancel_on_merge(status):
+        stages.append(status.stage)
+        if (
+            status.stage == ExportStage.FINALIZING
+            and "original files" in status.message
+        ):
+            jobs.cancel("layer retry")
+
+    with (
+        pytest.raises(jobs.Cancelled),
+        jobs.task("layer retry", title="Repairing a bundle"),
+    ):
+        retry_failed_figures(
+            cache, cache["sig"], *frames, status_callback=cancel_on_merge, **args
+        )
+    assert ExportStage.READY not in stages
+    assert cache["data"] == updated
+    calls.clear()
+    stages.clear()
+    final, progress = retry_failed_figures(
+        cache,
+        cache["sig"],
+        *frames,
+        status_callback=lambda s: stages.append(s.stage),
+        **args,
+    )
+    done, files = contents(final)
+    assert stages.count(ExportStage.READY) == 1 and stages[-1] == ExportStage.READY
+    assert len(renderers) == 4  # One warm renderer per build/retry.
+    assert calls == [("A", "word_boxes", "png"), ("B", "fixations", "pdf")]
+    assert written.items() <= files.items()
+    assert files[path] == b"2/A/word_boxes/png"
+    assert set(done.status) == {"written"}
+    assert (
+        progress.figures_written,
+        progress.figures_failed,
+        progress.retryable_figures,
+    ) == (12, 0, 0)

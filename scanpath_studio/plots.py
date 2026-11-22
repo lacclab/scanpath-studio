@@ -3106,7 +3106,9 @@ def _trace_layer(trace) -> str:
     return "fixations"
 
 
-def split_scanpath_layers(fig: go.Figure) -> dict[str, go.Figure]:
+def split_scanpath_layers(
+    fig: go.Figure, *, only: set[str] | None = None
+) -> dict[str, go.Figure]:
     """Split a `make_scanpath_figure` result into one figure per visible layer.
 
     Returns ``{layer_name: figure}`` in bottom-to-top draw order, keeping only the
@@ -3114,7 +3116,8 @@ def split_scanpath_layers(fig: go.Figure) -> dict[str, go.Figure]:
     with (a) only that layer's traces/shapes/images kept and (b) a transparent
     paper/plot background, so stacking the exported files in a vector editor
     reproduces the combined figure exactly (identical axis ranges + size ⇒ perfect
-    registration)."""
+    registration). ``only`` limits which layer figures are copied, as when
+    retrying one failed layer from a bundle."""
     # Which layers are present, and each trace's layer (computed once).
     trace_layers = [_trace_layer(tr) for tr in fig.data]
     shape_layers = [_shape_layer(sh) for sh in (fig.layout.shapes or ())]
@@ -3122,6 +3125,8 @@ def split_scanpath_layers(fig: go.Figure) -> dict[str, go.Figure]:
     if fig.layout.images:
         present.add("stimulus_image")
 
+    if only is not None:
+        present.intersection_update(only)
     out: dict[str, go.Figure] = {}
     for layer in SCANPATH_LAYER_ORDER:
         if layer not in present:

@@ -3877,7 +3877,7 @@ def _recipe_parser() -> argparse.ArgumentParser:
     """Options for reproducing a downloaded Corpus Analysis table."""
     parser = _ShortErrorParser(
         prog="scanpath-studio recipe",
-        description="Rerun a Per text cohort profile recipe on its source tables.",
+        description="Rerun a cohort or two-group difference word profile on its source tables.",
     )
     parser.add_argument(
         "recipe",
@@ -3913,9 +3913,6 @@ def _recipe_parser() -> argparse.ArgumentParser:
 
 def recipe(argv: list[str]) -> None:
     """Rerun a cohort profile using the same inputs as its author."""
-    from . import api, data
-    from .analysis_recipe import load_recipe_sources
-
     args = _recipe_parser().parse_args(argv)
     if args.sample and any(
         (
@@ -3930,21 +3927,20 @@ def recipe(argv: list[str]) -> None:
         raise SystemExit(
             "--sample uses the bundled tables and their mappings. Pass --words to use your own."
         )
+    from . import api, data
+    from .analysis_recipe import load_recipe_sources
+
     try:
-        saved = json.loads(Path(args.recipe).read_text(encoding="utf-8"))
+        saved = json.loads(Path(args.recipe).read_bytes())
         words, fixations = (
-            data.load_sample_data() if args.sample else (args.words, args.fixations)
+            data.read_sample_tables() if args.sample else (args.words, args.fixations)
         )
-        manifest = (
-            json.loads(Path(args.trial_parts_manifest).read_text(encoding="utf-8"))
-            if args.trial_parts_manifest
-            else None
-        )
+        manifest = _trial_parts_manifest(args.trial_parts_manifest)
         tables, raw_gaze = load_recipe_sources(
             saved,
             words,
             fixations,
-            data.load_sample_raw_gaze() if args.sample else args.raw_gaze,
+            data.read_sample_raw_gaze() if args.sample else args.raw_gaze,
             word_schema=_parse_schema_arg(args.word_schema, "--word-schema"),
             fix_schema=_parse_schema_arg(args.fix_schema, "--fix-schema"),
             keep_columns=args.keep_columns,
@@ -4443,7 +4439,7 @@ usage:
   scanpath-studio render …         render one trial to .html/.png/.svg/.pdf
                                    (see `scanpath-studio render --help`)
   scanpath-studio corpus …         render a corpus figure from a tidy CSV
-  scanpath-studio recipe …         reproduce a cohort profile CSV from its recipe
+  scanpath-studio recipe …         reproduce a cohort or difference profile CSV from its recipe
   scanpath-studio check …          run the Data checks on your tables
   scanpath-studio cache …          show / clear the on-device recovery cache
   scanpath-studio version [--check]

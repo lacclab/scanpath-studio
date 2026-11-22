@@ -9814,25 +9814,32 @@ def make_word_profile_figure(
     for i, (label, prof) in enumerate(entries):
         prof = prof.sort_values("word_id")
         xs = prof["word_id"].to_numpy()
-        ys = prof["value"].to_numpy()
+        supported = prof["value"].notna()
+        if "enough" in prof:
+            supported &= prof["enough"]
+        ys = prof["value"].where(supported).to_numpy()
         color_choices = tuple(colors or COMPARISON_PALETTE)
         color = color_choices[i % len(color_choices)]
         rgba = _hex_to_rgba(color, 0.15)
         if {"lo", "hi"} <= set(prof.columns):
             lo = prof["lo"].to_numpy()
             hi = prof["hi"].to_numpy()
-            fig.add_trace(
-                go.Scatter(
-                    x=np.concatenate([xs, xs[::-1]]),
-                    y=np.concatenate([hi, lo[::-1]]),
-                    fill="toself",
-                    fillcolor=rgba,
-                    line=dict(width=0),
-                    hoverinfo="skip",
-                    showlegend=False,
-                    name=f"{label} {spread_label}",
-                )
-            )
+            # Runs use positions in the word catalog: IDs need not be consecutive.
+            positions = np.flatnonzero(supported & np.isfinite(lo) & np.isfinite(hi))
+            for run in np.split(positions, np.flatnonzero(np.diff(positions) > 1) + 1):
+                if run.size:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=np.concatenate([xs[run], xs[run][::-1]]),
+                            y=np.concatenate([hi[run], lo[run][::-1]]),
+                            fill="toself",
+                            fillcolor=rgba,
+                            line=dict(width=0),
+                            hoverinfo="skip",
+                            showlegend=False,
+                            name=f"{label} {spread_label}",
+                        )
+                    )
         fig.add_trace(
             go.Scatter(
                 x=xs,

@@ -1219,7 +1219,7 @@ class TestGroupComparison:
         assert list(out["n_b"]) == [1, 1, 1]
         # Word 2 has no A reader → below the guard even at min_readers=1.
         assert list(out["enough"]) == [True, True, False]
-        assert list(out["word_text"]) == ["the", "cat", ""]
+        assert list(out["word_text"]) == ["the", "cat", "sat"]
 
     def test_group_word_difference_guard(self):
         out = group_word_difference(
@@ -1761,3 +1761,61 @@ class TestMadeUpTimestampsStayInside:
             make_synthetic_words(), make_synthetic_fixations()
         )
         assert "timestamp_ms" in data.shareable_frame(fixations).columns
+
+
+def test_reader_weight_and_infinite_values_agree_across_stimulus_and_profile():
+    words = pd.DataFrame(
+        {
+            "participant_id": ["A", "A", "B", "C", "D"],
+            "trial_id": ["one", "again", "one", "one", "one"],
+            "total_fixation_duration_ms": [100, 100, 700, np.inf, -np.inf],
+        }
+    ).assign(text_id="page", word_id=1, text="ink", x=10)
+    args = (words, "text_id", "page", MEASURES["tfd"])
+    profile = cohort_word_profile(*args, min_readers=3).iloc[0]
+    assert profile["n"] == 2 and not profile["enough"]
+    assert profile["value"] == word_box_aggregate(*args).iloc[0]["value"] == 400
+    assert np.isinf(words["total_fixation_duration_ms"]).sum() == 2
+
+
+def test_repeated_index_does_not_change_selected_screen():
+    words = _multipart_words()
+    expected = cohort_word_profile(words, "text_id", "A", MEASURES["tfd"])
+    words.index = [0] * len(words)
+    pd.testing.assert_frame_equal(
+        cohort_word_profile(words, "text_id", "A", MEASURES["tfd"]), expected
+    )
+
+
+@pytest.mark.parametrize("agg", ["mean", "median", "sum"])
+def test_bootstrap_batches_preserve_seeded_draw_order(agg):
+    from scanpath_studio.aggregation import bootstrap_ci
+
+    finite = np.arange(4001, dtype=float)
+    sampled = np.random.default_rng(9).choice(finite, size=(53, len(finite)))
+    expected = np.percentile(getattr(np, agg)(sampled, axis=1), [2.5, 97.5])
+    actual = bootstrap_ci(
+        np.append(finite, [np.inf, np.nan]), agg=agg, seed=9, n_boot=53
+    )
+    np.testing.assert_array_equal(actual, expected)
+
+
+def test_difference_preserves_one_sided_and_conflicting_word_labels():
+    words = pd.DataFrame(
+        {
+            "participant_id": ["A", "B", "B"],
+            "word_id": [1, 1, 2],
+            "text": ["old", "revised", "extra"],
+            "total_fixation_duration_ms": [100, 200, 700],
+        }
+    ).assign(text_id="page")
+    a, b = ({"participant_id": [reader]} for reader in ["A", "B"])
+    for left, right in [(a, b), (b, a)]:
+        rows = group_word_difference(
+            words, "text_id", "page", MEASURES["tfd"], left, right
+        ).set_index("word_id")
+        assert rows.loc[2, "word_text"] == "extra" and pd.isna(rows.loc[2, "diff"])
+        assert {rows.loc[1, "word_text"], rows.loc[1, "word_text_b"]} == {
+            "old",
+            "revised",
+        }

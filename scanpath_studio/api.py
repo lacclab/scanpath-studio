@@ -1777,7 +1777,7 @@ def run_analysis_recipe(
     annotations: str | Path | None = None,
     column_names: dict | None = None,
 ) -> pd.DataFrame:
-    """Recreate a downloaded per-word cohort profile table.
+    """Recreate a per-word cohort profile or a two-group difference profile.
 
     Args:
         recipe: The downloaded recipe JSON path or its decoded object.
@@ -1791,7 +1791,7 @@ def run_analysis_recipe(
         column_names: Source column maps when supplying canonical frames.
 
     Returns:
-        The cohort profile under the dataset's own output column names.
+        The published table under the dataset's own output column names.
 
     Raises:
         ValueError: Unsupported recipe, missing filter fields or mismatched result.
@@ -1799,7 +1799,7 @@ def run_analysis_recipe(
     from .analysis_recipe import cohort_recipe_table
 
     if isinstance(recipe, (str, Path)):
-        recipe = json.loads(Path(recipe).read_text(encoding="utf-8"))
+        recipe = json.loads(Path(recipe).read_bytes())
     words, word_names = _named_in(words, "words")
     fixations, fix_names = _named_in(fixations, "fixations", optional=True)
     samples, _ = _named_in(raw_gaze, "raw_gaze", optional=True)

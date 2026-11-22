@@ -39,6 +39,7 @@ from scanpath_studio.aggregation import (
     available_measures,
     cohort_word_profile,
     distinct_group_labels,
+    effective_spread,
     ensure_fixation_enrichment,
     group_mean_difference,
     group_word_difference,
@@ -55,13 +56,16 @@ from scanpath_studio.aggregation import (
     reader_summary,
     reader_summary_table,
     reader_vs_cohort_values,
+    reading_word_contributions,
     resolve_group_spec,
     saccade_vs_duration,
+    stimulus_revisions,
     text_read_counts,
     text_screen_options,
     trial_summary_table,
     two_group_values,
     two_group_word_profiles,
+    within_reader_contrast,
     word_box_aggregate,
     word_measure_vs_feature,
     word_rate_profile,
@@ -8867,9 +8871,22 @@ def _c_cohort_profile(
 
 
 @st.cache_data(show_spinner=False)
-def _c_word_box_aggregate(_words, text_col, text_id, mkey, agg, fkey, screen=None):
+def _c_stimulus_revisions(_words, text_col, text_id, fkey, screen=None):
+    return stimulus_revisions(_words, text_col, text_id, screen)
+
+
+@st.cache_data(show_spinner=False)
+def _c_word_box_aggregate(
+    _words, text_col, text_id, mkey, agg, fkey, screen=None, readings=None
+):
     return word_box_aggregate(
-        _words, text_col, text_id, MEASURES[mkey], agg=agg, screen_id=screen
+        _words,
+        text_col,
+        text_id,
+        MEASURES[mkey],
+        agg=agg,
+        screen_id=screen,
+        readings=readings,
     )
 
 
@@ -9135,7 +9152,7 @@ def _download_tidy(
     recipe = dict(recipe)
     counts = result_counts(df, recipe.pop("counts", None))
     cohort_csv = None
-    if recipe.get("view") == "Cohort profile":
+    if recipe.get("view") in ("Cohort profile", "Difference word profile"):
         entry = (st.session_state.get("_datasets") or {}).get(
             context.get("dataset", {}).get("source")
         )
@@ -9170,6 +9187,19 @@ def _download_tidy(
         counts["headers"] = as_written(df.iloc[:0], names).columns.tolist()
     row = host.container(horizontal=True, gap="small")
     row.download_button(label, **button)
+    if recipe.get("view") == "Cohort profile":
+        from .cohort_audit import profile_methods
+
+        row.download_button(
+            "Methods draft",
+            data=lambda: profile_methods(
+                json.loads(_recipe_json(context, recipe, name, counts))
+            ),
+            file_name="cohort_methods.txt",
+            mime="text/plain",
+            key=f"{key}_methods",
+            on_click="ignore",
+        )
     row.download_button(
         "⬇ Download the recipe (JSON)",
         data=partial(_recipe_json, context, recipe, name, counts, cohort_csv),
@@ -9177,8 +9207,8 @@ def _download_tidy(
         mime="application/json",
         key=f"{key}_recipe",
         on_click="ignore",
-        help="Rerun this cohort profile with scanpath-studio recipe and the same source tables."
-        if recipe.get("view") == "Cohort profile"
+        help="Reproduce this table with scanpath-studio recipe and the same source files."
+        if recipe.get("view") in ("Cohort profile", "Difference word profile")
         else (
             "A record of the dataset name, trial filters, analysis choices and counts"
             " used for this table. Keep your data separately; the recipe contains no "
@@ -9223,7 +9253,7 @@ def _recipe_json(
             pool=context.get("pool") or {},
             analysis=analysis,
             selection=context.get("selection")
-            if analysis.get("view") == "Cohort profile"
+            if analysis.get("view") in ("Cohort profile", "Difference word profile")
             else None,
             table_file=name,
             counts=counts,
@@ -10658,7 +10688,7 @@ def render_per_text_tab(
         _chart(
             make_small_multiples_figure(
                 per,
-                measure_label=measure.axis_label,
+                measure_label=measure.value_label(normalize),
                 cohort=cohort,
                 aggregate=agg,
                 **fw,
@@ -10694,7 +10724,7 @@ def render_per_text_tab(
                 per,
                 row_col="participant_id",
                 row_label=active_all(st.session_state).field_label("participant_id"),
-                measure_label=measure.axis_label,
+                measure_label=measure.value_label(normalize),
                 colorscale=viz_settings.get(
                     "heatmap_colorscale", DEFAULT_HEATMAP_COLORSCALE
                 ),
@@ -10737,12 +10767,18 @@ def render_per_text_tab(
             fkey,
             screen_id,
         )
-        prof = _apply_min_readers(st, prof, min_readers, key="ptext3_min_note")
+        supported = _apply_min_readers(st, prof, min_readers, key="ptext3_min_note")
+        if not supported.empty:
+            supported = supported[supported["enough"]]
         _chart(
             make_word_profile_figure(
-                {f"Cohort ({measure.label})": prof},
-                measure_label=measure.axis_label,
-                spread_label=spread,
+                {
+                    f"Cohort ({measure.value_label(True) if normalize and not measure.is_rate else measure.label})": prof
+                },
+                measure_label=measure.value_label(normalize),
+                spread_label="95% bootstrap CI"
+                if effective_spread(spread, agg) == "Bootstrap CI"
+                else spread,
                 aggregate=agg,
                 colors=_corpus_series_colors(viz_settings),
                 **fw,
@@ -10750,7 +10786,7 @@ def render_per_text_tab(
         )
         _download_tidy(
             st,
-            prof,
+            supported,
             name=f"cohort_profile_{measure.key}_{text_id}.csv",
             key="dl_ptext3",
             recipe=dict(
@@ -10764,9 +10800,135 @@ def render_per_text_tab(
                 min_readers=min_readers,
             ),
         )
+        detail = st.expander(
+            "Readings behind a word", key="ptext3_readings", on_change="rerun"
+        )
+        if detail.open and not prof.empty:
+            labels = prof.set_index("word_id")["word_text"].to_dict()
+            word = detail.selectbox(
+                "Word to inspect",
+                list(labels),
+                format_func=lambda wid: f"{wid} · {labels[wid]}",
+                key="ptext3_inspect_word",
+            )
+            contributions = reading_word_contributions(
+                words_filtered,
+                text_col,
+                text_id,
+                measure,
+                normalize=normalize,
+                screen_id=screen_id,
+            )
+            rows = contributions[contributions["word_id"].eq(word)].copy()
+            reader_values = _c_per_reader_word(
+                words_filtered,
+                text_col,
+                text_id,
+                measure.key,
+                agg,
+                normalize,
+                fkey,
+                screen_id,
+            )
+            reader_values = reader_values[reader_values["word_id"].eq(word)].set_index(
+                "participant_id"
+            )["value"]
+            rows["reader_value"] = rows["participant_id"].map(reader_values)
+            detail.caption(
+                f"Source values use {measure.unit or 'the recorded scale'}. Reader values combine repeated readings by {agg}."
+            )
+            detail.dataframe(rows, hide_index=True)
+        audit = st.expander(
+            "Compare profile revisions", key="ptext3_revisions", on_change="rerun"
+        )
+        if audit.open:
+            from .cohort_audit import compare_profiles, profile_snapshot
+
+            context = _RECIPE_CONTEXT.get() or {}
+            inputs = reading_word_contributions(
+                words_filtered,
+                text_col,
+                text_id,
+                measure,
+                normalize=normalize,
+                screen_id=screen_id,
+            )
+            written = _tidy_csv(supported, active_all(st.session_state).identity())
+            choices = analysis_choices(
+                text=(text_col, text_id),
+                screen=screen_id,
+                measure=measure,
+                aggregation=agg,
+                normalize=normalize,
+                spread=spread,
+                min_readers=min_readers,
+            )
+            snapshot = profile_snapshot(
+                inputs,
+                supported,
+                written,
+                {**choices, "filters": context.get("trial_filters", [])},
+            )
+            audit.caption(
+                "This file contains participant and reading IDs, words and individual observations."
+            )
+            audit.download_button(
+                "Download profile snapshot",
+                data=json.dumps(snapshot, ensure_ascii=False),
+                file_name="cohort_snapshot.json",
+                mime="application/json",
+                on_click="ignore",
+            )
+            prior = audit.file_uploader(
+                "Earlier profile snapshot",
+                type=["json"],
+                key="ptext3_earlier",
+                max_upload_size=upload_limit_mb(),
+            )
+            if prior is not None:
+                try:
+                    changes, note = compare_profiles(
+                        json.loads(prior.getvalue()), snapshot
+                    )
+                except (UnicodeError, ValueError) as exc:
+                    audit.error(str(exc))
+                else:
+                    audit.caption(note)
+                    if not changes.empty:
+                        audit.dataframe(changes, hide_index=True)
+                    else:
+                        audit.caption(
+                            "Reading membership and contributions are identical."
+                        )
     elif view == "Measure on the stimulus":  # reads viz_settings
+        revisions = _c_stimulus_revisions(
+            words_filtered, text_col, text_id, fkey, screen_id
+        )
+        chosen = None
+        if len(revisions) > 1:
+            st.warning(
+                "This text has different wording or word boxes across readings. Choose the version to include in the figure."
+            )
+            chosen = st.selectbox(
+                "Stimulus version, by representative reading",
+                list(revisions),
+                index=None,
+                format_func=lambda k: (
+                    f"{' / '.join(map(str, k))} · {len(revisions[k])} reading(s)"
+                ),
+                key="ptext_stimulus_revision",
+            )
+            if chosen is None:
+                return
         agg_words = _c_word_box_aggregate(
-            words_filtered, text_col, text_id, measure.key, agg, fkey, screen_id
+            words_filtered,
+            text_col,
+            text_id,
+            measure.key,
+            agg,
+            fkey,
+            screen_id,
+            tuple(revisions[chosen]) if chosen else None,
         )
         if agg_words.empty:
             st.info("This text has no word geometry to tint.")
@@ -10819,10 +10981,22 @@ def render_per_text_tab(
             word_heatmap_col="value",
             word_heatmap_title=measure.axis_label,
         )
+        if chosen:
+            fig.update_layout(
+                meta={**(fig.layout.meta or {}), "representative_reading": list(chosen)}
+            )
+            st.caption(
+                f"Stimulus layout from {md_literal(str(chosen[0]))} / {md_literal(str(chosen[1]))}."
+            )
         _render_true_scale_chart(fig, key="ptext_stimulus")
+        values = agg_words[["word_id", "value"]]
+        if chosen:
+            values = values.assign(
+                representative_participant=chosen[0], representative_trial=chosen[1]
+            )
         _download_tidy(
             st,
-            agg_words[["word_id", "value"]],
+            values,
             name=f"stimulus_{measure.key}_{text_id}.csv",
             key="dl_ptext4",
             recipe=dict(
@@ -10858,7 +11032,7 @@ def render_per_text_tab(
         _chart(
             make_feature_scatter_figure(
                 df,
-                measure_label=measure.axis_label,
+                measure_label=measure.value_label(normalize),
                 feature_label=feat_label,
                 categorical=categorical,
                 **fw,
@@ -11411,12 +11585,12 @@ def render_per_group_tab(
                 f"**{grp_screens[0]}**. Word ids restart on each screen, so a "
                 "profile across screens would mix different words."
             )
-        prof = _apply_min_readers(st, prof, min_readers, key="pgrp15_note")
+        supported = _apply_min_readers(st, prof, min_readers, key="pgrp15_note")
         _chart(
             make_word_profile_figure(
                 {label: prof},
                 measure_label=measure.axis_label,
-                spread_label=spread,
+                spread_label=effective_spread(spread, agg),
                 aggregate=agg,
                 colors=_corpus_series_colors(viz_settings),
                 **fw,
@@ -11424,7 +11598,7 @@ def render_per_group_tab(
         )
         _download_tidy(
             st,
-            prof,
+            supported,
             name=f"group_profile_{measure.key}_{text_id}.csv",
             key="dl_pgrp15",
             recipe=dict(
@@ -11630,6 +11804,7 @@ def render_group_comparison_tab(
             "Difference word profile",
             "Side-by-side summary bars",
             _GROUP_MEANS_VIEW,
+            "Within-participant contrast",
             "Two-group word heatmap",
         ],
         key="cmp_view",
@@ -11715,6 +11890,10 @@ def render_group_comparison_tab(
             min_readers=min_readers,
             screen_id=screen_id,
         )
+        if "word_text_b" in diff:
+            st.warning(
+                "The groups use different word text at one or more word IDs. The CSV includes both labels for those positions."
+            )
         diff = _apply_min_readers(st, diff, min_readers, key="cmp19_note")
         _chart(
             make_difference_profile_figure(
@@ -11802,6 +11981,42 @@ def render_group_comparison_tab(
                 measures=measures,
                 aggregation=agg,
                 counts={"group_a_readers": readers_a, "group_b_readers": readers_b},
+            ),
+        )
+    elif view == "Within-participant contrast":
+        measure = _measure_picker(words_filtered, fixations_filtered, key="cmp_measure")
+        if measure is None:
+            return
+        frame = fixations_filtered if measure.frame == "fixations" else words_filtered
+        table = within_reader_contrast(
+            apply_group(frame, use_a),
+            apply_group(frame, use_b),
+            measure,
+            participants=ids_a | ids_b,
+        )
+        differences = table["difference_a_minus_b"].dropna()
+        st.caption(
+            f"A = {md_literal(label_a)}. B = {md_literal(label_b)}. Each cell is one participant’s "
+            f"mean for {measure.value_label(False)}. {len(differences)} complete pairs. "
+            f"{table['value_a'].isna().sum()} missing A and {table['value_b'].isna().sum()} missing B."
+        )
+        if not differences.empty:
+            st.metric(
+                "Mean within-participant difference (A − B)",
+                _fmt_stat(differences.mean()) + f" {measure.unit}",
+            )
+        st.dataframe(table, hide_index=True)
+        _download_tidy(
+            st,
+            table,
+            name=f"within_participant_{measure.key}.csv",
+            key="dl_cmp_within",
+            recipe=dict(
+                view=view,
+                groups=[(label_a, spec_a), (label_b, spec_b)],
+                measure=measure,
+                aggregation="mean",
+                counts={"complete_pairs": len(differences)},
             ),
         )
     elif view == _GROUP_MEANS_VIEW:  # descriptive only

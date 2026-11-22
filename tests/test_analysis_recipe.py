@@ -218,8 +218,8 @@ def test_downloaded_filtered_profile_replays_through_cli_and_api(monkeypatch, tm
     assert not at.exception, at.exception
     expected = captured["csv"]()
     saved = tmp_path / "profile.recipe.json"
-    saved.write_text(captured["recipe"](), encoding="utf-8")
-    spec = json.loads(saved.read_text())
+    saved.write_text(captured["recipe"](), encoding="utf-8-sig")
+    spec = json.loads(saved.read_bytes())
     assert spec["selection"]["participants"] == ["l7_1090"]
     assert (
         api.run_analysis_recipe(saved, *api.load_sample_data())
@@ -308,6 +308,7 @@ def test_required_metadata_table_and_annotations_restrict_readings(
             }
         )
     )
+    annotated.write_text(annotated.read_text(), encoding="utf-8-sig")
     actual = run_analysis_recipe(
         recipe, _profile_words(), annotations=annotated, **opts
     )
@@ -535,3 +536,142 @@ def test_recipe_replays_text_ids_supplied_by_raw_gaze(tmp_path, monkeypatch):
     output = tmp_path / "profile.csv"
     cli.main([*arguments, "-o", str(output)])
     assert pd.read_csv(output).iloc[0][["value", "n"]].tolist() == [100, 1]
+
+
+def test_two_group_recipe_reproduces_signed_difference_and_one_sided_word():
+    from scanpath_studio import run_analysis_recipe
+    from scanpath_studio.aggregation import group_word_difference
+
+    words = _profile_words().assign(
+        text=["ink", "ink", "end"],
+        word_id=[1, 1, 2],
+        screen_id="second",
+        screen_index=5,
+    )
+    groups = [{"participant_id": ["01"]}, {"participant_id": ["02", "03"]}]
+    recipe = _cohort_recipe()
+    recipe["analysis"] = analysis_choices(
+        section="Groups",
+        view="Difference word profile",
+        text=("text_id", "story"),
+        screen="second",
+        measure=MEASURES["tfd"],
+        aggregation="mean",
+        groups=[
+            group_definition(label, spec) for label, spec in zip(("A", "B"), groups)
+        ],
+        min_readers=1,
+    )
+    recipe["result"]["rows"] = 2
+    expected = group_word_difference(
+        words, "text_id", "story", MEASURES["tfd"], *groups, screen_id="second"
+    )
+    pd.testing.assert_frame_equal(run_analysis_recipe(recipe, words), expected)
+    assert expected.loc[0, "diff"] == 50 and expected.loc[1, "word_text"] == "end"
+
+
+def _group_difference_app():
+    import streamlit as st
+
+    from scanpath_studio import tabs
+
+    token = tabs._RECIPE_CONTEXT.set(
+        {"dataset": {"source": "Lab"}, "section": "Groups"}
+    )
+    try:
+        tabs.render_group_comparison_tab(
+            st.session_state["words"],
+            st.session_state["fix"],
+            viz_settings={},
+            canvas_width=700,
+            canvas_height=400,
+            base_font_size=14,
+            font_family="Arial",
+        )
+    finally:
+        tabs._RECIPE_CONTEXT.reset(token)
+
+
+def test_paired_contrast_counts_a_reader_who_has_only_fixations(monkeypatch):
+    from scanpath_studio import tabs
+
+    words = (
+        _profile_words()
+        .iloc[:2]
+        .assign(
+            participant_id="r1",
+            trial_id=["a", "b"],
+            total_fixation_duration_ms=[100, 150],
+        )
+    )
+    fix = pd.DataFrame(
+        {"participant_id": ["r1", "r1", "r2", "r2"], "trial_id": ["a", "b", "a", "b"]}
+    )
+    monkeypatch.setattr(
+        tabs,
+        "_render_group_definition",
+        lambda *args, **kwargs: ({"trial_id": ["a"]}, {"trial_id": ["b"]}, "A", "B"),
+    )
+    at = streamlit_testing.AppTest.from_function(_group_difference_app)
+    at.session_state["words"], at.session_state["fix"] = words, fix
+    at.session_state["cmp_view"] = "Within-participant contrast"
+    at.run(timeout=60)
+    assert not at.exception
+    assert any("1 missing A and 1 missing B" in caption.value for caption in at.caption)
+    result = at.dataframe[-1].value.set_index("participant_id")
+    assert result.loc["r2"].isna().all()
+    assert result.at["r1", "difference_a_minus_b"] == -50
+
+
+def test_downloaded_group_difference_replays_from_source_files(tmp_path, monkeypatch):
+    import functools
+    import hashlib
+
+    from scanpath_studio import api, cli, tabs
+
+    source = _profile_words().assign(
+        text=["ink", "ink", "end"],
+        word_id=[1, 1, 2],
+        x=[0, 0, 20],
+        y=0,
+        width=20,
+        height=10,
+        screen_id="second",
+        screen_index=5,
+    )
+    path = tmp_path / "words.csv"
+    source.to_csv(path, index=False)
+    words, fix = api.load_scanpath_data(path, None, names="canonical")
+    captures = {}
+
+    def capture(func, *args, **kwargs):
+        fn = functools.partial(func, *args, **kwargs)
+        if func is tabs._recipe_json and args[2].startswith("difference_"):
+            captures["recipe"] = fn
+        if func is tabs._tidy_csv and "diff" in args[0]:
+            captures["csv"] = fn
+        return fn
+
+    monkeypatch.setattr(tabs, "partial", capture)
+    monkeypatch.setattr(
+        tabs,
+        "_render_group_definition",
+        lambda *a, **k: (
+            {"participant_id": ["01"]},
+            {"participant_id": ["02", "03"]},
+            "A",
+            "B",
+        ),
+    )
+    at = streamlit_testing.AppTest.from_function(_group_difference_app)
+    at.session_state["words"], at.session_state["fix"] = words, fix
+    at.session_state["cmp_view"] = "Difference word profile"
+    at.run(timeout=90)
+    assert not at.exception
+    payload, expected = captures["recipe"](), captures["csv"]()
+    recipe = json.loads(payload)
+    assert recipe["result"]["sha256"] == hashlib.sha256(expected).hexdigest()
+    saved, out = tmp_path / "groups.recipe.json", tmp_path / "difference.csv"
+    saved.write_text(payload, encoding="utf-8")
+    cli.main(["recipe", str(saved), "--words", str(path), "-o", str(out)])
+    assert out.read_bytes() == expected

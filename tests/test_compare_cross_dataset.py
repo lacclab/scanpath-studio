@@ -445,11 +445,128 @@ class TestCompareStimulusSource:
 
 
 class TestPairExportBundle:
+    def test_disabled_artifacts_still_carry_both_dataset_citations(self):
+        import io
+        import zipfile
+
+        from scanpath_studio.export import ComparisonSide, ExportOptions, pair_export
+
+        def side(dataset):
+            return ComparisonSide(
+                "p1", "t1", _words("p1", "t1"), _fixations("p1", "t1"), dataset
+            )
+
+        refs = [
+            {"side": "A", "name": "Pilot", "fields": {"credit": "Unpublished pilot"}},
+            {"side": "B", "name": "Repeat", "fields": {"doi": "10.1234/repeat"}},
+        ]
+        data = pair_export(
+            None,
+            side("Pilot"),
+            side("Repeat"),
+            canvas_width=1000,
+            canvas_height=800,
+            x_field="x",
+            y_field="y",
+            settings={"dataset_references": refs},
+            options=ExportOptions(include_plot_config=False, include_fixations=False),
+        )
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            assert archive.namelist() == ["CITATION.bib"]
+            bibliography = archive.read("CITATION.bib").decode()
+        assert bibliography.count("@software{") == 1
+        a, b = bibliography.split("@misc{scanpath-dataset-a,")[1].split(
+            "@misc{scanpath-dataset-b,"
+        )
+        assert "Unpublished pilot" in a
+        assert "10.1234/repeat" in b
+
+    def test_exported_settings_reopen_both_readings_on_their_screens(self):
+        import io
+        import json
+        import zipfile
+
+        from scanpath_studio.constants import DATASET_ALIASES_KEY
+        from scanpath_studio.dataset_identity import DATASET_IDS_KEY
+        from scanpath_studio.export import ComparisonSide, ExportOptions, pair_export
+        from scanpath_studio.utils import reading_key
+        from tests.test_plot_config_restore import _apply_app, _run
+
+        def side(pid, trial, name, screen, dataset_id):
+            return ComparisonSide(
+                pid,
+                trial,
+                _words(pid, trial).assign(screen_id=screen),
+                _fixations(pid, trial).assign(screen_id=screen),
+                dataset=name,
+                dataset_id=dataset_id,
+            )
+
+        first = side("p1", "t2", "Pilot", "left", "aa" * 16)
+        second = side("p2", "t1", "Repeat", "right", "bb" * 16)
+        fig = make_comparison_figure(
+            pd.concat([first.words, second.words]),
+            pd.concat([first.fixations, second.fixations]),
+            (first.participant, first.trial),
+            (second.participant, second.trial),
+            settings=FigureSettings(
+                canvas_width=1000,
+                canvas_height=800,
+                base_font_size=16,
+                layout="side_by_side",
+            ),
+        )
+        data = pair_export(
+            fig,
+            first,
+            second,
+            canvas_width=1000,
+            canvas_height=800,
+            x_field="x",
+            y_field="y",
+            settings={"compare_stimulus": "b"},
+            options=ExportOptions(
+                include_png=False, include_svg=False, include_html=True
+            ),
+        )
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            folder = "p1__t2__vs__p2__t1"
+            assert b"Plotly.newPlot(" in archive.read(f"{folder}/figure.html")
+            saved = archive.read(f"{folder}/plot_config.json")
+        config = json.loads(saved)
+        assert config["data_source"] == "Pilot"
+        assert config["mode"] == {"animate": False, "compare": True}
+        assert config["datasets"]["a"]["source_id"] == first.dataset_id
+        ss = _run(
+            _apply_app,
+            _bytes=saved,
+            data_source_choice="local-pilot",
+            _datasets={"local-pilot": {}, "local-repeat": {}, "other": {}},
+            _fix=first.fixations,
+            **{
+                DATASET_IDS_KEY: {"local-repeat": second.dataset_id},
+                DATASET_ALIASES_KEY: {
+                    "local-repeat": "Renamed repeat",
+                    "other": "Repeat",
+                },
+            },
+        ).session_state
+        assert ss["single_trial_id"] == reading_key("p1", "t2")
+        assert ss["single_screen_id"] == "left"
+        assert ss["single_compare_toggle"] is True
+        assert ss["cmp_dataset"] == "local-repeat"
+        assert ss["_pending_compare"] == {"participant_id": "p2", "trial_id": "t1"}
+        assert ss["single_compare_screen_id"] == "right"
+        assert ss["single_compare_layout"] == "Side by side"
+        assert ss["single_compare_stimulus"] == "B"
+
     def test_bundle_names_both_sources_and_both_setups(self):
         import io
         import json
         import zipfile
 
+        from scanpath_studio.citation import CORPORA
+        from scanpath_studio.constants import DEMO_CHOICE, POTEC_CHOICE
         from scanpath_studio.export import ComparisonSide, ExportOptions, pair_export
 
         side_a = ComparisonSide(
@@ -466,7 +583,7 @@ class TestPairExportBundle:
             trial="t1",
             words=tabs._unqualify_for_export(qualified_words, "p1"),
             fixations=tabs._unqualify_for_export(qualified_fix, "p1"),
-            dataset="PoTeC",
+            dataset=POTEC_CHOICE,
             setup=SetupSnapshot(canvas_width=1680, canvas_height=1050).to_dict(),
         )
         data = pair_export(
@@ -477,7 +594,7 @@ class TestPairExportBundle:
             canvas_height=800,
             x_field="x",
             y_field="y",
-            settings={},
+            settings={"data_source": DEMO_CHOICE},
             options=ExportOptions(
                 include_fixations=True, include_measures=True, table_format="csv"
             ),
@@ -489,13 +606,16 @@ class TestPairExportBundle:
             assert f"{folder}/fixations.csv" in names
             config = json.loads(zf.read(f"{folder}/plot_config.json"))
             fixations = pd.read_csv(io.BytesIO(zf.read(f"{folder}/fixations.csv")))
+            citations = zf.read("CITATION.bib").decode()
 
         assert config["datasets"]["a"]["source"] is None
-        assert config["datasets"]["b"]["source"] == "PoTeC"
+        assert config["data_source"] == DEMO_CHOICE
+        assert config["datasets"]["b"]["source"] == POTEC_CHOICE
         assert config["datasets"]["b"]["setup"]["canvas_width"] == 1680
+        assert CORPORA["onestop"].doi in citations and CORPORA["potec"].doi in citations
         # The `dataset` column is what tells two identically-named readers apart
         # in the exported table — the ids themselves are the corpus' own.
-        assert set(fixations["dataset"]) == {"(this dataset)", "PoTeC"}
+        assert set(fixations["dataset"]) == {"(this dataset)", POTEC_CHOICE}
         assert set(fixations["participant_id"]) == {"p1"}
 
 
@@ -877,3 +997,11 @@ def test_a_cross_dataset_b_counts_its_own_gaze_samples(_synthetic_vs_demo):
     """B's samples are drawn, so B's chip counts them too."""
     table = next(t for t in _synthetic_vs_demo if "Number of gaze samples" in t)
     assert "2,233" in table, table
+
+
+def test_compare_qualification_preserves_the_labs_dataset_column_through_export():
+    source = _fixations("p1", "t1").assign(dataset="pilot")
+    restored = tabs._unqualify_for_export(
+        tabs._qualify_for_compare(source, "Corpus B"), "p1"
+    )
+    pd.testing.assert_frame_equal(restored, source)

@@ -36,12 +36,33 @@ from .session_keys import (
     DESIGN_FLOAT_PARAMS,
     DESIGN_INT_PARAMS,
     DESIGN_TOGGLE_PARAMS,
+    PLOT_CONFIG_SCHEMA_VERSION,
     SINGLE_ANIMATE,
+    SINGLE_COMPARE_FIX_RANGE,
     SINGLE_COMPARE_LAYOUT,
     SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
+    SINGLE_FIX_RANGE,
     SINGLE_PLAYBACK_SPEED,
 )
+
+
+def _saved_window(state: Mapping, key: str, full_key: str) -> list[int] | None:
+    """Only save a deliberate window. Untouched slider bounds describe the data."""
+    bounds = state.get(key)
+    if (
+        not state.get(f"{key}_user_set")
+        or not isinstance(bounds, (list, tuple))
+        or len(bounds) != 2
+    ):
+        return None
+    full = (state.get("_share_selection") or {}).get(full_key)
+    sticky = key == SINGLE_FIX_RANGE and state.get("single_fix_range_all_trials")
+    return (
+        list(map(int, bounds))
+        if sticky or full is None or tuple(bounds) != tuple(full)
+        else None
+    )
 
 
 def build_plot_config(
@@ -77,10 +98,6 @@ def build_plot_config(
     edited — 🗂️ Data → Annotations → *Export*, ✏️ Edit dataset → *Download setup
     file*, and the tables you attached. (Files older than schema 4 carried
     them too; the reader ignores them.)"""
-    # PLOT_CONFIG_SCHEMA is the single source of truth for the version; bump
-    # it (+ register a migration) in url_state when this layout changes.
-    from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
-
     # Schema 6: the *requested* mode (the switches), as a link records it.
     animate_on = bool(state.get(SINGLE_ANIMATE, False))
     compare_on = bool(state.get(SINGLE_COMPARE_TOGGLE, False))
@@ -88,6 +105,9 @@ def build_plot_config(
     compare_b = (
         {
             "participant_id": str(published["participant_id"]),
+            "fixation_window": _saved_window(
+                state, SINGLE_COMPARE_FIX_RANGE, "compare_full_fix_range"
+            ),
             "trial_id": str(published["trial_id"]),
             "source": published.get("source_name") or published.get("source") or None,
             **(
@@ -110,7 +130,7 @@ def build_plot_config(
     return {
         # Schema 4 and later = the figure only; older files still restore
         # through the same reader, which ignores what they carry beyond it.
-        "schema": PLOT_CONFIG_SCHEMA,
+        "schema": PLOT_CONFIG_SCHEMA_VERSION,
         "app": {"name": "Scanpath Studio", "version": app_version},
         # When this config was saved (ISO 8601, local time) — provenance only,
         # surfaced when restoring (Share → File + the upload wizard's restore step).
@@ -118,6 +138,8 @@ def build_plot_config(
         "data_source": data_source,
         "selection": {
             "participant_id": selected_participant,
+            "fixation_window": _saved_window(state, SINGLE_FIX_RANGE, "full_fix_range"),
+            "window_all_trials": bool(state.get("single_fix_range_all_trials")),
             "trial_id": selected_trial,
             **(
                 {"screen_id": str(state["single_screen_id"])}
@@ -435,8 +457,9 @@ def render_plot_config(
     y_field: str,
     screen_id: str | None = None,
     setup: dict | None = None,
+    comparison: dict | None = None,
 ) -> dict:
-    """Serialize an exported static figure in Share's restorable format."""
+    """Serialize an exported figure in Share's format, including a selected B."""
     from .build_info import build_info
 
     names = {f.name for f in fields(FigureSettings)}
@@ -497,6 +520,14 @@ def render_plot_config(
             "global_heatmap_opacity_auto": figure.heatmap_opacity is None,
         }
     )
+    if comparison is not None:
+        state[SINGLE_COMPARE_TOGGLE] = True
+        state["_share_selection"] = {"compare": comparison}
+        layout = settings.get("layout") or settings.get("compare_layout") or "overlay"
+        state[SINGLE_COMPARE_LAYOUT] = (
+            layout.replace("_", " ").replace("-", " ").capitalize()
+        )
+        state[SINGLE_COMPARE_STIMULUS] = figure.compare_stimulus.capitalize()
     for bar in ("fixation", "heatmap"):
         length = getattr(figure, f"{bar}_colorbar_length")
         state[f"global_{bar}_colorbar_length_auto"] = length is None
@@ -518,6 +549,9 @@ def render_plot_config(
         data_source=settings.get("data_source_label", settings.get("data_source")),
         app_version=build_info().version,
         exported_at="",
+        compare_styles=settings.get("compare_styles")
+        if comparison is not None
+        else None,
         state=state,
     )
     config.pop("exported_at")

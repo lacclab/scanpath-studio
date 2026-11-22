@@ -49,6 +49,7 @@ from .constants import (
     FIXATION_LABEL_OPTIONS,
     FIXATION_SYMBOLS,
     FONT_FAMILY,
+    OPACITY_OPTIONS,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_EDITABLE,
     SACCADE_CLASS_ORDER,
@@ -59,6 +60,7 @@ from .constants import (
     drift_correction_enabled,
     multipleye_format_enabled,
     palette_settings,
+    parse_opacity,
 )
 
 
@@ -165,6 +167,22 @@ def _colorscale_name(value: str) -> str:
             "works, e.g. Viridis, Greens, Blues, Cividis; append _r to reverse one."
         )
     return str(value)
+
+
+def _opacity(value: str) -> float:
+    try:
+        return parse_opacity(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+
+
+def _json_hover_fields(value: str) -> list[str]:
+    try:
+        return _cn.json_field_list(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"Expected a JSON array of column names ({exc})."
+        ) from None
 
 
 def _fill_color(value: str) -> str:
@@ -779,18 +797,23 @@ def _render_parser() -> argparse.ArgumentParser:
         default=None,
         help="Hide the fixation numbers (the default).",
     )
-    viz.add_argument(
-        "--word-hover-fields",
-        metavar="FIELDS",
-        help="Comma-separated Words table columns shown on hover (e.g. "
-        "text,word_id,gpt2_surprisal).",
-    )
-    viz.add_argument(
-        "--fixation-hover-fields",
-        metavar="FIELDS",
-        help="Comma-separated Fixations table columns shown on hover (e.g. "
-        "order_in_trial,duration_ms,eye).",
-    )
+    for table in ("word", "fixation"):
+        hover = viz.add_mutually_exclusive_group()
+        flag = f"--{table}-hover-fields"
+        hover.add_argument(
+            flag,
+            metavar="FIELDS",
+            type=_cn.split_field_list,
+            help=f"Comma-separated {table} columns to show on hover, in order.",
+        )
+        hover.add_argument(
+            f"{flag}-json",
+            dest=f"{table}_hover_fields",
+            metavar="JSON",
+            type=_json_hover_fields,
+            help=f"Ordered JSON array of {table} column names. Use this for names "
+            "containing commas, or pass '[]' to leave the tooltip empty.",
+        )
     viz.add_argument(
         "--no-saccades",
         dest="show_saccades",
@@ -837,13 +860,6 @@ def _render_parser() -> argparse.ArgumentParser:
         help=f"Saccade line width in px, "
         f"{SACCADE_WIDTH_BOUNDS[0]:g}–{SACCADE_WIDTH_BOUNDS[1]:g} "
         f"(default: {DEFAULT_SACCADE_WIDTH:g}).",
-    )
-    viz.add_argument(
-        "--saccade-opacity",
-        type=float,
-        metavar="O",
-        help="Opacity of the saccade lines and arrows, 0.1–1.0 (default: 1). "
-        "In a comparison, both scanpaths share it.",
     )
     viz.add_argument(
         "--saccade-arrow-size",
@@ -1226,13 +1242,14 @@ def _render_parser() -> argparse.ArgumentParser:
     # what it left out. Each is spelled after its
     # figure option and takes that option's own value; `_DIRECT_OPTION_FLAGS` /
     # `_SWITCH_OPTION_FLAGS` below hand them to the builder.
-    viz.add_argument(
-        "--fixation-opacity",
-        type=float,
-        metavar="O",
-        help="Fixation marker opacity, 0.1–1.0 (default: 0.7, so overlapping "
-        "fixations show through).",
-    )
+    for option in OPACITY_OPTIONS.values():
+        lo, hi = option.bounds
+        viz.add_argument(
+            option.flag,
+            type=_opacity,
+            metavar=option.metavar,
+            help=f"{option.description}, {lo:g}–{hi:g} (default: {option.default:g}).",
+        )
     viz.add_argument(
         "--fixation-outline-width",
         type=float,
@@ -1781,7 +1798,7 @@ def _render_parser() -> argparse.ArgumentParser:
             "--word-box-fill-color), raw_gaze_color (default fix_color). Also "
             "heatmap_colorscale (default --heatmap-colorscale, on the shared "
             f"range), saccade_style ({'|'.join(SACCADE_DASH_OPTIONS.values())}), "
-            "saccade_width (px), marker_size_range (MIN:MAX), opacity (0.1–1), "
+            "saccade_width (px), marker_size_range (MIN:MAX), opacity (0–1), "
             "box_line_opacity / box_fill_opacity (0–1; default "
             "--word-box-line-opacity / --word-box-fill-opacity), "
             f"hollow (true|false). E.g. --style-{side} fix_color=#D55E00,opacity=0.5. "
@@ -1879,8 +1896,7 @@ def _render_parser() -> argparse.ArgumentParser:
 #: builder unchanged whenever given.
 _DIRECT_OPTION_FLAGS = (
     "marker_size_scale",
-    "fixation_opacity",
-    "saccade_opacity",
+    *OPACITY_OPTIONS,
     *FIXATION_LABEL_OPTIONS,
     "text_color",
     "highlight_text_color",
@@ -2005,12 +2021,9 @@ def _parse_style_spec(specs: list[str] | None, flag: str) -> dict | None:
                     if raw.lower() not in ("1", "0", "true", "false", "yes", "no"):
                         raise ValueError
                     style[name] = raw.lower() in ("1", "true", "yes")
-                elif name in ("box_line_opacity", "box_fill_opacity"):
-                    value = float(raw)
-                    if not 0.0 <= value <= 1.0:
-                        raise ValueError
-                    style[name] = value
-                else:  # saccade_width, opacity
+                elif name in ("opacity", "box_line_opacity", "box_fill_opacity"):
+                    style[name] = parse_opacity(raw)
+                else:  # saccade_width
                     style[name] = float(raw)
             except ValueError:
                 raise SystemExit(
@@ -3173,18 +3186,9 @@ def render(argv: list[str]) -> None:
     if args.coordinate_grid or args.coordinate_grid_spacing is not None:
         overrides["show_coordinate_grid"] = True
         overrides["coordinate_grid_spacing"] = args.coordinate_grid_spacing
-    if args.word_hover_fields is not None:
-        overrides["word_hover_fields"] = [
-            field.strip()
-            for field in args.word_hover_fields.split(",")
-            if field.strip()
-        ]
-    if args.fixation_hover_fields is not None:
-        overrides["fixation_hover_fields"] = [
-            field.strip()
-            for field in args.fixation_hover_fields.split(",")
-            if field.strip()
-        ]
+    for key in ("word_hover_fields", "fixation_hover_fields"):
+        if (fields := getattr(args, key)) is not None:
+            overrides[key] = fields
     # The palette rides along as an override; api._expand_palette turns
     # it into colour kwargs and lets any explicit --*-color below win.
     if args.palette:

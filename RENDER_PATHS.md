@@ -27,13 +27,13 @@ lists the four render views. The reference and compact Share snippets use
 | `show_words`, `show_labels`, `show_saccades`, `show_order`, `order_font_size`, `order_label_position` | ✅ | ✅ | ✅ | |
 | `word_box_*` (colour, line / fill opacity) | ✅ | ✅ | fill and both opacities | Compare outlines each reading's boxes in its own `cmp{idx}_box_color` (its scanpath colour by default); each style can also override the fill and opacities |
 | `show_fix` | ✅ | ❌ | ✅ | The replay *is* the fixation trail |
-| `show_saccade_arrows`, `saccade_arrow_size`, `saccade_opacity` | ✅ | ✅ | ✅ | One figure-wide value in Compare |
+| `show_saccade_arrows`, `saccade_arrow_size`, `saccade_opacity` | ✅ | ✅ | ✅ | One figure-wide value in Compare. A fixation-index chart connects visible fixations with the uniform line colour, dash, width and opacity. Arrows and saccade classes apply to screen coordinates. |
 | `legend_layout` | ✅ | ✅ (not saccades) | ✅ (not saccades) | `plots.apply_legend_layout`; one `legend_<kind>=SPOT[,ARR][,SIZE]` link param per moved legend, `render --legend` |
 | Global fixation index color, marker color, opacity and hollow markers, saccade color / style / width | ✅ | ✅ (single only) | ❌ | Compare and the co-animation use the per-scanpath `cmp{idx}_*` styles; fixation indices use each scanpath's fixation color |
 | `marker_size_range` | ✅ | ✅ | ✅ | A/B controls set each scanpath's range. A style without a range inherits the figure-wide value. |
 | `color_by`, `fixation_colorscale`, `fixation_color_range` | ✅ | ✅ | ✅ | Compare colours the fill and makes the scanpath colour the outline; a range is present only when explicit (absent = scale to the data, A+B together) |
 | `fixation_symbol` | ✅ | ✅ | ✅ | Glyph shapes (♥) are drawn as text by `plots._glyph_scatter_traces` in every builder |
-| `marker_size_scale`, `marker_duration_range`, `duration_size_legend` | ✅ | ✅ | ✅ | One duration scale; the size key draws in Compare only while A and B share a px range |
+| `marker_size_scale`, `marker_duration_range`, `duration_size_legend` | ✅ | ✅ | ✅ | Relative sizing uses the visible durations of both readings together. Each side keeps its own pixel range. The size key draws in Compare when these ranges match. |
 | `fix_index_range` | ✅ | ✅ | ✅ | Sliced in `tabs._slice_fix_range`; Compare's B has its own window (`single_compare_fix_range`) |
 | `fixation_flags` (short / long / out-of-bounds) | ✅ | ✅ | ✅ | Compare applies each scanpath's own (B: `cmp1_fixclass_*`) |
 | `illustration_label` / `illustration_text` | ✅ | ✅ | ✅ | An authored drawing on either side of a comparison qualifies for the automatic label |
@@ -41,7 +41,7 @@ lists the four render views. The reference and compact Share snippets use
 | drift connectors (`align_connectors`) | ✅ | ❌ | ❌ | Only the static figure has the original→corrected layer |
 | `fixation_snap_to_line` / `_position`, Arc saccades | ✅ | ❌ | ❌ | The linear-reading schematic |
 | saccade colour by type, `saccade_classes` | ✅ | ❌ | classes only | Reading-class colouring is static-only; Compare filters classes per scanpath |
-| heatmap (`show_heatmap`, metric / norm / colour scale / range / opacity) | ✅ | ❌ | ✅ | Compare is always word boxes (`heatmap_style` static-only), on a scale shared by A and B |
+| heatmap (`show_heatmap`, metric / norm / colour scale / range / opacity) | ✅ | ❌ | ✅ | Compare shows word boxes with a scale shared by A and B. Word counts and dwell use recorded word assignments when mapped, and box geometry otherwise. Logarithmic legends label the original units. |
 | raw gaze (`show_raw_gaze`, size / opacity) | ✅ | ❌ | ✅ | Compare draws each reading's samples in its scanpath's colour |
 | stimulus image (`background_image*`, opacity / offset / scale) | ✅ | ✅ | ✅ | Split layouts get one image per panel |
 | `highlight_column`, `highlight_text_color`, `text_color` | ✅ | ✅ | ✅ | Only *Mark text* reaches all three; *Mark border* (`span_border_color`) is static-only |

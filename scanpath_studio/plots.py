@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import base64
+import colorsys
 import copy
+import hashlib
 import html
 import itertools
 import math
@@ -16,6 +18,7 @@ from contextvars import ContextVar
 from dataclasses import MISSING, dataclass, fields, replace
 from pathlib import Path
 from typing import Any
+from unicodedata import bidirectional
 
 import numpy as np
 import pandas as pd
@@ -65,6 +68,7 @@ from .constants import (
     LEGEND_KINDS,
     LEGEND_POSITIONS,
     MARKER_SIZE_SCALES,
+    OPACITY_OPTIONS,
     ORDER_LABEL_POSITIONS,
     OUT_OF_TEXT_COLOR,
     SACCADE_CLASS_COLORS,
@@ -87,6 +91,7 @@ from .constants import (
     WORD_LABEL_COLOR,
     canonical_legend_position,
     compare_palette_color,
+    parse_opacity,
 )
 from .illustration import MANUAL_LABEL_REASON
 from .multipart import SCREEN_ID
@@ -414,6 +419,11 @@ def normalize_option_value(name: str, value: object) -> object:
 
     Raises ``ValueError`` listing the choices for a value that is none of
     them. ``critical_span_style=None`` is the app's "None" (no marking)."""
+    if value is not None and (name in OPACITY_OPTIONS or name == "opacity"):
+        try:
+            return parse_opacity(value)
+        except ValueError as exc:
+            raise ValueError(f"{name}: {exc}") from None
     choices = FIGURE_OPTION_CHOICES.get(name)
     if choices is None:
         return value
@@ -601,13 +611,10 @@ def redact_word_text(words: pd.DataFrame | None) -> pd.DataFrame | None:
     the masked text no longer shows."""
     if words is None or words.empty or "text" not in words.columns:
         return words
-    from .preprocessing import detect_right_to_left
-
     out = words.copy()
     present = words["text"].notna()
     text = words["text"].where(present, "").astype(str)
-    if "right_to_left" not in out.columns:
-        out["right_to_left"] = text.map(detect_right_to_left)
+    out["right_to_left"] = _word_label_rtl(words)
     masked = text.map(
         lambda word: "".join(
             _REDACTED_FULLWIDTH_CHAR if _is_fullwidth(ch) else _REDACTED_CHAR
@@ -673,13 +680,13 @@ def _compute_axis_ranges(
 
     x_range = [0, canvas_width]
     y_range = [canvas_height, 0]
+    x_candidates = [v for v in x_candidates if pd.notna(v) and np.isfinite(v)]
+    y_candidates = [v for v in y_candidates if pd.notna(v) and np.isfinite(v)]
     if not x_candidates or not y_candidates:
         return x_range, y_range, None, None, None, None
 
-    x_min = float(np.nanmin(x_candidates))
-    x_max = float(np.nanmax(x_candidates))
-    y_min = float(np.nanmin(y_candidates))
-    y_max = float(np.nanmax(y_candidates))
+    x_min, x_max = float(min(x_candidates)), float(max(x_candidates))
+    y_min, y_max = float(min(y_candidates)), float(max(y_candidates))
 
     if fit_to_monitor:
         # Show the whole monitor; the scanpath keeps its true on-screen position.
@@ -1380,12 +1387,7 @@ def _word_label_x(words: pd.DataFrame) -> np.ndarray:
     chars = words["text"].astype(str).str.len().to_numpy(dtype=float)
     width = x1 - x0
     half_padded = np.abs(width - chars * cell - pad / 2) <= max(1.5, _PADDED_TOL * cell)
-    rtl = words.get("right_to_left")
-    ltr = (
-        np.ones(len(words), dtype=bool)
-        if rtl is None
-        else ~rtl.fillna(False).astype(bool).to_numpy()
-    )
+    ltr = ~_word_label_rtl(words).to_numpy()
     lines = np.asarray(cluster_word_lines(words))
     first = np.zeros(len(words), dtype=bool)
     for line in pd.unique(lines):
@@ -1490,15 +1492,8 @@ def _resolve_marker_colors(
         return uniform_color, []
     if is_numeric_color:
         return color_data, []
-    series = color_data.fillna("(missing)").astype(str)
-    unique_vals = list(pd.unique(series))
-    cat_to_color = {
-        val: _QUALITATIVE_PALETTE[i % len(_QUALITATIVE_PALETTE)]
-        for i, val in enumerate(unique_vals)
-    }
-    marker_color = [cat_to_color[val] for val in series]
-    legend = [(val, cat_to_color[val]) for val in unique_vals]
-    return marker_color, legend
+    colors, legend = _shared_category_colors([color_data])
+    return colors[0], legend
 
 
 def _fixation_category_labels(
@@ -1532,7 +1527,26 @@ def _fixation_category_labels(
         or pd.api.types.is_numeric_dtype(fixations[color_by])
     ):
         return None
-    return fixations[color_by].fillna("(missing)").astype(str)
+    return fixations[color_by]
+
+
+def _category_color(label: str | None, avoid: set[str]) -> str:
+    """Stable across trial selections, workspaces and independent export processes."""
+    if label is None:
+        return "#777777" if "#777777" not in avoid else "#aaaaaa"
+    # Hue, lightness and saturation come from the label itself. Using a
+    # finite palette index here would give unrelated categories identical
+    # colours and make a subset depend on which other categories it contained.
+    digest = hashlib.sha256(label.encode("utf-8")).digest()
+    hue = int.from_bytes(digest[:2], "big") / 65536
+    light = 0.39 + 0.13 * digest[2] / 255
+    saturation = 0.55 + 0.22 * digest[3] / 255
+    while True:
+        rgb = colorsys.hls_to_rgb(hue, light, saturation)
+        color = "#" + "".join(f"{round(255 * channel):02x}" for channel in rgb)
+        if color not in avoid:
+            return color
+        hue = (hue + 0.381966) % 1
 
 
 def _shared_category_colors(
@@ -1542,25 +1556,34 @@ def _shared_category_colors(
     """One category→colour mapping across several scanpaths (Compare, the dual
     replay), so a category wears the same colour on A and on B.
 
-    Categories are numbered in order of first appearance, A's before B's.
+    A category's text determines its colour, independently of row order.
     ``avoid`` names the scanpaths' own colours, which outline their markers: a
     category never fills in one, or that scanpath's outline would vanish into
     its fill. Returns each scanpath's per-row colours (``None`` where it had no
     labels) and the shared legend.
     """
+    labels = [
+        None
+        if col is None
+        else col.astype("string").astype(object).where(col.notna(), None)
+        for col in labels
+    ]
     present = [series for series in labels if series is not None]
     if not present:
         return [None] * len(labels), []
     taken = {str(color).lower() for color in avoid if color}
-    palette = [c for c in _QUALITATIVE_PALETTE if c.lower() not in taken]
-    palette = palette or list(_QUALITATIVE_PALETTE)
     order = list(pd.unique(pd.concat(present, ignore_index=True)))
-    cat_to_color = {val: palette[i % len(palette)] for i, val in enumerate(order)}
+    cat_to_color = {val: _category_color(val, taken) for val in order}
+    missing = "(missing)"
+    while missing in cat_to_color:
+        missing = f"{missing} (no value)"
     colors = [
         None if series is None else [cat_to_color[val] for val in series]
         for series in labels
     ]
-    return colors, [(val, cat_to_color[val]) for val in order]
+    return colors, [
+        (missing if val is None else val, cat_to_color[val]) for val in order
+    ]
 
 
 def _add_category_legend(
@@ -1605,7 +1628,7 @@ def _add_category_legend(
 
 #: How much larger (font px) the outline layer behind a glyph marker is: a text
 #: glyph takes no stroke, so its outline is a second, larger glyph drawn under it.
-_GLYPH_OUTLINE_PX = 4.0
+_GLYPH_DIAMETER_PER_STROKE_PX = 2 * FIXATION_GLYPH_SIZE_SCALE
 #: The outline-only form of each glyph shape, for hollow markers.
 _HOLLOW_GLYPHS = {"♥": "♡"}
 
@@ -1667,12 +1690,18 @@ def _glyph_layers(marker: dict, glyph: str, n: int) -> list[dict]:
         outline = line.get("color")
         # A glyph skips the default hairline (either spelling) and an
         # outline whose width is 0; any other outline is a ring behind it.
+        width = float(line.get("width") or 0)
         if (
             isinstance(outline, str)
-            and outline.lower() not in _DEFAULT_OUTLINES
-            and float(line.get("width") or 0) > 0
+            and width > 0
+            and (
+                outline.lower() not in _DEFAULT_OUTLINES
+                or width > DEFAULT_FIXATION_OUTLINE_WIDTH
+            )
         ):
-            layers.append((glyph, outline, sizes + _GLYPH_OUTLINE_PX))
+            layers.append(
+                (glyph, outline, sizes + _GLYPH_DIAMETER_PER_STROKE_PX * width)
+            )
         layers.append((glyph, color, sizes))
     opacity = float(marker.get("opacity", 1.0))
     return [
@@ -1785,6 +1814,7 @@ def _compute_marker_sizes(
     size_range: tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
     scale: str = DEFAULT_MARKER_SIZE_SCALE,
     duration_range: tuple[float, float] = DEFAULT_MARKER_DURATION_RANGE,
+    relative_bounds: tuple[float, float] | None = None,
 ) -> np.ndarray:
     """Map fixation durations to marker sizes (px diameter).
 
@@ -1799,7 +1829,10 @@ def _compute_marker_sizes(
     durations = pd.to_numeric(durations, errors="coerce").fillna(0)
     min_size, max_size = size_range
     if scale == "relative":
-        d_min, d_max = float(durations.min()), float(durations.max())
+        d_min, d_max = relative_bounds or (
+            float(durations.min()),
+            float(durations.max()),
+        )
         if d_max - d_min > 0:
             return np.interp(durations, (d_min, d_max), (min_size, max_size))
         return np.full(len(durations), (min_size + max_size) / 2)
@@ -1817,6 +1850,27 @@ def _settings_size_scale(settings: FigureSettings) -> dict:
         "scale": settings.marker_size_scale,
         "duration_range": settings.marker_duration_range,
     }
+
+
+def _comparison_duration_scale(trials: list[dict], settings: FigureSettings) -> dict:
+    """Use the extents of both readings' visible fixations for relative sizing."""
+    scale = _settings_size_scale(settings)
+    if settings.marker_size_scale != "relative":
+        return scale
+    durations = []
+    for trial in trials:
+        fix = trial["trial_fix"]
+        if fix.empty:
+            continue
+        flags = _comparison_filters(trial["style"], settings)["fixation_flags"] or {}
+        if any(f.get("mode") == "Hide" for f in flags.values() if isinstance(f, dict)):
+            fix = _discard_flagged_fixations(fix, trial["trial_words"], flags)
+        durations.append(pd.to_numeric(fix["duration_ms"], errors="coerce").fillna(0))
+    if durations:
+        series = pd.concat(durations, ignore_index=True)
+        if not series.empty:
+            scale["relative_bounds"] = (float(series.min()), float(series.max()))
+    return scale
 
 
 def _duration_key_references(duration_range) -> list[tuple[float, str]]:
@@ -3036,10 +3090,12 @@ def _trace_layer(trace) -> str:
     fixation-flag overlays, the drift-correction ``drift`` connectors), so they
     all fall through to ``fixations`` — robust to those names changing."""
     name = trace.name or ""
+    if trace.meta == _COLORS_LEGEND_META:
+        return "fixations"
     low = name.lower()
     if name == "words":
         return "labels"
-    if "heatmap" in low:
+    if low in {"fixation heatmap", "heatmap colorbar"}:
         return "heatmap"
     if name == "Raw gaze":
         return "raw_gaze"
@@ -3580,6 +3636,21 @@ def _add_redaction_blocks(
             fig.add_trace(trace)
 
 
+def _word_label_rtl(words: pd.DataFrame) -> pd.Series:
+    """Use the word's first strong character, falling back to its passage for neutrals."""
+
+    def first_strong(word):
+        for char in str(word):
+            direction = bidirectional(char)
+            if direction in ("L", "R", "AL"):
+                return direction != "L"
+        return None
+
+    from_text = words["text"].fillna("").map(first_strong)
+    fallback = words.get("right_to_left", False)
+    return from_text.where(from_text.notna(), fallback).eq(True)
+
+
 def _add_word_label_trace(
     fig: go.Figure,
     words: pd.DataFrame,
@@ -3659,15 +3730,7 @@ def _add_word_label_trace(
     # (the box carries the following space) that draws every word flush left.
     # Centred text needs no LTR/RTL anchor; the Unicode direction isolates stay —
     # they are about *shaping* mixed Hebrew/Arabic + punctuation, not placement.
-    from .preprocessing import detect_right_to_left
-
-    rtl = words.get("right_to_left")
-    if rtl is None:
-        rtl = words["text"].astype(str).map(detect_right_to_left)
-    else:
-        # As object first: a float flag column (1.0 / NaN) cannot take a
-        # boolean fill value.
-        rtl = rtl.astype(object).fillna(False).astype(bool)
+    rtl = _word_label_rtl(words)
     label_x = _word_label_x(words)
     # The word drawn as its own characters (not as Plotly markup),
     # escaped before the direction isolates wrap it; the hover's `%{text}`
@@ -4823,7 +4886,10 @@ def _render_scanpath_figure(
                     x=path[x_field],
                     y=path[y_field],
                     mode="lines",
-                    line=dict(color=saccade_color, width=1),
+                    line=dict(
+                        color=saccade_color, width=saccade_width, dash=saccade_style
+                    ),
+                    opacity=settings.saccade_opacity,
                     name="Fixation sequence",
                     showlegend=False,
                     hoverinfo="skip",
@@ -5238,6 +5304,32 @@ def _apply_heatmap_norm(values, norm: str):
 _WORD_DWELL_TITLE = "Dwell time per word (ms)"
 
 
+def _heatmap_ticks(
+    z_min: float, z_max: float, norm: str, *, counts: bool = False
+) -> dict:
+    """Tick positions share the colour transform, labels keep the recorded units."""
+    if norm != "Log" or not np.isfinite(z_min + z_max) or z_min >= z_max:
+        return {}
+    lo, hi = np.expm1([z_min, z_max])
+    step = _nice_grid_spacing((hi - lo) / 4)
+    if counts:
+        step = max(step, 1.0)
+    ticks = [
+        lo,
+        *(
+            x
+            for x in np.arange(np.ceil(lo / step) * step, hi, step)
+            if lo < x < hi and not np.isclose(x, hi)
+        ),
+        hi,
+    ]
+    return {
+        "tickmode": "array",
+        "tickvals": np.log1p(ticks).tolist(),
+        "ticktext": [f"{v:.5g}" for v in ticks],
+    }
+
+
 def _heatmap_title(base: str, norm: str) -> str:
     """Colour-bar title, marked ``(log)`` when the log normalization is active."""
     return f"{base} (log)" if norm == "Log" else base
@@ -5270,31 +5362,8 @@ def _add_word_level_heatmap(
 ) -> list[dict]:
     """Tint each word box by the fixations in it; returns the tint rects for
     the caller to put on the figure (`_draw_word_value_heatmap`)."""
-    # Pull the fixation coordinates (and optional weights) into numpy arrays once,
-    # then test box membership per word against the arrays: O(words × fix) work
-    # without rebuilding pandas Series each iteration, and O(fix) memory (no
-    # full words × fix matrix).
-    fx = pd.to_numeric(fixations[x_field], errors="coerce").to_numpy(dtype=float)
-    fy = pd.to_numeric(fixations[y_field], errors="coerce").to_numpy(dtype=float)
-    w_arr = (
-        pd.to_numeric(weights, errors="coerce").to_numpy(dtype=float)
-        if weights is not None
-        else None
-    )
-    # Bin against the experiment's boxes with the assignment's own
-    # containment rule — the same boundary it uses and the heatmap then draws,
-    # and half-open, so a fixation on a shared edge counts towards one word.
-    from .measures import word_box_bounds, word_box_contains
-
-    word_values = []
-    for wx0, wy0, wx1, wy1 in zip(*word_box_bounds(words)):
-        in_word = word_box_contains(fx, fy, wx0, wy0, wx1, wy1)
-        val = (
-            float(np.nansum(w_arr[in_word]))
-            if w_arr is not None
-            else float(in_word.sum())
-        )
-        word_values.append(val)
+    values = _word_heatmap_values(words, fixations, weights)
+    word_values = _word_id_keys(words["word_id"]).map(values).fillna(0).tolist()
 
     return _draw_word_value_heatmap(
         fig,
@@ -5305,6 +5374,7 @@ def _add_word_level_heatmap(
         show_colorbars=show_colorbars,
         heatmap_norm=heatmap_norm,
         colorbar_title="Fixation count" if weights is None else _WORD_DWELL_TITLE,
+        unit="fixations" if weights is None else "ms",
         colorbar_style=colorbar_style,
         opacity=opacity,
     )
@@ -5340,6 +5410,7 @@ def _add_word_measure_heatmap(
         colorbar_title="Fixation count"
         if measure == "n_fixations"
         else _WORD_DWELL_TITLE,
+        unit="fixations" if measure == "n_fixations" else "ms",
         colorbar_style=colorbar_style,
         opacity=opacity,
     )
@@ -5355,6 +5426,7 @@ def _draw_word_value_heatmap(
     show_colorbars: bool,
     heatmap_norm: str = "Linear",
     colorbar_title: str,
+    unit: str = "",
     colorbar_style: dict | None = None,
     opacity: float | None = None,
 ) -> list[dict]:
@@ -5383,13 +5455,9 @@ def _draw_word_value_heatmap(
     z_max = float(_apply_heatmap_norm(z_max_raw, heatmap_norm))
     z_span = max(z_max - z_min, 1e-9)
 
-    positions = [
-        max(
-            0.0,
-            min(1.0, (float(_apply_heatmap_norm(v, heatmap_norm)) - z_min) / z_span),
-        )
-        for v in vals
-    ]
+    positions = np.clip(
+        (_apply_heatmap_norm(vals, heatmap_norm) - z_min) / z_span, 0, 1
+    ).tolist()
     # One call for every box: each call looks the scale up by name again.
     colors = sample_colorscale(heatmap_colorscale, positions)
     heatmap_shapes = []
@@ -5410,6 +5478,12 @@ def _draw_word_value_heatmap(
             )
         )
     if show_colorbars:
+        scope = "fixed range" if heatmap_range is not None else "this trial"
+        scale_title = _heatmap_title(colorbar_title, heatmap_norm)
+        # A caller supplying its own values can be drawing a cohort aggregate.
+        # Only the per-reading count/dwell heatmaps carry this scope.
+        if unit:
+            scale_title += f"<br>{z_min_raw:g}–{z_max_raw:g} {unit} · {scope}"
         fig.add_trace(
             go.Scatter(
                 x=[None],
@@ -5421,15 +5495,23 @@ def _draw_word_value_heatmap(
                     cmin=z_min,
                     cmax=z_max,
                     colorbar=_colorbar_dict(
-                        _heatmap_title(colorbar_title, heatmap_norm),
+                        scale_title,
                         **(colorbar_style or {}),
+                    )
+                    | _heatmap_ticks(
+                        z_min,
+                        z_max,
+                        heatmap_norm,
+                        counts=colorbar_title == "Fixation count",
                     ),
                 ),
                 showlegend=False,
                 hoverinfo="skip",
-                # The word-box heatmap's colorbar-carrier rides the heatmap
-                # layer (name contains "heatmap" → classified there).
+                # Keep this carrier with the coloured word boxes in a layer export.
                 name="heatmap colorbar",
+                # The UI can pin exactly the raw limits this reading drew,
+                # including when its visible colours use a log transform.
+                meta={"word_heatmap_range": (z_min_raw, z_max_raw)} if unit else None,
             )
         )
     return heatmap_shapes
@@ -5496,6 +5578,12 @@ def _add_density_heatmap(
             showscale=show_colorbars,
             colorbar=_colorbar_dict(
                 _heatmap_title(base_title, heatmap_norm), **(colorbar_style or {})
+            )
+            | _heatmap_ticks(
+                z_range[0] if heatmap_range else np.nanmin(z),
+                z_range[1] if heatmap_range else np.nanmax(z),
+                heatmap_norm,
+                counts=weights is None,
             ),
             zmin=z_range[0],
             zmax=z_range[1],
@@ -5699,8 +5787,11 @@ def _add_interpolated_heatmap(
             # so it autoscales from 0 rather than borrowing that range.
             zmin=0.0,
             colorbar=_colorbar_dict(
-                _heatmap_title(base_title, heatmap_norm), **(colorbar_style or {})
-            ),
+                _heatmap_title(base_title, heatmap_norm)
+                + "<br>Relative to this figure’s peak",
+                **(colorbar_style or {}),
+            )
+            | _heatmap_ticks(0.0, np.nanmax(z), heatmap_norm),
             hoverinfo="skip",
             name="Fixation heatmap",
         )
@@ -8168,7 +8259,9 @@ def _add_comparison_fixation_trace(
             )
         )
     if flags:
-        overlay = _fixation_flag_masks(trial_fix, words_for_flags, flags)
+        overlay = _fixation_flag_masks(
+            trial_fix, words_for_flags, flags, modes=("Highlight",)
+        )
         for cat in FIXATION_FLAG_CATEGORIES:
             spec = flags.get(cat, {})
             if spec.get("mode") != "Highlight" or cat not in overlay:
@@ -8235,6 +8328,22 @@ def _word_id_keys(values: pd.Series) -> pd.Series:
     return text.mask(integral, numeric.where(integral, 0).astype("int64").astype(str))
 
 
+def _word_heatmap_values(
+    words: pd.DataFrame, fixations: pd.DataFrame, weights: pd.Series | None
+) -> dict[str, float]:
+    """Count or sum dwell by the fixation's word. A recorded blank stays blank."""
+    if words.empty or fixations.empty or "word_id" not in words:
+        return {}
+    from .measures import assign_fixations_to_words
+
+    ids = assign_fixations_to_words(fixations, words)["word_id"]
+    valid = ids.notna()
+    keys = _word_id_keys(ids[valid])
+    if weights is None:
+        return keys.value_counts().to_dict()
+    return pd.to_numeric(weights[valid], errors="coerce").groupby(keys).sum().to_dict()
+
+
 def _comparison_word_heatmap_data(
     trial_specs: Sequence[dict],
     *,
@@ -8248,20 +8357,11 @@ def _comparison_word_heatmap_data(
     duration_weighted = metric == "duration_ms"
     for spec in trial_specs:
         fixations = spec["trial_fix"]
-        if fixations.empty or "word_id" not in fixations.columns:
-            values: dict[str, float] = {}
-        else:
-            valid = fixations[fixations["word_id"].notna()].copy()
-            keys = _word_id_keys(valid["word_id"])
-            if duration_weighted and "duration_ms" in valid.columns:
-                grouped = (
-                    pd.to_numeric(valid["duration_ms"], errors="coerce")
-                    .groupby(keys)
-                    .sum()
-                )
-            else:
-                grouped = valid.groupby(keys).size()
-            values = {str(key): float(value) for key, value in grouped.items()}
+        values = _word_heatmap_values(
+            spec["trial_words"],
+            fixations,
+            fixations.get("duration_ms") if duration_weighted else None,
+        )
         value_maps.append(values)
         all_values.extend(value for value in values.values() if value > 0)
     if heatmap_range is not None:
@@ -8305,17 +8405,22 @@ def _comparison_heatmap_shapes(
     if "word_id" not in words.columns:
         return []
     keys = _word_id_keys(words["word_id"])
-    for key, (x0, y0, x1, y1) in zip(keys, zip(*word_box_bounds(words))):
-        value = values.get(key, 0.0)
-        if value <= 0:
-            continue
+    raw = keys.map(values).fillna(0).to_numpy(dtype=float)
+    active = raw > 0
+    if not active.any():
+        return []
+    positions = np.clip(
+        (_apply_heatmap_norm(raw[active], heatmap_norm) - z_min) / z_span, 0, 1
+    )
+    colors = sample_colorscale(heatmap_colorscale, positions.tolist())
+    for (x0, y0, x1, y1), color in zip(
+        zip(*(v[active] for v in word_box_bounds(words))), colors
+    ):
         midpoint = (x0 + x1) / 2.0
         if half == "left":
             x1 = midpoint
         elif half == "right":
             x0 = midpoint
-        transformed = float(_apply_heatmap_norm(value, heatmap_norm))
-        position = max(0.0, min(1.0, (transformed - z_min) / z_span))
         shape = dict(
             type="rect",
             x0=x0,
@@ -8323,7 +8428,7 @@ def _comparison_heatmap_shapes(
             x1=x1,
             y1=y1,
             line=dict(width=0),
-            fillcolor=sample_colorscale(heatmap_colorscale, [position])[0],
+            fillcolor=color,
             opacity=heatmap_style_opacity("Word boxes", opacity),
             layer="below",
             name=_shape_layer_tag("heatmap"),
@@ -8356,6 +8461,9 @@ def _comparison_heatmap_colorbar_trace(
             cmax=z_max,
             colorbar=_colorbar_dict(
                 _heatmap_title(title, heatmap_norm), **colorbar_style
+            )
+            | _heatmap_ticks(
+                z_min, z_max, heatmap_norm, counts=title == "Fixation count"
             ),
         ),
         showlegend=False,
@@ -8595,6 +8703,7 @@ def _make_split_comparison_figure(
             )
         )
 
+    duration_scale = _comparison_duration_scale(trial_specs, settings)
     heatmap_maps, heatmap_min, heatmap_max, heatmap_title = (
         _comparison_word_heatmap_data(
             trial_specs,
@@ -8838,7 +8947,7 @@ def _make_split_comparison_figure(
             col=col,
             trial_words=spec["trial_words"],
             **_comparison_filters(spec["style"], settings),
-            duration_scale=_settings_size_scale(settings),
+            duration_scale=duration_scale,
             category_colors=category_colors[idx],
         )
 
@@ -9138,6 +9247,7 @@ def _render_comparison_figure(
             )
         )
 
+    duration_scale = _comparison_duration_scale(trial_specs, settings)
     heatmap_maps, heatmap_min, heatmap_max, heatmap_title = (
         _comparison_word_heatmap_data(
             trial_specs,
@@ -9258,7 +9368,7 @@ def _render_comparison_figure(
             fixation_hover_fields=fixation_hover_fields,
             trial_words=spec["trial_words"],
             **_comparison_filters(spec["style"], settings),
-            duration_scale=_settings_size_scale(settings),
+            duration_scale=duration_scale,
             category_colors=category_colors[_idx],
         )
         if show_words and draws_stimulus[_idx]:

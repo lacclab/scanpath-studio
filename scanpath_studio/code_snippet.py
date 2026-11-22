@@ -37,7 +37,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from .constants import FIXATION_DURATION_FLAGS, FIXATION_LABEL_OPTIONS
+from .column_names import encode_field_list
+from .constants import FIXATION_DURATION_FLAGS, FIXATION_LABEL_OPTIONS, OPACITY_OPTIONS
 from .figure_views import (
     SECOND_SCANPATH_OPTIONS,
     STATIC_COMPARISON_LAYER_STYLES,
@@ -1206,6 +1207,16 @@ def _comma_list(flag: str) -> Any:
     return emit
 
 
+def _hover_fields(flag: str) -> Any:
+    def emit(fields):
+        if fields is None:
+            return []
+        value, as_json = encode_field_list(fields)
+        return [f"{flag}-json" if as_json else flag, value]
+
+    return emit
+
+
 def _highlight_column(value):
     """``--highlight-column``. ``None`` is the real request "highlight nothing",
     which the flag spells as an empty string — not the absence of the flag,
@@ -1489,8 +1500,8 @@ _CLI_EMITTERS: dict[str, Any] = {
     "show_saccade_arrows": _flag_when("--saccade-arrows", True),
     "show_coordinate_grid": _flag_when("--coordinate-grid", True),
     "coordinate_grid_spacing": _valued("--coordinate-grid-spacing"),
-    "word_hover_fields": _comma_list("--word-hover-fields"),
-    "fixation_hover_fields": _comma_list("--fixation-hover-fields"),
+    "word_hover_fields": _hover_fields("--word-hover-fields"),
+    "fixation_hover_fields": _hover_fields("--fixation-hover-fields"),
     "color_by": _valued("--color-by"),
     "fixation_color": _valued("--fixation-color"),
     "fixation_symbol": _valued("--fixation-symbol"),
@@ -1520,7 +1531,7 @@ _CLI_EMITTERS: dict[str, Any] = {
     "saccade_color": _valued("--saccade-color"),
     "saccade_style": _valued("--saccade-style"),
     "saccade_width": _valued("--saccade-width"),
-    "saccade_opacity": _valued("--saccade-opacity"),
+    **{name: _valued(option.flag) for name, option in OPACITY_OPTIONS.items()},
     # The rail's finer design choices.
     "saccade_arrow_size": _valued("--saccade-arrow-size"),
     "heatmap_opacity": _valued("--heatmap-opacity"),
@@ -1552,7 +1563,6 @@ _CLI_EMITTERS: dict[str, Any] = {
     # Each flag below is spelled after its option; `tests/test_code_snippet.py`
     # fails on an option with no row here, so a new one cannot quietly fall
     # back to being "named".
-    "fixation_opacity": _valued("--fixation-opacity"),
     "hollow_fixations": _flag_when("--hollow-fixations", True),
     "color_by_line": _flag_when("--color-by-line", True),
     "fixation_color_range": _two_numbers("--fixation-color-range"),

@@ -70,10 +70,12 @@ from .constants import (  # noqa: E402
     DEFAULT_STIMULUS_IMAGE_PATTERN,
     EXPERIMENTAL_ENV_VAR,
     FIXATION_LABEL_OPTIONS,
+    FIXATION_OPACITY,
     FONT_FAMILY,
     PLOTLY_CONFIG,
     SACCADE_CLASS_ORDER,
     UNIFORM_COLOR_FIELD,
+    comparison_palette_style,
     computed_measures_enabled,
     drift_correction_enabled,
     palette_settings,
@@ -303,7 +305,7 @@ CANONICAL_FIGURE_DEFAULTS: dict = FigureSettings.defaults(
     show_heatmap=False,
     heatmap_metric="duration_ms",
     saccade_classes=list(SACCADE_CLASS_ORDER),
-    fixation_opacity=0.7,
+    fixation_opacity=FIXATION_OPACITY.default,
     background_color=DEFAULT_BACKGROUND_COLOR,
     fit_to_monitor=True,
     # The A/B legend is on, as in the app.
@@ -3012,6 +3014,15 @@ def animate_scanpath(
             "samples with plot_scanpath(..., raw_gaze=...) instead."
         )
     valid = set(_ANIMATION_FIGURE_PARAMS)
+    if "palette" in animation_overrides and (
+        trial_b is not None or animation_overrides.get("fixations_b") is not None
+    ):
+        name = resolve_palette(animation_overrides["palette"])
+        for idx, side in enumerate(("style_a", "style_b")):
+            animation_overrides[side] = {
+                **comparison_palette_style(name, idx),
+                **(animation_overrides.get(side) or {}),
+            }
     explicit = set(animation_overrides) - {"palette"}
     animation_overrides = _expand_palette(animation_overrides)
     # Only the keys the caller named are held to the "is this supported?" rule;
@@ -3696,6 +3707,10 @@ def compare_scanpaths(
         _COMPARISON_FIGURE_PARAMS | {"palette"},
         "compare_scanpaths",
     )
+    if figure_overrides.get("palette") is not None:
+        name = resolve_palette(figure_overrides["palette"])
+        style_a = {**comparison_palette_style(name, 0), **(style_a or {})}
+        style_b = {**comparison_palette_style(name, 1), **(style_b or {})}
 
     cross_dataset = words_b is not None or fixations_b is not None
     # A's names name the figure's text and its options; every frame,

@@ -103,6 +103,12 @@ The Python API loads the same datasets with
 | write each layer to its own file | `--separable-layers` |
 | print the equivalent code | `--print-code python` (or `cli` / `both`), plus `--print-code-explicit` |
 
+Hover fields appear in the order you list them. For a column named
+`pupil, left`, preserve the comma with
+`--keep-columns 'pupil, left' --fixation-hover-fields-json '["duration_ms","pupil, left"]'`.
+Use `--fixation-hover-fields-json '[]'` to clear that selection. The Words
+layer accepts `--word-hover-fields-json` in the same way.
+
 ### Compare two scanpaths
 
 `--compare-with PARTICIPANT:TRIAL` draws a second trial, B, beside or over the
@@ -174,7 +180,7 @@ scanpath's default.
 | `saccade_style` | `solid`, `dash`, `dot` or `dashdot` | that scanpath's default |
 | `saccade_width` | px | that scanpath's default |
 | `marker_size_range` | `MIN:MAX` | that scanpath's default |
-| `opacity` | 0.1–1 | that scanpath's default |
+| `opacity` | 0–1 | that scanpath's default |
 | `hollow` | `true` or `false` | that scanpath's default |
 
 The `--animate` replay draws one set of word boxes and no raw gaze, so it

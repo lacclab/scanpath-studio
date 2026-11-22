@@ -789,6 +789,8 @@ SHARE_PARAMS: Mapping[str, str] = MappingProxyType(
     {
         **SHARE_TOGGLE_PARAMS,
         **SHARE_VALUE_PARAMS,
+        "word_hover_fields_json": GLOBAL_WORD_HOVER_FIELDS,
+        "fixation_hover_fields_json": GLOBAL_FIXATION_HOVER_FIELDS,
         **SHARE_INT_PARAMS,
         **SHARE_FLOAT_PARAMS,
         **SHARE_INT_RANGE_PARAMS,
@@ -907,6 +909,8 @@ LEGEND_PARAMS: Mapping[str, str] = MappingProxyType(
 
 URL_OPTIONAL_PARAMS = frozenset(
     {
+        "word_hover_fields_json",
+        "fixation_hover_fields_json",
         *LEGEND_PARAMS,
         SETUP_PROVENANCE_PARAM,
         COMPARE_PARAM,
@@ -1049,7 +1053,7 @@ URL_SEEDED_STATE_KEYS = frozenset(
 # The JSON schema version stamped by both writers and understood by the reader.
 # Bumping it in url_state without registering a migration (or without updating
 # this constant) is the failure the contract test catches.
-PLOT_CONFIG_SCHEMA_VERSION = 9
+PLOT_CONFIG_SCHEMA_VERSION = 10
 
 # `cmp{idx}_*` templates the config's `compare` list restores, per entry.
 COMPARE_STATE_KEY_TEMPLATES = frozenset(
@@ -1231,6 +1235,11 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
 PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
     {
         SINGLE_SELECT_TRIAL_MODE,
+        SINGLE_FIX_RANGE,
+        SINGLE_COMPARE_FIX_RANGE,
+        "single_fix_range_user_set",
+        "single_compare_fix_range_user_set",
+        "single_fix_range_all_trials",
         SINGLE_TRIAL_ID,
         SINGLE_TRIAL_CHOSEN,
         # The compare view's own two settings, restored from the

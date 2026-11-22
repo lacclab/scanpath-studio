@@ -204,6 +204,7 @@ from scanpath_studio.controls import (
     field_help,
     format_filter_item,
     has_active_trial_filters,
+    pin_word_heatmap_range,
     plot_popover_on_change,
     read_trial_filters,
     render_compare_filters,
@@ -214,6 +215,7 @@ from scanpath_studio.controls import (
     render_trial_chip_picker,
     render_trial_filters,
     render_viz_reset,
+    selected_hover_text,
 )
 from scanpath_studio.data import (
     IDENTITY_SCHEMA_FIELDS,
@@ -550,12 +552,51 @@ def _figure_alt(fig, fallback: str) -> str:
     return _plain_title(title) or fallback
 
 
-def _scanpath_alt(participant, text, n_fixations: int) -> str:
-    """A screen reader's summary of one trial's scanpath."""
-    noun = "fixation" if n_fixations == 1 else "fixations"
-    return (
-        f"Scanpath of participant {participant} on text {text}: {n_fixations:,} {noun}"
-    )
+def _scanpath_alt(participant, text, n_fixations: int, figure=None) -> str:
+    """Describe marks that the current layers and axes actually place on the figure."""
+
+    def count(label, n):
+        return f"{n:,} {label}{'' if n == 1 else 's'}"
+
+    def coordinates(values):
+        # The Streamlit cache can restore Plotly's typed-array encoding where
+        # a freshly built figure holds an ndarray.
+        if isinstance(values, dict) and "bdata" in values:
+            return np.frombuffer(
+                base64.b64decode(values["bdata"]), dtype=values["dtype"]
+            )
+        return pd.to_numeric(np.asarray(values), errors="coerce")
+
+    name = f"Scanpath of participant {participant} on text {text}"
+    if figure is None:
+        return f"{name}: {count('fixation', n_fixations)}"
+    axes = [
+        getattr(getattr(figure.layout, axis).title, "text", None)
+        for axis in ("xaxis", "yaxis")
+    ]
+    if all(axes):
+        name = f"{_plain_title(axes[1])} by {_plain_title(axes[0])} for participant {participant} on text {text}"
+    shown = {}
+    for trace in figure.data:
+        if (
+            trace.name in ("Fixations", "Raw gaze")
+            and trace.x is not None
+            and trace.y is not None
+        ):
+            xs, ys = coordinates(trace.x), coordinates(trace.y)
+            shown[trace.name] = int(np.count_nonzero(np.isfinite(xs) & np.isfinite(ys)))
+    points = shown.get("Fixations", 0)
+    if not n_fixations:
+        fixation_text = "no fixations recorded"
+    elif points == n_fixations:
+        fixation_text = count("fixation", points)
+    else:
+        fixation_text = f"{count('fixation', points)} shown of {n_fixations:,} recorded"
+    details = []
+    if samples := shown.get("Raw gaze"):
+        details.append(count("raw gaze sample", samples))
+    details.append(fixation_text)
+    return f"{name}: {', '.join(details)}"
 
 
 def _plain_title(title: str | None) -> str:
@@ -4988,6 +5029,7 @@ def _title_caption_fields(
         "show_fixations": viz_settings.get("show_fix", True),
         "show_saccades": viz_settings.get("show_saccades", True),
         "show_heatmap": viz_settings.get("show_heatmap", False),
+        "show_raw_gaze": viz_settings.get("caption_raw_gaze", False),
         "color_by": viz_settings.get("color_by"),
         "palette": viz_settings.get("palette"),
     }
@@ -5605,6 +5647,22 @@ def _render_export_panel(
     a comparison or animation — round-trips exactly; the bulk section rebuilds
     static figures across many trials."""
     st.markdown("## Current figure")
+    if viz_settings.get("redact_text"):
+        selected = selected_hover_text(
+            words_filtered,
+            fixations_filtered,
+            viz_settings.get("word_hover_fields"),
+            viz_settings.get("fixation_hover_fields"),
+        )
+        if selected:
+            st.caption(
+                "These selected tooltip fields can appear in saved HTML. Review them under Figure & canvas → Hover."
+            )
+            st.text(", ".join(selected))
+        if viz_settings.get("show_stimulus_image"):
+            st.caption(
+                "The stimulus image can contain readable text. Turn it off under Stimulus to omit it."
+            )
     if animate and replay is not None:
         _render_animation_export(replay, file_stem=file_stem or "animation")
         render_cite_button(st, key="anim_export", what="this replay")
@@ -7041,7 +7099,18 @@ def render_single_trial_tab(
             # The title / caption fields the figure renders with — its
             # fixations within the fixation window, as `{n_fixations}` counts.
             title_fields=lambda settings: _title_caption_fields(
-                settings,
+                {
+                    **settings,
+                    "caption_raw_gaze": bool(settings.get("show_raw_gaze"))
+                    and not animate
+                    and chart_axes.drawable_raw_samples(
+                        (
+                            settings.get("x_field") or "x",
+                            settings.get("y_field") or "y",
+                        ),
+                        trial_raw_gaze,
+                    ),
+                },
                 trial_words,
                 _slice_fix_range(trial_fixations, settings.get("fix_index_range")),
                 selected_participant,
@@ -7221,6 +7290,17 @@ def render_single_trial_tab(
         comparing
         and draw_compare_raw_gaze
         and (trial_has_raw_gaze or not compare_raw_gaze.empty)
+    )
+    viz_settings["caption_raw_gaze"] = (
+        not animate
+        and global_raw_toggle
+        and (
+            chart_axes.drawable_raw_samples(fields, trial_raw_gaze)
+            or (
+                compare_shows_raw_gaze
+                and chart_axes.drawable_raw_samples(("x", "y"), compare_raw_gaze)
+            )
+        )
     )
     if compare_shows_raw_gaze:
         # Never while animating: `show_raw_gaze` is part of the replay's cache
@@ -7929,18 +8009,108 @@ def render_single_trial_tab(
                     selected_trial,
                     combo_row=primary_combo_row,
                 )
-                _render_true_scale_chart(
-                    displayed_fig,
-                    key="single",
-                    download_name=f"scanpath_{_safe_filename(save_slug)}",
-                    alt=_scanpath_alt(
+                if (
+                    static_settings.show_heatmap
+                    and static_settings.heatmap_range is None
+                ):
+                    for trace in displayed_fig.data:
+                        if trace.name == "heatmap colorbar" and trace.meta:
+                            bounds = tuple(trace.meta["word_heatmap_range"])
+                            plot_notes_slot.button(
+                                "Use this heatmap range for other trials",
+                                key="pin_word_heatmap_range",
+                                on_click=pin_word_heatmap_range,
+                                args=(bounds,),
+                                help="Keep the raw values shown on this reading’s word-box legend as the fixed range.",
+                            )
+                            break
+                preview_positions = False
+                if (
+                    "fixations snapped to lines" in detected_reasons
+                    and not trial_words.empty
+                ):
+                    preview_scope = (
+                        st.session_state.get("data_source_choice"),
                         selected_participant,
-                        _metadata_mod.trial_text_id(plot_fixations, trial_words)
-                        or selected_trial,
-                        len(plot_fixations),
-                    ),
-                    fit_window=True,
+                        selected_trial,
+                        selected_screen,
+                    )
+                    if st.session_state.get("_position_preview_scope") != preview_scope:
+                        st.session_state.pop("preview_unsnapped_positions", None)
+                        st.session_state["_position_preview_scope"] = preview_scope
+                    preview_positions = plot_notes_slot.toggle(
+                        "Show positions before snapping",
+                        key="preview_unsnapped_positions",
+                        help="Compare the illustration with the trial’s original fixation coordinates on identical axes. Imports with missing coordinates may use word-box centers.",
+                    )
+                panels = (
+                    st.columns(2) if preview_positions else (contextlib.nullcontext(),)
                 )
+                with panels[0]:
+                    if preview_positions:
+                        st.caption("Illustration · figure selected for export")
+                    _render_true_scale_chart(
+                        displayed_fig,
+                        key="single",
+                        download_name=f"scanpath_{_safe_filename(save_slug)}",
+                        alt=_scanpath_alt(
+                            selected_participant,
+                            _metadata_mod.trial_text_id(plot_fixations, trial_words)
+                            or selected_trial,
+                            len(trial_fixations),
+                            displayed_fig,
+                        ),
+                        fit_window=True,
+                    )
+                if preview_positions:
+                    reasons = [
+                        reason
+                        for reason in detected_reasons
+                        if reason != "fixations snapped to lines"
+                        and not reason.startswith("drift correction:")
+                    ]
+                    original = static_settings.with_overrides(
+                        fixation_snap_to_line=False,
+                        show_connectors=False,
+                        illustration_reasons=tuple(
+                            resolve_label_reasons(
+                                viz_settings.get("illustration_label", "Auto"), reasons
+                            )
+                        ),
+                    )
+                    preview = _cached_scanpath_figure(
+                        trial_words,
+                        fig_fixations,
+                        original,
+                        figure_raw_gaze,
+                        fig_key=_figure_input_key(
+                            trial_words,
+                            fig_fixations,
+                            {
+                                **original.for_builder(STATIC_FIGURE_OPTIONS),
+                                "raw_gaze": figure_raw_gaze,
+                                "column_labels": original.column_labels,
+                            },
+                        ),
+                    )
+                    preview.update_layout(
+                        xaxis_range=displayed_fig.layout.xaxis.range,
+                        yaxis_range=displayed_fig.layout.yaxis.range,
+                        width=displayed_fig.layout.width,
+                        height=displayed_fig.layout.height,
+                    )
+                    with panels[1]:
+                        st.caption("Trial coordinates before snapping")
+                        _render_true_scale_chart(
+                            preview,
+                            key="unsnapped_preview",
+                            fit_window=True,
+                            alt=f"Fixation positions before snapping for {selected_participant}, {selected_trial}.",
+                        )
+            if displayed_fig is not None and not comparing and not animate:
+                from .fixation_inspector import render as render_fixation_inspector
+
+                render_fixation_inspector(displayed_fig, trial_words, plot_fixations)
             note = _full_screen_note(viz_settings, canvas_width, canvas_height)
             if note and (static_settings.x_field, static_settings.y_field) == (
                 "x",

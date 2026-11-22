@@ -21,6 +21,31 @@ from dataclasses import dataclass, field
 
 from .constants import SAMPLE_INDEX, WORD_KEY
 
+
+def split_field_list(value: str) -> list[str]:
+    """Column names in a comma-separated CLI argument or share link."""
+    return [name.strip() for name in value.split(",") if name.strip()]
+
+
+def json_field_list(value: str) -> list[str]:
+    """An ordered JSON array of exact column names, including an empty selection."""
+    fields = json.loads(value)
+    if not isinstance(fields, list) or not all(
+        isinstance(name, str) for name in fields
+    ):
+        raise ValueError("Expected a JSON array of column names.")
+    return fields
+
+
+def encode_field_list(fields: Iterable[str]) -> tuple[str, bool]:
+    """The shortest lossless CLI or URL form and whether it uses JSON."""
+    names = list(fields)
+    joined = ",".join(names)
+    if joined and split_field_list(joined) == names:
+        return joined, False
+    return json.dumps(names, ensure_ascii=False, separators=(",", ":")), True
+
+
 #: How a canonical column came to be.
 MAPPED = "mapped"  # read from one source column, unchanged
 COMPOSITE = "composite"  # several source columns joined (a composite id)

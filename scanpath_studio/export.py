@@ -432,6 +432,7 @@ def _settings_summary(settings: dict) -> str:
             ("fixations", "show_fixations"),
             ("saccades", "show_saccades"),
             ("heatmap", "show_heatmap"),
+            ("raw gaze", "show_raw_gaze"),
         )
         if settings.get(key)
     ]

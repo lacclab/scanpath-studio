@@ -363,7 +363,7 @@ def test_figure_and_filter_menus_stay_editable_after_undo(app_url, browser):
         title.locator("label").click()
         _settle(page)
         page.keyboard.press("Escape")
-        page.get_by_role("button", name=re.compile(r"^Undo title")).click()
+        page.locator(".st-key-viz_undo").get_by_role("button").click()
         _settle(page)
         labels.click()
         sync_api.expect(title.get_by_role("checkbox")).not_to_be_checked()

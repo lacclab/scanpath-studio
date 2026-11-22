@@ -2605,7 +2605,10 @@ def _print_reproduction_code(
         if args.compare_with is not None
         else "static"
     )
-    settings = {**api.figure_options(kind), **api._expand_palette(dict(overrides))}
+    settings = {
+        **api.figure_options(kind),
+        **api._expand_palette(overrides, comparing=args.compare_with is not None),
+    }
     # `plot_scanpath` turns the raw-gaze layer on for the frame it is handed, so
     # the flag never reaches `overrides`; the snippet reads it here. So does
     # `compare_scanpaths` — whose samples may all be B's.

@@ -597,6 +597,7 @@ def _figure_fingerprint(fig) -> tuple:
             str(trace.name),
             str(getattr(marker, "symbol", None)),
             str(getattr(marker, "color", None)),
+            str(getattr(marker, "opacity", None)),
             str(getattr(marker, "colorscale", None)),
             str(getattr(line, "color", None)),
             str(getattr(line, "width", None)),
@@ -827,6 +828,67 @@ def _rendered_figures(monkeypatch, argv_list) -> list:
     for argv in argv_list:
         cli.main(argv)
     return figures
+
+
+@pytest.mark.parametrize("kind", ["comparison", "animation"])
+@pytest.mark.parametrize("override", [False, True])
+def test_print_palette_reproduces_both_readers(
+    monkeypatch, capsys, tmp_path, lab_fixations, kind, override
+):
+    path = str(tmp_path / "pair.html")
+    args = [
+        "render",
+        "--fixations",
+        str(lab_fixations),
+        "-p",
+        "A",
+        "-t",
+        "1",
+        "--compare-participant",
+        "B",
+        "--compare-trial",
+        "round:2",
+        "--palette",
+        "print",
+        "--print-code",
+        "python",
+        "-o",
+        path,
+    ]
+    if kind == "animation":
+        args.append("--animate")
+    options = {}
+    if override:
+        options["style_b"] = {"hollow": False, "saccade_style": "solid", "opacity": 0}
+        args += ["--style-b", "hollow=false,saccade_style=solid,opacity=0"]
+
+    rendered = _rendered_figures(monkeypatch, [args])
+    original = rendered[0]
+    printed = capsys.readouterr().out
+    exec(compile(printed, "<printed Python>", "exec"), {})  # noqa: S102
+    assert _figure_fingerprint(rendered[1]) == _figure_fingerprint(original)
+
+    command = api.figure_code(
+        kind=kind,
+        source="files",
+        source_options={"fixations": [str(lab_fixations)]},
+        participant="A",
+        trial="1",
+        compare=("B", "round:2"),
+        palette="print",
+        flavor="cli",
+        output=path,
+        **options,
+    )
+    cli.main(shlex.split(_one_line(command))[1:])
+    assert _figure_fingerprint(rendered[2]) == _figure_fingerprint(original)
+    label = "Scanpath B" if kind == "animation" else "round:2 · B"
+    marks = next(
+        t.marker for t in original.data if t.mode == "markers" and t.name == label
+    )
+    assert (marks.color, marks.opacity) == (
+        ("#666666", 0.0) if override else ("rgba(0,0,0,0)", 0.7)
+    )
 
 
 @pytest.mark.parametrize("palette", ["Print / grayscale", "High contrast"])

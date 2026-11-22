@@ -2276,8 +2276,11 @@ def _apply_fix_index_range(
     return windowed
 
 
-def _figure_kwargs(overrides: dict) -> dict:
-    settings = {**CANONICAL_FIGURE_DEFAULTS, **_expand_palette(overrides)}
+def _figure_kwargs(overrides: dict, *, comparing: bool = False) -> dict:
+    settings = {
+        **CANONICAL_FIGURE_DEFAULTS,
+        **_expand_palette(overrides, comparing=comparing),
+    }
     if settings.get("heatmap_metric") == "counts":
         settings["heatmap_metric"] = None
     return settings
@@ -2310,7 +2313,7 @@ def _check_colorscales(overrides: dict) -> None:
             ) from None
 
 
-def _expand_palette(overrides: dict) -> dict:
+def _expand_palette(overrides: dict, *, comparing: bool = False) -> dict:
     """Expand a ``palette=`` override into the color kwargs it stands for.
 
     ``palette`` names a set of color defaults tuned for a medium — screen,
@@ -2341,6 +2344,12 @@ def _expand_palette(overrides: dict) -> dict:
     settings["text_color"] = settings.pop("word_label_color")
     for key, value in settings.items():
         expanded.setdefault(key, value)
+    if comparing:
+        for idx, side in enumerate(("style_a", "style_b")):
+            expanded[side] = {
+                **comparison_palette_style(name, idx),
+                **(expanded.get(side) or {}),
+            }
     return expanded
 
 
@@ -3026,17 +3035,12 @@ def animate_scanpath(
             "samples with plot_scanpath(..., raw_gaze=...) instead."
         )
     valid = set(_ANIMATION_FIGURE_PARAMS)
-    if "palette" in animation_overrides and (
-        trial_b is not None or animation_overrides.get("fixations_b") is not None
-    ):
-        name = resolve_palette(animation_overrides["palette"])
-        for idx, side in enumerate(("style_a", "style_b")):
-            animation_overrides[side] = {
-                **comparison_palette_style(name, idx),
-                **(animation_overrides.get(side) or {}),
-            }
     explicit = set(animation_overrides) - {"palette"}
-    animation_overrides = _expand_palette(animation_overrides)
+    animation_overrides = _expand_palette(
+        animation_overrides,
+        comparing=trial_b is not None
+        or animation_overrides.get("fixations_b") is not None,
+    )
     # Only the keys the caller named are held to the "is this supported?" rule;
     # a palette's extras (heatmap colorscale, highlight text colour, …) that the
     # animation has no parameter for are simply dropped.
@@ -3722,11 +3726,6 @@ def compare_scanpaths(
         _COMPARISON_FIGURE_PARAMS | {"palette"},
         "compare_scanpaths",
     )
-    if figure_overrides.get("palette") is not None:
-        name = resolve_palette(figure_overrides["palette"])
-        style_a = {**comparison_palette_style(name, 0), **(style_a or {})}
-        style_b = {**comparison_palette_style(name, 1), **(style_b or {})}
-
     cross_dataset = words_b is not None or fixations_b is not None
     # A's names name the figure's text and its options; every frame,
     # A's or B's, is processed under the internal names.
@@ -3907,7 +3906,9 @@ def compare_scanpaths(
     merged_raw = None
     if not (trial_raw_a.empty and trial_raw_b.empty):
         merged_raw = pd.concat(align_compare_columns(trial_raw_a, trial_raw_b)[:2])
-    settings = _figure_kwargs(figure_overrides)
+    settings = _figure_kwargs(
+        dict(figure_overrides, style_a=style_a, style_b=style_b), comparing=True
+    )
     from .illustration import illustration_reasons, resolve_label_reasons
 
     label_mode = str(illustration_label).capitalize()
@@ -3934,8 +3935,6 @@ def compare_scanpaths(
         layout=resolved_layout,
         compare_stimulus=normalize_option_value("compare_stimulus", compare_stimulus),
         trial_labels=tuple(labels) if labels else None,
-        style_a=style_a,
-        style_b=style_b,
         column_labels=_column_labels(
             names, trial_words_a, trial_fix_a, words=word_side
         ),
@@ -4352,7 +4351,12 @@ def figure_code(
         canvas_size = _snippet.source_canvas(source)
     state = _snippet.FigureState(
         kind=kind,
-        settings={**figure_options(kind), **_expand_palette(figure_overrides)},
+        settings={
+            **figure_options(kind),
+            **_expand_palette(
+                figure_overrides, comparing=kind == "comparison" or compare is not None
+            ),
+        },
         participant=participant,
         trial=trial,
         screen=screen,

@@ -2165,7 +2165,13 @@ def cli_snippet(
     settings, defaults = _snippet_options(
         state.settings, state.kind, state.compare, explicit=explicit
     )
-    palette, palette_colors = _matching_palette(settings, defaults)
+    # A two-reading palette changes the individual markers and lines too.
+    # Spell those styles out so an explicit override survives copying the command.
+    palette, palette_colors = (
+        (None, {})
+        if state.kind == "comparison" or state.compare
+        else _matching_palette(settings, defaults)
+    )
     kwargs = _figure_kwargs(settings, state.kind, defaults, explicit=explicit)
     if palette:
         from .plots import palette_slug

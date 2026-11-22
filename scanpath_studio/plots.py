@@ -7916,15 +7916,17 @@ def _comparison_scanpath_style(
     if override:
         # Drop falsy values (None / "") so a blank colour can't override the
         # palette default and reach Plotly as a dark/None marker colour. The
-        # per-scanpath filters are the exception: an empty one is a
-        # real answer — "no filter on this scanpath" — not a missing colour.
+        # filters can be empty, and zero opacity hides the layer.
         base.update(
             {
                 k: v
                 for k, v in override.items()
                 if v
                 or (
-                    k in COMPARE_FILTER_STYLE_KEYS | COMPARE_BOX_OPACITY_STYLE_KEYS
+                    k
+                    in COMPARE_FILTER_STYLE_KEYS
+                    | COMPARE_BOX_OPACITY_STYLE_KEYS
+                    | {"opacity"}
                     and v is not None
                 )
             }

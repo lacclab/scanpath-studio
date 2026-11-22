@@ -4019,6 +4019,9 @@ def _build_share_query(
     # re-declared. The styles additionally need a comparison to describe — the
     # same rule as `cmp_layout` / `cmp_stimulus`.
     defaults = _link_defaults(data_choice)
+    if COMPARE_PARAM in params and (palette := params.get("palette")) in PALETTES:
+        # The link reader seeds the palette before applying individual overrides.
+        defaults.update(palette_state(palette, include_compare=True))
     for url_key, state_key in {**SETUP_PARAMS, **COMPARE_STYLE_PARAMS}.items():
         if url_key not in params:
             continue

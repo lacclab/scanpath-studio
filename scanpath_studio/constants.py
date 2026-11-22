@@ -1417,7 +1417,7 @@ SUBTAB_MORE = f"{ICONS['add']} More"
 
 
 # --- Legend layout ------------------------------------------------------------
-# Where each legend sits (📐 Figure & canvas → Legends; `plots.apply_legend_layout`).
+# Where each legend sits (Figure → Legends; `plots.apply_legend_layout`).
 # The values are wire format — share links, saved configs, `render --legend` —
 # so never rename one.
 

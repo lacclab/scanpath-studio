@@ -1,4 +1,4 @@
-"""Where each legend sits (📐 Figure & canvas → Legends).
+"""Where each legend sits (Figure → Legends).
 
 Each legend kind can be moved to a spot of its own, laid out as a stack or a
 row and given a text size, on top of its layer's own show/hide switch. Auto

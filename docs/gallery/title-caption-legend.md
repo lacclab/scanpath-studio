@@ -22,7 +22,7 @@ print(gallery_figure("title-caption-legend"))
 
     1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
     2. In :material/arrow_outward: **Saccades** ▾ → **Line** → **Color**, choose **By type**.
-    3. In :material/aspect_ratio: **Figure & canvas** ▾ → **Title & labels**, tick **Title** and **Caption**. Enter a title for your reading and a caption that explains the markers and colors. Set each one's **Size**, here 34 px and 20 px.
+    3. In :material/aspect_ratio: **Figure** → **Title & labels**, tick **Title** and **Caption**. Enter a title for your reading and a caption that explains the markers and colors. Set each one's **Size**, here 34 px and 20 px.
     4. Under **Legends**, set **Saccade types** to **Right, outside** and **Fixation sizes** to **Bottom right, outside**, both with text size 18.
     5. Under **Screen & framing**, tick **Frame** → **Crop to data**. Untick **Margin** → **Auto** and enter 60 px.
 

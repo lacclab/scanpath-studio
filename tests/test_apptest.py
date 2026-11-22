@@ -4136,7 +4136,7 @@ class TestGenericFilenamePowers:
 
 @pytest.mark.timeout(120)
 class TestFigureAndCanvasSubGroups:
-    """The 📐 Figure & canvas group renders its sub-groups, settings intact.
+    """Figure, axes and layer settings render together with their stored values.
 
     Every conditional body in the group (the title/caption pattern boxes, the
     manual grid interval, the colour-bar styling, the custom background picker)
@@ -4174,49 +4174,32 @@ class TestFigureAndCanvasSubGroups:
             "Horizontal",
         )
 
-    def test_the_group_keeps_its_named_blocks(self):
-        """The shape itself: one disclosure, named blocks, nothing nested.
-
-        The group is a ``[name | ▾]`` row with named blocks inside it; the
-        typography is drawn in 📄 Stimulus → Text, and the physical-geometry
-        controls belong to the 🗂️ Data page's Recording setup. What this pins
-        is that the group does not collapse into one flat ~26-row run.
-        """
-        import inspect
-
-        from scanpath_studio import app, controls
-
-        control_source = inspect.getsource(controls.render_plot_controls)
-        canvas_source = inspect.getsource(app.render_canvas_controls)
-
-        # The first block opens the popover, so it draws no rule above it.
-        assert (
-            "_rail_subsection(\n"
-            "        figure_grp, f\"{ICONS['screen']} Screen & framing\", first=True\n"
-            "    )"
-        ) in control_source
-        assert (
-            "_rail_subsection(figure_grp, f\"{ICONS['axes']} Axes & grid\")"
-            in control_source
+    def test_axes_and_figure_put_each_setting_in_its_own_panel(self):
+        at = _make_apptest(synthetic=True).run(timeout=30)
+        assert not at.exception
+        editor = next(
+            bar for bar in at.get("tab_container") if bar.key == "plot_editor_tabs"
         )
-        assert (
-            "_rail_subsection(figure_grp, f\"{ICONS['labels']} Title & labels\")"
-            in control_source
-        )
-        # The typography half is drawn into the Stimulus section instead.
-        assert "text_host" in canvas_source
-        assert '_rail_subsection(stim_grp, "🔤 Text")' not in control_source
-        # The framing switch leads the screen block: a `Frame | ☑ Crop to data`
-        # row, a shadow of `global_fit_to_monitor` (its inverse).
-        assert 'check_label="Crop to data"' in control_source
-        assert '"global_fit_to_monitor"' in control_source
-        assert "with screen_group, _popover_rows(" in control_source
-        # …and no flat captions.
-        assert 'figure_grp.caption("**Canvas & text**")' not in control_source
-        assert 'figure_grp.caption("**Axes & labels**")' not in control_source
+        layers, axes, figure = editor.tabs
+        assert [tab.label for tab in editor.tabs] == ["Layers", "Axes", "Figure"]
+        assert axes.selectbox(key="global_x_field").value == "x"
+        assert axes.selectbox(key="global_y_field").value == "y"
+        (grid,) = axes.get("popover")
+        assert grid.proto.popover.label == "Coordinate grid"
+        assert grid.checkbox(key="global_show_coordinate_grid") is not None
+        menus = {menu.proto.popover.label: menu for menu in figure.get("popover")}
+        assert list(menus) == [
+            "Screen & framing",
+            "Title & labels",
+            "Hover fields",
+            "Legends",
+        ]
+        assert menus["Screen & framing"].checkbox(key="_rail_crop_to_data") is not None
+        assert menus["Title & labels"].checkbox(key="global_show_title") is not None
+        assert layers.checkbox(key="global_show_labels") is not None
 
     def test_text_can_be_switched_off_without_crashing_the_figure_controls(self):
-        """Figure & canvas must not render into a missing Text slot."""
+        """Typography controls have a host even when the text is hidden."""
         at = _make_apptest(synthetic=True)
         at.session_state["global_show_labels"] = False
         at.run(timeout=30)

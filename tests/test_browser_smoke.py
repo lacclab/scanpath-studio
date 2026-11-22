@@ -329,12 +329,69 @@ def test_the_scanpath_figure_draws(page):
     assert frame.locator("#truescale-single .scatterlayer .trace").count() >= 1
 
 
-def test_a_rail_popover_opens(page):
-    page.locator(".st-key-split_mode_rail_fix_popover button").first.click()
+def test_fixation_settings_and_visibility_are_independent(page):
+    row = page.locator(".st-key-plot_layer_fix")
+    switch = row.get_by_role("switch", name="Fixations")
+    sync_api.expect(switch).to_be_checked()
+    row.get_by_role("button", name="Fixations", exact=True).click()
     body = page.locator('[data-testid="stPopoverBody"]')
     body.first.wait_for(state="visible", timeout=15_000)
     assert "Size" in body.first.inner_text()
+    sync_api.expect(switch).to_be_checked()
     page.keyboard.press("Escape")
+    for shown in (False, True):
+        switch.press("Space")
+        _settle(page)
+        assert switch.is_checked() == shown
+        frame = _plot_frame(page, "single")
+        assert (
+            frame.locator("#truescale-single").evaluate(
+                "plot => plot.data.some(t => t.name === 'Fixations')"
+            )
+            == shown
+        )
+
+
+def test_figure_and_filter_menus_stay_editable_after_undo(app_url, browser):
+    page = _open(browser, f"{app_url}/?ui=full&source=synthetic")
+    try:
+        editor = page.locator(".st-key-plot_editor_tabs")
+        editor.get_by_role("tab", name="Figure", exact=True).click()
+        labels = editor.get_by_role("button", name="Title & labels")
+        labels.click()
+        title = page.locator(".st-key-global_show_title")
+        title.locator("label").click()
+        _settle(page)
+        page.keyboard.press("Escape")
+        page.get_by_role("button", name=re.compile(r"^Undo title")).click()
+        _settle(page)
+        labels.click()
+        sync_api.expect(title.get_by_role("checkbox")).not_to_be_checked()
+        title.locator("label").click()
+        _settle(page)
+        sync_api.expect(title.get_by_role("checkbox")).to_be_checked()
+        page.keyboard.press("Escape")
+
+        editor.get_by_role("tab", name="Layers", exact=True).click()
+        row = editor.locator(".st-key-plot_filter_row")
+        filters = row.get_by_role("button", name="Filters & highlights")
+        button_height = filters.bounding_box()["height"]
+        filters.click()
+        short = page.locator(".st-key-global_fixclass_short_mode").get_by_role(
+            "combobox"
+        )
+        for mode in ("Hide", "Off"):
+            short.click()
+            page.get_by_role("option", name=mode, exact=True).click()
+            _settle(page)
+            sync_api.expect(short).to_be_visible()
+            assert row.get_by_text("Active", exact=True).is_visible() == (
+                mode == "Hide"
+            )
+            assert filters.bounding_box()["height"] == button_height
+        assert page.errors == []
+    finally:
+        page.context.close()
 
 
 def test_a_trial_change_covers_the_figure_until_the_next_one_draws(page):
@@ -549,12 +606,13 @@ def test_chart_controls_survive_navigation_presets_and_reset(app_url, browser):
 
     try:
         default = chart()
-        click("split_mode_rail_figure_popover")
+        editor = page.locator(".st-key-plot_editor_tabs")
+        editor.get_by_role("tab", name="Axes", exact=True).click()
         page.get_by_role("combobox", name="Axis preset").click()
         page.get_by_role("option", name="Elapsed time by fixation index").click()
         _settle(page)
-        page.keyboard.press("Escape")
-        click("split_mode_rail_fix_popover")
+        editor.get_by_role("tab", name="Layers", exact=True).click()
+        click("plot_menu_fix")
         page.locator(".st-key-global_show_order label").click()
         _settle(page)
         page.keyboard.press("Escape")
@@ -563,7 +621,7 @@ def test_chart_controls_survive_navigation_presets_and_reset(app_url, browser):
         assert first["mode"] == "markers+text"
         click("viz_undo")
         assert chart()["mode"] == "markers"
-        click("split_mode_rail_fix_popover")
+        click("plot_menu_fix")
         page.locator(".st-key-global_show_order label").click()
         _settle(page)
         page.keyboard.press("Escape")
@@ -628,7 +686,7 @@ def test_simple_opens_on_the_replay_with_its_own_controls(simple_page):
     frame.locator("#truescale-single_anim.js-plotly-plot").wait_for(timeout=60_000)
     assert frame.locator("#truescale-single_anim .main-svg").count() >= 1
     assert page.locator(".st-key-tour_grp_ui_mode").first.is_visible()
-    assert not page.locator(".st-key-split_mode_rail_fix_popover").first.is_visible()
+    assert not page.locator(".st-key-plot_menu_fix").first.is_visible()
     page.locator(".st-key-iconpop_more_picker button").first.click()
     body = page.locator('[data-testid="stPopoverBody"]')
     body.first.wait_for(state="visible", timeout=15_000)

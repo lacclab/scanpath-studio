@@ -1830,7 +1830,7 @@ def render_export_options(
     is the whole loaded dataset. Picking the "All" scope switches the scope
     picker — and the export itself — to ``combos_all`` so the trial filters
     are ignored. ``title_pattern``/``caption_pattern`` come from the Scanpath
-    rail's **📐 Figure & canvas** → *Title* / *Caption* — this panel has no
+    rail's **📐 Figure** → **Title & labels** — this panel has no
     copy of that setting of its own.
     """
     st = st_module
@@ -2028,7 +2028,7 @@ def render_export_options(
         if title_pattern or caption_pattern:
             st.caption(
                 "The figures use the title and caption set in Plot controls under "
-                f"**{ICONS['figure']} Figure & canvas** → *Title* / *Caption*."
+                f"**{ICONS['figure']} Figure** → **Title & labels**."
             )
 
     from .controls import current_dataset_name

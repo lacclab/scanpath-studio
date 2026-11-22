@@ -82,9 +82,11 @@ also work in downloaded HTML replays.
 
 ## Control the layers
 
-The :material/tune: **Plot controls** column, on the right of the plot, holds
-the figure's settings. Each layer has a row with a switch that turns it on or
-off and a **▾** that opens its settings.
+Both modes start with the same **View** tiles and **Palette**. In Full, use
+**Layers** to change what appears in the plot. Click a layer’s name to edit
+its settings or its switch to show or hide it. Choose **Axes** to chart the
+reading by fixation order or time. **Figure** holds the settings for the whole
+plot, including framing, titles and legends.
 
 | Section | What it controls |
 | --- | --- |
@@ -100,7 +102,8 @@ off and a **▾** that opens its settings.
 | :material/local_fire_department: **Heatmap** | where fixations concentrate, by fixation count or duration |
 | :material/grain: **Raw gaze** | the gaze samples as recorded |
 | :material/filter_list: **Filters & highlights** | which fixations and saccades are drawn, and which stand out |
-| :material/aspect_ratio: **Figure & canvas** | screen framing, axes and grid, title and labels, hover fields and legends |
+| **Axes** | chart presets, X and Y fields, and the coordinate grid |
+| **Figure** | screen framing, title and labels, hover fields and legends |
 
 [All controls → Plot controls](controls.md#plot-controls) describes every
 setting in each menu.

@@ -236,6 +236,12 @@ def _visible_actions(group) -> list:
     ]
 
 
+def _reference_heading(level: str, topic: str) -> str:
+    """Keep published reference anchors when a plot control changes its name."""
+    anchor = {"Screen & framing": "figure-canvas", "Hover fields": "hover"}.get(topic)
+    return f"{level} {topic}" + (f" {{ #{anchor} }}" if anchor else "")
+
+
 def cli_reference(command: str, *, heading: str = "") -> str:
     """Every flag of one subcommand, one table per argument group.
 
@@ -250,7 +256,11 @@ def cli_reference(command: str, *, heading: str = "") -> str:
     if command == "render":
         out = []
         for topic, actions in _render_flag_topics(parser).items():
-            out += [f"{heading} {topic}", "", *_flag_rows(actions, formatter)]
+            out += [
+                _reference_heading(heading, topic),
+                "",
+                *_flag_rows(actions, formatter),
+            ]
             out += ["", "</div>", ""]
         return "\n".join(out)
     groups = [(g.title, _visible_actions(g)) for g in parser._action_groups]
@@ -338,11 +348,13 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
     "Heatmap": HEATMAP_OPTIONS,
     "Raw gaze": RAW_GAZE_OPTIONS,
     "Filters & highlights": ("fixation_flags", "saccade_classes"),
-    "Figure & canvas": (
+    "Screen & framing": (
         "fit_to_monitor",
         "crop_margin",
         "show_plot_frame",
         "plot_frame_color",
+    ),
+    "Axes": (
         "show_coordinate_grid",
         "coordinate_grid_spacing",
         "coordinate_grid_font_size",
@@ -357,7 +369,11 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "caption_color",
         "show_credit",
     ),
-    "Hover": ("word_hover_fields", "word_hover_measure", "fixation_hover_fields"),
+    "Hover fields": (
+        "word_hover_fields",
+        "word_hover_measure",
+        "fixation_hover_fields",
+    ),
     "Legends": (
         "legend_layout",
         "show_color_legend",
@@ -403,14 +419,14 @@ _OPTION_NOTES = {
 #: The ``render`` flags that set no single figure option, by the topic they
 #: are listed under. The rest are placed through the option they set.
 _FLAG_TOPICS = {
-    "--word-hover-fields-json": "Hover",
-    "--fixation-hover-fields-json": "Hover",
+    "--word-hover-fields-json": "Hover fields",
+    "--fixation-hover-fields-json": "Hover fields",
     "--palette": "Fixations",
     "--fix-index-range": "Filters & highlights",
     "--illustration": "Title & labels",
     "--illustration-label": "Title & labels",
-    "--canvas": "Figure & canvas",
-    "--crop-to-data": "Figure & canvas",
+    "--canvas": "Screen & framing",
+    "--crop-to-data": "Screen & framing",
     "--font-size": "Stimulus",
     "--font-family": "Stimulus",
     "--sample-raw-gaze": "Raw gaze",
@@ -607,7 +623,7 @@ def figure_options_reference(*, heading: str = "##") -> str:
             # Set by an experimental feature: the published site leaves it out.
             continue
         out += [
-            f"{heading} {topic}",
+            _reference_heading(heading, topic),
             "",
             '<div class="sps-reference-table sps-option-table" markdown>',
             "",

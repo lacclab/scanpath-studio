@@ -10812,7 +10812,7 @@ def _run_app() -> None:
         """Render the canvas/text controls into the rail, in two places.
 
         The panel is split between two sections: the screen half into
-        ``slot`` (📐 Figure & canvas) and the typography half into ``text_host``
+        ``slot`` (📐 Figure) and the typography half into ``text_host``
         (📄 Stimulus → Text). One call, so each widget is created exactly once.
         With no ``text_host`` (the Corpus style panel) the typography rows are
         titled *Text* themselves, since no *Text* row precedes them there.

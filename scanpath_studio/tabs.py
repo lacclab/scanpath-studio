@@ -198,8 +198,8 @@ from scanpath_studio.controls import (
     _gated_help,
     _labeled,
     _numeric_slider,
+    _plot_menu,
     _popover_rows,
-    _rail_section,
     _sub_row,
     _text_field_and_frame,
     active_filter_items,
@@ -4259,7 +4259,7 @@ def _full_screen_note(viz_settings: dict, canvas_width, canvas_height) -> str:
         return ""
     return (
         f"Cropped to the data. The full screen is {width}×{height}; turn off "
-        "**Figure & canvas → Crop to data** to show all of it."
+        "**Figure → Screen & framing → Crop to data** to show all of it."
     )
 
 
@@ -5688,7 +5688,7 @@ def _render_export_panel(
         )
         if selected:
             st.caption(
-                "These selected tooltip fields can appear in saved HTML. Review them under Figure & canvas → Hover."
+                "These selected tooltip fields can appear in saved HTML. Review them under Figure → Hover fields."
             )
             st.text(", ".join(selected))
         if viz_settings.get("show_stimulus_image"):
@@ -6625,10 +6625,10 @@ def render_single_trial_tab(
                 if animate_requested
                 else f"{ICONS['warning']} Choose **Animation** to change playback."
             )
-            _, animation_settings = _rail_section(
+            animation_settings = _plot_menu(
                 ui_mode.advanced_only(modes, "rail_animation"),
-                f"{ICONS['animate']} **Animation settings**",
-                name="Animation",
+                "Animation settings",
+                icon=ICONS["animate"],
                 slug="animation",
             )
             with animation_settings, _popover_rows("animation"):
@@ -6954,7 +6954,7 @@ def render_single_trial_tab(
                             cmp_gate,
                         ),
                     )
-                    # The A/B legend's *Show* is in 📐 Figure & canvas →
+                    # The A/B legend's *Show* is in 📐 Figure →
                     # Legends; its label patterns stay here, beside Compare.
                     show_legend_now = bool(
                         st.session_state.get("global_show_compare_legend", True)
@@ -7321,7 +7321,11 @@ def render_single_trial_tab(
     # here because this is the first point B's fixations exist to size its
     # window. Everything below reads them in this same run.
     if comparing:
-        render_compare_filters(rail_slots.get("compare_filter"), compare_fix)
+        render_compare_filters(
+            rail_slots.get("compare_filter"),
+            compare_fix,
+            status=rail_slots.get("compare_filter_status"),
+        )
     # Record the completed edit after both readings and their fixation windows
     # have resolved, in the slot already placed at the foot of the rail.
     render_viz_reset(plot_footer)
@@ -16365,7 +16369,7 @@ def _render_setup_provenance_note(host=None) -> None:
             box.caption(
                 "This dataset doesn't state the screen it was recorded on, "
                 "so none is assumed. Set it in "
-                f"**{ICONS['figure']} Figure & canvas → {ICONS['screen']} Screen & framing** on the Scanpath "
+                f"**{ICONS['figure']} Figure → {ICONS['screen']} Screen & framing** on the Scanpath "
                 "view, or add the dataset yourself to record it here."
             )
         return

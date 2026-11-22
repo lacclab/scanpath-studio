@@ -718,9 +718,9 @@ _SPOTLIGHT_STEPS = [
         "selector": ".st-key-tour_grp_viz_controls",
         "dock": "left",
         "title": f"{ICONS['plot_controls']} Plot controls",
-        "body": "Turn each layer on or off and set its style: fixations, "
-        "saccades, stimulus, word boxes, heatmap and raw gaze. "
-        f"**{ICONS['designs']} My designs** saves your own.",
+        "body": "In **Layers**, open a layer by name to style it, or use its switch "
+        "to show or hide it. **Axes** plots the reading by position, fixation order "
+        "or time. **Figure** holds the title, framing, hover fields and legends.",
     },
     {
         "selector": ".st-key-tour_grp_subtabs",

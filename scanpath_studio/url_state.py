@@ -1930,7 +1930,7 @@ def _legend_position(value) -> str:
     return position
 
 
-#: Each legend's three keys (Figure & canvas → Legends), checked the same way
+#: Each legend's three keys (Figure → Legends), checked the same way
 #: whether they come from a link, a settings file, a design or the cache.
 _LEGEND_STATE_PARSERS = {
     key: parse

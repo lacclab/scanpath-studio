@@ -468,12 +468,12 @@ def story(s: Session) -> None:
     s.caption("Build your figure layer by layer")
     # A popover setting comes first: the first layer switch flipped right
     # after a preset is put back, while one after any other change holds.
-    s.pick("split_mode_rail_heatmap_popover", "Oranges", nth=2)
+    s.pick("plot_menu_heatmap", "Oranges", nth=2)
     s.wait(600)
     s.toggle("global_show_fix", True)
-    s.pick("split_mode_rail_fix_popover", "Duration (ms)")
+    s.pick("plot_menu_fix", "Duration (ms)")
     s.toggle("global_show_saccades", True)
-    arrows = s.popover("split_mode_rail_sac_popover").locator("label", has_text="Show")
+    arrows = s.popover("plot_menu_sac").locator("label", has_text="Show")
     s.glide(arrows)
     s.idle()
     s.wait(900)
@@ -486,7 +486,7 @@ def story(s: Session) -> None:
     s.wait(1200)
 
     s.caption("Filter saccades by type")
-    body = s.popover("split_mode_rail_filter_popover")
+    body = s.popover("plot_menu_filter")
     s.glide(body.locator('button[aria-label="Remove Forward"]'))
     s.idle()
     s.close_popover()
@@ -494,7 +494,7 @@ def story(s: Session) -> None:
 
     s.caption("Redact the text in one click")
     for hold in (1900, 0):
-        body = s.popover("split_mode_rail_stim_popover")
+        body = s.popover("plot_menu_stim")
         s.glide(body.locator("label", has_text="Redact"))
         s.idle()
         s.close_popover()

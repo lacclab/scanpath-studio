@@ -63,14 +63,14 @@ pencil (:material/edit:), which are in Full.
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/plot-controls.webp" title="Open full size"><img src="../../../assets/screenshots/controls/plot-controls.webp" alt="The Plot controls column" loading="lazy"></a>
 
 
-Both modes start with the same four **View** tiles and **Palette**. Switching
-modes keeps your figure and its settings. If you switch to Essentials while
-comparing readings, the **Compare readings** switch stays available.
+The four **View** tiles and **Palette** appear in both modes. Full adds comparison,
+animation settings, saved designs, and three editing tabs.
 
-Full adds comparison and animation settings, saved designs, and a row for
-each layer. Use the switch to turn a layer on or off and **▾** to open its
-settings. **Filters & highlights** and **Figure & canvas** apply to the
-whole figure. Hover over a grayed-out control to see why it is unavailable.
+- **Layers** lists what the plot can draw. Click a layer’s name to edit its settings. The switch on the right shows or hides it. **Filters & highlights** applies to the current reading.
+- **Axes** chooses the X and Y fields and configures the coordinate grid.
+- **Figure** holds framing, titles, hover fields and legends.
+
+If you switch to Essentials while comparing readings, the comparison switch stays available.
 
 ### :material/movie: Animation settings { #animate-play-the-reading-as-a-video }
 
@@ -130,7 +130,7 @@ saved:
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/fixations.webp" title="Open full size"><img src="../../../assets/screenshots/controls/fixations.webp" alt="The Fixations menu" loading="lazy"></a>
 
 
-The **Fixations** switch draws the fixation markers. Its **▾** holds:
+Click **Fixations** to edit the markers. The switch shows or hides them.
 
 | Control | What it does |
 | --- | --- |
@@ -156,7 +156,7 @@ The **Fixations** switch draws the fixation markers. Its **▾** holds:
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/saccades.webp" title="Open full size"><img src="../../../assets/screenshots/controls/saccades.webp" alt="The Saccades menu" loading="lazy"></a>
 
 
-The **Saccades** switch draws the lines between fixations. Its **▾** holds:
+Click **Saccades** to edit the lines between fixations. The switch shows or hides the lines.
 
 | Control | What it does |
 | --- | --- |
@@ -176,12 +176,12 @@ The **Saccades** switch draws the lines between fixations. Its **▾** holds:
 
 
 The **Stimulus** switch draws the text and the stimulus image. The text rows start from the dataset's
-Recording setup, and changes here apply to the figure only. Its **▾** holds:
+Recording setup. Click **Stimulus** to adjust the text or image for this figure.
 
 | Control | What it does |
 | --- | --- |
 | **Text** → **Show** | Show the stimulus text, the words the participant read, at their place on the screen. |
-| **Text** → **Redact** | Mask stimulus words and their text IDs. Other columns selected under **Figure & canvas → Hover** still travel with the HTML figure. Review those selections and the separate **Stimulus image** switch before sharing. |
+| **Text** → **Redact** | Mask stimulus words and their text IDs. Other columns selected under **Figure → Hover fields** still travel with the HTML figure. Review those selections and the separate **Stimulus image** switch before sharing. |
 | **Fit** → **Fit to word boxes** | Size the stimulus text from its word boxes, instead of a fixed font size. |
 | **Fit** → **Spacing** | With **Fit to word boxes** on: the distance between lines, in font sizes. The font size is that distance divided by this value, so 3 leaves a blank line above and below. |
 | **Size** | With **Fit to word boxes** on: the size of the axis and legend text, in px. Off: the stimulus text's size too, in px or pt. |
@@ -202,7 +202,7 @@ Recording setup, and changes here apply to the figure only. Its **▾** holds:
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/word-boxes.webp" title="Open full size"><img src="../../../assets/screenshots/controls/word-boxes.webp" alt="The Word boxes menu" loading="lazy"></a>
 
 
-The **Word boxes** switch draws each word's box (its interest area). Its **▾** holds:
+The **Word boxes** switch draws each word’s interest area. Click **Word boxes** to set its outline and fill.
 
 | Control | What it does |
 | --- | --- |
@@ -216,7 +216,7 @@ The **Word boxes** switch draws each word's box (its interest area). Its **▾**
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/heatmap.webp" title="Open full size"><img src="../../../assets/screenshots/controls/heatmap.webp" alt="The Heatmap menu" loading="lazy"></a>
 
 
-The **Heatmap** switch shows where reading concentrated. Its **▾** holds:
+The **Heatmap** switch shows where reading concentrated. Click **Heatmap** to choose the measure, colors and scale.
 
 | Control | What it does |
 | --- | --- |
@@ -234,7 +234,7 @@ The **Heatmap** switch shows where reading concentrated. Its **▾** holds:
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/raw-gaze.webp" title="Open full size"><img src="../../../assets/screenshots/controls/raw-gaze.webp" alt="The Raw gaze menu" loading="lazy"></a>
 
 
-The **Raw gaze** switch draws the gaze samples as recorded. Its **▾** holds:
+The **Raw gaze** switch draws the recorded gaze samples. Click **Raw gaze** to set their appearance.
 
 | Control | What it does |
 | --- | --- |
@@ -247,7 +247,7 @@ The **Raw gaze** switch draws the gaze samples as recorded. Its **▾** holds:
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/filters.webp" title="Open full size"><img src="../../../assets/screenshots/controls/filters.webp" alt="The Filters & highlights menu" loading="lazy"></a>
 
 
-These controls change the fixation marks and saccades drawn in the figure. The trial-list filter selects whole readings.
+An **Active** label appears beside **Filters & highlights** when either reading has a fixation window, highlight or filter in effect. The trial-list filter selects whole readings.
 
 | Control | What it does |
 | --- | --- |
@@ -259,37 +259,45 @@ These controls change the fixation marks and saccades drawn in the figure. The t
 | **Marker** and **Color** | Choose the marker shape and color of each highlighted fixation kind. |
 | **Saccades** → **Types** | Show only some saccade types, such as regressions or return sweeps. Empty draws all. Needs a word ID for each fixation, as for coloring saccades by type. |
 
-### :material/aspect_ratio: Figure & canvas
+### Axes
 
-<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/figure-canvas.webp" title="Open full size"><img src="../../../assets/screenshots/controls/figure-canvas.webp" alt="The Figure & canvas menu" loading="lazy"></a>
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/plot-axes.webp" title="Open full size"><img src="../../../assets/screenshots/controls/plot-axes.webp" alt="Axes tab with the chart preset and both coordinate fields" loading="lazy"></a>
 
+Choose a chart preset, or set the X and Y fields individually. Open **Coordinate grid** to style the screen grid.
 
-The figure as a whole:
+| Control | What it does |
+| --- | --- |
+| **Axis preset** | Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. **Connect fixations** traces the index sequence. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window. |
+| **X axis field** / **Y axis field** | Choose any two numeric fixation fields. Try fixation order against duration, or recorded onset against word number. Screen Y increases downward. Raw samples can appear when they supply both plotted quantities. **Screen X and Y** restores the stimulus view. Animation and Compare readings use screen coordinates. |
+| **Grid** → **Show** | Show a grid of screen coordinates, in px. |
+| **Grid** → **Auto**, interval | Set the grid spacing (interval), in px, or let **Auto** choose it. |
+| **Labels** | Set the grid label (tick label) font size. |
+
+![Vertical screen position by elapsed time for a bundled demo reading](../../assets/screenshots/elapsed-reading-chart.jpg)
+
+Each dot is a fixation. The clusters step down as the reader looks lower on the screen. Around 39 seconds, the reader looks back near the top.
+
+### Figure { #figure-canvas }
+
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/figure-canvas.webp" title="Open full size"><img src="../../../assets/screenshots/controls/figure-canvas.webp" alt="The Figure tab and its four settings menus" loading="lazy"></a>
+
+Open **Screen & framing**, **Title & labels**, **Hover fields**, or **Legends**.
 
 | Control | What it does |
 | --- | --- |
 | **Frame** → **Crop to data** | Crop (zoom) the figure to the part of the screen with data, instead of the whole screen. |
 | **Margin** | Set the crop margin: the space around the data when cropping. **Auto** uses 5% of the data's width and height, at least 20 px. |
 | **Border** → **Show**, color | Show a 1 px border around the plot area, and choose its color. It marks the edge of the screen, or, with **Crop to data**, the edge of the cropped area. |
-| **Grid** → **Show** | Show a grid of screen coordinates, in px. |
-| **Grid** → **Auto**, interval | Set the grid spacing (interval), in px, or let **Auto** choose it. |
-| **Labels** | Set the grid label (tick label) font size. |
-| **Axis preset** | Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. **Connect fixations** traces the index sequence. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window. |
-| **Axes** → **X** / **Y** | Choose any two numeric fixation fields. Try fixation order against duration, or recorded onset against word number. Screen Y increases downward. Raw samples can appear when they supply both plotted quantities. **Screen X and Y** restores the stimulus view. Animation and Compare readings use screen coordinates. |
 | **Illustration** → **Label** | Choose when the figure carries an *Illustration* note, saying it does not show the recorded positions. **Auto** adds it when a setting changes the geometry or the data (such as snapping fixations to a line or drawing saccades as arcs), **Show** always, **Hide** never. |
 | **Illustration** → **Text** | Write the *Illustration* label's text. Empty writes "Illustration ·" followed by the reasons. |
 | **Title** → **Show**, text, **Size** | Add a figure title above the plot, and set its font size. `{field}` inserts a value of the trial. |
 | **Caption** → **Show**, text, **Size**, color | Add a figure caption below the plot, and set its font size and color. `{field}` works here too. |
 | **Credit** → **Show** | Add a small *Made with Scanpath Studio* line under the plot. |
-| **Hover** → **Words** / **Fixations** | Choose the hover fields: what the tooltip shows when the mouse is over a word or a fixation. |
+| **Hover fields** → **Words** / **Fixations** | Choose the hover fields: what the tooltip shows when the mouse is over a word or a fixation. |
 | **Legends** → **Show** | Show or hide each legend the figure draws: **Compare (A/B)**, **Saccade types**, **Fixation colors**, **Fixation sizes** or **Text highlight**. Each has a row. |
 | **Legends** → **Position** | Choose the legend position: a corner, the middle of an edge, or down a side, outside or inside the plot. |
 | **Legends** → **Arrangement** | Choose the legend arrangement: **Stacked** or **Side by side**. |
 | **Legends** → **Text size** | Set the legend text (font) size, in px. Empty uses the figure's text size. |
-
-![Vertical screen position by elapsed time for a bundled demo reading](../../assets/screenshots/elapsed-reading-chart.jpg)
-
-Each dot is a fixation. The clusters step down as the reader looks lower on the screen. Around 39 seconds, the reader looks back near the top.
 
 ### :material/restart_alt: Reset visualization
 
@@ -319,12 +327,12 @@ several menus split into a **Scanpath A** and a **Scanpath B** group.
 | **Screen B** | On a trial recorded over several screens: B's screen to show. |
 | **⇅** on B's row | Sort scanpath B's trial list, apart from A's. The default, **Same text, then same participant**, lists trials of A's text first, then A's participant, then the rest. You can also sort by any field, as on A's row. |
 | :material/filter_alt: on B's row | Filter scanpath B's trials, apart from A's. |
-| **Fixations ▾** → **Scanpath A / B** → **Color**, **Size**, **Opacity** | Choose each scanpath's fixation marker color, size range and opacity. When the markers are colored by a column, **Color** becomes **Outline**. |
-| **Saccades ▾** → **Scanpath A / B** → **Color**, **Style**, **Width** | Choose each scanpath's saccade line color, style and width. |
-| **Word boxes ▾** → **Scanpath A / B** → **Line**, **Fill** | Choose each scanpath's word box outline and fill colors and opacities. |
-| **Heatmap ▾** → **Scanpath A / B** → **Colors** | Choose each scanpath's heatmap colors (color scale). |
-| **Raw gaze ▾** → **Scanpath A / B** → **Color** | Choose each scanpath's raw gaze sample color. |
-| **Filters & highlights ▾** → **Fixations · B** / **Saccades · B** | Set scanpath B's fixation range, fixation highlights and saccade types. |
+| **Layers** → **Fixations** → **Scanpath A / B** → **Color**, **Size**, **Opacity** | Choose each scanpath's fixation marker color, size range and opacity. When the markers are colored by a column, **Color** becomes **Outline**. |
+| **Layers** → **Saccades** → **Scanpath A / B** → **Color**, **Style**, **Width** | Choose each scanpath's saccade line color, style and width. |
+| **Layers** → **Word boxes** → **Scanpath A / B** → **Line**, **Fill** | Choose each scanpath's word box outline and fill colors and opacities. |
+| **Layers** → **Heatmap** → **Scanpath A / B** → **Colors** | Choose each scanpath's heatmap colors (color scale). |
+| **Layers** → **Raw gaze** → **Scanpath A / B** → **Color** | Choose each scanpath's raw gaze sample color. |
+| **Layers** → **Filters & highlights** → **Fixations · B** / **Saccades · B** | Set scanpath B's fixation range, fixation highlights and saccade types. |
 
 ## Under the plot
 

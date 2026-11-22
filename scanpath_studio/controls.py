@@ -3,7 +3,6 @@ from __future__ import annotations
 import html
 import json
 import math
-import re
 from collections.abc import Callable
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -247,10 +246,12 @@ def _popover_rows(slug: str):
     ctx = None
     if pending:
         section = slug.split("_", 1)[0]
-        if section == "fig":
-            section = "figure"
-        prefix = "split_mode" if section == "compare" else "split_mode_rail"
-        if st.session_state.get(f"{prefix}_{section}_popover"):
+        menu_key = (
+            "split_mode_compare_popover"
+            if section == "compare"
+            else f"plot_menu_{section}"
+        )
+        if st.session_state.get(menu_key):
             ctx = get_script_run_ctx()
     drawn = ctx.shared.widget_user_keys_this_run if ctx else None
     waiting = [key for key in pending if key not in drawn] if drawn is not None else []
@@ -803,7 +804,7 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_marker_size_scale": DEFAULT_MARKER_SIZE_SCALE,
     "global_marker_duration_range": DEFAULT_MARKER_DURATION_RANGE,
     "global_duration_size_legend": True,
-    # 📐 Figure & canvas → Legends: where each legend sits (Auto = the builder's
+    # 📐 Figure → Legends: where each legend sits (Auto = the builder's
     # own placement). Size None = the figure's own text size.
     **{
         f"global_legend_{kind}_{part}": default
@@ -969,7 +970,7 @@ _VIZ_WIDGET_DEFAULTS = {
             ("length", DEFAULT_COLORBAR_LENGTH),
         )
     },
-    # Title/caption on the figure (📐 Figure & canvas). Off by default;
+    # Title/caption on the figure (📐 Figure). Off by default;
     # the two patterns are only meaningful while the toggle is on — see
     # `_collect_viz_settings`, which reports them empty otherwise.
     "global_show_title": False,
@@ -1136,23 +1137,14 @@ def _fixation_filter_badge(prefix: str = "global") -> str:
     return f" · {detail}"
 
 
-def _plot_filter_badge() -> str:
-    """One badge for the whole Filters & highlights section.
-
-    The section holds the fixation and saccade filters together (and, in
-    Compare, scanpath B's), so its header has to answer "is anything being
-    hidden?" for all of them: a thinned figure otherwise reads as missing data.
-    The detail stays on each half's own badge inside.
-    """
-    comparing = bool(st.session_state.get("_resolved_comparing"))
-    b_active = comparing and bool(
-        _fixation_filter_badge("cmp1")
-        or _saccade_filter_badge("cmp1_saccade_classes")
-        or st.session_state.get("single_compare_fix_range_user_set")
-    )
-    return (
-        " •" if _fixation_filter_badge() or _saccade_filter_badge() or b_active else ""
-    )
+def _mark_active_plot_filters(status, windowed: bool, prefix: str = "global") -> None:
+    """Either reading can mark the shared filter row after its window is resolved."""
+    if status is not None and (
+        windowed
+        or _fixation_filter_badge(prefix)
+        or _saccade_filter_badge(f"{prefix}_saccade_classes")
+    ):
+        status.caption("Active", width="content")
 
 
 def _saccade_filter_badge(key: str = "global_saccade_classes") -> str:
@@ -1658,6 +1650,8 @@ _MOUNTED_VIEW_KEYS = frozenset(
         "global_show_words",
         "global_show_heatmap",
         "global_show_raw_gaze",
+        "global_x_field",
+        "global_y_field",
         "global_palette",
         SINGLE_COMPARE_TOGGLE,
         "global_preproc_enabled",
@@ -5755,7 +5749,9 @@ def compare_b_filters() -> dict:
     )
 
 
-def render_compare_filters(host, compare_fixations: pd.DataFrame | None) -> None:
+def render_compare_filters(
+    host, compare_fixations: pd.DataFrame | None, *, status=None
+) -> None:
     """Scanpath B's half of the Filters & highlights section.
 
     Rendered into the slot ``render_plot_controls`` reserved under A's filters —
@@ -5776,12 +5772,13 @@ def render_compare_filters(host, compare_fixations: pd.DataFrame | None) -> None
             ),
             _popover_rows("filter_fix_b"),
         ):
-            _render_fix_range_slider(
+            windowed = _render_fix_range_slider(
                 compare_fixations,
                 key="single_compare_fix_range",
                 trial_state_key="_compare_fix_range_trial",
                 all_trials_key=None,
             )
+            _mark_active_plot_filters(status, windowed, "cmp1")
             _render_fixation_cleaning(prefix="cmp1")
         _cls_dis, _cls_reason = _mode_gate(animating, True, in_animation=False)
         with (
@@ -5862,8 +5859,8 @@ def _render_fix_range_slider(
     key: str = "single_fix_range",
     trial_state_key: str = "_fix_range_trial",
     all_trials_key: str | None = "single_fix_range_all_trials",
-) -> None:
-    """Render the fixation-index window slider (``single_fix_range``).
+) -> bool:
+    """Render the fixation-index window and report whether it subsets this reading.
 
     The slider value persists across trial changes (which shift the bounds), so
     it is seeded/clamped via session_state *only* (no ``value=`` arg) to stay
@@ -5908,7 +5905,7 @@ def _render_fix_range_slider(
     a saved config it must be added to ``session_keys.PLOT_CONFIG_STATE_KEYS``.
     """
     if fixations is None:
-        return
+        return False
     # The same slider serves scanpath B under its own keys; B's window is
     # always per-trial (no *All trials* box — B's trial moves with its picker).
     user_key = f"{key}_user_set"
@@ -5922,7 +5919,7 @@ def _render_fix_range_slider(
         if st.session_state.get(key) is not None:
             st.session_state[key] = None
         st.session_state[user_key] = False
-        return
+        return False
     # Notice a trial change *before* resolving the stored window: in per-trial
     # mode, un-freezing the window is what makes the `user_set is False` branch
     # below expand it to the new trial's full range.
@@ -6014,6 +6011,7 @@ def _render_fix_range_slider(
         "scanpath A's window.",
         lead=_all_trials if all_trials_key else None,
     )
+    return window != (min_fix, max_fix)
 
 
 def _seed_viz_state(
@@ -6202,7 +6200,7 @@ def _legends_drawn(
     return [kind for kind in LEGEND_KINDS if kinds[kind]]
 
 
-#: What each Legends row places (📐 Figure & canvas → Legends).
+#: What each Legends row places (📐 Figure → Legends).
 _LEGEND_ROW_HELP = {
     "compare": (
         "Labels for scanpaths A and B. Edit them under Compare → Label A / Label B."
@@ -6228,7 +6226,7 @@ _LEGEND_ROW_HELP = {
 
 
 def _collect_legend_layout(ss) -> dict | None:
-    """The legend placements set under 📐 Figure & canvas → Legends.
+    """The legend placements set under 📐 Figure → Legends.
 
     Only the legends moved off *Auto* are listed; ``None`` when none is, which
     every builder reads as its own default placement. A stale value a link or an old
@@ -6803,120 +6801,60 @@ _ANIMATE_GREYS = {
 def _greyed_help(*reasons: tuple[bool, str]) -> str | None:
     """A rail switch's hover text: why it is greyed, or nothing while it is live.
 
-    The reason sits on the switch itself. ``reasons`` are ``(holds, text)`` pairs, most
-    fundamental first — a trial with nothing to draw stays greyed whatever the
-    mode — and the first that holds is the one said. `styles.py` makes the whole
-    switch the hover target and draws no `?` beside it.
+    The first applicable reason wins. A trial with nothing to draw stays
+    greyed whatever the mode.
     """
     return next((text for holds, text in reasons if holds), None)
 
 
-def _rail_section(host, label: str, *, slug: str, name: str | None = None, **toggle):
-    """One rail section: `[toggle | ▾]` on a single line.
+def _plot_menu(host, label: str, *, icon: str, slug: str):
+    """A named settings button. Its stable key also tracks edits after Undo."""
+    return host.popover(
+        label,
+        icon=icon,
+        key=f"plot_menu_{slug}",
+        type="tertiary",
+        width="stretch",
+        on_change=plot_popover_on_change(),
+    )
 
-    A layer uses the same split row as Compare readings: the
-    layer's switch and the disclosure for its options share a row, and the
-    options open in a **popover** rather than inside an expander.
 
-    That last part is the point, not the tidiness. The rail is ~150–200 px wide
-    on purpose (the plot is the hero), so an expander lays its controls out
-    inside that width and crops them; a popover is positioned over the page and
-    sizes to its content. Inlining the popovers breaks the rail for exactly
-    this reason.
-
-    Passing ``toggle`` kwargs (``key=``, ``disabled=``) draws the switch and
-    returns its value; the name is the switch's label, so clicking it flips the
-    switch. Omitting them leaves the section's **name** on its own, for the
-    sections that have no layer to switch: 📐 Figure & canvas holds none, and
-    Filters & highlights is not a layer at all — there, clicking the name opens
-    the popover. (📄 Stimulus has a master switch over its layers.) ``note=``
-    is a line written into the top of the popover — used for the ⚠️ that says
-    why a switch is greyed.
-
-    Returns ``(value, body)`` — ``value`` is ``None`` for a name-only section.
-    The ``split_mode_`` key prefix is what `styles.py` styles the row with; it is
-    shared with the two mode rows above the plot deliberately, because they are
-    the same control.
-
-    What keeps the row on one line, with one arrow and no `?`:
-
-    - ``width="content"``, not ``"stretch"`` — a stretched trigger claims the
-      row's whole width, so the switch and the ▾ could not share a line however
-      much room the rail had.
-    - **No visible label and no icon on the trigger.** A `▾` label (or a
-      `:material/arrow_drop_down:` icon) sits *beside* the chevron Streamlit
-      draws on every popover, which is one arrow too many. The trigger does
-      carry a label for screen readers, ``name="Fixation"`` → "Fixation
-      settings" (``label`` without its icon and bold when ``name`` is omitted);
-      `styles.py` clips it off screen.
-    - **No hover text on the row**, so a row which has to fit carries no
-      Streamlit `?` icon — see the comments in the body.
-
-    **The popover carries an explicit ``key=``.** ``st.popover`` is a stateful
-    widget in this Streamlit version (it takes ``key``/``on_change`` like
-    ``st.expander``). Without a `key`, Streamlit falls back to a positional
-    auto-key, and this row sits downstream of several booleans that change
-    which widgets render (`_mode_gate`'s `disabled=`/`help=`, the layer toggles
-    themselves) — so the auto-key for a *later* section can shift between
-    reruns whenever an *earlier* one's rendered shape changes. A shifted key
-    reads to Streamlit as a brand-new widget, which drops the one thing this
-    widget tracks: whether it is open — the popover opens, a rerun lands before
-    the user sees it, and the fresh auto-key comes back closed, so a click
-    seems not to work.
-    """
+def _layer_row(
+    host,
+    label: str,
+    *,
+    icon: str,
+    slug: str,
+    visibility_key: str,
+    disabled: bool,
+    help: str | None,
+    note: str = "",
+):
+    """Open a layer's settings by name, or change visibility with its switch."""
     row = host.container(
         horizontal=True,
         wrap=False,
         vertical_alignment="center",
-        gap=None,
-        key=f"split_mode_rail_{slug}",
+        gap="xsmall",
+        key=f"plot_layer_{slug}",
     )
-    note = toggle.pop("note", None)
-    # The name is the switch's own label, so clicking the word flips the
-    # switch, as on Animate and Compare. It carries no native tooltip: in a
-    # one-line row Streamlit puts a checkbox label in "truncate" mode, which
-    # stamps a `title=` repeating the words already on screen, and a `title`
-    # cannot be styled or suppressed from CSS. `wrap=True`
-    # is what turns truncate mode off, and with it the `title`; the one-line
-    # ellipsis it would have drawn comes from `styles.py` instead (the
-    # `split_mode_` label rule), which draws it without a tooltip.
-    if toggle:
-        # No `**` in the label, which is the switch's accessible
-        # name verbatim; `styles.py` draws the row names bold instead.
-        value = row.toggle(label.replace("**", ""), wrap=True, **toggle)
-    else:
-        # A name-only section: `styles.py` stretches the ▾ trigger's click
-        # target over the whole row, so the name opens the popover.
-        value = None
-        row.markdown(label)
-    # The trigger is named for screen readers ("Fixation settings");
-    # `styles.py` clips that label off screen, so the chevron stays the only
-    # thing drawn. `wrap=True` for the reason the switch has it: a truncated
-    # one-line label would stamp a native `title=` tooltip.
-    name = name or re.sub(r":material/\w+:|\*", "", label).strip()
-    body = row.popover(
-        f"{name} settings",
-        width="content",
-        wrap=True,
-        key=f"split_mode_rail_{slug}_popover",
-        on_change=plot_popover_on_change(),
+    menu = _plot_menu(row, label, icon=icon, slug=slug)
+    shown = row.toggle(
+        label,
+        key=visibility_key,
+        disabled=disabled,
+        help=help,
+        persist_state="session",
     )
-    # ...and the popover trigger carries no `help=` either: it would only
-    # restate the section's own name. What is worth saying -- why
-    # a switch is greyed -- is written inside the popover instead, where it is
-    # read without waiting for a tooltip and without covering the row below.
     if note:
-        body.caption(note)
-    return value, body
+        menu.caption(note)
+    return shown, menu
 
 
 def _rail_subsection(host, label: str, *, note: str = "", first: bool = False):
     """A named block inside the rail's Filters & highlights section.
 
-    Only that section uses blocks rather than popovers: its two halves
-    (👁️ Fixations · ↗️ Saccades) are genuinely one thing each, and a popover
-    would spend a click for nothing. Elsewhere the rail keeps its popovers —
-    flattened into blocks like this one, a section becomes a long unbroken run.
+    Scanpath A and B each have their own fixation and saccade filters.
 
     ``note`` renders under the label — a block has no trigger, so the sentence a
     popover carried as a tooltip (what the filter does, and why it is inert in
@@ -7123,25 +7061,9 @@ def render_plot_controls(
 ) -> dict:
     """Render the visualization controls and return the resolved settings dict.
 
-    Layout, grouped so the rail reads by category:
-      1. View tiles and Palette at the top in both modes. Full adds comparison,
-         animation settings, My designs and the layer controls.
-      2. One `[switch | ▾]` row per layer (:func:`_rail_section`) —
-         **👁️ Fixations**, **↗️ Saccades**, **📄 Stimulus**, **⬚ Word boxes**,
-         **🔥 Heatmap**, **🔵 Raw gaze** — the ▾ popover holding the layer's
-         styling, greyed (never hidden) while the layer is off. Streamlit nests
-         neither expander-in-expander nor popover-in-popover, so the options are
-         one popover deep — which is also why Fixations and Saccades are peer
-         sections rather than sub-sections of a single "Scanpath" group.
-      3. One **Filters & highlights** section after the layers holds both the
-         fixation and the saccade filters.
-      4. **📐 Figure & canvas** has the same row shape with no layer to toggle:
-         🖥️ Screen & framing · 📊 Axes & grid · 🏷️ Title & labels · 💬 Hover ·
-         Legends, as named groups inside one popover.
-
-    The sections are created up front (Streamlit lays containers out in creation
-    order), so each block below renders into its section without moving in this
-    file — see the "Layer groups" comment.
+    Full adds three editing tabs after the view and palette controls. Layers
+    pairs each settings menu with its visibility switch. Axes selects the chart
+    coordinates. Figure groups framing, labels, hover fields and legends.
 
     ``canvas_renderer`` is an optional callable rendering the canvas / text
     panel (``app.render_canvas_controls``): its screen rows into 🖥️ Screen &
@@ -7188,19 +7110,11 @@ def render_plot_controls(
     )
     viz = rail.container(key="tour_grp_viz_controls")
     _render_saved_designs(advanced_only(viz, "rail_designs"))
-    advanced_only(viz, "rail_layers_label").markdown(
-        '<div class="sps-control-label">Layers</div>', unsafe_allow_html=True
-    )
-    # Essentials mode ends its rail here: a list of what Full adds, where the
-    # layer rows would start.
     render_more_popover(simple_only(viz, "rail_more"), "rail", label="More options")
-
-    # Each main layer is an `st.toggle`; the layer's detailed styling lives in a
-    # per-layer popover (greyed while the layer is off) — so the rail shows just
-    # the toggles, and the fiddly knobs open in an overlay instead of growing the
-    # rail past the plot.
-    # Values for off layers are read back from session_state by
-    # `_collect_viz_settings`, so the returned dict always carries every key.
+    editor = advanced_only(viz, "plot_editor")
+    layers, axes, figure = editor.tabs(
+        ["Layers", "Axes", "Figure"], key="plot_editor_tabs"
+    )
 
     # Animation and Compare readings route the figure through different builders, and each
     # ignores a different slice of these controls. Read both flags and gate every
@@ -7229,27 +7143,6 @@ def render_plot_controls(
     _static_only = dict(in_animation=False, in_compare=False)
     _no_compare = dict(in_compare=False)
 
-    # --- Layer groups -----------------------------------------------------
-    # Named sections rather than one flat run of toggles, so the rail shows which
-    # layers describe the *stimulus* (text, image, word boxes) and which the
-    # *recording* (fixations, saccades, raw gaze), plus two for how the figure is
-    # filtered and framed.
-    #
-    # The sections are created HERE, up front, because Streamlit lays containers
-    # out in **creation** order — which lets each block below keep its position
-    # in this file while rendering into whichever section it belongs to. So the
-    # visual order is exactly the order of the `_rail_section` calls here; the
-    # code order further down is irrelevant to the layout.
-    #
-    # **Section shape.** Each section is a row — its switch (when it has exactly
-    # one thing to switch) and a ▾ popover holding everything else. Streamlit
-    # nests neither expander-in-expander nor popover-in-popover, so the options
-    # are one popover deep; that is also why Fixations and Saccades are *peer*
-    # sections rather than one "Scanpath" group holding two. The layer toggles
-    # are rendered HERE rather than in the blocks below, because a row lays its
-    # children out in creation order and the switch has to precede the ▾; the
-    # blocks below own everything inside the popovers. The preset row above
-    # covers the common combinations without opening anything at all.
     fix_off_disabled, _fix_off_reason = _mode_gate(
         animating, comparing, in_animation=False, in_compare=True
     )
@@ -7268,13 +7161,12 @@ def render_plot_controls(
             else ""
         )
     )
-    show_fix, fix_grp = _rail_section(
-        advanced_only(viz, "rail_fix"),
-        f"{ICONS['fixations']} **Fixations**",
+    show_fix, fix_grp = _layer_row(
+        layers,
+        "Fixations",
+        icon=ICONS["fixations"],
         slug="fix",
-        name="Fixation",
-        key="global_show_fix",
-        persist_state="session",
+        visibility_key="global_show_fix",
         disabled=fix_off_disabled or not has_fixations,
         help=_greyed_help(
             (not has_fixations, "This trial has no fixations."),
@@ -7290,13 +7182,12 @@ def render_plot_controls(
             else ""
         ),
     )
-    show_saccades, sac_grp = _rail_section(
-        advanced_only(viz, "rail_sac"),
-        f"{ICONS['saccades']} **{'Connect fixations in order' if sequence else 'Saccades'}**",
+    show_saccades, sac_grp = _layer_row(
+        layers,
+        "Connect fixations in order" if sequence else "Saccades",
+        icon=ICONS["saccades"],
         slug="sac",
-        name="Fixation sequence" if sequence else "Saccade",
-        key="global_show_saccades",
-        persist_state="session",
+        visibility_key="global_show_saccades",
         disabled=not has_fixations or (chart_axes and not sequence),
         help=_greyed_help(
             (not has_fixations, "This trial has no fixations."),
@@ -7310,26 +7201,24 @@ def render_plot_controls(
     # set; it only ANDs into the *effective* values `_collect_viz_settings`
     # returns — turning it back on reveals exactly what was configured before,
     # with nothing to restore.
-    show_stimulus, stim_grp = _rail_section(
-        advanced_only(viz, "rail_stim"),
-        f"{ICONS['stimulus']} **Stimulus**",
+    show_stimulus, stim_grp = _layer_row(
+        layers,
+        "Stimulus",
+        icon=ICONS["stimulus"],
         slug="stim",
-        name="Stimulus",
-        key="global_show_stimulus",
-        persist_state="session",
+        visibility_key="global_show_stimulus",
         disabled=chart_axes,
         help=screen_help if chart_axes else None,
     )
     # Word boxes are a section of their own, with a style (outline + fill) that
     # the Stimulus popover has no room for. Its switch is `global_show_words`,
     # and the Stimulus master switch does not gate it.
-    show_word_boxes, boxes_grp = _rail_section(
-        advanced_only(viz, "rail_boxes"),
-        f"{ICONS['word_boxes']} **Word boxes**",
+    show_word_boxes, boxes_grp = _layer_row(
+        layers,
+        "Word boxes",
+        icon=ICONS["word_boxes"],
         slug="boxes",
-        name="Word boxes",
-        key="global_show_words",
-        persist_state="session",
+        visibility_key="global_show_words",
         # No word boxes: the popover body's own `_layer_off` caption says it.
         disabled=not has_words or chart_axes,
         help=_greyed_help(
@@ -7352,13 +7241,12 @@ def render_plot_controls(
             else ""
         )
     )
-    show_heatmap, heatmap_grp = _rail_section(
-        advanced_only(viz, "rail_heatmap"),
-        f"{ICONS['heatmap']} **Heatmap**",
+    show_heatmap, heatmap_grp = _layer_row(
+        layers,
+        "Heatmap",
+        icon=ICONS["heatmap"],
         slug="heatmap",
-        name="Heatmap",
-        key="global_show_heatmap",
-        persist_state="session",
+        visibility_key="global_show_heatmap",
         disabled=heat_disabled or heat_nothing or chart_axes,
         help=_greyed_help(
             (chart_axes, screen_help),
@@ -7373,13 +7261,12 @@ def render_plot_controls(
     raw_disabled, raw_reason = _mode_gate(animating, comparing, in_animation=False)
     raw_axis_off = chart_axes and not charts.raw_axes_available(fields, trial_samples)
     raw_axis_help = "Raw samples need both plotted coordinates. Choose screen position or recorded time."
-    show_raw_gaze, raw_gaze_grp = _rail_section(
-        advanced_only(viz, "rail_rawgaze"),
-        f"{ICONS['raw_gaze']} **Raw gaze**",
+    show_raw_gaze, raw_gaze_grp = _layer_row(
+        layers,
+        "Raw gaze",
+        icon=ICONS["raw_gaze"],
         slug="rawgaze",
-        name="Raw gaze",
-        key="global_show_raw_gaze",
-        persist_state="session",
+        visibility_key="global_show_raw_gaze",
         disabled=not has_raw_gaze or raw_disabled or raw_axis_off,
         help=_greyed_help(
             (raw_axis_off, raw_axis_help),
@@ -7391,24 +7278,21 @@ def render_plot_controls(
             raw_reason,
         ),
     )
-    # ONE filter section for the whole figure, a peer of the layer sections
-    # rather than a popover inside each of them; it sits after the layers
-    # because it thins what they draw.
-    #
-    # Not to be confused with the filter funnel on the control line, which
-    # narrows the *trial pool* — which readings you can pick. This one thins one
-    # reading. The badge says an active filter is on, or a thinned figure reads
-    # as missing data; it reports both halves, so `•` on the section means at
-    # least one of them is narrowing. No toggle — filtering is not a layer — but
-    # the same row shape, so its controls open over the page instead of being
-    # cropped by the rail.
-    _filter_none, filter_grp = _rail_section(
-        advanced_only(viz, "rail_filter"),
-        f"{ICONS['plot_filter']} **Filters & highlights**{_plot_filter_badge()}",
-        slug="filter",
-        name="Filters & highlights",
-        note=no_fixations_note,
+    filter_row = layers.container(
+        horizontal=True,
+        wrap=False,
+        vertical_alignment="center",
+        gap="xsmall",
+        key="plot_filter_row",
     )
+    filter_grp = _plot_menu(
+        filter_row, "Filters & highlights", icon=ICONS["plot_filter"], slug="filter"
+    )
+    # A stateful popover's label is part of its identity. Keep the live status
+    # beside the button so editing a filter leaves the menu open.
+    filter_status = filter_row.empty()
+    if no_fixations_note:
+        filter_grp.caption(no_fixations_note)
     filter_grp.caption(
         "Hide or highlight fixations in the drawing. The trial list and corpus measures stay the same."
     )
@@ -7422,17 +7306,8 @@ def render_plot_controls(
     # dict, which is hashed into figure keys and must stay plain data.
     if comparing and slots is not None:
         slots["compare_filter"] = filter_grp.container()
+        slots["compare_filter_status"] = filter_status
     ab = " · A" if comparing else ""
-    # The canvas controls and the figure/axes controls share one section: both
-    # describe the figure's framing rather than a data layer. The injected canvas
-    # renderer writes into its groups directly — see the "Figure & canvas" block
-    # below.
-    _figure_none, figure_grp = _rail_section(
-        advanced_only(viz, "rail_figure"),
-        f"{ICONS['figure']} **Figure & canvas**",
-        slug="figure",
-        name="Figure & canvas",
-    )
 
     # --- Fixations --------------------------------------------------------
     # The Fixations toggle reaches the static figure AND Compare (the
@@ -7686,7 +7561,7 @@ def render_plot_controls(
         elif not numeric_color:
             bar_idle = (
                 f"{ICONS['warning']} No color bar for **Text line** or a categorical "
-                f"color. Its legend is in {ICONS['figure']} **Figure & canvas** ▾ "
+                f"color. Its legend is in {ICONS['figure']} **Figure** "
                 f"→ **Legends** → **{LEGEND_KIND_LABELS['colors']}**."
             )
         else:
@@ -7894,7 +7769,8 @@ def render_plot_controls(
         # The index window removes fixations just like the
         # short/long/OOB rules, so it belongs here rather than under marker style.
         # The max follows the selected trial.
-        _render_fix_range_slider(fix_range_fixations)
+        windowed = _render_fix_range_slider(fix_range_fixations)
+        _mark_active_plot_filters(filter_status, windowed)
         _render_fixation_cleaning(disabled=_flag_dis, reason=_flag_reason)
 
     # --- Saccades ---------------------------------------------------------
@@ -8183,7 +8059,7 @@ def render_plot_controls(
     # captioned rows under it, greyed while it is off rather than
     # hidden; the span highlight is a *Highlight* row of its own. Word boxes
     # have their own section, and the hover fields are in
-    # 📐 Figure & canvas → Hover.
+    # 📐 Figure → Hover fields.
     #
     # The layer switches and their settings stay live while the
     # section's master switch is off, so a user can set up what they want shown
@@ -8219,7 +8095,7 @@ def render_plot_controls(
         )
         # The typography that draws this text lives beside the layer
         # that draws it. Reserved here and filled by the single
-        # `canvas_renderer` call in the 📐 Figure & canvas block below — one
+        # `canvas_renderer` call in the 📐 Figure block below — one
         # call draws both halves, since a widget drawn twice is a duplicate-key
         # error. Keyed so `styles.py` spaces its rows like the popover's own.
         stim_text_slot = st.container(key="rail_rows_stim_text")
@@ -8808,36 +8684,14 @@ def render_plot_controls(
                 help=_FILL_OPACITY_HELP,
             )
 
-    # --- Figure & canvas --------------------------------------------------
-    # One popover, named groups inside it and nothing nested —
-    #
-    #   🖥️ Screen & framing   Crop to data (the monitor's size is the Data
-    #                         page's Recording setup)
-    #   📊 Axes & grid        the coordinate grid and the axis fields (each
-    #                         colour bar is under its own layer)
-    #   🏷️ Title & labels     the Illustration disclosure + the figure title
-    #   💬 Hover              the word and fixation tooltip fields
-    #   Legends               where each legend sits
-    #
-    # 🔤 Text & fonts is **not** here: it describes the stimulus text, so it
-    # sits in 📄 Stimulus → Text, beside the layer it draws. Nor are the
-    # physical-geometry fields (monitor width in mm, viewing distance, DPI) —
-    # they are experiment facts the 🗂️ Data page's Recording setup owns, and a
-    # second set here could disagree with it.
-    #
-    # The containers are created up front so each block keeps its place in
-    # this file while landing in the right group.
-    screen_group = _rail_subsection(
-        figure_grp, f"{ICONS['screen']} Screen & framing", first=True
+    # The chart fields sit directly on Axes. Each group of figure properties
+    # opens a full-width menu over the plot, including on a narrow screen.
+    screen_group = _plot_menu(
+        figure, "Screen & framing", icon=ICONS["screen"], slug="screen"
     )
-    axes = _rail_subsection(figure_grp, f"{ICONS['axes']} Axes & grid")
-    labels = _rail_subsection(figure_grp, f"{ICONS['labels']} Title & labels")
-    hover = _rail_subsection(figure_grp, f"{ICONS['hover']} Hover")
-    legends = _rail_subsection(figure_grp, f"{ICONS['legend']} Legends")
-    # Each block's rows take the popover layout (`_popover_rows`) — the
-    # framing switch and the grid are `label | ☑ Show | …` rows carrying what
-    # they govern (greyed while off), the monitor size and the two axis fields
-    # one row each.
+    labels = _plot_menu(figure, "Title & labels", icon=ICONS["labels"], slug="labels")
+    hover = _plot_menu(figure, "Hover fields", icon=ICONS["hover"], slug="hover")
+    legends = _plot_menu(figure, "Legends", icon=ICONS["legend"], slug="legends")
     # The static figure takes any X / Y field, but only screen x / y is a
     # screen. On other axes it draws a plain chart of the fixations, so the
     # framing and the grid have nothing to act on: they grey, saying why.
@@ -8849,7 +8703,7 @@ def render_plot_controls(
         else ""
     )
 
-    with screen_group, _popover_rows("fig_screen"):
+    with screen_group, _popover_rows("screen"):
         # The box reads "crop", the wire key "fit to monitor" — its inverse. The
         # box is a shadow re-seeded from the key every run, so links, configs and
         # presets that set the key move it, and only a click writes the key.
@@ -8949,7 +8803,83 @@ def render_plot_controls(
                 text_disabled=not show_labels,
             )
 
-    with axes, _popover_rows("fig_axes"):
+    with axes:
+        # The animation and the comparison figures always plot spatial x/y —
+        # only `make_scanpath_figure` takes `x_field`/`y_field`. The
+        # greyed fields' hover says so, and what turns them back on.
+        axis_disabled, _ = _mode_gate(animating, comparing, **_static_only)
+        axes_note = (
+            "Comparisons use screen coordinates."
+            if comparing
+            else "Animation uses screen coordinates."
+        )
+        axis_disabled, axis_help = _layer_gate(
+            axis_disabled,
+            f"{axes_note} Your axis choices apply to the static plot of one reading."
+            if axis_disabled
+            else "Choose screen X and Y for the spatial scanpath, or select two numeric fields to chart the reading.",
+        )
+        presets = {
+            "Screen X and Y": ("x", "y"),
+            "Horizontal position by fixation index": ("order_in_trial", "x"),
+            "Vertical position by fixation index": ("order_in_trial", "y"),
+            "Elapsed time by fixation index": ("order_in_trial", charts.ELAPSED),
+            "Duration by fixation index": ("order_in_trial", "duration_ms"),
+            "Horizontal position over time": (charts.ELAPSED, "x"),
+            "Vertical position over time": (charts.ELAPSED, "y"),
+        }
+
+        available = {
+            name: pair
+            for name, pair in presets.items()
+            if all(field in numeric_fields for field in pair)
+        }
+        current = next(
+            (name for name, pair in available.items() if pair == fields), None
+        )
+        picker_key = "_plot_axis_preset"
+
+        def apply_axis_preset() -> None:
+            choice = st.session_state[picker_key]
+            if choice in available:
+                (
+                    st.session_state["global_x_field"],
+                    st.session_state["global_y_field"],
+                ) = available[choice]
+
+        # The field pair is the saved setting. Reflect manual edits, links and
+        # Undo in the shortcut picker on the same run.
+        st.session_state[picker_key] = current
+        if axis_disabled:
+            st.caption(axis_help)
+        st.selectbox(
+            "Axis preset",
+            list(available),
+            key=picker_key,
+            placeholder="Custom axes",
+            on_change=apply_axis_preset,
+            disabled=axis_disabled,
+            help=axis_help if axis_disabled else None,
+        )
+        axis_labels = _rail_names().option_labels(numeric_fields, roles=True)
+        axis_labels[charts.ELAPSED] = charts.ELAPSED_LABEL
+        for axis in ("x", "y"):
+            st.selectbox(
+                f"{axis.upper()} axis field",
+                options=numeric_fields,
+                format_func=axis_labels.__getitem__,
+                key=f"global_{axis}_field",
+                persist_state="session",
+                disabled=axis_disabled,
+                help=axis_help if axis_disabled else None,
+            )
+        if chart_axes and fields == ("order_in_trial", "order_in_trial"):
+            st.caption(
+                "Both axes show fixation order. Choose Duration or Word ID on one axis to see how it changes over the reading."
+            )
+
+    grid = _plot_menu(axes, "Coordinate grid", icon=ICONS["axes"], slug="grid")
+    with grid, _popover_rows("grid"):
         show_coordinate_grid, grid_rest = _check_row(
             "Grid",
             key="global_show_coordinate_grid",
@@ -9004,95 +8934,6 @@ def render_plot_controls(
             ),
         )
 
-        # The animation and the comparison figures always plot spatial x/y —
-        # only `make_scanpath_figure` takes `x_field`/`y_field`. The
-        # greyed fields' hover says so, and what turns them back on.
-        axis_disabled, _ = _mode_gate(animating, comparing, **_static_only)
-        modes = " and ".join(
-            name
-            for name, on in (("Animation", animating), ("Compare readings", comparing))
-            if on
-        )
-        axis_disabled, axis_help = _layer_gate(
-            axis_disabled,
-            f"{ICONS['warning']} {modes} uses screen coordinates. Choose a static view "
-            "of one reading to edit the axes."
-            if axis_disabled
-            else "Choose screen X and Y for the spatial scanpath, or select two numeric fields to chart the reading.",
-        )
-        presets = {
-            "Screen X and Y": ("x", "y"),
-            "Horizontal position by fixation index": ("order_in_trial", "x"),
-            "Vertical position by fixation index": ("order_in_trial", "y"),
-            "Elapsed time by fixation index": ("order_in_trial", charts.ELAPSED),
-            "Duration by fixation index": ("order_in_trial", "duration_ms"),
-            "Horizontal position over time": (charts.ELAPSED, "x"),
-            "Vertical position over time": (charts.ELAPSED, "y"),
-        }
-
-        # This picker applies a command. Remount it after a selection so a
-        # closed popover cannot send the last command again on later reruns.
-        generation = st.session_state.get("_axis_preset_generation", 0)
-        picker_key = f"_axis_chart_preset_{generation}"
-
-        def apply_axis_preset():
-            choice = st.session_state.get(picker_key)
-            if choice in presets:
-                st.session_state["_axis_preset_generation"] = generation + 1
-                x, y = presets[choice]
-                write_through("global_x_field", x)
-                write_through("global_y_field", y)
-
-        st.selectbox(
-            "Axis preset",
-            [
-                name
-                for name, pair in presets.items()
-                if all(f in numeric_fields for f in pair)
-            ],
-            index=None,
-            placeholder="Choose a chart",
-            key=picker_key,
-            on_change=apply_axis_preset,
-            disabled=axis_disabled,
-        )
-        label_w = _label_w()
-        rest = 1.0 - label_w
-        axes_cols = st.columns(
-            [label_w, rest * 0.1, rest * 0.4, rest * 0.1, rest * 0.4],
-            gap=_LABEL_GAP,
-            vertical_alignment="center",
-        )
-        _row_label(axes_cols[0], "Axes", axis_help)
-        _sub_caption(axes_cols[1], "X", axis_help if axis_disabled else None)
-        axis_labels = _rail_names().option_labels(numeric_fields, roles=True)
-        axis_labels[charts.ELAPSED] = charts.ELAPSED_LABEL
-        axes_cols[2].selectbox(
-            "X axis field",
-            options=numeric_fields,
-            format_func=axis_labels.__getitem__,
-            key="global_x_field",
-            persist_state="session",
-            disabled=axis_disabled,
-            help=axis_help,
-            label_visibility="collapsed",
-        )
-        _sub_caption(axes_cols[3], "Y", axis_help if axis_disabled else None)
-        axes_cols[4].selectbox(
-            "Y axis field",
-            options=numeric_fields,
-            format_func=axis_labels.__getitem__,
-            key="global_y_field",
-            persist_state="session",
-            disabled=axis_disabled,
-            help=axis_help,
-            label_visibility="collapsed",
-        )
-        if chart_axes and fields == ("order_in_trial", "order_in_trial"):
-            st.caption(
-                "Both axes show fixation order. Choose Duration or Word ID on one axis to see how it changes over the reading."
-            )
-
     # Title/caption on the figure — set here, so it's visible live rather than
     # a setting a user has to remember to go find under Export. This is the
     # single source of truth: the Export panel's bulk section reads these two
@@ -9107,7 +8948,7 @@ def render_plot_controls(
         if st.session_state.get(show_key) and not st.session_state.get(pattern_key):
             st.session_state[pattern_key] = default
 
-    with labels, _popover_rows("fig_labels"):
+    with labels, _popover_rows("labels"):
         label_help = (
             "Auto: label the figure when a setting changes its geometry or data. "
             "Show: always label it. Hide: never."
@@ -9271,7 +9112,7 @@ def render_plot_controls(
     # render paths (the comparison builders take them too), so neither carries
     # a `_mode_gate`; and neither greys with its layer, since a hidden layer's
     # tooltip choice is still the one it shows when switched back on.
-    with hover, _popover_rows("fig_hover"):
+    with hover, _popover_rows("hover"):
         word_names = cn.active(st.session_state, "words")
         word_hover = word_names.sort_options(hover_field_options(words, words=True))
         word_hover_labels = word_names.option_labels(word_hover, roles=True)
@@ -9318,7 +9159,7 @@ def render_plot_controls(
     # carry). A row
     # appears only while the figure can draw that legend, so the table lists
     # what is on the plot rather than four rows that may do nothing.
-    with legends, _popover_rows("fig_legends"):
+    with legends, _popover_rows("legends"):
         drawn = _legends_drawn(
             show_fix=show_fix,
             show_saccades=show_saccades,

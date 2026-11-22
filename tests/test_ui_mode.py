@@ -310,9 +310,10 @@ def test_more_lists_cover_the_spec():
     for word in (
         "animation",
         "compare",
-        "layer style",
+        "layers",
         "filters & highlights",
-        "figure & canvas",
+        "axes",
+        "figure",
         "saved designs",
     ):
         assert word in titles("rail")
@@ -547,18 +548,7 @@ def test_rail_wrappers_are_keyed_for_the_mode_css():
     for name in ("rail_animation", "rail_reset"):
         assert re.search(rf'advanced_only\(\s*\w+,\s*"{name}"\s*\)', rail), name
     source = inspect.getsource(controls.render_plot_controls)
-    for name in (
-        "rail_layers_label",
-        "rail_designs",
-        "rail_fix",
-        "rail_sac",
-        "rail_stim",
-        "rail_boxes",
-        "rail_heatmap",
-        "rail_rawgaze",
-        "rail_filter",
-        "rail_figure",
-    ):
+    for name in ("rail_designs", "plot_editor"):
         assert re.search(rf'advanced_only\(\s*\w+,\s*"{name}"\s*\)', source), name
     assert 'simple_only(viz, "rail_more")' in source
 
@@ -770,9 +760,8 @@ def test_full_view_tiles_keep_the_selected_palette():
 
 def _subtab_labels(at: AppTest) -> list[str]:
     """The labels of the per-trial subtab bar (the one holding ``Share``)."""
-    labels = [t.label for t in at.tabs]
-    assert tabs.SUBTAB_SHARE in labels
-    return labels
+    bar = next(bar for bar in at.get("tab_container") if bar.key == "single_subtab")
+    return [tab.label for tab in bar.tabs]
 
 
 def test_subtab_labels_for_simple():

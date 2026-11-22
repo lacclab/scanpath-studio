@@ -177,14 +177,13 @@ def capture(page: Page) -> None:
 #: menu captured open with its own layer on, so nothing in it is greyed out.
 #: ``(file, layer switch to turn on or None, menu container key)``.
 CONTROL_MENUS = (
-    ("fixations", "global_show_fix", "split_mode_rail_fix_popover"),
-    ("saccades", "global_show_saccades", "split_mode_rail_sac_popover"),
-    ("stimulus", "global_show_stimulus", "split_mode_rail_stim_popover"),
-    ("word-boxes", "global_show_words", "split_mode_rail_boxes_popover"),
-    ("heatmap", "global_show_heatmap", "split_mode_rail_heatmap_popover"),
-    ("raw-gaze", "global_show_raw_gaze", "split_mode_rail_rawgaze_popover"),
-    ("filters", None, "split_mode_rail_filter_popover"),
-    ("figure-canvas", None, "split_mode_rail_figure_popover"),
+    ("fixations", "global_show_fix", "plot_menu_fix"),
+    ("saccades", "global_show_saccades", "plot_menu_sac"),
+    ("stimulus", "global_show_stimulus", "plot_menu_stim"),
+    ("word-boxes", "global_show_words", "plot_menu_boxes"),
+    ("heatmap", "global_show_heatmap", "plot_menu_heatmap"),
+    ("raw-gaze", "global_show_raw_gaze", "plot_menu_rawgaze"),
+    ("filters", None, "plot_menu_filter"),
 )
 CONTROLS_OUT = OUT / "controls"
 
@@ -343,13 +342,18 @@ def capture_controls(page: Page, only: set[str] | None = None) -> None:
             page, "plot-controls", page.locator(".st-key-scanpath_rail").first
         )
 
+    editor = page.locator(".st-key-plot_editor_tabs")
+    for name, tab in (("plot-axes", "Axes"), ("figure-canvas", "Figure")):
+        if wanted(name):
+            editor.get_by_role("tab", name=tab, exact=True).click()
+            _shot_controls(page, name, editor)
+    editor.get_by_role("tab", name="Layers", exact=True).click()
+
     if wanted("animate"):
         print("animate menu")
         page.get_by_role("button", name="Animation", exact=True).click()
         ui.settle(page)
-        _shot_controls(
-            page, "animate", _open_menu_body(page, "split_mode_rail_animation_popover")
-        )
+        _shot_controls(page, "animate", _open_menu_body(page, "plot_menu_animation"))
         page.keyboard.press("Escape")
         page.get_by_role("button", name="Scanpath", exact=True).click()
         ui.settle(page)

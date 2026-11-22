@@ -433,6 +433,39 @@ class TestAnnotationsPerDataset:
     STAR = {"star": True, "tags": ["Review"], "note": "A's note."}
     NOTE = {"star": False, "tags": [], "note": "B's note."}
 
+    def test_stale_tab_keeps_its_note_and_cannot_remove_a_newer_dataset(
+        self, tmp_path, monkeypatch
+    ):
+        import scanpath_studio.annotations as ann
+
+        monkeypatch.setenv(persistence.STATE_DIR_ENV_VAR, str(tmp_path))
+        monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "1")
+        url = "http://localhost"
+        assert save_state({"_datasets": {"A": _dataset()}}, tmp_path)
+        newer, older = {}, {}
+        for tab in (newer, older):
+            assert restore_state(tab, tmp_path)
+            ann.activate_dataset(tab, "A")
+
+        newer["_datasets"]["B"] = _dataset()
+        assert save_local_state(newer, url)
+        saved = (tmp_path / "manifest.json").read_bytes()
+        for note in ("Check this fixation", "Keep this edit too"):
+            older[ANNOTATIONS_STATE_KEY][("p1", "t1")] = {**self.NOTE, "note": note}
+            assert not save_local_state(older, url)
+            assert (tmp_path / "manifest.json").read_bytes() == saved
+            assert ann.cache_payload(older)["datasets"]["A"][0]["note"] == note
+            assert "this tab" in older[persistence.SAVE_CONFLICT_KEY]
+
+        fresh = {}
+        assert restore_state(fresh, tmp_path)
+        assert set(fresh["_datasets"]) == {"A", "B"}
+        pd.testing.assert_frame_equal(
+            fresh["_datasets"]["B"]["words"], _dataset()["words"]
+        )
+        ann.activate_dataset(fresh, "A")
+        assert not fresh[ANNOTATIONS_STATE_KEY]
+
     def test_two_local_sessions_merge_independent_edits_and_detect_a_conflict(
         self, tmp_path
     ):
@@ -563,7 +596,9 @@ def test_setting_change_reuses_persisted_dataset_files(tmp_path):
     assert frame_path.stat().st_mtime_ns == before
 
 
-def test_concurrent_sessions_leave_a_valid_cache(tmp_path):
+def test_concurrent_first_saves_only_publish_one_sessions_work(tmp_path, monkeypatch):
+    monkeypatch.setenv(persistence.STATE_DIR_ENV_VAR, str(tmp_path))
+    monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "1")
     sessions = [
         {
             "_datasets": {f"Corpus {index}": _dataset()},
@@ -573,11 +608,30 @@ def test_concurrent_sessions_leave_a_valid_cache(tmp_path):
     ]
 
     with ThreadPoolExecutor(max_workers=4) as pool:
-        assert all(pool.map(lambda session: save_state(session, tmp_path), sessions))
+        saved = list(
+            pool.map(lambda tab: save_local_state(tab, "http://localhost"), sessions)
+        )
 
+    assert saved.count(True) == 1
     restored = {}
     assert restore_state(restored, tmp_path)
-    assert restored["_datasets"]
+    assert set(restored["_datasets"]) == {f"Corpus {saved.index(True)}"}
+    assert all(
+        persistence.SAVE_CONFLICT_KEY in tab
+        for tab, won in zip(sessions, saved, strict=True)
+        if not won
+    )
+
+
+def test_an_open_tab_cannot_recreate_work_cleared_from_another_session(tmp_path):
+    tab = {"_datasets": {"A": _dataset()}}
+    assert save_state(tab, tmp_path)
+    assert clear_local_state(root=tmp_path)
+    tab["global_show_heatmap"] = True
+    with pytest.raises(persistence.RecoveryConflictError):
+        save_state(tab, tmp_path)
+    assert not (tmp_path / "manifest.json").exists()
+    assert "A" in tab["_datasets"]
 
 
 def test_local_save_failure_does_not_escape_into_the_app(tmp_path, monkeypatch):
@@ -1585,6 +1639,28 @@ class TestMetadataTablesInTheRecoveryCache:
         md.activate_dataset(restored, "study")
         assert md.SESSION_KEY in restored
 
+    def test_an_older_tab_cannot_discard_files_used_by_a_newer_save(self, tmp_path):
+        writer = {"_datasets": {"study": _dataset()}, **self._attached()}
+        assert save_state(writer, tmp_path)
+        paths = [_frame_files(tmp_path, "study")["words"], _sidecar(tmp_path)]
+        contents = {path: path.read_bytes() for path in paths}
+        for path in paths:
+            path.unlink()
+        older = {}
+        assert restore_state(older, tmp_path)
+        assert "study" in persistence.failed_datasets(older)
+        assert persistence.failed_metadata(older)
+
+        for path, data in contents.items():
+            path.write_bytes(data)
+        writer["global_show_heatmap"] = True
+        assert save_state(writer, tmp_path)
+        assert not persistence.discard_failed_dataset(older, "study", tmp_path)
+        assert not persistence.discard_failed_metadata(older, tmp_path)
+        assert {path: path.read_bytes() for path in paths} == contents
+        assert "study" in persistence.failed_datasets(older)
+        assert persistence.failed_metadata(older)
+
     def test_removing_the_held_back_file_touches_nothing_else(self, tmp_path):
         save_state({"_datasets": {"study": _dataset()}, **self._attached()}, tmp_path)
         sidecar = _sidecar(tmp_path)
@@ -1975,6 +2051,12 @@ class TestASaveIsAllOrNothing:
             ),
         }
 
+    def _save_replacement(self, root) -> bool:
+        session = {}
+        assert restore_state(session, root)
+        session.update(self._session(**self.NEW))
+        return save_state(session, root)
+
     @staticmethod
     def _expected(state: dict) -> dict:
         trial = state["trial"]
@@ -2051,7 +2133,7 @@ class TestASaveIsAllOrNothing:
 
     def test_a_clean_save_restores_the_new_state(self, tmp_path):
         save_state(self._session(**self.OLD), tmp_path)
-        assert save_state(self._session(**self.NEW), tmp_path)
+        assert self._save_replacement(tmp_path)
         assert self._restored(tmp_path) == self._expected(self.NEW)
 
     @pytest.mark.parametrize("mode", ["fails", "killed"])
@@ -2062,7 +2144,7 @@ class TestASaveIsAllOrNothing:
         save_state(self._session(**self.OLD), counted)
         with monkeypatch.context() as patch:
             writes, _ = self._writes(patch)
-            assert save_state(self._session(**self.NEW), counted)
+            assert self._save_replacement(counted)
         # Both datasets' three frames, the metadata tables, then the manifest.
         assert len(writes) == 8 and writes[-1] == "manifest.json"
 
@@ -2073,7 +2155,7 @@ class TestASaveIsAllOrNothing:
             with monkeypatch.context() as patch:
                 _, injected = self._writes(patch, fail_at, mode)
                 with pytest.raises(injected):
-                    save_state(self._session(**self.NEW), root)
+                    self._save_replacement(root)
             committed = mode == "killed" and fail_at == len(writes)
             expected = self._expected(self.NEW if committed else self.OLD)
             assert self._restored(root) == expected, (mode, fail_at, writes)
@@ -2098,7 +2180,7 @@ class TestASaveIsAllOrNothing:
         with monkeypatch.context() as patch:
             writes, injected = self._writes(patch, fail_at=4, mode="killed")
             with pytest.raises(injected):
-                save_state(self._session(**self.NEW), tmp_path)
+                self._save_replacement(tmp_path)
         left = {f"datasets/{name}" for name in writes}
 
         young: dict = {}
@@ -2117,24 +2199,19 @@ class TestASaveIsAllOrNothing:
         assert self._restored(tmp_path)["frames"] == self._expected(self.OLD)["frames"]
 
     def test_two_sessions_sharing_the_cache_leave_each_others_files(self, tmp_path):
-        """Two tabs on one cache: only a session's first save sweeps unnamed
-        files, so a dataset one tab added is not removed by the other tab's
-        every save, and re-encoded by its own next one."""
-        save_state({"_datasets": {"Corpus": _dataset()}}, tmp_path)
-        tab_a: dict = {}
-        tab_b: dict = {}
-        for tab in (tab_a, tab_b):
-            restore_state(tab, tmp_path)
-            tab["global_show_heatmap"] = True
-            assert save_state(tab, tmp_path)  # each tab's one sweep
-
-        tab_a["_datasets"] = {**tab_a["_datasets"], "Added": _dataset()}
+        """A refused save leaves even aged files available to the tab that added them."""
+        tab_a = {"_datasets": {"Corpus": _dataset()}}
+        assert save_state(tab_a, tmp_path)
+        tab_b = {}
+        assert restore_state(tab_b, tmp_path)
+        tab_a["_datasets"]["Added"] = _dataset()
         assert save_state(tab_a, tmp_path)
         added = _frame_files(tmp_path, "Added")
         self._age(tmp_path, [path.relative_to(tmp_path) for path in added.values()])
 
-        tab_b["global_show_heatmap"] = False  # its manifest has no "Added"
-        assert save_state(tab_b, tmp_path)
+        tab_b["global_show_heatmap"] = False
+        with pytest.raises(persistence.RecoveryConflictError):
+            save_state(tab_b, tmp_path)
         assert all(path.is_file() for path in added.values())
         tab_a["global_show_heatmap"] = False
         assert save_state(tab_a, tmp_path)
@@ -2232,7 +2309,7 @@ class TestASaveIsAllOrNothing:
         with monkeypatch.context() as patch:
             _, injected = self._writes(patch, fail_at=7, mode="killed")
             with pytest.raises(injected):
-                save_state(self._session(**self.NEW), tmp_path)
+                self._save_replacement(tmp_path)
         assert len(self._on_disk(tmp_path)) == 14  # both saves' frames and tables
         forget_state(tmp_path)
         assert not (tmp_path / "datasets").exists()

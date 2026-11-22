@@ -284,6 +284,7 @@ from scanpath_studio.metadata_editor import (
 from scanpath_studio.multipart import SCREEN_ID, extract_part, part_catalog
 from scanpath_studio.persistence import (
     PERSIST_ENV_VAR,
+    SAVE_CONFLICT_KEY,
     cache_failure,
     cache_status,
     clear_local_state,
@@ -1539,11 +1540,16 @@ def _render_saved_here_section(app_url: str, host) -> None:
     # "Nothing leaves" holds only where browser and server are one machine; a
     # network server opted in with SCANPATH_STUDIO_PERSIST=1 got the files
     # over the network.
-    host.caption(
-        "Your added datasets, annotations, designs, and your view, trial and "
-        "plot settings are saved as you work and restored next time."
-        + (" Nothing leaves this computer." if server_bound_to_loopback() else "")
-    )
+    if st.session_state.get(SAVE_CONFLICT_KEY):
+        host.caption(
+            "This list shows the saved copy. Your unsaved edits are still in this tab."
+        )
+    else:
+        host.caption(
+            "Your added datasets, annotations, designs, and your view, trial and "
+            "plot settings are saved as you work and restored next time."
+            + (" Nothing leaves this computer." if server_bound_to_loopback() else "")
+        )
     if restored_from_cache(st.session_state):
         host.success("Recovered when the app opened.", icon=ICONS["recovery"])
     readable = status["exists"] and status["readable"]
@@ -1577,7 +1583,7 @@ def _render_saved_here_section(app_url: str, host) -> None:
             icon=ICONS["warning"],
         )
     elif not status["exists"]:
-        host.caption("Nothing saved yet. Your first change will be saved here.")
+        host.caption("Nothing is saved in this folder.")
     render_cache_recovery_notice(host, app_url, key="saved_here_recovery")
     host.markdown(
         f"**Session folder:** `{status['directory']}`"
@@ -9681,6 +9687,8 @@ def _run_app() -> None:
         other views, not under ✏️ Edit dataset, and not while the add-dataset
         wizard owns the page.
         """
+        if conflict := st.session_state.get(SAVE_CONFLICT_KEY):
+            page_notices.warning(conflict, icon=ICONS["warning"])
         if data_view and not editing and not wizard_owns_page:
             _render_download_folder_section(download_folder_slot)
             _render_saved_here_section(app_url, saved_here_slot)
@@ -11196,10 +11204,6 @@ def _run_app() -> None:
     # Persist after all view/menu widgets have written their current values.
     # The helper fingerprints the session and is a no-op on unchanged reruns.
     save_local_state(st.session_state, app_url)
-    from .persistence import ANNOTATION_CONFLICT_KEY
-
-    if conflict := st.session_state.get(ANNOTATION_CONFLICT_KEY):
-        st.warning(conflict, icon=ICONS["warning"])
     # …then draw *Saved on this computer*, so it reports the write that just
     # happened rather than the previous run's.
     _finish_page()

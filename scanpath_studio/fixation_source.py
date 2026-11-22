@@ -44,10 +44,9 @@ def record_rows(target, source, keep, *, remap):
         return
     spans = source.attrs.get(FILE_SPANS, ())
     if spans and sum(count for _, count in spans) == len(source):
-        filenames = pd.Categorical(
-            np.repeat([name for name, _ in spans], [n for _, n in spans])
-        )
-        target[SOURCE_FILE] = filenames[keep]
+        # Expand the categorical codes, so each filename is stored only once.
+        names = pd.Categorical([name for name, _ in spans])
+        target[SOURCE_FILE] = names.repeat([n for _, n in spans])[keep]
         rows = np.concatenate([np.arange(1, n + 1) for _, n in spans])
         target[SOURCE_ROW] = rows[keep]
     else:

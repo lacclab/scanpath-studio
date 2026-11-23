@@ -7,6 +7,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
+from dataclasses import dataclass
 from functools import partial
 
 import numpy as np
@@ -244,27 +245,28 @@ def _popover_rows(slug: str):
     ``rail_rows_<slug>``, that `styles.py` spaces the rows of apart — the same
     for every popover.
     """
-    # A closed popover needs its programmatic values held against stale
-    # browser echoes. Once it opens, the widgets it actually renders have
-    # taken the new values: release just those so the first edit can undo one.
+    # Remember which menu rendered each pending value. Its open event and
+    # the user's first edit can reach the server together on the next run.
     pending = st.session_state.get(_PENDING_WRITES_KEY)
-    ctx = None
-    if pending:
+    ctx = get_script_run_ctx() if pending else None
+    drawn = ctx.shared.widget_user_keys_this_run if ctx else None
+    waiting = [key for key in pending if key not in drawn] if drawn is not None else []
+    with _rail_label_width(_POPOVER_LABEL_W), st.container(key=f"rail_rows_{slug}"):
+        yield
+    if waiting:
         section = slug.split("_", 1)[0]
         menu_key = (
             "split_mode_compare_popover"
             if section == "compare"
             else f"plot_menu_{section}"
         )
-        if st.session_state.get(menu_key):
-            ctx = get_script_run_ctx()
-    drawn = ctx.shared.widget_user_keys_this_run if ctx else None
-    waiting = [key for key in pending if key not in drawn] if drawn is not None else []
-    with _rail_label_width(_POPOVER_LABEL_W), st.container(key=f"rail_rows_{slug}"):
-        yield
-    for key in waiting:
-        if key in drawn:
-            pending.pop(key, None)
+        is_open = st.session_state.get(menu_key)
+        for key in waiting:
+            if key in drawn and key in pending:
+                if is_open:
+                    pending.pop(key)
+                else:
+                    pending[key].popover_key = menu_key
 
 
 def plot_popover_on_change() -> str:
@@ -2557,10 +2559,16 @@ def apply_palette(name: str) -> None:
         ss[_QUICK_VIEW_APPLIED_STATE] = {**baseline, **colors, "global_palette": name}
 
 
-#: Programmatic widget writes the browser may not have taken yet:
-#: ``{key: [value, stale_echo, fresh]}``. ``stale_echo`` is what the browser
-#: sent for the key with the run that wrote it, and ``fresh`` says that run's
-#: script has not started yet. See `write_through`.
+@dataclass
+class _PendingWidgetWrite:
+    """A programmatic value held while its unmounted widget echoes an older value."""
+
+    value: object
+    stale_echo: object
+    fresh: bool  # The script run that made the write hasn't started yet.
+    popover_key: str | None = None
+
+
 _PENDING_WRITES_KEY = "_pending_widget_writes"
 #: ``stale_echo`` when the key held no value as it was written — its widget
 #: was not drawn on the last run, or the same callback cleared the key first.
@@ -2592,32 +2600,29 @@ def write_through(
     holds for one run and the next rerun puts the remembered value back (a
     palette applied after Fixations ▾ has been opened would not stick).
 
-    So the write is also recorded here, with the echo to expect: the value the
-    browser sent with the run that writes, which a callback finds in the key
-    before it writes (``shown`` passes it instead, for a caller that has
-    already overwritten the key). `reassert_pending_writes` repeats the write
-    at the top of each run while the browser keeps sending that value back.
-    It lets go as soon as the browser sends anything else: the written value
-    (the widget remounted and took it) or another pick of the user's own, made
-    once the widget took the write. A pick of exactly the old value reads as
-    the echo, since nothing the browser sends tells the two apart — which is
-    why a widget that is always on screen is written plainly instead.
+    Record the value the browser last showed alongside the write. A callback
+    can read it from the key, or pass ``shown`` if it already changed the key.
+    `reassert_pending_writes` holds the write while the browser keeps echoing
+    that value from a closed menu. Opening a tracked menu mounts its widgets
+    with their restored values, so a click that returns to the old value is
+    accepted immediately. A widget that is always mounted takes a plain write.
+
     A reset can resolve dataset defaults only in the script, before the
     widgets render. In that case the next run is already the browser's reply.
     """
     ss = st.session_state
     pending = dict(ss.get(_PENDING_WRITES_KEY) or {})
     earlier = pending.get(key)
-    if earlier is not None and earlier[2]:
+    if earlier is not None and earlier.fresh:
         # Written already in this run's callbacks: the browser's value is the
         # one that write recorded, not the value it put in the key.
-        stale = earlier[1]
+        stale = earlier.stale_echo
     elif shown is not _SHOWN_IN_STATE:
         stale = deepcopy(shown)
     else:
         stale = deepcopy(ss[key]) if key in ss else _ECHO_UNKNOWN
     ss[key] = value
-    pending[key] = [deepcopy(value), stale, in_callback]
+    pending[key] = _PendingWidgetWrite(deepcopy(value), stale, in_callback)
     ss[_PENDING_WRITES_KEY] = pending
 
 
@@ -2625,30 +2630,36 @@ def reassert_pending_writes() -> None:
     """Re-apply `write_through` writes the browser has not taken yet.
 
     Runs at the top of every script run, before any widget is built. While the
-    browser keeps sending a key the value it sent before the write, the write
-    is repeated; the written value, or any other, ends it. A write that could
-    not record that value (`_ECHO_UNKNOWN`) takes the first one sent after it.
+    browser keeps sending a closed widget's value from before the write, the
+    write is repeated. Opening the menu or sending another value ends the hold.
+    A write with an unknown echo (`_ECHO_UNKNOWN`) takes the first value sent
+    after it.
     """
     ss = st.session_state
     pending = ss.get(_PENDING_WRITES_KEY)
     if not pending:
         return
     kept = {}
-    for key, (value, stale, fresh) in pending.items():
-        if fresh:
+    for key, write in pending.items():
+        if write.fresh:
             # The run the callback wrote in: the write itself is what reads
             # back, and the browser has not answered yet.
-            kept[key] = [value, stale, False]
+            write.fresh = False
+            kept[key] = write
+            continue
+        if write.popover_key and ss.get(write.popover_key):
+            # Opening mounts the value we sent. A click on that widget can
+            # arrive with the open event, even when it picks the old value.
             continue
         current = _write_match_key(ss.get(key))
-        if current == _write_match_key(value):
+        if current == _write_match_key(write.value):
             continue  # the browser has it
-        if stale == _ECHO_UNKNOWN:
-            stale = deepcopy(ss.get(key))
-        elif current != _write_match_key(stale):
+        if write.stale_echo == _ECHO_UNKNOWN:
+            write.stale_echo = deepcopy(ss.get(key))
+        elif current != _write_match_key(write.stale_echo):
             continue  # the user picked something else
-        ss[key] = deepcopy(value)
-        kept[key] = [value, stale, False]
+        ss[key] = deepcopy(write.value)
+        kept[key] = write
     if kept:
         ss[_PENDING_WRITES_KEY] = kept
     else:

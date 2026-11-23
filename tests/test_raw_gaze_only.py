@@ -198,7 +198,7 @@ def test_the_note_above_the_plot_says_nothing_is_detected():
     )
     assert "Raw gaze only" in note
     assert "does not detect fixations" in note
-    assert "**Animate** draws fixations" in note
+    assert "**Animation** draws fixations" in note
     # Off → it says how to see them.
     assert "Turn on" in tabs._no_fixations_note(
         trial_has_fixations=False,
@@ -698,11 +698,11 @@ class TestScanpathView:
 
     def test_animate_on_draws_the_static_figure_with_a_reason(self, raw_gaze, figures):
         at = self._open(raw_gaze, demo_first=False)
-        at.toggle(key="single_animate").set_value(True).run()
+        at.button(key="viz_view_animation").click().run()
         assert not at.exception, at.exception
         assert [trace.name for trace in figures[-1].data] == ["Raw gaze"]
         captions = " ".join(c.value for c in at.caption)
-        assert "**Animate** draws fixations" in captions
+        assert "**Animation** draws fixations" in captions
 
     def test_every_samples_only_trial_is_pickable(self, two_trial_raw_gaze):
         at = self._open(two_trial_raw_gaze, demo_first=False)

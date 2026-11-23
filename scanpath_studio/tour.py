@@ -301,14 +301,14 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         steps=(
             TutorialStep(
                 "Choose layers and colors",
-                "Use the design presets, palette and layer controls.",
+                "Adjust the layers and their colors in Plot controls.",
                 ".st-key-tour_grp_viz_controls",
             ),
             TutorialStep(
                 "Choose a static figure or a replay",
-                "Turn on **Animate** to inspect fixation order and timing. "
+                "Choose **Animation** to inspect fixation order and timing. "
                 "Multipart trials replay one screen at a time.",
-                ".st-key-tour_grp_view_modes",
+                ".st-key-tour_grp_views",
             ),
             TutorialStep(
                 "Save the figure and its settings",
@@ -458,7 +458,7 @@ _STEPS = [
     ),
     (
         f"{ICONS['views']} Three views",
-        "**Scanpath** (tick *Animate* to replay) · **Corpus Analysis** · "
+        "**Scanpath** (choose *Animation* to see fixation timing) · **Corpus Analysis** · "
         "**Data Management** (set up and inspect the dataset). Bulk export is the "
         "**Export** subtab in Scanpath.",
     ),
@@ -709,19 +709,17 @@ _SPOTLIGHT_STEPS = [
     {
         "selector": ".st-key-tour_grp_view_modes",
         "dock": "left",
-        "title": f"{ICONS['animate']} Animate & compare",
-        "body": "**Animate** replays the trial fixation by fixation. "
-        "**Compare** adds a second scanpath, overlaid or side by side, from this "
-        "dataset or from another one via **Dataset B**. The "
-        f"**{ICONS['menu_arrow']}** beside each toggle opens its settings.",
+        "title": f"{ICONS['animate']} Animation settings & comparison",
+        "body": "Set playback speed and frame quality in **Animation settings**. "
+        "Turn on **Compare readings** to add a second scanpath. Use "
+        f"**{ICONS['menu_arrow']}** beside Compare readings to choose its dataset and layout.",
     },
     {
         "selector": ".st-key-tour_grp_viz_controls",
         "dock": "left",
         "title": f"{ICONS['plot_controls']} Plot controls",
         "body": "Turn each layer on or off and set its style: fixations, "
-        "saccades, stimulus, word boxes, heatmap, raw gaze. **Design presets** "
-        "switch between Scanpath, Heatmap, Illustration and Custom. "
+        "saccades, stimulus, word boxes, heatmap and raw gaze. "
         f"**{ICONS['designs']} My designs** saves your own.",
     },
     {
@@ -766,7 +764,7 @@ _SIMPLE_SPOTLIGHT_STEPS = [
         "above the plot to pause or restart the replay.",
     },
     {
-        "selector": ".st-key-tour_grp_simple_views",
+        "selector": ".st-key-tour_grp_views",
         "dock": "left",
         "title": f"{ICONS['plot_controls']} Choose a view",
         "body": "**Animation** replays the reading, **Scanpath** shows a "

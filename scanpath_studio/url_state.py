@@ -1294,8 +1294,7 @@ def _apply_url_preset() -> str | None:
                                    or in an independent import by name
         &cmp_source=corpus&cmp_corpus=potec
                                  → open B from an installed public corpus
-        &tab=animation           → pre-tick the Animate toggle (legacy; Animate
-                                   is a toggle, not a tab)
+        &tab=animation           → select Animation (legacy link)
         &heatmap_colorscale=Greens
         &hide_fixation_numbers=1
         &show_saccades=1
@@ -1447,8 +1446,7 @@ def _apply_url_preset() -> str | None:
             st.session_state.setdefault("global_show_title", both)
             st.session_state.setdefault("global_show_caption", both)
 
-    # Animate is a toggle on the Scanpath view, not a tab, so a legacy
-    # `?tab=animation` deep link just pre-ticks it.
+    # Older links use the tab name to select Animation.
     if (qp.get("tab") or "").lower() == "animation":
         st.session_state.setdefault("single_animate", True)
     if qp.get("screen") not in (None, ""):

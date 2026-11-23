@@ -189,7 +189,6 @@ from scanpath_studio.constants import (
 from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
-    SIMPLE_VIEW_LIT_KEY,
     SUMMARY_CHIP_FIELDS,
     TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
@@ -200,6 +199,7 @@ from scanpath_studio.controls import (
     _labeled,
     _numeric_slider,
     _popover_rows,
+    _rail_section,
     _sub_row,
     _text_field_and_frame,
     active_filter_items,
@@ -222,8 +222,10 @@ from scanpath_studio.controls import (
     render_plot_controls,
     render_trial_chip_picker,
     render_trial_filters,
+    render_view_tiles,
     render_viz_reset,
     selected_hover_text,
+    static_plot_view,
 )
 from scanpath_studio.data import (
     IDENTITY_SCHEMA_FIELDS,
@@ -375,6 +377,7 @@ from scanpath_studio.session_keys import (
     EXPORT_FIGURE_WIDTH_UNIT,
     PENDING_COMPARE_STATE_KEY,
     SETUP_PROVENANCE_STATE_KEY,
+    SINGLE_ANIMATE,
     SINGLE_COMPARE_LAYOUT,
     SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
@@ -4212,7 +4215,10 @@ def _no_fixations_note(
         return ""
     modes = [
         name
-        for name, on in (("Animate", animate_requested), ("Compare", compare_requested))
+        for name, on in (
+            ("Animation", animate_requested),
+            ("Compare", compare_requested),
+        )
         if on
     ]
     resolved = (
@@ -5248,7 +5254,7 @@ def _claim_animation_task(task_key: tuple) -> None:
 
 def _abandon_animation_task() -> None:
     """This Scanpath run builds no replay: stop the one an earlier run left
-    building — Animate switched off with its own switch mid-build, or
+    building — a static view selected mid-build, or
     a trial with nothing to animate — rather than let a replay of frames no
     longer wanted run on beside this run's figure. Show static plot cancels
     its build itself (`_cancel_animation`). A run on another view never gets
@@ -6603,290 +6609,203 @@ def render_single_trial_tab(
         # ordinary window size.
         with st.container(key="plot_controls_header"):
             st.markdown(f"## {ICONS['plot_controls']} Plot controls")
-        # Essentials mode sets Animate from its View tiles and has no Compare, so
-        # the two mode rows are Full-only; they still run in Essentials, which
-        # keeps `animate` and `compare_enabled` resolved exactly as here.
-        with ui_mode.advanced_only(rail, "rail_modes").container(
-            key="tour_grp_view_modes"
-        ):
-            # The mode and its settings are ONE control, laid out the way a
-            # Zoom-style split button is: the toggle switches the mode on and off,
-            # the ▾ beside it opens the settings. The horizontal container is what
-            # puts them on one row; it wraps rather than overflowing, so on a rail
-            # too narrow for both the ▾ simply drops to the line below.
-            # `gap=None` is load-bearing, not taste:
-            # the toggles measure ~132 px (Animate) and ~137 px (Compare) against a
-            # ~195 px rail, so any gap at all puts Compare over the edge once the ▾
-            # is beside it — and zero is what the fused look wants anyway. The
-            # `split_mode_*` key is the hook `styles.py` draws the shared outline
-            # and the divider on, and it is also what shrinks the ▾ from Streamlit's
-            # default ~55 px button to a glyph's worth, which is where the rest of
-            # the room comes from. The trigger renders on every run — it greys out
-            # rather than disappearing, because one that comes and goes reflows the
-            # row under the cursor, and because what a mode offers is part of
-            # deciding whether to turn it on (so the menu opens either way; the
-            # controls inside are what go disabled).
-            with st.container(
-                horizontal=True,
-                wrap=False,
-                vertical_alignment="center",
-                gap=None,
-                key="split_mode_animate",
-            ):
-                # Animate styled like a layer: a toggle + a ▾ popover for its config
-                # (playback speed) — matching Compare and the visualization layers
-                # below. Seeded, not `value=`-defaulted: `single_animate` is restored
-                # pre-widget by a deep link / saved config (see session_keys), and
-                # passing both makes Streamlit warn. `setdefault` suffices —
-                # this toggle renders on every run, so it never first mounts late the
-                # way a popover-bound widget can (that case needs
-                # `persist_state="session"`).
-                st.session_state.setdefault("single_animate", False)
-                # `wrap=True` turns off Streamlit's one-line "truncate"
-                # label mode, which stamps a native `title=` tooltip repeating
-                # the label — icon ligature included, so it would read "movie
-                # Animate". `styles.py` draws the one-line ellipsis instead.
-                animate_requested = st.toggle(
-                    f"{ICONS['animate']} Animate",
-                    key="single_animate",
-                    persist_state="session",
-                    wrap=True,
-                    # Why the layer rows below grey out, on the switch that
-                    # does it. `styles.py` draws no `?` for it: the whole
-                    # switch is the hover target.
-                    help="Replay the reading fixation by fixation. The replay "
-                    "draws the fixations itself and has no heatmap or raw gaze, "
-                    "so the Fixations, Heatmap and Raw gaze switches are greyed "
-                    "while it is on.",
+        # Reserve the first block before resolving the detailed controls. Its
+        # tiles need the defaults seeded by render_plot_controls further below.
+        view_host = rail.container(key="rail_view_controls")
+        modes = rail.container(key="tour_grp_view_modes")
+        with modes:
+            compare_host = modes.container(key="rail_compare")
+            animate_requested = st.session_state.setdefault(SINGLE_ANIMATE, False)
+            animate = animate_requested and trial_has_fixations
+            anim_disabled = not animate
+            anim_gate = (
+                ""
+                if animate
+                else f"{ICONS['warning']} This trial has no fixations to animate."
+                if animate_requested
+                else f"{ICONS['warning']} Choose **Animation** to change playback."
+            )
+            _, animation_settings = _rail_section(
+                ui_mode.advanced_only(modes, "rail_animation"),
+                f"{ICONS['animate']} **Animation settings**",
+                name="Animation",
+                slug="animation",
+            )
+            with animation_settings, _popover_rows("animation"):
+                st.session_state.setdefault(
+                    "single_playback_speed", _ANIM_DEFAULT_SPEED
                 )
-                # The replay is built from fixations, so a trial with none
-                # draws the static figure (its raw gaze, its text) instead of
-                # nothing. The toggle keeps the user's value — resolve, don't
-                # rewrite — and the next trial with fixations replays again.
-                animate = animate_requested and trial_has_fixations
-                # The ▾ opens whether or not Animate is on — what a mode *offers* is
-                # part of deciding whether to turn it on, and a menu that refuses to
-                # open shows nothing. Off, every control inside is greyed instead
-                # (`anim_gate`), which is the same "your value is kept" contract the
-                # rail's own mode gating uses. Disabled or not, the body always runs,
-                # which is what keeps `playback_speed` / `anim_frames_slot` defined.
-                anim_disabled = not animate
-                anim_gate = (
-                    ""
-                    if not anim_disabled
-                    else f"{ICONS['warning']} Turn on **Animate** to change playback."
-                    if not animate_requested
-                    else f"{ICONS['warning']} This trial has no fixations to replay."
-                )
-                # No `icon=` — Streamlit already draws a chevron on a
-                # popover trigger, so a material arrow beside it would be a
-                # second one. The toggle's `help` sits on the trigger: on a
-                # widget it renders as a `?` icon, on a trigger as a plain
-                # hover tooltip.
-                # An explicit key — a blank-label popover otherwise relies
-                # on Streamlit's positional auto-key, which can shift across
-                # reruns and drop the open state. See `_rail_section` in
-                # controls.py for the full diagnosis; this row shares that
-                # helper's shape and its exposure.
-                # The rail popovers' layout: a *Replay* group (speed,
-                # autoplay, duration) and a *Frames* group (the smoothness
-                # preset, the spacing and the limit, and what they give
-                # this trial).
-                with (
-                    st.popover(
-                        # Named for screen readers; `styles.py` clips the
-                        # label off screen, so the chevron is all that is drawn.
-                        "Replay settings",
-                        width="content",
-                        key="split_mode_animate_popover",
-                        on_change=plot_popover_on_change(),
-                        help="Replay settings. Playback controls appear above the plot.",
+                playback_speed = _sub_row(
+                    "Speed",
+                    section="Replay",
+                    section_help="Playback speed, autoplay and duration.",
+                    caption_help=_gated_help(
+                        "Playback speed relative to the recorded fixation timings.",
+                        anim_gate,
                     ),
-                    _popover_rows("animate"),
-                ):
-                    st.session_state.setdefault(
-                        "single_playback_speed", _ANIM_DEFAULT_SPEED
-                    )
-                    playback_speed = _sub_row(
-                        "Speed",
-                        section="Replay",
-                        section_help="Playback speed, autoplay and duration.",
-                        caption_help=_gated_help(
-                            "Playback speed relative to the recorded fixation timings.",
-                            anim_gate,
-                        ),
-                    ).select_slider(
-                        "Playback speed",
-                        options=_ANIM_SPEED_OPTIONS,
-                        format_func=lambda x: _ANIM_SPEED_LABELS[
-                            _ANIM_SPEED_OPTIONS.index(x)
-                        ],
-                        key="single_playback_speed",
-                        persist_state="session",
-                        disabled=anim_disabled,
-                        label_visibility="collapsed",
-                    )
-                    # Start the replay automatically on load (at the speed
-                    # above). Off → the figure waits on the ▶ Play button.
+                ).select_slider(
+                    "Playback speed",
+                    options=_ANIM_SPEED_OPTIONS,
+                    format_func=lambda x: _ANIM_SPEED_LABELS[
+                        _ANIM_SPEED_OPTIONS.index(x)
+                    ],
+                    key="single_playback_speed",
+                    persist_state="session",
+                    disabled=anim_disabled,
+                    label_visibility="collapsed",
+                )
+                # Start the replay automatically on load (at the speed
+                # above). Off → the figure waits on the ▶ Play button.
+                _sub_row(
+                    "Autoplay",
+                    caption_help=_gated_help(
+                        "Start playing when the plot loads.", anim_gate
+                    ),
+                ).checkbox(
+                    "On load",
+                    key="global_anim_autoplay",
+                    persist_state="session",
+                    disabled=anim_disabled,
+                )
+                # How long the trial and its replay are belongs to
+                # *Replay*, under the speed it follows from. Filled later
+                # (`_render_anim_info`), once scanpath B is known; drawn
+                # only while there is a replay to time.
+                anim_timing_slot = (
                     _sub_row(
-                        "Autoplay",
-                        caption_help=_gated_help(
-                            "Start playing when the plot loads.", anim_gate
-                        ),
-                    ).checkbox(
-                        "On load",
-                        key="global_anim_autoplay",
-                        persist_state="session",
-                        disabled=anim_disabled,
+                        "Duration",
+                        caption_help="How long the trial's reading "
+                        "took, and how long its replay plays at the "
+                        "speed above.",
                     )
-                    # How long the trial and its replay are belongs to
-                    # *Replay*, under the speed it follows from. Filled later
-                    # (`_render_anim_info`), once scanpath B is known; drawn
-                    # only while there is a replay to time.
-                    anim_timing_slot = (
-                        _sub_row(
-                            "Duration",
-                            caption_help="How long the trial's reading "
-                            "took, and how long its replay plays at the "
-                            "speed above.",
-                        )
-                        if animate
-                        else None
-                    )
+                    if animate
+                    else None
+                )
 
-                    # The frame grid is a real tradeoff — smoothness against frame
-                    # count, which is what export size and render time are made of —
-                    # so the user sets it, and `_render_anim_info` says when the
-                    # frame limit coarsened it.
-                    def _apply_anim_quality() -> None:
-                        preset = _ANIM_QUALITY_PRESETS.get(
-                            st.session_state.get("global_anim_quality")
-                        )
-                        if preset is not None:
-                            (
-                                st.session_state["global_anim_grid_step_ms"],
-                                st.session_state["global_anim_max_frames"],
-                            ) = preset
-
-                    current_grid = (
-                        int(st.session_state.get("global_anim_grid_step_ms", 100)),
-                        int(st.session_state.get("global_anim_max_frames", 360)),
+                # The frame grid is a real tradeoff — smoothness against frame
+                # count, which is what export size and render time are made of —
+                # so the user sets it, and `_render_anim_info` says when the
+                # frame limit coarsened it.
+                def _apply_anim_quality() -> None:
+                    preset = _ANIM_QUALITY_PRESETS.get(
+                        st.session_state.get("global_anim_quality")
                     )
-                    matched_quality = next(
+                    if preset is not None:
                         (
-                            name
-                            for name, values in _ANIM_QUALITY_PRESETS.items()
-                            if values == current_grid
-                        ),
-                        None,
-                    )
-                    # Picking Custom on the segmented control has to be
-                    # "sticky" even while the grid still equals a preset
-                    # exactly (the state right after switching, before
-                    # either slider is touched) — otherwise this re-inference
-                    # would snap it straight back to that preset's name. Only
-                    # infer a preset when the mode isn't already Custom; a
-                    # grid matching no preset is unambiguous either way.
-                    previous_quality = st.session_state.get("global_anim_quality")
-                    if matched_quality is None:
-                        st.session_state["global_anim_quality"] = "Custom"
-                    elif previous_quality != "Custom":
-                        st.session_state["global_anim_quality"] = matched_quality
-                    # Written for someone meeting the replay for the
-                    # first time — what a frame is, what each control does
-                    # and what more of them costs — with the presets' own
-                    # numbers, so the help cannot drift from them.
-                    presets_help = " ".join(
-                        f"{name}: a frame every {step} ms, at most {cap}."
-                        for name, (step, cap) in _ANIM_QUALITY_PRESETS.items()
-                    )
+                            st.session_state["global_anim_grid_step_ms"],
+                            st.session_state["global_anim_max_frames"],
+                        ) = preset
+
+                current_grid = (
+                    int(st.session_state.get("global_anim_grid_step_ms", 100)),
+                    int(st.session_state.get("global_anim_max_frames", 360)),
+                )
+                matched_quality = next(
+                    (
+                        name
+                        for name, values in _ANIM_QUALITY_PRESETS.items()
+                        if values == current_grid
+                    ),
+                    None,
+                )
+                # Picking Custom on the segmented control has to be
+                # "sticky" even while the grid still equals a preset
+                # exactly (the state right after switching, before
+                # either slider is touched) — otherwise this re-inference
+                # would snap it straight back to that preset's name. Only
+                # infer a preset when the mode isn't already Custom; a
+                # grid matching no preset is unambiguous either way.
+                previous_quality = st.session_state.get("global_anim_quality")
+                if matched_quality is None:
+                    st.session_state["global_anim_quality"] = "Custom"
+                elif previous_quality != "Custom":
+                    st.session_state["global_anim_quality"] = matched_quality
+                # Written for someone meeting the replay for the
+                # first time — what a frame is, what each control does
+                # and what more of them costs — with the presets' own
+                # numbers, so the help cannot drift from them.
+                presets_help = " ".join(
+                    f"{name}: a frame every {step} ms, at most {cap}."
+                    for name, (step, cap) in _ANIM_QUALITY_PRESETS.items()
+                )
+                _sub_row(
+                    "Quality",
+                    section="Frames",
+                    section_help="The replay is a series of still frames, each "
+                    "showing the scanpath up to that moment of the reading. "
+                    "More frames play more smoothly but take longer to build "
+                    "and export.",
+                    caption_help=_gated_help(
+                        f"{presets_help} Moving a slider below makes it Custom.",
+                        anim_gate,
+                    ),
+                ).segmented_control(
+                    "Animation smoothness",
+                    options=[*_ANIM_QUALITY_PRESETS, "Custom"],
+                    key="global_anim_quality",
+                    persist_state="session",
+                    on_change=_apply_anim_quality,
+                    disabled=anim_disabled,
+                    label_visibility="collapsed",
+                )
+
+                def _mark_anim_quality_custom() -> None:
+                    st.session_state["global_anim_quality"] = "Custom"
+
+                # The two sliders are live whatever the preset —
+                # a preset only sets them, and moving one makes it
+                # Custom — so there is no Custom click before a drag.
+                step_help = _gated_help(
+                    "Reading time between frames. Smaller plays smoother.",
+                    anim_gate,
+                )
+                _numeric_slider(
+                    st,
+                    "Frame every (ms)",
+                    key="global_anim_grid_step_ms",
+                    persist_state="session",
+                    min_value=20,
+                    max_value=500,
+                    step=10,
+                    slider_format="%d ms",
+                    number_format="%d",
+                    on_change=_mark_anim_quality_custom,
+                    disabled=anim_disabled,
+                    help=step_help,
+                    field_host=_sub_row("Every", caption_help=step_help),
+                )
+                limit_help = _gated_help(
+                    "The most frames a replay gets. If a trial needs more "
+                    "at the spacing above, the spacing widens instead.",
+                    anim_gate,
+                )
+                _numeric_slider(
+                    st,
+                    "Frame limit",
+                    key="global_anim_max_frames",
+                    persist_state="session",
+                    min_value=30,
+                    max_value=2000,
+                    step=10,
+                    slider_format="%d frames",
+                    number_format="%d",
+                    on_change=_mark_anim_quality_custom,
+                    disabled=anim_disabled,
+                    help=limit_help,
+                    field_host=_sub_row("Limit", caption_help=limit_help),
+                )
+                # Filled later, once the selected comparison trial is
+                # known: what the two controls above give this trial,
+                # said beside them.
+                anim_frames_slot = (
                     _sub_row(
-                        "Quality",
-                        section="Frames",
-                        section_help="The replay is a series of still frames, each "
-                        "showing the scanpath up to that moment of the reading. "
-                        "More frames play more smoothly but take longer to build "
-                        "and export.",
-                        caption_help=_gated_help(
-                            f"{presets_help} Moving a slider below makes it Custom.",
-                            anim_gate,
-                        ),
-                    ).segmented_control(
-                        "Animation smoothness",
-                        options=[*_ANIM_QUALITY_PRESETS, "Custom"],
-                        key="global_anim_quality",
-                        persist_state="session",
-                        on_change=_apply_anim_quality,
-                        disabled=anim_disabled,
-                        label_visibility="collapsed",
+                        "Result",
+                        caption_help="What the spacing and the limit give this trial.",
                     )
-
-                    def _mark_anim_quality_custom() -> None:
-                        st.session_state["global_anim_quality"] = "Custom"
-
-                    # The two sliders are live whatever the preset —
-                    # a preset only sets them, and moving one makes it
-                    # Custom — so there is no Custom click before a drag.
-                    step_help = _gated_help(
-                        "Reading time between frames. Smaller plays smoother.",
-                        anim_gate,
-                    )
-                    _numeric_slider(
-                        st,
-                        "Frame every (ms)",
-                        key="global_anim_grid_step_ms",
-                        persist_state="session",
-                        min_value=20,
-                        max_value=500,
-                        step=10,
-                        slider_format="%d ms",
-                        number_format="%d",
-                        on_change=_mark_anim_quality_custom,
-                        disabled=anim_disabled,
-                        help=step_help,
-                        field_host=_sub_row("Every", caption_help=step_help),
-                    )
-                    limit_help = _gated_help(
-                        "The most frames a replay gets. If a trial needs more "
-                        "at the spacing above, the spacing widens instead.",
-                        anim_gate,
-                    )
-                    _numeric_slider(
-                        st,
-                        "Frame limit",
-                        key="global_anim_max_frames",
-                        persist_state="session",
-                        min_value=30,
-                        max_value=2000,
-                        step=10,
-                        slider_format="%d frames",
-                        number_format="%d",
-                        on_change=_mark_anim_quality_custom,
-                        disabled=anim_disabled,
-                        help=limit_help,
-                        field_host=_sub_row("Limit", caption_help=limit_help),
-                    )
-                    # Filled later, once the selected comparison trial is
-                    # known: what the two controls above give this trial,
-                    # said beside them.
-                    anim_frames_slot = (
-                        _sub_row(
-                            "Result",
-                            caption_help="What the spacing and the limit "
-                            "give this trial.",
-                        )
-                        if animate
-                        else None
-                    )
-            # Compare is a view mode (toggle here); the second-trial selector renders
-            # above the chips in the plot column (compare_slot below), mirroring the
-            # main trial picker.
-            # Same split-button row as Animate above — toggle + ▾ settings.
-            # Compare config lives in the rail: the overlay/side-by-side/stacked
-            # layout + the show-A/B-legend toggle.
-            # The layout reaches the figure via session_state
-            # (`single_compare_layout`), read into `compare_layout` below.
-            with st.container(
+                    if animate
+                    else None
+                )
+            with compare_host.container(
                 horizontal=True,
                 wrap=False,
                 vertical_alignment="center",
@@ -6897,39 +6816,42 @@ def render_single_trial_tab(
                 # is seeded rather than given a `value=`: an explicit default fights
                 # the deep link the same way it would fight a restored config.
                 st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, False)
-                # `wrap=True` for the same reason as Animate above.
+                compare_unavailable = (
+                    not animate
+                    and not st.session_state[SINGLE_COMPARE_TOGGLE]
+                    and static_plot_view() == "illustration"
+                )
+                if compare_unavailable:
+                    # On returning to an illustration, disabling the widget would
+                    # discard the just-received click that switched comparison off.
+                    st.session_state[SINGLE_COMPARE_TOGGLE] = False
                 compare_requested = st.toggle(
                     f"{ICONS['compare']} Compare readings",
                     key=SINGLE_COMPARE_TOGGLE,
                     persist_state="session",
                     wrap=True,
-                    help="Add a second scanpath to the figure, overlaid or in a separate panel.",
+                    disabled=compare_unavailable,
+                    help="Choose Scanpath, Animation or Heatmap to compare readings."
+                    if compare_unavailable
+                    else "Add a second scanpath to the figure, overlaid or in a separate panel.",
                 )
                 # Compare is built from two readings' fixations (its
                 # raw-gaze layer only sits under them), so a trial without
                 # fixations stays on its static figure rather than drawing an empty
                 # comparison — same resolve as Animate.
                 compare_enabled = compare_requested and trial_has_fixations
-                # Opens either way; greyed inside while Compare is off — see the
-                # Animate row above for why the menu does not refuse to open.
+                # The menu stays available to inspect its settings while off.
                 cmp_disabled = not compare_enabled
                 cmp_gate = (
                     f"{ICONS['warning']} This trial has no fixations to compare."
                     if compare_requested and cmp_disabled
-                    else f"{ICONS['warning']} Turn on **Compare** to change these."
+                    else f"{ICONS['warning']} Turn on **Compare readings** to change these."
                     if cmp_disabled
                     else ""
                 )
-                # See the Animate row above — one arrow, and the toggle's
-                # `help` served as a tooltip here instead of a `?`; an
-                # explicit key so a blank-label popover keeps its open
-                # state across reruns.
-                # The rail popovers' layout — *View*, then
-                # *Stimulus from* (greyed unless the figure is an overlay, rather
-                # than hidden), *Legend* and *Step* as `label | ☑ Show` rows.
                 with (
                     st.popover(
-                        "Compare settings",  # named for screen readers, as Animate's
+                        "Compare settings",
                         width="content",
                         key="split_mode_compare_popover",
                         on_change=plot_popover_on_change(),
@@ -6986,7 +6908,7 @@ def render_single_trial_tab(
                     stored_layout = st.session_state.get(SINGLE_COMPARE_LAYOUT)
                     if animate and stored_layout != "Overlay":
                         st.caption(
-                            "Overlaid while **Animate** is on; your layout "
+                            "Overlaid in **Animation**. Your layout "
                             "comes back when you turn it off."
                         )
                     # Overlay pools both trials into one axis range, so
@@ -7130,6 +7052,7 @@ def render_single_trial_tab(
             fixations_filtered,
             base_font_size,
             host=rail,
+            view_host=view_host,
             # Where scanpath B's filters go, once B is loaded below.
             slots=rail_slots,
             # Compare draws B's samples too, so B's dataset having some
@@ -7173,7 +7096,7 @@ def render_single_trial_tab(
                 selected_trial,
                 combo_row=primary_combo_row,
             ),
-            # Essentials' lit View tile follows the figure actually drawn.
+            # A trial without fixations draws its static view.
             animating=bool(animate),
         )
         # The scoped reset closes the rail, below every control it
@@ -7193,7 +7116,7 @@ def render_single_trial_tab(
             narrowed=len(combos) < len(combos_all),
             sorted_=trial_sort_is_set("single"),
             comparing=bool(compare_enabled),
-            custom_view=st.session_state.get(SIMPLE_VIEW_LIT_KEY, "") is None,
+            custom_view=st.session_state.get("_custom_plot_in_use", False),
             axes=(viz_settings.get("x_field", "x"), viz_settings.get("y_field", "y"))
             if not (animate or compare_enabled)
             else ("x", "y"),
@@ -7337,6 +7260,7 @@ def render_single_trial_tab(
         dataset_canvas=dataset_canvas,
     )
     comparing = compare_meta is not None
+    render_view_tiles(rail_slots["view_tiles"], animating=animate, comparing=comparing)
     # Compare draws raw gaze too — each reading's own samples, so the
     # layer is on when either reading has some.
     compare_raw_gaze = (

@@ -863,17 +863,48 @@ def word_rate_profile(
 # --- Per reader: one reader, many trials ------------------------------------
 
 
+def _pool_values(
+    frame: pd.DataFrame, measure: Measure, *, normalize: bool
+) -> pd.Series:
+    """The measure on every row of ``frame``, aligned to its index.
+
+    With ``normalize`` each participant is z-scored once over all of their rows
+    in ``frame``. A caller that splits the frame into groups takes the groups
+    from this series, so a participant who is in both groups keeps the
+    difference between them instead of being centred at 0 in each.
+    """
+    values = _measure_series(frame, measure)
+    if normalize and not measure.is_rate:
+        work = pd.DataFrame({"_m": values})
+        if "participant_id" in frame.columns:
+            work["participant_id"] = frame["participant_id"]
+        values = add_normalized_column(work, "_m")["_m"]
+    return values
+
+
 def measure_values(
     frame: pd.DataFrame, measure: Measure, *, normalize: bool = False
 ) -> np.ndarray:
     """Flat array of a measure's values (for distribution plots)."""
     if frame is None or frame.empty or measure.column not in frame.columns:
         return np.array([], dtype="float64")
-    work = frame.copy()
-    work["_m"] = _measure_series(work, measure).to_numpy()
-    if normalize and not measure.is_rate:
-        work = add_normalized_column(work, "_m")
-    return work["_m"].dropna().to_numpy()
+    return _pool_values(frame, measure, normalize=normalize).dropna().to_numpy()
+
+
+def _group_values(
+    frame: pd.DataFrame | None,
+    measure: Measure,
+    specs: Sequence[Mapping],
+    *,
+    normalize: bool,
+) -> list[np.ndarray]:
+    """A measure's values for each group ``spec``, z-scored over ``frame`` first."""
+    if frame is None or frame.empty or measure.column not in frame.columns:
+        return [np.array([], dtype="float64") for _ in specs]
+    values = _pool_values(frame, measure, normalize=normalize)
+    return [
+        values[group_mask(frame, spec).to_numpy()].dropna().to_numpy() for spec in specs
+    ]
 
 
 def reader_means(frame: pd.DataFrame, measure: Measure) -> np.ndarray | None:
@@ -1733,11 +1764,14 @@ def two_group_values(
     label_b: str = "Group B",
     normalize: bool = False,
 ) -> dict[str, np.ndarray]:
-    """``{label_a: values, label_b: values}`` for overlaid distributions."""
+    """``{label_a: values, label_b: values}`` for overlaid distributions.
+
+    With ``normalize`` the z-scores are taken over each participant's rows in
+    the whole ``frame`` before the groups are split (:func:`_pool_values`).
+    """
     label_a, label_b = distinct_group_labels(label_a, label_b)
     out: dict[str, np.ndarray] = {}
-    a = measure_values(apply_group(frame, spec_a), measure, normalize=normalize)
-    b = measure_values(apply_group(frame, spec_b), measure, normalize=normalize)
+    a, b = _group_values(frame, measure, (spec_a, spec_b), normalize=normalize)
     if a.size:
         out[label_a] = a
     if b.size:
@@ -1882,8 +1916,8 @@ def paired_group_summary(
         )
         if src is None:
             continue
-        for spec, label in ((spec_a, label_a), (spec_b, label_b)):
-            vals = measure_values(apply_group(src, spec), m, normalize=normalize)
+        groups = _group_values(src, m, (spec_a, spec_b), normalize=normalize)
+        for vals, label in zip(groups, (label_a, label_b), strict=True):
             rows.append(
                 {
                     "measure": m.label,

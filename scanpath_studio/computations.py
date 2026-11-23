@@ -1206,7 +1206,10 @@ REGISTER: tuple[Computation, ...] = (
         summary="Rescale a measure for cross-participant comparison.",
         formula=(
             "Per-participant z-score, `(value − participant mean) / participant SD`, "
-            "when **Z-score per participant** is on."
+            "when **Z-score per participant** is on. The mean and SD span the "
+            "participant's values in the view's selection; the two-group views "
+            "take them before splitting the readings into groups, so a "
+            "participant in both groups keeps the difference between them."
         ),
         code="scanpath_studio/aggregation.py:add_normalized_column",
         missing=(

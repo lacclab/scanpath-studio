@@ -1187,8 +1187,8 @@ class TestGroupSelection:
         assert set(groups) == {"Group A"}
 
     def test_two_group_values_normalizes_within_reader(self):
-        # Each group is z-scored inside itself, so the two readers' absolute
-        # levels (p1 ≈ 127 ms, p2 = 190 ms) stop driving the comparison.
+        # Each reader is z-scored over their own values, so the two readers'
+        # absolute levels (p1 ≈ 127 ms, p2 = 190 ms) stop driving the comparison.
         groups = two_group_values(
             _tidy_fixations(),
             MEASURES["fix_dur"],
@@ -1201,6 +1201,31 @@ class TestGroupSelection:
         assert sorted(groups["Group B"]) == pytest.approx(
             [-1 / np.sqrt(2), 1 / np.sqrt(2)]
         )
+
+    def test_normalizing_keeps_a_difference_inside_each_reader(self):
+        # Both readers read both conditions. Each reader is z-scored once over
+        # all their readings and the conditions are split afterwards, so the
+        # slower condition stays above the reader's mean instead of both
+        # conditions being centred on 0.
+        frame = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 4 + ["p2"] * 4,
+                "trial_id": ["hard", "hard", "easy", "easy"] * 2,
+                "duration_ms": [300.0, 320.0, 200.0, 220.0, 600.0, 640.0, 400.0, 440.0],
+            }
+        )
+        hard, easy = {"trial_id": ["hard"]}, {"trial_id": ["easy"]}
+        shift = 50 / np.std([300.0, 320.0, 200.0, 220.0], ddof=1)
+        groups = two_group_values(
+            frame, MEASURES["fix_dur"], hard, easy, normalize=True
+        )
+        assert groups["Group A"].mean() == pytest.approx(shift)
+        assert groups["Group B"].mean() == pytest.approx(-shift)
+        bars = paired_group_summary(
+            frame, [MEASURES["fix_dur"]], hard, easy, normalize=True
+        )
+        assert bars["value"].tolist() == pytest.approx([shift, -shift])
+        assert bars["n_observations"].tolist() == [4, 4]
 
 
 class TestGroupComparison:

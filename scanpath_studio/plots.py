@@ -4468,7 +4468,7 @@ def _render_scanpath_figure(
     show_connectors = settings.show_connectors
     connector_y = settings.connector_y
     illustration_reasons = settings.illustration_reasons
-    fig = go.Figure()
+    fig = go.Figure(layout=dict(template="plotly_white"))
     fields = (x_field, y_field)
     spatial_axes = fields == ("x", "y")
     if any(f in chart_axes.CLOCK_FIELDS for f in fields):
@@ -5229,7 +5229,6 @@ def _render_scanpath_figure(
         xaxis=xaxis_cfg,
         yaxis=yaxis_cfg,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        template="plotly_white",
         # None leaves the template's default white; a hex value paints both the
         # plotting area and the surrounding paper (e.g. a neutral gray).
         plot_bgcolor=background_color,

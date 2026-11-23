@@ -34,7 +34,7 @@ import re
 import zipfile
 from collections.abc import Callable, Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager, nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext, suppress
 from contextvars import copy_context
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -1130,43 +1130,38 @@ def _write_table(
     return zf.getinfo(path).file_size
 
 
+def _write_figure_file(zf: zipfile.ZipFile, path: str, data: bytes, fmt: str) -> None:
+    # PNG already compresses its pixels. Level 3 keeps the additional ZIP pass cheap.
+    zf.writestr(path, data, compresslevel=3 if fmt == "png" else None)
+
+
 @contextmanager
-def _figure_renderer(enabled: bool):
-    """Yield ``render(fig, fmt, width, height, scale) -> bytes``.
+def _figure_renderer(native_readings: int):
+    """Draw and cite native images. Multi-reading exports can reuse the plotting page."""
+    from .animation_export import KALEIDO_LOCK, chromium_browser_path, warm_calc_fig
 
-    When ``enabled`` and Kaleido starts, every trial's figure is rasterized
-    through one persistent Kaleido browser (``calc_fig_sync``) instead of
-    cold-starting a fresh Chrome on each ``fig.to_image`` call — the cold start
-    is the "Resorting to unclean kill browser." log noise and ~seconds-per-trial
-    latency. Falls back to per-call ``to_image`` if the warm server can't start
-    (or no figures were requested), so behavior is unchanged when Kaleido/Chrome
-    is unavailable — the per-trial failure is still surfaced as an export error.
-
-    ``enabled`` also holds ``animation_export.KALEIDO_LOCK`` until the server has
-    stopped, since that server is one per process. Every file it draws carries
-    the citation in its metadata (`file_citation.stamp`).
-    """
-    from .animation_export import KALEIDO_LOCK, warm_calc_fig
-
-    with KALEIDO_LOCK if enabled else nullcontext():
+    with KALEIDO_LOCK if native_readings else nullcontext(), ExitStack() as stack:
+        calc = None
         server = None
-        if enabled:
-            try:
-                import kaleido
+        if native_readings and (path := chromium_browser_path()) is not None:
+            if native_readings > 1:
+                # A startup failure can still use the ordinary Kaleido path.
+                with suppress(Exception):
+                    from .bulk_renderer import bulk_renderer
 
-                from .animation_export import chromium_browser_path
+                    calc = stack.enter_context(bulk_renderer(path))
+            if calc is None:
+                with suppress(Exception):
+                    import kaleido
 
-                browser_path = chromium_browser_path()
-                if browser_path is not None:
-                    kaleido.start_sync_server(path=browser_path, silence_warnings=True)
+                    kaleido.start_sync_server(path=path, silence_warnings=True)
+                    calc = warm_calc_fig
                     server = kaleido
-            except Exception:
-                server = None
 
         def render(fig, fmt: str, width: int, height: int, scale: int) -> bytes:
             try:
-                if server is not None:
-                    data = warm_calc_fig(
+                if calc is not None:
+                    data = calc(
                         fig,
                         {
                             "format": fmt,
@@ -1192,10 +1187,8 @@ def _figure_renderer(enabled: bool):
             yield render
         finally:
             if server is not None:
-                try:
+                with suppress(Exception):
                     server.stop_sync_server(silence_warnings=True)
-                except Exception:  # pragma: no cover - best-effort teardown
-                    pass
 
 
 def render_static_figure_bytes(
@@ -1226,7 +1219,7 @@ def render_static_figure_bytes(
             "Starting the browser that draws the figure (this can take a few seconds)…",
             started_at=started,
         )
-        with _figure_renderer(True) as render:
+        with _figure_renderer(1) as render:
             emit_status(
                 status_callback,
                 ExportStage.RASTERIZING,
@@ -3315,7 +3308,7 @@ def bulk_export(
         return fig, render_settings
 
     with (
-        _figure_renderer(needs_kaleido) as render,
+        _figure_renderer(len(units) if needs_kaleido else 0) as render,
         ThreadPoolExecutor(max_workers=1)
         if needs_kaleido and len(units) > 1
         else nullcontext(None) as worker,
@@ -3495,7 +3488,7 @@ def bulk_export(
                                 scale = options.png_scale if fmt == "png" else 1
                                 data = render_figure(fig, fmt, out_w, out_h, scale)
                             path = _path("figure", fmt)
-                            zf.writestr(path, data)
+                            _write_figure_file(zf, path, data, fmt)
                         except Exception as exc:
                             record_failure(_path("figure", fmt), "figure", fmt, exc)
                             continue
@@ -3531,7 +3524,7 @@ def bulk_export(
                                     data = render_figure(
                                         layer_fig, fmt, out_w, out_h, scale
                                     )
-                                    zf.writestr(path, data)
+                                    _write_figure_file(zf, path, data, fmt)
                                 except Exception as exc:
                                     record_failure(path, artifact, fmt, exc)
                                     continue

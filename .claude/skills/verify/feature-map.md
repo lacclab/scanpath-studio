@@ -11,8 +11,11 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | --- | --- | --- | --- |
 | Three views | Header: 🗺️ Scanpath · 📊 Corpus Analysis · 🗂️ Data Management | `main_nav` session key (`constants._VIEW_*`) | Each draws with no exception and no "this is a bug" note |
 | Essentials / Full | Header switch | `?ui=essentials\|full` (first run only) | Full shows every rail section; Essentials hides Full-only containers by CSS but keeps their widgets' values. Share never writes `ui` |
-| ❓ Help actions | Header ❓ menu | — | The dialog opens and the view stays where it was |
-| Stable / Dev | Help menu | Open Documentation and What’s new | Both open the matching docs edition in another tab. Only Dev lists unreleased changes. |
+| Task guides | Help → Task guides | Expand a task, then start or exit the walkthrough | The written steps open with any data. Eligible actions respect the current mode or offer Open in Full. Exit restores the starting view and mode. |
+| First visit and import | Scanpath · import wizard | Replay this reading, Import my data, Setup help → Show setup guide | The figure and import fields work immediately. The replay and setup guide start on request. |
+| Troubleshooting & feedback | Help menu or a feedback bookmark | Open an answer, then Report a bug | Short answers work offline. Questions open Q&A, suggestions open Ideas, and the bug report offers copyable diagnostics. |
+| About & citation | Help menu | Open Citation and App details | Citation gives APA and BibTeX. App details identifies local or server storage and opens support and Debug. |
+| Stable / Dev | Help → Documentation · About & citation → App details | Follow Documentation or What's new | Both open the matching docs edition. Dev includes unreleased changes. |
 
 ## Scanpath view
 

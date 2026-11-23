@@ -96,13 +96,13 @@ def browser():
 
 def _open(browser, url: str):
     """A fresh browser context's page on ``url``, its uncaught errors collected,
-    settled and with the first-visit tour closed."""
+    settled and with the sample invitation dismissed."""
     page = browser.new_context(viewport={"width": 1440, "height": 900}).new_page()
     page.errors = []
     page.on("pageerror", lambda exc: page.errors.append(str(exc)))
     page.goto(url)
     _settle(page)
-    _close_tour(page)
+    _dismiss_sample_invitation(page)
     return page
 
 
@@ -137,19 +137,10 @@ def _settle(page, quiet_ms: int = 1500, timeout_s: float = 150) -> None:
     pytest.fail("the app never stopped running")
 
 
-def _close_tour(page) -> None:
-    """Dismiss the first-visit tour card, which covers the page."""
-    for _ in range(3):
-        buttons = [
-            button
-            for button in page.locator(
-                '.st-key-tour_sp_close button, .st-key-tour_card button:has-text("Skip")'
-            ).all()
-            if button.is_visible()
-        ]
-        if not buttons:
-            return
-        buttons[0].click()
+def _dismiss_sample_invitation(page) -> None:
+    button = page.locator(".st-key-sample_invitation_dismiss button")
+    if button.is_visible():
+        button.click()
         _settle(page)
 
 
@@ -167,22 +158,79 @@ def _plot_frame(page, key: str):
     pytest.fail(f"no plot iframe holds #truescale-{key}")
 
 
-@pytest.mark.parametrize("path", ["data", "corpus-analysis", "help-faq"])
+@pytest.mark.parametrize(
+    "path", ["data", "corpus-analysis", "help-faq", "help-feedback", "help-tutorials"]
+)
 def test_first_visit_respects_the_requested_page(app_url, browser, path):
     with browser.new_context() as context:
         page = context.new_page()
         page.goto(f"{app_url}/{path}")
-        if path == "help-faq":
-            page.get_by_role("dialog").wait_for()
+        if path.startswith("help-"):
+            title = (
+                "Task guides"
+                if path == "help-tutorials"
+                else "Troubleshooting & feedback"
+            )
+            page.get_by_role("dialog", name=title).wait_for()
         else:
             target = (
                 ".st-key-data_identity" if path == "data" else ".st-key-corpus_pool_bar"
             )
             page.locator(target).wait_for()
         _settle(page)
-        assert not page.locator(".st-key-tour_sp_close button:visible").count()
-        if path != "help-faq":
+        assert not page.locator(".st-key-sample_invitation_replay button").is_visible()
+        if not path.startswith("help-"):
             assert page.url.split("?")[0] == f"{app_url}/{path}"
+
+
+def test_help_menu_opens_four_destinations_over_the_current_view(app_url, browser):
+    with browser.new_context() as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/corpus-analysis")
+        trigger = page.get_by_role("button", name=re.compile("Help · (Dev|Stable)"))
+        trigger.click()
+        items = page.get_by_role("menu").get_by_role("menuitem")
+        expected = [
+            "Task guides",
+            "Troubleshooting & feedback",
+            "Documentation ↗",
+            "About & citation",
+        ]
+        sync_api.expect(items).to_have_count(len(expected))
+        for index, name in enumerate(expected):
+            sync_api.expect(items.nth(index)).to_have_accessible_name(
+                re.compile("^" + re.escape(name) + r"( \(opens in new tab\))?$")
+            )
+        docs = items.filter(has_text="Documentation ↗")
+        sync_api.expect(docs).to_have_attribute("target", "_blank")
+        items.first.click()
+        dialog = page.get_by_role("dialog", name="Task guides")
+        sync_api.expect(dialog).to_be_visible()
+        page.keyboard.press("Escape")
+        sync_api.expect(dialog).to_have_count(0)
+        sync_api.expect(trigger).to_be_focused()
+        assert page.url.split("?")[0] == f"{app_url}/corpus-analysis"
+
+
+def test_import_walkthrough_returns_to_the_data_tab_that_opened_help(app_url, browser):
+    with browser.new_context() as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/data")
+        saved = page.get_by_role("tab", name="Saved work", exact=True)
+        saved.click()
+        heading = page.get_by_role("heading", name="Your session", exact=True)
+        sync_api.expect(heading).to_be_visible()
+        page.get_by_role("button", name=re.compile("Help · (Dev|Stable)")).click()
+        page.get_by_role("menuitem", name="Task guides", exact=True).click()
+        chooser = page.get_by_role("dialog", name="Task guides", exact=True)
+        chooser.get_by_text("Import and check a recording", exact=True).click()
+        chooser.get_by_role("button", name="Show me in the app", exact=True).click()
+        library = page.get_by_role("tab", name="Dataset library", exact=True)
+        sync_api.expect(library).to_have_attribute("aria-selected", "true")
+        guide = page.locator(".st-key-tour_card")
+        guide.get_by_role("button", name="Exit", exact=True).click()
+        sync_api.expect(saved).to_have_attribute("aria-selected", "true")
+        sync_api.expect(heading).to_be_visible()
 
 
 def test_phone_dataset_list_sorts_by_participant_count(app_url, browser):
@@ -260,7 +308,7 @@ def test_phone_view_choices_stay_with_figure_in_both_modes(app_url, browser):
         page.goto(f"{app_url}/?source=demo&ui=essentials&animate=0")
         _plot_frame(page, "single").locator(".scatterlayer .trace").first.wait_for()
         _settle(page)
-        _close_tour(page)
+        _dismiss_sample_invitation(page)
 
         def box(key):
             return page.locator(f".st-key-{key}").bounding_box()
@@ -491,7 +539,7 @@ def test_keyboard_steps_comparison_b_at_a_boundary(app_url, browser):
         page.context.close()
 
 
-def test_the_tour_card_shows_nothing_until_its_stylesheet_applies(page):
+def test_the_tour_card_shows_nothing_until_its_stylesheet_applies(app_url, browser):
     """Streamlit draws a markdown block's raw HTML — the card's stylesheet —
     only once it has fetched its HTML renderer, a script of its own. Without
     it, the card must stay clipped to its 1px slot, not show its text and
@@ -502,14 +550,15 @@ def test_the_tour_card_shows_nothing_until_its_stylesheet_applies(page):
         blocked.append(route.request.url)
         route.abort()
 
-    context = page.context.browser.new_context(viewport={"width": 1440, "height": 900})
+    context = browser.new_context(viewport={"width": 1440, "height": 900})
     other = context.new_page()
     try:
         other.route(re.compile(r"/rehype-raw[^/]*\.js"), block)
-        other.goto(page.url)
+        other.goto(app_url)
         _settle(other)
         if not blocked:
             pytest.skip("this Streamlit fetches no separate rehype-raw script")
+        other.locator(".st-key-sample_invitation_replay button").click()
         card = other.locator(".st-key-tour_card")
         card.wait_for(state="attached", timeout=30_000)
         assert card.bounding_box()["height"] <= 1
@@ -910,7 +959,7 @@ def test_clicking_a_fixation_keeps_the_trial_tabs_available(app_url, browser, mo
         page = context.new_page()
         page.goto(f"{app_url}/?ui={mode}&source=synthetic&animate=0")
         _settle(page)
-        _close_tour(page)
+        _dismiss_sample_invitation(page)
         assert not page.locator('[data-testid="stException"]').count()
         frame = _plot_frame(page, "single")
         uid = frame.evaluate(
@@ -942,7 +991,7 @@ def test_live_comparison_exports_a_physical_svg_and_reopenable_panel_settings(
             f"{app_url}/?ui=full&source=synthetic&compare=synthetic:synthetic_2line_demo&cmp_layout=Side+by+side"
         )
         _settle(page)
-        _close_tour(page)
+        _dismiss_sample_invitation(page)
         page.get_by_role("tab", name=re.compile("Export")).click()
         page.get_by_text("Manuscript panel proof", exact=True).click()
         page.get_by_text(re.compile("Stimulus words · .* pt")).wait_for()
@@ -1000,10 +1049,13 @@ def test_reduced_motion_keeps_a_steady_tour_target_as_the_keyboard_advances(
     with browser.new_context(reduced_motion="reduce") as context:
         page = context.new_page()
         page.goto(f"{app_url}/?ui=full")
-        advance = page.locator(".st-key-tour_sp_next button")
-        for target in ("plot", "data_source", "trial_picker"):
-            advance.focus()
-            advance.press("Enter")
+        for key, target in (
+            ("sample_invitation_replay", "plot"),
+            ("tour_sp_next", "trial_picker"),
+        ):
+            action = page.locator(f".st-key-{key} button")
+            action.focus()
+            action.press("Enter")
             page.wait_for_function(
                 """selector => {
                     const el = document.querySelector(selector);

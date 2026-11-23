@@ -105,6 +105,36 @@ class TestScreenIdentity:
 
 
 class TestTheCatalogue:
+    def test_partial_screen_sequences_preserve_their_relative_order(self):
+        bc = _frame(screen_id=["b", "b", "c", "c"])
+        ab = _frame()
+        catalog = part_catalog(bc, ab)
+        assert list(zip(catalog.screen_id, catalog.screen_index, strict=True)) == [
+            ("a", 1),
+            ("b", 2),
+            ("c", 3),
+        ]
+        known = _frame(screen_id=["b", "b", "z", "z"], screen_index=[2, 2, 7, 7])
+        extra = _frame(screen_id=["x"] * 4)
+        ordered = part_catalog(known, extra, ab).set_index("screen_id").screen_index
+        assert (ordered["a"], ordered["b"], ordered["z"]) == (1, 2, 7)
+        assert ordered.nunique() == 4
+
+    def test_conflicting_sample_ordinals_leave_the_screen_count_unavailable(self):
+        from scanpath_studio import tabs
+
+        events = _frame(screen_index=[1, 1, 2, 2])
+        samples = _frame(screen_index=[2, 2, 1, 1])
+        empty_words = events.iloc[0:0]
+        assert (
+            "conflicts across tables"
+            in tabs.dataset_capabilities(empty_words, events, samples)[-1]
+        )
+        stats = tabs._dataset_statistics(
+            empty_words, events, samples, ("conflicting screens",)
+        )
+        assert stats["parts"].empty and "Edit dataset" in stats["screen_error"]
+
     def test_legacy_data_yields_an_empty_catalogue(self):
         assert part_catalog(pd.DataFrame(), None).empty
 

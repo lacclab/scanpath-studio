@@ -222,6 +222,11 @@ scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv \
   --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
 ```
 
+To plot the same reading's pupil area over its recorded clock, use
+`--x-field timestamp_ms --y-field pupil_area` with `--sample-raw-gaze`.
+`scanpath-studio check --sample` includes the raw table and reports how many
+samples have missing positions.
+
 When `--raw-gaze` is the only input, it is the dataset. `--list-trials` lists
 its trials, and `render` draws the chosen trial's samples as recorded. No
 fixations are detected from them, so `--animate` and `--compare-with` exit

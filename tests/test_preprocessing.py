@@ -223,6 +223,68 @@ def test_peak_velocity_uses_only_sample_pairs_inside_each_saccade_and_screen():
     )
 
 
+def test_peak_speed_uses_one_eye_and_never_spans_a_missing_position_or_unassigned_screen():
+    fix = pd.DataFrame(
+        {
+            "participant_id": "p",
+            "trial_id": "t",
+            "screen_id": "page",
+            "timestamp_ms": [0, 4],
+            "duration_ms": 1,
+            "x": [0, 30],
+            "y": 0,
+            "eye": "L",
+        }
+    )
+    left = pd.DataFrame(
+        {
+            "participant_id": "p",
+            "trial_id": "t",
+            "screen_id": "page",
+            "timestamp_ms": [1, 2, 3, 4],
+            "x": [2, np.nan, 30, 31],
+            "y": 0,
+            "eye": "Left",
+        }
+    )
+    gaze = pd.concat([left, left.assign(x=[200, 300, 400, 500], eye="Right")])
+
+    def peak(events, samples):
+        return saccade_table(events, raw_gaze=samples, pixels_per_degree=50)[
+            "peak_velocity_deg_s"
+        ].item()
+
+    assert peak(fix, gaze) == 20
+    assert np.isnan(peak(fix.drop(columns="eye"), gaze))
+    assert np.isnan(peak(fix, gaze.drop(columns="screen_id")))
+    assert np.isnan(peak(fix.assign(_timestamp_synthesized=True), gaze))
+    right = fix.assign(eye="R", x=[10, 40])
+    both = saccade_table(pd.concat([fix, right]), raw_gaze=gaze, pixels_per_degree=50)
+    assert both.set_index("eye").peak_velocity_deg_s.to_dict() == {"L": 20, "R": 2000}
+    uncalibrated = saccade_table(fix, raw_gaze=gaze, pixels_per_degree=-50)
+    assert uncalibrated[["peak_velocity_deg_s", "amplitude_deg"]].isna().all().all()
+    assert np.isnan(peak(fix, left.assign(timestamp_ms=[1, np.nan, 4, 4])))
+
+
+def test_peak_speed_resolves_legacy_fixation_onsets_before_exclusions():
+    fix = pd.DataFrame(
+        {
+            "participant_id": "p",
+            "trial_id": "t",
+            "timestamp_ms": range(6),
+            "x": range(6),
+            "y": 10,
+            "duration_ms": 2,
+            "excluded": [False, True, True, True, True, False],
+        }
+    )
+    samples = fix[["participant_id", "trial_id", "timestamp_ms", "x", "y"]]
+    peaks = saccade_table(
+        fix, raw_gaze=samples, pixels_per_degree=50
+    ).peak_velocity_deg_s
+    assert len(peaks) == 1 and peaks.isna().all()
+
+
 def test_saccade_duration_is_gap_after_fixation_and_uses_canonical_line_idx():
     fixations = pd.DataFrame(
         {

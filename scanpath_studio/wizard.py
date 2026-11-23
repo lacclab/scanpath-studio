@@ -3962,6 +3962,8 @@ MAP_LINES = {
         ("trial", "participant", "text_id", "screen_id"),
         ("x", "y", "timestamp"),
         ("word_id", "text"),
+        ("eye", "pupil_area", "pupil_diameter"),
+        ("screen_index", "canvas_width", "canvas_height"),
     ),
 }
 

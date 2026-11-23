@@ -281,7 +281,7 @@ from scanpath_studio.metadata_editor import (
     render_text_metadata_section,
     render_trial_metadata_section,
 )
-from scanpath_studio.multipart import SCREEN_ID, extract_part, part_catalog
+from scanpath_studio.multipart import part_catalog, screen_rows
 from scanpath_studio.persistence import (
     PERSIST_ENV_VAR,
     SAVE_CONFLICT_KEY,
@@ -3096,7 +3096,7 @@ _BUILTIN_DATASET_ABOUT: dict[str, dict] = {
             "Trials": 24,
             "Words": 2614,
             "Fixations": 1894,
-            "Gaze points": 386_572,
+            "Gaze points": 401_200,
         },
         published_counts_source=(
             "Counted from the files bundled with this release of the package."
@@ -10730,7 +10730,7 @@ def _run_app() -> None:
     # render, so they pick up the saved values (see _apply_url_preset for the
     # same preset-then-render mechanism). The uploader is 🔗 Share → File's; its
     # file persists across reruns.
-    _apply_uploaded_plot_config(combos, fixations_filtered)
+    _apply_uploaded_plot_config(combos, fixations_filtered, raw_gaze_filtered)
 
     # Canvas and visualization controls (the Scanpath rail). For a dataset whose
     # only gaze is samples, size the canvas from the gaze extent and turn the
@@ -10798,7 +10798,10 @@ def _run_app() -> None:
     # session_state without rendering any widgets; the rail's widgets are the
     # source of truth and write the same keys.
     viz_settings = viz_settings_from_state(
-        fixations_filtered, base_font_size, words=words_filtered
+        fixations_filtered,
+        base_font_size,
+        words=words_filtered,
+        raw_gaze=raw_gaze_filtered,
     )
 
     # Whole-dataset combos (the Export subtab's *All*, and what the pool lines
@@ -11055,6 +11058,7 @@ def _run_app() -> None:
                     scale_text_to_boxes=scale_text_to_boxes,
                     canvas_renderer=canvas_renderer,
                     has_raw_gaze=not raw_gaze_filtered.empty,
+                    raw_gaze=raw_gaze_filtered,
                     recipe_context=recipe_context,
                 )
             _render_inclusion_report(
@@ -11078,22 +11082,22 @@ def _run_app() -> None:
             subtabs), the figure settings from the rail's live keys.
             """
             live = viz_settings_from_state(
-                fixations_filtered, base_font_size, words=words_filtered
+                fixations_filtered,
+                base_font_size,
+                words=words_filtered,
+                raw_gaze=raw_gaze_filtered,
             )
             selection = st.session_state.get("_share_selection") or {}
             pid = str(selection.get("participant_id") or "")
             trial = str(selection.get("trial_id") or "")
             screen = selection.get("screen_id")
-            # The trial first (position-indexed), then its screen: `extract_part`
-            # compares strings row by row, which over a whole sample-level
-            # raw-gaze frame is seconds per call.
+            # Slice the indexed trial before filtering sample-level screen IDs.
             trial_raw_gaze = (
                 extract_trial(raw_gaze_filtered, pid, trial)
                 if pid and trial and not raw_gaze_filtered.empty
                 else pd.DataFrame()
             )
-            if screen is not None and SCREEN_ID in trial_raw_gaze.columns:
-                trial_raw_gaze = extract_part(trial_raw_gaze, pid, trial, screen)
+            trial_raw_gaze = screen_rows(trial_raw_gaze, screen)
             figure_settings = _build_figure_settings(live, not trial_raw_gaze.empty)
             figure_settings["raw_gaze"] = (
                 trial_raw_gaze if not trial_raw_gaze.empty else None

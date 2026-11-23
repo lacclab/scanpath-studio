@@ -2978,6 +2978,17 @@ RAW_GAZE_FIELD_SPECS: list[dict] = [
         "required": False,
         "help": "Which screen of a multi-screen trial this sample is on.",
     },
+    {
+        "key": "screen_index",
+        "label": "Screen number",
+        "required": False,
+        "help": "The order in which the screens appeared in this trial, starting at 1.",
+    },
+    *[
+        field
+        for field in FIX_FIELD_SPECS
+        if field["key"] in ("canvas_width", "canvas_height")
+    ],
     # text_id/word_id round out the row to the same six identity fields
     # Fixations/AOI map (Trial · Screen · Participant · Text · Word ID
     # · text-or-id). Both optional — a raw-gaze-only dataset with no such
@@ -3021,6 +3032,24 @@ RAW_GAZE_FIELD_SPECS: list[dict] = [
         "help": "Sample time (ms); orders the gaze path. If unmapped, samples "
         "keep their row order and are numbered 1, 2, … per trial, with no "
         "time.",
+    },
+    {
+        "key": "eye",
+        "label": "Tracked eye",
+        "required": False,
+        "help": "The eye that produced each sample.",
+    },
+    {
+        "key": "pupil_area",
+        "label": "Pupil area",
+        "required": False,
+        "help": "Pupil area in the units reported by the tracker.",
+    },
+    {
+        "key": "pupil_diameter",
+        "label": "Pupil diameter",
+        "required": False,
+        "help": "Pupil diameter in the units reported by the tracker.",
     },
 ]
 
@@ -4189,8 +4218,10 @@ def _axis_clock_available(_fixations: pd.DataFrame, cache_key: tuple) -> bool:
     return charts.has_clock(_fixations)
 
 
-def numeric_field_options(trial_fixations: pd.DataFrame) -> list[str]:
-    """Numeric columns and supported derived axes for fixation charts."""
+def numeric_field_options(
+    trial_fixations: pd.DataFrame, raw_gaze: pd.DataFrame | None = None
+) -> list[str]:
+    """Chart axes available across the fixations and recorded samples."""
     fields = [
         col
         for col in user_columns(trial_fixations)
@@ -4200,6 +4231,12 @@ def numeric_field_options(trial_fixations: pd.DataFrame) -> list[str]:
         fields.append(charts.ELAPSED)
     elif "timestamp_ms" in fields:
         fields.remove("timestamp_ms")
+    if raw_gaze is not None and not raw_gaze.empty:
+        if trial_fixations.empty:
+            fields = []
+        fields.extend(
+            f for f in charts.SAMPLE_FIELDS if f in raw_gaze and f not in fields
+        )
     return fields
 
 
@@ -5980,6 +6017,7 @@ def _seed_viz_state(
     trial_fixations: pd.DataFrame,
     base_font_size: int,
     words: pd.DataFrame | None,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> tuple[list[str], list[str], list[str]]:
     """Seed every viz widget's session_state default (pure — renders nothing).
 
@@ -6008,7 +6046,7 @@ def _seed_viz_state(
     # One flat colour by default — see `color_field_options`.
     _pin("global_color_by", UNIFORM_COLOR_FIELD)
 
-    numeric_fields = numeric_field_options(trial_fixations)
+    numeric_fields = numeric_field_options(trial_fixations, raw_gaze)
     if numeric_fields:
         x_default = "x" if "x" in numeric_fields else numeric_fields[0]
         y_default = (
@@ -6668,6 +6706,7 @@ def viz_settings_from_state(
     trial_fixations: pd.DataFrame,
     base_font_size: int,
     words: pd.DataFrame | None = None,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> dict:
     """Resolve the viz-settings dict from session_state WITHOUT rendering widgets.
 
@@ -6677,7 +6716,7 @@ def viz_settings_from_state(
     ``render_plot_controls``) on whatever the user last set.
     """
     _, numeric_fields, highlight_options = _seed_viz_state(
-        trial_fixations, base_font_size, words
+        trial_fixations, base_font_size, words, raw_gaze
     )
     return _collect_viz_settings(
         trial_fixations,
@@ -6692,6 +6731,7 @@ def corpus_style_controls(
     base_font_size: int,
     *,
     words: pd.DataFrame | None = None,
+    raw_gaze: pd.DataFrame | None = None,
     host=None,
     canvas_renderer=None,
 ) -> dict:
@@ -6707,7 +6747,7 @@ def corpus_style_controls(
     size, fonts, line spacing, background — so the view that consumes them needs
     a way to change them.
     """
-    _seed_viz_state(trial_fixations, base_font_size, words)
+    _seed_viz_state(trial_fixations, base_font_size, words, raw_gaze)
     target = host or st
     with target.expander(
         f"{ICONS['designs']} Corpus figure style", expanded=False
@@ -6748,7 +6788,9 @@ def corpus_style_controls(
         # open across the Corpus page under a collapsed expander.
         if canvas_renderer is not None:
             canvas_renderer(style_panel)
-    return viz_settings_from_state(trial_fixations, base_font_size, words=words)
+    return viz_settings_from_state(
+        trial_fixations, base_font_size, words=words, raw_gaze=raw_gaze
+    )
 
 
 #: What a greyed rail switch says on hover, for the Animate gate. The
@@ -7074,6 +7116,7 @@ def render_plot_controls(
     has_raw_gaze: bool = False,
     has_stimulus_image: bool = False,
     trial_samples: pd.DataFrame | None = None,
+    raw_gaze: pd.DataFrame | None = None,
     words: pd.DataFrame | None = None,
     fix_range_fixations: pd.DataFrame | None = None,
     canvas_renderer=None,
@@ -7137,7 +7180,7 @@ def render_plot_controls(
     """
     # Seed every widget's default before any widget renders (see `_pin`).
     color_fields, numeric_fields, highlight_options = _seed_viz_state(
-        trial_fixations, base_font_size, words
+        trial_fixations, base_font_size, words, raw_gaze
     )
     if not numeric_fields:
         st.error(
@@ -7430,7 +7473,7 @@ def render_plot_controls(
     # has no raw-gaze layer.
     raw_disabled, raw_reason = _mode_gate(animating, comparing, in_animation=False)
     raw_axis_off = chart_axes and not charts.raw_axes_available(fields, trial_samples)
-    raw_axis_help = "Raw samples need both plotted coordinates. Choose screen position or recorded time."
+    raw_axis_help = "Both axes must be fields available in the raw samples."
     show_raw_gaze, raw_gaze_grp = _rail_section(
         advanced_only(viz, "rail_rawgaze"),
         f"{ICONS['raw_gaze']} **Raw gaze**",
@@ -9085,6 +9128,21 @@ def render_plot_controls(
             "Horizontal position over time": (charts.ELAPSED, "x"),
             "Vertical position over time": (charts.ELAPSED, "y"),
         }
+        sample_presets = {}
+        if raw_gaze is not None and not raw_gaze.empty:
+            clock = "timestamp_ms" if "timestamp_ms" in raw_gaze else "sample_index"
+            along = (
+                "over recorded time" if clock == "timestamp_ms" else "by sample number"
+            )
+            for field, label in (
+                ("x", "Horizontal gaze position"),
+                ("y", "Vertical gaze position"),
+                ("pupil_area", "Pupil area"),
+                ("pupil_diameter", "Pupil diameter"),
+            ):
+                if field in raw_gaze:
+                    sample_presets[f"{label} {along}"] = (clock, field)
+        presets.update(sample_presets)
 
         # This picker applies a command. Remount it after a selection so a
         # closed popover cannot send the last command again on later reruns.
@@ -9098,6 +9156,8 @@ def render_plot_controls(
                 x, y = presets[choice]
                 write_through("global_x_field", x)
                 write_through("global_y_field", y)
+                if choice in sample_presets:
+                    write_through("global_show_raw_gaze", True)
 
         st.selectbox(
             "Axis preset",

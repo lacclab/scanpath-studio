@@ -328,6 +328,7 @@ from scanpath_studio.multipart import (
     has_screen_identity,
     part_catalog,
     screen_canvas_size,
+    screen_rows,
 )
 from scanpath_studio.plots import (
     COLORBAR_DEFAULTS,
@@ -533,18 +534,25 @@ def _render_screen_navigator(
 
 
 def _part_catalog_for_display(
-    words: pd.DataFrame, fixations: pd.DataFrame
+    words: pd.DataFrame, fixations: pd.DataFrame, raw_gaze: pd.DataFrame | None = None
 ) -> pd.DataFrame:
     """Use MultiplEYE's fixation-onset order if cached word order is stale."""
     try:
-        return part_catalog(words, fixations)
+        return part_catalog(words, fixations, raw_gaze)
     except ValueError as exc:
         if (
             str(exc) == "Multipart metadata 'screen_index' conflicts across tables."
             and "screen_kind" in fixations.columns
         ):
-            return part_catalog(fixations)
+            return part_catalog(fixations, raw_gaze)
         raise
+
+
+def _screen_catalog_status(words, fixations, raw_gaze) -> tuple[pd.DataFrame, str]:
+    try:
+        return _part_catalog_for_display(words, fixations, raw_gaze), ""
+    except ValueError as exc:
+        return pd.DataFrame(), f"{exc} Check the screen mappings in Edit dataset."
 
 
 def _embed_html_iframe(
@@ -3073,7 +3081,11 @@ def _render_compare_selector(
     slider_col = None
     screen_track = screen_track or any(
         frame is not None and SCREEN_ID in frame.columns
-        for frame in (words_filtered, fixations_filtered)
+        for frame in (
+            words_filtered,
+            fixations_filtered,
+            source.raw_gaze if source else None,
+        )
     )
     extra_track = [SELECTOR_SCREEN_TRACK] if screen_track else []
     if n > 1:
@@ -4173,6 +4185,7 @@ def _no_fixations_note(
     raw_gaze_shown: bool,
     animate_requested: bool,
     compare_requested: bool,
+    drawable_samples: bool = True,
 ) -> str:
     """What a trial with no fixations shows, and what it cannot.
 
@@ -4206,6 +4219,8 @@ def _no_fixations_note(
         if raw_gaze_shown
         else f"Turn on {ICONS['raw_gaze']} **Raw gaze** to draw its gaze samples."
     )
+    if not drawable_samples:
+        shown = "None of its gaze samples have usable values on both selected axes."
     return (
         f"{ICONS['info']} **Raw gaze only.** There are no fixations in this "
         f"trial. {shown} "
@@ -4631,6 +4646,7 @@ def _build_compare_meta(
     raw_gaze: pd.DataFrame | None = None,
     include_raw_gaze: bool = True,
     dataset_canvas: tuple[int, int] | None = None,
+    screen_canvas: tuple[int, int] | None = None,
 ) -> dict | None:
     """Build the second trial's words/fixations + column labels for the
     Compare's A/B chip table, or None when no comparison is active.
@@ -4727,7 +4743,12 @@ def _build_compare_meta(
     # B's screen, read before the participant ids are namespaced (they don't
     # touch the canvas columns, but this is B's data as its corpus has it).
     setup_b = source.setup if source is not None else None
-    canvas_b = screen_canvas_size(compare_words) or screen_canvas_size(compare_fix)
+    canvas_b = (
+        screen_canvas_size(compare_words)
+        or screen_canvas_size(compare_fix)
+        or screen_canvas_size(compare_raw)
+        or screen_canvas
+    )
     if canvas_b is not None and setup_b is not None:
         setup_b = replace(setup_b, canvas_width=canvas_b[0], canvas_height=canvas_b[1])
     if canvas_b is None:
@@ -6497,13 +6518,12 @@ def render_single_trial_tab(
     parent_raw_gaze = pd.DataFrame()
     if raw_gaze is not None and not raw_gaze.empty:
         parent_raw_gaze = extract_trial(raw_gaze, selected_participant, selected_trial)
-    screens = (
-        # A trial recorded as raw gaze alone takes its screens from its
-        # samples, so each screen draws in its own coordinate space.
-        part_catalog(parent_raw_gaze)
-        if parent_words.empty and parent_fixations.empty
-        else _part_catalog_for_display(parent_words, parent_fixations)
+    screens, screen_error = _screen_catalog_status(
+        parent_words, parent_fixations, parent_raw_gaze
     )
+    if screen_error:
+        plot_notes_slot.warning(screen_error)
+        return
     selected_screen = _render_screen_navigator(screens, host=screen_slot)
     from .annotations import render_disputed_note
 
@@ -6511,29 +6531,23 @@ def render_single_trial_tab(
         plot_notes_slot, selected_participant, selected_trial, selected_screen
     )
     if selected_screen is not None:
-        trial_words = extract_part(
-            parent_words, selected_participant, selected_trial, selected_screen
-        )
-        trial_fixations = extract_part(
-            parent_fixations, selected_participant, selected_trial, selected_screen
-        )
-        if not parent_raw_gaze.empty and SCREEN_ID in parent_raw_gaze.columns:
-            trial_raw_gaze = extract_part(
-                parent_raw_gaze,
-                selected_participant,
-                selected_trial,
-                selected_screen,
-            )
-        else:
-            trial_raw_gaze = pd.DataFrame()
-            if not parent_raw_gaze.empty:
+        trial_words = screen_rows(parent_words, selected_screen)
+        trial_fixations = screen_rows(parent_fixations, selected_screen)
+        trial_raw_gaze = screen_rows(parent_raw_gaze, selected_screen)
+        for label, parent in (
+            ("Words", parent_words),
+            ("Fixations", parent_fixations),
+            ("Raw gaze", parent_raw_gaze),
+        ):
+            if not parent.empty and SCREEN_ID not in parent:
                 plot_notes_slot.warning(
-                    "Raw-gaze samples are hidden because this trial has several "
-                    "screens and the samples don't say which screen each belongs to."
+                    f"{label} has no Screen ID. Its rows cannot be placed on this screen."
                 )
         st.session_state["_share_selection"]["screen_id"] = selected_screen
-        per_screen_canvas = screen_canvas_size(trial_words) or screen_canvas_size(
-            trial_fixations
+        per_screen_canvas = (
+            screen_canvas_size(trial_words)
+            or screen_canvas_size(trial_fixations)
+            or screen_canvas_size(trial_raw_gaze)
         )
         if per_screen_canvas is not None:
             canvas_width, canvas_height = per_screen_canvas
@@ -7117,6 +7131,7 @@ def render_single_trial_tab(
             # slider (its max is this trial's fixation count).
             fix_range_fixations=trial_fixations,
             trial_samples=trial_raw_gaze,
+            raw_gaze=raw_gaze,
             # The canvas / text panel (monitor geometry, fonts, text colour,
             # background) renders inside the rail's group order. `app.main`
             # passes it in already bound to the frames + data source, since
@@ -7135,6 +7150,7 @@ def render_single_trial_tab(
                             settings.get("y_field") or "y",
                         ),
                         trial_raw_gaze,
+                        trial_fixations,
                     ),
                 },
                 trial_words,
@@ -7180,6 +7196,7 @@ def render_single_trial_tab(
     compare_source: SecondaryDataset | None = None
     compare_pool: SecondaryDataset | None = None
     selected_compare_screen: str | None = None
+    compare_screen_canvas = None
     # Layout comes from the rail's Compare-config popover via session_state; an
     # animated comparison always co-animates on one clock, so force overlay then.
     # The cross-dataset *resolve* is NOT done here. It needs B's screen,
@@ -7236,14 +7253,32 @@ def render_single_trial_tab(
             compare_parent_fixations = extract_trial(
                 compare_fixations_pool, compare_participant, compare_trial
             )
-            compare_screens = _part_catalog_for_display(
-                compare_parent_words, compare_parent_fixations
+            compare_samples = (
+                compare_source.raw_gaze
+                if compare_source is not None
+                else raw_gaze_all
+                if raw_gaze_all is not None
+                else raw_gaze
             )
+            compare_screens, screen_error = _screen_catalog_status(
+                compare_parent_words,
+                compare_parent_fixations,
+                extract_trial(compare_samples, compare_participant, compare_trial)
+                if compare_samples is not None and SCREEN_ID in compare_samples
+                else None,
+            )
+            if screen_error:
+                plot_notes_slot.warning(screen_error)
+                return
         else:
             compare_screens = pd.DataFrame()
         selected_compare_screen = _render_screen_navigator(
             compare_screens, key_prefix="single_compare", host=screen_cells.get("b")
         )
+        if selected_compare_screen is not None:
+            compare_screen_canvas = screen_canvas_size(
+                screen_rows(compare_screens, selected_compare_screen)
+            )
     else:
         # Compare off loads no second dataset — stop the one an
         # earlier run left loading for B.
@@ -7305,6 +7340,7 @@ def render_single_trial_tab(
         ),
         include_raw_gaze=draw_compare_raw_gaze,
         dataset_canvas=dataset_canvas,
+        screen_canvas=compare_screen_canvas,
     )
     comparing = compare_meta is not None
     # Compare draws raw gaze too — each reading's own samples, so the
@@ -7321,7 +7357,7 @@ def render_single_trial_tab(
         not animate
         and global_raw_toggle
         and (
-            chart_axes.drawable_raw_samples(fields, trial_raw_gaze)
+            chart_axes.drawable_raw_samples(fields, trial_raw_gaze, trial_fixations)
             or (
                 compare_shows_raw_gaze
                 and chart_axes.drawable_raw_samples(("x", "y"), compare_raw_gaze)
@@ -7507,6 +7543,7 @@ def render_single_trial_tab(
             st.session_state,
             words=trial_words.columns,
             fixations=trial_fixations.columns,
+            raw_gaze=trial_raw_gaze.columns,
         ),
     )
 
@@ -7818,6 +7855,8 @@ def render_single_trial_tab(
             trial_has_fixations=trial_has_fixations,
             trial_has_raw_gaze=trial_has_raw_gaze,
             raw_gaze_shown=effective_show_raw_gaze,
+            drawable_samples=trial_has_fixations
+            or chart_axes.drawable_raw_samples(fields, trial_raw_gaze, trial_fixations),
             animate_requested=animate_requested,
             compare_requested=compare_requested,
         )
@@ -10402,6 +10441,7 @@ def render_corpus_analysis_tab(
     scale_text_to_boxes: bool = True,
     canvas_renderer: Callable[[Any], None] | None = None,
     has_raw_gaze: bool = False,
+    raw_gaze: pd.DataFrame | None = None,
     recipe_context: dict | None = None,
 ) -> None:
     """Corpus Analysis tab — question-oriented analysis sections.
@@ -10430,6 +10470,7 @@ def render_corpus_analysis_tab(
             scale_text_to_boxes=scale_text_to_boxes,
             canvas_renderer=canvas_renderer,
             has_raw_gaze=has_raw_gaze,
+            raw_gaze=raw_gaze,
         )
     finally:
         _RECIPE_CONTEXT.reset(token)
@@ -10448,6 +10489,7 @@ def _render_corpus_analysis_body(
     scale_text_to_boxes: bool,
     canvas_renderer: Callable[[Any], None] | None,
     has_raw_gaze: bool,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> None:
     """The body of :func:`render_corpus_analysis_tab`."""
     # The page shows the reading measures the dataset *brought* and computes
@@ -10490,6 +10532,7 @@ def _render_corpus_analysis_body(
         fixations_filtered,
         base_font_size,
         words=words_filtered,
+        raw_gaze=raw_gaze,
         host=st,
         # This view renders true-to-scale stimulus figures from the
         # canvas / typography settings, so it hosts that panel too — the rail
@@ -14033,12 +14076,7 @@ def _dataset_statistics(
     # Texts from every table that names one, not the words alone.
     texts = text_ids(_words, _fixations, _raw_gaze)
 
-    trial_source = _fixations if not _fixations.empty else _words
-    trials_per_participant = (
-        trial_source.groupby("participant_id")["trial_id"].nunique()
-        if not trial_source.empty
-        else pd.Series(dtype=float)
-    )
+    trials_per_participant = pd.Series([pid for pid, _ in trial_ids]).value_counts()
     fixations_per_trial = (
         _fixations.groupby(["participant_id", "trial_id"]).size()
         if not _fixations.empty
@@ -14068,6 +14106,7 @@ def _dataset_statistics(
         }
     )
 
+    parts, screen_error = _screen_catalog_status(_words, _fixations, _raw_gaze)
     return {
         "n_participants": len(participant_ids),
         "n_texts": len(texts),
@@ -14075,6 +14114,8 @@ def _dataset_statistics(
         "n_fixations": len(_fixations),
         "n_words": len(_words),
         "n_gaze": len(_raw_gaze),
+        "parts": parts,
+        "screen_error": screen_error,
         "stats_df": stats_df,
     }
 
@@ -14108,14 +14149,7 @@ _FIX_MAPPING_LABELS = {
     "text_id": "Text ID",
     "word_id": "Word ID",
 }
-_RAW_GAZE_MAPPING_LABELS = {
-    "participant": "Participant ID",
-    "trial": "Trial ID",
-    "x": "X coordinate",
-    "y": "Y coordinate",
-    "timestamp": "Timestamp (ms)",
-    "text": "Word text",
-}
+_RAW_GAZE_MAPPING_LABELS = {spec["key"]: spec["label"] for spec in RAW_GAZE_FIELD_SPECS}
 _MAPPING_TABLES = [
     ("Words (interest areas)", "words", _WORD_MAPPING_LABELS),
     ("Fixations", "fixations", _FIX_MAPPING_LABELS),
@@ -14208,6 +14242,20 @@ _RAW_GAZE_REMAP_CANON = {
     "y": "y",
     "timestamp": "timestamp_ms",
     "text": "text",
+    **{
+        key: key
+        for key in (
+            "text_id",
+            "word_id",
+            "screen_id",
+            "screen_index",
+            "canvas_width",
+            "canvas_height",
+            "pupil_area",
+            "pupil_diameter",
+            "eye",
+        )
+    },
 }
 # (table_key, label, field_specs, canonical-map) for the editable remap form.
 _REMAP_TABLES = [
@@ -16587,8 +16635,6 @@ def _render_spread_cards(spread: pd.DataFrame) -> None:
 
 def _render_dataset_stats_tab(
     stats: dict,
-    words_filtered: pd.DataFrame,
-    fixations_filtered: pd.DataFrame,
     *,
     scope: str | None = None,
 ) -> None:
@@ -16607,7 +16653,7 @@ def _render_dataset_stats_tab(
     render_data_scope(scope, key="data_scope_stats")
     # Icons so the six counts are scannable rather than a row of
     # equally-weighted numbers — one glyph per *kind* of thing being counted.
-    parts = part_catalog(words_filtered, fixations_filtered)
+    parts = stats["parts"]
     top_cols = st.columns(7)
     top_cols[0].metric(
         "Participants", f"{stats['n_participants']:,}", icon=ICONS["participants"]
@@ -16618,24 +16664,29 @@ def _render_dataset_stats_tab(
         "Fixations", f"{stats['n_fixations']:,}", icon=ICONS["fixations"]
     )
     top_cols[4].metric("Word rows", f"{stats['n_words']:,}", icon=ICONS["words"])
-    # No `help=` — "Gaze points" says what it counts, and a ❔ beside it
-    # alone on the row would read as though that count meant something
-    # different from its five neighbours.
     top_cols[5].metric(
         "Gaze points",
         f"{stats['n_gaze']:,}" if stats["n_gaze"] else "0",
         icon=ICONS["gaze_points"],
+        help="Every row in the raw gaze table counts, including samples with missing positions.",
     )
     # Always shown — the dataset table has no Screens column, so this is
     # where the count lives. A dataset without multipart
     # screens has exactly one per trial, which is what it says.
     top_cols[6].metric(
         "Screens",
-        f"{len(parts):,}" if not parts.empty else "1 per trial",
-        icon=ICONS["screens"],
-        help=None
+        "Unavailable"
+        if stats.get("screen_error")
+        else f"{len(parts):,}"
         if not parts.empty
-        else "Every trial is a single screen; this dataset has no screen ids.",
+        else "1 per trial",
+        icon=ICONS["screens"],
+        help=stats.get("screen_error")
+        or (
+            None
+            if not parts.empty
+            else "Every trial is a single screen; this dataset has no screen ids."
+        ),
     )
 
     # The spread behind those totals, right under them.
@@ -16713,11 +16764,10 @@ def dataset_capabilities(
         else "none"
     )
 
-    try:
-        parts = part_catalog(words, fixations)
-    except ValueError:
-        parts = pd.DataFrame()
-    if parts.empty:
+    parts, screen_error = _screen_catalog_status(words, fixations, raw_gaze)
+    if screen_error:
+        screen_line = screen_error
+    elif parts.empty:
         screen_line = "one per trial"
     else:
         n_parents = len(parts[["participant_id", "trial_id"]].drop_duplicates())
@@ -17061,9 +17111,7 @@ def render_data_inspection_tab(
         labels.append(f"{ICONS['annotations']} Annotations")
     stats_tab, *raw_tabs = st.tabs(labels)
     with stats_tab:
-        _render_dataset_stats_tab(
-            stats, words_filtered, fixations_filtered, scope=scope
-        )
+        _render_dataset_stats_tab(stats, scope=scope)
     if annotation_trials is not None:
         *raw_tabs, annotations_tab = raw_tabs
         with annotations_tab:

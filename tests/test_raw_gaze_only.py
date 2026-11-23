@@ -844,6 +844,149 @@ def test_multipart_samples_draw_one_screen_at_a_time(two_screen_raw_gaze):
         sps.plot_scanpath(raw_gaze=two_screen_raw_gaze, screen="s9")
 
 
+def test_screen_with_only_samples_is_listed_drawn_and_exported():
+    from scanpath_studio.export import ExportOptions, bulk_export
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+
+    words, fix = make_multipart_synthetic_data()
+    pid, tid = _key(fix)
+    # Only the last screen has events. The sample file has no mapped Text ID
+    # or ordinal, and lists the overlapping screen second.
+    words, fix = (f[f.screen_id.eq("question")] for f in (words, fix))
+    source = pd.DataFrame(
+        {
+            "participant_id": pid,
+            "trial_id": tid,
+            "screen_id": ["intro", "intro", "question"],
+            "x": [12, None, 19],
+            "y": [13, None, 20],
+            "timestamp_ms": [0, 1, 500],
+            "canvas_width": [640, 640, None],
+            "canvas_height": [480, 480, None],
+            "pupil_area": [100, 0, 110],
+        },
+        index=[7, 8, 10],
+    )
+    samples = api.load_raw_gaze(source, names="canonical")
+    catalog = api.list_parts(words, fix, raw_gaze=samples)
+    assert catalog.screen_id.tolist() == ["intro", "question"]
+    assert catalog.screen_index.tolist() == [1, 2]
+    assert catalog.text_id.iloc[1] == words.text_id.iat[0]
+    fig = api.plot_scanpath(
+        words, fix, pid, tid, screen="intro", raw_gaze=samples, fit_to_monitor=True
+    )
+    assert not any(t.name == "Fixations" for t in fig.data)
+    assert list(fig.layout.xaxis.range) == [0, 640]
+    assert list(fig.layout.yaxis.range) == [480, 0]
+    trace = next(t for t in fig.data if t.name == "Raw gaze")
+    assert list(trace.customdata) == [0, 1]
+    payload, progress = bulk_export(
+        api.list_trials(words, fix, raw_gaze=samples),
+        words,
+        fix,
+        canvas_width=800,
+        canvas_height=600,
+        base_font_size=16,
+        font_family="Arial",
+        x_field="x",
+        y_field="y",
+        settings={},
+        raw_gaze=samples,
+        options=ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_html=False,
+            include_raw_gaze=True,
+        ),
+    )
+    assert not progress.errors
+    with zipfile.ZipFile(io.BytesIO(payload)) as bundle:
+        paths = [path for path in bundle.namelist() if path.endswith("/raw_gaze.csv")]
+        assert len(paths) == 2
+        for path in paths:
+            table = pd.read_csv(bundle.open(path))
+            screen = table.screen_id.unique().item()
+            assert f"-{screen}/" in path
+            assert (
+                table.pupil_area.tolist()
+                == source.loc[source.screen_id.eq(screen), "pupil_area"].tolist()
+            )
+
+
+@pytest.mark.parametrize("combine", [False, True])
+def test_unassigned_rows_are_exported_exactly_once(combine):
+    from scanpath_studio.export import ExportOptions, bulk_export
+    from scanpath_studio.synthetic import example_import_tables
+
+    words, events = api.load_scanpath_data(*example_import_tables(), names="canonical")
+    pid, tid = _key(events)
+    source = pd.DataFrame(
+        {
+            "participant_id": pid,
+            "trial_id": tid,
+            "screen_id": ["  ", "a", None, "b"],
+            "x": [1, 2, 3, 4],
+            "y": 10,
+            "timestamp_ms": [10, 11, 12, 13],
+        }
+    )
+    samples = api.load_raw_gaze(source, names="canonical")
+    parts = api.list_parts(words, events, pid, tid, raw_gaze=samples)
+    assert parts.screen_id.tolist() == ["a", "b"] and parts.screen_index.tolist() == [
+        1,
+        2,
+    ]
+    combos = api.list_trials(words, events, raw_gaze=samples)
+    payload, progress = bulk_export(
+        combos,
+        words,
+        events,
+        raw_gaze=samples,
+        canvas_width=800,
+        canvas_height=600,
+        base_font_size=16,
+        font_family="Arial",
+        x_field="x",
+        y_field="y",
+        settings={},
+        options=ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_html=False,
+            include_measures=False,
+            include_fixations=True,
+            include_raw_gaze=True,
+            combine_trials=combine,
+        ),
+    )
+    assert not progress.errors
+    with zipfile.ZipFile(io.BytesIO(payload)) as bundle:
+        gaze_tables = [
+            pd.read_csv(bundle.open(path))
+            for path in bundle.namelist()
+            if path.endswith(("raw_gaze.csv", "all_raw_gaze.csv"))
+        ]
+        assert sorted(pd.concat(gaze_tables).timestamp_ms) == [10, 11, 12, 13]
+        if not combine:
+            assert sorted(
+                pd.read_csv(
+                    bundle.open(
+                        next(
+                            p
+                            for p in bundle.namelist()
+                            if p.endswith("/raw_gaze.csv") and "/screens/" not in p
+                        )
+                    )
+                ).timestamp_ms
+            ) == [10, 12]
+        fixation_tables = [
+            pd.read_csv(bundle.open(path))
+            for path in bundle.namelist()
+            if path.endswith("fixations.csv")
+        ]
+        assert len(pd.concat(fixation_tables)) == len(events)
+
+
 def test_render_lists_the_screens_of_multipart_samples(
     two_screen_raw_gaze, tmp_path, capsys
 ):

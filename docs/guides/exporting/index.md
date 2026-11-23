@@ -88,6 +88,10 @@ in their tables. A word-measures CSV can contain the original stimulus words
 even when the figure masks them. When you select specific screens, the bundle
 includes notes on those screens and their parent trials.
 
+When you export all screens, rows with no Screen ID are included once in the
+trial’s tables. Selecting specific screens includes only rows assigned to those
+screens. A screen with raw gaze alone has its own sample table.
+
 If a figure fails, the download includes the files that succeeded. With the same data
 and settings still open, choose **Retry failed figure files**. The app retries each
 missing format or layer and keeps the successful files. If it could not split a figure

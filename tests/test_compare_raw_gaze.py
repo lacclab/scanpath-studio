@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 import scanpath_studio.api as sps
@@ -30,9 +31,10 @@ def test_each_reading_draws_its_own_samples_in_its_colour(demo, layout):
     fig = sps.compare_scanpaths(words, fixations, A, B, raw_gaze=raw, layout=layout)
     traces = _raw_traces(fig)
     assert len(traces) == 2
-    a_samples = raw[raw["trial_id"] == A[1]]
-    assert list(traces[0].x) == list(a_samples["x"])
-    assert list(traces[1].x) == list(raw.loc[raw["trial_id"] == B[1], "x"])
+    for trace, reading in zip(traces, (A, B), strict=True):
+        samples = raw.loc[raw["trial_id"] == reading[1]]
+        np.testing.assert_array_equal(trace.x, samples["x"].to_numpy())
+        np.testing.assert_array_equal(trace.y, samples["y"].to_numpy())
     # Each in its scanpath's own colour — the A/B cue — not one time ramp.
     assert [t.marker.color for t in traces] == [
         compare_palette_color(0),
@@ -51,6 +53,25 @@ def test_samples_sit_under_both_scanpaths_in_an_overlay(demo):
         i for i, t in enumerate(fig.data) if t.legendgroup and i not in raw_at
     )
     assert max(raw_at) < first_scanpath
+
+
+def test_comparison_never_shares_unscreened_samples_between_pages():
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+
+    words, fix = make_multipart_synthetic_data()
+    reading = tuple(fix[["participant_id", "trial_id"]].iloc[0])
+    raw = fix[["participant_id", "trial_id", "x", "y", "timestamp_ms"]]
+    fig = sps.compare_scanpaths(
+        words,
+        fix,
+        reading,
+        reading,
+        screen="intro",
+        screen_b="question",
+        raw_gaze=raw,
+        layout="side_by_side",
+    )
+    assert not _raw_traces(fig)
 
 
 def test_the_size_and_opacity_settings_apply(demo):

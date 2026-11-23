@@ -481,7 +481,8 @@ here fails when its rule is broken.
 - The bundled `raw_gaze.{csv,parquet}` carries the two L1 readers' recorded
   EyeLink gaze positions for all 24 readings. Extract samples within the
   fixation report's paragraph interest period and subtract its trial start
-  time to share the fixation clock. Preserve gaps where x or y is missing.
+  time to share the fixation clock. Keep every recorded tick, including missing
+  x/y values, pupil area in tracker units and the tracked eye.
 
 **Figures**
 

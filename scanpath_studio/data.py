@@ -1827,12 +1827,17 @@ def propose_raw_gaze_schema(raw_gaze: pd.DataFrame) -> dict[str, str | None]:
         trial=pick_column(raw_gaze, TRIAL_CANDIDATES),
         screen_id=pick_column(raw_gaze, SCREEN_ID_CANDIDATES),
         screen_index=pick_column(raw_gaze, SCREEN_INDEX_CANDIDATES),
+        canvas_width=pick_column(raw_gaze, CANVAS_WIDTH_CANDIDATES),
+        canvas_height=pick_column(raw_gaze, CANVAS_HEIGHT_CANDIDATES),
         text_id=pick_column(raw_gaze, TEXT_ID_CANDIDATES),
         word_id=pick_column(raw_gaze, FIX_WORD_ID_CANDIDATES),
         text=pick_column(raw_gaze, TEXT_CANDIDATES),
         x=pick_column(raw_gaze, RAW_GAZE_X_CANDIDATES),
         y=pick_column(raw_gaze, RAW_GAZE_Y_CANDIDATES),
         timestamp=pick_column(raw_gaze, RAW_GAZE_TIMESTAMP_CANDIDATES),
+        eye=pick_column(raw_gaze, ["eye", "EYE_TRACKED", "EYE_USED"]),
+        pupil_area=pick_column(raw_gaze, ["pupil_area"]),
+        pupil_diameter=pick_column(raw_gaze, ["pupil_diameter"]),
     )
 
 
@@ -2558,6 +2563,8 @@ NUMERIC_SCHEMA_FIELDS = frozenset(
         "height",
         "left",
         "line",
+        "pupil_area",
+        "pupil_diameter",
         "right",
         "screen_index",
         "screen_timestamp",
@@ -4901,7 +4908,7 @@ def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def read_sample_raw_gaze() -> pd.DataFrame:
-    """Read the bundled raw gaze sample (millisecond-level x,y)."""
+    """Read the demo's 1 kHz EyeLink positions, timestamps, pupil area and eye."""
     return _load_bundled("raw_gaze")
 
 
@@ -4942,13 +4949,9 @@ def normalize_raw_gaze(
 ) -> pd.DataFrame:
     """Normalize raw gaze data to canonical column names.
 
-    ``keep_columns`` carries user-chosen extra source columns through
-    verbatim, the same "Extra fields to keep" mechanism
-    :func:`normalize_words`/:func:`normalize_fixations` have — raw
-    gaze has no optional-fields *registry* of its own (no semantic field
-    here is common enough across exports to earn a canonical name the way
-    ``saccade_amplitude`` does for fixations), so this only ever carries
-    unclaimed columns, via :func:`_carry_extra_columns`.
+    Keep every identified sample, including tracking loss. Pupil measurements
+    retain their recorded units. ``keep_columns`` carries additional source
+    columns through verbatim, as it does for words and fixations.
     """
     # Samples with no participant or trial id belong to no trial (the rule
     # the other two tables follow).
@@ -5002,6 +5005,11 @@ def normalize_raw_gaze(
         df["word_id"] = raw_gaze[schema["word_id"]]
     df["x"] = _to_number(raw_gaze[schema["x"]])
     df["y"] = _to_number(raw_gaze[schema["y"]])
+    if schema.get("eye"):
+        df["eye"] = raw_gaze[schema["eye"]]
+    for measurement in ("pupil_area", "pupil_diameter"):
+        if schema.get(measurement):
+            df[measurement] = _to_number(raw_gaze[schema[measurement]])
     skip = _schema_source_columns(schema)
     if schema.get("timestamp"):
         onset = schema["timestamp"]

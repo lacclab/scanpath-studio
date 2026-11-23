@@ -199,8 +199,9 @@ CHECKS: tuple[_Check, ...] = (
         "Raw-gaze samples with no usable position",
         ("x", "y"),
         _position_masks,
-        "They stay in the table and its export. The raw-gaze layer leaves them "
-        "out. Missing positions are common in raw gaze (blinks, track loss).",
+        "Their timestamps and other recorded fields stay in the table and its "
+        "export. A sample needs both coordinates to appear on the spatial plot. "
+        "Missing positions are common during blinks or tracking loss.",
     ),
     _Check(
         "word_box_size",

@@ -381,8 +381,13 @@ def _paragraph_samples(asc: BinaryIO, trial) -> pd.DataFrame:
     eye = trial.EYE_TRACKED.upper().encode("ascii")
     rows = []
     gaze_header = False
+    pupil_field = None
     for line in asc:
-        if line.startswith(b"SAMPLES"):
+        if line.startswith(b"PUPIL"):
+            pupil_field = {b"AREA": "pupil_area", b"DIAMETER": "pupil_diameter"}.get(
+                line.split()[1]
+            )
+        elif line.startswith(b"SAMPLES"):
             # Each OneStop session records one eye. A binocular or HREF export
             # would give the first two numbers a different meaning.
             if line.split()[1:4] != [b"GAZE", eye, b"RATE"]:
@@ -408,12 +413,18 @@ def _paragraph_samples(asc: BinaryIO, trial) -> pd.DataFrame:
                     raise ValueError(
                         f"Missing GAZE sample header for {trial.unique_trial_id}"
                     )
-                x, y = fields[1:3]
-                if b"." not in (x, y):
-                    rows.append((float(x), float(y), time - trial.TRIAL_START_TIME))
+                if pupil_field is None:
+                    raise ValueError(
+                        f"Missing pupil measurement type for {trial.unique_trial_id}"
+                    )
+                x, y, pupil = (
+                    float(v) if v != b"." else float("nan") for v in fields[1:4]
+                )
+                rows.append((x, y, time - trial.TRIAL_START_TIME, pupil))
     else:
         raise ValueError(f"Missing END in the recording for {trial.unique_trial_id}")
-    frame = pd.DataFrame(rows, columns=["x", "y", "timestamp_ms"])
+    frame = pd.DataFrame(rows, columns=["x", "y", "timestamp_ms", pupil_field])
+    frame["eye"] = trial.EYE_TRACKED
     frame.insert(0, "unique_paragraph_id", trial.unique_paragraph_id)
     frame.insert(0, "unique_trial_id", trial.unique_trial_id)
     frame.insert(0, "participant_id", trial.participant_id)
@@ -421,7 +432,7 @@ def _paragraph_samples(asc: BinaryIO, trial) -> pd.DataFrame:
 
 
 def extract_raw_gaze(fixations: pd.DataFrame, asc_dir: Path) -> pd.DataFrame:
-    """All recorded gaze positions in the bundled readings' paragraph intervals.
+    """Every ASC sample in the bundled readings' paragraph intervals.
 
     The report's TRIAL_START_TIME identifies the ASC START block exactly.
     IP_START_TIME is inclusive and IP_END_TIME is exclusive, in tracker ms.

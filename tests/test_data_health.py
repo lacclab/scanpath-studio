@@ -134,9 +134,12 @@ class TestChecks:
         assert len(findings) == 4
         assert all("stay in" in f.consequence for f in findings)
 
-    def test_the_bundled_demo_is_clean(self):
+    def test_the_bundled_demo_reports_its_recorded_gaze_gaps(self):
         words, fixations = api.load_sample_data()
-        assert check_data_health(words, fixations, api.load_sample_raw_gaze()) == []
+        findings = check_data_health(words, fixations, api.load_sample_raw_gaze())
+        assert [(f.check, f.severity, f.rows) for f in findings] == [
+            ("raw_gaze_position", "note", 14_628),
+        ]
 
     def test_a_table_without_the_columns_is_not_checked(self):
         assert check_data_health(pd.DataFrame({"a": [1]}), pd.DataFrame()) == []

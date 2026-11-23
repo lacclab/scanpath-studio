@@ -2223,9 +2223,11 @@ def test_check_json_preserves_missing_and_infinite_coordinates(tmp_path, capsys)
     assert records[0]["rows"] == 3
 
 
-def test_check_passes_the_sample(capsys):
+def test_check_counts_every_demo_sample_and_reports_recorded_position_gaps(capsys):
     cli.main(["check", "--sample"])
-    assert "every check passed" in capsys.readouterr().out
+    report = capsys.readouterr().out
+    assert "[note] Raw-gaze samples" in report
+    assert "14,628 of 401,200 rows in 18 trials" in report
 
 
 def test_check_needs_an_input():

@@ -3203,8 +3203,8 @@ def _column_name(column: str) -> str:
     return labels.get(column, str(column))
 
 
-def _chart_axis_title(field: str) -> str:
-    label = _column_title(field)
+def _chart_axis_title(field: str, table: str | None = None) -> str:
+    label = _column_title(field, table)
     if field in chart_axes.POSITION_FIELDS:
         direction = "Horizontal" if field == "x" else "Vertical"
         return (
@@ -3234,13 +3234,12 @@ def _chart_axis_range(traces, coordinate: str, reverse: bool):
     return limits[::-1] if reverse else limits
 
 
-def _column_title(column: str) -> str:
+def _column_title(column: str, table: str | None = None) -> str:
     """A column's name in a figure's titles: the dataset's own, else
     the column humanized."""
-    labels = _COLUMN_LABELS.get() or {}
     if column == chart_axes.ELAPSED:
         return chart_axes.ELAPSED_LABEL
-    return labels[column] if column in labels else _humanize_column(column)
+    return _table_label(column, table) or _humanize_column(column)
 
 
 def _table_label(field: str, table: str | None) -> str | None:
@@ -4236,6 +4235,7 @@ def _add_raw_gaze_layer(
     raw_gaze: pd.DataFrame | None,
     *,
     show_raw_gaze: bool,
+    fixations: pd.DataFrame | None = None,
     fields: tuple[str, str] = ("x", "y"),
     raw_gaze_color: str = "#888888",
     raw_gaze_marker_size: float = 4.0,
@@ -4252,7 +4252,9 @@ def _add_raw_gaze_layer(
     ``sample_index`` instead: coloured by that order, with the legend titled
     *Sample order* and the hover saying ``sample n`` — never milliseconds.
     """
-    if not show_raw_gaze or not chart_axes.raw_axes_available(fields, raw_gaze):
+    if not show_raw_gaze or not chart_axes.drawable_raw_samples(
+        fields, raw_gaze, fixations
+    ):
         return False
     legend_title = None
     if "timestamp_ms" in raw_gaze.columns:
@@ -4286,8 +4288,8 @@ def _add_raw_gaze_layer(
                 showscale=False,
             ),
             hovertemplate=(
-                f"Raw gaze<br>{html.escape(_column_title(fields[0]))}: %{{x:.2f}}"
-                f"<br>{html.escape(_column_title(fields[1]))}: %{{y:.2f}}"
+                f"Raw gaze<br>{_plotly_literal(_column_title(fields[0], 'raw_gaze'))}: %{{x:.2f}}"
+                f"<br>{_plotly_literal(_column_title(fields[1], 'raw_gaze'))}: %{{y:.2f}}"
                 + when
                 + "<extra></extra>"
             ),
@@ -4669,6 +4671,7 @@ def _render_scanpath_figure(
         fig,
         raw_gaze,
         show_raw_gaze=show_raw_gaze,
+        fixations=fixations,
         fields=fields,
         raw_gaze_color=raw_gaze_color,
         raw_gaze_marker_size=raw_gaze_marker_size,
@@ -5167,7 +5170,9 @@ def _render_scanpath_figure(
             axis.update(
                 showticklabels=True,
                 showgrid=True,
-                title=_chart_axis_title(field),
+                title=_chart_axis_title(
+                    field, "raw_gaze" if fixations.empty or not show_fixations else None
+                ),
                 range=_chart_axis_range(
                     fig.data, coordinate, coordinate == "y" and field == "y"
                 ),
@@ -8050,7 +8055,7 @@ def _add_comparison_raw_gaze_trace(
     trace joins its scanpath's legend group, so toggling A in the legend hides
     A's samples with it.
     """
-    if samples is None or samples.empty:
+    if not chart_axes.drawable_raw_samples(("x", "y"), samples):
         return
     if "timestamp_ms" in samples.columns:
         customdata, when = samples["timestamp_ms"], "<br>Timestamp: %{customdata} ms"
@@ -10799,7 +10804,11 @@ def make_scanpath_figure(
     if resolved.redact_text:
         words, fixations = redact_word_text(words), without_word_keys(fixations)
     fixations = _finite_for_plotting(fixations, fields_xy)
-    raw_gaze = _finite_for_plotting(raw_gaze)
+    raw_gaze = _finite_for_plotting(raw_gaze, fields_xy)
+    if any(f in chart_axes.SAMPLE_FIELDS and f not in fixations for f in fields_xy):
+        if chart_axes.ELAPSED in fields_xy:
+            fixations = chart_axes.with_origin(fixations)
+        fixations = fixations.iloc[:0]
     with _labelled_columns(resolved.column_labels):
         fig = _render_scanpath_figure(
             words,

@@ -28,6 +28,7 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Word boxes | Rail → **Word boxes** | `global_show_words` | Boxes exactly as the data gave them (`x .. x + width`) |
 | Heatmap | Rail → **Heatmap** | `global_show_heatmap` | Word-level shading on its own colour bar |
 | Raw gaze | Rail → **Raw gaze** | `global_show_raw_gaze` | Samples drawn; on by default when raw gaze is the only table |
+| Sample charts | Full → Figure & canvas → Axis preset | `global_x_field`, `global_y_field`, `global_show_raw_gaze` | Pupil and position presets draw samples against the recorded clock or sample number. A screen covered only by samples is selectable and exportable. |
 | Filters & highlights | Rail → **Filters & highlights** | its popover's keys | The badge counts active filters; the fixation range slices the trail |
 | Figure & canvas | Rail → **Figure & canvas** | its popover's keys (legends: `global_legend_<kind>_*`) | Canvas size, fonts, title / caption, legends, credit |
 | Animate | Rail toggle | `single_animate` | The replay player draws its own toolbar row; the plot keeps the static figure's size |

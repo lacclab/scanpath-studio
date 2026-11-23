@@ -1936,6 +1936,11 @@ def _print_dimensions(options, fmt, width, height):
     }
 
 
+class _SettingsFailure(ValueError):
+    """A figure file the bundle's own settings rule out. A retry keeps those
+    settings, so it would fail the same way and is not offered for this file."""
+
+
 def _bundle_image(renderer, figure, fmt, width, height, options):
     """Set physical size without changing the layout of source text and markers."""
     from PIL import Image
@@ -1948,7 +1953,7 @@ def _bundle_image(renderer, figure, fmt, width, height, options):
     raster = fmt in {"png", "tiff"}
     scale = options.image_scale(fmt, width)
     if raster and width * height * scale**2 > 64_000_000:
-        raise ValueError("Use a smaller raster width or DPI, or export as SVG.")
+        raise _SettingsFailure("Use a smaller raster width or DPI, or export as SVG.")
     data = renderer(figure, "png" if fmt == "tiff" else fmt, width, height, scale)
     if fmt == "svg" and mm is not None:
         return size_svg(data, width, height, mm)
@@ -3584,7 +3589,8 @@ def bulk_export(
 
             def record_failure(path, artifact, fmt, exc, unit=unit_ids, name=slug):
                 progress.figures_failed += 1
-                progress.retryable_figures += 1
+                if not isinstance(exc, _SettingsFailure):
+                    progress.retryable_figures += 1
                 label = "layer" if artifact == "layers" else f"{fmt.upper()} {artifact}"
                 progress.errors.append(f"{name}: {label} export failed ({exc})")
                 _inventory(path, artifact, "failed", unit, str(exc), fmt=fmt)

@@ -2148,6 +2148,51 @@ def test_a_retried_zip64_bundle_keeps_valid_local_headers(
             )
 
 
+def test_only_failures_another_try_can_fix_are_offered_for_retry(
+    minimal_combos, minimal_words, minimal_fixations, base_settings, monkeypatch
+):
+    from contextlib import contextmanager
+
+    from scanpath_studio import export
+    from scanpath_studio.export_retry import retry_failed_figures
+
+    fail = True
+
+    @contextmanager
+    def renderer(_enabled):
+        def render(_fig, fmt, *_dimensions):
+            assert fmt == "pdf", "a PNG over the pixel cap is never rendered"
+            if fail:
+                raise ValueError("Renderer unavailable")
+            return b"pdf"
+
+        yield render
+
+    monkeypatch.setattr(export, "_figure_renderer", renderer)
+    args = dict(
+        canvas_width=800,
+        canvas_height=400,
+        base_font_size=14,
+        font_family="Arial",
+        x_field="x",
+        y_field="y",
+        settings=base_settings,
+        # The PNGs exceed the raster pixel cap, which no retry can change.
+        options=ExportOptions(
+            include_png=True, include_svg=False, include_pdf=True, png_scale=40
+        ),
+    )
+    frames = minimal_combos, minimal_words, minimal_fixations
+    original, progress = bulk_export(*frames, **args)
+    assert (progress.figures_failed, progress.retryable_figures) == (4, 2)
+    assert sum("smaller raster width" in error for error in progress.errors) == 2
+    cache = {"data": original, "sig": ("frames",), "progress": progress}
+    fail = False
+    _, progress = retry_failed_figures(cache, cache["sig"], *frames, **args)
+    assert (progress.figures_written, progress.figures_failed) == (2, 2)
+    assert progress.retryable_figures == 0
+
+
 def test_uploaded_study_references_are_carried_through_a_comparison_bundle(
     minimal_combos, minimal_words, minimal_fixations, base_settings
 ):

@@ -140,3 +140,30 @@ def test_heatmap_without_colorbar_keeps_the_same_units_and_values():
     assert (
         hidden.layout.meta["publication_hidden_heatmap"]["meta"] == shown.data[0].meta
     )
+
+
+def test_single_figure_api_and_legacy_layout():
+    figure = go.Figure(go.Bar(x=["before", "after"], y=[4, 6]))
+    single = sps.publication_figure(figure, name="Accuracy")
+    assert len(single["sources"]) == len(single["panels"]) == 1
+    assert single["panels"][0]["title"] == "Accuracy"
+    assert single["sources"][0]["figure"]["data"][0]["y"] == [4, 6]
+
+    legacy = sps.publication_figure({"A": figure, "B": figure}, layout="row")
+    assert [p["title"] for p in legacy["panels"]] == ["A", "B"]
+    assert legacy["layout"] == "row"
+
+
+def test_quick_download_size_keeps_current_figure_draft_identity():
+    def capture(y, width):
+        return publication.source(
+            go.Figure(go.Bar(y=[y])),
+            "Accuracy",
+            settings={"export": {"width": width}, "selection": {"trial_id": "1"}},
+        )
+
+    original = capture(4, 85)
+    resized = capture(4, 170)
+    assert original["id"] == resized["id"]
+    assert original["settings"] != resized["settings"]
+    assert capture(6, 170)["id"] != original["id"]

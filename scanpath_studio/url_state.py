@@ -4666,7 +4666,7 @@ def _render_share_body(
     )
     if visible:
         st.checkbox(
-            "Open the figure workspace with this link",
+            "Open Prepare figure for export with this link",
             key="share_prepare_figure",
             persist_state="session",
         )

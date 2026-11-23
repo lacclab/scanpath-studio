@@ -24,7 +24,7 @@ If you mistype a command, the CLI suggests the closest match.
 
 ## Publication
 
-Save the editor’s figure recipe to reproduce an assembled figure, including its panel order, crop, annotations and print size.
+Download the editable file under **Save or open** to reproduce the figure with its crop, labels, caption and print settings.
 
 ```bash
 scanpath-studio render --sample --width-mm 85 -o reading.publication.json

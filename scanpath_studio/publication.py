@@ -53,14 +53,18 @@ def source(
         {
             **entry,
             "settings": {
-                k: v for k, v in (settings or {}).items() if k != "exported_at"
+                k: v
+                for k, v in (settings or {}).items()
+                if k not in {"exported_at", "export"}
             },
         },
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
     )
-    entry["id"] = hashlib.sha256(identity.encode()).hexdigest()
+    entry["id"] = hashlib.sha256(
+        identity.encode("utf-8", errors="backslashreplace")
+    ).hexdigest()
     return entry
 
 
@@ -155,8 +159,8 @@ def editor_html(
     plotly_script: str | None = None,
     session: str = "",
     plot_id: str = "",
-    replacement=None,
-    import_id="",
+    import_id: str = "",
+    batch: bool = False,
 ) -> str:
     """An offline editing document, or the same editor with the app's shared plotly.js."""
     from plotly.offline import get_plotlyjs
@@ -171,8 +175,8 @@ def editor_html(
             "project": doc,
             "session": session,
             "plotId": plot_id,
-            "replacement": replacement,
             "importId": import_id,
+            "batch": batch,
         },
         allow_nan=False,
     ).replace("<", "\\u003c")
@@ -308,7 +312,7 @@ def render(doc: dict, fmt: str) -> bytes:
     if "." + fmt not in FORMATS:
         raise ValueError(f"Unknown publication format {fmt!r}.")
     if fmt == "json":
-        return json.dumps(doc, ensure_ascii=False, allow_nan=False).encode()
+        return json.dumps(doc, allow_nan=False).encode()
     if fmt == "html":
         return editor_html(doc).encode()
     result = _render_local(doc, fmt)

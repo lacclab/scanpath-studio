@@ -3968,7 +3968,7 @@ def publication_figure(
     width_mm: float = 170,
     layout: str = "stack",
 ) -> dict:
-    """Build a portable figure project from a mapping of panel titles to Plotly figures.
+    """Prepare one Plotly figure to edit and export.
 
     Use the returned recipe with save_publication or open its JSON in Prepare figure.
     The recipe includes the plotted data and embedded images.
@@ -3989,6 +3989,10 @@ def publication_figure(
                 return "scanpath"
         return "chart"
 
+    if isinstance(figures, go.Figure):
+        return project(
+            [source(figures, name, kind=kind(figures))], name=name, width_mm=width_mm
+        )
     return project(
         (source(fig, title, kind=kind(fig)) for title, fig in figures.items()),
         name=name,
@@ -4071,7 +4075,7 @@ def save_figure(
             raise ValueError("Pass width_mm or width_in, not both.")
         name = Path(path).name.rsplit(".publication.", 1)[0]
         recipe = publication_figure(
-            {name: fig},
+            fig,
             name=name,
             width_mm=width_mm
             if width_mm is not None

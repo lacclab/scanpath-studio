@@ -614,10 +614,10 @@ function build(arts) {
     rows;
   if (slide && room < 10)
     throw Error(
-      "The slide has too little room for its panels. Move the caption to the manuscript or shorten the headings."
+      "The caption and headings leave too little room for the artwork. Shorten them or keep the caption separate."
     );
   if (!finite(H, 1, 20000))
-    throw Error("Choose a wider crop or a more compact layout.");
+    throw Error("Choose a wider crop or reduce the figure width.");
   const root = svg("svg", {
     xmlns: NS,
     width: doc.width + "mm",
@@ -731,9 +731,9 @@ function build(arts) {
           issues.push(
             "A " +
               (t.legend ? "legend" : "figure annotation") +
-              " is clipped in panel " +
-              letter(i) +
-              "."
+              (doc.panels.length === 1
+                ? " is clipped at the figure edge."
+                : " is clipped in panel " + letter(i) + ".")
           );
       }
       const map = (a, b) => [ox + (a - box[0]) * k, oy + (b - box[1]) * k];
@@ -807,7 +807,11 @@ function build(arts) {
           ly - fs < y ||
           ly > oy + h
         )
-          issues.push("Move the pinned label inside panel " + letter(i) + ".");
+          issues.push(
+            doc.panels.length === 1
+              ? "Move the pinned label inside the figure."
+              : "Move the pinned label inside panel " + letter(i) + "."
+          );
         min = Math.min(min, fs);
       }
       positions[i] = { x: ox, y: oy, w, h, k, box, art };
@@ -896,8 +900,7 @@ function setBox(n, x, y, w, h, box) {
     n.setAttribute(key, value);
 }
 async function artwork() {
-  if (!doc.panels.length)
-    throw Error("Add a source panel to start the figure.");
+  if (!doc.panels.length) throw Error("Open a saved figure to export it.");
   const arts = [];
   for (const p of doc.panels) arts.push(await capture(byId(p.source), p));
   return build(arts);

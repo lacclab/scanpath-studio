@@ -1016,3 +1016,48 @@ def test_reduced_motion_keeps_a_steady_tour_target_as_the_keyboard_advances(
                 arg=f".st-key-tour_grp_{target}",
                 timeout=60000,
             )
+
+
+def test_prepare_single_figure_keeps_draft_when_opening_a_saved_figure(
+    app_url, browser
+):
+    import json
+
+    import plotly.graph_objects as go
+
+    from scanpath_studio.api import publication_figure
+
+    page = _open(browser, f"{app_url}/?ui=full&prepare=1")
+    try:
+        editor = page.frame_locator('iframe[title="Publication figure workspace"]')
+        editor.locator("#sheet > svg").wait_for()
+        editor.get_by_role("button", name="Download PNG", exact=True).wait_for()
+        assert not editor.get_by_label("Width (mm)", exact=True).count()
+        assert not editor.get_by_role("button", name="Replay clip").count()
+
+        def click(label):
+            editor.get_by_role("button", name=label, exact=True).click()
+
+        click("Caption and description")
+        editor.get_by_label("Caption", exact=True).fill("Close reading")
+        editor.get_by_label("Caption", exact=True).press("Tab")
+        click("Save or open")
+        saved = publication_figure(go.Figure(go.Bar(y=[2, 4])), name="Chart")
+        editor.locator("#upload").set_input_files(
+            {
+                "name": "chart.json",
+                "mimeType": "application/json",
+                "buffer": json.dumps(saved).encode(),
+            }
+        )
+        editor.locator("#figure-name").filter(has_text="Chart").wait_for()
+        assert not editor.get_by_role("button", name="Label events").count()
+        click("Save or open")
+        click("Return to starting figure")
+        click("Caption and description")
+        assert (
+            editor.get_by_label("Caption", exact=True).input_value() == "Close reading"
+        )
+        assert not page.errors
+    finally:
+        page.context.close()

@@ -825,7 +825,7 @@ def test_simple_export_has_no_bundle():
     assert not at.exception
     headings = [str(m.value) for m in at.markdown]
     assert any("Current figure" in h for h in headings)
-    assert not any("Export bundle" in h for h in headings)
+    assert not any(e.label == "Export bundle" for e in at.expander)
     assert not [r for r in at.radio if r.key == "bulk_export_scope"]
 
 
@@ -834,7 +834,7 @@ def test_advanced_export_keeps_the_bundle():
     at.session_state["single_subtab"] = tabs.SUBTAB_EXPORT
     at.run()
     assert not at.exception
-    assert any("Export bundle" in str(m.value) for m in at.markdown)
+    assert any(e.label == "Export bundle" for e in at.expander)
 
 
 def test_simple_more_subtab_lists_advanced_and_switches():
@@ -1085,7 +1085,7 @@ def test_simple_export_points_to_the_bundle_in_advanced():
     assert not at.exception
     assert at.session_state["ui_mode"] == "full"
     assert at.session_state["_ui_mode_chosen"] is True
-    assert any("Export bundle" in str(m.value) for m in at.markdown)
+    assert any(e.label == "Export bundle" for e in at.expander)
 
 
 def test_advanced_export_has_no_pointer():

@@ -61,4 +61,4 @@ rail-less Corpus view resolves the same geometry.
 
 ## Publication figures
 
-The publication workspace captures a rendered Plotly source from any supported view. Panel placement, crops in source-figure pixels, labels, caption placement and print size belong to the publication recipe. The source retains its original axes, clock, plot settings when captured from Scanpath, and illustration disclosures. The offline editor, app proof and command-line renderer use the same layout.
+The publication workspace captures a rendered Plotly source from any supported view. Crops in source-figure pixels, labels, caption placement and optional print settings belong to the publication recipe. The source retains its original axes, clock, plot settings when captured from Scanpath, and illustration disclosures. The offline editor, app proof and command-line renderer use the same layout.

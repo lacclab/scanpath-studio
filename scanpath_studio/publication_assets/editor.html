@@ -11,21 +11,15 @@
 <body>
   <main>
     <header>
-      <div><small>Scanpath Studio</small><h1>Prepare figure</h1></div>
-      <button id="library">Saved figures</button>
+      <div><h1 id="heading">Prepare figure</h1><div id="figure-name"></div></div>
+      <button id="library">Save or open</button>
     </header>
-    <nav aria-label="Figure tools"></nav>
-    <div class="workspace">
-      <section>
-        <div class="proof">
-          <div class="proofhead"><strong id="figure-name"></strong><button id="zoom">100%</button></div>
-          <div id="stage"><div id="sheet"></div></div>
-        </div>
-        <div id="metrics"></div>
-        <div id="type-sizes" class="note"></div>
+    <div id="workspace" class="workspace">
+      <section id="preview" aria-label="Figure preview">
+        <div id="stage"><div id="sheet"></div></div>
         <div id="issues" aria-live="polite"></div>
       </section>
-      <aside id="controls"></aside>
+      <aside id="controls" aria-label="Figure tools"></aside>
     </div>
     <div id="message" role="status"></div>
     <input type="file" id="upload" accept=".json" hidden>

@@ -1,15 +1,11 @@
-const tabs = [
-  "Proof & export",
-  "Region & events",
-  "Panel layout",
-  "Replay",
-  "Caption & save",
-];
-let tab = tabs[0],
-  actual = false,
+let libraryOpen = false,
+  tool = "",
+  format = "png",
   cropping = false,
-  playing = false,
-  chosenSource = null,
+  playing = false;
+let startingDraft = null,
+  openedFile = false;
+let target,
   queued = Promise.resolve();
 const node = (tag, text, cls) => {
   const n = document.createElement(tag);
@@ -69,13 +65,14 @@ const num = (name, v, min, max, change) =>
   entry(name, v, change, { num: true, min, max });
 const row = (...children) => {
   const n = node("div", null, "row");
-  n.append(...children);
+  n.append(...children.filter(Boolean));
   return n;
 };
 function section(title, ...children) {
   const n = node("section");
-  n.append(node("h2", title), ...children.filter(Boolean));
-  $("controls").append(n);
+  if (title) n.append(node("h2", title));
+  n.append(...children.filter(Boolean));
+  target.append(n);
 }
 const pNow = () => doc.panels[active],
   sNow = () => byId(pNow()?.source),
@@ -88,13 +85,6 @@ const set = (k, v) => {
     pNow()[k] = v;
     update();
   };
-const optPanels = () =>
-  doc.panels.map((p, i) => [i, letter(i) + " · " + p.title]);
-const panelChoice = () =>
-  choice("Edit panel", optPanels(), active, (v) => {
-    active = +v;
-    update();
-  });
 function snapshot() {
   const { currentSource, comparison, ...project } = doc;
   return {
@@ -148,21 +138,37 @@ function draftStore() {
     return null;
   }
 }
+const draftKey = JSON.stringify([input.session, input.importId]);
 function persist() {
-  draftStore()?.set(input.session, {
-    importId: input.importId,
-    project: snapshot(),
+  const drafts = draftStore();
+  if (!drafts) return;
+  drafts.delete(draftKey);
+  drafts.set(draftKey, {
+    starting: openedFile ? startingDraft : snapshot(),
+    opened: openedFile ? snapshot() : null,
   });
+  if (drafts.size > 4) drafts.delete(drafts.keys().next().value);
 }
-function merged(item) {
-  check(item);
-  const sources = new Map(
-    [...doc.sources, ...item.sources].map((s) => [s.id, s])
-  );
-  doc = { ...item, sources: [...sources.values()] };
+function openFigure(item) {
+  doc = clone(check(item));
   active = 0;
-  chosenSource = null;
+  tool = "";
+  cropping = false;
+  libraryOpen = !doc.panels.length;
   cache.clear();
+}
+function openSaved(item) {
+  check(item);
+  if (!openedFile) startingDraft = snapshot();
+  openFigure(item);
+  openedFile = true;
+  return update();
+}
+function returnToStart() {
+  openFigure(startingDraft ?? input.project);
+  openedFile = false;
+  startingDraft = null;
+  return update();
 }
 function update() {
   playing = false;
@@ -174,83 +180,35 @@ function redraw() {
   const render = async () => {
     if (rev !== revision) return;
     try {
+      if (!doc.panels.length) {
+        libraryOpen = true;
+        paintControls();
+        return;
+      }
       const art = await artwork();
       if (rev !== revision) return;
       cells = art.positions;
       currentSheet = art;
       $("sheet").replaceChildren(art.root);
-      $("sheet").style.width = actual
-        ? fmt((doc.width * 96) / 25.4) + "px"
-        : "min(100%, " +
-          Math.max(80, Math.round((435 * art.W) / art.H)) +
-          "px)";
-      $("figure-name").textContent = doc.name;
-      $("zoom").textContent = actual ? "Fit to window" : "100%";
-      $("metrics").textContent =
-        fmt(doc.width) +
-        " × " +
-        fmt(art.H / PT) +
-        " mm" +
-        (Number.isFinite(art.min)
-          ? "   ·   Smallest lettering " + fmt(art.min) + " pt"
-          : "");
-      $("type-sizes").textContent = Object.entries(art.lettering)
-        .map(([name, points]) => name + " " + fmt(points) + " pt")
-        .join("   ·   ");
+      $("sheet").style.maxWidth =
+        Math.max(100, Math.round((480 * art.W) / art.H)) + "px";
       $("issues").replaceChildren();
-      for (const issue of art.issues) {
+      for (const issue of art.issues.filter((issue) => !printIssue(issue))) {
         const n = node("div", issue);
         if (issue.startsWith("The caption"))
           n.append(
-            button("Wrap caption", () => set("captionPlacement", "Wrap")),
-            button("Move to manuscript", () =>
-              set("captionPlacement", "Manuscript")
-            )
+            button("Wrap caption", () => set("captionPlacement", "Wrap"))
           );
-        if (issue.startsWith("Move the pinned label"))
+        if (
+          issue.startsWith("Move the pinned label") &&
+          doc.panels.length === 1
+        )
           n.append(
-            button("Fit labels inside panels", () => {
-              doc.panels.forEach((panel, i) =>
-                panel.labels.forEach((label) => fitLabel(label, cells[i]))
-              );
+            button("Fit label inside figure", () => {
+              pNow().labels.forEach((label) => fitLabel(label, cells[0]));
               update();
             })
           );
-        if (issue.includes("legend"))
-          n.append(
-            button("Edit legend", () => {
-              tab = "Panel layout";
-              paintControls();
-            })
-          );
-        if (issue.startsWith("Smallest")) {
-          if (
-            input.session &&
-            input.project.comparison &&
-            pNow()?.source === input.project.currentSource
-          )
-            n.append(
-              button("Stack and crop readings", () =>
-                window.parent.postMessage(
-                  {
-                    key: input.session,
-                    action: "stack",
-                    value: { id: pNow().source, index: active },
-                  },
-                  "*"
-                )
-              )
-            );
-          if (doc.panels.length > 1 && doc.layout !== "stack")
-            n.append(button("Stack panels", () => set("layout", "stack")));
-          n.append(
-            button("Crop detail", () => {
-              tab = "Region & events";
-              cropping = true;
-              paintControls();
-            })
-          );
-        }
         $("issues").append(n);
       }
       message("");
@@ -260,8 +218,6 @@ function redraw() {
       currentSheet = null;
       cells = [];
       $("sheet").replaceChildren();
-      $("metrics").textContent = "";
-      $("type-sizes").textContent = "";
       $("issues").replaceChildren();
       paintControls();
     }
@@ -269,267 +225,224 @@ function redraw() {
   queued = queued.catch(() => {}).then(render);
   return queued;
 }
+const printIssue = (issue) =>
+  issue.startsWith("Smallest") || issue.startsWith("The figure exceeds");
+const formats = {
+  png: "For slides and documents.",
+  svg: "Editable vector artwork that stays sharp at any size.",
+  pdf: "Vector artwork for manuscripts and print.",
+  tiff: "A high-resolution image for journal submissions.",
+};
+function disclosure(name, render) {
+  const summary = button(name, () => {
+    tool = tool === name ? "" : name;
+    cropping = false;
+    playing = false;
+    paintControls();
+    [...$("controls").querySelectorAll("button.disclosure")]
+      .find((b) => b.textContent === name)
+      ?.focus();
+  });
+  summary.className = "disclosure";
+  summary.setAttribute("aria-expanded", String(tool === name));
+  target.append(summary);
+  if (tool !== name) return;
+  const body = node("div", null, "tool-body");
+  target.append(body);
+  target = body;
+  render();
+  target = $("controls");
+}
 function paintControls() {
-  $("controls").replaceChildren();
-  const nav = document.querySelector("nav");
-  nav.replaceChildren();
-  for (const label of tabs) {
-    const b = button(label, () => {
-      playing = false;
-      tab = label;
-      cropping = false;
-      paintControls();
-    });
-    b.setAttribute("aria-pressed", String(label === tab));
-    nav.append(b);
-  }
+  const controls = $("controls");
+  const focus = controls.contains(document.activeElement)
+    ? document.activeElement.getAttribute("aria-label")
+    : null;
+  controls.replaceChildren();
+  target = controls;
+  $("workspace").classList.toggle("library", libraryOpen);
+  $("preview").hidden = libraryOpen;
+  $("library").hidden = !doc.panels.length;
+  $("library").textContent = libraryOpen ? "Back to figure" : "Save or open";
+  $("heading").textContent = libraryOpen ? "Saved figures" : "Prepare figure";
+  $("figure-name").textContent = libraryOpen ? "" : doc.name;
   $("sheet").classList.toggle("cropping", cropping);
-  if (tab === "Saved figures") {
+  if (libraryOpen) {
     savedControls();
     return;
   }
-  const p = pNow(),
-    s = sNow();
-  if (!p || !s) {
-    section("Sources", ...sourceControls());
-    return;
-  }
-  if (tab === tabs[0]) {
-    section(
-      "Destination",
-      choice(
-        "Place figure in",
-        [...Object.keys(presets), "Custom paper"],
-        doc.destination,
-        (v) => {
-          doc.destination = v;
-          if (presets[v]) doc.width = presets[v];
-          doc.minimum = v.includes("slide") ? 18 : 6;
-          doc.maxHeight = v.includes("slide") ? 190.5 : 230;
-          update();
-        }
-      ),
-      row(
-        num("Width (mm)", doc.width, 10, 1000, (v) => {
-          doc.destination = "Custom paper";
-          set("width", v);
-        }),
-        num("Height limit (mm)", doc.maxHeight, 10, 2000, (v) =>
-          set("maxHeight", v)
-        )
-      ),
-      num("Minimum lettering (pt)", doc.minimum, 1, 72, (v) =>
-        set("minimum", v)
-      ),
-      choice(
-        "Palette",
-        ["Color", "Grayscale"],
-        doc.gray ? "Grayscale" : "Color",
-        (v) => set("gray", v === "Grayscale")
-      )
-    );
-    section(
-      "Export",
-      choice(
-        "Caption placement",
-        ["Manuscript", "Wrap", "Single line"],
-        doc.captionPlacement,
-        (v) => set("captionPlacement", v)
-      ),
-      num("Raster resolution (dpi)", doc.dpi, 50, 1200, (v) =>
-        set("dpi", Math.round(v))
-      ),
-      row(
-        ...["SVG", "PDF", "PNG", "TIFF"].map((f) =>
-          button(f, () => downloadArt(f.toLowerCase()))
-        )
-      ),
-      input.session &&
-        button("Apply size to export bundle", () =>
-          window.parent.postMessage(
-            {
-              key: input.session,
-              action: "batch",
-              value: { width: doc.width, dpi: doc.dpi },
-            },
-            "*"
-          )
-        ),
-      note(
-        "SVG and PDF keep vector artwork. PNG and TIFF record the selected print density."
-      )
-    );
-  } else if (tab === tabs[1]) regionControls(p);
-  else if (tab === tabs[2]) layoutControls(p);
-  else if (tab === tabs[3]) replayControls(p, s);
-  else {
-    section(
-      "Figure text",
-      entry(
-        "Manuscript caption",
-        doc.caption ?? draft(),
-        (v) => set("caption", v),
-        { multi: true }
-      ),
-      entry("Alternative text", doc.alt ?? draft(true), (v) => set("alt", v), {
-        multi: true,
-      }),
-      button("Regenerate from current panels", () => {
-        doc.caption = null;
-        set("alt", null);
-      }),
-      button("Download both as text", () =>
-        file(
-          "txt",
-          [
-            doc.caption ?? draft(),
-            "",
-            doc.alt ?? draft(true),
-            "",
-            doc.citation.Comment,
-          ].join("\n"),
-          "text/plain"
-        )
-      )
-    );
-    section(
-      "Save figure",
-      entry("Figure name", doc.name, (v) =>
-        set("name", v.trim() || "Untitled figure")
-      ),
-      button("Save named figure on this device", saveNamed, true),
-      button("Download figure recipe", () =>
-        file("json", JSON.stringify(snapshot()), "application/json")
-      ),
-      input.session &&
-        button("Download offline editor", () =>
-          window.parent.postMessage(
-            { key: input.session, action: "html", value: snapshot() },
-            "*"
-          )
-        ),
-      s.settings &&
-        button("Download source settings", () =>
-          file("settings.json", JSON.stringify(s.settings), "application/json")
-        ),
-      note(
-        "Recipes include plotted data, tooltip fields and embedded stimulus images. Open the file to edit or reproduce the figure."
-      )
-    );
-  }
-}
-function sourceControls() {
-  const id = chosenSource || doc.sources.at(-1)?.id;
-  const arr = [
+  section(
+    "Download figure",
     choice(
-      "Available source",
-      doc.sources.map((s) => [s.id, s.title]),
-      id,
+      "File format",
+      Object.keys(formats).map((k) => [k, k.toUpperCase()]),
+      format,
       (v) => {
-        chosenSource = v;
+        format = v;
         paintControls();
       }
     ),
-  ];
-  if (id)
-    arr.push(
-      button("Add as panel", () => {
-        const s = byId(id);
-        doc.panels.push({ source: id, title: s.title, labels: [] });
-        active = doc.panels.length - 1;
-        update();
-      })
-    );
-  if (id && pNow() && id !== pNow().source) {
-    arr.push(
+    note(formats[format]),
+    button(
+      format === "pdf" && !input.session
+        ? "Print / save PDF"
+        : "Download " + format.toUpperCase(),
+      () => downloadArt(format),
+      true
+    )
+  );
+  const p = pNow(),
+    s = sNow();
+  if (doc.panels.length === 1) {
+    disclosure("Crop", () => cropControls(p));
+    if (artNow()?.events.length || p.labels.length)
+      disclosure("Label events", () => eventControls(p));
+    if (clock(s).length) disclosure("Replay clip", () => replayControls(p, s));
+    if (
+      s.figure.layout?.showlegend !== false &&
+      s.figure.data.some(
+        (t) => t.name && t.showlegend !== false && t.visible !== false
+      )
+    )
+      disclosure("Legend", () => legendControls(p));
+  } else {
+    section(
+      "",
       note(
-        "Replace " +
-          pNow().title +
-          " with " +
-          byId(id).title +
-          ". This clears pins belonging to the previous reading."
+        "This file contains a saved layout. Download it as shown, or open one of its figures as a separate copy."
       ),
       choice(
-        "Edited caption and alternative text",
-        ["Keep wording", "Regenerate on replacement"],
-        pNow().regenerate ? "Regenerate on replacement" : "Keep wording",
+        "Figure to copy",
+        doc.panels.map((q, i) => [i, q.title]),
+        active,
         (v) => {
-          pNow().regenerate = v === "Regenerate on replacement";
-          persist();
+          active = Number(v);
         }
-      )
+      ),
+      button("Edit a copy", () => {
+        const project = snapshot(),
+          panel = pNow();
+        openSaved({
+          ...project,
+          name: doc.name + " · " + (panel.title || letter(active)),
+          panels: [panel],
+          sources: [sNow()],
+          caption: null,
+          alt: null,
+          headings: false,
+          moviePanel: 0,
+        });
+      })
     );
   }
-  if (id && pNow() && id !== pNow().source)
-    arr.push(
-      button("Replace selected panel", () => {
-        const s = byId(id),
-          old = pNow(),
-          a = sNow().figure.layout,
-          b = s.figure.layout;
-        // Geometry from another canvas must be chosen again. Event labels belong to the old reading.
-        const same =
-          a?.width === b?.width &&
-          a?.height === b?.height &&
-          JSON.stringify(a?.xaxis?.range) === JSON.stringify(b?.xaxis?.range) &&
-          JSON.stringify(a?.yaxis?.range) === JSON.stringify(b?.yaxis?.range);
-        if (old.regenerate) {
-          doc.caption = null;
-          doc.alt = null;
-        }
-        doc.panels[active] = {
-          source: id,
-          title: old.title === sNow().title ? s.title : old.title,
-          labels: [],
-          ...(same ? { crop: old.crop, overview: old.overview } : {}),
-        };
-        update();
-      })
-    );
-  return arr;
+  disclosure("Caption and description", captionControls);
+  disclosure("Print settings", printControls);
+  if (focus)
+    [...controls.querySelectorAll("[aria-label]")]
+      .find((el) => el.getAttribute("aria-label") === focus)
+      ?.focus({ preventScroll: true });
 }
-function layoutControls(p) {
+function captionControls() {
   section(
-    "Layout",
-    choice(
-      "Arrangement",
-      [
-        ["row", "Row"],
-        ["stack", "Stack"],
-        ["grid", "2 × 2 grid"],
-      ],
-      doc.layout,
-      (v) => set("layout", v)
-    ),
-    num("Panel gap (pt)", doc.gap, 0, 100, (v) => set("gap", v)),
-    panelChoice(),
-    entry("Panel heading", p.title, (v) => {
-      doc.headings = true;
-      panelSet("title", v);
+    "",
+    entry("Caption", doc.caption ?? draft(), (v) => set("caption", v), {
+      multi: true,
     }),
-    row(
-      ...[-1, 1].map((d) => {
-        const b = button(d === 1 ? "Move later" : "Move earlier", () => {
-          const j = active + d;
-          [doc.panels[active], doc.panels[j]] = [
-            doc.panels[j],
-            doc.panels[active],
-          ];
-          active = j;
-          update();
-        });
-        b.disabled = !doc.panels[active + d];
-        return b;
-      })
+    choice(
+      "Caption placement",
+      [
+        ["Manuscript", "Keep separate"],
+        ["Wrap", "Include below figure"],
+        ["Single line", "Include on one line"],
+      ],
+      doc.captionPlacement,
+      (v) => set("captionPlacement", v)
     ),
-    doc.panels.length > 1 &&
-      button("Remove panel", () => {
-        doc.panels.splice(active, 1);
-        active = Math.min(active, doc.panels.length - 1);
-        update();
+    entry("Alternative text", doc.alt ?? draft(true), (v) => set("alt", v), {
+      multi: true,
+    }),
+    button("Download text", () =>
+      file(
+        "txt",
+        [
+          doc.caption ?? draft(),
+          "",
+          doc.alt ?? draft(true),
+          "",
+          doc.citation.Comment,
+        ].join("\n"),
+        "text/plain"
+      )
+    ),
+    (doc.caption !== null || doc.alt !== null) &&
+      button("Restore suggested text", () => {
+        doc.caption = null;
+        set("alt", null);
       })
   );
-  section("Panel source", ...sourceControls());
+}
+function printControls() {
+  const art = currentSheet;
+  section(
+    "",
+    choice(
+      "Page preset",
+      [...Object.keys(presets), "Custom paper"],
+      doc.destination,
+      (v) => {
+        doc.destination = v;
+        if (presets[v]) doc.width = presets[v];
+        doc.minimum = v.includes("slide") ? 18 : 6;
+        doc.maxHeight = v.includes("slide") ? 190.5 : 230;
+        update();
+      }
+    ),
+    row(
+      num("Width (mm)", doc.width, 10, 1000, (v) => {
+        doc.destination = "Custom paper";
+        set("width", v);
+      }),
+      num("Height limit (mm)", doc.maxHeight, 10, 2000, (v) =>
+        set("maxHeight", v)
+      )
+    ),
+    row(
+      num("Minimum text (pt)", doc.minimum, 1, 72, (v) => set("minimum", v)),
+      num("Resolution (dpi)", doc.dpi, 50, 1200, (v) =>
+        set("dpi", Math.round(v))
+      )
+    ),
+    choice(
+      "Color",
+      ["Color", "Grayscale"],
+      doc.gray ? "Grayscale" : "Color",
+      (v) => set("gray", v === "Grayscale")
+    ),
+    art &&
+      note(
+        fmt(doc.width) +
+          " × " +
+          fmt(art.H / PT) +
+          " mm" +
+          (Number.isFinite(art.min)
+            ? " · Smallest text " + fmt(art.min) + " pt"
+            : "")
+      ),
+    ...(art?.issues || []).filter(printIssue).map(note),
+    input.batch &&
+      button("Use this size for batch export", () =>
+        window.parent.postMessage(
+          {
+            key: input.session,
+            action: "batch",
+            value: { width: doc.width, dpi: doc.dpi },
+          },
+          "*"
+        )
+      )
+  );
+}
+function legendControls(p) {
   const names = [
     ...new Set(
       sNow()
@@ -551,7 +464,7 @@ function layoutControls(p) {
   }
   if (names.length)
     section(
-      "Legend",
+      "",
       Object.keys(ids).length &&
         button("Use reader IDs", () =>
           panelSet("legendNames", { ...p.legendNames, ...ids })
@@ -568,54 +481,6 @@ function layoutControls(p) {
         )
       )
     );
-  const tr = heatInfo(sNow());
-  if (tr) {
-    const info = tr.meta.publication_heatmap,
-      h = doc.heat;
-    const matched = !!h && h.measure === info.measure && h.norm === info.norm;
-    const apply = (min, max, shared) => {
-      if (min >= max) {
-        message("The upper limit must exceed the lower limit.");
-        return;
-      }
-      set("heat", {
-        min,
-        max,
-        shared,
-        opacity:
-          (sNow().figure.layout?.shapes || []).find(
-            (sh) => sh.name === info.tag
-          )?.opacity ?? 1,
-        scale: tr.marker.colorscale,
-        measure: info.measure,
-        norm: info.norm,
-      });
-    };
-    section(
-      "Heatmap scale",
-      note(info.measure + " · " + info.norm),
-      matched
-        ? row(
-            num("Lower limit", h.min, 0, 1e10, (v) =>
-              apply(v, h.max, h.shared)
-            ),
-            num("Upper limit", h.max, 0.001, 1e10, (v) =>
-              apply(h.min, v, h.shared)
-            )
-          )
-        : button("Lock matching heatmap limits", () =>
-            apply(...tr.meta.word_heatmap_range, true)
-          ),
-      matched &&
-        choice(
-          "Legends",
-          ["One shared legend", "Per panel"],
-          h.shared ? "One shared legend" : "Per panel",
-          (v) => apply(h.min, h.max, v === "One shared legend")
-        ),
-      matched && button("Restore source scales", () => set("heat", null))
-    );
-  }
 }
 function fitLabel(label, cell) {
   if (!cell) return;
@@ -628,30 +493,32 @@ function fitLabel(label, cell) {
   label.dy =
     clip(y + label.dy, Math.min(size + 2, cell.h), Math.max(0, cell.h - 2)) - y;
 }
-function regionControls(p) {
+function cropControls(p) {
   const a = artNow();
   section(
-    "Export region",
-    panelChoice(),
+    "",
+    cropping && note("Drag a rectangle on the figure to keep that area."),
     row(
       button(cropping ? "Cancel drawing" : "Draw crop", () => {
         cropping = !cropping;
         paintControls();
       }),
-      button("Show full source", () => {
-        cropping = false;
-        panelSet("crop", null);
-      })
+      p.crop &&
+        button("Remove crop", () => {
+          cropping = false;
+          panelSet("crop", null);
+        })
     ),
     input.plotId &&
-      p.source === input.project.currentSource &&
+      p.source === input.project.panels[0]?.source &&
       button("Use current plot zoom", useZoom),
-    choice(
-      "Screen overview",
-      ["Off", "Include locator"],
-      p.overview ? "Include locator" : "Off",
-      (v) => panelSet("overview", v !== "Off")
-    )
+    p.crop &&
+      choice(
+        "Show full figure inset",
+        ["Off", "Include locator"],
+        p.overview ? "Include locator" : "Off",
+        (v) => panelSet("overview", v !== "Off")
+      )
   );
   if (!a) return;
   if (a.words.length) {
@@ -702,9 +569,13 @@ function regionControls(p) {
       })
     );
   }
+}
+function eventControls(p) {
+  const a = artNow();
   const unique = new Map();
-  a.events.forEach((e) => unique.set(e.axis + ":" + e.index, e));
+  (a?.events || []).forEach((e) => unique.set(e.axis + ":" + e.index, e));
   const events = [...unique.values()];
+  const multipleReadings = new Set(events.map((q) => q.axis)).size > 1;
   if (events.length) {
     const i = clip(p.event || 0, 0, events.length - 1),
       e = events[i],
@@ -724,12 +595,13 @@ function regionControls(p) {
         update();
       };
     section(
-      "Events",
+      "",
       choice(
         "Fixation",
         events.map((q, j) => [
           j,
-          q.axis + " · " + (q.detail || "Fixation " + q.index),
+          (q.detail || "Fixation " + q.index) +
+            (multipleReadings ? " · " + q.axis : ""),
         ]),
         i,
         (v) => panelSet("event", +v)
@@ -779,11 +651,7 @@ function regionControls(p) {
         (v) => panelSet("label", +v)
       ),
       entry("Label text", l.text, (v) => edit("text", v)),
-      row(
-        num("Horizontal offset (pt)", l.dx, -2000, 2000, (v) => edit("dx", v)),
-        num("Vertical offset (pt)", l.dy, -2000, 2000, (v) => edit("dy", v))
-      ),
-      note("Drag the label on the proof to move its leader."),
+      note("Drag the label on the figure to move it."),
       button("Remove this label", () => {
         p.labels.splice(j, 1);
         update();
@@ -834,14 +702,6 @@ function clipValues(p, s) {
 }
 function replayControls(p, s) {
   const [times, start, end, speed] = clipValues(p, s);
-  section(
-    "Replay panel",
-    panelChoice(),
-    !times.length &&
-      note(
-        "Add a replay from Scanpath → Export to select a clip and its poster."
-      )
-  );
   if (!times.length) return;
   const range = (name, k, v) =>
     num(name, v + 1, 1, times.length, (n) => {
@@ -896,9 +756,9 @@ function replayControls(p, s) {
       button(playing ? "Pause" : "Play clip", () => previewClip()),
       button("Save poster PNG", async () => file("png", await moviePoster()))
     ),
-    button("Prepare MP4 and poster", () => requestVideo()),
-    note(
-      "The clip uses this panel’s interval. Other panels stay at their selected frames."
+    button(
+      input.session ? "Prepare MP4 and poster" : "Save clip settings for MP4",
+      () => requestVideo()
     )
   );
 }
@@ -943,52 +803,70 @@ async function saveNamed() {
     thumbnail: canvas.toDataURL("image/png"),
   };
   await storage((s) => s.put(saved, doc.name));
-  message("Saved " + doc.name + " · revision " + revision + ".");
+  paintControls();
+  message("Saved " + doc.name + " on this device.");
 }
+let libraryRevision = 0;
 async function savedControls() {
+  const generation = ++libraryRevision;
+  if (doc.panels.length) {
+    section(
+      "Save this figure",
+      entry("Figure name", doc.name, (v) =>
+        set("name", v.trim() || "Untitled figure")
+      ),
+      button("Save on this device", saveNamed, true),
+      button("Download editable file", () =>
+        file("json", JSON.stringify(snapshot()), "application/json")
+      ),
+      note("The editable file includes the plotted data and embedded images."),
+      input.session &&
+        button("Download offline editor", () =>
+          window.parent.postMessage(
+            { key: input.session, action: "html", value: snapshot() },
+            "*"
+          )
+        ),
+      doc.panels.length === 1 &&
+        sNow().settings &&
+        button("Download source settings", () =>
+          file(
+            "settings.json",
+            JSON.stringify(sNow().settings),
+            "application/json"
+          )
+        )
+    );
+  }
   section(
-    "Restore figure",
-    button("Open figure recipe", () => $("upload").click()),
-    note(
-      "A recipe contains the plotted data and works without the original dataset."
-    )
+    "Open a figure",
+    button("Open figure file", () => $("upload").click()),
+    openedFile &&
+      input.project.panels.length &&
+      button("Return to starting figure", returnToStart)
   );
-  const rev = revision;
+  const list = node("section");
+  list.append(node("h2", "Saved on this device"));
+  target.append(list);
   try {
     const items = await storage((s) => s.getAll());
-    if (tab !== "Saved figures" || rev !== revision) return;
-    section(
-      "Saved on this device",
-      ...items.map((item) => {
-        const saved = item.project || item,
-          b = button(saved.name, () => {
-            merged(saved);
-            tab = tabs[2];
-            update();
-          });
-        if (item.thumbnail) {
-          const thumb = node("img");
-          thumb.src = item.thumbnail;
-          thumb.alt = "";
-          b.prepend(thumb);
-        }
-        b.append(
-          note(
-            saved.panels.length +
-              " panel" +
-              (saved.panels.length === 1 ? "" : "s") +
-              " · " +
-              fmt(saved.width) +
-              " mm · Revision " +
-              (item.revision || 1)
-          )
-        );
-        return b;
-      }),
-      !items.length && note("Name and save a figure under Caption & save.")
-    );
+    if (!libraryOpen || generation !== libraryRevision) return;
+    if (!items.length)
+      list.append(note("Figures you save on this device will appear here."));
+    for (const item of items) {
+      const saved = item.project || item;
+      const b = button(saved.name, () => openSaved(saved));
+      if (item.thumbnail) {
+        const img = node("img");
+        img.src = item.thumbnail;
+        img.alt = "";
+        b.prepend(img);
+      }
+      list.append(b);
+    }
   } catch (e) {
-    if (tab === "Saved figures") message(e.message);
+    if (libraryOpen && generation === libraryRevision)
+      list.append(note(e.message));
   }
 }
 function file(ext, bytes, type) {
@@ -1099,7 +977,7 @@ function movie() {
       doc.panels.findIndex((p) => clock(byId(p.source)).length),
     p = doc.panels[i],
     s = byId(p?.source);
-  if (!s || !clock(s).length) throw Error("Select a replay panel.");
+  if (!s || !clock(s).length) throw Error("Open a replay to export a clip.");
   return { p, s, range: clipValues(p, s) };
 }
 window.publicationClipDuration = () => {
@@ -1161,21 +1039,17 @@ function requestVideo() {
   }
 }
 $("library").onclick = () => {
-  tab = "Saved figures";
+  libraryOpen = !libraryOpen;
   playing = false;
+  cropping = false;
+  message("");
   paintControls();
-};
-$("zoom").onclick = () => {
-  actual = !actual;
-  redraw();
 };
 $("upload").onchange = async (e) => {
   try {
     const f = e.target.files[0];
     if (!f) return;
-    merged(JSON.parse(await f.text()));
-    tab = tabs[2];
-    await update();
+    await openSaved(JSON.parse(await f.text()));
   } catch (err) {
     message(err.message);
   }
@@ -1185,7 +1059,7 @@ let drag = null;
 $("sheet").onpointerdown = (e) => {
   const el = e.target.closest("[data-label]"),
     root = currentSheet?.root;
-  if (!root || (!el && !cropping)) return;
+  if (doc.panels.length !== 1 || !root || (!el && !cropping)) return;
   const xy = () =>
       new DOMPoint(e.clientX, e.clientY).matrixTransform(
         root.getScreenCTM().inverse()
@@ -1278,17 +1152,11 @@ if (input.session && window.parent !== window)
 window.publicationReady = (async () => {
   if (input.session) {
     try {
-      const stored = draftStore()?.get(input.session);
-      if (stored && stored.importId === input.importId)
-        merged(clone(stored.project));
-      const change = input.replacement,
-        p = doc.panels[change?.index];
-      if (change && p?.source === change.id && byId(change.new)) {
-        p.source = change.new;
-        p.crop = null;
-        p.overview = false;
-        p.labels = [];
-        active = change.index;
+      const stored = draftStore()?.get(draftKey);
+      if (stored) {
+        startingDraft = stored.starting;
+        openedFile = Boolean(stored.opened);
+        openFigure(stored.opened ?? stored.starting);
       }
       persist();
     } catch {

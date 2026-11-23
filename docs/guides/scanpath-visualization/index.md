@@ -97,7 +97,7 @@ back your last hand-edited figure.
 | --- | --- |
 | **View** | switch **Animation** on or off, or choose **Scanpath**, **Heatmap**, **Illustration**, **Gaze over time** or **Custom** |
 | :material/palette: **My views** | save a named view, apply it to another reading, or share it |
-| **Palette** | choose **Default** (colorblind-safe), **Grayscale**, or **High contrast** |
+| **Palette** | choose **Colorblind-safe**, **Grayscale**, or **High contrast** |
 | :material/compare: **Compare readings** | add a second reading over this one, beside it, or below it |
 | :material/movie: **Animation settings** | set playback speed, autoplay, and frame quality |
 | :material/blur_on: **Fixations** | the fixation markers: color, shape and size, and the fixation index |

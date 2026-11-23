@@ -126,7 +126,7 @@ saved:
 | :material/palette: **My views** | Your saved designs. Click one to apply it. :material/edit: renames it and :material/delete: deletes it. |
 | :material/palette: **My views** → :material/save: | Save the settings on screen as a named design, to apply again later in one click. |
 | :material/palette: **My views** → **Export** / **Import** | Download your designs as a file, or load a file of designs, to share a look with co-authors or move your designs to another computer. A design in the file replaces yours of the same name. |
-| **Palette** | Choose **Default** (colorblind-safe), **Grayscale** for print, or **High contrast**. The swatches preview each palette’s colors. For a grayscale comparison, A has filled markers and solid lines, and B has hollow markers and dashed lines. |
+| **Palette** | Choose **Colorblind-safe**, **Grayscale** for print, or **High contrast**. The swatches preview each palette’s colors. For a grayscale comparison, A has filled markers and solid lines, and B has hollow markers and dashed lines. |
 
 ### :material/blur_on: Fixations
 

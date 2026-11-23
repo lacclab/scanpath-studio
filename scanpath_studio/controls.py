@@ -2542,9 +2542,10 @@ def _render_view_controls(host, *, has_time: bool, slots: dict | None) -> None:
     for index, name in enumerate(names):
         if index % 2 == 0:
             row = grid.columns(2, gap="small", wrap=False)
-        label = {DEFAULT_PALETTE: "Default", "Print / grayscale": "Grayscale"}.get(
-            name, name
-        )
+        label = {
+            DEFAULT_PALETTE: "Colorblind-safe",
+            "Print / grayscale": "Grayscale",
+        }.get(name, name)
         row[index % 2].button(
             f"{label} {spoken('selected')}" if name == palette else label,
             key=palette_tile_key(name),

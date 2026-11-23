@@ -6,7 +6,7 @@
  },
  "app": {
   "name": "Scanpath Studio",
-  "version": "0.48.0.post7+g007504ab1.dirty"
+  "version": "0.48.0"
  },
  "axes": {
   "coordinate_grid": false,
@@ -191,7 +191,7 @@
   "unit": "mm",
   "width": null
  },
- "exported_at": "2026-11-24T00:08:34",
+ "exported_at": "2026-11-24T00:33:50",
  "highlighting": {
   "background_color": "#ffffff",
   "critical_span_style": "None",

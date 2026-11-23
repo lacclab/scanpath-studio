@@ -10,12 +10,12 @@
   "options": {}
  },
  "static-default": {
-  "digest": "f2a2d5acce043967f33e23449da13f813b5c0278882fceb6be84bac41afbcdf6",
+  "digest": "9b8a2ddb650084efb60426527df876be2205edad441f05ee943f6089cda69dd4",
   "kind": "static",
   "options": {}
  },
  "static-maximal": {
-  "digest": "f55569f5d6be82dbdf7a9f23f2fc8cfead7f8fab5455d05d6f5ad329c19c2030",
+  "digest": "77d01baea63cd8eef1d0400eb7f60361e482e81b1fa5c854625ed023eafbb986",
   "kind": "static",
   "options": {
    "color_by": "duration_ms",

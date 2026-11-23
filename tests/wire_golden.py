@@ -94,9 +94,13 @@ def differences(expected: Mapping[str, Any], actual: Mapping[str, Any]) -> list[
     """Each captured key whose restored value differs, or that is now missing.
 
     Keys the session has and the capture lacks are ignored, so adding a
-    setting never fails here; renaming or re-reading one does."""
+    setting never fails here; renaming or re-reading one does. A captured key
+    renamed on purpose is looked up under its new name once its old one is
+    registered in `session_keys.LEGACY_SESSION_KEYS`."""
+    from scanpath_studio.session_keys import rename_legacy_keys
+
     problems = []
-    for key, value in expected.items():
+    for key, value in rename_legacy_keys(expected).items():
         if key not in actual:
             problems.append(f"{key}: missing (was {value!r})")
         elif actual[key] != value:
@@ -319,7 +323,31 @@ def cache_session() -> dict[str, Any]:
         }
     )
     import scanpath_studio.annotations as annotations_mod
+    from scanpath_studio.column_names import for_tables
+    from scanpath_studio.constants import DATASET_ALIASES_KEY
+    from scanpath_studio.dataset_identity import DATASET_IDS_KEY
+    from scanpath_studio.experimental_setup import Provenance, SetupSnapshot
 
+    # The names the user's own files gave the columns, as the wizard records
+    # them beside the canonical frames.
+    schemas = {
+        "words": {"participant": "Reader", "trial": "Paragraph", "text": "Word"},
+        "fixations": {"participant": "Reader", "trial": "Paragraph", "duration": "Dur"},
+        "raw_gaze": None,
+    }
+    raw = {
+        "words": pd.DataFrame(columns=["Reader", "Paragraph", "Word", "Left", "Top"]),
+        "fixations": pd.DataFrame(columns=["Reader", "Paragraph", "Dur", "X", "Y"]),
+    }
+    setup = SetupSnapshot(
+        canvas_width=1280,
+        canvas_height=720,
+        monitor_width_mm=531.0,
+        viewing_distance_mm=650.0,
+        base_font_size=22,
+        screen_provenance=Provenance.MEASURED,
+        geometry_provenance=Provenance.MEASURED,
+    )
     session = {
         **maximal_link_state(),
         "_datasets": {
@@ -327,13 +355,23 @@ def cache_session() -> dict[str, Any]:
                 "words": words,
                 "fixations": fixations,
                 "raw_gaze": raw_gaze,
-                "filter_fields": [],
+                "filter_fields": ["condition"],
                 "composite_trial_columns": [],
-                "schemas": {"words": {"trial": "trial_id"}},
+                "schemas": schemas,
+                "column_names": for_tables(schemas, raw),
+                "dropped_columns": {
+                    "words": ["Notes"],
+                    "fixations": [],
+                    "raw_gaze": [],
+                },
+                "setup": setup.to_dict(),
             }
         },
         "data_source_choice": CACHE_DATASET,
         "_dataset_descriptions": {CACHE_DATASET: "A three-word pilot."},
+        # A private dataset's share links find it by this id, and show its alias.
+        DATASET_IDS_KEY: {CACHE_DATASET: "0d6c1e7a-5b8f-4c3e-9a21-7f04b1c2d3e4"},
+        DATASET_ALIASES_KEY: {CACHE_DATASET: "Pilot (three words)"},
     }
     # As every app run does: the annotations belong to the open dataset.
     annotations_mod.activate_dataset(session, CACHE_DATASET)
@@ -348,19 +386,28 @@ CACHE_DATASET = "Golden corpus"
 
 def read_cache(root: Path) -> dict[str, Any]:
     """What a fresh session restores from the cache at `root`: the keys the
-    cache saves for the user, the dataset's annotations, and its frames."""
+    cache saves for the user, each dataset's own fields (its column names,
+    recording setup, filter fields), its annotations, and its frames."""
     import scanpath_studio.annotations as annotations_mod
     from scanpath_studio.persistence import _SESSION_KEYS, restore_state
 
     restored: dict[str, Any] = {}
     assert restore_state(restored, root), f"nothing restored from {root}"
+    datasets = restored.get("_datasets", {})
     frames = {
         f"{name}/{table}": jsonable(
             frame.astype(object).where(frame.notna(), None).to_dict("list")
         )
-        for name, entry in restored.get("_datasets", {}).items()
+        for name, entry in datasets.items()
         for table, frame in entry.items()
         if isinstance(frame, pd.DataFrame) and not frame.empty
+    }
+    fields = {
+        f"{name}/{field}": value
+        for name, entry in datasets.items()
+        for field, value in snapshot(
+            {k: v for k, v in entry.items() if not isinstance(v, pd.DataFrame)}
+        ).items()
     }
     annotations_mod.activate_dataset(restored, CACHE_DATASET)
     notes = sorted(
@@ -371,7 +418,12 @@ def read_cache(root: Path) -> dict[str, Any]:
         key=lambda row: (row["participant_id"], row["trial_id"]),
     )
     state = snapshot({k: v for k, v in restored.items() if k in _SESSION_KEYS})
-    return {"state": state, "annotations": notes, "frames": frames}
+    return {
+        "state": state,
+        "datasets": fields,
+        "annotations": notes,
+        "frames": frames,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -467,7 +519,8 @@ def build_figure(kind: str, options: Mapping[str, Any]):
 
     words, fixations = api.load_sample_data()
     if kind == "static":
-        return api.plot_scanpath(words, fixations, *TRIAL, **options)
+        raw_gaze = api.load_sample_raw_gaze()
+        return api.plot_scanpath(words, fixations, *TRIAL, raw_gaze=raw_gaze, **options)
     if kind == "animation":
         return api.animate_scanpath(words, fixations, *TRIAL, **options)
     return api.compare_scanpaths(words, fixations, TRIAL, OTHER, **options)

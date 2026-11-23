@@ -6,7 +6,7 @@
  },
  "app": {
   "name": "Scanpath Studio",
-  "version": "0.48.0.post7+g007504ab1.dirty"
+  "version": "0.48.0"
  },
  "axes": {
   "coordinate_grid": true,
@@ -191,7 +191,7 @@
   "unit": "mm",
   "width": null
  },
- "exported_at": "2026-11-24T00:08:31",
+ "exported_at": "2026-11-24T00:33:47",
  "highlighting": {
   "background_color": "#ffffff",
   "critical_span_style": "None",
@@ -299,7 +299,7 @@
   "fixation_window": null,
   "participant_id": "l37_273",
   "trial_id": "l37_273_2_2_2_Adv",
-  "window_all_trials": true
+  "window_all_trials": false
  },
  "sizing": {
   "base_font_size": 16,

@@ -17,17 +17,157 @@
   "datasets": {
     "Golden corpus": {
       "frames": {
-        "fixations": "datasets/f74dd466865b3272-fixations.parquet",
-        "raw_gaze": "datasets/f74dd466865b3272-raw_gaze.parquet",
-        "words": "datasets/f74dd466865b3272-words.parquet"
+        "fixations": "datasets/fa635aea1e89b6a0-fixations.parquet",
+        "raw_gaze": "datasets/fa635aea1e89b6a0-raw_gaze.parquet",
+        "words": "datasets/fa635aea1e89b6a0-words.parquet"
       },
       "metadata": {
-        "composite_trial_columns": [],
-        "filter_fields": [],
-        "schemas": {
+        "column_names": {
+          "fixations": {
+            "duration_ms": {
+              "kind": "mapped",
+              "note": "",
+              "sources": [
+                "Dur"
+              ]
+            },
+            "fixation_id": {
+              "kind": "generated",
+              "note": "1, 2, … per trial",
+              "sources": []
+            },
+            "participant_id": {
+              "kind": "mapped",
+              "note": "",
+              "sources": [
+                "Reader"
+              ]
+            },
+            "text_id": {
+              "kind": "generated",
+              "note": "the trial ID",
+              "sources": []
+            },
+            "timestamp_ms": {
+              "kind": "generated",
+              "note": "the fixation's order in its trial",
+              "sources": []
+            },
+            "trial_id": {
+              "kind": "mapped",
+              "note": "",
+              "sources": [
+                "Paragraph"
+              ]
+            },
+            "unique_trial_id": {
+              "kind": "mapped",
+              "note": "",
+              "sources": [
+                "Paragraph"
+              ]
+            },
+            "word_id": {
+              "kind": "computed",
+              "note": "assigned from the word boxes",
+              "sources": []
+            },
+            "x": {
+              "kind": "computed",
+              "note": "the fixated word's box center",
+              "sources": []
+            },
+            "y": {
+              "kind": "computed",
+              "note": "the fixated word's box center",
+              "sources": []
+            }
+          },
           "words": {
-            "trial": "trial_id"
+            "line_idx": {
+              "kind": "generated",
+              "note": "1, a single line",
+              "sources": []
+            },
+            "participant_id": {
+              "kind": "mapped",
+              "note": "",
+              "sources": [
+                "Reader"
+              ]
+            },
+            "text": {
+              "kind": "mapped",
+              "note": "",
+              "sources": [
+                "Word"
+              ]
+            },
+            "text_id": {
+              "kind": "generated",
+              "note": "the trial ID",
+              "sources": []
+            },
+            "trial_id": {
+              "kind": "mapped",
+              "note": "",
+              "sources": [
+                "Paragraph"
+              ]
+            },
+            "unique_trial_id": {
+              "kind": "mapped",
+              "note": "",
+              "sources": [
+                "Paragraph"
+              ]
+            },
+            "word_id": {
+              "kind": "generated",
+              "note": "the row order",
+              "sources": []
+            }
           }
+        },
+        "composite_trial_columns": [],
+        "dropped_columns": {
+          "fixations": [],
+          "raw_gaze": [],
+          "words": [
+            "Notes"
+          ]
+        },
+        "filter_fields": [
+          "condition"
+        ],
+        "schemas": {
+          "fixations": {
+            "duration": "Dur",
+            "participant": "Reader",
+            "trial": "Paragraph"
+          },
+          "raw_gaze": null,
+          "words": {
+            "participant": "Reader",
+            "text": "Word",
+            "trial": "Paragraph"
+          }
+        },
+        "setup": {
+          "base_font_size": 22,
+          "canvas_height": 720,
+          "canvas_width": 1280,
+          "font_family": "monospace",
+          "line_spacing": 3.0,
+          "monitor_width_mm": 531.0,
+          "provenance": {
+            "geometry": "measured",
+            "screen": "measured",
+            "text": "assumed"
+          },
+          "scale_text_to_boxes": true,
+          "viewing_distance_mm": 650.0,
+          "viewing_distance_provenance": "assumed"
         }
       },
       "rows": {
@@ -41,6 +181,12 @@
   "session": {
     "_dataset_descriptions": {
       "Golden corpus": "A three-word pilot."
+    },
+    "_dataset_display_aliases": {
+      "Golden corpus": "Pilot (three words)"
+    },
+    "_upload_dataset_ids": {
+      "Golden corpus": "0d6c1e7a-5b8f-4c3e-9a21-7f04b1c2d3e4"
     },
     "cmp0_hollow": true,
     "cmp1_hollow": true,

@@ -206,7 +206,7 @@
    1,
    92
   ],
-  "single_fix_range_all_trials": true,
+  "single_fix_range_all_trials": false,
   "single_fix_range_user_set": false,
   "single_playback_speed": 1.0,
   "single_select_trial_mode": "Trial",

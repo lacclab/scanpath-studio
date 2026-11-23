@@ -20,9 +20,11 @@ from __future__ import annotations
 
 import os
 
-# The default build, with nothing read from or written to the user's cache.
+# The default build of a local install (as the test suite runs it), with
+# nothing read from or written to the user's own cache.
 os.environ.pop("SCANPATH_EXPERIMENTAL", None)
 os.environ["SCANPATH_STUDIO_PERSIST"] = "0"
+os.environ["SCANPATH_LOCAL_FS"] = "1"
 
 import argparse
 import json
@@ -46,7 +48,7 @@ def _stable(first: dict, second: dict) -> dict:
 def _write(path: Path, data) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=1, sort_keys=True) + "\n", encoding="utf-8")
-    print(f"wrote {path.relative_to(ROOT)}")
+    print(f"wrote {path}")
 
 
 def capture_links(out: Path) -> dict[str, str]:
@@ -84,7 +86,7 @@ def capture_cache(out: Path) -> None:
     target = out / "cache"
     assert save_state(g.cache_session(), target), "the cache saved nothing"
     (target / ".scanpath-recovery.lock").unlink(missing_ok=True)
-    print(f"wrote {target.relative_to(ROOT)}/")
+    print(f"wrote {target}/")
     reads = []
     for _ in range(2):
         with tempfile.TemporaryDirectory() as tmp:
@@ -92,6 +94,10 @@ def capture_cache(out: Path) -> None:
             shutil.copytree(target, copy)
             reads.append(g.read_cache(copy))
     assert reads[0]["annotations"], "the cache restored no annotations"
+    for field in ("column_names", "setup", "schemas"):
+        assert f"{g.CACHE_DATASET}/{field}" in reads[0]["datasets"], (
+            f"the cache restored no {field}"
+        )
     _write(
         out / "cache_restored.json",
         {**reads[0], "state": _stable(reads[0]["state"], reads[1]["state"])},
@@ -123,9 +129,15 @@ def main() -> None:
     out = g.GOLDEN / f"v{__release__}"
     if out.exists():
         sys.exit(f"{out} exists; a release's captures are never rewritten")
-    queries = capture_links(out)
-    capture_settings(out, queries)
-    capture_cache(out)
+    # Written aside and moved into place at the end, so a capture that fails
+    # part-way leaves nothing that looks like a finished one.
+    partial = out.with_name(out.name + ".partial")
+    shutil.rmtree(partial, ignore_errors=True)
+    queries = capture_links(partial)
+    capture_settings(partial, queries)
+    capture_cache(partial)
+    partial.rename(out)
+    print(f"captured {out}")
     capture_figures()
 
 

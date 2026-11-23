@@ -60,6 +60,15 @@ def _report(what, problems):
 
 def test_there_is_a_capture():
     assert RELEASES, f"no golden captures under {g.GOLDEN}"
+    assert FIGURES, "figures.json pins no figure"
+
+
+@pytest.mark.parametrize("release", RELEASES, ids=lambda r: r.name)
+def test_each_release_capture_is_complete(release):
+    """A capture file emptied or deleted would silently drop its cases."""
+    for name in ("links.json", "settings_restored.json", "cache_restored.json"):
+        assert _load(release / name), f"{release.name}/{name} is empty or missing"
+    assert (release / "cache" / "manifest.json").is_file()
 
 
 @pytest.mark.parametrize(("release", "name", "case"), _cases("links.json"))
@@ -100,6 +109,7 @@ def test_a_recovery_cache_restores_as_captured(release, tmp_path):
     expected = _load(release / "cache_restored.json")
     restored = g.read_cache(root)
     problems = g.differences(expected["state"], restored["state"])
+    problems += g.differences(expected["datasets"], restored["datasets"])
     assert not problems, _report(f"The {release.name} recovery cache", problems)
     assert restored["annotations"] == expected["annotations"], (
         f"The {release.name} recovery cache restores different annotations"

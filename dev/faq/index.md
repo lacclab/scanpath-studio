@@ -60,15 +60,15 @@ Yes. Turn on **Stimulus** ▾ → **Text** → **Redact**. Each word becomes a r
 
 ### Will a refresh lose my work?
 
-When the app listens only on this computer, as `scanpath-studio` and the desktop app do, it saves your datasets and settings there. **Data Management** → **Saved on this computer** shows what it holds. The online demo keeps nothing and explains this after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#back-up-your-work)).
+When the app listens only on this computer, as `scanpath-studio` and the desktop app do, it saves your datasets and settings there. **Data Management** → **Saved work → Your session** shows what it holds. The online demo keeps nothing and explains this after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#back-up-your-work)).
 
 If the files of one saved dataset go missing or are damaged, the rest of the session still comes back. The app names the dataset it could not restore, keeps that saved copy unchanged, and offers **Retry** and **Remove saved copy**. Saved metadata tables that can't be read are kept the same way. If the whole saved copy can't be read, the app opens without it and stops saving over it until you retry or clear it.
 
-If two tabs use the same local recovery folder, edits to different trial annotations can be saved together. When a save would overwrite newer work, the older tab shows a warning and keeps your edits open. Copy or export them before reloading that tab. To save your notes, open **Data Management → Annotations** for the dataset and download the JSON file.
+If two tabs use the same local recovery folder, edits to different trial annotations can be saved together. When a save would overwrite newer work, the older tab shows a warning and keeps your edits open. Copy or export them before reloading that tab. To save your notes, open **Data Management → Current dataset → Annotations** for the dataset and download the JSON file.
 
 ### How do I stop saving, or delete what is saved?
 
-Start the app with `scanpath-studio run --no-persist` to save nothing. To delete what is saved and start over, use **Clear what is saved…** under **Saved on this computer**, or close the app and run `scanpath-studio cache --clear`. That leaves the public datasets you downloaded: delete one with its button in the same section. See [Your data](https://lacclab.github.io/scanpath-studio/dev/about/#your-data) and [Recovery cache](https://lacclab.github.io/scanpath-studio/dev/cli/#cache).
+Start the app with `scanpath-studio run --no-persist` to save nothing. To delete what is saved and start over, use **Clear saved session…** under **Saved session details**, or close the app and run `scanpath-studio cache --clear`. That leaves the public datasets you downloaded: delete one with its button under **Dataset downloads**. See [Your data](https://lacclab.github.io/scanpath-studio/dev/about/#your-data) and [Recovery cache](https://lacclab.github.io/scanpath-studio/dev/cli/#cache).
 
 ## Help and versions
 

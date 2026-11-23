@@ -44,11 +44,11 @@ With the desktop app or a local install, your recordings stay on your computer a
 A local install (`scanpath-studio`) and the desktop app save your work on your computer, so a refresh or a restart picks up where you left off.
 
 - **What is saved:** the datasets you added, with their column mappings, your annotations, your saved designs, attached metadata tables, and your view, trial and plot settings. The bundled demo and public datasets are not copied, since they reload from their source.
-- **Where:** `~/.cache/scanpath-studio/session-v1` in your home folder (`C:\Users\<you>\.cache\scanpath-studio\session-v1` on Windows), or the folder set by `SCANPATH_STUDIO_STATE_DIR`. **Data Management** → **Saved on this computer** shows the folder and its contents. You can also check with `scanpath-studio cache`.
+- **Where:** `~/.cache/scanpath-studio/session-v1` in your home folder (`C:\Users\<you>\.cache\scanpath-studio\session-v1` on Windows), or the folder set by `SCANPATH_STUDIO_STATE_DIR`. **Data Management** → **Saved work → Your session** shows the folder and its contents. You can also check with `scanpath-studio cache`.
 - **How long:** until you clear it. Removing a dataset from the app removes its saved copy.
-- **To clear it:** **Clear what is saved…** under **Saved on this computer**, or close the app and run `scanpath-studio cache --clear`.
+- **To clear it:** **Clear saved session…** under **Saved session details**, or close the app and run `scanpath-studio cache --clear`.
 - **To turn it off:** start the app with `scanpath-studio --no-persist`, or set `SCANPATH_STUDIO_PERSIST=0`.
-- **Downloaded public datasets** remain in their download folders when you clear saved work. **Saved on this computer** lists them beside the datasets you added, each with its size and folder. Its button deletes that download's files, after a confirmation, and leaves anything else in the folder.
+- **Downloaded public datasets** remain in their download folders when you clear saved work. **Dataset downloads** lists each one with its size and folder. Its button deletes that download's files, after a confirmation, and leaves anything else in the folder.
 
 The online demo processes uploads on Streamlit Community Cloud and does not save your work between sessions. Before closing or refreshing the tab, export your annotations and settings, and keep your source files ([what to back up](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#back-up-your-work)). The app itself has no analytics. Community Cloud's surrounding page has its own analytics; see its [privacy policy](https://streamlit.io/privacy-policy).
 

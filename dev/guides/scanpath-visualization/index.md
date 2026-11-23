@@ -121,11 +121,11 @@ The [gallery](https://lacclab.github.io/scanpath-studio/dev/gallery/index.md) sh
 
 You can save each of these to a file and load it again:
 
-| What                               | Where                                              |
-| ---------------------------------- | -------------------------------------------------- |
-| figure settings                    | **Share** → **Settings file**                      |
-| favorites, tags and notes          | **Data Management** → **Annotations** → **Export** |
-| column mapping and recording setup | **Edit dataset** → **Download setup file**         |
-| saved figure designs               | **My designs** → **Export**                        |
+| What                               | Where                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------ |
+| figure settings                    | **Share** → **Settings file**                                            |
+| favorites, tags and notes          | **Data Management** → **Current dataset** → **Annotations** → **Export** |
+| column mapping and recording setup | **Edit dataset** → **Download setup file**                               |
+| saved figure designs               | **My designs** → **Export**                                              |
 
-Keep your source data alongside these files, and load the same dataset before restoring them. In the desktop app or a local install, the app also keeps your datasets, annotations and designs between sessions. See **Data Management** → **Saved on this computer**.
+Keep your source data alongside these files, and load the same dataset before restoring them. In the desktop app or a local install, the app also keeps your datasets, annotations and designs between sessions. See **Data Management** → **Saved work → Your session**.

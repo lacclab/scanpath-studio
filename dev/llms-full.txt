@@ -655,7 +655,7 @@ Load your own data, open a public dataset, or try the bundled demo.
 
 ## Choose a dataset
 
-Pick a dataset in **Select dataset** above the plot, or in the dataset list on the **Data Management** page:
+Pick a dataset in **Select dataset** above the plot or open **Dataset library** on the **Data Management** page.
 
 - **Bundled demo**: 24 trials from OneStop, with two participants and 12 texts.
 - **Hand-drawn sample**: a scanpath drawn by hand over a short English text, which you can edit.
@@ -669,7 +669,7 @@ Choose **+ → Draw a scanpath**, then type your passage. In **Draw** mode, clic
 
 Use **Select & move** to drag a marker. The **Fixation** list lets you select visits that land on top of one another. Change **Duration (ms)** and use **Play preview** to check the timing. The **Fixation table** also accepts keyboard edits. Leaving both coordinates empty places the fixation at the center of its target word.
 
-**Save dataset** opens the figure. To revise it, go to **Data Management** and click **Edit** on its row. **Save changes** updates the drawing, and **Save as copy** keeps a separate version. For another computer, download the editable draft from **Share** and open it with **Load a saved draft** in the drawing editor.
+**Save dataset** opens the figure. To revise it, go to **Data Management** and click **Edit drawing** beside its name. **Save changes** updates the drawing, and **Save as copy** keeps a separate version. For another computer, download the editable draft from **Share** and open it with **Load a saved draft** in the drawing editor.
 
 ### OneStop
 
@@ -717,7 +717,7 @@ Corpus Analysis uses the per-word reading measures in your Words table, such as 
 1. Upload your tables and check the column mapping.
 1. Under **Recording setup**, enter the **Screen**, **Monitor width** and **Text size** if you know them.
 1. Optionally, in the desktop app or a local install, attach the stimulus images from a folder.
-1. Click **Add dataset**, then **Open in Scanpath view** to see its first trial. Later, **Open in Scanpath view** beside **Add dataset** on the Data page does the same for the selected dataset.
+1. Click **Add dataset**, then **Open in Scanpath view** to see its first trial. You can also open the figure from **Data Management → Current dataset**.
 
 To import similar files again, click **Download setup file** before **Add dataset**. Next time, choose **Start from** → **A setup file** and upload your tables: the column mapping, derived columns, character-box merge and recording setup are filled in.
 
@@ -747,13 +747,19 @@ For raw gaze, metadata and explicit column mappings, see the [loaders](https://l
 
 ## Manage datasets
 
-Click a dataset in the dataset list to open it. Below the list, **What's in *‹dataset›*** shows its tables, annotations and **Data checks**. When a check flags more than half of a table, such as every duration read as 0 ms, the Scanpath view says so above the plot.
+**Current dataset** opens on **Overview**. It shows how many participants, trials and texts are in your selection and the average number of trials per participant. Fixation and word averages count trials that contain those rows. **Eye-tracking data** shows the row and trial counts for each table. Scanpath trial filters apply to these counts.
+
+Click a table name to jump to its rows. **Tables** shows fixations, words, raw gaze samples, participants, trials and texts on one page. When you attach a participant, trial or text metadata file, that table shows the complete file.
+
+**Data checks** looks for unusable values in the whole dataset, including trials outside the filters. **Annotations** lets you review, import and export the dataset’s favorites, tags and notes.
+
+To switch datasets, open **Dataset library**. Search by name or filter by source, then click a dataset to open its overview. **Saved work** shows what will reopen next time. On a local install, **Dataset downloads** lists the public datasets on disk and lets you choose where future downloads go.
 
 Use **Edit dataset** to change its name, column mapping, recording setup or metadata, then click **Save changes**. **Download setup file** saves the mapping, recording setup and character-box merge, so you can apply them to similar data.
 
 The editor offers only the columns kept when the dataset was added. To use a column that isn't listed, remove the dataset and add it again from its files, mapping the column or keeping it under **Extra fields to keep**.
 
-Under **Data checks**, **Compare with the experiment run sheet** accepts a CSV with `participant_id` and `trial_id`. Add `screen_id` to check an individual screen. Enter a reason in `planned_omission` for readings you intended to omit and leave it blank for the rest. The report distinguishes missing readings, unscheduled recordings, and readings with raw gaze alone. **Review affected readings** shows all the rows behind a finding, one reading at a time, while your trial filters stay in place.
+Under **Data checks**, **Compare with planned trials (optional)** accepts a CSV with `participant_id` and `trial_id`. Add `screen_id` to check an individual screen. Enter a reason in `planned_omission` for readings you intended to omit and leave it blank for the rest. The report distinguishes missing readings, unscheduled recordings, and readings with raw gaze alone. **Review affected readings** shows all the rows behind a finding, one reading at a time, while your trial filters stay in place.
 
 Excel imports use the first worksheet and show its name. ID columns preserve literal labels such as `01` and `NA`. Leave a cell empty for a missing ID. On restoring a pilot setup, the wizard names files whose headers or time units differ from the saved mapping.
 
@@ -882,14 +888,14 @@ The [gallery](https://lacclab.github.io/scanpath-studio/dev/gallery/index.md) sh
 
 You can save each of these to a file and load it again:
 
-| What                               | Where                                              |
-| ---------------------------------- | -------------------------------------------------- |
-| figure settings                    | **Share** → **Settings file**                      |
-| favorites, tags and notes          | **Data Management** → **Annotations** → **Export** |
-| column mapping and recording setup | **Edit dataset** → **Download setup file**         |
-| saved figure designs               | **My designs** → **Export**                        |
+| What                               | Where                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------ |
+| figure settings                    | **Share** → **Settings file**                                            |
+| favorites, tags and notes          | **Data Management** → **Current dataset** → **Annotations** → **Export** |
+| column mapping and recording setup | **Edit dataset** → **Download setup file**                               |
+| saved figure designs               | **My designs** → **Export**                                              |
 
-Keep your source data alongside these files, and load the same dataset before restoring them. In the desktop app or a local install, the app also keeps your datasets, annotations and designs between sessions. See **Data Management** → **Saved on this computer**.
+Keep your source data alongside these files, and load the same dataset before restoring them. In the desktop app or a local install, the app also keeps your datasets, annotations and designs between sessions. See **Data Management** → **Saved work → Your session**.
 
 # All controls
 
@@ -1232,15 +1238,15 @@ Yes. Turn on **Stimulus** ▾ → **Text** → **Redact**. Each word becomes a r
 
 ### Will a refresh lose my work?
 
-When the app listens only on this computer, as `scanpath-studio` and the desktop app do, it saves your datasets and settings there. **Data Management** → **Saved on this computer** shows what it holds. The online demo keeps nothing and explains this after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#back-up-your-work)).
+When the app listens only on this computer, as `scanpath-studio` and the desktop app do, it saves your datasets and settings there. **Data Management** → **Saved work → Your session** shows what it holds. The online demo keeps nothing and explains this after your first upload, so export your annotations and settings before you leave ([what to back up](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#back-up-your-work)).
 
 If the files of one saved dataset go missing or are damaged, the rest of the session still comes back. The app names the dataset it could not restore, keeps that saved copy unchanged, and offers **Retry** and **Remove saved copy**. Saved metadata tables that can't be read are kept the same way. If the whole saved copy can't be read, the app opens without it and stops saving over it until you retry or clear it.
 
-If two tabs use the same local recovery folder, edits to different trial annotations can be saved together. When a save would overwrite newer work, the older tab shows a warning and keeps your edits open. Copy or export them before reloading that tab. To save your notes, open **Data Management → Annotations** for the dataset and download the JSON file.
+If two tabs use the same local recovery folder, edits to different trial annotations can be saved together. When a save would overwrite newer work, the older tab shows a warning and keeps your edits open. Copy or export them before reloading that tab. To save your notes, open **Data Management → Current dataset → Annotations** for the dataset and download the JSON file.
 
 ### How do I stop saving, or delete what is saved?
 
-Start the app with `scanpath-studio run --no-persist` to save nothing. To delete what is saved and start over, use **Clear what is saved…** under **Saved on this computer**, or close the app and run `scanpath-studio cache --clear`. That leaves the public datasets you downloaded: delete one with its button in the same section. See [Your data](https://lacclab.github.io/scanpath-studio/dev/about/#your-data) and [Recovery cache](https://lacclab.github.io/scanpath-studio/dev/cli/#cache).
+Start the app with `scanpath-studio run --no-persist` to save nothing. To delete what is saved and start over, use **Clear saved session…** under **Saved session details**, or close the app and run `scanpath-studio cache --clear`. That leaves the public datasets you downloaded: delete one with its button under **Dataset downloads**. See [Your data](https://lacclab.github.io/scanpath-studio/dev/about/#your-data) and [Recovery cache](https://lacclab.github.io/scanpath-studio/dev/cli/#cache).
 
 ## Help and versions
 
@@ -2668,7 +2674,7 @@ cache_status()
 
 Describe the recovery cache a local run keeps, without launching the app.
 
-A local or desktop app stores completed uploaded datasets, column mappings, view settings, saved designs, metadata tables and annotations under your cache folder, so a refresh or a restart resumes where it left off. A hosted deployment, such as the online demo, keeps none. The same information is on the app's **Data Management** page under *Saved on this computer*, and in `scanpath-studio cache`.
+A local or desktop app stores completed uploaded datasets, column mappings, view settings, saved designs, metadata tables and annotations under your cache folder, so a refresh or a restart resumes where it left off. A hosted deployment, such as the online demo, keeps none. The same information is on the app's **Data Management** page under *Saved work*, and in `scanpath-studio cache`.
 
 | Key                                              | What it holds                                                                                                                                |
 | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -3355,7 +3361,7 @@ scanpath-studio cache --clear    # delete the recovery cache
 | `--json`  | switch | —       | Print the status as JSON.        |
 | `--clear` | switch | —       | Delete the recovery cache.       |
 
-The same information is at the foot of the **Data Management** page, under **Saved on this computer**. A running app writes a new copy at its next change, so clear the cache with the app closed.
+Open **Data Management → Saved work → Your session** to see the same information. A running app writes a new copy at its next change, so clear the cache with the app closed.
 
 | To                                       | Use                            |
 | ---------------------------------------- | ------------------------------ |
@@ -4037,11 +4043,11 @@ With the desktop app or a local install, your recordings stay on your computer a
 A local install (`scanpath-studio`) and the desktop app save your work on your computer, so a refresh or a restart picks up where you left off.
 
 - **What is saved:** the datasets you added, with their column mappings, your annotations, your saved designs, attached metadata tables, and your view, trial and plot settings. The bundled demo and public datasets are not copied, since they reload from their source.
-- **Where:** `~/.cache/scanpath-studio/session-v1` in your home folder (`C:\Users\<you>\.cache\scanpath-studio\session-v1` on Windows), or the folder set by `SCANPATH_STUDIO_STATE_DIR`. **Data Management** → **Saved on this computer** shows the folder and its contents. You can also check with `scanpath-studio cache`.
+- **Where:** `~/.cache/scanpath-studio/session-v1` in your home folder (`C:\Users\<you>\.cache\scanpath-studio\session-v1` on Windows), or the folder set by `SCANPATH_STUDIO_STATE_DIR`. **Data Management** → **Saved work → Your session** shows the folder and its contents. You can also check with `scanpath-studio cache`.
 - **How long:** until you clear it. Removing a dataset from the app removes its saved copy.
-- **To clear it:** **Clear what is saved…** under **Saved on this computer**, or close the app and run `scanpath-studio cache --clear`.
+- **To clear it:** **Clear saved session…** under **Saved session details**, or close the app and run `scanpath-studio cache --clear`.
 - **To turn it off:** start the app with `scanpath-studio --no-persist`, or set `SCANPATH_STUDIO_PERSIST=0`.
-- **Downloaded public datasets** remain in their download folders when you clear saved work. **Saved on this computer** lists them beside the datasets you added, each with its size and folder. Its button deletes that download's files, after a confirmation, and leaves anything else in the folder.
+- **Downloaded public datasets** remain in their download folders when you clear saved work. **Dataset downloads** lists each one with its size and folder. Its button deletes that download's files, after a confirmation, and leaves anything else in the folder.
 
 The online demo processes uploads on Streamlit Community Cloud and does not save your work between sessions. Before closing or refreshing the tab, export your annotations and settings, and keep your source files ([what to back up](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#back-up-your-work)). The app itself has no analytics. Community Cloud's surrounding page has its own analytics; see its [privacy policy](https://streamlit.io/privacy-policy).
 
@@ -4085,6 +4091,7 @@ Developed with AI assistance. Cross-check results before publishing.
 - Word-box heatmaps show the current reading’s dwell-time or count limits and can reuse those limits on other readings. Grayscale comparisons distinguish readers with filled and hollow markers and solid and dashed lines. A snapped illustration can be viewed beside the same trial’s original coordinates.
 - Data Management puts Add dataset above the list, shows full names on phones and restores click-to-sort column headers. Corpus Analysis opens with the analysis controls and keeps figure styling and the inclusion report below the results.
 - Essentials and Full share the same four view tiles and Palette. Full adds comparison, animation settings, saved designs, and layers below them.
+- Data Management opens on the selected dataset with trial averages, six browsable tables and recording quality checks. The dataset library and saved work have their own tabs.
 - The fixation size legend starts hidden. Turn on Fixation sizes under Figure & canvas → Legends to include it in a figure.
 
 ### Removed

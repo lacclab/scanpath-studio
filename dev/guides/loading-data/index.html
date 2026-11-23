@@ -2669,11 +2669,11 @@
 <h1 id="data-management">Data Management<a class="headerlink" href="#data-management" title="Permanent link">&para;</a></h1>
 <p>Load your own data, open a public dataset, or try the bundled demo.</p>
 <figure class="sps-screenshot">
-<p><img alt="Data Management: datasets and the tables of the selected dataset" src="../../assets/screenshots/data-page.webp" /></p>
+<p><img alt="The bundled demo in Data Management, with participant and trial counts, averages and the number of trials containing each type of data" src="../../assets/screenshots/data-page.webp" /></p>
 </figure>
 <h2 id="choose-a-dataset">Choose a dataset<a class="headerlink" href="#choose-a-dataset" title="Permanent link">&para;</a></h2>
-<p>Pick a dataset in <strong>Select dataset</strong> above the plot, or in the dataset list on
-the <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management</strong> page:</p>
+<p>Pick a dataset in <strong>Select dataset</strong> above the plot or open <strong>Dataset library</strong>
+on the <span class="sps-icon" data-icon="database" aria-hidden="true"></span> <strong>Data Management</strong> page.</p>
 <ul>
 <li><strong>Bundled demo</strong>: 24 trials from OneStop, with two participants and 12 texts.</li>
 <li><strong>Hand-drawn sample</strong>: a scanpath drawn by hand over a short English text,
@@ -2695,7 +2695,7 @@ visits that land on top of one another. Change <strong>Duration (ms)</strong> an
 keyboard edits. Leaving both coordinates empty places the fixation at the
 center of its target word.</p>
 <p><strong>Save dataset</strong> opens the figure. To revise it, go to <strong>Data Management</strong> and
-click <strong>Edit</strong> on its row. <strong>Save changes</strong> updates the drawing, and <strong>Save as
+click <strong>Edit drawing</strong> beside its name. <strong>Save changes</strong> updates the drawing, and <strong>Save as
 copy</strong> keeps a separate version. For another computer, download the editable
 draft from <strong>Share</strong> and open it with <strong>Load a saved draft</strong> in the drawing editor.</p>
 <h3 id="onestop">OneStop<a class="headerlink" href="#onestop" title="Permanent link">&para;</a></h3>
@@ -2792,8 +2792,8 @@ EyeLink's <code>IA_*</code> columns are detected.</p>
 <li>Optionally, in the desktop app or a local install, attach the stimulus
    images from a folder.</li>
 <li>Click <span class="sps-icon" data-icon="check" aria-hidden="true"></span> <strong>Add dataset</strong>, then <span class="sps-icon" data-icon="route" aria-hidden="true"></span> <strong>Open in
-   Scanpath view</strong> to see its first trial. Later, <strong>Open in Scanpath view</strong> beside
-   <strong>Add dataset</strong> on the Data page does the same for the selected dataset.</li>
+   Scanpath view</strong> to see its first trial. You can also open the figure from
+   <strong>Data Management → Current dataset</strong>.</li>
 </ol>
 <p>To import similar files again, click <span class="sps-icon" data-icon="download" aria-hidden="true"></span> <strong>Download setup file</strong>
 before <strong>Add dataset</strong>. Next time, choose <strong>Start from</strong> → <strong>A setup file</strong> and
@@ -2830,10 +2830,21 @@ the app does.</p>
 <a href="../../api/#load-your-data">loaders</a> and <a href="../../cli/#flags-input">CLI input options</a>.</p>
 </details>
 <h2 id="manage-datasets">Manage datasets<a class="headerlink" href="#manage-datasets" title="Permanent link">&para;</a></h2>
-<p>Click a dataset in the dataset list to open it. Below the list,
-<span class="sps-icon" data-icon="search" aria-hidden="true"></span> <strong>What's in <em>‹dataset›</em></strong> shows its tables, annotations and
-<strong>Data checks</strong>. When a check flags more than half of a table, such as every
-duration read as 0 ms, the Scanpath view says so above the plot.</p>
+<p><strong>Current dataset</strong> opens on <strong>Overview</strong>. It shows how many participants, trials
+and texts are in your selection and the average number of trials per participant.
+Fixation and word averages count trials that contain those rows. <strong>Eye-tracking
+data</strong> shows the row and trial counts for each table. Scanpath trial filters
+apply to these counts.</p>
+<p>Click a table name to jump to its rows. <strong>Tables</strong> shows fixations, words, raw
+gaze samples, participants, trials and texts on one page. When you attach a
+participant, trial or text metadata file, that table shows the complete file.</p>
+<p><strong>Data checks</strong> looks for unusable values in the whole dataset, including trials
+outside the filters. <strong>Annotations</strong> lets you review, import and export the
+dataset’s favorites, tags and notes.</p>
+<p>To switch datasets, open <strong>Dataset library</strong>. Search by name or filter by
+source, then click a dataset to open its overview. <strong>Saved work</strong> shows what
+will reopen next time. On a local install, <strong>Dataset downloads</strong> lists the
+public datasets on disk and lets you choose where future downloads go.</p>
 <p>Use <span class="sps-icon" data-icon="edit" aria-hidden="true"></span> <strong>Edit dataset</strong> to change its name, column mapping,
 recording setup or metadata, then click <span class="sps-icon" data-icon="check" aria-hidden="true"></span> <strong>Save changes</strong>.
 <strong>Download setup file</strong> saves the mapping, recording setup and character-box
@@ -2841,7 +2852,7 @@ merge, so you can apply them to similar data.</p>
 <p>The editor offers only the columns kept when the dataset was added. To use a
 column that isn't listed, remove the dataset and add it again from its files,
 mapping the column or keeping it under <strong>Extra fields to keep</strong>.</p>
-<p>Under <strong>Data checks</strong>, <strong>Compare with the experiment run sheet</strong> accepts a
+<p>Under <strong>Data checks</strong>, <strong>Compare with planned trials (optional)</strong> accepts a
 CSV with <code>participant_id</code> and <code>trial_id</code>. Add <code>screen_id</code> to check an
 individual screen. Enter a reason in <code>planned_omission</code> for readings you
 intended to omit and leave it blank for the rest. The report distinguishes

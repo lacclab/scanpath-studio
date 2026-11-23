@@ -569,7 +569,7 @@ scanpath-studio cache --clear    # delete the recovery cache
 | `--json`  | switch | —       | Print the status as JSON.        |
 | `--clear` | switch | —       | Delete the recovery cache.       |
 
-The same information is at the foot of the **Data Management** page, under **Saved on this computer**. A running app writes a new copy at its next change, so clear the cache with the app closed.
+Open **Data Management → Saved work → Your session** to see the same information. A running app writes a new copy at its next change, so clear the cache with the app closed.
 
 | To                                       | Use                            |
 | ---------------------------------------- | ------------------------------ |

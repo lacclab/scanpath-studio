@@ -498,9 +498,11 @@ def _manifest_for(
     root: Path,
     dataset_identity: list,
     written: list[Path],
+    annotations: dict,
 ) -> dict:
     """The manifest this save writes, with the frames of every changed dataset
-    written beside it under new names (``written`` lists them).
+    written beside it under new names (``written`` lists them), and
+    ``annotations`` — `{"datasets": {name: [records]}}`, each dataset's own.
 
     A dataset reuses its last entry — no Parquet is written — when its
     identity is the one that entry was written for and the files it names are
@@ -560,8 +562,7 @@ def _manifest_for(
         "schema": SCHEMA_VERSION,
         "datasets": datasets,
         "session": values,
-        # `{"datasets": {name: [records]}}` — each dataset's own.
-        "annotations": annotations_mod.cache_payload(session),
+        "annotations": annotations,
     }
 
 
@@ -823,18 +824,23 @@ def _publish_state(
     """Write and retire files while the same disk revision stays exclusively ours."""
     with file_lock(root / _CACHE_LOCK_FILE):
         disk = _check_saved_copy(session, root)
+        # Merged before any file is written: a conflict must cost nothing,
+        # since it recurs on every rerun until the user resolves it.
+        local_annotations = annotations_mod.cache_payload(session)
+        annotations = local_annotations
+        if disk is not None:
+            annotations = _merge_saved_annotations(
+                session.get(_ANNOTATION_BASE_KEY, {"datasets": {}}),
+                local_annotations,
+                disk.get("annotations", {"datasets": {}}),
+            )
         dataset_identity = _dataset_identity(session)
         written: list[Path] = []
         swapped = False
         try:
-            manifest = _manifest_for(session, root, dataset_identity, written)
-            local_annotations = manifest["annotations"]
-            if disk is not None:
-                manifest["annotations"] = _merge_saved_annotations(
-                    session.get(_ANNOTATION_BASE_KEY, {"datasets": {}}),
-                    local_annotations,
-                    disk.get("annotations", {"datasets": {}}),
-                )
+            manifest = _manifest_for(
+                session, root, dataset_identity, written, annotations
+            )
             metadata, metadata_bookkeeping = _save_metadata(
                 session, root, metadata_signature, written
             )

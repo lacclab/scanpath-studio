@@ -581,6 +581,38 @@ class TestAnnotationsPerDataset:
         assert {key[1] for key in fresh[ANNOTATIONS_STATE_KEY]} == {"b", "c", "d", "e"}
         assert fresh["single_trial_id"] == "01__e"
 
+    def test_an_unresolved_conflict_writes_no_files_on_each_rerun(
+        self, tmp_path, monkeypatch
+    ):
+        import scanpath_studio.annotations as ann
+
+        base = {"data_source_choice": "Pilot"}
+        ann.activate_dataset(base, "Pilot")
+        base[ANNOTATIONS_STATE_KEY][("01", "a")] = dict(self.STAR)
+        assert save_state(base, tmp_path)
+        first, second = {}, {}
+        for tab in (first, second):
+            assert restore_state(tab, tmp_path)
+            ann.activate_dataset(tab, "Pilot")
+        first[ANNOTATIONS_STATE_KEY][("01", "a")] = dict(self.NOTE)
+        assert save_state(first, tmp_path)
+
+        writes = []
+        for name in ("_atomic_parquet", "_atomic_text"):
+            monkeypatch.setattr(
+                persistence, name, lambda *args, name=name: writes.append(name)
+            )
+        second["_datasets"] = {"Unsaved": _dataset()}
+        second[ANNOTATIONS_STATE_KEY][("01", "a")] = {**self.NOTE, "note": "Mine"}
+        for heatmap in (True, False, True):
+            second["global_show_heatmap"] = heatmap  # a rerun with a change
+            with pytest.raises(persistence.AnnotationConflictError):
+                save_state(second, tmp_path)
+        assert writes == []
+        assert not (tmp_path / "datasets").exists() or not any(
+            (tmp_path / "datasets").iterdir()
+        )
+
     @pytest.mark.parametrize(
         "work",
         [

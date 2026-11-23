@@ -3360,6 +3360,20 @@ def _column_name(column: str) -> str:
     return labels.get(column, str(column))
 
 
+#: Axis titles for the recorded fields whose names don't say what they measure
+#: or in what unit: the title for a generic name, and what a dataset's own name
+#: is followed by. A recorded timestamp is on the dataset's own clock, unlike
+#: the fixation charts' seconds since the first fixation onset.
+_RECORDED_AXIS_TITLES = {
+    "timestamp_ms": ("Recorded time (ms)", "recorded time, ms"),
+    "pupil_area": ("Pupil area (tracker units)", "pupil area, tracker units"),
+    "pupil_diameter": (
+        "Pupil diameter (tracker units)",
+        "pupil diameter, tracker units",
+    ),
+}
+
+
 def _chart_axis_title(field: str, table: str | None = None) -> str:
     label = _column_title(field, table)
     if field in chart_axes.POSITION_FIELDS:
@@ -3369,6 +3383,10 @@ def _chart_axis_title(field: str, table: str | None = None) -> str:
             if label.lower() == field
             else f"{label} ({direction.lower()} position, px)"
         )
+    if field in _RECORDED_AXIS_TITLES:
+        title, measure = _RECORDED_AXIS_TITLES[field]
+        generic = {field, _humanize_column(field).lower()}
+        return title if label.lower() in generic else f"{label} ({measure})"
     return label
 
 

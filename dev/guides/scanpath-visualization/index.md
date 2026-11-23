@@ -16,7 +16,7 @@ Looking for a specific button?
 
 ## Essentials and Full
 
-The Scanpath view opens in **Essentials**, with the main controls for exploring a reading. Switch to **Full** in the top bar whenever you want more options. The app remembers your choice in this browser.
+The Scanpath View opens in **Essentials**, with the main controls for exploring a reading. Switch to **Full** in the top bar whenever you want more options. The app remembers your choice in this browser.
 
 Essentials shows:
 

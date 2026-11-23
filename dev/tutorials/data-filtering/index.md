@@ -14,7 +14,7 @@
 
 ## Before you start
 
-Open a dataset in the **Scanpath View**. The filter () beside **Select trial** selects whole trials. **Filters & highlights** in the Plot controls changes which fixations and saccades the figure draws. Switch to **Full** at the top of the Scanpath view to use trial filters, fixation highlights, and batch export ([Essentials and Full](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#essentials-and-full)).
+Open a dataset in the **Scanpath View**. The filter () beside **Select trial** selects whole trials. **Filters & highlights** in the Plot controls changes which fixations and saccades the figure draws. Switch to **Full** at the top of the Scanpath View to use trial filters, fixation highlights, and batch export ([Essentials and Full](https://lacclab.github.io/scanpath-studio/dev/guides/scanpath-visualization/#essentials-and-full)).
 
 \[!\[
 

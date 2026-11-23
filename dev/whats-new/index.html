@@ -2301,6 +2301,39 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#exec-13--added" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exec-13--changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exec-13--removed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#exec-13--fixed" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2329,7 +2362,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#exec-13--added" class="md-nav__link">
+  <a href="#exec-13--added_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Added
@@ -2340,7 +2373,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#exec-13--changed" class="md-nav__link">
+  <a href="#exec-13--changed_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Changed
@@ -2351,7 +2384,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#exec-13--removed" class="md-nav__link">
+  <a href="#exec-13--removed_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Removed
@@ -2451,6 +2484,39 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#exec-13--added" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exec-13--changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exec-13--removed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#exec-13--fixed" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2479,7 +2545,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#exec-13--added" class="md-nav__link">
+  <a href="#exec-13--added_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Added
@@ -2490,7 +2556,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#exec-13--changed" class="md-nav__link">
+  <a href="#exec-13--changed_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Changed
@@ -2501,7 +2567,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#exec-13--removed" class="md-nav__link">
+  <a href="#exec-13--removed_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Removed
@@ -2557,12 +2623,75 @@
 
 <h1 id="whats-new">What's new<a class="headerlink" href="#whats-new" title="Permanent link">&para;</a></h1>
 <p><h2 id="exec-13--in-development">In development<a class="headerlink" href="#exec-13--in-development" title="Permanent link">&para;</a></h2>
+<h3 id="exec-13--added">Added<a class="headerlink" href="#exec-13--added" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Smaller PNG files works outside the app too: <code>render --compact-png</code> and <code>save_figure(..., compact_png=True)</code> / <code>save_figure_layers(..., compact_png=True)</code> compress a PNG figure and its separate layers losslessly, keeping the pixels, the print dpi and the citation.</li>
+<li>Share links carry <em>Keep this range across trials</em> (<code>fix_range_all_trials=1</code>), so a fixation window kept across trials stays kept when the link is opened, as it already did in a settings file.</li>
+</ul>
+<h3 id="exec-13--changed">Changed<a class="headerlink" href="#exec-13--changed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Buttons, help text and guides now name the Scanpath View tab as it appears in the navigation.</li>
+<li>The Texts and Participants summary captions now say how the means are weighted: each participant counts equally in a text mean, and each reading counts equally in a participant mean.</li>
+<li>A table inside a zip with rows that have more fields than its header is read like the same table on its own: the Add-dataset wizard skips those rows and names their lines, instead of refusing the archive.</li>
+<li>Gaze charts name their axes clearly: recorded timestamps read "Recorded time (ms)" and pupil charts "Pupil area (tracker units)" or "Pupil diameter (tracker units)", instead of "Time (ms)" and the raw column name.</li>
+<li><code>animate_scanpath</code> and <code>render --animate</code> now refuse a replay with both fixations and saccades hidden, which used to produce an empty replay, with a message naming the two settings.</li>
+<li>Comparison links that use the Print / grayscale palette and were made before v0.48.0 draw the two readers in dark and light grey since v0.48.0, scanpath B with hollow markers and dashed saccades, instead of blue and red; set each scanpath's colors again under Scanpath A and Scanpath B in the Fixations and Saccades settings to bring blue and red back.</li>
+<li>The fixation size legend is also off by default in <code>plot_scanpath</code> and <code>render</code> output since v0.48.0; turn it on with <code>duration_size_legend=True</code>, <code>render --duration-size-legend</code>, or Fixation sizes under Figure → Legends in the app.</li>
+</ul>
+<h3 id="exec-13--removed">Removed<a class="headerlink" href="#exec-13--removed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The package no longer ships a CSV copy of the demo raw gaze (<code>sample_data/raw_gaze.csv</code>); <code>load_sample_raw_gaze()</code> reads the bundled Parquet, and the download is about 3 MB smaller.</li>
+</ul>
 <h3 id="exec-13--fixed">Fixed<a class="headerlink" href="#exec-13--fixed" title="Permanent link">&para;</a></h3>
 <ul>
 <li>The Raw gaze switch can be turned off on a trial with no samples of its own, and its "no samples" warning no longer shows during Animation or for a dataset without raw gaze.</li>
+<li>Clicking the Custom view no longer switches Compare readings on or off, or puts back an earlier replay speed, autoplay or smoothness.</li>
+<li>When the chosen axes are ones fixations don't have, such as pupil area, the Fixations switch and its menu now say so instead of greying out with no reason.</li>
+<li>Gaze over time now draws its small onset markers in Compare readings too, so large markers no longer hide short fixations; choosing a view sets both readings' marker size.</li>
+<li>A replay always shows fixations or saccades: the last of the two cannot be switched off while it plays, and a replay opened with both off shows its fixations.</li>
+<li>Changing the replay's speed, autoplay or smoothness no longer switches the view to Custom, and Essentials no longer reports it as a setting from Full.</li>
+<li>After Undo, opening Stimulus → Text and changing the font size, line spacing or other text settings back keeps your change instead of putting the undone value back.</li>
+<li>Groups → Overlaid distributions with Z-score per participant now z-scores each participant once over all their selected trials before splitting the groups, so a participant who read both conditions keeps the difference between them.</li>
+<li>Corpus Analysis stays responsive on large datasets while Study inclusion and exclusions is open: the report is worked out once per filter change instead of on every rerun, and its CSVs are written only when you download them.</li>
+<li>Corpus Analysis keeps its place when you visit another view or open a Help item: the destination, profile and measure you chose are still there when you come back.</li>
+<li>Measure on the stimulus keeps the stimulus version you chose for a text after you visit another view, instead of hiding the figure until you choose again.</li>
+<li>With Aggregate set to Sum, an IQR spread is now drawn as the 95% bootstrap interval of the sum, as SD and SEM already were, instead of the quartiles of the individual values around the total; the recipe and the methods draft say so.</li>
+<li>The "Updated in this session" line under a trial's annotations now appears only in the editor of the trial you changed, and goes once you open another trial, instead of following you to every trial of the dataset.</li>
+<li>While a conflict over a trial's note waits for you to resolve it, the app no longer writes and deletes this tab's unsaved datasets on disk on every click.</li>
+<li>A damaged dataset-citation entry in the saved session no longer throws away every other restored setting: only that entry is left out.</li>
+<li>Large CSV and TSV tables load faster again: a planned read no longer checks every line against the header before reading, only a table that turns out to have a row with a field too many, and that check keeps the loading card live and Cancel working.</li>
+<li>Tables written by R's write.table() with its default row names (a header one column shorter than every row) load again, through the Add-dataset wizard, the API and the CLI, with the row names left out; a table with rows that really have too many fields now says how many and what each has.</li>
+<li>Two tabs or windows that share saved work now merge each other's trial notes, stars and tags as promised, whatever page, trial or plot settings each has open: those are each tab's own, and the last one to save wins them.</li>
+<li>On Windows, a window that opens while another one is still saving large datasets now waits for that save, instead of giving up after about ten seconds, calling the saved work unreadable and pausing saving.</li>
+<li>CSV tables in an export bundle now carry the time they were written instead of 1 January 1980.</li>
+<li>Changing an export setting while a large bundle is still downloading no longer stops the download; the replaced bundle stays available for 30 minutes.</li>
+<li>Preview bundle contents in the Export tab is no longer re-planned on every interaction while it is open, which took seconds on a large corpus with a custom path pattern.</li>
+<li>The read_csv.R reader in CSV bundles now says "Choose a CSV listed in dictionary$csv_files" for a path it does not know, instead of a cryptic R error.</li>
+<li>A figure too large for the raster pixel limit is no longer offered for Retry failed figure files, since retrying with the same settings cannot make it.</li>
+<li>Retrying failed figures in an export bundle larger than 2 GiB now makes a ZIP that macOS Archive Utility and other extractors can open.</li>
+<li>Exported GIFs and MP4s end on the complete scanpath again; most readings had lost their last one or two fixations.</li>
+<li>The bundled demo's raw gaze leaves the pupil area blank where the tracker lost the eye, so a pupil chart shows a gap at each blink instead of dropping to zero.</li>
+<li>Each category now keeps one color in every trial of a dataset, and up to 20 categories get clearly different colors; several used to look almost identical, such as three purples for the demo's saccade types.</li>
+<li>In a right-to-left or mixed-script passage, a word made only of digits or punctuation is drawn in the direction of the words around it, so a period ending an Arabic or Hebrew sentence sits on the left.</li>
+<li>The experimental saccade table (with <code>SCANPATH_EXPERIMENTAL=1</code>) leaves the peak speed blank for a saccade that spans a blink or lost signal, instead of reporting thousands of degrees per second.</li>
+<li>In a replay, the first Previous fixation press after pausing or scrubbing goes to the fixation before the one on screen instead of seeming to do nothing, and the fixation buttons work in Safari before 15.4.</li>
+<li>The replay timer has a light background in the light theme again, even when the computer is in dark mode.</li>
+<li>Share links and settings files from before v0.48.0 that open a replay with fixations hidden show the fixations again, as they were drawn when saved, instead of an empty or saccades-only replay; a saccades-only replay linked from v0.48.0 itself also reopens with fixations, while links made from now on keep it saccades-only.</li>
+<li><code>render --print-code</code> and <code>figure_code</code> keep scanpath B's fixation window (<code>--compare-fix-index-range</code>, <code>fix_index_range_b=</code>), so the printed recipe for a comparison or a two-reading replay draws the same B as the command it came from.</li>
+<li>The sample-number axis (<code>x_field="sample_index"</code>, <code>render --x-field sample_index</code>) draws raw gaze recorded with timestamps too, numbering each reading's samples in recorded order per screen and eye, instead of an empty chart; and a shared link whose chart axis the opened reading lacks falls back to the screen axes, rather than plotting one field against itself.</li>
+<li>The chart axis pickers offer the sample number for gaze samples recorded with timestamps.</li>
+<li>Each visitor to the bundled demo uses about 70 MB less memory: every session now shares one copy of the demo's gaze samples.</li>
+<li>Each interaction on a trial with raw-gaze samples is faster, most on long high-rate recordings: finding the cached figure no longer reads all of the trial's samples.</li>
+<li>Opening a large dataset and changing its trial filters is faster: finding the columns the trial picker can sort by no longer runs Python code for each reading.</li>
+<li>Use this size for batch export now gives the export bundle the width of the prepared artwork, without the page margins, so batch figures print with the same lettering as the proof instead of about 5% larger; the editor also says that the crop, labels and caption are not applied to batch figures.</li>
+<li>Prepare figure no longer fails to make an MP4 when the suggested caption is printed below the replay: every frame of the clip, and its poster, keeps room for the caption's longest reading time.</li>
+<li>A Corpus Analysis chart's Prepare figure for export section stays open, with its draft, when a note or control appears above the chart.</li>
+<li>An emptied caption in Prepare figure no longer leaves a blank caption line below the figure when the caption is set to print with it.</li>
+<li>Preparing a PDF or the offline editor in Prepare figure now shows a loading card with its progress, as the clip does, instead of a page that seems to hang.</li>
+<li>Two Prepare figure sections open at once, such as a Corpus Analysis chart and its text's stimulus, no longer rebuild each other's editor on every rerun.</li>
 </ul>
 <h2 id="exec-13--release-v0480">Release v0.48.0<a class="headerlink" href="#exec-13--release-v0480" title="Permanent link">&para;</a></h2>
-<h3 id="exec-13--added">Added<a class="headerlink" href="#exec-13--added" title="Permanent link">&para;</a></h3>
+<h3 id="exec-13--added_1">Added<a class="headerlink" href="#exec-13--added_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Use the arrow keys to browse trials and Space to play or pause a scanpath replay, including from the replay time slider.</li>
 <li>The check command reports how many rows were read and checked, including why a table supplied no usable rows. Use --json-report to save these counts alongside the findings.</li>
@@ -2585,7 +2714,7 @@
 <li>Prepare the current scanpath, replay or corpus chart for a paper or slide. Download it directly, or crop it, label events and edit its caption. Print settings include journal and slide sizes.</li>
 <li>Word highlights can now underline individual words in the current text color.</li>
 </ul>
-<h3 id="exec-13--changed">Changed<a class="headerlink" href="#exec-13--changed" title="Permanent link">&para;</a></h3>
+<h3 id="exec-13--changed_1">Changed<a class="headerlink" href="#exec-13--changed_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Corpus Analysis shows the participant profiles immediately after the measure and aggregation pickers. The cohort overlay, normalization and measure definition sit below the chart.</li>
 <li>Fixation markers and saccades accept opacity from 0 to 1 in the app, shared settings, CLI and Python API, including fully transparent marks.</li>
@@ -2616,7 +2745,7 @@
 <li>Data Management now lists the dataset’s supplied reading measures under Tables → Words.</li>
 <li>The documentation screenshots and walkthroughs now show Scanpath View, the updated plot controls and the current export steps.</li>
 </ul>
-<h3 id="exec-13--removed">Removed<a class="headerlink" href="#exec-13--removed" title="Permanent link">&para;</a></h3>
+<h3 id="exec-13--removed_1">Removed<a class="headerlink" href="#exec-13--removed_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Removed the undocumented Python helpers <code>scanpath_studio.export.pair_export</code> and <code>ComparisonSide</code>. Comparison figures can be saved from the app or with <code>save_figure</code>.</li>
 <li>Retired the individual workflow GIFs in <code>assets/workflows/</code>. The docs carry the videos and posters, and the README keeps its overview animation.</li>

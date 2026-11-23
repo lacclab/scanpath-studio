@@ -2640,7 +2640,7 @@ Essentials offers <strong>Current figure</strong> for the figure or replay on sc
 <li><strong>Crop</strong> lets you draw a rectangle, select a word span when words are available, or use the scanpath’s current zoom. Under <strong>Label events</strong>, pin a fixation or saccade and drag its label into position.</li>
 <li><strong>Caption and description</strong> suggests a caption and alternative text. Edit them, download both as text, or include the caption below the artwork.</li>
 <li>For a replay, <strong>Replay clip</strong> lets you choose the interval, speed and poster frame. <strong>Prepare MP4 and poster</strong> produces a ZIP with the clip, poster and editable file. Rendering PDF or video in the app requires Chromium on the server.</li>
-<li>When a journal specifies dimensions, open <strong>Print settings</strong> to set the width, resolution or minimum text size. In Full mode on the Scanpath view, <strong>Use this size for batch export</strong> applies the width and resolution to the export bundle.</li>
+<li>When a journal specifies dimensions, open <strong>Print settings</strong> to set the width, resolution or minimum text size. In Full mode on the Scanpath View, <strong>Use this size for batch export</strong> prints each bundle figure at the prepared artwork’s width and resolution; the crop, labels and caption stay with the prepared figure.</li>
 </ul>
 <p>Under <strong>Save or open</strong>, save a copy on this device or download an editable file for a coauthor. The file includes the plotted data, tooltip fields and embedded images. Open it here, under <strong>Data Management → Saved work → Saved figures</strong>, or via <strong>Share → Settings file</strong>. A Share link opens the editor on the source view. An editable file also restores your crop, labels and caption. Older files containing several figures open with their saved layout.</p>
 <h2 id="reproduce-a-coauthors-results">Reproduce a coauthor's results<a class="headerlink" href="#reproduce-a-coauthors-results" title="Permanent link">&para;</a></h2>
@@ -2734,8 +2734,9 @@ for your own files. The CLI's <code>render</code> writes one trial per run.</p>
 replay as HTML, GIF or MP4. In a saved HTML replay, <strong>Previous fixation</strong> and
 <strong>Next fixation</strong> move to individual onsets and show the fixation’s duration and
 assigned word when available. The time slider scrubs through the whole reading.
-A GIF or MP4 with a low frame cap shows the state reached at each frame’s start.
-A fixation after the last frame starts can be absent from the clip.</p>
+Each frame of a GIF or MP4 shows the state reached at that frame’s start, and the
+last frame shows the complete scanpath. With a low frame cap, a fixation that
+begins between two frames first shows in the later one.</p>
 <p>The CLI’s <code>render --animate</code> saves interactive HTML. For a GIF or MP4 in Python:</p>
 <details class="example">
 <summary>Python: save a GIF or MP4</summary>

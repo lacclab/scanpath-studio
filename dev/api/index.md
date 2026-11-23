@@ -388,7 +388,7 @@ load_sample_raw_gaze(*, names=NAMES_SOURCE)
 
 Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo.
 
-The table includes each sample during paragraph reading, with screen x/y in pixels, the tracked eye and pupil area in the tracker's units. Timestamps are milliseconds from trial recording start on the fixation report's clock. Samples with missing positions keep their timestamps and recorded pupil values.
+The table includes each sample during paragraph reading, with screen x/y in pixels, the tracked eye and pupil area in the tracker's units. Timestamps are milliseconds from trial recording start on the fixation report's clock. Samples with missing positions keep their timestamps; their pupil value is missing too, since the tracker measured nothing.
 
 Parameters:
 
@@ -672,7 +672,7 @@ Every figure option is a keyword (`show_heatmap=True`, `color_by="pass_index"`, 
 Parameters:
 
 - **`words`** (`DataFrame | None`, default: `None` ) – A normalized words frame from load_scanpath_data, or None for a dataset recorded as raw gaze alone.
-- **`fixations`** (`DataFrame | None`, default: `None` ) – The normalized fixations frame, or None likewise.
+- **`fixations`** (`DataFrame | None`, default: `None` ) – The normalized fixations frame, or None likewise. A categorical color_by gives each label of its column in this whole frame a color, so a category keeps its color in every trial drawn from the same frame.
 - **`participant`** (`str | None`, default: `None` ) – The participant ID. It may be left out when the frames hold one trial.
 - **`trial`** (`str | None`, default: `None` ) – The trial ID. It may be left out when the frames hold one trial.
 - **`screen`** (`str | None`, default: `None` ) – The screen of a multipart trial to draw. Left out, the first recorded screen; coordinate spaces are never concatenated.
@@ -774,6 +774,7 @@ Raises:
 
 - `ValueError` – The trial has no fixations (one recorded as raw gaze alone, or a words-only one). Also for raw_gaze=; draw samples with plot_scanpath(raw_gaze=…).
 - `ValueError` – An option the replay does not take (the message names the valid ones), a style naming saccade_classes (the replay has no saccade-class filter), or B frames holding several trials without trial_b.
+- `ValueError` – show_fixations=False with show_saccades=False, which leaves the replay nothing to draw.
 - `IncomparableScreensError` – B's dataset has a different canvas from A's. A ValueError.
 
 ### compare_scanpaths
@@ -1243,6 +1244,7 @@ figure_code(
     title="",
     caption="",
     fix_index_range=None,
+    fix_index_range_b=None,
     illustration_label="auto",
     drift_correction=None,
     drift_connectors=False,
@@ -1280,6 +1282,7 @@ Parameters:
 - **`title`** (`str`, default: `''` ) – As the builders take it.
 - **`caption`** (`str`, default: `''` ) – As the builders take it.
 - **`fix_index_range`** (`tuple[int, int] | None`, default: `None` ) – As the builders take it.
+- **`fix_index_range_b`** (`tuple[int, int] | None`, default: `None` ) – B's window, with compare, as compare_scanpaths and animate_scanpath take it (--compare-fix-index-range).
 - **`illustration_label`** (`str`, default: `'auto'` ) – As the builders take it.
 - **`drift_correction`** (`str | None`, default: `None` ) – Experimental, as in plot_scanpath.
 - **`drift_connectors`** (`bool`, default: `False` ) – Experimental, as in plot_scanpath.
@@ -1328,6 +1331,7 @@ save_figure(
     width_in=None,
     dpi=None,
     proof_width_mm=None,
+    compact_png=False,
 )
 ```
 
@@ -1346,6 +1350,7 @@ Parameters:
 - **`width_in`** (`float | None`, default: `None` ) – The same in inches.
 - **`dpi`** (`int | None`, default: `None` ) – The resolution for width_mm / width_in. Default 300.
 - **`proof_width_mm`** (`float | None`, default: `None` ) – Total manuscript width of a split comparison SVG, as in save_panel_proof.
+- **`compact_png`** (`bool`, default: `False` ) – Compress the PNG losslessly, as the app's Export bundle does under Smaller PNG files: the same pixels and metadata in a smaller file, for a little more time. Only for .png.
 
 Returns:
 
@@ -1408,6 +1413,7 @@ save_figure_layers(
     width_mm=None,
     width_in=None,
     dpi=None,
+    compact_png=False,
 )
 ```
 
@@ -1426,6 +1432,7 @@ Parameters:
 - **`width_mm`** (`float | None`, default: `None` ) – PNG print width in millimetres.
 - **`width_in`** (`float | None`, default: `None` ) – PNG print width in inches.
 - **`dpi`** (`int | None`, default: `None` ) – Resolution for the print width, shared by every layer.
+- **`compact_png`** (`bool`, default: `False` ) – Compress each PNG layer losslessly, as save_figure does. Only for png.
 
 Returns:
 

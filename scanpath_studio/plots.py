@@ -1531,23 +1531,151 @@ def _fixation_category_labels(
     return fixations[color_by]
 
 
-def _category_color(label: str | None, avoid: set[str]) -> str:
-    """Stable across trial selections, workspaces and independent export processes."""
-    if label is None:
-        return "#777777" if "#777777" not in avoid else "#aaaaaa"
-    # Hue, lightness and saturation come from the label itself. Using a
-    # finite palette index here would give unrelated categories identical
-    # colours and make a subset depend on which other categories it contained.
-    digest = hashlib.sha256(label.encode("utf-8")).digest()
+#: Fill colours for categories. Okabe & Ito's six mid-tone hues, then fourteen
+#: more, each the colour of moderate chroma (lightness 30–78) farthest from the
+#: ones before it and from the missing-value greys, measured as CIELAB ΔE under
+#: normal vision and simulated deuteranopia and protanopia (Machado et al.,
+#: 2009). Any two are ≥ 23 ΔE*ab apart for normal vision and ≥ 13 under either
+#: simulation; the greys are ≥ 26 from all of them.
+_CATEGORY_PALETTE = (
+    "#e69f00",
+    "#56b4e9",
+    "#009e73",
+    "#0072b2",
+    "#d55e00",
+    "#cc79a7",
+    "#7b3121",
+    "#bdc573",
+    "#84106b",
+    "#7b94ff",
+    "#00429c",
+    "#947b42",
+    "#8c1042",
+    "#4acede",
+    "#94ce9c",
+    "#8c4a00",
+    "#ce9c42",
+    "#846394",
+    "#5a734a",
+    "#005a52",
+)
+#: The missing-value grey, and the one used when a scanpath is drawn in it.
+_CATEGORY_MISSING = ("#777777", "#aaaaaa")
+#: A palette colour this close (ΔE*ab) to a scanpath's own colour is not used:
+#: the scanpath's outline would vanish into the fill.
+_CATEGORY_AVOID_DELTA_E = 15.0
+#: Past the palette, how far (ΔE*ab) a label's own colour must be from every
+#: colour already given before it is taken.
+_CATEGORY_FALLBACK_DELTA_E = 10.0
+
+
+def _color_lab(color: str) -> tuple[float, float, float] | None:
+    """CIELAB (D65) of a ``#rgb`` / ``#rrggbb`` / ``rgb(…)`` colour, else ``None``."""
+    text = str(color).strip().lower()
+    try:
+        if text.startswith("#") and len(text) in (4, 7):
+            digits = text[1:] if len(text) == 7 else "".join(c * 2 for c in text[1:])
+            channels = [int(digits[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+        elif text.startswith(("rgb(", "rgba(")):
+            parts = text[text.index("(") + 1 : text.rindex(")")].split(",")
+            channels = [float(part) / 255 for part in parts[:3]]
+        else:
+            return None
+    except ValueError:
+        return None
+    r, g, b = (
+        c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels
+    )
+    xyz = (
+        (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047,
+        0.2126 * r + 0.7152 * g + 0.0722 * b,
+        (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883,
+    )
+    fx, fy, fz = (t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116 for t in xyz)
+    return 116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)
+
+
+def _delta_e(a: tuple[float, float, float], b: tuple[float, float, float]) -> float:
+    """CIE76 colour difference ΔE*ab."""
+    return math.dist(a, b)
+
+
+def _label_digest(label: str) -> bytes:
+    return hashlib.sha256(label.encode("utf-8")).digest()
+
+
+def _label_hash_color(label: str, used: Sequence[tuple[float, float, float]]) -> str:
+    """A colour from the label's own hash, for labels past the palette: turned
+    around the hue circle until it is ``_CATEGORY_FALLBACK_DELTA_E`` from every
+    ``used`` colour, or the farthest of a fixed number of turns."""
+    digest = _label_digest(label)
     hue = int.from_bytes(digest[:2], "big") / 65536
     light = 0.39 + 0.13 * digest[2] / 255
     saturation = 0.55 + 0.22 * digest[3] / 255
-    while True:
+    best, best_gap = "", -1.0
+    for _ in range(64):
         rgb = colorsys.hls_to_rgb(hue, light, saturation)
         color = "#" + "".join(f"{round(255 * channel):02x}" for channel in rgb)
-        if color not in avoid:
+        lab = _color_lab(color)
+        gap = min((_delta_e(lab, other) for other in used), default=math.inf)
+        if gap >= _CATEGORY_FALLBACK_DELTA_E:
             return color
+        if gap > best_gap:
+            best, best_gap = color, gap
         hue = (hue + 0.381966) % 1
+    return best
+
+
+def _category_color_map(
+    labels: Iterable[str | None], avoid: Iterable[str] = ()
+) -> dict[str | None, str]:
+    """Each label's fill colour: deterministic, and distinct within one figure.
+
+    A label's hash names its preferred ``_CATEGORY_PALETTE`` slot, so it keeps
+    its colour across readings, trial selections and export processes whenever
+    no other label in the figure prefers the same slot. Labels that share a slot
+    are settled in sorted order: the first keeps it, the others take the next
+    free slot after it. A slot close to an ``avoid`` colour is never used. Past
+    the palette's size a label takes its own hash colour, kept apart from those
+    already given. ``None`` (a missing value) is grey.
+    """
+    avoid_labs = [lab for lab in map(_color_lab, avoid) if lab is not None]
+    avoid_text = {str(color).strip().lower() for color in avoid}
+    missing = next(c for c in _CATEGORY_MISSING if c not in avoid_text)
+    names = sorted({label for label in labels if label is not None})
+    size = len(_CATEGORY_PALETTE)
+    free = {
+        slot
+        for slot, color in enumerate(_CATEGORY_PALETTE)
+        if all(
+            _delta_e(_color_lab(color), lab) >= _CATEGORY_AVOID_DELTA_E
+            for lab in avoid_labs
+        )
+    }
+    mapping: dict[str | None, str] = {None: missing}
+    preferred = {
+        name: int.from_bytes(_label_digest(name)[4:8], "big") % size for name in names
+    }
+    waiting = []
+    for name in names:
+        if preferred[name] in free:
+            free.discard(preferred[name])
+            mapping[name] = _CATEGORY_PALETTE[preferred[name]]
+        else:
+            waiting.append(name)
+    for name in waiting:
+        if free:
+            slot = next(
+                (preferred[name] + step) % size
+                for step in range(1, size + 1)
+                if (preferred[name] + step) % size in free
+            )
+            free.discard(slot)
+            mapping[name] = _CATEGORY_PALETTE[slot]
+        else:
+            used = [*map(_color_lab, mapping.values()), *avoid_labs]
+            mapping[name] = _label_hash_color(name, used)
+    return mapping
 
 
 def _shared_category_colors(
@@ -1557,11 +1685,12 @@ def _shared_category_colors(
     """One category→colour mapping across several scanpaths (Compare, the dual
     replay), so a category wears the same colour on A and on B.
 
-    A category's text determines its colour, independently of row order.
-    ``avoid`` names the scanpaths' own colours, which outline their markers: a
-    category never fills in one, or that scanpath's outline would vanish into
-    its fill. Returns each scanpath's per-row colours (``None`` where it had no
-    labels) and the shared legend.
+    The categories' texts determine their colours, independently of row order
+    (:func:`_category_color_map`), and no two categories share one. ``avoid``
+    names the scanpaths' own colours, which outline their markers: a category
+    never fills in one, or that scanpath's outline would vanish into its fill.
+    Returns each scanpath's per-row colours (``None`` where it had no labels)
+    and the shared legend.
     """
     labels = [
         None
@@ -1572,9 +1701,8 @@ def _shared_category_colors(
     present = [series for series in labels if series is not None]
     if not present:
         return [None] * len(labels), []
-    taken = {str(color).lower() for color in avoid if color}
     order = list(pd.unique(pd.concat(present, ignore_index=True)))
-    cat_to_color = {val: _category_color(val, taken) for val in order}
+    cat_to_color = _category_color_map(order, [color for color in avoid if color])
     missing = "(missing)"
     while missing in cat_to_color:
         missing = f"{missing} (no value)"

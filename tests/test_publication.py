@@ -21,7 +21,7 @@ needs_chrome = pytest.mark.skipif(
 )
 
 
-def _in_editor(doc: dict, *expressions: str) -> list:
+def _in_editor(doc: dict, *expressions: str, **page) -> list:
     """Evaluate each expression, in order, in the offline editor in Chromium."""
     from choreographer import Browser
 
@@ -51,7 +51,7 @@ def _in_editor(doc: dict, *expressions: str) -> list:
                 "Page.setDocumentContent",
                 {
                     "frameId": tree["frameTree"]["frame"]["id"],
-                    "html": publication.editor_html(doc),
+                    "html": publication.editor_html(doc, **page),
                 },
             )
             await evaluate("window.publicationReady")
@@ -362,6 +362,47 @@ def test_replay_clip_keeps_one_size_when_the_caption_time_wraps(tmp_path):
         finally:
             reader.close()
         assert frame.shape[:2] == (poster.height, poster.width)
+
+
+@needs_chrome
+@pytest.mark.parametrize("crop", [None, [0, 0, 300, 200]])
+def test_batch_size_is_the_proof_artwork_width(crop):
+    doc = sps.publication_figure(
+        go.Figure(go.Bar(y=[1, 2]), layout=dict(width=600, height=400)),
+        width_mm=85,
+    )
+    doc["panels"][0]["crop"] = crop
+    ((sent, cell, page, shown),) = _in_editor(
+        doc,
+        """(async () => {
+          const sent = [];
+          window.postMessage = (message) => sent.push(message);
+          tool = "Print settings";
+          paintControls();
+          const use = [...document.querySelectorAll("#controls button")].find(
+            (b) => b.textContent === "Use this size for batch export"
+          );
+          await use.onclick();
+          const cell = currentSheet.positions[0];
+          return [
+            sent.map((m) => m.value),
+            [cell.w / PT, cell.k, cell.art.w],
+            currentSheet.W / PT,
+            document.querySelector("#controls").textContent,
+          ];
+        })()""",
+        session="test",
+        batch=True,
+    )
+    width, k, figure_width = cell
+    assert page == pytest.approx(85)
+    assert sent == [{"width": pytest.approx(width, abs=0.005), "dpi": 300}]
+    # The sheet's side margins are not part of the artwork.
+    assert sent[0]["width"] < 85
+    if crop is None:
+        # The whole figure prints at the proof's scale, so lettering matches.
+        assert sent[0]["width"] / figure_width == pytest.approx(k * 25.4 / 72, rel=1e-3)
+    assert "The crop, labels and caption apply only to this figure." in shown
 
 
 def test_clip_frames_of_different_sizes_are_refused(monkeypatch):

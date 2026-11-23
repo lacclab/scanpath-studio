@@ -1,0 +1,1 @@
+Use this size for batch export now gives the export bundle the width of the prepared artwork, without the page margins, so batch figures print with the same lettering as the proof instead of about 5% larger; the editor also says that the crop, labels and caption are not applied to batch figures.

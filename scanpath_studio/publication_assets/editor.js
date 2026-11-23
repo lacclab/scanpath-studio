@@ -443,18 +443,35 @@ function printControls() {
             : "")
       ),
     ...(art?.issues || []).filter(printIssue).map(note),
-    input.batch &&
-      button("Use this size for batch export", () =>
-        window.parent.postMessage(
-          {
-            key: input.session,
-            action: "batch",
-            value: { width: doc.width, dpi: doc.dpi },
-          },
-          "*"
-        )
-      )
+    ...(input.batch && art?.positions[active]
+      ? batchSize(art.positions[active])
+      : [])
   );
+}
+// Batch export scales each whole figure to a print width. The artwork's width
+// on this sheet leaves out the sheet's side margins, so an uncropped figure
+// prints at this proof's scale.
+function batchSize(cell) {
+  const width = Number(fmt(cell.w / PT));
+  return [
+    button("Use this size for batch export", () =>
+      window.parent.postMessage(
+        {
+          key: input.session,
+          action: "batch",
+          value: { width, dpi: doc.dpi },
+        },
+        "*"
+      )
+    ),
+    note(
+      "Batch export prints each whole figure " +
+        fmt(width) +
+        " mm wide, the width of this artwork, at " +
+        doc.dpi +
+        " dpi. The crop, labels and caption apply only to this figure."
+    ),
+  ];
 }
 function legendControls(p) {
   const names = [

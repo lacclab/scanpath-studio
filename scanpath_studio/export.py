@@ -68,6 +68,7 @@ from .constants import (
 )
 from .data import brought_reading_measures, shareable_frame, with_onset_provenance
 from .export_dictionary import R_IMPORT, CsvDictionary
+from .export_png import MAX_RGBA_PIXELS, compact_png
 from .export_status import ExportStage, StatusCallback, emit_status
 from .fields import panel_field
 from .file_citation import stamp as stamp_citation
@@ -265,6 +266,8 @@ class ExportOptions:
     # trials (OneStop's `Paragraph`, MultiplEYE's `page_1`). `None` is every
     # screen; a trial showing none of the chosen screens is left out.
     screens: tuple[str, ...] | None = None
+    # Spend extra encoding time on lossless compression of PNG figures and layers.
+    compact_pngs: bool = False
 
     def any_table(self) -> bool:
         return (
@@ -1524,7 +1527,7 @@ class _ExportReading:
         # sample traces on demand. The full recording canvas before Plotly fits
         # it gives a conservative bound of 64 MiB for one RGBA surface.
         return (
-            self.width * self.height * scale**2 <= 16 * 1024**2
+            self.width * self.height * scale**2 <= MAX_RGBA_PIXELS
             and sum(len(frame) for frame in self.frames) <= 10_000
             and not self.settings.get("background_image")
             and any(not frame.empty for frame in self.frames)
@@ -1978,8 +1981,17 @@ def render_export_options(
                 persist_state="session",
                 help="Higher values give sharper images and larger files.",
             )
+            compact_pngs = panel_field(
+                st,
+                "toggle",
+                "Smaller PNG files",
+                key=f"{key_prefix}_compact_pngs",
+                persist_state="session",
+                help="Uses lossless compression to reduce file size. Building the ZIP takes longer.",
+            )
         else:
             png_scale = int(st.session_state.get(f"{key_prefix}_scale", 2))
+            compact_pngs = False
 
         st.markdown("### Also include")
         # Per-layer figure breakdown for publication editing.
@@ -2110,6 +2122,7 @@ def render_export_options(
         separable_layers=separable_layers,
         table_format=table_format,
         png_scale=int(png_scale),
+        compact_pngs=compact_pngs,
         title_pattern=title_pattern,
         caption_pattern=caption_pattern,
         # This panel only runs inside the app, so the picker's label is
@@ -3302,11 +3315,16 @@ def bulk_export(
         return fig, render_settings
 
     with (
-        _figure_renderer(needs_kaleido) as render_figure,
+        _figure_renderer(needs_kaleido) as render,
         ThreadPoolExecutor(max_workers=1)
         if needs_kaleido and len(units) > 1
         else nullcontext(None) as worker,
     ):
+
+        def render_figure(fig, fmt, width, height, scale):
+            data = render(fig, fmt, width, height, scale)
+            return compact_png(data) if fmt == "png" and options.compact_pngs else data
+
         for reading, get_figure in _figures_for_readings(
             reading_inputs(),
             build_figure,

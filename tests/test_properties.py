@@ -10,6 +10,7 @@ blind spots; these do not.
 from __future__ import annotations
 
 import copy
+import io
 import json
 import zipfile
 from urllib.parse import parse_qsl
@@ -43,6 +44,34 @@ _ID_TEXT = st.text(
 
 
 # --- Round-trips -----------------------------------------------------------
+
+
+@given(
+    st.sampled_from(["RGB", "opaque RGBA", "RGBA"]),
+    st.binary(min_size=4, max_size=128),
+    st.text(alphabet="aב猫 ·é", min_size=1, max_size=20),
+)
+def test_smaller_pngs_preserve_every_channel_and_embedded_metadata(mode, pixels, text):
+    from PIL import Image, PngImagePlugin
+
+    from scanpath_studio.export_png import compact_png
+
+    channels = 3 if mode == "RGB" else 4
+    values = np.resize(np.frombuffer(pixels, dtype=np.uint8), (24, 48, channels))
+    if mode == "opaque RGBA":
+        values[:, :, 3] = 255
+    metadata = PngImagePlugin.PngInfo()
+    metadata.add_itxt("Comment", text)
+    with io.BytesIO() as original:
+        Image.fromarray(values).save(
+            original, "PNG", compress_level=0, pnginfo=metadata, dpi=(300, 300)
+        )
+        compact = compact_png(original.getvalue())
+        assert len(compact) < original.tell()
+        with Image.open(original) as before, Image.open(io.BytesIO(compact)) as after:
+            assert before.size == after.size
+            assert before.info == after.info
+            assert before.convert("RGBA").tobytes() == after.convert("RGBA").tobytes()
 
 
 @given(

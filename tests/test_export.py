@@ -1898,6 +1898,19 @@ def test_bulk_png_bounds_figure_preparation_and_attributes_build_failures(
         ]
 
 
+def test_pngs_above_the_memory_budget_keep_the_browser_encoding(monkeypatch):
+    from PIL import Image
+
+    from scanpath_studio import export_png
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (32, 32)).save(buffer, "PNG", compress_level=0)
+    original = buffer.getvalue()
+    monkeypatch.setattr(export_png, "MAX_RGBA_PIXELS", 1023)
+    monkeypatch.setattr(Image, "open", lambda *_: pytest.fail("decoded a large PNG"))
+    assert export_png.compact_png(original) is original
+
+
 def test_an_interrupted_download_discards_its_disk_parts(
     minimal_combos,
     minimal_words,

@@ -4915,9 +4915,6 @@ def read_sample_raw_gaze() -> pd.DataFrame:
     return _load_bundled("raw_gaze")
 
 
-load_sample_raw_gaze = st.cache_data(read_sample_raw_gaze)
-
-
 def normalized_sample_raw_gaze() -> tuple[pd.DataFrame, dict | None, tuple[str, ...]]:
     """The demo samples, mapping and original headers shared by both scanpaths.
 

@@ -276,6 +276,7 @@ from scanpath_studio.data import (
     repeat_bases,
     respell_reading,
     select_trials_cached,
+    set_digest,
     shareable_frame,
     text_ids,
     timestamps_synthesized,
@@ -297,6 +298,7 @@ from scanpath_studio.debug_log import timed
 from scanpath_studio.export import (
     DEFAULT_PRINT_DPI,
     HTML_SELF_CONTAINED_KEY,
+    BundleContents,
     ExportOptions,
     annotate_figure,
     apply_export_scope,
@@ -362,6 +364,7 @@ from scanpath_studio.plots import (
     apply_legend_layout,
     break_at_gaps,
     build_scanpath_replay,
+    category_vocabulary,
     make_comparison_figure,
     make_density_scatter_figure,
     make_difference_profile_figure,
@@ -2419,6 +2422,38 @@ def _figure_input_key(
             except TypeError:
                 parts.append((k, str(v)))
     return tuple(parts)
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def _c_category_vocabulary(
+    column: str,
+    _fixations: pd.DataFrame | None,
+    _fixations_b: pd.DataFrame | None,
+    frame_keys: tuple,
+) -> tuple[str, ...] | None:
+    """`plots.category_vocabulary`, cached on the frames' fingerprints."""
+    return category_vocabulary(column, _fixations, _fixations_b)
+
+
+def _dataset_color_categories(
+    color_by: str | None,
+    fixations: pd.DataFrame | None,
+    fixations_b: pd.DataFrame | None = None,
+) -> tuple[str, ...] | None:
+    """`FigureSettings.color_categories` for a figure coloured by ``color_by``:
+    every label it takes in the whole dataset's ``fixations`` — unfiltered, so a
+    trial filter moves no colour — and in a second dataset's for Compare."""
+    if not color_by or color_by in (UNIFORM_COLOR_FIELD, "line"):
+        return None
+    return _c_category_vocabulary(
+        str(color_by),
+        fixations,
+        fixations_b,
+        tuple(
+            None if frame is None else frame_fingerprint(frame)
+            for frame in (fixations, fixations_b)
+        ),
+    )
 
 
 @st.cache_data(show_spinner=False)
@@ -6610,6 +6645,10 @@ def render_single_trial_tab(
         trial_words = screen_rows(parent_words, selected_screen)
         trial_fixations = screen_rows(parent_fixations, selected_screen)
         trial_raw_gaze = screen_rows(parent_raw_gaze, selected_screen)
+        # Named like the reading's slice, so its samples are not hashed per rerun.
+        assign_derived(
+            trial_raw_gaze, "screen_rows", parent_raw_gaze, str(selected_screen)
+        )
         for label, parent in (
             ("Words", parent_words),
             ("Fixations", parent_fixations),
@@ -7469,6 +7508,16 @@ def render_single_trial_tab(
             fixations=trial_fixations.columns,
             raw_gaze=trial_raw_gaze.columns,
         ),
+        # A category's colour comes from every label in the dataset — both
+        # datasets' for a cross-dataset Compare — so it is the same in every
+        # trial, the replay, Compare and the bulk export.
+        color_categories=_dataset_color_categories(
+            figure_settings.get("color_by"),
+            fixations_all,
+            compare_source.fixations
+            if comparing and cross_dataset and compare_source is not None
+            else None,
+        ),
     )
 
     # Drift correction — hoisted ABOVE the render-mode split, so the two
@@ -7993,8 +8042,9 @@ def render_single_trial_tab(
                     build_inputs["reading_origin_ms"] = (
                         None if pd.isna(origin) else origin
                     )
-                # Not an option, but the figure's text: a renamed column redraws.
+                # Not options, but the figure's text and its category colours.
                 build_inputs["column_labels"] = static_settings.column_labels
+                build_inputs["color_categories"] = static_settings.color_categories
                 displayed_fig = _cached_scanpath_figure(
                     trial_words,
                     plot_fixations,
@@ -8097,6 +8147,7 @@ def render_single_trial_tab(
                                 **original.for_builder(STATIC_FIGURE_OPTIONS),
                                 "raw_gaze": figure_raw_gaze,
                                 "column_labels": original.column_labels,
+                                "color_categories": original.color_categories,
                             },
                         ),
                     )
@@ -8205,6 +8256,9 @@ def render_single_trial_tab(
                     scale_text_to_boxes=scale_text_to_boxes,
                     trial_raw_gaze=trial_raw_gaze,
                     raw_gaze=raw_gaze,
+                    color_categories=_dataset_color_categories(
+                        viz_settings.get("color_by"), fixations_all
+                    ),
                 )
 
     # Absent entirely while drift correction is gated off.
@@ -8282,6 +8336,32 @@ def render_single_trial_tab(
 #: the wire, never in the recovery cache.
 _BULK_EXPORT_STOPPED = "_bulk_export_stopped"
 
+#: The session's replaced disk bundle, which `DiskBundle.retire` keeps on disk
+#: for a while so a download already under way can finish. One per session.
+#: Internal: never on the wire, never in the recovery cache.
+_BULK_EXPORT_RETIRED = "_bulk_export_retired"
+
+
+def _retire_bulk_bundle(bundle) -> None:
+    """Let go of a replaced bundle without cutting off its download.
+
+    A disk bundle is deleted after a grace period, or at once when the session
+    retires another. A bundle held in memory needs nothing."""
+    if not isinstance(bundle, DiskBundle):
+        return
+    earlier = st.session_state.get(_BULK_EXPORT_RETIRED)
+    if earlier is not None and earlier is not bundle:
+        earlier.close()
+    st.session_state[_BULK_EXPORT_RETIRED] = bundle
+    bundle.retire()
+
+
+def _drop_bulk_export_cache() -> None:
+    """Forget the session's bundle; its download keeps working for a while."""
+    cache = st.session_state.pop("_bulk_export_cache", None)
+    if cache:
+        _retire_bulk_bundle(cache["data"])
+
 
 def _bulk_export_task_key() -> tuple:
     """The bundle build's progress task — one per session."""
@@ -8293,7 +8373,7 @@ def _stop_bulk_export(task_key: tuple, retry: bool = False) -> None:
     progress.cancel(task_key)
     st.session_state[_BULK_EXPORT_STOPPED] = "retry" if retry else "build"
     if not retry:
-        st.session_state.pop("_bulk_export_cache", None)
+        _drop_bulk_export_cache()
 
 
 @st.cache_data(show_spinner=False, max_entries=16)
@@ -8326,6 +8406,44 @@ def _c_export_unit_count(
         return count_export(scoped, _words, _fixations, _raw_gaze, screens)
     except ValueError:
         return None
+
+
+@st.cache_data(show_spinner=False, max_entries=4)
+def _c_bundle_contents(
+    _combos: pd.DataFrame,
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _raw_gaze: pd.DataFrame | None,
+    _options: ExportOptions,
+    _settings: dict,
+    _column_names: dict,
+    _annotation_records: list | None,
+    axes: tuple[str, str],
+    frame_keys: tuple,
+    key: tuple,
+) -> BundleContents | str:
+    """*Preview bundle contents*, which walks every reading and takes seconds
+    over a large corpus for a custom path pattern. Cached on the four frames'
+    fingerprints (``frame_keys``), the axes and ``key``: the options, the
+    settings (with the attached metadata tables' fingerprints), the names of
+    the metadata fields a pattern can use, the column names and the annotations.
+
+    An invalid plan's message is returned, not raised, so it is cached too."""
+    try:
+        return bundle_contents(
+            _combos,
+            _words,
+            _fixations,
+            _raw_gaze,
+            options=_options,
+            settings=_settings,
+            axes=axes,
+            column_names=_column_names,
+            metadata_rows_for=_metadata_mod.pattern_rows,
+            annotation_records=_annotation_records,
+        )
+    except ValueError as error:
+        return str(error)
 
 
 @st.cache_data(show_spinner=False, max_entries=8)
@@ -8494,6 +8612,18 @@ def _render_bulk_export(
         from scanpath_studio.app import _dataset_display_name
 
         annotation_dataset = _dataset_display_name(annotation_owner)
+    settings_key = json.dumps(figure_settings, sort_keys=True, default=str)
+    # The figure on screen assigns category colours over the whole dataset's
+    # labels, whichever trials the bundle exports.
+    color_categories = _dataset_color_categories(
+        figure_settings.get("color_by"), fixations_all
+    )
+    annotations_key = json.dumps(annotation_records, sort_keys=True, default=str)
+    table_names = _dataset_table_names()
+    # A renamed column changes every table's header.
+    names_key = json.dumps(
+        {t: n.to_payload() for t, n in table_names.items()}, sort_keys=True
+    )
     preview = st.expander(
         "Preview bundle contents", key="bulk_export_contents", on_change="rerun"
     )
@@ -8505,21 +8635,31 @@ def _render_bulk_export(
                 for grain in ("participant", "trial", "text")
             },
         }
-        try:
-            contents = bundle_contents(
-                active_combos,
-                active_words,
-                active_fix,
-                active_raw_gaze,
-                options=options,
-                settings=preview_settings,
-                axes=(x_field, y_field),
-                column_names=_dataset_table_names(),
-                metadata_rows_for=_metadata_mod.pattern_rows,
-                annotation_records=annotation_records,
+        # The settings carry the attached tables' fingerprints; a pattern can
+        # also name a field the table declares.
+        metadata_fields = tuple(
+            None if table is None else table.names
+            for table in (
+                _metadata_mod.active(),
+                _metadata_mod.active_trials(),
+                _metadata_mod.active_texts(),
             )
-        except ValueError as error:
-            preview.error(str(error))
+        )
+        contents = _c_bundle_contents(
+            active_combos,
+            active_words,
+            active_fix,
+            active_raw_gaze,
+            options,
+            preview_settings,
+            table_names,
+            annotation_records,
+            (x_field, y_field),
+            frame_keys,
+            (repr(options), settings_key, metadata_fields, names_key, annotations_key),
+        )
+        if isinstance(contents, str):
+            preview.error(contents)
         else:
             if options.print_width_mm and options.raster_formats():
                 sizing = f"{options.print_width_mm:g} mm wide"
@@ -8537,20 +8677,17 @@ def _render_bulk_export(
         str(font_family),
         str(x_field),
         str(y_field),
-        json.dumps(figure_settings, sort_keys=True, default=str),
+        settings_key,
+        color_categories,
         repr(options),
-        json.dumps(annotation_records, sort_keys=True, default=str),
+        annotations_key,
         annotation_dataset,
         EXPORTER_VERSION,
-        # A renamed column changes every table's header.
-        json.dumps(
-            {t: n.to_payload() for t, n in _dataset_table_names().items()},
-            sort_keys=True,
-        ),
+        names_key,
     )
     cache = st.session_state.get("_bulk_export_cache")
     if cache and cache.get("sig") != sig:
-        st.session_state.pop("_bulk_export_cache", None)
+        _drop_bulk_export_cache()
         cache = None
 
     retry = bool(
@@ -8621,20 +8758,25 @@ def _render_bulk_export(
                     status_callback=on_status,
                     # The tables go out under the dataset's own names.
                     column_names=_dataset_table_names(),
+                    color_categories=color_categories,
                 )
         except Exception as exc:
             stop_slot.empty()
             progress_slot.empty()
             status_box.update(label="Export failed", state="error")
             if not retry:
-                st.session_state.pop("_bulk_export_cache", None)
+                _drop_bulk_export_cache()
                 cache = None
             st.warning(f"Couldn't build the export bundle: {exc}")
         else:
             stop_slot.empty()
             progress_slot.empty()
+            replaced = cache["data"] if cache else None
             cache = {"sig": sig, "data": bundle, "progress": built_progress}
             st.session_state["_bulk_export_cache"] = cache
+            # A retry with nothing left to repair hands back the same bundle.
+            if replaced is not bundle:
+                _retire_bulk_bundle(replaced)
             # The status box's last word is the bundle's, not
             # "ready" over a zip whose figures failed.
             built = summarize_export(built_progress, len(bundle))
@@ -9188,7 +9330,7 @@ def _c_trial_summary(_words, _fix, fwkey, ffkey):
     return trial_summary_table(_words, _fix)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=4)
 def _c_enrich_fix(_fix, _words, ffkey, fwkey):
     return ensure_fixation_enrichment(_fix, _words)
 
@@ -9208,6 +9350,45 @@ def _c_trial_keys(_frame, fkey):
     """`data.trial_keys`, cached per frame — a trial-metadata group
     needs the loaded readings on every rerun, once per group per frame."""
     return trial_keys(_frame)
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def _c_group_means(_frame, mkey, _readings, _specs, key):
+    """Group means' two value arrays: one mean per participant, or every value
+    when the frame names no participants.
+
+    ``key`` is the frame's fingerprint and what selects each group — its
+    readings, or its spec on a frame without the reading key
+    (:func:`_group_means_key`).
+    """
+    measure = MEASURES[mkey]
+    if not _frame.empty and set(_TRIAL_KEY_COLUMNS) <= set(_frame):
+        # Each row's already-resolved reading, looked up on the frame's codes.
+        codes, reading_keys = distinct_key_codes(_frame, _TRIAL_KEY_COLUMNS)
+        masks = [reading_keys.isin(group)[codes] for group in _readings]
+    else:
+        masks = [group_mask(_frame, spec) for spec in _specs]
+    values = reader_means if "participant_id" in _frame else measure_values
+    columns = _frame.columns.intersection(["participant_id", measure.column])
+    return tuple(values(_frame.loc[mask, columns], measure) for mask in masks)
+
+
+def _group_means_key(frame, readings, specs) -> tuple:
+    """`_c_group_means`'s key: the readings as exact, order-free digests
+    (`data.set_digest`), or the specs when the frame has no reading key to
+    look them up by."""
+    if not frame.empty and set(_TRIAL_KEY_COLUMNS) <= set(frame):
+        groups = tuple(set_digest(group) for group in readings)
+    else:
+        groups = hashable_key(specs)
+    return (frame_fingerprint(frame), groups)
+
+
+@st.cache_data(show_spinner=False, max_entries=4)
+def _c_reader_vs_cohort(_frame, participant_id, mkey, normalize, fkey):
+    return reader_vs_cohort_values(
+        _frame, participant_id, MEASURES[mkey], normalize=normalize
+    )
 
 
 # --- Cross-cutting analysis controls -----------------------------------------
@@ -9341,11 +9522,14 @@ _SPREAD_NOTES = {
 def _spread_note(host, spread: str, agg: str | None = None) -> None:
     """One caption under an error-bar selector saying what the choice shows.
 
-    With Aggregate = sum, SD and SEM are drawn as a bootstrap interval of the
-    sum (`aggregation.spread_bounds`), so the note says that instead."""
+    With Aggregate = sum, SD, SEM and IQR are drawn as a bootstrap interval of
+    the sum (`aggregation.spread_bounds`), so the note says that instead."""
     note = _SPREAD_NOTES.get(spread)
-    if agg == "sum" and spread in ("SD", "SEM"):
-        note = "With Sum, SD and SEM are drawn as a 95% bootstrap interval of the sum."
+    if effective_spread(spread, agg) != spread:
+        note = (
+            "With Sum, SD, SEM and IQR are drawn as a 95% bootstrap interval "
+            "of the sum."
+        )
     if note:
         host.caption(note)
 
@@ -9580,7 +9764,7 @@ def _render_trials_with_open_button(
                 "",
                 type="tertiary",
                 width="small",
-                help="Show this trial's scanpath in the Scanpath view.",
+                help="Show this trial's scanpath in the Scanpath View.",
                 on_click=_open,
                 key=click_key,
             ),
@@ -10328,7 +10512,7 @@ def render_analysis_pool_bar(
         "Edit filters",
         icon=ICONS["trial_filter"],
         width="content",
-        help="The same trial filters the Scanpath view uses.",
+        help="The same trial filters the Scanpath View uses.",
         key=_POOL_POPOVER_KEY,
         on_change="rerun",
     )
@@ -10349,7 +10533,7 @@ def render_analysis_pool_bar(
             key="corpus_pool_clear",
             on_click=_clear_pool_filters,
             width="content",
-            help="Clear all trial filters, here and on the Scanpath view.",
+            help="Clear all trial filters, here and on the Scanpath View.",
         )
     return {
         "trial_filters": items,
@@ -10666,7 +10850,7 @@ def _chart(fig) -> None:
 
     title = _figure_alt(fig, "Corpus chart")
     publication_ui.render(
-        fig, title=title, kind="chart", key="chart_" + st._main._get_delta_path_str()
+        fig, title=title, kind="chart", key=publication_ui.chart_key(fig)
     )
 
 
@@ -11240,6 +11424,8 @@ def render_per_text_tab(
             st.warning(
                 "This text has different wording or word boxes across readings. Choose the version to include in the figure."
             )
+            # A version chosen for another text or screen names no option here.
+            _drop_stale("ptext_stimulus_revision", list(revisions))
             chosen = st.selectbox(
                 "Stimulus version, by representative reading",
                 list(revisions),
@@ -11248,6 +11434,7 @@ def render_per_text_tab(
                     f"{' / '.join(map(str, k))} · {len(revisions[k])} reading(s)"
                 ),
                 key="ptext_stimulus_revision",
+                persist_state="session",
             )
             if chosen is None:
                 return
@@ -11424,7 +11611,9 @@ def _render_reader_comparison(
         if measure.frame == "fixations"
         else words
     )
-    groups = reader_vs_cohort_values(frame, pid, measure, normalize=normalize)
+    groups = _c_reader_vs_cohort(
+        frame, pid, measure.key, normalize, frame_fingerprint(frame)
+    )
     participant = f"Participant {pid}"
     if not groups:
         st.info(
@@ -12473,19 +12662,15 @@ def render_group_comparison_tab(
         if measure is None:
             return
         frame = fixations_filtered if measure.frame == "fixations" else words_filtered
-        # Lookup each row's already-resolved reading on the original frame,
-        # then take just the measurement and reader needed for the two means.
-        if not frame.empty and set(_TRIAL_KEY_COLUMNS) <= set(frame):
-            codes, reading_keys = distinct_key_codes(frame, _TRIAL_KEY_COLUMNS)
-            masks = (
-                reading_keys.isin(group)[codes] for group in (readings_a, readings_b)
-            )
-        else:
-            masks = (group_mask(frame, spec) for spec in (use_a, use_b))
         by_reader = "participant_id" in frame
-        values = reader_means if by_reader else measure_values
-        columns = frame.columns.intersection(["participant_id", measure.column])
-        a, b = (values(frame.loc[mask, columns], measure) for mask in masks)
+        readings, specs = (readings_a, readings_b), (use_a, use_b)
+        a, b = _c_group_means(
+            frame,
+            measure.key,
+            readings,
+            specs,
+            _group_means_key(frame, readings, specs),
+        )
         observations = "fixations" if measure.frame == "fixations" else "words"
         observation = (
             f"For each participant, the mean includes all {observations} with a value "
@@ -13359,6 +13544,7 @@ def render_multiple_comparison_tab(
     scale_text_to_boxes: bool = True,
     trial_raw_gaze: pd.DataFrame | None = None,
     raw_gaze: pd.DataFrame | None = None,
+    color_categories: tuple[str, ...] | None = None,
 ) -> None:
     """Render the **Comparisons** subtab.
 
@@ -13368,6 +13554,8 @@ def render_multiple_comparison_tab(
 
     ``trial_raw_gaze`` / ``raw_gaze`` are the selected trial's samples and the
     filtered pool's, for the chip table's gaze-sample count.
+    ``color_categories`` is the dataset's `FigureSettings.color_categories`, so
+    each panel colours a category as the main figure does.
     """
     st.caption(
         "Browse related readings by selecting a field they share with this trial."
@@ -13457,6 +13645,7 @@ def render_multiple_comparison_tab(
             column_labels=active_figure_labels(
                 st.session_state, words=words.columns, fixations=fix.columns
             ),
+            color_categories=color_categories,
             **settings,
         )
 

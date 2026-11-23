@@ -486,6 +486,84 @@ def test_invalid_pattern_disables_build_and_preview_matches_real_html_and_table_
     assert_example("aggregate/all_fixations.csv")
 
 
+def test_the_contents_preview_is_planned_once_per_choice(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import tabs
+
+    planned = []
+
+    def plan(*args, **kwargs):
+        planned.append(kwargs["options"].path_pattern)
+        return real(*args, **kwargs)
+
+    real = tabs.bundle_contents
+    monkeypatch.setattr(tabs, "bundle_contents", plan)
+    tabs._c_bundle_contents.clear()
+    at = AppTest.from_function(_real_bundle_panel)
+    at.session_state["bulk_export_contents"] = True
+    at.run()
+    assert not at.exception and len(planned) == 1
+    rows = at.dataframe[0].value
+    assert "per_trial/p1__t1/plot_config.json" in set(rows["Path"])
+    # A rerun that changes nothing the plan reads plans nothing.
+    at.run()
+    assert len(planned) == 1 and at.dataframe[0].value.equals(rows)
+    pattern = "{participant_id}/{artifact}.{ext}"
+    at.text_input(key="bulk_export_path_pattern").set_value(pattern).run()
+    assert planned == [planned[0], pattern]
+    assert "p1/plot_config.json" in set(at.dataframe[0].value["Path"])
+    at.run()
+    assert len(planned) == 2
+
+
+def test_a_replaced_disk_bundle_stays_downloadable_for_a_grace_period(monkeypatch):
+    import gc
+
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import export_archive
+
+    timers = []
+
+    class Timer:
+        def __init__(self, interval, function):
+            self.interval, self.function, self.cancelled = interval, function, False
+
+        def start(self):
+            timers.append(self)
+
+        def cancel(self):
+            self.cancelled = True
+
+    monkeypatch.setattr(export_archive, "_SMALL_ZIP", 0)
+    monkeypatch.setattr(export_archive, "Timer", Timer)
+    at = AppTest.from_function(_real_bundle_panel).run()
+    at.pills(key="bulk_export_figfmts").set_value(["HTML"]).run()
+
+    def build():
+        next(b for b in at.button if b.label == "Build export").click().run()
+        assert not at.exception
+        return at.session_state["_bulk_export_cache"]["data"].folder
+
+    first = build()
+    # Any change of setting retires the bundle; its pieces stay for the
+    # download that may still be reading them.
+    at.toggle(key="bulk_export_cfg").set_value(False).run()
+    gc.collect()
+    assert "_bulk_export_cache" not in at.session_state
+    assert (first / "0.part").is_file()
+    assert [t.interval for t in timers] == [export_archive.RETIRED_BUNDLE_S]
+    # A session keeps one retired bundle: the next one deletes the earlier.
+    second = build()
+    assert (first / "0.part").is_file()
+    at.toggle(key="bulk_export_cfg").set_value(True).run()
+    assert not first.exists() and timers[0].cancelled
+    assert (second / "0.part").is_file()
+    timers[1].function()
+    assert not second.exists()
+
+
 def test_partial_bundle_immediately_offers_retry_and_removes_it_after_repair(
     monkeypatch,
 ):

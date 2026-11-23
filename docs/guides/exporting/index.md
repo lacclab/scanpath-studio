@@ -28,7 +28,7 @@ Open **Scanpath → Export → Prepare figure for export**. The preview shows th
 - **Crop** lets you draw a rectangle, select a word span when words are available, or use the scanpath’s current zoom. Under **Label events**, pin a fixation or saccade and drag its label into position.
 - **Caption and description** suggests a caption and alternative text. Edit them, download both as text, or include the caption below the artwork.
 - For a replay, **Replay clip** lets you choose the interval, speed and poster frame. **Prepare MP4 and poster** produces a ZIP with the clip, poster and editable file. Rendering PDF or video in the app requires Chromium on the server.
-- When a journal specifies dimensions, open **Print settings** to set the width, resolution or minimum text size. In Full mode on the Scanpath view, **Use this size for batch export** applies the width and resolution to the export bundle.
+- When a journal specifies dimensions, open **Print settings** to set the width, resolution or minimum text size. In Full mode on the Scanpath View, **Use this size for batch export** prints each bundle figure at the prepared artwork’s width and resolution; the crop, labels and caption stay with the prepared figure.
 
 Under **Save or open**, save a copy on this device or download an editable file for a coauthor. The file includes the plotted data, tooltip fields and embedded images. Open it here, under **Data Management → Saved work → Saved figures**, or via **Share → Settings file**. A Share link opens the editor on the source view. An editable file also restores your crop, labels and caption. Older files containing several figures open with their saved layout.
 
@@ -142,8 +142,9 @@ With :material/movie: **Animation** selected, **Export** → **Current figure** 
 replay as HTML, GIF or MP4. In a saved HTML replay, **Previous fixation** and
 **Next fixation** move to individual onsets and show the fixation’s duration and
 assigned word when available. The time slider scrubs through the whole reading.
-A GIF or MP4 with a low frame cap shows the state reached at each frame’s start.
-A fixation after the last frame starts can be absent from the clip.
+Each frame of a GIF or MP4 shows the state reached at that frame’s start, and the
+last frame shows the complete scanpath. With a low frame cap, a fixation that
+begins between two frames first shows in the later one.
 
 The CLI’s `render --animate` saves interactive HTML. For a GIF or MP4 in Python:
 

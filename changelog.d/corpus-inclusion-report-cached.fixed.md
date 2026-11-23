@@ -1,0 +1,1 @@
+Corpus Analysis stays responsive on large datasets while Study inclusion and exclusions is open: the report is worked out once per filter change instead of on every rerun, and its CSVs are written only when you download them.

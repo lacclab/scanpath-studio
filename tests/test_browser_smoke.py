@@ -994,8 +994,10 @@ def test_saved_replay_steps_and_scrubs_between_recorded_onsets(
                 )
             page.get_by_role("slider", name="Replay time").press("End")
             expect_point(325)
+            # The end shows the fourth fixation; Previous goes to the third.
             page.get_by_role("button", name="Previous fixation").click()
-            assert "onset 220 ms" in page.get_by_role("status").inner_text()
+            expect_point(225)
+            assert "onset 60 ms" in page.get_by_role("status").inner_text()
             # Several seeks before the next paint replace a queued Plotly frame.
             page.get_by_role("slider", name="Replay time").evaluate(
                 """slider => {

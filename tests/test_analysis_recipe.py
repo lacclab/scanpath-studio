@@ -49,6 +49,28 @@ class TestAnalysisChoices:
             "min_readers": 2,
         }
 
+    @pytest.mark.parametrize("requested", ["SD", "SEM", "IQR"])
+    def test_a_sum_records_and_describes_the_bootstrap_it_draws(self, requested):
+        from scanpath_studio.cohort_audit import profile_methods
+
+        analysis = analysis_choices(
+            text=("unique_paragraph_id", "3_1"),
+            measure=MEASURES["tfd"],
+            aggregation="sum",
+            normalize=False,
+            spread=requested,
+            min_readers=1,
+        )
+        assert analysis["spread"] == "Bootstrap CI"
+        assert analysis["requested_spread"] == requested
+        methods = profile_methods(
+            {"app": {"version": "0"}, "analysis": analysis, "trial_filters": []}
+        )
+        assert (
+            "The spread shown was a 95% percentile bootstrap interval of the sum "
+            f"across participants ({requested} was selected" in methods
+        )
+
     def test_a_rate_is_never_recorded_as_normalized(self):
         """The aggregation helpers skip z-scoring a 0–1 rate whatever the toggle
         says, so the recipe records what was applied."""

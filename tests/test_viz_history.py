@@ -51,6 +51,30 @@ def test_title_edit_on_the_same_rerun_as_opening_a_menu(menu, browser_title, exp
     assert at.session_state[SNIPPET_STATE_KEY].title == (title if expected else "")
 
 
+@pytest.mark.parametrize(
+    ("menu", "accepted"),
+    [
+        pytest.param("stim", True, id="open-text-menu-and-edit-together"),
+        pytest.param("grid", False, id="closed-text-menu-echo"),
+    ],
+)
+def test_font_size_edit_on_the_same_rerun_as_opening_its_menu(menu, accepted):
+    """The text rows are drawn into Stimulus → Text after that menu's own rows,
+    and opening it still releases the value Undo put back."""
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
+    before = at.number_input(key="global_base_font_size").value
+    at.number_input(key="global_base_font_size").set_value(before + 4).run()
+    _click(at, "viz_undo")
+    assert at.number_input(key="global_base_font_size").value == before
+
+    at.session_state[f"plot_menu_{menu}"] = True
+    at.number_input(key="global_base_font_size").set_value(before + 4).run()
+    assert not at.exception
+    expected = before + 4 if accepted else before
+    assert at.number_input(key="global_base_font_size").value == expected
+    assert at.session_state["global_base_font_size"] == expected
+
+
 def test_undo_names_the_restored_value_after_navigating_to_another_trial():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=90).run()
     at.checkbox(key="global_show_order").check().run()

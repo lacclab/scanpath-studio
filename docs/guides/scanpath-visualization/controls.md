@@ -1,6 +1,6 @@
 ---
 title: "All scanpath controls"
-description: "Every control on Scanpath Studio's Scanpath view and what it does: fixations, saccades, stimulus, word boxes, heatmap, raw gaze, filters and figure layout."
+description: "Every control on Scanpath Studio's Scanpath View and what it does: fixations, saccades, stimulus, word boxes, heatmap, raw gaze, filters and figure layout."
 ---
 
 # All controls
@@ -137,7 +137,7 @@ Click **Fixations** to edit the markers. The switch shows or hides them.
 
 | Control | What it does |
 | --- | --- |
-| **Color** | **One color** paints all fixations alike. A number such as duration uses a continuous scale. A category such as condition or part of speech keeps the same color across trials, even when filtering removes other categories. The legend identifies missing values separately. |
+| **Color** | **One color** paints all fixations alike. A number such as duration uses a continuous scale. A category, such as a condition or a part of speech, keeps the same color in every trial of the dataset, even when filtering removes other categories. Up to 20 categories in the dataset get clearly different colors; with more, some colors are closer. The legend identifies missing values separately. |
 | color box | With **One color**: the fixation marker color. With a number column: the color scale. |
 | **Color range and color bar** → **Range** | When markers are colored by a number: the values at the two ends of the color scale. **Auto** fits each trial. |
 | **Marker appearance** → **Shape** | Choose the fixation marker shape: circle, square, diamond, triangle, cross, X, star, hexagon or heart. |
@@ -246,7 +246,7 @@ The **Raw gaze** switch draws the recorded gaze samples. Click **Raw gaze** to s
 
 To inspect samples from one reading, open **Axes → Axis preset**. Choose **Horizontal gaze position over recorded time**, **Vertical gaze position over recorded time**, or a recorded pupil measurement. These presets turn on **Raw gaze**. A recording without timestamps offers sample number on the horizontal axis.
 
-In the OneStop demo, the clock starts at trial onset and the first sample appears when the reader sees the paragraph. A pupil area of zero accompanies missing gaze coordinates. The raw table and its exports keep those samples.
+In the OneStop demo, the clock starts at trial onset and the first sample appears when the reader sees the paragraph. A sample with missing gaze coordinates has no pupil area either, so the pupil chart shows a gap there. The raw table and its exports keep those samples.
 
 ### :material/filter_list: Filters & highlights
 

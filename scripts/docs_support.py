@@ -448,6 +448,7 @@ _FLAG_TOPICS = {
     "--width-in": "Size and export",
     "--dpi": "Size and export",
     "--separable-layers": "Size and export",
+    "--compact-png": "Size and export",
     "--print-code": "Size and export",
     "--print-code-explicit": "Size and export",
     # Only with SCANPATH_EXPERIMENTAL=1, which the published site is built

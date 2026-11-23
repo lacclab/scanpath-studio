@@ -832,6 +832,51 @@ class TestEditorKeysAreTheStoreKeys:
         assert slug("p", "t") != slug("p", "t", "parent")
 
 
+def _two_readings_app():
+    import streamlit as st
+
+    import scanpath_studio.annotations as ann
+
+    ann.activate_dataset(st.session_state, "Pilot")
+    pick = st.selectbox("Reading", ["one", "two"])
+    ann.render_trial_annotations("P1", "T1" if pick == "one" else "T2", bare=True)
+
+
+class TestTheEditReceipt:
+    """ "Updated in this session" confirms an edit in the editor of the reading
+    it was made on, and goes once another reading is open."""
+
+    @staticmethod
+    def _receipts(at) -> list[str]:
+        return [
+            str(el.proto.body)
+            for el in at.get("html")
+            if "Updated in this session" in str(el.proto.body)
+        ]
+
+    def test_it_is_said_for_its_own_reading_only(self):
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_function(_two_readings_app).run()
+        assert self._receipts(at) == []
+        at.checkbox[0].check().run()
+        assert not at.exception, at.exception
+        (receipt,) = self._receipts(at)
+        assert "P1 / T1 (whole trial)" in receipt
+
+        at.selectbox[0].set_value("two").run()
+        assert self._receipts(at) == []
+        at.selectbox[0].set_value("one").run()
+        assert self._receipts(at) == [], "the receipt was for the earlier visit"
+
+    def test_a_dataset_switch_drops_it(self):
+        session: dict = {}
+        annotations_mod.activate_dataset(session, "A")
+        session[annotations_mod._RECEIPT_KEY] = ("A", ("P1", "T1", None), "done")
+        annotations_mod.activate_dataset(session, "B")
+        assert annotations_mod._RECEIPT_KEY not in session
+
+
 class TestTrialFiltersAreTrialLevel:
     """The trial filters read the trial's own annotation; a screen's star or
     tag neither keeps nor drops its trial, so the pickers do not offer a tag

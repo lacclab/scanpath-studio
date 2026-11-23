@@ -865,6 +865,15 @@ def test_b_dataset_reference_params_are_pinned():
     assert params <= sk.URL_OPTIONAL_PARAMS
 
 
+def test_fixation_window_scope_param_is_pinned():
+    """*Keep this range across trials* on the link: a switch, written only
+    while on, so a link may lack it."""
+    assert sk.SHARE_TOGGLE_PARAMS["fix_range_all_trials"] == (
+        "single_fix_range_all_trials"
+    )
+    assert "fix_range_all_trials" in sk.URL_OPTIONAL_PARAMS
+
+
 def test_corpus_bookmark_keys_and_sections_frozen():
     # Existing links and tutorial steps still use the published section names.
     from scanpath_studio import tabs
@@ -919,3 +928,10 @@ def test_the_groups_setup_survives_another_subtab():
     assert not at.exception, at.exception
     assert at.toggle(key="groups_compare").value is True
     assert at.multiselect(key="cmp_b").value == ["Adv", "Ele"]
+
+
+def test_replay_fixations_param_is_pinned():
+    """A replay link with fixations hidden says so explicitly; one without
+    this param was written before it existed and reopens with fixations."""
+    assert sk.REPLAY_FIXATIONS_PARAM == "replay_fixations"
+    assert "replay_fixations" in sk.URL_OPTIONAL_PARAMS

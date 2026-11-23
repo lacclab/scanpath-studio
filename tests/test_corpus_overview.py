@@ -290,6 +290,12 @@ def test_inspecting_a_lower_rank_moves_the_chart_to_that_participant():
     assert fig["layout"]["yaxis"]["ticktext"] == ids[12:]
     assert fig["data"][0]["marker"]["symbol"] == ["circle", "diamond", "circle"]
     assert any("ranks 13–15 of 15" in c.value for c in at.caption)
+    # The participant mean weights readings, not words.
+    assert any(
+        "each reading counting equally" in c.value
+        and "range across readings" in c.value
+        for c in at.caption
+    )
 
 
 def test_rate_chart_and_table_display_the_underlying_proportions_as_percentages(

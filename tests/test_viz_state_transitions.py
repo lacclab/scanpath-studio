@@ -130,6 +130,75 @@ def test_custom_quick_view_remembers_manual_settings(monkeypatch):
     assert store["global_fixation_opacity"] == 0.42
 
 
+def test_the_custom_tile_keeps_compare_and_the_replay_settings(monkeypatch):
+    """Every view tile, Custom included, leaves Compare and the replay as they
+    are: Custom brings back its own design, not the viewing it was left in."""
+    store = _viz_store()
+    store.update({"single_compare_toggle": False, "single_playback_speed": 1.0})
+    monkeypatch.setattr(controls.st, "session_state", store)
+    controls._choose_plot_view("scanpath", None)
+    assert controls._active_quick_view() == "scanpath"
+    store["global_fixation_opacity"] = 0.42
+    assert controls._active_quick_view() == "custom"
+    controls._choose_plot_view("heatmap", "custom")
+    assert controls._active_quick_view() == "heatmap"
+    viewing = {
+        "single_compare_toggle": True,
+        "single_playback_speed": 2.0,
+        "global_anim_autoplay": False,
+        "global_anim_grid_step_ms": 40,
+        "global_anim_max_frames": 900,
+    }
+    store.update(viewing)
+
+    controls._choose_plot_view("custom", "heatmap")
+
+    assert store["global_fixation_opacity"] == 0.42
+    assert store["global_show_heatmap"] is False
+    assert {key: store[key] for key in viewing} == viewing
+
+
+def test_view_mode_settings_neither_drift_nor_change_with_a_tile(monkeypatch):
+    """The keys every tile keeps are exactly the ones the drift check skips:
+    changing the replay leaves the view lit, and no tile changes it back."""
+    store = _viz_store()
+    store.update({"single_compare_toggle": False, "single_playback_speed": 1.0})
+    monkeypatch.setattr(controls.st, "session_state", store)
+    controls._choose_plot_view("scanpath", None)
+    assert controls._active_quick_view() == "scanpath"
+    viewing = {
+        "single_compare_toggle": True,
+        "single_playback_speed": 2.0,
+        "global_anim_autoplay": False,
+        "global_anim_quality": "Custom",
+        "global_anim_grid_step_ms": 40,
+        "global_anim_max_frames": 900,
+    }
+    assert all(controls._is_view_mode_key(key) for key in viewing)
+    store.update(viewing)
+    assert controls._active_quick_view() == "scanpath"
+
+    current = "scanpath"
+    for tile in ("heatmap", "illustration", "gaze_over_time", "custom", "scanpath"):
+        controls._choose_plot_view(tile, current)
+        assert controls._active_quick_view() == tile
+        assert {key: store[key] for key in viewing} == viewing, tile
+        current = tile
+
+
+def test_a_view_sets_both_readings_marker_size(monkeypatch):
+    """A view's marker size reaches Compare's per-reading sizes, and the next
+    view puts them back with the rest of its defaults."""
+    store = _viz_store()
+    store.update({"cmp0_marker_size_range": (10, 30), "cmp1_marker_size_range": (5, 9)})
+    monkeypatch.setattr(controls.st, "session_state", store)
+    for name, expected in (("gaze_over_time", (4, 4)), ("heatmap", (8, 24))):
+        controls._apply_view_preset(name)
+        assert store["global_marker_size_range"] == expected
+        assert store["cmp0_marker_size_range"] == expected
+        assert store["cmp1_marker_size_range"] == expected
+
+
 def test_scanpath_quick_view_clears_custom_configuration(monkeypatch):
     store = _viz_store()
     store.update(

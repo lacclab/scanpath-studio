@@ -670,8 +670,10 @@ def _letter_position_in_word(
 
 def _sample_velocities(
     samples: pd.DataFrame, pixels_per_degree: float
-) -> tuple[np.ndarray, np.ndarray]:
-    """Sorted sample times and the speed from each sample to the next."""
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Sorted sample times, the speed from each sample to the next, and how
+    many of the pairs before each sample are broken: a missing position at
+    either end, or a break in acquisition order between them."""
     points = samples[["timestamp_ms", "x", "y"]].apply(pd.to_numeric, errors="coerce")
     points = points.replace([np.inf, -np.inf], np.nan)
     # An untimed row marks a break in acquisition order. Removing it before
@@ -682,8 +684,12 @@ def _sample_velocities(
     )
     times, x, y, segment = points.to_numpy(dtype=float, na_value=np.nan).T
     dt = np.diff(times)
-    dt[(dt == 0) | (np.diff(segment) != 0)] = np.nan
-    return times, np.hypot(np.diff(x), np.diff(y)) / dt / pixels_per_degree * 1000
+    split = np.diff(segment) != 0
+    dt[(dt == 0) | split] = np.nan
+    lost = np.isnan(x) | np.isnan(y)
+    broken = np.cumsum(np.concatenate([[False], lost[:-1] | lost[1:] | split]))
+    speeds = np.hypot(np.diff(x), np.diff(y)) / dt / pixels_per_degree * 1000
+    return times, speeds, broken
 
 
 def _eye_streams(frame: pd.DataFrame) -> dict[str, pd.DataFrame]:
@@ -699,13 +705,22 @@ def _eye_streams(frame: pd.DataFrame) -> dict[str, pd.DataFrame]:
 
 
 def _peak_sample_speed(stream, start_end: float, next_onset: float) -> float:
-    """Maximum speed from sample pairs with both endpoints inside the saccade."""
+    """Maximum speed from sample pairs with both endpoints inside the saccade.
+
+    ``NaN`` when the saccade's samples hold a tracking gap. A blink or a lost
+    signal is bracketed by samples the closing or opening lid distorts, whose
+    positions jump far faster than any eye moves, and nothing in one pair of
+    samples tells such a jump from a real one; trimming a fixed number of
+    samples beside the gap would depend on the sampling rate and the tracker.
+    """
     if stream is None or not (np.isfinite(start_end) and np.isfinite(next_onset)):
         return np.nan
-    times, speeds = stream
+    times, speeds, broken = stream
     first = times.searchsorted(start_end, side="left")
     last = times.searchsorted(next_onset, side="right") - 1
-    return float(np.fmax.reduce(speeds[first:last])) if last > first else np.nan
+    if last <= first or broken[last] > broken[first]:
+        return np.nan
+    return float(np.fmax.reduce(speeds[first:last]))
 
 
 def saccade_table(

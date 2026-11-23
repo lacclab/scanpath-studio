@@ -103,6 +103,7 @@ from .plots import (  # noqa: E402
     FigureSettings,
     _resolve_trial_display_name,
     add_illustration_label,
+    category_vocabulary,
     make_comparison_figure,
     make_corpus_overview_figure,
     make_difference_profile_figure,
@@ -1436,7 +1437,8 @@ def load_sample_raw_gaze(*, names: str = NAMES_SOURCE) -> pd.DataFrame:
     The table includes each sample during paragraph reading, with screen x/y in
     pixels, the tracked eye and pupil area in the tracker's units. Timestamps
     are milliseconds from trial recording start on the fixation report's clock.
-    Samples with missing positions keep their timestamps and recorded pupil values.
+    Samples with missing positions keep their timestamps; their pupil value is
+    missing too, since the tracker measured nothing.
 
     Args:
         names: ``"source"`` or ``"canonical"``, as
@@ -2735,7 +2737,9 @@ def plot_scanpath(
         words: A normalized words frame from
             [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data], or ``None``
             for a dataset recorded as raw gaze alone.
-        fixations: The normalized fixations frame, or ``None`` likewise.
+        fixations: The normalized fixations frame, or ``None`` likewise. A categorical
+            ``color_by`` gives each label of its column in this whole frame a color,
+            so a category keeps its color in every trial drawn from the same frame.
         participant: The participant ID. It may be left out when the frames hold one
             trial.
         trial: The trial ID. It may be left out when the frames hold one trial.
@@ -2923,6 +2927,9 @@ def plot_scanpath(
             raw_gaze=raw_gaze,
             sample_names=sample_side,
         ),
+        # Every reading's labels, not this trial's, so a category wears one
+        # colour in every trial drawn from these frames, as in the app.
+        color_categories=category_vocabulary(settings.get("color_by"), fixations),
     )
     fig = make_scanpath_figure(
         trial_words,
@@ -3052,6 +3059,8 @@ def animate_scanpath(
         ValueError: An option the replay does not take (the message names the valid
             ones), a style naming ``saccade_classes`` (the replay has no saccade-class
             filter), or B frames holding several trials without ``trial_b``.
+        ValueError: ``show_fixations=False`` with ``show_saccades=False``, which
+            leaves the replay nothing to draw.
         IncomparableScreensError: B's dataset has a different canvas from A's. A
             ``ValueError``.
     """
@@ -3094,6 +3103,16 @@ def animate_scanpath(
     # `plot_scanpath` and `animate_scanpath` don't render the same trial
     # differently (the app feeds both from one settings dict).
     animation_overrides = {**_animation_defaults(), **animation_overrides}
+    if not (
+        animation_overrides.get("show_fixations", True)
+        or animation_overrides.get("show_saccades", True)
+    ):
+        raise ValueError(
+            "show_fixations=False and show_saccades=False leave nothing to replay: "
+            "the replay draws the fixations and the saccades between them, and no "
+            "heatmap or raw gaze. Keep one of them on, or draw a static figure "
+            "with plot_scanpath(...)."
+        )
     words, word_names = _named_in(words, "words", optional=True)
     fixations, fix_names = _named_in(fixations, "fixations", optional=True)
     names = _call_names(column_names, fixations=fix_names, words=word_names)
@@ -3226,6 +3245,12 @@ def animate_scanpath(
         autoplay=autoplay,
         column_labels=_column_labels(
             names, trial_words, trial_fixations, words=word_side
+        ),
+        # A's whole frames and B's own, as the app colours a co-animation.
+        color_categories=category_vocabulary(
+            animation_overrides.get("color_by"),
+            fixations,
+            None if passed_b[1] is None else _cn.to_canonical_frame(passed_b[1]),
         ),
     )
     fig = make_scanpath_animation(
@@ -4009,6 +4034,13 @@ def compare_scanpaths(
         # Only the split layouts read this; an overlay that got here has two
         # equal canvases anyway, so it is the same value either way.
         canvas_b=resolved_setup_b.canvas,
+        # Both datasets' labels: a category wears one colour on A and on B,
+        # and the same one in every comparison of these frames.
+        color_categories=category_vocabulary(
+            settings.get("color_by"),
+            fixations,
+            fixations_b if cross_dataset else None,
+        ),
     )
     fig = make_comparison_figure(
         pd.concat([merged_words, merged_words_b], ignore_index=True),
@@ -4114,6 +4146,7 @@ def save_figure(
     width_in: float | None = None,
     dpi: int | None = None,
     proof_width_mm: float | None = None,
+    compact_png: bool = False,
 ) -> Path:
     """Save a figure as HTML, PNG, SVG or PDF.
 
@@ -4141,10 +4174,15 @@ def save_figure(
         dpi: The resolution for ``width_mm`` / ``width_in``. Default 300.
         proof_width_mm: Total manuscript width of a split comparison SVG, as in
             [`save_panel_proof`][scanpath_studio.api.save_panel_proof].
+        compact_png: Compress the PNG losslessly, as the app's Export bundle does
+            under *Smaller PNG files*: the same pixels and metadata in a smaller file,
+            for a little more time. Only for ``.png``.
 
     Returns:
         The path written.
     """
+    if compact_png and not str(path).lower().endswith(".png"):
+        raise ValueError("compact_png compresses a PNG; save as .png.")
     if str(path).lower().endswith((".publication.json", ".publication.html")):
         if any(v is not None for v in (width, height, proof_width_mm)) or scale != 2:
             raise ValueError("Use width_mm or width_in to size a publication figure.")
@@ -4236,6 +4274,11 @@ def save_figure(
                 _export.set_png_dpi(staged, dpi)
         if suffix == ".html" or dpi is not None:
             stamp_file(staged)
+        if compact_png:
+            # Last, over the finished file: it keeps the dpi and the citation.
+            from .export_png import compact_png as compress
+
+            staged.write_bytes(compress(staged.read_bytes()))
         staged.replace(path)
     return path
 
@@ -4290,6 +4333,7 @@ def save_figure_layers(
     width_mm: float | None = None,
     width_in: float | None = None,
     dpi: int | None = None,
+    compact_png: bool = False,
 ) -> dict[str, Path]:
     """Save a scanpath figure as one file per layer, for editing.
 
@@ -4312,6 +4356,8 @@ def save_figure_layers(
         width_mm: PNG print width in millimetres.
         width_in: PNG print width in inches.
         dpi: Resolution for the print width, shared by every layer.
+        compact_png: Compress each PNG layer losslessly, as
+            [`save_figure`][scanpath_studio.api.save_figure] does. Only for ``png``.
 
     Returns:
         ``{layer: Path}`` for each file written.
@@ -4320,6 +4366,8 @@ def save_figure_layers(
     fmt = fmt.lstrip(".").lower()
     if fmt not in {"html", "png", "svg", "pdf"}:
         raise ValueError("Choose html, png, svg or pdf for the layer format.")
+    if compact_png and fmt != "png":
+        raise ValueError("compact_png compresses PNG layers; choose fmt='png'.")
     created = [path for path in (directory, *directory.parents) if not path.exists()]
     directory.mkdir(parents=True, exist_ok=True)
     written: dict[str, Path] = {}
@@ -4337,6 +4385,7 @@ def save_figure_layers(
                     width_mm=width_mm,
                     width_in=width_in,
                     dpi=dpi,
+                    compact_png=compact_png,
                 )
                 written[layer] = directory / name
             _publish_layers(directory, staged, [p.name for p in written.values()], fmt)
@@ -4369,6 +4418,7 @@ def figure_code(
     title: str = "",
     caption: str = "",
     fix_index_range: tuple[int, int] | None = None,
+    fix_index_range_b: tuple[int, int] | None = None,
     illustration_label: str = "auto",
     drift_correction: str | None = None,
     drift_connectors: bool = False,
@@ -4428,6 +4478,10 @@ def figure_code(
         title: As the builders take it.
         caption: As the builders take it.
         fix_index_range: As the builders take it.
+        fix_index_range_b: B's window, with ``compare``, as
+            [`compare_scanpaths`][scanpath_studio.api.compare_scanpaths] and
+            [`animate_scanpath`][scanpath_studio.api.animate_scanpath] take it
+            (``--compare-fix-index-range``).
         illustration_label: As the builders take it.
         drift_correction: Experimental, as in
             [`plot_scanpath`][scanpath_studio.api.plot_scanpath].
@@ -4497,6 +4551,7 @@ def figure_code(
         title=title,
         caption=caption,
         fix_index_range=fix_index_range,
+        fix_index_range_b=fix_index_range_b,
         illustration_label=illustration_label,
         drift_correction=drift_correction,
         drift_connectors=drift_connectors,

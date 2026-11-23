@@ -22,7 +22,9 @@ Before you start, switch to **Full** at the top of the :material/route:
 
 For PNGs, turn on **Smaller PNG files** to reduce file size at the same resolution.
 This adds encoding time. Images over 16.8 megapixels use the standard encoding
-to limit memory use. **PNG scale** controls resolution separately. A scale of 1
+to limit memory use. Outside the app, `scanpath-studio render --compact-png`
+and `save_figure(..., compact_png=True)` do the same for one figure and its
+layers. **PNG scale** controls resolution separately. A scale of 1
 writes one pixel per figure pixel, and the default scale of 2 doubles both dimensions.
 
 Large bundles are kept on temporary disk and download as one ZIP in a new tab.

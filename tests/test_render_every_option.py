@@ -739,6 +739,28 @@ def test_the_co_animation_round_trips(monkeypatch, capsys):
 
 
 @pytest.mark.parametrize("replay", [False, True], ids=["compare", "co-animation"])
+def test_b_fixation_window_round_trips(monkeypatch, capsys, replay):
+    """B's window is a builder parameter, so the printed recipe names it, in
+    both languages."""
+    mode = ["--animate", "--anim-max-frames", "8"] if replay else []
+    flags = [*_COMPARE, *mode, "--compare-fix-index-range", "5:30"]
+    original, from_cli, command = _round_trip(monkeypatch, capsys, flags)
+    assert "--compare-fix-index-range 5:30" in command
+    assert original.to_json() == from_cli.to_json()
+    (whole,) = _figures(monkeypatch, [[*_BASE[:-2], *_COMPARE, *mode, "-o", "a.html"]])
+    assert whole.to_json() != original.to_json()
+
+    _figures(
+        monkeypatch, [[*_BASE[:-2], *flags, "--print-code", "python", "-o", "a.html"]]
+    )
+    python = capsys.readouterr().out
+    assert "fix_index_range_b=(5, 30)" in python
+    namespace = {}
+    exec(compile(python, "<snippet>", "exec"), namespace)  # noqa: S102
+    assert namespace["fig"].to_json() == original.to_json()
+
+
+@pytest.mark.parametrize("replay", [False, True], ids=["compare", "co-animation"])
 def test_compact_code_keeps_the_drawn_styles_in_both_languages(
     monkeypatch, capsys, replay
 ):

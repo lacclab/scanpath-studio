@@ -1616,6 +1616,13 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="Resolution of --width-mm / --width-in (default: 300).",
     )
+    # The app's Export bundle → Smaller PNG files.
+    viz.add_argument(
+        "--compact-png",
+        action="store_true",
+        help="Compress a .png output, and its --separable-layers, losslessly: the "
+        "same pixels and metadata in a smaller file, for a little more time.",
+    )
     viz.add_argument(
         "--font-size",
         type=int,
@@ -2685,6 +2692,10 @@ def _print_reproduction_code(
         # pair above — so it has to be named here or the printed recipe would
         # silently widen the window back to the whole trial.
         fix_index_range=_parse_fix_index_range(args.fix_index_range),
+        # B's own window, which both builders that draw a B take.
+        fix_index_range_b=_parse_fix_index_range(args.compare_fix_index_range)
+        if compare is not None
+        else None,
         playback_speed=args.playback_speed,
         autoplay=args.autoplay,
         compare=compare,
@@ -2819,6 +2830,8 @@ def _save_kwargs(args) -> dict:
         kwargs["width_in"] = args.width_in
     if args.dpi is not None:
         kwargs["dpi"] = args.dpi
+    if args.compact_png:
+        kwargs["compact_png"] = True
     return kwargs
 
 
@@ -2877,6 +2890,12 @@ def render(argv: list[str]) -> None:
             "Print width applies to PNG files and publication projects. Use .png, .publication.json or .publication.html "
             "with --width-mm or --width-in."
         )
+    if (
+        args.compact_png
+        and args.output
+        and not str(args.output).lower().endswith(".png")
+    ):
+        parser.error("--compact-png compresses a PNG. Choose a .png output.")
     # Validate everything derivable from argv before the (possibly minutes-long
     # on full corpora) data load.
     corpus_inputs = [
@@ -3025,6 +3044,13 @@ def render(argv: list[str]) -> None:
             "--animate writes interactive .html files or a .publication.json recipe. For GIF or "
             "MP4, use the app's Export, or "
             "scanpath_studio.animation_export.export_animation in Python."
+        )
+    if args.animate and args.show_fixations is False and args.show_saccades is False:
+        raise SystemExit(
+            "--animate with --no-fixations and --no-saccades leaves nothing to "
+            "replay: the replay draws the fixations and the saccades between "
+            "them, and no heatmap or raw gaze. Drop one of the two, or drop "
+            "--animate for a static figure."
         )
     # The connectors draw *between* the original and corrected y, so on
     # their own there is nothing to connect. Warn rather than fail — the render

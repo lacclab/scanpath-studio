@@ -57,7 +57,9 @@ def test_samples_keep_their_own_axes_during_tracking_loss_and_without_a_clock():
     )
     assert list(_trace(fig, "Raw gaze").x) == [100, 101]
     assert list(_trace(fig, "Raw gaze").y) == [2.1, 2.3]
-    assert fig.layout.yaxis.title.text == "diameter from tracker"
+    assert fig.layout.yaxis.title.text == (
+        "diameter from tracker (pupil diameter, tracker units)"
+    )
     untimed = api.load_raw_gaze(source, raw_gaze_schema={**schema, "timestamp": None})
     chart = api.plot_scanpath(
         raw_gaze=untimed, x_field="sample_index", y_field="pupil_diameter"
@@ -100,8 +102,8 @@ def test_fixation_and_sample_clocks_can_have_different_source_names():
     trace = _trace(fig, "Raw gaze")
     assert list(trace.x) == [123, 124]
     assert list(trace.y) == [340, 341]
-    assert fig.layout.xaxis.title.text == "Time (ms)"
-    assert fig.layout.yaxis.title.text == "Area recording"
+    assert fig.layout.xaxis.title.text == "Recorded time (ms)"
+    assert fig.layout.yaxis.title.text == "Area recording (pupil area, tracker units)"
 
 
 def test_captions_and_charts_require_drawable_samples_and_a_measured_elapsed_origin():
@@ -156,6 +158,48 @@ def test_pupil_preset_enables_recorded_samples_and_round_trips_through_settings(
         "timestamp_ms",
         "pupil_area",
     )
+
+
+def test_fixations_say_why_they_grey_on_axes_they_lack():
+    """Fixations carry no pupil area: the switch greys with the reason, and its
+    menu gives the same one rather than asking to turn the layer on."""
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
+    at.toggle(key="single_animate").set_value(False).run()
+    at.selectbox(key="_plot_axis_preset").set_value(
+        "Pupil area over recorded time"
+    ).run()
+    assert not at.exception
+    reason = "Both axes must be fields available in the fixations."
+    switch = at.toggle(key="global_show_fix")
+    assert switch.disabled
+    assert switch.help == reason
+    menu = next(p for p in at.get("popover") if p.key == "plot_menu_fix")
+    captions = [caption.value for caption in menu.caption]
+    assert captions[0] == reason
+    assert not any("Turn the layer on" in caption for caption in captions)
+
+
+def test_gaze_over_time_keeps_its_small_onset_markers_in_compare():
+    """Each reading draws its own marker size in Compare, so the view sets
+    both: a large duration-scaled marker would hide a short fixation's bar."""
+    from scanpath_studio.code_snippet import SNIPPET_STATE_KEY
+
+    def sizes():
+        figure = at.session_state[SNIPPET_STATE_KEY]
+        assert figure.kind == "comparison"
+        return [
+            tuple(figure.settings[style]["marker_size_range"])
+            for style in ("style_a", "style_b")
+        ]
+
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
+    at.toggle(key="single_animate").set_value(False).run()
+    at.toggle(key="single_compare_toggle").set_value(True).run()
+    at.button(key="viz_view_gaze_over_time").click().run()
+    assert not at.exception
+    assert sizes() == [(4, 4), (4, 4)]
+    at.button(key="viz_view_scanpath").click().run()
+    assert sizes() == [(8, 24), (8, 24)]
 
 
 def test_missing_timestamps_never_supply_elapsed_seconds():
@@ -751,3 +795,20 @@ def test_sample_only_comparison_axis_does_not_draw_fixation_keys():
     assert list(fig.data[0].y) == [231]
     assert sum(a.text == "No data on these axes" for a in fig.layout.annotations) == 1
     assert not fig.layout.shapes
+
+
+@pytest.mark.parametrize("names", ["source", "canonical"])
+def test_recorded_gaze_axes_say_what_they_measure(names):
+    words, fixations = api.load_sample_data(names=names)
+    samples = api.load_sample_raw_gaze(names=names)
+    fig = api.plot_scanpath(
+        words,
+        fixations,
+        "l7_183",
+        "l7_183_2_1_1_Ele",
+        raw_gaze=samples,
+        x_field="timestamp_ms",
+        y_field="pupil_area",
+    )
+    assert fig.layout.xaxis.title.text == "Recorded time (ms)"
+    assert fig.layout.yaxis.title.text == "Pupil area (tracker units)"

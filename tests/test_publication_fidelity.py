@@ -329,7 +329,7 @@ def test_recorded_or_estimated_time_agrees_in_replay_axis_and_summary(
 
 
 @pytest.mark.parametrize("speed", [1, 2])
-def test_capped_gif_never_paints_a_future_marker_at_its_decoded_display_time(
+def test_capped_gif_paints_no_future_marker_before_ending_on_the_whole_scanpath(
     speed, monkeypatch
 ):
     words, fixations = load_synthetic_data()
@@ -361,12 +361,18 @@ def test_capped_gif_never_paints_a_future_marker_at_its_decoded_display_time(
     gif = animation_export.export_animation(fig, fmt="gif", max_frames=2)
     elapsed = 0
     with Image.open(io.BytesIO(gif)) as image:
+        last = image.n_frames - 1
         for i in range(image.n_frames):
             image.seek(i)
             rgb = image.convert("RGB")
-            for j, onset in enumerate((0, 500, 900)):
-                if rgb.getpixel((j, 0)) == (0, 0, 0):
-                    assert onset <= elapsed * speed
+            painted = [rgb.getpixel((j, 0)) == (0, 0, 0) for j in range(3)]
+            if i == last:
+                # The final image holds until the replay ends: all of it shows.
+                assert all(painted)
+            else:
+                for shown, onset in zip(painted, (0, 500, 900), strict=True):
+                    if shown:
+                        assert onset <= elapsed * speed
             elapsed += image.info["duration"]
     assert elapsed == pytest.approx(995 / speed, abs=10)
 
@@ -511,13 +517,18 @@ def test_categorical_colors_survive_order_subsets_and_a_literal_missing_label():
     forward, key = plots._resolve_marker_colors(values, False)
     reverse, _ = plots._resolve_marker_colors(values[::-1], False)
     assert forward == reverse[::-1]
-    assert plots._resolve_marker_colors(values.iloc[[1]], False)[0] == [forward[1]]
+    # "noun" and "verb" prefer one palette slot; "noun" sorts first and keeps it.
+    noun = plots._resolve_marker_colors(values.iloc[[1]], False)[0]
+    verb_and_noun = plots._resolve_marker_colors(values.iloc[[0, 1]], False)[0]
+    assert verb_and_noun[1] == noun[0] != verb_and_noun[0]
     assert forward[2] != forward[3]
     assert len(set(forward)) == len(values)
     assert {"(missing)", "(missing) (no value)"} <= dict(key).keys()
+    # Two scanpaths share the mapping one figure of their labels would give.
+    first_four, _ = plots._resolve_marker_colors(values.iloc[:4], False)
     sides, legend = plots._shared_category_colors([values.iloc[:3], values.iloc[1:4]])
-    assert sides == [forward[:3], forward[1:4]]
-    assert dict(legend)["noun"] == forward[1]
+    assert sides == [first_four[:3], first_four[1:4]]
+    assert dict(legend)["noun"] == first_four[1]
 
 
 def test_index_connector_styles_the_line_and_gates_only_spatial_controls():

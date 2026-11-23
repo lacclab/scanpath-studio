@@ -529,6 +529,17 @@ COMPARE_IDENTITY_STATE_KEY = "_compare_selected_identity"
 #: (`SHARE_INT_RANGE_PARAMS`) and `URL_OPTIONAL_PARAMS`, which is what says
 #: a link may legitimately not carry it.
 FIX_RANGE_PARAM = "fix_range"
+#: *Keep this range across trials*: the fixation window applies to every
+#: trial, clamped to each one's length.
+SINGLE_FIX_RANGE_ALL_TRIALS = "single_fix_range_all_trials"
+#: …on the wire, as "1" and only while it is on (off is the default).
+FIX_RANGE_ALL_TRIALS_PARAM = "fix_range_all_trials"
+#: Whether a linked replay draws fixations. Share writes ``replay_fixations=0``
+#: beside ``show_fixations=0`` when the link opens a replay with the fixations
+#: hidden. A link that opens a replay with ``show_fixations=0`` and no
+#: ``replay_fixations`` was shared while a replay always drew fixations, so it
+#: opens with them shown; ``show_fixations`` then sets the static figure's.
+REPLAY_FIXATIONS_PARAM = "replay_fixations"
 #: Where an arriving `compare=` selection waits until the candidate list exists.
 #: The picker's own key holds a *label* built at render time, so a link can't
 #: seed it directly — the same problem `PENDING_TRIAL_KEY` solves for A.
@@ -587,6 +598,9 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         **_compare_style_params("hollow"),
         # The trial chips above the plot.
         "show_chips": SINGLE_SHOW_CHIPS,
+        # The fixation window's scope. Optional on the wire (see
+        # `URL_OPTIONAL_PARAMS`): only a window kept across trials says so.
+        FIX_RANGE_ALL_TRIALS_PARAM: SINGLE_FIX_RANGE_ALL_TRIALS,
     }
 )
 
@@ -926,7 +940,9 @@ URL_OPTIONAL_PARAMS = frozenset(
         PARAM_DATASET_DIGEST,
         PARAM_DATASET_ID,
         FIX_RANGE_PARAM,
+        FIX_RANGE_ALL_TRIALS_PARAM,
         COMPARE_FIX_RANGE_PARAM,
+        REPLAY_FIXATIONS_PARAM,
         *SETUP_PARAMS,
         *COMPARE_STYLE_PARAMS,
         *EXPORT_PARAMS,

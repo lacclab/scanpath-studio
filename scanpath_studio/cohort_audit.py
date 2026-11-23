@@ -123,13 +123,21 @@ def profile_methods(recipe: dict) -> str:
             condition += f", unknown values {rule['unknown']}"
         conditions.append(condition)
     filters = " and ".join(conditions) if conditions else "the full trial pool"
+    spread = a["spread"]
+    if spread == "Bootstrap CI":
+        spread = f"a 95% percentile bootstrap interval of the {agg} across participants"
+    if a.get("requested_spread"):
+        spread += (
+            f" ({a['requested_spread']} was selected; it cannot bracket a {agg},"
+            " so the bootstrap interval was drawn)"
+        )
     return (
         "\n".join(
             [
                 f"The profile for text {text}{screen} was produced with Scanpath Studio {recipe['app']['version']}. [analysis.text, analysis.screen, app.version]",
                 f"The measure was {m.label} ({unit}). Normalization was {a['normalization']}. [analysis.measure, analysis.normalization]",
                 f"For each word we used the {agg} across a participant's finite observations and then the {agg} across those participants. [analysis.aggregation]",
-                f"Words required at least {a['min_readers']} contributing participants. The spread shown was {a['spread']}. [analysis.min_readers, analysis.spread]",
+                f"Words required at least {a['min_readers']} contributing participants. The spread shown was {spread}. [analysis.min_readers, analysis.spread]",
                 f"The analysis used {filters}. [trial_filters]",
                 "Add the sampling procedure, study design and rationale for exclusions before submission.",
             ]

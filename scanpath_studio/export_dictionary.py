@@ -95,8 +95,10 @@ class CsvDictionary:
 R_IMPORT = """# Run from the extracted bundle folder. Requires the R package jsonlite.
 dictionary <- jsonlite::fromJSON("columns.json", simplifyVector = FALSE)
 read_scanpath_csv <- function(path) {
+  if (!isTRUE(path %in% names(dictionary$csv_files))) {
+    stop("Choose a CSV listed in dictionary$csv_files")
+  }
   schema <- dictionary$csv_schemas[[dictionary$csv_files[[path]]]]
-  if (is.null(schema)) stop("Choose a CSV listed in dictionary$csv_files")
   types <- vapply(schema, function(column) column$r_type, character(1))
   read.csv(path, colClasses = unname(types), check.names = FALSE,
            na.strings = "", fileEncoding = "UTF-8", stringsAsFactors = FALSE)

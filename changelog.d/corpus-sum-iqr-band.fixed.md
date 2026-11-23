@@ -1,0 +1,1 @@
+With Aggregate set to Sum, an IQR spread is now drawn as the 95% bootstrap interval of the sum, as SD and SEM already were, instead of the quartiles of the individual values around the total; the recipe and the methods draft say so.

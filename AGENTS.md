@@ -93,6 +93,7 @@ scanpath_studio/
 │  ├─ plots.py           `FigureSettings` (the render contract) + every Plotly builder + layer split
 │  ├─ code_snippet.py    the Python / CLI code that reproduces the figure on screen
 │  ├─ export.py          bulk export (figures + tables, per trial or combined)
+│  ├─ bulk_renderer.py   Kaleido page reuse and browser recycling for bulk figures
 │  ├─ animation_export.py GIF / MP4 from the replay (warm Kaleido + Pillow / imageio-ffmpeg)
 │  ├─ export_status.py   shared export stages and byte signatures
 │  └─ authoring.py, authoring_component.py
@@ -512,9 +513,11 @@ here fails when its rule is broken.
   `tabs._render_save_plot_button` hands its component. A new writer stamps its
   output too; only the toolbar camera's PNG can't.
 - **Kaleido** (PNG/SVG/PDF, GIF/MP4) needs Chrome (`plotly_get_chrome -y`;
-  `packages.txt` on Streamlit Cloud), and its warm server is a process-wide
-  singleton: hold `animation_export.KALEIDO_LOCK`. The on-screen PNG/SVG is
-  saved in the browser; HTML needs no browser.
+  `packages.txt` on Streamlit Cloud). Hold `animation_export.KALEIDO_LOCK`
+  for native rendering. Single figures and animations use Kaleido's process-wide
+  warm server. Multi-reading bundles reuse one browser page and periodically
+  replace the browser to release native memory. The on-screen PNG/SVG is saved
+  in the browser. HTML export works without Chrome.
 - Bulk export iterates *all* filtered trials — narrow the filter first.
 
 **Loading and performance**

@@ -742,8 +742,6 @@ def test_the_co_animation_round_trips(monkeypatch, capsys):
 def test_compact_code_keeps_the_drawn_styles_in_both_languages(
     monkeypatch, capsys, replay
 ):
-    import scanpath_studio as sps
-
     flags = [
         *_COMPARE,
         "--fixation-index",
@@ -772,7 +770,6 @@ def test_compact_code_keeps_the_drawn_styles_in_both_languages(
     python = capsys.readouterr().out
     assert "order_font_color=" not in python and "\n    saccade_width=" not in python
     assert "'fix_color': '#00aa00'" in python
-    monkeypatch.setattr(sps, "save_figure", lambda *args, **kwargs: None)
     namespace = {}
     exec(compile(python, "<compact snippet>", "exec"), namespace)  # noqa: S102
     assert namespace["fig"].to_json() == from_cli.to_json() == original.to_json()

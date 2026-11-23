@@ -449,7 +449,7 @@ class TestBulkExportFlow:
     ``st.download_button`` is drivable from ``AppTest``, and the test clicks the
     real one — but the bytes it serves live in Streamlit's media-file manager,
     not in the element tree, so there is no way to *read* the zip back from the
-    click. The payload is therefore captured at the ``tabs.bulk_export`` seam by
+    click. The payload is therefore captured at the ``tabs.build_download`` seam by
     a wrapper that calls the real function. Everything up to and including the
     button press — the options collected from the widgets, the scope, the trial
     pool, the figure settings — is the real UI path; only the *inspection* of
@@ -471,14 +471,14 @@ class TestBulkExportFlow:
         from scanpath_studio import tabs
 
         calls: list = []
-        real_bulk_export = tabs.bulk_export
+        real_build_download = tabs.build_download
 
         def capturing(*args, **kwargs):
-            result = real_bulk_export(*args, **kwargs)
+            result = real_build_download(*args, **kwargs)
             calls.append((kwargs, result[0]))
             return result
 
-        monkeypatch.setattr(tabs, "bulk_export", capturing)
+        monkeypatch.setattr(tabs, "build_download", capturing)
 
         at = _boot(subtab=SUBTAB_EXPORT)
         tabular = at.pills(key="bulk_export_tabular")
@@ -506,14 +506,14 @@ class TestBulkExportFlow:
         from scanpath_studio import tabs
 
         calls: list = []
-        real_bulk_export = tabs.bulk_export
+        real_build_download = tabs.build_download
 
         def capturing(*args, **kwargs):
-            result = real_bulk_export(*args, **kwargs)
+            result = real_build_download(*args, **kwargs)
             calls.append((kwargs, result[0], result[1]))
             return result
 
-        monkeypatch.setattr(tabs, "bulk_export", capturing)
+        monkeypatch.setattr(tabs, "build_download", capturing)
 
         at = _boot(subtab=SUBTAB_EXPORT)
         # No zip to download yet. The Current figure's "⬇ Download PNG" is always
@@ -712,6 +712,56 @@ class TestBulkExportFlow:
         # The session is as it was: the choices that led to the build stand.
         assert at.radio(key="bulk_export_scope").value == "This trial"
         assert list(at.pills(key="bulk_export_figfmts").value) == ["HTML", "SVG"]
+
+    def test_smaller_png_files_rebuilds_figures_and_layers(self, monkeypatch):
+        from contextlib import contextmanager
+
+        from PIL import Image
+
+        from scanpath_studio import export
+        from scanpath_studio.file_citation import stamp
+
+        buffer = io.BytesIO()
+        Image.new("RGBA", (120, 80), (31, 73, 122, 128)).save(
+            buffer, "PNG", compress_level=0
+        )
+        original = stamp(buffer.getvalue(), "png")
+
+        @contextmanager
+        def renderer(_enabled):
+            yield lambda _fig, fmt, *_: original if fmt == "png" else b"<svg/>"
+
+        monkeypatch.setattr(export, "_figure_renderer", renderer)
+        at = _boot(subtab=SUBTAB_EXPORT)
+        at.radio(key="bulk_export_scope").set_value("This trial")
+        at.pills(key="bulk_export_figfmts").set_value(["PNG", "SVG"])
+        at.toggle(key="bulk_export_layers").set_value(True)
+        at.run(timeout=60)
+        assert at.toggle(key="bulk_export_compact_pngs").value is False
+
+        def build():
+            next(b for b in at.button if b.label == "Build export").click().run(
+                timeout=60
+            )
+            _clean(at, "after building PNG figures and layers:")
+            with zipfile.ZipFile(
+                io.BytesIO(at.session_state["_bulk_export_cache"]["data"])
+            ) as z:
+                return {
+                    p: z.read(p) for p in z.namelist() if p.endswith((".png", ".svg"))
+                }
+
+        fast = build()
+        at.toggle(key="bulk_export_compact_pngs").set_value(True).run(timeout=60)
+        assert "⬇ Download bundle (zip)" not in self._download_labels(at)
+        smaller = build()
+        assert smaller.keys() == fast.keys()
+        assert any("/layers/" in path and path.endswith(".png") for path in fast)
+        for path in fast:
+            if path.endswith(".png"):
+                assert fast[path] == original and len(smaller[path]) < len(original)
+            else:
+                assert smaller[path] == fast[path] == b"<svg/>"
 
     def test_the_html_files_choice_reaches_the_bundle(self, monkeypatch):
         from scanpath_studio import tabs

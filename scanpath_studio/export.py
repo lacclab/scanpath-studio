@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import PurePosixPath
-from time import perf_counter
+from time import localtime, perf_counter
 
 import pandas as pd
 
@@ -1134,9 +1134,12 @@ def _write_table(
         zf.writestr(path, data)
         return len(data)
     # csv.writer sends complete rows to the member. Only a chunk of converted
-    # values is kept in memory, even for a multi-gigabyte gaze table.
+    # values is kept in memory, even for a multi-gigabyte gaze table. A bare
+    # name would date the member 1980-01-01; writestr dates the others now.
+    info = zipfile.ZipInfo(path, localtime()[:6])
+    info.compress_type = zf.compression
     with (
-        zf.open(path, "w", force_zip64=True) as member,
+        zf.open(info, "w", force_zip64=True) as member,
         io.TextIOWrapper(member, encoding="utf-8", newline="") as text,
     ):
         df.to_csv(text, index=False, chunksize=5000)

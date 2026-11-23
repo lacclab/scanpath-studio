@@ -2148,6 +2148,27 @@ def test_a_retried_zip64_bundle_keeps_valid_local_headers(
             )
 
 
+def test_every_bundle_member_is_dated_when_it_was_written(
+    minimal_combos, minimal_words, minimal_fixations, base_settings
+):
+    import time
+
+    # A ZIP stores even seconds, rounded down.
+    start = time.localtime()[:6]
+    start = (*start[:5], start[5] - start[5] % 2)
+    with _bulk(
+        minimal_combos,
+        minimal_words,
+        minimal_fixations,
+        base_settings,
+        include_fixations=True,
+    ) as archive:
+        dates = {info.filename: info.date_time for info in archive.infolist()}
+    end = time.localtime()[:6]
+    assert sum(name.endswith(".csv") for name in dates) > 1
+    assert all(start <= when <= end for when in dates.values()), dates
+
+
 def test_only_failures_another_try_can_fix_are_offered_for_retry(
     minimal_combos, minimal_words, minimal_fixations, base_settings, monkeypatch
 ):

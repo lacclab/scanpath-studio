@@ -618,13 +618,15 @@ function build(arts, panels, steady = false) {
     bodyW = W - pad * 2;
   if (cw < 10)
     throw Error("Increase the figure width or reduce the gap between panels.");
+  // An emptied caption box prints no caption and takes no room.
   const caption = doc.caption ?? draft(false, panels),
-    cl =
-      doc.captionPlacement === "Wrap"
-        ? lines(caption, bodyW, size)
-        : doc.captionPlacement === "Single line"
-        ? [caption.replaceAll("\n", " ")]
-        : [];
+    cl = !caption.trim()
+      ? []
+      : doc.captionPlacement === "Wrap"
+      ? lines(caption, bodyW, size)
+      : doc.captionPlacement === "Single line"
+      ? [caption.replaceAll("\n", " ")]
+      : [];
   // The suggested caption ends with each frame's reading time, which can wrap
   // onto another line. A clip holds room for the widest time in its interval.
   const captionLines =

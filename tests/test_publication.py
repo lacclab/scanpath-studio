@@ -405,6 +405,29 @@ def test_batch_size_is_the_proof_artwork_width(crop):
     assert "The crop, labels and caption apply only to this figure." in shown
 
 
+@needs_chrome
+def test_an_emptied_caption_takes_no_room():
+    doc = sps.publication_figure(go.Figure(go.Bar(y=[1, 2])), width_mm=85)
+    ((separate, printed),) = _in_editor(
+        doc,
+        """(async () => {
+          doc.captionPlacement = "Manuscript";
+          const separate = (await artwork()).H, printed = {};
+          for (const placement of ["Wrap", "Single line"])
+            for (const caption of ["", "  \\n ", "Accuracy by condition."]) {
+              Object.assign(doc, { captionPlacement: placement, caption });
+              printed[placement + ":" + JSON.stringify(caption)] =
+                (await artwork()).H;
+            }
+          return [separate, printed];
+        })()""",
+    )
+    for placement in ("Wrap", "Single line"):
+        assert printed[f'{placement}:""'] == separate
+        assert printed[f'{placement}:"  \\n "'] == separate
+        assert printed[f'{placement}:"Accuracy by condition."'] > separate
+
+
 def _corpus_chart_app():
     import plotly.graph_objects as go
     import streamlit as st

@@ -364,6 +364,7 @@ from scanpath_studio.plots import (
     apply_legend_layout,
     break_at_gaps,
     build_scanpath_replay,
+    category_vocabulary,
     make_comparison_figure,
     make_density_scatter_figure,
     make_difference_profile_figure,
@@ -2421,6 +2422,38 @@ def _figure_input_key(
             except TypeError:
                 parts.append((k, str(v)))
     return tuple(parts)
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def _c_category_vocabulary(
+    column: str,
+    _fixations: pd.DataFrame | None,
+    _fixations_b: pd.DataFrame | None,
+    frame_keys: tuple,
+) -> tuple[str, ...] | None:
+    """`plots.category_vocabulary`, cached on the frames' fingerprints."""
+    return category_vocabulary(column, _fixations, _fixations_b)
+
+
+def _dataset_color_categories(
+    color_by: str | None,
+    fixations: pd.DataFrame | None,
+    fixations_b: pd.DataFrame | None = None,
+) -> tuple[str, ...] | None:
+    """`FigureSettings.color_categories` for a figure coloured by ``color_by``:
+    every label it takes in the whole dataset's ``fixations`` — unfiltered, so a
+    trial filter moves no colour — and in a second dataset's for Compare."""
+    if not color_by or color_by in (UNIFORM_COLOR_FIELD, "line"):
+        return None
+    return _c_category_vocabulary(
+        str(color_by),
+        fixations,
+        fixations_b,
+        tuple(
+            None if frame is None else frame_fingerprint(frame)
+            for frame in (fixations, fixations_b)
+        ),
+    )
 
 
 @st.cache_data(show_spinner=False)
@@ -7475,6 +7508,16 @@ def render_single_trial_tab(
             fixations=trial_fixations.columns,
             raw_gaze=trial_raw_gaze.columns,
         ),
+        # A category's colour comes from every label in the dataset — both
+        # datasets' for a cross-dataset Compare — so it is the same in every
+        # trial, the replay, Compare and the bulk export.
+        color_categories=_dataset_color_categories(
+            figure_settings.get("color_by"),
+            fixations_all,
+            compare_source.fixations
+            if comparing and cross_dataset and compare_source is not None
+            else None,
+        ),
     )
 
     # Drift correction — hoisted ABOVE the render-mode split, so the two
@@ -7992,8 +8035,9 @@ def render_single_trial_tab(
                     build_inputs["reading_origin_ms"] = (
                         None if pd.isna(origin) else origin
                     )
-                # Not an option, but the figure's text: a renamed column redraws.
+                # Not options, but the figure's text and its category colours.
                 build_inputs["column_labels"] = static_settings.column_labels
+                build_inputs["color_categories"] = static_settings.color_categories
                 displayed_fig = _cached_scanpath_figure(
                     trial_words,
                     plot_fixations,
@@ -8096,6 +8140,7 @@ def render_single_trial_tab(
                                 **original.for_builder(STATIC_FIGURE_OPTIONS),
                                 "raw_gaze": figure_raw_gaze,
                                 "column_labels": original.column_labels,
+                                "color_categories": original.color_categories,
                             },
                         ),
                     )
@@ -8204,6 +8249,9 @@ def render_single_trial_tab(
                     scale_text_to_boxes=scale_text_to_boxes,
                     trial_raw_gaze=trial_raw_gaze,
                     raw_gaze=raw_gaze,
+                    color_categories=_dataset_color_categories(
+                        viz_settings.get("color_by"), fixations_all
+                    ),
                 )
 
     # Absent entirely while drift correction is gated off.
@@ -8558,6 +8606,11 @@ def _render_bulk_export(
 
         annotation_dataset = _dataset_display_name(annotation_owner)
     settings_key = json.dumps(figure_settings, sort_keys=True, default=str)
+    # The figure on screen assigns category colours over the whole dataset's
+    # labels, whichever trials the bundle exports.
+    color_categories = _dataset_color_categories(
+        figure_settings.get("color_by"), fixations_all
+    )
     annotations_key = json.dumps(annotation_records, sort_keys=True, default=str)
     table_names = _dataset_table_names()
     # A renamed column changes every table's header.
@@ -8618,6 +8671,7 @@ def _render_bulk_export(
         str(x_field),
         str(y_field),
         settings_key,
+        color_categories,
         repr(options),
         annotations_key,
         annotation_dataset,
@@ -8697,6 +8751,7 @@ def _render_bulk_export(
                     status_callback=on_status,
                     # The tables go out under the dataset's own names.
                     column_names=_dataset_table_names(),
+                    color_categories=color_categories,
                 )
         except Exception as exc:
             stop_slot.empty()
@@ -13482,6 +13537,7 @@ def render_multiple_comparison_tab(
     scale_text_to_boxes: bool = True,
     trial_raw_gaze: pd.DataFrame | None = None,
     raw_gaze: pd.DataFrame | None = None,
+    color_categories: tuple[str, ...] | None = None,
 ) -> None:
     """Render the **Comparisons** subtab.
 
@@ -13491,6 +13547,8 @@ def render_multiple_comparison_tab(
 
     ``trial_raw_gaze`` / ``raw_gaze`` are the selected trial's samples and the
     filtered pool's, for the chip table's gaze-sample count.
+    ``color_categories`` is the dataset's `FigureSettings.color_categories`, so
+    each panel colours a category as the main figure does.
     """
     st.caption(
         "Browse related readings by selecting a field they share with this trial."
@@ -13580,6 +13638,7 @@ def render_multiple_comparison_tab(
             column_labels=active_figure_labels(
                 st.session_state, words=words.columns, fixations=fix.columns
             ),
+            color_categories=color_categories,
             **settings,
         )
 

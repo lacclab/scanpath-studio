@@ -103,6 +103,7 @@ from .plots import (  # noqa: E402
     FigureSettings,
     _resolve_trial_display_name,
     add_illustration_label,
+    category_vocabulary,
     make_comparison_figure,
     make_corpus_overview_figure,
     make_difference_profile_figure,
@@ -2736,7 +2737,9 @@ def plot_scanpath(
         words: A normalized words frame from
             [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data], or ``None``
             for a dataset recorded as raw gaze alone.
-        fixations: The normalized fixations frame, or ``None`` likewise.
+        fixations: The normalized fixations frame, or ``None`` likewise. A categorical
+            ``color_by`` gives each label of its column in this whole frame a color,
+            so a category keeps its color in every trial drawn from the same frame.
         participant: The participant ID. It may be left out when the frames hold one
             trial.
         trial: The trial ID. It may be left out when the frames hold one trial.
@@ -2924,6 +2927,9 @@ def plot_scanpath(
             raw_gaze=raw_gaze,
             sample_names=sample_side,
         ),
+        # Every reading's labels, not this trial's, so a category wears one
+        # colour in every trial drawn from these frames, as in the app.
+        color_categories=category_vocabulary(settings.get("color_by"), fixations),
     )
     fig = make_scanpath_figure(
         trial_words,
@@ -3239,6 +3245,12 @@ def animate_scanpath(
         autoplay=autoplay,
         column_labels=_column_labels(
             names, trial_words, trial_fixations, words=word_side
+        ),
+        # A's whole frames and B's own, as the app colours a co-animation.
+        color_categories=category_vocabulary(
+            animation_overrides.get("color_by"),
+            fixations,
+            None if passed_b[1] is None else _cn.to_canonical_frame(passed_b[1]),
         ),
     )
     fig = make_scanpath_animation(
@@ -4022,6 +4034,13 @@ def compare_scanpaths(
         # Only the split layouts read this; an overlay that got here has two
         # equal canvases anyway, so it is the same value either way.
         canvas_b=resolved_setup_b.canvas,
+        # Both datasets' labels: a category wears one colour on A and on B,
+        # and the same one in every comparison of these frames.
+        color_categories=category_vocabulary(
+            settings.get("color_by"),
+            fixations,
+            fixations_b if cross_dataset else None,
+        ),
     )
     fig = make_comparison_figure(
         pd.concat([merged_words, merged_words_b], ignore_index=True),

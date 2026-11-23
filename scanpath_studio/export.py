@@ -32,7 +32,7 @@ import io
 import json
 import re
 import zipfile
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager, nullcontext, suppress
 from contextvars import copy_context
@@ -88,6 +88,7 @@ from .plots import (
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
     _plotly_literal,
+    category_vocabulary,
     make_scanpath_figure,
     reading_stimulus_image,
     split_scanpath_layers,
@@ -3009,6 +3010,7 @@ def bulk_export(
     annotation_dataset: str | None = None,
     column_names: Mapping[str, ColumnNames] | None = None,
     stimulus_image_resolver: Callable | None = None,
+    color_categories: Sequence[str] | None = None,
     _retry=None,
     _archive: zipfile.ZipFile | None = None,
 ) -> tuple[bytes | None, ExportProgress]:
@@ -3036,6 +3038,11 @@ def bulk_export(
     ``annotation_dataset`` is the dataset they were made on, which the file
     names (annotations file schema 3).
 
+    ``color_categories`` is every label of a categorical ``color_by`` in the
+    dataset (`plots.category_vocabulary`), which each figure assigns its
+    category colours over; the app passes the whole dataset's, so the files
+    match the figure on screen. Without it they are read off ``fixations``.
+
     progress_callback (if given) is invoked with an ExportProgress after every
     trial so the UI can update a progress bar.
 
@@ -3045,6 +3052,10 @@ def bulk_export(
     pattern_problem = path_structure_error(options.path_pattern)
     if pattern_problem:
         raise ValueError(pattern_problem)
+    if color_categories is None:
+        color_categories = category_vocabulary(settings.get("color_by"), fixations)
+    else:
+        color_categories = tuple(color_categories)
     combos = _apply_scope(combos, options)
     units = export_units(
         combos,
@@ -3469,6 +3480,7 @@ def bulk_export(
             # colouring.
             color_by_line=bool(settings.get("color_by_line", False))
             or fig_fix is not trial_fix,
+            color_categories=color_categories,
         )
         # The trial's own samples, as the live figure
         # gets them (the layer self-gates on `show_raw_gaze`).

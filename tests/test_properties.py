@@ -586,3 +586,31 @@ def test_a_header_line_ends_where_the_csv_module_ends_its_record(cells):
     text = record + "next\n"
     assert _unquoted_line_end(text, '"', "\n") == len(record) - 1
     assert _unquoted_line_end(text.encode(), b'"', b"\n") == len(record.encode()) - 1
+
+
+@given(
+    st.lists(st.text(min_size=1, max_size=8), min_size=1, max_size=45, unique=True),
+    st.data(),
+)
+def test_a_category_keeps_its_colour_in_every_figure_of_its_dataset(vocabulary, data):
+    """Assigned over the dataset's labels, a category wears the colour the whole
+    vocabulary gives it whatever subset a figure shows and in whatever order; up
+    to the palette's size every pair is palette-far apart, and a label the
+    vocabulary lacks takes a colour none of the vocabulary's has."""
+    from itertools import combinations
+
+    shown = data.draw(st.lists(st.sampled_from(vocabulary), unique=True))
+    stranger = data.draw(
+        st.text(min_size=1, max_size=8).filter(lambda t: t not in vocabulary)
+    )
+    whole = plots._category_color_map(vocabulary)
+    figure = plots._category_color_map(
+        [*shown, stranger, None], vocabulary=vocabulary[::-1]
+    )
+    assert all(figure[label] == whole[label] for label in shown)
+    colors = [whole[label] for label in vocabulary]
+    assert len(set(colors)) == len(colors)
+    assert figure[stranger] not in colors
+    if len(vocabulary) <= len(plots._CATEGORY_PALETTE):
+        labs = [plots._color_lab(color) for color in colors]
+        assert all(plots._delta_e(a, b) >= 23 for a, b in combinations(labs, 2))

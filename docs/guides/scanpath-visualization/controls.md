@@ -137,7 +137,7 @@ Click **Fixations** to edit the markers. The switch shows or hides them.
 
 | Control | What it does |
 | --- | --- |
-| **Color** | **One color** paints all fixations alike. A number such as duration uses a continuous scale. Each category, such as a condition or a part of speech, gets a color clearly different from the others in the figure, and keeps it across trials unless a category shown with it would take the same one. The legend identifies missing values separately. |
+| **Color** | **One color** paints all fixations alike. A number such as duration uses a continuous scale. A category, such as a condition or a part of speech, keeps the same color in every trial of the dataset, even when filtering removes other categories. Up to 20 categories in the dataset get clearly different colors; with more, some colors are closer. The legend identifies missing values separately. |
 | color box | With **One color**: the fixation marker color. With a number column: the color scale. |
 | **Color range and color bar** → **Range** | When markers are colored by a number: the values at the two ends of the color scale. **Auto** fits each trial. |
 | **Marker appearance** → **Shape** | Choose the fixation marker shape: circle, square, diamond, triangle, cross, X, star, hexagon or heart. |

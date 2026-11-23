@@ -119,6 +119,7 @@ from .constants import (
 )
 from .controls import (
     _ALIGN_OPTIONS,
+    _AUTO_REPLAY_FIXATIONS,
     claim_mapping,
     clear_replay_layer_restore,
     color_field_options,
@@ -150,7 +151,9 @@ from .session_keys import (
     COMPARE_STIMULUS_PARAM,
     COMPARE_STYLE_PARAMS,
     EXPORT_PARAMS,
+    FIX_RANGE_ALL_TRIALS_PARAM,
     FIX_RANGE_PARAM,
+    GLOBAL_SHOW_FIX,
     LEGEND_PARAMS,
     LINK_SETUP_STATE_KEY,
     PARAM_CORPUS,
@@ -162,6 +165,7 @@ from .session_keys import (
     PENDING_COMPARE_STATE_KEY,
     PLOT_CONFIG_SCHEMA_VERSION,
     PUBLIC_DATASET_CHOICE,
+    REPLAY_FIXATIONS_PARAM,
     SAME_DATASET,
     SETUP_PARAMS,
     SETUP_PROVENANCE_PARAM,
@@ -171,6 +175,7 @@ from .session_keys import (
     SINGLE_COMPARE_SCREEN_ID,
     SINGLE_COMPARE_TOGGLE,
     SINGLE_FIX_RANGE,
+    SINGLE_FIX_RANGE_ALL_TRIALS,
 )
 from .utils import (
     combo_reading_keys,
@@ -578,7 +583,8 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "saccade_type_legend": "global_saccade_type_legend",
     "show_color_legend": "global_show_color_legend",
     "show_highlight_legend": "global_show_highlight_legend",
-    # The fixed duration scale's size key (default on, so always emitted).
+    # The fixed duration scale's size key (off by default; seeded, so always
+    # emitted).
     "duration_size_legend": "global_duration_size_legend",
     # Snap to line (its *Position* is a float below). The param has the name
     # the older "snap above the word" had, so an older link that snapped still
@@ -619,6 +625,9 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     # The chips above the plot, shown or hidden. Not part of the figure, so
     # the settings file leaves it out — only the link carries it.
     "show_chips": "single_show_chips",
+    # *Keep this range across trials*, written only while it is on; see the
+    # `FIX_RANGE_PARAM` block in `_build_share_query`.
+    FIX_RANGE_ALL_TRIALS_PARAM: SINGLE_FIX_RANGE_ALL_TRIALS,
 }
 _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
     **_design_params("color"),
@@ -1062,6 +1071,21 @@ def _warn_invalid_link_param(param: str, raw) -> None:
     st.warning(f"Ignored the link's invalid {param}={_shown_link_value(raw)}.")
 
 
+def _link_replay_draws_fixations(qp) -> bool:
+    """Whether a link that opens a replay with ``show_fixations=0`` draws them.
+
+    Only a ``replay_fixations`` the link carries hides them: one shared while a
+    replay always drew fixations has none, and opens as it was drawn."""
+    raw = qp.get(REPLAY_FIXATIONS_PARAM)
+    if raw is None:
+        return True
+    try:
+        return _coerce_bool(raw)
+    except (ValueError, TypeError):
+        _warn_invalid_link_param(REPLAY_FIXATIONS_PARAM, raw)
+        return True
+
+
 def _clamp_url_value(state_key: str, value):
     """Clamp a deep-linked value to its widget bounds (scalars and 2-tuples)."""
     bounds = _URL_BOUNDED.get(state_key)
@@ -1343,6 +1367,9 @@ def _apply_url_preset() -> str | None:
     _apply_url_legends(qp)
 
     snapped_from_link: set[str] = set()
+    # Whether this run seeds the fixation layer from the link (it re-applies
+    # on every rerun, as `setdefault`), for the replay check below.
+    fixations_unseeded = GLOBAL_SHOW_FIX not in st.session_state
     for url_key, (state_key, coerce) in _URL_PRESETS.items():
         if url_key not in qp:
             continue
@@ -1383,12 +1410,13 @@ def _apply_url_preset() -> str | None:
     # relative scale. Share writes the scale beside the toggles, so such a link
     # predates the fixed duration scale and was drawn relative.
     # `duration_size_legend` is left out of the check: it only travels with the
-    # scale. A hand-written `?trial_id=` link carries no toggle and gets the
+    # scale. So are the chips and the window's scope, which are no part of the
+    # figure. A hand-written `?trial_id=` link carries no toggle and gets the
     # current default.
     if "marker_size_scale" not in qp and any(
         k in qp
         for k in _SHARE_TOGGLE_PARAMS
-        if k not in ("duration_size_legend", "show_chips")
+        if k not in ("duration_size_legend", "show_chips", FIX_RANGE_ALL_TRIALS_PARAM)
     ):
         st.session_state.setdefault(
             "global_marker_size_scale", LEGACY_MARKER_SIZE_SCALE
@@ -1455,6 +1483,16 @@ def _apply_url_preset() -> str | None:
     # Older links use the tab name to select Animation.
     if (qp.get("tab") or "").lower() == "animation":
         st.session_state.setdefault("single_animate", True)
+        if (
+            fixations_unseeded
+            and st.session_state.get(SINGLE_ANIMATE)
+            and st.session_state.get(GLOBAL_SHOW_FIX) is False
+            and _link_replay_draws_fixations(qp)
+        ):
+            # The replay draws the fixations, and leaving it returns to the
+            # static figure without them, as the switch's own replay does.
+            st.session_state[GLOBAL_SHOW_FIX] = True
+            st.session_state[_AUTO_REPLAY_FIXATIONS] = True
     if qp.get("screen") not in (None, ""):
         st.session_state.setdefault("single_screen_id", str(qp["screen"]))
 
@@ -2290,6 +2328,32 @@ def _migrate_config_7_to_8(config: dict) -> dict:
     return migrated
 
 
+def _migrate_config_9_to_10(config: dict) -> dict:
+    """Draw a saved replay's fixations. A replay drew them whatever the
+    Fixation switch said, so a file that saved a replay with the switch off
+    showed them; read as saved, it would open an empty replay, or saccades
+    alone. Fixation windows and their scope are left alone.
+
+    As with an old link, the fixations are on for the replay only: the
+    in-memory ``mode`` marks it, and leaving the replay hides them again."""
+    migrated = dict(config)
+    mode, layers = migrated.get("mode"), migrated.get("layers")
+    if (
+        isinstance(mode, dict)
+        and mode.get("animate") is True
+        and isinstance(layers, dict)
+        and "fixations" in layers
+        and not layers["fixations"]
+    ):
+        migrated["layers"] = {**layers, "fixations": True}
+        migrated["mode"] = {**mode, _REPLAY_ONLY_FIXATIONS: True}
+    return migrated
+
+
+#: Set by `_migrate_config_9_to_10` on the migrated (never saved) config.
+_REPLAY_ONLY_FIXATIONS = "_replay_only_fixations"
+
+
 # version N -> callable that upgrades an N config to N+1. Keyed by the *source*
 # version so `_migrate_plot_config` can walk an old config forward step by step.
 _PLOT_CONFIG_MIGRATIONS = {
@@ -2302,8 +2366,7 @@ _PLOT_CONFIG_MIGRATIONS = {
     7: _migrate_config_7_to_8,
     # Without an upload ID, a saved name still resolves by its original store key.
     8: dict,
-    # Earlier files leave existing fixation windows and their scope alone.
-    9: dict,
+    9: _migrate_config_9_to_10,
 }
 
 
@@ -2747,6 +2810,8 @@ def _restore_plot_config(
     for cfg_key, state_key in _PLOT_CONFIG_LAYER_KEYS.items():
         if cfg_key in layers:
             put(state_key, bool(layers[cfg_key]))
+    if section("mode").get(_REPLAY_ONLY_FIXATIONS) is True:
+        st.session_state[_AUTO_REPLAY_FIXATIONS] = True
 
     illustration = section("illustration")
     if "label_mode" in illustration:
@@ -4020,13 +4085,22 @@ def _build_share_query(
     # length — so a 509–540 window arriving at a 30-fixation trial silently
     # collapses to a single fixation. Only headless callers can reach this (the
     # UI has no identity-mode picker), which is what makes it worth stating.
+    #
+    # A window kept across trials travels even when it spans this trial, as
+    # the settings file keeps it: on a longer trial it still cuts. Its scope
+    # travels as `fix_range_all_trials=1`, only while on.
     window = st.session_state.get("single_fix_range")
+    all_trials = bool(st.session_state.get(SINGLE_FIX_RANGE_ALL_TRIALS))
+    if not all_trials:
+        params.pop(FIX_RANGE_ALL_TRIALS_PARAM, None)
     if not include_trial or not st.session_state.get("single_fix_range_user_set"):
         params.pop(FIX_RANGE_PARAM, None)
     elif isinstance(window, (list, tuple)) and len(window) == 2:
         full = (st.session_state.get("_share_selection") or {}).get("full_fix_range")
-        if full is not None and tuple(int(v) for v in window) == tuple(
-            int(v) for v in full
+        if (
+            not all_trials
+            and full is not None
+            and tuple(int(v) for v in window) == tuple(int(v) for v in full)
         ):
             params.pop(FIX_RANGE_PARAM, None)
     # B's window on exactly the terms of A's, against B's own flag and
@@ -4079,6 +4153,14 @@ def _build_share_query(
             params.pop(url_key, None)
     if st.session_state.get("single_animate"):
         params["tab"] = "animation"
+        # A linked replay draws fixations unless `replay_fixations` hides
+        # them (see `REPLAY_FIXATIONS_PARAM`). Fixations the replay turned on
+        # for itself travel as the static figure's off, which the reader
+        # turns on for the replay alone, as here.
+        if st.session_state.get(_AUTO_REPLAY_FIXATIONS):
+            params["show_fixations"] = "0"
+        elif params.get("show_fixations") == "0":
+            params[REPLAY_FIXATIONS_PARAM] = "0"
 
     # A compact provenance badge for the recording setup. The link carries
     # the setup's *values* wherever they differ from the corpus' own — but it
@@ -4533,7 +4615,7 @@ def _render_code_snippet_body(data_choice: str) -> None:
     state = st.session_state.get(SNIPPET_STATE_KEY)
     if not isinstance(state, FigureState):
         st.caption(
-            f"Open a trial on the {ICONS['view_scanpath']} Scanpath view to see "
+            f"Open a trial on the {ICONS['view_scanpath']} Scanpath View to see "
             "the code that rebuilds its figure."
         )
         return

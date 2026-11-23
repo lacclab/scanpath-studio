@@ -246,14 +246,29 @@ def _popover_rows(slug: str):
     ``rail_rows_<slug>``, that `styles.py` spaces the rows of apart — the same
     for every popover.
     """
-    # Remember which menu rendered each pending value. Its open event and
-    # the user's first edit can reach the server together on the next run.
+    with (
+        _menu_draws_pending_writes(slug),
+        _rail_label_width(_POPOVER_LABEL_W),
+        st.container(key=f"rail_rows_{slug}"),
+    ):
+        yield
+
+
+@contextmanager
+def _menu_draws_pending_writes(slug: str):
+    """Remember which menu draws each pending value (`write_through`) inside.
+
+    The menu's open event and the user's first edit can reach the server
+    together on the next run, so `reassert_pending_writes` releases the value
+    of a menu that is open. `_popover_rows` does this for a menu's own rows;
+    rows drawn into a menu's container after its block has closed need it
+    around them too.
+    """
     pending = st.session_state.get(_PENDING_WRITES_KEY)
     ctx = get_script_run_ctx() if pending else None
     drawn = ctx.shared.widget_user_keys_this_run if ctx else None
     waiting = [key for key in pending if key not in drawn] if drawn is not None else []
-    with _rail_label_width(_POPOVER_LABEL_W), st.container(key=f"rail_rows_{slug}"):
-        yield
+    yield
     if waiting:
         section = slug.split("_", 1)[0]
         menu_key = (
@@ -1787,6 +1802,10 @@ def _apply_view_preset_state(ss, name: str, saved: dict) -> None:
 
     for key, value in _VIEW_PRESETS[name].items():
         ss[key] = deepcopy(value)
+    # Compare draws each reading's markers at its own size, so the view's
+    # marker size is written to both readings too, as a palette's colours are.
+    for idx, _ in _COMPARE_SCANPATHS:
+        ss[f"cmp{idx}_marker_size_range"] = deepcopy(ss["global_marker_size_range"])
     ss[_QUICK_VIEW_SELECTION_KEY] = name
     # The complete baseline is captured by `_active_quick_view` after the
     # next rerun has restored data-dependent defaults.
@@ -2187,10 +2206,14 @@ _NUMERIC_TWIN_SUFFIXES = ("__num", "__num_lo", "__num_hi")
 _ABSENT = object()
 
 
-#: Compare and Animate are ways of *viewing* a design, not part of
-#: it: switching one on leaves the design's highlight where it is. (A design
-#: still records whether Compare was on, so applying it restores that.)
-_VIEW_MODE_KEYS = frozenset({SINGLE_COMPARE_TOGGLE, "single_animate"})
+#: Compare and the replay are ways of *viewing* a design, not part of it:
+#: switching one on, or changing how the replay plays, leaves the design's
+#: highlight where it is, and every view tile, Custom included, keeps them as
+#: they are. (A saved design still records whether Compare was on and the
+#: replay speed, so applying it restores them.) See `_is_view_mode_key`.
+_VIEW_MODE_KEYS = frozenset(
+    {SINGLE_COMPARE_TOGGLE, SINGLE_ANIMATE, SINGLE_PLAYBACK_SPEED}
+)
 #: The dataset the applied design's baseline was taken on; see
 #: `_active_quick_view`.
 _QUICK_VIEW_DATASET = "_quick_view_dataset"
@@ -2200,18 +2223,26 @@ def _is_drift_mirror(key: str) -> bool:
     return key in _DRIFT_MIRROR_KEYS or key.endswith(_NUMERIC_TWIN_SUFFIXES)
 
 
+def _is_view_mode_key(key: object) -> bool:
+    """Whether a session key sets how a design is viewed rather than the design:
+    one of `_VIEW_MODE_KEYS`, or a replay setting (`global_anim_*`)."""
+    name = str(key)
+    return name in _VIEW_MODE_KEYS or name.startswith("global_anim_")
+
+
 def _design_drifted(applied: dict, current: dict) -> bool:
     """Whether the plot settings moved off the design that was applied.
 
     Every design key counts — a named view resets *all* of them to the widget
     defaults, so changing any plot control is a departure from it — except the
-    mirrors above. A key present on only one side is compared against its
-    widget default: a control registered late (its popover opened after the
-    baseline was taken) at its default value has not been changed, while a key
-    with no default (an explicit colour range) appearing *has*.
+    mirrors above and the view-mode keys, which every view tile keeps as they
+    are (`_is_view_mode_key`). A key present on only one side is compared
+    against its widget default: a control registered late (its popover opened
+    after the baseline was taken) at its default value has not been changed,
+    while a key with no default (an explicit colour range) appearing *has*.
     """
     for key in applied.keys() | current.keys():
-        if _is_drift_mirror(key) or key in _VIEW_MODE_KEYS:
+        if _is_drift_mirror(key) or _is_view_mode_key(key):
             continue
         default = _VIZ_WIDGET_DEFAULTS.get(key, _ABSENT)
         if applied.get(key, default) != current.get(key, default):
@@ -2292,7 +2323,7 @@ def _initial_plot_design(current: dict) -> str:
             for key, value in current.items()
             if key in expected
             and key != "global_palette"
-            and key not in _VIEW_MODE_KEYS
+            and not _is_view_mode_key(key)
             and not _is_drift_mirror(key)
         ):
             return name
@@ -2447,14 +2478,10 @@ def _choose_plot_view(name: str, current: str | None) -> None:
     """A static view ends the replay. Custom brings back its own palette too."""
     leave_animation()
     if name != current:
-        keep = (
-            *_palette_keys(),
-            "_palette_picked",
-            *(k for k in _VIZ_WIDGET_DEFAULTS if k.startswith("global_anim_")),
-        )
-        _apply_view_preset(
-            name, keep=() if name == _CUSTOM_VIEW else keep, built_in=True
-        )
+        keep = tuple(key for key in st.session_state if _is_view_mode_key(key))
+        if name != _CUSTOM_VIEW:
+            keep += (*_palette_keys(), "_palette_picked")
+        _apply_view_preset(name, keep=keep, built_in=True)
 
 
 #: The 🔵 Raw gaze layer's switch, which `app.seed_raw_gaze_default` seeds.
@@ -4332,6 +4359,10 @@ def numeric_field_options(
         fields.extend(
             f for f in charts.SAMPLE_FIELDS if f in raw_gaze and f not in fields
         )
+        # Samples recorded with a clock are numbered when the chart is drawn
+        # (`chart_axes.with_sample_index`), so the sample number is always an axis.
+        if charts.SAMPLE_INDEX not in fields:
+            fields.append(charts.SAMPLE_INDEX)
     return fields
 
 
@@ -6067,8 +6098,9 @@ def _render_fix_range_slider(
     checkbox opts into the sticky behaviour (the window is re-applied to every
     trial, clamped to each one's length).
 
-    The settings file restores the window and its all-trials scope. A URL,
-    CLI command or API call addresses one reading and only carries its window.
+    The settings file and a Share link restore the window and its all-trials
+    scope. A CLI command or API call addresses one reading and only carries
+    its window.
 
     ``single_fix_range`` itself reaches all four surfaces: the
     ``?fix_range=lo,hi`` link param, ``render --fix-index-range`` and ``api``'s
@@ -6226,16 +6258,20 @@ def _seed_viz_state(
     numeric_fields = numeric_field_options(trial_fixations, raw_gaze)
     if numeric_fields:
         ss = st.session_state
-        if (
-            charts.ELAPSED not in numeric_fields
-            and (ss.get("global_x_field"), ss.get("global_y_field"))
-            == charts.GAZE_OVER_TIME
+        axes = (ss.get("global_x_field"), ss.get("global_y_field"))
+        if any(
+            key in ss and ss[key] not in numeric_fields
+            for key in ("global_x_field", "global_y_field")
         ):
-            # Both fields belong to this preset. Falling back one field at a
-            # time would leave horizontal position plotted against itself.
+            # The two fields make one chart. Falling back one field at a time
+            # would plot the other against a default it was never paired
+            # with, such as horizontal position against itself.
             ss.pop("global_x_field", None)
             ss.pop("global_y_field", None)
-            if ss.get(_QUICK_VIEW_SELECTION_KEY) == "gaze_over_time":
+            if (
+                axes == charts.GAZE_OVER_TIME
+                and ss.get(_QUICK_VIEW_SELECTION_KEY) == "gaze_over_time"
+            ):
                 forget_design_selection(ss)
         x_default = "x" if "x" in numeric_fields else numeric_fields[0]
         y_default = (
@@ -6243,9 +6279,7 @@ def _seed_viz_state(
             if "y" in numeric_fields
             else numeric_fields[min(1, len(numeric_fields) - 1)]
         )
-        _drop_stale("global_x_field", numeric_fields)
         _pin("global_x_field", x_default)
-        _drop_stale("global_y_field", numeric_fields)
         _pin("global_y_field", y_default)
 
     # Highlight-column default + stale-clear run every time (even when the Text
@@ -6933,7 +6967,7 @@ def corpus_style_controls(
             key="global_palette",
             persist_state="session",
             on_change=_on_palette_change,
-            help="Same palette as the Scanpath view; designs and Share links keep it.",
+            help="Same palette as the Scanpath View; designs and Share links keep it.",
         )
         columns = st.columns(2)
         columns[0].color_picker(
@@ -7345,6 +7379,13 @@ def render_plot_controls(
     has_fixations = has_fixations or (b_fix is not None and not b_fix.empty)
     sequence = chart_axes and charts.position_chart(fields, "order_in_trial")
     screen_help = "Choose screen X and Y to draw this layer."
+    # Why Fixations greys when the trial has fixations but none of them can be
+    # placed on the chosen axes (a pupil-area chart, say).
+    fix_axis_help = (
+        "Both axes must be fields available in the fixations."
+        if chart_axes
+        else "No fixation has a screen position to draw."
+    )
     # Handy shorthands for the two recurring gates.
     _static_only = dict(in_animation=False, in_compare=False)
     _no_compare = dict(in_compare=False)
@@ -7364,6 +7405,20 @@ def render_plot_controls(
             else ""
         )
     )
+    # A replay draws only fixations and saccades, so it always keeps one of
+    # them: a replay opened with both off (a link, a settings file or a saved
+    # session) shows fixations, as switching Animation on does, and the switch
+    # of the one layer left is greyed while the replay runs. The API and CLI
+    # refuse a replay with both off, so Share → Code stays runnable.
+    ss = st.session_state
+    if animating and not (
+        ss.get("global_show_fix", True) or ss.get("global_show_saccades", True)
+    ):
+        ss["global_show_fix"] = True
+        ss[_AUTO_REPLAY_FIXATIONS] = True
+    replay_layer_help = "A replay draws fixations or saccades. Turn the other on first."
+    last_replay_fix = animating and not ss.get("global_show_saccades", True)
+    last_replay_sac = animating and not ss.get("global_show_fix", True)
     show_fix, fix_grp = _layer_row(
         layers,
         "Fixations",
@@ -7371,8 +7426,12 @@ def render_plot_controls(
         slug="fix",
         visibility_key="global_show_fix",
         on_change=clear_replay_layer_restore,
-        disabled=not has_fixations or not has_markers,
-        help=_greyed_help((not has_fixations, "This trial has no fixations.")),
+        disabled=not has_fixations or not has_markers or last_replay_fix,
+        help=_greyed_help(
+            (not has_fixations, "This trial has no fixations."),
+            (not has_markers, fix_axis_help),
+            (last_replay_fix, replay_layer_help),
+        ),
     )
     show_saccades, sac_grp = _layer_row(
         layers,
@@ -7381,10 +7440,11 @@ def render_plot_controls(
         slug="sac",
         visibility_key="global_show_saccades",
         on_change=clear_replay_layer_restore,
-        disabled=not has_fixations or (chart_axes and not sequence),
+        disabled=not has_fixations or (chart_axes and not sequence) or last_replay_sac,
         help=_greyed_help(
             (not has_fixations, "This trial has no fixations."),
             (chart_axes and not sequence, screen_help),
+            (last_replay_sac, replay_layer_help),
             (sequence, "Connect successive fixation indices in reading order."),
         ),
     )
@@ -7523,7 +7583,7 @@ def render_plot_controls(
         _layer_off(
             f"{ICONS['fixations']} Fixations",
             off=not show_fix or not has_fixations or not has_markers,
-            reason=no_fixations_note or None,
+            reason=no_fixations_note or (None if has_markers else fix_axis_help),
         ),
         _popover_rows("fix"),
     ):
@@ -8924,7 +8984,7 @@ def render_plot_controls(
         # The typography rows always draw, greyed while *Text* is off
         # (`text_disabled`), at the popovers' label width. They belong to
         # 📄 Stimulus → Text and must never fall back into this one.
-        with _rail_label_width(_POPOVER_LABEL_W):
+        with _rail_label_width(_POPOVER_LABEL_W), _menu_draws_pending_writes("stim"):
             canvas_renderer(
                 screen_rows,
                 text_host=stim_text_slot,

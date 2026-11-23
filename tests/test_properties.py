@@ -260,6 +260,72 @@ def test_shared_public_b_survives_a_catalogue_label_change(short):
     assert state["cmp_dataset"] == "New label"
 
 
+@given(st.booleans(), st.booleans(), st.booleans(), st.booleans())
+def test_a_shared_replay_reopens_with_its_layers(animate, fixations, saccades, auto):
+    """A link reopens the mode and gaze layers it was shared with, and a
+    replay that showed fixations for itself still returns to a static figure
+    without them."""
+    from scanpath_studio.constants import DEMO_CHOICE
+
+    # Only a replay turns its fixations on for itself, and it shows them.
+    auto = auto and animate and fixations
+    keys = ("single_animate", "global_show_fix", "global_show_saccades")
+    sender = {
+        "_share_selection": {"participant_id": "p", "trial_id": "t"},
+        **dict(zip(keys, (animate, fixations, saccades), strict=True)),
+        **({"_auto_replay_fixations": True} if auto else {}),
+    }
+    recipient: dict = {}
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(url_state.st, "session_state", sender)
+        query, _ = url_state._build_share_query(DEMO_CHOICE)
+        patch.setattr(url_state.st, "session_state", recipient)
+        patch.setattr(url_state.st, "query_params", dict(parse_qsl(query)))
+        url_state._apply_url_preset()
+    assert {k: bool(recipient.get(k)) for k in keys} == {
+        k: bool(sender[k]) for k in keys
+    }
+    assert bool(recipient.get("_auto_replay_fixations")) == auto
+
+
+@given(
+    st.tuples(
+        st.integers(min_value=1, max_value=400), st.integers(min_value=1, max_value=400)
+    ),
+    st.tuples(
+        st.integers(min_value=1, max_value=400), st.integers(min_value=1, max_value=400)
+    ),
+    st.booleans(),
+    st.booleans(),
+)
+def test_a_shared_fixation_window_keeps_its_scope(window, full, chosen, all_trials):
+    """A link carries a chosen window and whether it is kept across trials;
+    a window kept across trials travels even when it spans this trial."""
+    from scanpath_studio.constants import DEMO_CHOICE
+
+    window, full = tuple(sorted(window)), tuple(sorted(full))
+    sender = {
+        "_share_selection": {
+            "participant_id": "p",
+            "trial_id": "t",
+            "full_fix_range": full,
+        },
+        "single_fix_range": window,
+        "single_fix_range_user_set": chosen,
+        "single_fix_range_all_trials": all_trials,
+    }
+    recipient: dict = {}
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(url_state.st, "session_state", sender)
+        query, _ = url_state._build_share_query(DEMO_CHOICE)
+        patch.setattr(url_state.st, "session_state", recipient)
+        patch.setattr(url_state.st, "query_params", dict(parse_qsl(query)))
+        url_state._apply_url_preset()
+    assert bool(recipient.get("single_fix_range_all_trials")) == all_trials
+    travels = chosen and (all_trials or window != full)
+    assert recipient.get("single_fix_range") == (window if travels else None)
+
+
 @given(
     st.sampled_from([p for p in LEGEND_POSITIONS if p != "auto"]),
     st.sampled_from(LEGEND_ARRANGEMENTS),
@@ -316,6 +382,8 @@ _CONFIG_KEYS = st.sampled_from(
         "marker_size_scale",
         "coordinate_grid",
         "compare",
+        "animate",
+        "fixations",
         "x",
     ]
 )
@@ -358,6 +426,27 @@ def test_settings_migration_is_pure_and_idempotent(config):
 
 
 @given(_CONFIG)
+def test_a_replay_saved_while_it_always_drew_fixations_draws_them(config):
+    """A schema-9 file that saved a replay opens it with fixations, as that
+    version drew it, and nothing else in the file changes."""
+    config = {**config, "schema": 9}
+    migrated, note = url_state._migrate_plot_config(config)
+    assert note is None
+    mode, layers = config.get("mode"), config.get("layers")
+    replay = isinstance(mode, dict) and mode.get("animate") is True
+    if replay and isinstance(layers, dict) and "fixations" in layers:
+        assert migrated["layers"]["fixations"]
+    if isinstance(layers, dict):
+        if not replay or "fixations" not in layers or layers["fixations"]:
+            assert migrated["layers"] == layers
+        else:
+            assert migrated["layers"] == {**layers, "fixations": True}
+    assert {k: v for k, v in migrated.items() if k not in ("layers", "schema")} == {
+        k: v for k, v in config.items() if k not in ("layers", "schema")
+    }
+
+
+@given(_CONFIG)
 def test_annotations_only_file_gains_no_plot_section(config):
     """A file with no plot section is not turned into a plot config by the
     migrations — restoring notes must not reset the figure to defaults."""
@@ -368,6 +457,41 @@ def test_annotations_only_file_gains_no_plot_section(config):
 
 
 # --- Invariants ------------------------------------------------------------
+
+
+@given(
+    st.lists(
+        st.tuples(
+            st.sampled_from(["t1", "t2"]),
+            st.sampled_from(["a", "b"]),
+            st.sampled_from(["L", "R", None]),
+            st.one_of(st.none(), st.integers(min_value=0, max_value=5)),
+        ),
+        min_size=1,
+        max_size=30,
+    )
+)
+def test_samples_are_numbered_in_recorded_order_within_their_group(rows):
+    """Each reading, screen and eye numbers its samples 1 … n, in the order
+    of their clock, every sample counted, whatever order the table holds."""
+    from scanpath_studio.chart_axes import with_sample_index
+    from scanpath_studio.constants import SAMPLE_INDEX
+
+    samples = pd.DataFrame(
+        rows, columns=["trial_id", "screen_id", "eye", "timestamp_ms"]
+    ).assign(participant_id="p", x=np.nan)
+    samples["timestamp_ms"] = samples["timestamp_ms"].astype(float)
+    numbered = with_sample_index(samples)
+    keys = ["participant_id", "trial_id", "screen_id", "eye"]
+    for _, group in numbered.groupby(keys, dropna=False):
+        assert sorted(group[SAMPLE_INDEX]) == list(range(1, len(group) + 1))
+        clock = group["timestamp_ms"].fillna(np.inf).to_numpy()
+        ranked = group[SAMPLE_INDEX].to_numpy()
+        assert all(
+            (clock[i] < clock[j]) <= (ranked[i] < ranked[j])
+            for i in range(len(group))
+            for j in range(len(group))
+        )
 
 
 @given(
@@ -443,3 +567,50 @@ def test_publication_recipe_preserves_panel_order_and_wording(labels):
     restored = json.loads(publication.render(doc, "json"))
     publication.validate_project(restored)
     assert restored == doc
+
+
+@given(
+    st.lists(st.text(alphabet='ab,"\n', max_size=6), min_size=1, max_size=5),
+)
+def test_a_header_line_ends_where_the_csv_module_ends_its_record(cells):
+    """The header line is cut at its first newline outside quotes, as the
+    csv module writes and reads it, in one pass over the text."""
+    import csv
+    import io
+
+    from scanpath_studio.data import _unquoted_line_end
+
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="\n").writerow(cells)
+    record = buf.getvalue()
+    text = record + "next\n"
+    assert _unquoted_line_end(text, '"', "\n") == len(record) - 1
+    assert _unquoted_line_end(text.encode(), b'"', b"\n") == len(record.encode()) - 1
+
+
+@given(
+    st.lists(st.text(min_size=1, max_size=8), min_size=1, max_size=45, unique=True),
+    st.data(),
+)
+def test_a_category_keeps_its_colour_in_every_figure_of_its_dataset(vocabulary, data):
+    """Assigned over the dataset's labels, a category wears the colour the whole
+    vocabulary gives it whatever subset a figure shows and in whatever order; up
+    to the palette's size every pair is palette-far apart, and a label the
+    vocabulary lacks takes a colour none of the vocabulary's has."""
+    from itertools import combinations
+
+    shown = data.draw(st.lists(st.sampled_from(vocabulary), unique=True))
+    stranger = data.draw(
+        st.text(min_size=1, max_size=8).filter(lambda t: t not in vocabulary)
+    )
+    whole = plots._category_color_map(vocabulary)
+    figure = plots._category_color_map(
+        [*shown, stranger, None], vocabulary=vocabulary[::-1]
+    )
+    assert all(figure[label] == whole[label] for label in shown)
+    colors = [whole[label] for label in vocabulary]
+    assert len(set(colors)) == len(colors)
+    assert figure[stranger] not in colors
+    if len(vocabulary) <= len(plots._CATEGORY_PALETTE):
+        labs = [plots._color_lab(color) for color in colors]
+        assert all(plots._delta_e(a, b) >= 23 for a, b in combinations(labs, 2))

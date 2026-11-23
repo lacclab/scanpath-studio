@@ -17,6 +17,7 @@ Paragraph PNGs are rendered separately. Each is placed at the experiment's
 from __future__ import annotations
 
 import argparse
+import math
 from collections.abc import Iterable
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -362,15 +363,38 @@ def with_stimulus_images(frame: pd.DataFrame, image_dir: Path) -> pd.DataFrame:
     )
 
 
+#: Tables shipped as Parquet alone. The app reads the Parquet, and a CSV copy of
+#: every 1 kHz sample would triple the wheel's size.
+PARQUET_ONLY_TABLES = frozenset({"raw_gaze"})
+
+
 def write_tables(output_dir: Path, **tables: pd.DataFrame) -> None:
-    """Finish both formats for every table before replacing the packaged data."""
+    """Finish every table before replacing the packaged data.
+
+    Each table ships as CSV and Parquet, except ``PARQUET_ONLY_TABLES``, whose
+    CSV an older build may have left is removed.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(dir=output_dir) as temp:
         for name, frame in tables.items():
-            frame.to_csv(Path(temp) / f"{name}.csv", index=False)
+            if name not in PARQUET_ONLY_TABLES:
+                frame.to_csv(Path(temp) / f"{name}.csv", index=False)
             frame.to_parquet(Path(temp) / f"{name}.parquet", index=False)
         for artifact in Path(temp).iterdir():
             artifact.replace(output_dir / artifact.name)
+    for name in PARQUET_ONLY_TABLES & tables.keys():
+        (output_dir / f"{name}.csv").unlink(missing_ok=True)
+
+
+def without_lost_pupil(x: float, y: float, pupil: float) -> float:
+    """A sample's pupil value, missing when the tracker lost the eye.
+
+    EyeLink writes a pupil size of 0 for a sample it has no position for: it
+    measured nothing, and a 0 would read as a real, tiny pupil.
+    """
+    if pupil == 0 and (math.isnan(x) or math.isnan(y)):
+        return math.nan
+    return pupil
 
 
 def _paragraph_samples(asc: BinaryIO, trial) -> pd.DataFrame:
@@ -420,6 +444,7 @@ def _paragraph_samples(asc: BinaryIO, trial) -> pd.DataFrame:
                 x, y, pupil = (
                     float(v) if v != b"." else float("nan") for v in fields[1:4]
                 )
+                pupil = without_lost_pupil(x, y, pupil)
                 rows.append((x, y, time - trial.TRIAL_START_TIME, pupil))
     else:
         raise ValueError(f"Missing END in the recording for {trial.unique_trial_id}")
@@ -525,7 +550,7 @@ def main() -> None:
     parser.add_argument(
         "--raw-gaze-only",
         action="store_true",
-        help="Skip the source rebuild; only regenerate raw_gaze.{csv,parquet} "
+        help="Skip the source rebuild; only regenerate raw_gaze.parquet "
         "from the ASC recordings and the bundled fixation report.",
     )
     args = parser.parse_args()

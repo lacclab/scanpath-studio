@@ -9,6 +9,9 @@
 // its frame count, and `steps` a list of [op, arg] run in order. A page's
 // layout (`plots.replay_page`) also passes `updatemenus` and `sliders`, and
 // `slot: true` gives the page a `gd-transport` element for the toolbar.
+// `parent` is the page around the replay's frame: absent for a page of its own,
+// `{scheme}` for an app whose `.stApp` has that computed `color-scheme`, or
+// `"cross-origin"` for a parent document the frame may not read.
 //   ["run_until", ms]   advance the clock, firing display ticks and timers
 //   ["click", name]     press the play / pause / restart button
 //   ["slider", k]       drag the time slider to frame k
@@ -97,6 +100,26 @@ function emit(event, data) {
   (listeners[event] || []).forEach((fn) => fn(data));
 }
 
+global.window = {};
+if (config.parent === "cross-origin") {
+  Object.defineProperty(global.window, "parent", {
+    get() {
+      return {
+        get document() {
+          throw new Error("SecurityError: cross-origin frame");
+        },
+      };
+    },
+  });
+} else if (config.parent) {
+  const app = { className: "stApp" };
+  global.window.parent = {
+    document: { querySelector: (sel) => (sel === ".stApp" ? app : null) },
+    getComputedStyle: (el) => ({ colorScheme: el === app ? config.parent.scheme : "" }),
+  };
+} else {
+  global.window.parent = global.window;
+}
 global.performance = { now: () => now };
 global.requestAnimationFrame = (cb) => {
   rafs.set(++rafSeq, cb);
@@ -233,6 +256,7 @@ function setHidden(hidden) {
           bar.children.find((c) => c.type === "range"),
         ),
         readout: bar.children.find((c) => c.attributes["aria-hidden"] === "true").textContent,
+        readout_style: bar.children.find((c) => c.attributes["aria-hidden"] === "true").style,
       }
     : null;
   process.stdout.write(JSON.stringify(log));

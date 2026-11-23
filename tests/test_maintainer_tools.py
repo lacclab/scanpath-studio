@@ -113,7 +113,8 @@ def test_interaction_benchmark_distinguishes_real_data_work_and_reruns(tmp_path)
         check=True,
         capture_output=True,
     )
-    first, switch, color = json.loads(target.read_bytes())["interactions"]
+    result = json.loads(target.read_bytes())
+    first, switch, color, narrowed = result["interactions"]
     assert first["stages"]["read_demo"] > 0 and first["stages"]["normalize"] > 0
     assert first["reading"] != switch["reading"] == color["reading"]
     assert switch["color_by"] != color["color_by"]
@@ -127,6 +128,15 @@ def test_interaction_benchmark_distinguishes_real_data_work_and_reruns(tmp_path)
             interaction["stages"]["build_figure"] > 0
             and interaction["stages"]["select_trial_rows"] > 0
         )
+    assert narrowed["reading"] == color["reading"]
+    # A rerun names the frames it keys caches on. The demo's raw tables are a
+    # few thousand rows; one reading's raw-gaze samples are over 10,000, so a
+    # hash that size means a slice lost its name.
+    for interaction in (switch, color, narrowed):
+        assert interaction["hashed"]["largest_rows"] < 10_000, interaction["hashed"]
+    assert [set(s) for s in result["new_sessions"]] == [
+        {"first_run_s", "rss_growth_mb"}
+    ] * 2
 
 
 def test_corpus_paper_uses_canonical_passage_ids_and_breaks_ties(tmp_path, monkeypatch):

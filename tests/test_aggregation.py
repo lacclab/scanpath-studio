@@ -29,6 +29,7 @@ from scanpath_studio.aggregation import (
     bootstrap_ci,
     cohort_summary_table,
     cohort_word_profile,
+    effective_spread,
     ensure_fixation_enrichment,
     group_mask,
     group_mean_difference,
@@ -372,6 +373,17 @@ class TestPrimitives:
         lo, hi = spread_bounds(np.array([100.0, 200.0, 300.0]), 600.0, "SD", agg="sum")
         assert lo <= 600.0 <= hi
 
+    @pytest.mark.parametrize("spread", ["SD", "SEM", "IQR", "Bootstrap CI"])
+    def test_every_sum_band_is_the_bootstrap_of_the_total(self, spread):
+        # The quartiles of the individual values (115–145) say nothing about
+        # where a total of 520 lies.
+        vals = np.array([100.0, 120.0, 140.0, 160.0])
+        band = spread_bounds(vals, 520.0, spread, agg="sum")
+        assert band == bootstrap_ci(vals, agg="sum")
+        assert band[0] <= 520.0 <= band[1]
+        assert effective_spread(spread, "sum") == "Bootstrap CI"
+        assert effective_spread(spread, "mean") == spread
+
     def test_bootstrap_ci(self):
         vals = np.arange(50, dtype=float)
         assert bootstrap_ci(vals, seed=0) == bootstrap_ci(vals, seed=0)
@@ -511,6 +523,27 @@ class TestCohortWordProfile:
         ) == [False, False, False]
         # The guard flags rows, it never drops them.
         assert len(out) == 3
+
+    def test_aggregates_within_each_participant_then_across_and_keeps_empty_words(
+        self,
+    ):
+        # p1 read the text twice. The median within p1 (200) and then across
+        # participants (125) differs from a median of the pooled values (100).
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1", "p2", "p1", "p1", "p2"],
+                "trial_id": ["t1", "t2", "t1", "t1", "t2", "t1"],
+                "word_id": [1, 1, 1, 2, 2, 2],
+                "total_fixation_duration_ms": [100.0, 300.0, 50.0, *[np.nan] * 3],
+            }
+        ).assign(text_id="A", text="w")
+        out = cohort_word_profile(words, "text_id", "A", MEASURES["tfd"], agg="median")
+        assert out["word_id"].tolist() == [1, 2]
+        assert out.loc[0, "value"] == 125.0
+        assert out.loc[0, "n"] == 2
+        assert np.isnan(out.loc[1, "value"])
+        assert out.loc[1, "n"] == 0
+        assert not out.loc[1, "enough"]
 
     def test_iqr_band(self):
         out = cohort_word_profile(
@@ -1187,8 +1220,8 @@ class TestGroupSelection:
         assert set(groups) == {"Group A"}
 
     def test_two_group_values_normalizes_within_reader(self):
-        # Each group is z-scored inside itself, so the two readers' absolute
-        # levels (p1 ≈ 127 ms, p2 = 190 ms) stop driving the comparison.
+        # Each reader is z-scored over their own values, so the two readers'
+        # absolute levels (p1 ≈ 127 ms, p2 = 190 ms) stop driving the comparison.
         groups = two_group_values(
             _tidy_fixations(),
             MEASURES["fix_dur"],
@@ -1201,6 +1234,31 @@ class TestGroupSelection:
         assert sorted(groups["Group B"]) == pytest.approx(
             [-1 / np.sqrt(2), 1 / np.sqrt(2)]
         )
+
+    def test_normalizing_keeps_a_difference_inside_each_reader(self):
+        # Both readers read both conditions. Each reader is z-scored once over
+        # all their readings and the conditions are split afterwards, so the
+        # slower condition stays above the reader's mean instead of both
+        # conditions being centred on 0.
+        frame = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 4 + ["p2"] * 4,
+                "trial_id": ["hard", "hard", "easy", "easy"] * 2,
+                "duration_ms": [300.0, 320.0, 200.0, 220.0, 600.0, 640.0, 400.0, 440.0],
+            }
+        )
+        hard, easy = {"trial_id": ["hard"]}, {"trial_id": ["easy"]}
+        shift = 50 / np.std([300.0, 320.0, 200.0, 220.0], ddof=1)
+        groups = two_group_values(
+            frame, MEASURES["fix_dur"], hard, easy, normalize=True
+        )
+        assert groups["Group A"].mean() == pytest.approx(shift)
+        assert groups["Group B"].mean() == pytest.approx(-shift)
+        bars = paired_group_summary(
+            frame, [MEASURES["fix_dur"]], hard, easy, normalize=True
+        )
+        assert bars["value"].tolist() == pytest.approx([shift, -shift])
+        assert bars["n_observations"].tolist() == [4, 4]
 
 
 class TestGroupComparison:

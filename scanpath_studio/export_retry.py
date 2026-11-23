@@ -6,7 +6,6 @@ import csv
 import io
 import zipfile
 from contextlib import nullcontext
-from copy import copy
 from dataclasses import dataclass, replace
 from tempfile import TemporaryFile
 from time import perf_counter
@@ -96,7 +95,15 @@ class _RetryPlan:
 
 
 def _copy_member(source, destination, info):
-    with source.open(info) as src, destination.open(copy(info), "w") as dest:
+    # A fresh header, not a copy of the source's: its extra field holds the
+    # source's own Zip64 sizes and offset, which zipfile would write beside the
+    # field it adds, leaving a local header extractors reject. The known size
+    # still decides whether this member needs Zip64.
+    target = zipfile.ZipInfo(info.filename, info.date_time)
+    target.compress_type = info.compress_type
+    target.external_attr = info.external_attr
+    target.file_size = info.file_size
+    with source.open(info) as src, destination.open(target, "w") as dest:
         while chunk := src.read(1024 * 1024):
             report()
             dest.write(chunk)
@@ -169,7 +176,7 @@ def retry_failed_figures(
             )
         ]
         with zipfile.ZipFile(repaired, "w", zipfile.ZIP_DEFLATED) as repair_archive:
-            bulk_export(
+            _, rerun = bulk_export(
                 combos.loc[selected],
                 words,
                 fixations,
@@ -211,6 +218,9 @@ def retry_failed_figures(
                 or not _figure_row(row)
                 or (row["artifact"] != "layers" and file_key(row) not in updated)
             ]
+            still_failed = sum(
+                row["status"] == "failed" and _figure_row(row) for row in inventory
+            )
             for row in new_rows:
                 if row["status"] == "written":
                     _copy_member(rebuilt, archive, rebuilt.getinfo(row["path"]))
@@ -228,7 +238,9 @@ def retry_failed_figures(
                     row["status"] == "written" and _figure_row(row) for row in inventory
                 ),
                 figures_failed=failed_count,
-                retryable_figures=failed_count,
+                # A file this run failed on counts when the failure can pass on
+                # another try; one it did not reach again counts as before.
+                retryable_figures=rerun.retryable_figures + still_failed,
                 errors=[
                     f"{row['participant_id']}/{row['trial_id']}: {row['note']}"
                     for row in inventory

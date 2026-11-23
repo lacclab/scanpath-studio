@@ -2232,6 +2232,8 @@ def cli_snippet(
         value = (save_kwargs or {}).get(name)
         if value is not None:
             argv += [f"--{name.replace('_', '-')}", _num(value)]
+    if (save_kwargs or {}).get("compact_png"):
+        argv.append("--compact-png")
 
     argv += ["-o", output]
     unsupported.extend(source.cli_unsupported)

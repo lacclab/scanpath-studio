@@ -16,7 +16,7 @@ Load your own data, open a public dataset, or try the bundled demo.
 Pick a dataset in **Select dataset** above the plot or open **Dataset library**
 on the :material/database: **Data Management** page.
 
-- **Bundled demo** includes 24 readings by two L1 English readers of 12 OneStop texts. The 1,000 Hz EyeLink samples run from paragraph onset to the keypress that ended reading. Each sample keeps its timestamp, screen coordinates, pupil area in tracker units and tracked eye. During tracking loss the coordinates are blank. The demo records a pupil area of zero on those samples.
+- **Bundled demo** includes 24 readings by two L1 English readers of 12 OneStop texts. The 1,000 Hz EyeLink samples run from paragraph onset to the keypress that ended reading. Each sample keeps its timestamp, screen coordinates, pupil area in tracker units and tracked eye. During tracking loss the coordinates and the pupil area are blank.
 - **Hand-drawn sample**: a scanpath drawn by hand over a short English text,
   which you can edit.
 - Public datasets: OneStop and PoTeC. In the desktop app or a pip install, each
@@ -124,7 +124,7 @@ For a walkthrough inside the import wizard, choose **Setup help → Show setup g
 4. Optionally, in the desktop app or a local install, attach the stimulus
    images from a folder.
 5. Click :material/check: **Add dataset**, then :material/route: **Open in
-   Scanpath view** to see its first trial. You can also open the figure from
+   Scanpath View** to see its first trial. You can also open the figure from
    **Data Management → Current dataset**.
 
 To import similar files again, click :material/download: **Download setup file**

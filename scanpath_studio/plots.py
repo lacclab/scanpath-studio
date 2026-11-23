@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import colorsys
 import copy
+import functools
 import hashlib
 import html
 import itertools
@@ -315,6 +316,13 @@ class FigureSettings:
     # canonical column → label. Built by the caller (`tabs`); not a figure
     # option, so no option set, link or `render` flag carries it.
     column_labels: dict | None = None
+    #: Every label a categorical ``color_by`` column takes across the dataset
+    #: (`category_vocabulary`). The category colours are assigned over all of
+    #: them, so a category keeps its colour from figure to figure; ``None``
+    #: assigns them over the figure's own labels. Derived from the data by the
+    #: caller, not a figure option, so no option set, link, settings file or
+    #: `render` flag carries it.
+    color_categories: tuple[str, ...] | None = None
 
     @classmethod
     def from_mapping(
@@ -1479,13 +1487,15 @@ def _resolve_marker_colors(
     color_data: pd.Series | None,
     is_numeric_color: bool,
     uniform_color: str = DEFAULT_FIXATION_COLOR,
+    vocabulary: Iterable[str] | None = None,
 ) -> tuple[object, list]:
     """Return (marker_color, category_legend) for the fixation scatter trace.
 
     - Numeric color_data is passed straight through (Plotly maps it via colorscale).
     - Categorical color_data is mapped to a discrete palette so the picker has
-      visible effect; the returned legend is a list of (category, hex) pairs the
-      caller can render as legend-only scatter traces.
+      visible effect, its colours assigned over ``vocabulary`` when given
+      (`FigureSettings.color_categories`); the returned legend is a list of
+      (category, hex) pairs the caller can render as legend-only scatter traces.
     - No color_data (the uniform default, or a `color_by` column that isn't
       in the frame) paints every marker ``uniform_color``.
     """
@@ -1493,8 +1503,19 @@ def _resolve_marker_colors(
         return uniform_color, []
     if is_numeric_color:
         return color_data, []
-    colors, legend = _shared_category_colors([color_data])
+    colors, legend = _shared_category_colors([color_data], vocabulary=vocabulary)
     return colors[0], legend
+
+
+def _color_vocabulary(
+    settings: FigureSettings, color_by: str | None, color_by_line: bool
+) -> tuple[str, ...] | None:
+    """The labels a figure's category colours are assigned over: the dataset's
+    (`FigureSettings.color_categories`) for a ``color_by`` column, none for
+    colour-by-line, whose "Line N" labels are the figure's own."""
+    if color_by_line or color_by == "line":
+        return None
+    return settings.color_categories
 
 
 def _fixation_category_labels(
@@ -1531,37 +1552,264 @@ def _fixation_category_labels(
     return fixations[color_by]
 
 
-def _category_color(label: str | None, avoid: set[str]) -> str:
-    """Stable across trial selections, workspaces and independent export processes."""
-    if label is None:
-        return "#777777" if "#777777" not in avoid else "#aaaaaa"
-    # Hue, lightness and saturation come from the label itself. Using a
-    # finite palette index here would give unrelated categories identical
-    # colours and make a subset depend on which other categories it contained.
-    digest = hashlib.sha256(label.encode("utf-8")).digest()
+#: Fill colours for categories. Okabe & Ito's six mid-tone hues, then fourteen
+#: more, each the colour of moderate chroma (lightness 30–78) farthest from the
+#: ones before it and from the missing-value greys, measured as CIELAB ΔE under
+#: normal vision and simulated deuteranopia and protanopia (Machado et al.,
+#: 2009). Any two are ≥ 23 ΔE*ab apart for normal vision and ≥ 13 under either
+#: simulation; the greys are ≥ 26 from all of them.
+_CATEGORY_PALETTE = (
+    "#e69f00",
+    "#56b4e9",
+    "#009e73",
+    "#0072b2",
+    "#d55e00",
+    "#cc79a7",
+    "#7b3121",
+    "#bdc573",
+    "#84106b",
+    "#7b94ff",
+    "#00429c",
+    "#947b42",
+    "#8c1042",
+    "#4acede",
+    "#94ce9c",
+    "#8c4a00",
+    "#ce9c42",
+    "#846394",
+    "#5a734a",
+    "#005a52",
+)
+#: The missing-value grey, and the one used when a scanpath is drawn in it.
+_CATEGORY_MISSING = ("#777777", "#aaaaaa")
+#: A palette colour this close (ΔE*ab) to a scanpath's own colour is not used:
+#: the scanpath's outline would vanish into the fill.
+_CATEGORY_AVOID_DELTA_E = 15.0
+#: Past the palette, how far (ΔE*ab) a label's own colour must be from every
+#: colour already given before it is taken.
+_CATEGORY_FALLBACK_DELTA_E = 10.0
+#: How many turns round the hue circle a label past the palette tries for a
+#: colour that far from the others.
+_CATEGORY_HUE_TURNS = 64
+#: Past this many labels a label takes its hash colour without that search:
+#: each turn is a ΔE pass over every colour given, and this many colours of the
+#: hash colours' lightness and chroma no longer all stay that far apart.
+_CATEGORY_SEARCH_LIMIT = 60
+
+
+def _color_lab(color: str) -> tuple[float, float, float] | None:
+    """CIELAB (D65) of a ``#rgb`` / ``#rrggbb`` / ``rgb(…)`` colour, else ``None``."""
+    text = str(color).strip().lower()
+    try:
+        if text.startswith("#") and len(text) in (4, 7):
+            digits = text[1:] if len(text) == 7 else "".join(c * 2 for c in text[1:])
+            channels = [int(digits[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+        elif text.startswith(("rgb(", "rgba(")):
+            parts = text[text.index("(") + 1 : text.rindex(")")].split(",")
+            channels = [float(part) / 255 for part in parts[:3]]
+        else:
+            return None
+    except ValueError:
+        return None
+    r, g, b = (
+        c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels
+    )
+    xyz = (
+        (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047,
+        0.2126 * r + 0.7152 * g + 0.0722 * b,
+        (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883,
+    )
+    fx, fy, fz = (t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116 for t in xyz)
+    return 116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)
+
+
+def _delta_e(a: tuple[float, float, float], b: tuple[float, float, float]) -> float:
+    """CIE76 colour difference ΔE*ab."""
+    return math.dist(a, b)
+
+
+def _label_digest(label: str) -> bytes:
+    return hashlib.sha256(label.encode("utf-8")).digest()
+
+
+#: The palette's colours in CIELAB, one row each.
+_CATEGORY_PALETTE_LABS = np.array([_color_lab(color) for color in _CATEGORY_PALETTE])
+
+
+def _palette_slot(label: str) -> int:
+    """The ``_CATEGORY_PALETTE`` slot the label's hash prefers."""
+    return int.from_bytes(_label_digest(label)[4:8], "big") % len(_CATEGORY_PALETTE)
+
+
+def _label_hash_color(
+    label: str, used: np.ndarray, *, search: bool = True
+) -> tuple[str, tuple[float, float, float]]:
+    """A colour from the label's own hash, for labels past the palette, with its
+    CIELAB. Turned around the hue circle until it is
+    ``_CATEGORY_FALLBACK_DELTA_E`` from every ``used`` colour (CIELAB rows), or
+    the farthest of ``_CATEGORY_HUE_TURNS`` turns; without ``search``, the
+    first turn as it is."""
+    digest = _label_digest(label)
     hue = int.from_bytes(digest[:2], "big") / 65536
     light = 0.39 + 0.13 * digest[2] / 255
     saturation = 0.55 + 0.22 * digest[3] / 255
-    while True:
+    best: tuple[str, tuple[float, float, float]] | None = None
+    best_gap = -1.0
+    for _ in range(_CATEGORY_HUE_TURNS):
         rgb = colorsys.hls_to_rgb(hue, light, saturation)
         color = "#" + "".join(f"{round(255 * channel):02x}" for channel in rgb)
-        if color not in avoid:
-            return color
+        lab = _color_lab(color)
+        if not search:
+            return color, lab
+        gap = (
+            float(np.sqrt(((used - lab) ** 2).sum(axis=1)).min())
+            if len(used)
+            else math.inf
+        )
+        if gap >= _CATEGORY_FALLBACK_DELTA_E:
+            return color, lab
+        if gap > best_gap:
+            best, best_gap = (color, lab), gap
         hue = (hue + 0.381966) % 1
+    return best
+
+
+@functools.lru_cache(maxsize=128)
+def _assigned_category_colors(
+    known: tuple[str, ...], extra: tuple[str, ...], avoid: tuple[str, ...]
+) -> dict[str | None, str]:
+    """:func:`_category_color_map`'s assignment over sorted ``known`` labels,
+    then sorted ``extra`` ones, cached: every figure of one dataset passes the
+    same vocabulary, so it is assigned once. ``extra`` is settled after
+    ``known`` and so moves none of its colours."""
+    avoid_labs = [lab for lab in map(_color_lab, avoid) if lab is not None]
+    missing = next(c for c in _CATEGORY_MISSING if c not in avoid)
+    size = len(_CATEGORY_PALETTE)
+    if avoid_labs:
+        gaps = np.sqrt(
+            ((_CATEGORY_PALETTE_LABS[:, None, :] - np.array(avoid_labs)) ** 2).sum(
+                axis=2
+            )
+        ).min(axis=1)
+        free = {slot for slot in range(size) if gaps[slot] >= _CATEGORY_AVOID_DELTA_E}
+    else:
+        free = set(range(size))
+    mapping: dict[str | None, str] = {}
+    # The avoided colours and every colour given so far, one CIELAB row each,
+    # filled as colours are given: each search reads it without rebuilding it.
+    used = np.empty((len(avoid_labs) + 1 + len(known) + len(extra), 3))
+    count = len(avoid_labs)
+    if count:
+        used[:count] = avoid_labs
+
+    def give(name: str | None, color: str, lab) -> None:
+        nonlocal count
+        mapping[name] = color
+        used[count] = lab
+        count += 1
+
+    give(None, missing, _color_lab(missing))
+    for group in (known, extra):
+        preferred = {name: _palette_slot(name) for name in group}
+        waiting = []
+        for name in group:
+            if preferred[name] in free:
+                free.discard(preferred[name])
+                give(
+                    name,
+                    _CATEGORY_PALETTE[preferred[name]],
+                    _CATEGORY_PALETTE_LABS[preferred[name]],
+                )
+            else:
+                waiting.append(name)
+        for name in waiting:
+            if free:
+                slot = next(
+                    (preferred[name] + step) % size
+                    for step in range(1, size + 1)
+                    if (preferred[name] + step) % size in free
+                )
+                free.discard(slot)
+                give(name, _CATEGORY_PALETTE[slot], _CATEGORY_PALETTE_LABS[slot])
+            else:
+                # `mapping` holds the missing grey besides the labels.
+                search = len(mapping) <= _CATEGORY_SEARCH_LIMIT
+                give(name, *_label_hash_color(name, used[:count], search=search))
+    return mapping
+
+
+def _category_color_map(
+    labels: Iterable[str | None],
+    avoid: Iterable[str] = (),
+    vocabulary: Iterable[str] | None = None,
+) -> dict[str | None, str]:
+    """Each label's fill colour: deterministic, and distinct within one figure.
+
+    The colours are assigned over ``vocabulary`` — every label the coloured
+    column takes in the dataset (`category_vocabulary`) — when given, so a label
+    wears one colour in every figure of the dataset; else over the figure's own
+    ``labels``. A label's hash names its preferred ``_CATEGORY_PALETTE`` slot.
+    Labels that share a slot are settled in sorted order: the first keeps it,
+    the others take the next free slot after it. A slot close to an ``avoid``
+    colour is never used. Past the palette's size a label takes its own hash
+    colour, kept apart from those already given for the first
+    ``_CATEGORY_SEARCH_LIMIT`` labels and taken as it is after them. A label of
+    ``labels`` the vocabulary lacks is settled after the vocabulary's, in a
+    colour none of theirs has where one is left. ``None`` (a missing value) is
+    grey.
+    """
+    present = {label for label in labels if label is not None}
+    if vocabulary is None:
+        known = tuple(sorted(present))
+        extra: tuple[str, ...] = ()
+    else:
+        known = tuple(sorted({str(label) for label in vocabulary}))
+        extra = tuple(sorted(present.difference(known)))
+    avoid_key = tuple(sorted({str(color).strip().lower() for color in avoid if color}))
+    return dict(_assigned_category_colors(known, extra, avoid_key))
+
+
+def category_vocabulary(
+    column: str | None, *frames: pd.DataFrame | None
+) -> tuple[str, ...] | None:
+    """Every label ``column`` takes across ``frames``, as text and sorted.
+
+    The `FigureSettings.color_categories` for figures coloured by ``column``,
+    so each category keeps one colour in all of them. ``None`` when ``column``
+    colours by no categories: unset, the uniform colour, colour-by-line, or a
+    column no frame carries as text."""
+    if not column or column in (UNIFORM_COLOR_FIELD, "line"):
+        return None
+    labels: set[str] = set()
+    found = False
+    for frame in frames:
+        if frame is None or column not in frame.columns:
+            continue
+        values = frame[column]
+        if pd.api.types.is_numeric_dtype(values):
+            continue
+        found = True
+        # The figure's own labels are the column as text (`_shared_category_colors`).
+        distinct = pd.Series(values.dropna().unique(), dtype=object)
+        labels.update(distinct.astype("string").dropna().tolist())
+    return tuple(sorted(labels)) if found else None
 
 
 def _shared_category_colors(
     labels: Sequence[pd.Series | None],
     avoid: Iterable[str] = (),
+    vocabulary: Iterable[str] | None = None,
 ) -> tuple[list[list[str] | None], list[tuple[str, str]]]:
     """One category→colour mapping across several scanpaths (Compare, the dual
     replay), so a category wears the same colour on A and on B.
 
-    A category's text determines its colour, independently of row order.
-    ``avoid`` names the scanpaths' own colours, which outline their markers: a
-    category never fills in one, or that scanpath's outline would vanish into
-    its fill. Returns each scanpath's per-row colours (``None`` where it had no
-    labels) and the shared legend.
+    The categories' texts determine their colours, independently of row order
+    (:func:`_category_color_map`, over ``vocabulary`` when given), and no two
+    categories share one. ``avoid`` names the scanpaths' own colours, which
+    outline their markers: a category never fills in one, or that scanpath's
+    outline would vanish into its fill. Returns each scanpath's per-row colours
+    (``None`` where it had no labels) and the shared legend, which lists only
+    the labels drawn.
     """
     labels = [
         None
@@ -1572,9 +1820,10 @@ def _shared_category_colors(
     present = [series for series in labels if series is not None]
     if not present:
         return [None] * len(labels), []
-    taken = {str(color).lower() for color in avoid if color}
     order = list(pd.unique(pd.concat(present, ignore_index=True)))
-    cat_to_color = {val: _category_color(val, taken) for val in order}
+    cat_to_color = _category_color_map(
+        order, [color for color in avoid if color], vocabulary
+    )
     missing = "(missing)"
     while missing in cat_to_color:
         missing = f"{missing} (no value)"
@@ -3232,6 +3481,20 @@ def _column_name(column: str) -> str:
     return labels.get(column, str(column))
 
 
+#: Axis titles for the recorded fields whose names don't say what they measure
+#: or in what unit: the title for a generic name, and what a dataset's own name
+#: is followed by. A recorded timestamp is on the dataset's own clock, unlike
+#: the fixation charts' seconds since the first fixation onset.
+_RECORDED_AXIS_TITLES = {
+    "timestamp_ms": ("Recorded time (ms)", "recorded time, ms"),
+    "pupil_area": ("Pupil area (tracker units)", "pupil area, tracker units"),
+    "pupil_diameter": (
+        "Pupil diameter (tracker units)",
+        "pupil diameter, tracker units",
+    ),
+}
+
+
 def _chart_axis_title(field: str, table: str | None = None) -> str:
     label = _column_title(field, table)
     if field in chart_axes.POSITION_FIELDS:
@@ -3241,6 +3504,10 @@ def _chart_axis_title(field: str, table: str | None = None) -> str:
             if label.lower() == field
             else f"{label} ({direction.lower()} position, px)"
         )
+    if field in _RECORDED_AXIS_TITLES:
+        title, measure = _RECORDED_AXIS_TITLES[field]
+        generic = {field, _humanize_column(field).lower()}
+        return title if label.lower() in generic else f"{label} ({measure})"
     return label
 
 
@@ -3693,19 +3960,94 @@ def _add_redaction_blocks(
             fig.add_trace(trace)
 
 
+def _first_strong_rtl(word: object) -> bool | None:
+    """Whether a word's first strong character is right to left; ``None`` for
+    a word without one (a number, punctuation)."""
+    for char in str(word):
+        direction = bidirectional(char)
+        if direction in ("L", "R", "AL"):
+            return direction != "L"
+    return None
+
+
+def _neutral_word_rtl(words: pd.DataFrame, strong: Sequence[bool | None]) -> np.ndarray:
+    """The direction a word without a strong character takes from its context.
+
+    Within each reading's visual line, in reading order (Word ID): the
+    direction of the strong words on both sides when they agree, else the
+    line's own — its first strong word's, or failing that the passage's first
+    strong word's, else left to right. A side with no strong word counts as
+    the line's direction. Unicode resolves a neutral character between strong
+    ones the same way.
+    """
+    from .measures import cluster_word_lines
+    from .multipart import grouping_columns
+
+    out = np.zeros(len(words), dtype=bool)
+    keys = grouping_columns(words)
+    groups = (
+        words.groupby(keys, sort=False, dropna=False).indices.values()
+        if keys
+        else [np.arange(len(words))]
+    )
+    word_ids = (
+        pd.to_numeric(words["word_id"], errors="coerce").to_numpy(dtype=float)
+        if "word_id" in words
+        else np.arange(len(words), dtype=float)
+    )
+    for positions in groups:
+        positions = np.asarray(positions)
+        if all(strong[p] is not None for p in positions):
+            continue
+        positions = positions[np.argsort(word_ids[positions], kind="stable")]
+        passage = next((strong[p] for p in positions if strong[p] is not None), False)
+        lines = (
+            cluster_word_lines(words.iloc[positions]).to_numpy()
+            if {"y", "height"} <= set(words.columns)
+            else np.zeros(len(positions), dtype=int)
+        )
+        for line in pd.unique(lines):
+            on_line = positions[lines == line]
+            known = [strong[p] for p in on_line]
+            base = next((d for d in known if d is not None), passage)
+            for i, position in enumerate(on_line):
+                if known[i] is not None:
+                    continue
+                before = next((d for d in reversed(known[:i]) if d is not None), base)
+                after = next((d for d in known[i + 1 :] if d is not None), base)
+                out[position] = before if before == after else base
+    return out
+
+
 def _word_label_rtl(words: pd.DataFrame) -> pd.Series:
-    """Use the word's first strong character, falling back to its passage for neutrals."""
+    """Whether each word is drawn right to left.
 
-    def first_strong(word):
-        for char in str(word):
-            direction = bidirectional(char)
-            if direction in ("L", "R", "AL"):
-                return direction != "L"
-        return None
-
-    from_text = words["text"].fillna("").map(first_strong)
-    fallback = words.get("right_to_left", False)
-    return from_text.where(from_text.notna(), fallback).eq(True)
+    A word takes the direction of its first strong character (Unicode's
+    bidirectional classes). A word with none, such as a number or a
+    punctuation mark, takes the dataset's ``right_to_left`` when it records
+    one (as ``redact_word_text`` does for the text it masks), else its
+    direction among its neighbours on the line and its passage
+    (:func:`_neutral_word_rtl`).
+    """
+    strong = [
+        None if direction is None else bool(direction)
+        for direction in words["text"].fillna("").map(_first_strong_rtl)
+    ]
+    if "right_to_left" in words:
+        for position, recorded in enumerate(words["right_to_left"]):
+            if strong[position] is None and pd.notna(recorded):
+                strong[position] = bool(recorded)
+    if all(direction is not None for direction in strong):
+        return pd.Series(strong, index=words.index, dtype=bool)
+    context = _neutral_word_rtl(words, strong)
+    return pd.Series(
+        [
+            context[position] if direction is None else direction
+            for position, direction in enumerate(strong)
+        ],
+        index=words.index,
+        dtype=bool,
+    )
 
 
 def _add_word_label_trace(
@@ -5028,7 +5370,10 @@ def _render_scanpath_figure(
                 color_data
             )
         marker_color, category_legend = _resolve_marker_colors(
-            color_data, is_numeric_color, fixation_color
+            color_data,
+            is_numeric_color,
+            fixation_color,
+            _color_vocabulary(settings, color_by, color_by_line),
         )
         sizes = _compute_marker_sizes(
             ordered["duration_ms"], marker_size_range, **_settings_size_scale(settings)
@@ -6309,11 +6654,13 @@ _REPLAY_PLAYER_JS = """(function () {
       stop();
       var i = eventIndex;
       if (i < 0) {
+        // From a frame (playing, paused or scrubbed), step from the fixation
+        // it shows: the latest one whose onset it has reached.
         var ms = times[shown];
-        i = direction > 0 ? events.findIndex(function (e) { return e.ms > ms; })
-                          : events.findLastIndex(function (e) { return e.ms < ms; });
-        if (i < 0) { i = direction > 0 ? events.length - 1 : 0; }
-      } else { i = Math.max(0, Math.min(i + direction, events.length - 1)); }
+        i = -1;
+        while (i + 1 < events.length && events[i + 1].ms <= ms) { i++; }
+      }
+      i = Math.max(0, Math.min(i + direction, events.length - 1));
       var e = events[i], r = readings[e.side], j = e.index;
       eventIndex = i; exactTime = e.ms; shown = frameAt(e.ms);
       if (!template) { template = readFrame ? readFrame(last) : gd._transitionData._frames[last]; }
@@ -6376,6 +6723,24 @@ _REPLAY_PLAYER_JS = """(function () {
     Promise.resolve(Plotly.relayout(gd, edit)).then(function () {
       if (meta.scanpath_autoplay) { play(); }
     });
+
+    // The colour scheme of the page showing the replay. Inside the app the
+    // replay is a same-origin iframe, and Streamlit sets `color-scheme` on
+    // `.stApp` to the active theme; prefers-color-scheme would be the
+    // computer's setting instead, which can differ. A saved replay, or a page
+    // the frame can't read, is light, like the toolbar's buttons.
+    function pageScheme() {
+      try {
+        var host = window.parent;
+        if (!host || host === window) return 'light';
+        var app = host.document.querySelector('.stApp');
+        if (!app) return 'light';
+        var scheme = host.getComputedStyle(app).colorScheme || '';
+        return /\\bdark\\b/.test(scheme) && !/\\blight\\b/.test(scheme) ? 'dark' : 'light';
+      } catch (e) {
+        return 'light';
+      }
+    }
 
     // One row: ▶ Play, ⏸ Pause, ⟲ Restart, the time slider and its readout.
     // The labels, the readout's text and the font are the figure's own
@@ -6471,7 +6836,7 @@ _REPLAY_PLAYER_JS = """(function () {
       slot.appendChild(range);
       var readout = document.createElement('span');
       readout.setAttribute('aria-hidden', 'true');
-      readout.style.colorScheme = 'light dark';
+      readout.style.colorScheme = pageScheme();
       readout.style.color = 'CanvasText';
       readout.style.background = 'Canvas';
       readout.style.borderRadius = '4px';
@@ -7337,7 +7702,9 @@ def _render_scanpath_animation(
             for s in specs
         ]
         colors, category_legend = _shared_category_colors(
-            labels, avoid=[s["color"] for s in specs]
+            labels,
+            avoid=[s["color"] for s in specs],
+            vocabulary=_color_vocabulary(settings, color_by, color_by_line),
         )
         if category_legend:
             color_label = "line" if (color_by_line or color_by == "line") else color_by
@@ -7395,7 +7762,9 @@ def _render_scanpath_animation(
             )
         if color_data is not None:
             marker_color, category_legend = _resolve_marker_colors(
-                color_data, is_numeric_color
+                color_data,
+                is_numeric_color,
+                vocabulary=_color_vocabulary(settings, color_by, color_by_line),
             )
             specs[0]["marker_colors"] = list(marker_color)
             if is_numeric_color:
@@ -9041,6 +9410,7 @@ def _make_split_comparison_figure(
             for spec in trial_specs
         ],
         avoid=[spec["color"] for spec in trial_specs],
+        vocabulary=_color_vocabulary(settings, color_by, color_by_line),
     )
     category_label = "line" if (color_by_line or color_by == "line") else color_by
 
@@ -9733,6 +10103,7 @@ def _render_comparison_figure(
             for spec in trial_specs
         ],
         avoid=[spec["color"] for spec in trial_specs],
+        vocabulary=_color_vocabulary(settings, color_by, color_by_line),
     )
     category_label = "line" if (color_by_line or color_by == "line") else color_by
     legend_on = show_legend or bool(category_legend)
@@ -11069,6 +11440,8 @@ STATIC_FIGURE_OPTIONS = _setting_names(
         "fixation_flags_b",
         # Names, not an option: read by `_labelled_columns`.
         "column_labels",
+        # Derived from the data, not an option: the category colours' labels.
+        "color_categories",
     }
 )
 #: What `make_comparison_figure` accepts. Only the animation-only fields are
@@ -11088,6 +11461,8 @@ COMPARISON_FIGURE_OPTIONS = _setting_names(
         "fixation_flags_b",
         # Names, not an option: read by `_labelled_columns`.
         "column_labels",
+        # Derived from the data, not an option: the category colours' labels.
+        "color_categories",
     }
 )
 ANIMATION_FIGURE_OPTIONS = _setting_names(
@@ -11125,6 +11500,8 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "background_image_origin_b",
         # Names, not an option: read by `_labelled_columns`.
         "column_labels",
+        # Derived from the data, not an option: the category colours' labels.
+        "color_categories",
     }
 )
 
@@ -11150,6 +11527,8 @@ def make_scanpath_figure(
     if resolved.redact_text:
         words, fixations = redact_word_text(words), without_word_keys(fixations)
     fixations = _finite_for_plotting(fixations, fields_xy)
+    if SAMPLE_INDEX in fields_xy:
+        raw_gaze = chart_axes.with_sample_index(raw_gaze)
     raw_gaze = _finite_for_plotting(raw_gaze, fields_xy)
     if any(f in chart_axes.SAMPLE_FIELDS and f not in fixations for f in fields_xy):
         if chart_axes.ELAPSED in fields_xy:

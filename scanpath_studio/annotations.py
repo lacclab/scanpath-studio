@@ -45,6 +45,9 @@ SCHEMA_VERSION = 3
 # Per-trial annotation widgets use this prefix so they can be cleared on import
 # (forcing a re-seed from the freshly loaded store), and on a dataset swap.
 _WIDGET_PREFIX = "annotrial_"
+#: The trial editor's last saved edit, ``(dataset, (participant, trial,
+#: screen or None), message)``, for that reading's editor to confirm.
+_RECEIPT_KEY = "_annotation_edit_receipt"
 
 # Always-available tag suggestions (users can add their own on top).
 PRESET_TAGS = ["To exclude", "Review", "Good example", "Check alignment"]
@@ -386,6 +389,7 @@ def _reseed_editors_in(session) -> None:
         if isinstance(k, str) and k.startswith(_WIDGET_PREFIX)
     ]:
         del session[key]
+    session.pop(_RECEIPT_KEY, None)
 
 
 def activate_dataset(session, dataset: str, *, adopt: bool = True) -> bool:
@@ -844,9 +848,21 @@ def _save_entry_callback(
         screen_id=screen_id,
     )
     scope = f"screen {screen_id}" if screen_id is not None else "whole trial"
-    state["_annotation_edit_receipt"] = (
+    state[_RECEIPT_KEY] = (
         state.get(OWNER_KEY),
+        _receipt_reading(participant_id, trial_id, screen_id),
         f"Updated in this session for {participant_id} / {trial_id} ({scope}).",
+    )
+
+
+def _receipt_reading(
+    participant_id: str, trial_id: str, screen_id: str | None
+) -> tuple[str, str, str | None]:
+    """The editor an edit receipt belongs to: its reading and its scope."""
+    return (
+        str(participant_id),
+        str(trial_id),
+        None if screen_id is None else str(screen_id),
     )
 
 
@@ -922,11 +938,19 @@ def render_trial_annotations(
         label += f" · {', '.join(entry['tags'])}"
     container = st.container() if bare else st.expander(label, expanded=False)
     with container:
-        receipt = st.session_state.get("_annotation_edit_receipt")
-        if receipt and receipt[0] == st.session_state.get(OWNER_KEY):
+        # Said in the editor of the reading it is about, until another
+        # reading's editor (or another scope's) is the one on screen.
+        receipt = st.session_state.get(_RECEIPT_KEY)
+        reading = _receipt_reading(participant_id, trial_id, annotation_screen)
+        if receipt and tuple(receipt[:2]) == (
+            st.session_state.get(OWNER_KEY),
+            reading,
+        ):
             st.html(
-                f'<p role="status" aria-live="polite">{html.escape(receipt[1])}</p>'
+                f'<p role="status" aria-live="polite">{html.escape(receipt[2])}</p>'
             )
+        elif receipt:
+            st.session_state.pop(_RECEIPT_KEY, None)
         # `label | field` rows, so the five stacked controls fit under the
         # plot without scrolling. Unlike the rail (`controls._labeled`'s note),
         # the checkbox is split too: here the label column is the row spine every
@@ -1398,7 +1422,7 @@ def render_dataset_annotations(
             "",
             type="tertiary",
             width="small",
-            help="Open this trial in the Scanpath view, on its screen for a "
+            help="Open this trial in the Scanpath View, on its screen for a "
             "screen annotation.",
             on_click=_open_annotation,
             args=(open_key, records, trials, _trial_set(open_trials)),

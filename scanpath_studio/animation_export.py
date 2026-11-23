@@ -648,8 +648,9 @@ def export_animation(
         show_elapsed: draw the "Elapsed: X.Xs" readout in the top margin.
         max_frames: cap the number of rendered images while preserving clip duration.
             Each image shows the latest replay state at the start of its display
-            interval. With a coarse cap, a fixation after the last interval starts
-            can be absent from the clip.
+            interval, and the last image shows the complete scanpath. With a
+            coarse cap, a fixation that begins between two images first shows
+            in the later one.
         progress_callback: ``(done, total)`` after each rendered frame.
 
     Raises:
@@ -688,7 +689,8 @@ def export_animation(
     if times and len(times) == n_total and times[-1] > 0 and count:
         # Each image holds until the next output slot. Pick the state that was
         # already visible at its start, using the encoder's actual timebase.
-        # A fixation after the last slot stays out of a severely capped clip.
+        # The last slot ends where the replay does, so its image is the final
+        # frame: the clip always ends on the complete scanpath.
         tick = 10.0 if fmt == "gif" else 1000.0 / _MP4_FPS
         hold = (
             max(effective_duration, _GIF_MIN_FRAME_MS)
@@ -702,6 +704,7 @@ def export_animation(
             .clip(0, n_total - 1)
             .tolist()
         )
+        indices[-1] = n_total - 1
     else:
         indices = _select_frames(n_total, count)
 

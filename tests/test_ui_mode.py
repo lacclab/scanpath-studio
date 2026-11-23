@@ -542,6 +542,47 @@ def test_animation_preserves_custom_scanpath_and_comparison_across_modes():
     assert at.session_state["single_compare_toggle"]
 
 
+@pytest.mark.parametrize("mode", ["essentials", "full"])
+def test_replay_settings_leave_the_view_highlighted(mode):
+    """How the replay plays is not part of the design: changing it keeps the
+    view's tile lit, and Essentials does not list it as a setting from Full."""
+    at = _boot(mode=mode)
+    at.toggle(key="single_animate").set_value(True).run()
+    assert _lit_tiles(at) == ["scanpath"]
+    at.select_slider(key="single_playback_speed").set_value(2.0).run()
+    at.checkbox(key="global_anim_autoplay").uncheck().run()
+    at.selectbox(key="global_anim_quality").set_value("Fine").run()
+    assert not at.exception
+    assert _lit_tiles(at) == ["scanpath"]
+    assert at.session_state["_quick_view_selection"] == "scanpath"
+    assert "hidden_note_to_advanced" not in {button.key for button in at.button}
+    at.button(key="viz_view_heatmap").click().run()
+    assert _lit_tiles(at) == ["heatmap"]
+    assert at.session_state["single_playback_speed"] == 2.0
+    assert at.session_state["global_anim_autoplay"] is False
+    assert at.session_state["global_anim_quality"] == "Fine"
+
+
+@pytest.mark.parametrize("compare", [True, False], ids=["on", "off"])
+def test_the_custom_tile_leaves_compare_as_it_is(compare):
+    """Compare is a way of viewing the figure: like every other tile, Custom
+    brings back its own design without switching Compare on or off."""
+    at = _boot(mode="full")
+    at.toggle(key="single_animate").set_value(False).run()
+    at.color_picker(key="global_fixation_color").pick("#123456").run()
+    at.toggle(key="single_compare_toggle").set_value(not compare).run()
+    assert _lit_tiles(at) == ["custom"]
+    at.button(key="viz_view_heatmap").click().run()
+    at.toggle(key="single_compare_toggle").set_value(compare).run()
+    assert _lit_tiles(at) == ["heatmap"]
+    at.button(key="viz_view_custom").click().run()
+    assert not at.exception
+    assert _lit_tiles(at) == ["custom"]
+    assert at.session_state["global_fixation_color"] == "#123456"
+    assert at.session_state["single_compare_toggle"] is compare
+    assert at.toggle(key="single_compare_toggle").value is compare
+
+
 @pytest.mark.parametrize("cross_dataset", [False, True])
 def test_comparison_highlights_its_scanpath_and_remembers_the_illustration(
     cross_dataset,

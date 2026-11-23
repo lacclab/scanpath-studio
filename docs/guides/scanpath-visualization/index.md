@@ -5,7 +5,7 @@ description: "Visualize eye movements over the text: fixations, saccades, word b
 # Scanpath visualization
 
 <figure class="sps-screenshot" markdown>
-![The Scanpath view, its regions numbered](../../assets/screenshots/scanpath-view.webp)
+![The Scanpath View, its regions numbered](../../assets/screenshots/scanpath-view.webp)
 </figure>
 
 1. Views and :material/help: Help.
@@ -27,7 +27,7 @@ the screen it was recorded on.
 
 ## Essentials and Full
 
-The Scanpath view opens in **Essentials**, with the main controls for exploring
+The Scanpath View opens in **Essentials**, with the main controls for exploring
 a reading. Switch to **Full** in the top bar whenever you want more options.
 The app remembers your choice in this browser.
 

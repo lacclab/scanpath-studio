@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import uuid
@@ -9,7 +10,7 @@ import zipfile
 
 import streamlit as st
 
-from . import dataset_credit, publication, ui_mode
+from . import dataset_credit, loading, publication, ui_mode
 from .crash_report import guarded
 from .html_embed import plotlyjs_src
 
@@ -28,6 +29,10 @@ export default function({data,parentElement,setTriggerValue}){
 """
 
 
+#: How many workspaces' editor pages a session keeps between reruns.
+_MARKUP_PAGES = 4
+
+
 @st.fragment
 @guarded()
 def workspace(key: str, doc: dict, revision: str, *, plot_id: str = "") -> None:
@@ -36,8 +41,11 @@ def workspace(key: str, doc: dict, revision: str, *, plot_id: str = "") -> None:
     session = st.session_state.setdefault("_publication_session", uuid.uuid4().hex)
     batch = key == "scanpath" and not ui_mode.is_simple()
     rev = json.dumps([key, revision, doc["width"], doc["dpi"], plot_id, batch])
-    cached = st.session_state.get("_publication_markup", {})
-    if cached.get("rev") != rev:
+    # Each workspace keeps its own editor page, most recently drawn last, so two
+    # open on one page don't rebuild each other's on every rerun.
+    pages = st.session_state.setdefault("_publication_markup", {})
+    cached = pages.pop(key, None)
+    if cached is None or cached["rev"] != rev:
         cached = {
             "rev": rev,
             "html": publication.editor_html(
@@ -49,7 +57,9 @@ def workspace(key: str, doc: dict, revision: str, *, plot_id: str = "") -> None:
                 batch=batch,
             ),
         }
-        st.session_state["_publication_markup"] = cached
+    pages[key] = cached
+    while len(pages) > _MARKUP_PAGES:
+        del pages[next(iter(pages))]
     widget = st.components.v2.component(
         "publication_workspace",
         html='<iframe title="Publication figure workspace" style="display:block;width:100%;height:460px;border:0"></iframe>',
@@ -65,7 +75,14 @@ def workspace(key: str, doc: dict, revision: str, *, plot_id: str = "") -> None:
     if action and action.get("type") in {"pdf", "html"}:
         fmt = action["type"]
         try:
-            data = publication.render(action["value"], fmt)
+            with loading.card(
+                st.empty(),
+                key="publication_" + fmt,
+                title="Preparing the PDF"
+                if fmt == "pdf"
+                else "Preparing the offline editor",
+            ):
+                data = publication.render(action["value"], fmt)
         except (ValueError, RuntimeError, OSError) as exc:
             st.error(str(exc))
         else:
@@ -80,8 +97,6 @@ def workspace(key: str, doc: dict, revision: str, *, plot_id: str = "") -> None:
     if action and action.get("type") == "video":
         try:
             project = action["value"]
-            from . import loading
-
             with loading.card(
                 st.empty(), key="publication_movie", title="Rendering clip and poster"
             ):
@@ -105,6 +120,27 @@ def workspace(key: str, doc: dict, revision: str, *, plot_id: str = "") -> None:
     if action and action.get("type") == "batch":
         st.session_state["_publication_batch"] = action["value"]
         st.rerun()
+
+
+def chart_key(figure) -> str:
+    """The export workspace key of a Corpus Analysis chart.
+
+    It names the open section and what the chart shows (its title, axis titles
+    and kinds of marks), never the chart's position on the page, so a note
+    drawn above the chart keeps its workspace open with its draft.
+    """
+    from .session_keys import CORPUS_SUBTAB
+
+    layout = figure.layout
+    identity = [
+        st.session_state.get(CORPUS_SUBTAB),
+        layout.title.text,
+        layout.xaxis.title.text,
+        layout.yaxis.title.text,
+        sorted({trace.type for trace in figure.data}),
+    ]
+    digest = hashlib.sha256(json.dumps(identity, default=str).encode()).hexdigest()
+    return "chart_" + digest[:16]
 
 
 def _capture(figure, replay, *, title, kind, description, settings, references) -> dict:

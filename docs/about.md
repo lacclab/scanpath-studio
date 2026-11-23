@@ -59,7 +59,7 @@ computer, so a refresh or a restart picks up where you left off.
 - **Where:** `~/.cache/scanpath-studio/session-v1` in your home folder
   (`C:\Users\<you>\.cache\scanpath-studio\session-v1` on Windows), or the
   folder set by `SCANPATH_STUDIO_STATE_DIR`. :material/database: **Data
-  Management** → :material/history: **Saved on this computer** shows the
+  Management** → **Storage** → :material/history: **Saved on this computer** shows the
   folder and its contents. You can also check with `scanpath-studio cache`.
 - **How long:** until you clear it. Removing a dataset from the app removes
   its saved copy.

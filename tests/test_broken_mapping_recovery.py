@@ -129,7 +129,8 @@ def test_the_data_page_still_reports_the_cache_while_the_app_is_wedged(
 
     at = _boot()
     at = _break_the_mapping(at)
-    at = open_data_view(at, timeout=180)
+    pin_data_view(at, section="Storage")
+    at.run(timeout=180)
 
     body = " ".join(str(m.value) for m in at.markdown)
     assert f"**Session folder:** `{tmp_path}`" in body

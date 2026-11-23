@@ -110,7 +110,7 @@ data tables and exported tables still hold the words.
 
 When the app listens only on this computer, as `scanpath-studio` and the
 desktop app do, it saves your datasets and
-settings there. :material/database: **Data Management** → :material/history:
+settings there. :material/database: **Data Management** → **Storage** → :material/history:
 **Saved on this computer** shows what it holds. The online demo keeps nothing
 and explains this after your first upload, so export your annotations and settings
 before you leave ([what to back up](guides/scanpath-visualization/index.md#back-up-your-work)).
@@ -126,7 +126,7 @@ If two tabs use the same local recovery folder, edits to different trial
 annotations can be saved together. When a save would overwrite newer work,
 the older tab shows a warning and keeps your edits open. Copy or export them
 before reloading that tab. To save your notes, open **Data Management →
-Annotations** for the dataset and download the JSON file.
+Current dataset → Annotations** for the dataset and download the JSON file.
 
 ### How do I stop saving, or delete what is saved?
 

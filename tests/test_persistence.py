@@ -1960,7 +1960,7 @@ def test_the_app_names_a_damaged_dataset_and_keeps_it(tmp_path, monkeypatch):
     not come back (with Retry / Remove from cache, on the page and on the Data
     page's *Saved on this computer*), and its next save keeps the damaged entry."""
     streamlit_testing = pytest.importorskip("streamlit.testing.v1")
-    from tests.conftest import APP_SCRIPT, open_data_view
+    from tests.conftest import APP_SCRIPT, pin_data_view
 
     monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
     monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
@@ -1978,7 +1978,8 @@ def test_the_app_names_a_damaged_dataset_and_keeps_it(tmp_path, monkeypatch):
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert set(manifest["datasets"]) == {"good", "damaged"}
 
-    open_data_view(at)
+    pin_data_view(at, section="Storage")
+    at.run()
     assert not at.exception, [e.message for e in at.exception]
     keys = {b.key for b in at.button}
     assert "saved_here_recovery_remove_0" in keys

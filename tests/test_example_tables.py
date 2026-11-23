@@ -1,11 +1,4 @@
-"""The example import pair, and *Available with this dataset*.
-
-The synthetic trial as a Words table and a fixation table (`synthetic.py`) that
-import with no manual mapping — the auto-detection's own end-to-end check. Once
-a dataset is added, the *What's in…* section opens with four lines saying what
-it supports: scanpaths, supplied reading measures, raw gaze coverage and
-multipart screens.
-"""
+"""Import the example tables and inspect the resulting dataset coverage."""
 
 from __future__ import annotations
 
@@ -57,30 +50,42 @@ class TestTheExampleMapsItself:
 class TestAvailableWithThisDataset:
     def test_the_example_lists_its_measures(self):
         words, fixations = _example_frames()
-        lines = dataset_capabilities(
+        coverage = dataset_capabilities(
             data.normalize_words(words, data.infer_word_schema(words)),
             data.normalize_fixations(fixations, data.infer_fix_schema(fixations)),
             None,
         )
-        assert len(lines) == 4
-        assert "over the text, for 1 trial" in lines[0]
-        assert "TFD, First fixation duration — FFD" in lines[1]
-        assert lines[2].endswith("**Raw gaze:** none")
-        assert lines[3].endswith("one per trial")
+        assert coverage.scanpaths == "1 trial over text"
+        assert coverage.reading_measures == (
+            "Total fixation duration — TFD",
+            "First fixation duration — FFD",
+        )
+        assert coverage.raw_gaze == "None recorded"
+        assert coverage.screens == "One per trial"
 
     def test_no_measures_and_raw_gaze_only(self):
         gaze = pd.DataFrame(
             {"participant_id": ["p", "p"], "trial_id": ["t", "t"], "x": [1, 2]}
         )
-        lines = dataset_capabilities(None, None, gaze)
-        assert "no fixations; raw gaze is drawn instead, for 1 trial" in lines[0]
-        assert "none supplied" in lines[1]
-        assert "1 of 1 trial" in lines[2]
+        coverage = dataset_capabilities(None, None, gaze)
+        assert coverage.scanpaths == "No fixations recorded"
+        assert not coverage.reading_measures
+        assert coverage.raw_gaze == "1 of 1 trial"
 
     def test_multipart_screens_are_counted(self):
         words, fixations = synthetic.make_multipart_synthetic_data()
-        lines = dataset_capabilities(words, fixations, None)
-        assert lines[3].endswith("2 screens across 1 trial")
+        coverage = dataset_capabilities(words, fixations, None)
+        assert coverage.screens == "2 screens across 1 trial"
+
+    def test_gaze_contributes_screens_only_for_readings_it_alone_records(self):
+        words, fixations = synthetic.make_multipart_synthetic_data()
+        samples = fixations.assign(text_id="default from gaze")
+        gaze_only = samples.assign(trial_id="samples-only")
+        coverage = dataset_capabilities(
+            words, fixations, pd.concat([samples, gaze_only])
+        )
+        assert coverage.screens == "4 screens across 2 trials"
+        assert coverage.raw_gaze == "2 of 2 trials"
 
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -130,9 +135,7 @@ class TestTheWizard:
 
         open_data_view(at, timeout=90)
         assert not at.exception, at.exception
-        text = " ".join(c.value for c in at.caption)
-        assert "Available with this dataset" in text
-        assert (
-            "**Reading measures:** Total fixation duration — TFD, First fixation duration — FFD"
-            in text
-        )
+        text = "\n".join(m.value for m in at.markdown)
+        assert "Dataset coverage" in text
+        assert "- Total fixation duration — TFD" in text
+        assert "- First fixation duration — FFD" in text

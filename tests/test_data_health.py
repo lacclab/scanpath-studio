@@ -205,6 +205,44 @@ def test_the_data_page_names_the_dataset_s_own_columns(clean):
     assert any("Flagged rows are kept" in c.value for c in at.caption)
 
 
+def _run_sheet_navigation_app():
+    import streamlit as st
+
+    from scanpath_studio.tabs import render_data_health
+
+    dataset = st.selectbox("Dataset", ["First", "Second"])
+    if st.radio("Panel", ["Data checks", "Tables"]) == "Data checks":
+        render_data_health(None, None, None, dataset=dataset)
+
+
+def test_run_sheet_survives_navigation_and_belongs_to_its_dataset():
+    at = AppTest.from_function(_run_sheet_navigation_app)
+
+    def show_sheet():
+        at.session_state["data_run_sheet"] = True
+        at.run()
+        assert not at.exception, at.exception
+
+    show_sheet()
+    at.file_uploader[0].upload("roster.csv", b"participant_id,trial_id\np,t\n").run()
+    assert any(
+        b.label == "Download run sheet reconciliation" for b in at.download_button
+    )
+    at.radio[0].set_value("Tables").run()
+    at.radio[0].set_value("Data checks").run()
+    show_sheet()
+    assert any(m.value == "roster.csv" for m in at.markdown)
+    at.selectbox[0].select("Second").run()
+    show_sheet()
+    assert len(at.file_uploader) == 1
+    assert not at.download_button
+    at.selectbox[0].select("First").run()
+    show_sheet()
+    at.button(key="remove_run_sheet").click().run()
+    assert len(at.file_uploader) == 1
+    assert not at.download_button
+
+
 def test_the_api_reads_frames_under_the_datasets_own_names():
     """`load_scanpath_data` returns the files' own column names; the
     check must still find their problems, and name the columns as they do."""

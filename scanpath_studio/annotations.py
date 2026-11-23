@@ -1152,11 +1152,12 @@ def render_disputed_note(host, participant, trial, screen) -> None:
     scope = "Whole trial" if len(key) == 2 else f"Screen {key[2]}"
     host.markdown(f"**{md_literal(scope)} · differing annotations**")
     host.table(pd.DataFrame([current, incoming], index=["Current", "Incoming"]))
-    from .url_state import _go_data
+    from .app import open_dataset_panel
 
     host.button(
         "Return to annotation import",
-        on_click=_go_data,
+        on_click=open_dataset_panel,
+        args=("Annotations",),
         key="annotation_return_to_import",
     )
 

@@ -74,6 +74,11 @@ from .constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
     _VIEW_SCANPATH,
+    DATA_CURRENT,
+    DATA_INSPECTION_KEY,
+    DATA_LIBRARY,
+    DATA_WORKSPACE_KEY,
+    DATA_WORKSPACE_REQUEST,
     ICONS,
     STREAMLIT_PRIVACY_URL,
     SUBTAB_ANNOTATIONS,
@@ -133,6 +138,7 @@ class TutorialStep:
     #: screen rather than its overview, so opening the view is not enough: the
     #: editor has to be raised too, or the spotlight aims at a hidden container.
     dataset_editor: bool = False
+    data_section: str = DATA_CURRENT
     #: The step's target is built inside a popover, so it is not in the
     #: page until that popover's trigger is clicked. The selector of the trigger;
     #: the spotlight opens it before it looks for the target (`_popover_script`).
@@ -190,10 +196,11 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Choose the dataset",
                 f"Datasets are set up and checked on the {ICONS['view_data']} "
-                "**Data Management** page. Start at the list of datasets: click a "
-                "row to open it, or **+ Add dataset** for your own tables.",
+                "**Data Management** page. Open a row in **Dataset library** to "
+                "inspect it, or choose **Add dataset** to import your own tables.",
                 ".st-key-tutorial_available_datasets",
                 view=_VIEW_DATA,
+                data_section=DATA_LIBRARY,
             ),
             TutorialStep(
                 "Check the column mapping",
@@ -208,10 +215,9 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Check what was loaded",
-                f"**{ICONS['search']} What's in the … dataset** opens on "
-                f"{ICONS['stats']} Stats. Review the counts and summary statistics "
-                "to check that the data loaded as you expected. The other tabs "
-                "show the data tables and annotations.",
+                "**Current dataset → Overview** shows how many participants, trials "
+                "and texts you loaded. Choose **Tables** to inspect their rows, "
+                "or **Data checks** to review any problems.",
                 ".st-key-tutorial_data_inspection",
                 view=_VIEW_DATA,
             ),
@@ -2017,15 +2023,14 @@ def _open_tutorial_surface(step: TutorialStep) -> None:
         st.session_state["single_subtab"] = step.subtab
     if step.corpus_subtab is not None:
         st.session_state["corpus_subtab"] = step.corpus_subtab
-    # The Data page's two screens. A step that points into the editor
-    # opens it; one that points at the overview closes it, so walking back up a
-    # tutorial does not leave the editor covering the table the previous step
-    # was about.
     if step.view == _VIEW_DATA:
+        st.session_state[DATA_WORKSPACE_REQUEST] = step.data_section
         if step.dataset_editor:
             st.session_state[DATASET_EDITOR_OPEN_KEY] = True
-        else:
-            st.session_state.pop(DATASET_EDITOR_OPEN_KEY, None)
+        elif step.data_section == DATA_CURRENT:
+            from .app import open_dataset_panel
+
+            open_dataset_panel("Overview")
 
 
 _KNOWN_VIEWS = (_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA)
@@ -2047,11 +2052,23 @@ def _tutorial_surface_is_open(step: TutorialStep) -> bool:
         current_view = _VIEW_SCANPATH
     if current_view != step.view:
         return False
+    if step.view == _VIEW_DATA and (
+        st.session_state.get(DATA_WORKSPACE_KEY, DATA_CURRENT) != step.data_section
+        or (
+            step.data_section == DATA_CURRENT
+            and not step.dataset_editor
+            and st.session_state.get(DATA_INSPECTION_KEY, "Overview") != "Overview"
+        )
+    ):
+        return False
     # On the Data page, "which screen" is part of the answer — an
     # editor step is not open while the overview is showing, and vice versa.
-    if step.view == _VIEW_DATA and bool(
-        st.session_state.get(DATASET_EDITOR_OPEN_KEY)
-    ) != bool(step.dataset_editor):
+    if (
+        step.view == _VIEW_DATA
+        and step.data_section == DATA_CURRENT
+        and bool(st.session_state.get(DATASET_EDITOR_OPEN_KEY))
+        != bool(step.dataset_editor)
+    ):
         return False
     if (
         step.corpus_subtab is not None

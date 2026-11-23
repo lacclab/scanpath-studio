@@ -66,6 +66,8 @@ from .constants import (
     COLORSCALES,
     CROP_MARGIN_BOUNDS,
     CUSTOM_PALETTE,
+    DATA_CURRENT,
+    DATA_WORKSPACE_REQUEST,
     DEFAULT_HEATMAP_SIGMA_PX,
     DEMO_CHOICE,
     FIXATION_DURATION_FLAGS,
@@ -4678,4 +4680,5 @@ def _go_scanpath() -> None:
 
 
 def _go_data() -> None:
+    st.session_state[DATA_WORKSPACE_REQUEST] = DATA_CURRENT
     st.session_state["main_nav"] = _VIEW_DATA

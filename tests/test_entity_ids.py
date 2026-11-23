@@ -58,6 +58,63 @@ def test_texts() -> None:
     assert out.set_index("Text ID")["# Participants"]["a"] == 2
 
 
+def test_gaze_only_readings_supply_participants_trials_and_texts() -> None:
+    words, fixations = _frames()
+    samples = pd.DataFrame(
+        {
+            "participant_id": ["p3", "p3"],
+            "trial_id": ["t3", "t3"],
+            "text_id": ["c", "c"],
+        }
+    )
+
+    def ids(kind):
+        return _ids_from_data(
+            kind, words, fixations, cache_key=("gaze", kind), _raw_gaze=samples
+        )
+
+    participant = ids("participant").set_index("Participant ID").loc["p3"]
+    assert participant[
+        ["# Trials", "# Texts", "# Fixations", "# Gaze points"]
+    ].tolist() == [1, 1, 0, 2]
+    trial = ids("trial").set_index("Trial ID").loc["t3"]
+    assert trial[["Text ID", "# Words", "# Fixations", "# Gaze points"]].tolist() == [
+        "c",
+        0,
+        0,
+        2,
+    ]
+    texts = ids("text").set_index("Text ID")
+    assert set(texts.index) == {"a", "b", "c"}
+    assert texts.loc["c", "# Participants"] == 1
+
+
+def test_recorded_text_outranks_the_gaze_fallback_in_all_tables() -> None:
+    from scanpath_studio import data
+
+    words, fixations = _frames()
+    words = words.assign(unique_text_id="story")
+    samples = fixations.iloc[:1].assign(text_id="t1", **{data.TEXT_ID_MAPPED: False})
+    fixations = fixations.assign(**{data.TEXT_ID_MAPPED: True})
+
+    def table(kind):
+        return _ids_from_data(
+            kind, words, fixations, cache_key=("mapped-text", kind), _raw_gaze=samples
+        )
+
+    assert data.text_ids(words, fixations, samples) == {"story", "b"}
+    assert table("participant").set_index("Participant ID").loc["p1", "# Texts"] == 1
+    assert (
+        table("trial")
+        .set_index(["Participant ID", "Trial ID"])
+        .loc[("p1", "t1"), "Text ID"]
+        == "story"
+    )
+    texts = table("text").set_index("Text ID")
+    assert set(texts.index) == {"story", "b"}
+    assert texts.loc["story", "Text"] == "The cat sat"
+
+
 def test_nothing_to_show() -> None:
     empty = pd.DataFrame()
     for kind in ("participant", "trial", "text"):

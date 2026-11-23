@@ -160,9 +160,20 @@ def _frames_with(at: AppTest, *columns: str) -> list[pd.DataFrame]:
     return out
 
 
+def _inspect_table(at: AppTest, label: str) -> None:
+    if any(w.key == "data_table_choice" for w in at.selectbox):
+        at.selectbox(key="data_table_choice").select(label)
+    else:
+        at.session_state["data_table_choice"] = label
+        at.segmented_control(key="data_inspection_panel").set_value("Tables")
+    _rerun(at, view=VIEW_DATA)
+    _clean(at, f"inspecting {label}:")
+
+
 def _fixation_durations(at: AppTest) -> list:
     """``duration_ms`` from the rendered fixation-level table (Data Inspection →
     Raw data → Fixations), in render order."""
+    _inspect_table(at, "Fixations")
     frames = _frames_with(at, "duration_ms", "x")
     assert frames, "fixation-level table not rendered"
     return list(frames[0]["duration_ms"])
@@ -171,6 +182,7 @@ def _fixation_durations(at: AppTest) -> list:
 def _word_labels(at: AppTest) -> set[str]:
     """Distinct ``text`` values on the rendered word-level table (Data
     Inspection → Raw data → AOIs)."""
+    _inspect_table(at, "Words (interest areas)")
     frames = _frames_with(at, "word_id", "text")
     assert frames, "word-level table not rendered"
     return set(frames[0]["text"].dropna().astype(str))
@@ -211,6 +223,8 @@ class TestColumnMappingOverrideFlow:
             "IA_LABEL" in m.value and "overridden" in m.value for m in at.markdown
         ), "the ✨ flag should report the overridden auto-detection on hover"
 
+        at.button(key="dataset_editor_close").click()
+        _rerun(at, view=VIEW_DATA)
         # The frames were re-derived, not just re-labelled: every word label on
         # the word-level table is now a POS tag…
         after = _word_labels(at)
@@ -218,6 +232,7 @@ class TestColumnMappingOverrideFlow:
         assert {"NOUN", "VERB", "DET", "PUNCT"} <= after, after
         # …and the stimulus text, reconstructed downstream from the same column,
         # reads as POS tags too.
+        _inspect_table(at, "Texts")
         stimuli = _frames_with(at, "Text ID", "# Words", "Text")
         assert stimuli, "stimuli table not rendered"
         passage = str(stimuli[0]["Text"].iloc[0]).split()
@@ -315,6 +330,7 @@ class TestTrialFilterFlow:
         _rerun(at, view=VIEW_DATA)
         _clean(at, "on the Data page after the difficulty filter:")
         assert _metric(at, "Trials") == str(DEMO_ADV_TRIALS_IN_WORDS)
+        _inspect_table(at, "Words (interest areas)")
         graded = _frames_with(at, "difficulty_level")
         assert graded, "no rendered frame carries difficulty_level"
         for frame in graded:
@@ -798,6 +814,7 @@ class TestRecoveryCachePanelFlow:
         monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+        at.session_state["data_workspace"] = "Storage"
         return _rerun(at, view=VIEW_DATA)
 
     def test_panel_reports_the_store_and_its_folder(self, tmp_path, monkeypatch):
@@ -972,6 +989,7 @@ class TestRecoveryCachePanelFlow:
         monkeypatch.delenv("SCANPATH_STUDIO_PERSIST", raising=False)
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+        at.session_state["data_workspace"] = "Storage"
         at = _rerun(at, view=VIEW_DATA)
         _clean(at, "hosted cache panel:")
         captions = " ".join(str(c.value) for c in at.caption)
@@ -986,6 +1004,7 @@ class TestRecoveryCachePanelFlow:
         monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "0")
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+        at.session_state["data_workspace"] = "Storage"
         at = _rerun(at, view=VIEW_DATA)
         _clean(at, "turned-off cache panel:")
         captions = [str(c.value) for c in at.caption]

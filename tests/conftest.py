@@ -225,9 +225,20 @@ def pin_view(at, view: str) -> None:
         at._page_hash = ""
 
 
-def pin_data_view(at) -> None:
-    """:func:`pin_view` for the 🗂️ Data page — the common case."""
+def pin_data_view(at, *, section: str | None = None) -> None:
+    """Open Data Management, optionally selecting a workspace tab."""
+    from scanpath_studio.constants import DATA_WORKSPACE_KEY, DATA_WORKSPACE_REQUEST
+
     pin_view(at, VIEW_DATA)
+    # AppTest does not echo the browser's selected native tab on the next run.
+    if (
+        section is None
+        and DATA_WORKSPACE_REQUEST not in at.session_state
+        and DATA_WORKSPACE_KEY in at.session_state
+    ):
+        section = at.session_state[DATA_WORKSPACE_KEY]
+    if section is not None:
+        at.session_state[DATA_WORKSPACE_REQUEST] = section
 
 
 def picked_trial_id(value) -> str | None:
@@ -278,7 +289,8 @@ def open_dataset_editor(at, timeout: int = 60):
     open; on every other run their picks are read from session state."""
     from scanpath_studio.app import _dataset_row_slug
 
-    open_data_view(at, timeout=timeout)
+    pin_data_view(at, section="Dataset library")
+    at.run(timeout=timeout)
     token = str(at.session_state["data_source_choice"])
     at.button(key=f"dataset_row_edit_{_dataset_row_slug(token)}").click()
     pin_data_view(at)

@@ -372,8 +372,8 @@ from docs_support import cli_reference
 print(cli_reference("cache"))
 ```
 
-The same information is at the foot of the **:material/database: Data
-Management** page, under **:material/history: Saved on this computer**. A
+Open **:material/database: Data Management → Storage →
+:material/history: Saved on this computer** to see the same information. A
 running app writes a new copy at its next change, so clear the cache with the
 app closed.
 

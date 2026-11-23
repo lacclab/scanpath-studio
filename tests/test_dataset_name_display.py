@@ -116,7 +116,7 @@ def test_the_dataset_table_shows_a_name_as_typed():
         long_name: _dataset(words, fixations),
     }
     at.session_state["data_source_choice"] = HOSTILE
-    pin_data_view(at)
+    pin_data_view(at, section="Dataset library")
     at.run()
     assert not at.exception, at.exception
 
@@ -128,10 +128,6 @@ def test_the_dataset_table_shows_a_name_as_typed():
     assert html.unescape(text) == HOSTILE
     assert not _markdown_left(text)
     assert f'title="{html.escape(HOSTILE)}"' in hostile
-    # The open dataset's heading names it literally too.
-    assert any(md_literal(HOSTILE) in h.value for h in at.subheader)
-    assert not any("**bold**" in h.value for h in at.subheader)
-
     # The long name is still a row; the CSS clamps it, its tooltip holds it.
     long_cell = next(c for c in cells if long_name in c)
     assert f'title="{long_name}"' in long_cell
@@ -141,6 +137,12 @@ def test_the_dataset_table_shows_a_name_as_typed():
         if b.key and b.key.startswith("dataset_row_edit_") and "L" * 100 in b.label
     )
     assert len(long_row.help) < 300
+
+    pin_data_view(at, section="Current dataset")
+    at.run(timeout=90)
+    # The open dataset's heading names it literally too.
+    assert any(md_literal(HOSTILE) in h.value for h in at.subheader)
+    assert not any("**bold**" in h.value for h in at.subheader)
 
 
 @pytest.mark.timeout(180)

@@ -1,10 +1,4 @@
-"""The Data Management page says which counts follow the trial filters.
-
-📊 Stats and the raw tables count the filtered pool while 📂 Available datasets
-and *Available with this dataset* count the whole dataset, and the page says
-which is which. One ``AppTest`` flow on the bundled demo (2 readers × 12
-trials) pins both states.
-"""
+"""Data Management distinguishes filtered recordings from whole-dataset checks."""
 
 from __future__ import annotations
 
@@ -28,12 +22,7 @@ def test_the_data_page_names_the_scope_of_its_counts():
     at.run(timeout=90)
     assert not at.exception, at.exception
 
-    # Unfiltered: Stats and the three trial tables say "whole dataset", and
-    # nothing else on the page needs to.
-    whole = _captions(at, "24 trials · 2 participants · whole dataset")
-    # Stats + Fixations + Words + Raw gaze, and Participants / Trials / Texts,
-    # which list the data's own ids while no table is attached to them.
-    assert len(whole) == 7, whole
+    assert _captions(at, "24 trials · 2 participants · whole dataset")
     assert not _captions(at, "before the trial filters")
 
     # Set on the Scanpath view, where the filter panel publishes the result
@@ -46,12 +35,44 @@ def test_the_data_page_names_the_scope_of_its_counts():
     at.run(timeout=90)
     assert not at.exception, at.exception
 
-    scoped = _captions(at, "12 of 24 trials · 1 of 2 participants · filtered")
-    assert len(scoped) == 7, scoped
-    assert all(md_literal("Participant: l7_1090") in c for c in scoped)
-    # The table and the capabilities block say they did not follow.
+    scope = "12 of 24 trials · 1 of 2 participants · filtered"
+    assert _captions(at, scope)
+    assert _captions(at, "Whole dataset, before the trial filters.")
+    at.button(key="data_inspect_fixations").click()
+    pin_data_view(at)
+    at.run(timeout=90)
+    for label in at.selectbox(key="data_table_choice").options:
+        at.selectbox(key="data_table_choice").select(label)
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        captions = _captions(at, scope)
+        assert (
+            len(captions) == 1 and md_literal("Participant: l7_1090") in captions[0]
+        ), label
+
+    pin_data_view(at, section="Dataset library")
+    at.run(timeout=90)
     assert _captions(at, "Whole datasets, before the trial filters")
-    assert _captions(at, "Available with this dataset** · whole dataset")
+
+
+@pytest.mark.timeout(180)
+def test_empty_trial_filters_leave_the_dataset_open_for_inspection():
+    at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
+    at.run(timeout=90)
+    at.session_state["filter_favorites"] = True
+    at.run(timeout=90)
+    pin_data_view(at)
+    at.run(timeout=90)
+    assert not at.exception, at.exception
+    assert _captions(at, "0 of 24 trials")
+    assert {m.label: m.value for m in at.metric}["Trials"] == "0"
+    at.segmented_control(key="data_inspection_panel").set_value("Data checks")
+    pin_data_view(at)
+    at.run(timeout=90)
+    assert not at.exception, at.exception
+    assert any("Compare with the experiment run sheet" in e.label for e in at.expander)
+    assert not at.button(key="data_edit_current").disabled
 
 
 class TestDatasetTableScopeNote:
@@ -71,7 +92,7 @@ class TestDatasetTableScopeNote:
 
         bare = dataset_table_scope_note(filtered=False, stand_in_for="PoTeC")
         assert bare == (
-            "Rows count whole datasets. PoTeC isn't loaded, so Stats below "
+            "Rows count whole datasets. PoTeC isn't loaded, so Overview "
             "counts the bundled demo shown in its place."
         )
         both = dataset_table_scope_note(filtered=True, stand_in_for="PoTeC")
@@ -88,7 +109,7 @@ def test_the_table_says_when_stats_counts_the_demo_standing_in(monkeypatch):
     monkeypatch.setattr(datasets, "potec_present", lambda root: False)
     at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
     at.session_state["data_source_choice"] = "PoTeC — Potsdam Textbook Corpus"
-    pin_data_view(at)
+    pin_data_view(at, section="Dataset library")
     at.run(timeout=90)
     assert not at.exception, at.exception
     notes = _captions(at, "counts the bundled demo shown in its place.")

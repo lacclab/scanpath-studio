@@ -9,6 +9,10 @@ Before you start, switch to **Full** at the top of the **Scanpath** view ([Essen
 1. Choose the **Figure formats** and, under **Also include**, the tables and their **Table format**. Check the **File path pattern**. To edit individual layers later, turn on **Layers as separate files**.
 1. Click **Build export**, download the bundle, and inspect one exported figure.
 
+For PNGs, turn on **Smaller PNG files** to reduce file size at the same resolution. This adds encoding time. Images over 16.8 megapixels use the standard encoding to limit memory use. **PNG scale** controls resolution separately. A scale of 1 writes one pixel per figure pixel, and the default scale of 2 doubles both dimensions.
+
+Large bundles are kept on temporary disk and download as one ZIP in a new tab. Keep the Export panel open until the download finishes. If your browser cannot stream the ZIP, the download page offers numbered parts and instructions for joining them.
+
 \[!\[
 
 \](../../../assets/workflows/export-bundle_poster.webp)\](../../../assets/workflows/export-bundle.mp4)

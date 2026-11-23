@@ -20,6 +20,7 @@
 - In Python, load data with `include_source_cells=True` and call `explain_fixation()` to see a fixation’s input row, file, original units and word assignment. Merged fixations list their contributing rows.
 - Plot gaze position and pupil measurements against recorded time or sample number. The OneStop demo includes every recorded sample, with its tracked eye, pupil area and missing positions.
 - Animation can replay saccades with the fixation markers hidden, for one reading or two.
+- Bulk export can now use lossless compression for smaller PNG figures and layers.
 
 ### Changed
 
@@ -39,6 +40,8 @@
 - Data Management opens on the selected dataset with trial averages, six browsable tables and recording quality checks. The dataset library and saved work have their own tabs.
 - The fixation size legend starts hidden. Turn on Fixation sizes under Figure & canvas → Legends to include it in a figure.
 - The bundled demo now uses two readers from the published OneStop L1 cohort and includes recorded EyeLink gaze samples for all 24 readings. Demo participant and trial IDs have changed.
+- Bulk PNG, SVG and PDF exports reuse the browser page across trials and prepare the next figure during rendering. Large bundles download from temporary disk in small pieces as one ZIP.
+- Bulk exports run faster on large datasets whose rows are grouped by trial.
 
 ### Removed
 

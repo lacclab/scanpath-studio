@@ -1436,7 +1436,8 @@ def load_sample_raw_gaze(*, names: str = NAMES_SOURCE) -> pd.DataFrame:
     The table includes each sample during paragraph reading, with screen x/y in
     pixels, the tracked eye and pupil area in the tracker's units. Timestamps
     are milliseconds from trial recording start on the fixation report's clock.
-    Samples with missing positions keep their timestamps and recorded pupil values.
+    Samples with missing positions keep their timestamps; their pupil value is
+    missing too, since the tracker measured nothing.
 
     Args:
         names: ``"source"`` or ``"canonical"``, as

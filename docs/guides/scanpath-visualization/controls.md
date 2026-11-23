@@ -246,7 +246,7 @@ The **Raw gaze** switch draws the recorded gaze samples. Click **Raw gaze** to s
 
 To inspect samples from one reading, open **Axes → Axis preset**. Choose **Horizontal gaze position over recorded time**, **Vertical gaze position over recorded time**, or a recorded pupil measurement. These presets turn on **Raw gaze**. A recording without timestamps offers sample number on the horizontal axis.
 
-In the OneStop demo, the clock starts at trial onset and the first sample appears when the reader sees the paragraph. A pupil area of zero accompanies missing gaze coordinates. The raw table and its exports keep those samples.
+In the OneStop demo, the clock starts at trial onset and the first sample appears when the reader sees the paragraph. A sample with missing gaze coordinates has no pupil area either, so the pupil chart shows a gap there. The raw table and its exports keep those samples.
 
 ### :material/filter_list: Filters & highlights
 

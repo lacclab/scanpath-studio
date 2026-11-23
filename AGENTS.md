@@ -482,11 +482,13 @@ here fails when its rule is broken.
 - **Every fingerprint is exact** — a frame hashed in full or named by its source
   (`data.stamp_source` / `adopt_source`, `frame_cache`, `assign_derived`), never
   sampled. A new large per-rerun frame needs one, or it is hashed every run.
-- The bundled `raw_gaze.{csv,parquet}` carries the two L1 readers' recorded
-  EyeLink gaze positions for all 24 readings. Extract samples within the
-  fixation report's paragraph interest period and subtract its trial start
-  time to share the fixation clock. Keep every recorded tick, including missing
-  x/y values, pupil area in tracker units and the tracked eye.
+- The bundled `raw_gaze.parquet` (Parquet only: no CSV copy in the wheel)
+  carries the two L1 readers' recorded EyeLink gaze positions for all 24
+  readings. Extract samples within the fixation report's paragraph interest
+  period and subtract its trial start time to share the fixation clock. Keep
+  every recorded tick, including missing x/y values, pupil area in tracker
+  units and the tracked eye. A sample without a position has a missing pupil
+  value, not EyeLink's 0 (`update_sample_data.without_lost_pupil`).
 
 **Figures**
 

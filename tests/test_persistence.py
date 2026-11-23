@@ -1449,6 +1449,37 @@ class TestAMalformedCacheNeverStopsTheApp:
         assert "global_fixation_opacity" not in session[DESIGN_PRESETS]["ok"]
         assert "bad" not in session[DESIGN_PRESETS]
 
+    @pytest.mark.parametrize("bad", [[], "x", None, 3])
+    def test_a_malformed_credits_value_costs_only_the_credits(self, tmp_path, bad):
+        from scanpath_studio import dataset_credit
+
+        self._write(
+            tmp_path,
+            self._manifest(
+                session={
+                    "global_show_heatmap": True,
+                    dataset_credit.STORE_KEY: bad,
+                    DATASET_DESCRIPTIONS_KEY: {"A": "Pilot readings"},
+                }
+            ),
+        )
+        session = {}
+        assert restore_state(session, tmp_path)
+        assert session["global_show_heatmap"] is True
+        assert session[DATASET_DESCRIPTIONS_KEY] == {"A": "Pilot readings"}
+        assert dataset_credit.STORE_KEY not in session
+
+    def test_a_malformed_credit_costs_only_that_dataset(self, tmp_path):
+        from scanpath_studio import dataset_credit
+
+        credits = {"A": {"title": "Pilot"}, "B": "x", "C": None}
+        self._write(
+            tmp_path, self._manifest(session={dataset_credit.STORE_KEY: credits})
+        )
+        session = {}
+        assert restore_state(session, tmp_path)
+        assert session[dataset_credit.STORE_KEY] == {"A": {"title": "Pilot"}}
+
 
 class TestTheRestoreCrashLoopBreaker:
     """A restore that breaks the app must not break every launch.

@@ -1350,11 +1350,13 @@ def _restorable_session(stored: Any) -> dict:
         ):
             continue
         if key == dataset_credit.STORE_KEY:
-            clean[key] = {
-                str(name): credit
-                for name, payload in _as_mapping(value).items()
-                if (credit := dataset_credit.clean_credit(payload))
-            }
+            # ``{dataset: credit}``; anything else is dropped.
+            if isinstance(value, dict):
+                clean[key] = {
+                    str(name): credit
+                    for name, payload in value.items()
+                    if (credit := dataset_credit.clean_credit(payload))
+                }
             continue
         if key in (DATASET_DESCRIPTIONS_KEY, DATASET_ALIASES_KEY, DATASET_IDS_KEY):
             # ``{dataset: sentence}``; anything else is dropped.

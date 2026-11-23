@@ -4128,6 +4128,8 @@ def save_figure(
             ``.pdf`` (static, through Kaleido; see the [export
             FAQ](faq.md#export-fails) for its
             setup).
+            Use ``.publication.json`` for an editable recipe or ``.publication.html``
+            for the offline figure editor.
         scale: The static image's scale factor.
         width: The image width in px, overriding the figure's own. Ignored for
             ``.html``.
@@ -4148,7 +4150,7 @@ def save_figure(
             raise ValueError("Use width_mm or width_in to size a publication figure.")
         if width_mm is not None and width_in is not None:
             raise ValueError("Pass width_mm or width_in, not both.")
-        name = Path(path).name.rsplit(".publication.", 1)[0]
+        name = Path(path).name.rsplit(".", 2)[0]
         recipe = publication_figure(
             fig,
             name=name,

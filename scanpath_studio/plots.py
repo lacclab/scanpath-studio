@@ -1634,13 +1634,14 @@ _GLYPH_DIAMETER_PER_STROKE_PX = 2 * FIXATION_GLYPH_SIZE_SCALE
 _HOLLOW_GLYPHS = {"♥": "♡"}
 
 
-def _publication_events(rows: pd.DataFrame, *, side: str = "") -> dict:
+def _publication_events(rows: pd.DataFrame, *, spatial: bool, side: str = "") -> dict:
     """Point identities and displayed-reading times, independent of marker labels."""
     from .measures import fixation_clock
 
     onsets, recorded = fixation_clock(rows)
     return {
         "publication_order": rows["order_in_trial"].tolist(),
+        "publication_spatial": spatial,
         "publication_onset": onsets.tolist(),
         "publication_recorded_clock": recorded,
         "publication_reading": side,
@@ -5076,7 +5077,7 @@ def _render_scanpath_figure(
                 glyph,
                 hovertemplate=hovertemplate,
                 customdata=customdata,
-                meta=_publication_events(ordered),
+                meta=_publication_events(ordered, spatial=spatial_axes),
                 name="Fixations",
                 showlegend=False,
             ):
@@ -5118,7 +5119,7 @@ def _render_scanpath_figure(
                     textposition=order_textposition,
                     hovertemplate=hovertemplate,
                     customdata=customdata,
-                    meta=_publication_events(ordered),
+                    meta=_publication_events(ordered, spatial=spatial_axes),
                     name="Fixations",
                     showlegend=False,
                 )
@@ -8479,7 +8480,7 @@ def _add_comparison_fixation_trace(
             showlegend=False,
             hovertemplate=f"{display_name}<br>{hovertemplate}",
             customdata=customdata,
-            meta=_publication_events(trial_fix, side=reading_side),
+            meta=_publication_events(trial_fix, spatial=spatial, side=reading_side),
         ):
             _add(trace)
         if show_order:
@@ -8515,7 +8516,7 @@ def _add_comparison_fixation_trace(
                 textfont=order_font,
                 hovertemplate=f"{display_name}<br>{hovertemplate}",
                 customdata=customdata,
-                meta=_publication_events(trial_fix, side=reading_side),
+                meta=_publication_events(trial_fix, spatial=spatial, side=reading_side),
             )
         )
     if show_legend and own_entry:

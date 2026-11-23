@@ -273,6 +273,15 @@ class ExportOptions:
     print_dpi: int = DEFAULT_PRINT_DPI
     include_tiff: bool = False
 
+    def image_scale(self, fmt: str, width: int) -> float:
+        if fmt in {"png", "tiff"}:
+            if self.print_width_mm is None:
+                return self.png_scale
+            return print_scale(width, self.print_width_mm, "mm", self.print_dpi)
+        if fmt == "pdf" and self.print_width_mm is not None:
+            return self.print_width_mm / 25.4 * 96 / width
+        return 1
+
     def any_table(self) -> bool:
         return (
             self.include_fixations
@@ -1542,19 +1551,30 @@ class _ExportReading:
     height: int
     settings: dict
 
-    def can_build_ahead(self, scale: int) -> bool:
+    def can_build_ahead(self, options: ExportOptions) -> bool:
         # Only the figure specification is built ahead. Build images and dense
         # sample traces on demand. The full recording canvas before Plotly fits
         # it gives a conservative bound of 64 MiB for one RGBA surface.
+        try:
+            scale = max(
+                (
+                    options.image_scale(fmt, self.width)
+                    for fmt in options.raster_formats()
+                ),
+                default=1,
+            )
+        except ValueError:
+            # Each writer reports its own invalid print settings in the inventory.
+            return False
         return (
-            self.width * self.height * scale**2 <= MAX_RGBA_PIXELS
+            self.width * self.height * max(1, scale) ** 2 <= MAX_RGBA_PIXELS
             and sum(len(frame) for frame in self.frames) <= 10_000
             and not self.settings.get("background_image")
             and any(not frame.empty for frame in self.frames)
         )
 
 
-def _figures_for_readings(readings, build, worker, scale):
+def _figures_for_readings(readings, build, worker, options):
     """Overlap building the next Plotly figure with drawing this one in Chrome.
 
     The calling thread owns the trial slices, session-dependent settings, browser
@@ -1564,7 +1584,7 @@ def _figures_for_readings(readings, build, worker, scale):
     """
     pending = None
     for reading in readings:
-        if worker is None or not reading.can_build_ahead(scale):
+        if worker is None or not reading.can_build_ahead(options):
             if pending is not None:
                 yield pending
                 pending = None
@@ -1926,15 +1946,7 @@ def _bundle_image(renderer, figure, fmt, width, height, options):
 
     mm = options.print_width_mm
     raster = fmt in {"png", "tiff"}
-    scale = options.png_scale if raster else 1
-    if mm is not None:
-        scale = (
-            print_scale(width, mm, "mm", options.print_dpi)
-            if raster
-            else mm / 25.4 * 96 / width
-            if fmt == "pdf"
-            else 1
-        )
+    scale = options.image_scale(fmt, width)
     if raster and width * height * scale**2 > 64_000_000:
         raise ValueError("Use a smaller raster width or DPI, or export as SVG.")
     data = renderer(figure, "png" if fmt == "tiff" else fmt, width, height, scale)
@@ -1954,8 +1966,8 @@ def _bundle_image(renderer, figure, fmt, width, height, options):
                 )
             else:
                 im.save(out, format="PNG", **args)
-            return stamp(out.getvalue(), fmt)
-    return data
+            data = stamp(out.getvalue(), fmt)
+    return compact_png(data) if fmt == "png" and options.compact_pngs else data
 
 
 def render_export_options(
@@ -2017,8 +2029,8 @@ def render_export_options(
                 key=f"{key_prefix}_figfmts",
                 persist_state="session",
                 help=(
-                    "PDF and SVG are vector images, PNG is a pixel image, and HTML is "
-                    "interactive. Creating PDF, SVG or PNG files requires Chrome, Chromium or"
+                    "PDF and SVG are vector images, PNG and TIFF are pixel images, and HTML is "
+                    "interactive. Creating PDF, SVG, PNG or TIFF files requires Chrome, Chromium or"
                     " Edge. HTML needs no additional browser installation."
                 ),
             )
@@ -2085,7 +2097,7 @@ def render_export_options(
             png_scale = panel_field(
                 st,
                 "number_input",
-                "PNG scale",
+                "Image scale" if include_tiff else "PNG scale",
                 min_value=1,
                 max_value=4,
                 value=2,
@@ -2094,17 +2106,16 @@ def render_export_options(
                 persist_state="session",
                 help="Higher values give sharper images and larger files.",
             )
-            compact_pngs = panel_field(
-                st,
-                "toggle",
-                "Smaller PNG files",
-                key=f"{key_prefix}_compact_pngs",
-                persist_state="session",
-                help="Uses lossless compression to reduce file size. Building the ZIP takes longer.",
-            )
         else:
             png_scale = int(st.session_state.get(f"{key_prefix}_scale", 2))
-            compact_pngs = False
+        compact_pngs = include_png and panel_field(
+            st,
+            "toggle",
+            "Smaller PNG files",
+            key=f"{key_prefix}_compact_pngs",
+            persist_state="session",
+            help="Uses lossless compression to reduce file size. Building the ZIP takes longer.",
+        )
 
         st.markdown("### Also include")
         # Per-layer figure breakdown for publication editing.
@@ -3467,16 +3478,11 @@ def bulk_export(
         if needs_kaleido and len(units) > 1
         else nullcontext(None) as worker,
     ):
-
-        def render_figure(fig, fmt, width, height, scale):
-            data = render(fig, fmt, width, height, scale)
-            return compact_png(data) if fmt == "png" and options.compact_pngs else data
-
         for reading, get_figure in _figures_for_readings(
             reading_inputs(),
             build_figure,
             worker,
-            options.png_scale if options.include_png else 1,
+            options,
         ):
             combo, layout = reading.row, reading.layout
             trial_words, trial_fix, trial_raw_gaze = reading.frames
@@ -3642,7 +3648,7 @@ def bulk_export(
                                 ).encode("utf-8")
                             else:
                                 data = _bundle_image(
-                                    render_figure, fig, fmt, out_w, out_h, options
+                                    render, fig, fmt, out_w, out_h, options
                                 )
                             path = _path("figure", fmt)
                             _write_figure_file(zf, path, data, fmt)
@@ -3685,7 +3691,7 @@ def bulk_export(
                                 path = _path(f"layers/{layer_name}", fmt)
                                 try:
                                     data = _bundle_image(
-                                        render_figure,
+                                        render,
                                         layer_fig,
                                         fmt,
                                         out_w,

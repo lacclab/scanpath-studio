@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import math
+import sys
 from importlib.resources import files
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -99,13 +100,54 @@ def project(sources, *, name="Untitled figure", width_mm=170, layout="stack") ->
     return doc
 
 
+def _finite_number(value) -> bool:
+    """A number the browser can represent as a finite JavaScript Number."""
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and abs(value) <= sys.float_info.max
+    )
+
+
+def _validate_figure_images(figure: dict) -> None:
+    layout = figure.get("layout", {})
+    if not isinstance(layout, dict) or not isinstance(layout.get("images", []), list):
+        raise ValueError("The source figure has an invalid layout or image layer.")
+    images = list(layout.get("images", []))
+    for trace in figure["data"]:
+        if not isinstance(trace, dict):
+            raise ValueError("A source figure contains an invalid plot trace.")
+        if trace.get("type") == "image":
+            images.append(trace)
+    for image in images:
+        if not isinstance(image, dict):
+            raise ValueError("The source figure has an invalid image layer.")
+        src = image.get("source")
+        if (
+            src
+            and image.get("visible") not in (False, "legendonly")
+            and (not isinstance(src, str) or src[:11].lower() != "data:image/")
+        ):
+            raise ValueError(
+                "Embed the source image in the Plotly figure before exporting. "
+                "An offline publication figure cannot load an image from a URL or file path."
+            )
+
+
 def validate_project(doc: dict) -> None:
+    """Check a portable recipe before saving it or handing it to the editor."""
     if not isinstance(doc, dict) or doc.get("schema") != SCHEMA:
         raise ValueError("Choose a Scanpath Studio publication recipe.")
     if not isinstance(doc.get("sources"), list) or not isinstance(
         doc.get("panels"), list
     ):
         raise ValueError("The recipe must contain its panel sources and layout.")
+    citation = doc.get("citation")
+    if not isinstance(citation, dict) or not all(
+        isinstance(citation.get(key), str) and citation[key].strip()
+        for key in ("Software", "Comment", "Source")
+    ):
+        raise ValueError("The publication recipe is missing its software citation.")
 
     bounds = {
         "width": (10, 1000),
@@ -116,10 +158,28 @@ def validate_project(doc: dict) -> None:
     }
     for key, (lo, hi) in bounds.items():
         value = doc.get(key)
-        if not isinstance(value, (float, int)) or not lo <= value <= hi:
+        if not _finite_number(value) or not lo <= value <= hi:
             raise ValueError(f"Publication {key} must be between {lo} and {hi}.")
     if doc.get("layout") not in ("row", "stack", "grid"):
         raise ValueError("Select row, stack or grid for the panel layout.")
+    heat = doc.get("heat")
+    if heat is not None and (
+        not isinstance(heat, dict)
+        or not _finite_number(heat.get("min"))
+        or not _finite_number(heat.get("max"))
+        or not 0 <= heat["min"] < heat["max"]
+        or not isinstance(heat.get("scale"), list)
+        or len(heat["scale"]) < 2
+        or any(
+            not isinstance(stop, (list, tuple))
+            or len(stop) != 2
+            or not _finite_number(stop[0])
+            or not 0 <= stop[0] <= 1
+            or not isinstance(stop[1], str)
+            for stop in heat["scale"]
+        )
+    ):
+        raise ValueError("The saved heatmap scale has invalid limits or colors.")
     ids = set()
     for src in doc["sources"]:
         if (
@@ -132,6 +192,7 @@ def validate_project(doc: dict) -> None:
             raise ValueError(
                 "The recipe contains an invalid or duplicate figure source."
             )
+        _validate_figure_images(src["figure"])
         ids.add(src["id"])
     for panel in doc["panels"]:
         if (
@@ -147,10 +208,26 @@ def validate_project(doc: dict) -> None:
         if crop is not None and (
             not isinstance(crop, list)
             or len(crop) != 4
-            or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in crop)
+            or not all(map(_finite_number, crop))
             or min(crop[2:]) <= 0
         ):
             raise ValueError("The panel crop must have a position and a positive size.")
+        for label in panel["labels"]:
+            if (
+                not isinstance(label, dict)
+                or not isinstance(label.get("text"), str)
+                or not all(_finite_number(label.get(k)) for k in ("x", "y", "dx", "dy"))
+            ):
+                raise ValueError("A pinned label has invalid text or coordinates.")
+            segment = label.get("segment")
+            if segment is not None and (
+                not isinstance(segment, list)
+                or len(segment) != 4
+                or not all(map(_finite_number, segment))
+            ):
+                raise ValueError(
+                    "A pinned saccade needs two finite endpoint positions."
+                )
 
 
 def editor_html(
@@ -216,24 +293,31 @@ async def _draw(doc: dict, fmt: str):
         raise RuntimeError(CHROME_INSTALL_HINT)
     async with Browser(path=path) as browser:
         tab = await browser.create_tab()
+
+        async def command(method, params=None):
+            reply = await tab.send_command(method, params)
+            if "error" in reply:
+                message = reply["error"].get("message", method)
+                raise RuntimeError(f"Chromium could not render the figure: {message}")
+            return reply["result"]
+
         # Keep imported figures offline, including Plotly image layers and fonts.
-        await tab.send_command("Network.enable")
-        await tab.send_command(
+        await command("Network.enable")
+        await command(
             "Network.setBlockedURLs",
             {"urls": ["http://*", "https://*", "file://*", "ftp://*"]},
         )
-        tree = await tab.send_command("Page.getFrameTree")
-        frame = tree["result"]["frameTree"]["frame"]["id"]
-        await tab.send_command(
+        tree = await command("Page.getFrameTree")
+        frame = tree["frameTree"]["frame"]["id"]
+        await command(
             "Page.setDocumentContent", {"frameId": frame, "html": editor_html(doc)}
         )
 
         async def evaluate(expr):
-            reply = await tab.send_command(
+            result = await command(
                 "Runtime.evaluate",
                 {"expression": expr, "awaitPromise": True, "returnByValue": True},
             )
-            result = reply["result"]
             if "exceptionDetails" in result:
                 raise ValueError(
                     result["exceptionDetails"]
@@ -245,7 +329,7 @@ async def _draw(doc: dict, fmt: str):
         await evaluate("window.publicationReady")
         if fmt == "pdf":
             await evaluate("publicationPrint()")
-            result = await tab.send_command(
+            result = await command(
                 "Page.printToPDF",
                 {
                     "preferCSSPageSize": True,
@@ -253,7 +337,7 @@ async def _draw(doc: dict, fmt: str):
                     "displayHeaderFooter": False,
                 },
             )
-            return base64.b64decode(result["result"]["data"])
+            return base64.b64decode(result["data"])
         if fmt == "poster":
             return base64.b64decode(await evaluate("publicationPoster()"))
         if fmt == "mp4":

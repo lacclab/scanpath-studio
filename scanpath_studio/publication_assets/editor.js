@@ -95,12 +95,26 @@ function snapshot() {
   };
 }
 const dbName = "scanpath-studio-figures:" + location.pathname;
-function storage(action, store = "figures") {
+function storage(stores, mode, action) {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(dbName, 1);
+    const req = indexedDB.open(dbName, 2);
     req.onupgradeneeded = () => {
-      req.result.createObjectStore("figures");
-      req.result.createObjectStore("drafts");
+      const db = req.result;
+      const gallery = db.createObjectStore("gallery", { keyPath: "name" });
+      if (!db.objectStoreNames.contains("figures")) {
+        db.createObjectStore("figures");
+        return;
+      }
+      // Read old records one at a time. Opening the gallery then needs only
+      // the small thumbnails, even when its figures contain long replays.
+      const cursor = req.transaction.objectStore("figures").openCursor();
+      cursor.onsuccess = () => {
+        const row = cursor.result;
+        if (!row) return;
+        const { thumbnail, revision } = row.value;
+        gallery.put({ name: row.key, thumbnail, revision: revision || 1 });
+        row.continue();
+      };
     };
     req.onerror = () =>
       reject(
@@ -110,10 +124,10 @@ function storage(action, store = "figures") {
       );
     req.onsuccess = () => {
       const db = req.result,
-        tx = db.transaction(store, "readwrite");
+        tx = db.transaction(stores, mode);
       let out;
       try {
-        out = action(tx.objectStore(store));
+        out = action(tx);
       } catch (e) {
         db.close();
         reject(e);
@@ -121,12 +135,13 @@ function storage(action, store = "figures") {
       }
       tx.oncomplete = () => {
         db.close();
-        resolve(out.result);
+        resolve(out?.result);
       };
       tx.onerror = () => {
         db.close();
         reject(tx.error);
       };
+      tx.onabort = tx.onerror;
     };
   });
 }
@@ -175,7 +190,7 @@ function update() {
   persist();
   return redraw();
 }
-function redraw() {
+function redraw(panels = doc.panels) {
   const rev = ++revision;
   const render = async () => {
     if (rev !== revision) return;
@@ -185,7 +200,7 @@ function redraw() {
         paintControls();
         return;
       }
-      const art = await artwork();
+      const art = await artwork(panels);
       if (rev !== revision) return;
       cells = art.positions;
       currentSheet = art;
@@ -370,8 +385,7 @@ function captionControls() {
           doc.alt ?? draft(true),
           "",
           doc.citation.Comment,
-        ].join("\n"),
-        "text/plain"
+        ].join("\n")
       )
     ),
     (doc.caption !== null || doc.alt !== null) &&
@@ -619,7 +633,7 @@ function eventControls(p) {
         button("Pin onset time", () =>
           pin(e, fmt(e.onset) + " ms" + (e.recorded ? "" : " (estimated)"))
         ),
-      next &&
+      next && e.spatial !== false &&
         button("Pin saccade " + e.index + " → " + next.index, () =>
           pin(
             { x: (e.x + next.x) / 2, y: (e.y + next.y) / 2 },
@@ -765,46 +779,54 @@ function replayControls(p, s) {
 async function previewClip() {
   if (playing) {
     playing = false;
-    return;
+    return redraw();
   }
   const p = pNow(),
     [times, start, end, speed] = clipValues(p, sNow());
-  playing = true;
+  const playback = {};
+  playing = playback;
   const t0 = performance.now();
-  const poster = p.frame;
   let i = start;
-  while (playing && i <= end) {
-    p.frame = i;
-    await redraw();
+  while (playing === playback && i <= end) {
+    await redraw(
+      doc.panels.map((panel) => (panel === p ? { ...panel, frame: i } : panel))
+    );
     const elapsed = (performance.now() - t0) * speed;
     do {
       i++;
     } while (i < end && times[i] - times[start] < elapsed);
-    if (i <= end)
+    if (playing === playback && i <= end)
       await new Promise((ok) =>
         setTimeout(ok, Math.max(0, (times[i] - times[start] - elapsed) / speed))
       );
   }
-  playing = false;
-  p.frame = poster;
-  await redraw();
+  if (!playing || playing === playback) {
+    playing = false;
+    await redraw();
+  }
 }
 async function saveNamed() {
+  const atRevision = revision;
   const art = await artwork(),
     canvas = await canvasFor(
       art,
       Math.min((192 * 72) / art.W, (140 * 72) / art.H)
     );
-  const previous = await storage((s) => s.get(doc.name)),
-    revision = (previous?.revision || 0) + 1;
-  const saved = {
-    project: snapshot(),
-    revision,
-    thumbnail: canvas.toDataURL("image/png"),
-  };
-  await storage((s) => s.put(saved, doc.name));
+  if (atRevision !== revision) return;
+  const name = doc.name,
+    project = { ...snapshot(), panels: clone(doc.panels) },
+    thumbnail = canvas.toDataURL("image/png");
+  await storage(["figures", "gallery"], "readwrite", (tx) => {
+    const gallery = tx.objectStore("gallery");
+    const previous = gallery.get(name);
+    previous.onsuccess = () => {
+      const revision = (previous.result?.revision || 0) + 1;
+      gallery.put({ name, thumbnail, revision });
+      tx.objectStore("figures").put({ project, revision }, name);
+    };
+  });
   paintControls();
-  message("Saved " + doc.name + " on this device.");
+  message("Saved " + name + " on this device.");
 }
 let libraryRevision = 0;
 async function savedControls() {
@@ -817,7 +839,7 @@ async function savedControls() {
       ),
       button("Save on this device", saveNamed, true),
       button("Download editable file", () =>
-        file("json", JSON.stringify(snapshot()), "application/json")
+        file("json", JSON.stringify(snapshot()))
       ),
       note("The editable file includes the plotted data and embedded images."),
       input.session &&
@@ -832,8 +854,7 @@ async function savedControls() {
         button("Download source settings", () =>
           file(
             "settings.json",
-            JSON.stringify(sNow().settings),
-            "application/json"
+            JSON.stringify(sNow().settings)
           )
         )
     );
@@ -849,13 +870,19 @@ async function savedControls() {
   list.append(node("h2", "Saved on this device"));
   target.append(list);
   try {
-    const items = await storage((s) => s.getAll());
+    const items = await storage("gallery", "readonly", (tx) =>
+      tx.objectStore("gallery").getAll()
+    );
     if (!libraryOpen || generation !== libraryRevision) return;
     if (!items.length)
       list.append(note("Figures you save on this device will appear here."));
     for (const item of items) {
-      const saved = item.project || item;
-      const b = button(saved.name, () => openSaved(saved));
+      const b = button(item.name, async () => {
+        const stored = await storage("figures", "readonly", (tx) =>
+          tx.objectStore("figures").get(item.name)
+        );
+        if (stored) await openSaved(stored.project || stored);
+      });
       if (item.thumbnail) {
         const img = node("img");
         img.src = item.thumbnail;
@@ -869,10 +896,12 @@ async function savedControls() {
       list.append(note(e.message));
   }
 }
-function file(ext, bytes, type) {
-  const blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type }),
+function file(ext, bytes) {
+  // The link delivers bytes even when a browser opens it outside the editor.
+  const blob = new Blob([bytes], { type: "application/octet-stream" }),
     url = URL.createObjectURL(blob),
     a = node("a");
+  if (!url.startsWith("blob:")) throw Error("Could not create a download link.");
   a.href = url;
   a.download =
     (doc.name.replace(/[^\p{L}\p{N}._-]+/gu, "-").slice(0, 100) || "figure") +
@@ -986,6 +1015,7 @@ window.publicationClipDuration = () => {
   } = movie();
   return (t[b] - t[a] + (t[b + 1] - t[b] || t[b] - t[b - 1] || 42)) / s;
 };
+let lastMovieFrame;
 window.publicationMovieFrame = async (elapsed) => {
   const {
     p,
@@ -999,7 +1029,17 @@ window.publicationMovieFrame = async (elapsed) => {
     else hi = m - 1;
   }
   p.frame = lo;
-  return publicationPoster();
+  // Several 24-fps output frames can fall within a single fixation. They
+  // share the same pixels, including every stationary panel and annotation.
+  if (
+    lastMovieFrame?.panel === p &&
+    lastMovieFrame.index === lo &&
+    lastMovieFrame.revision === revision
+  )
+    return lastMovieFrame.png;
+  const png = await publicationPoster();
+  lastMovieFrame = { panel: p, index: lo, revision, png };
+  return png;
 };
 async function moviePoster() {
   const art = await artwork(),
@@ -1032,7 +1072,7 @@ function requestVideo() {
       "Preparing the clip and poster. The download appears below the editor."
     );
   } else {
-    file("json", JSON.stringify(snapshot()), "application/json");
+    file("json", JSON.stringify(snapshot()));
     message(
       "Render this recipe with scanpath-studio publication RECIPE.json -o clip.mp4."
     );

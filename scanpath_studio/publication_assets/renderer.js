@@ -37,7 +37,9 @@ const ptText = (x, y, t, size, attrs = {}) =>
 const plain = (s) =>
   String(s ?? "")
     .replace(/<br\s*\/?\s*>/gi, " ")
-    .replace(/<[^>]*>/g, "");
+    // Strip Plotly's inline formatting while preserving literal angle brackets
+    // in stimulus text. Labels and descriptions are inserted as text nodes.
+    .replace(/<\/?(?:b|i|em|strong|sup|sub|u|s|span|a)(?:\s+[^<>]*)?\s*>/gi, "");
 const ctx = document.createElement("canvas").getContext("2d");
 function textWidth(text, size) {
   ctx.font = size + "px Arial";
@@ -77,13 +79,27 @@ function check(doc) {
   )
     throw Error("Choose a Scanpath Studio publication recipe.");
   if (
-    doc.heat &&
+    !["Software", "Comment", "Source"].every(
+      (key) =>
+        typeof doc.citation?.[key] === "string" && doc.citation[key].trim()
+    )
+  )
+    throw Error("The publication recipe is missing its software citation.");
+  if (
+    doc.heat != null &&
     (!Number.isFinite(doc.heat.min) ||
       !Number.isFinite(doc.heat.max) ||
       doc.heat.min < 0 ||
       doc.heat.max <= doc.heat.min ||
       !Array.isArray(doc.heat.scale) ||
-      doc.heat.scale.length < 2)
+      doc.heat.scale.length < 2 ||
+      doc.heat.scale.some(
+        (stop) =>
+          !Array.isArray(stop) ||
+          stop.length !== 2 ||
+          !finite(stop[0], 0, 1) ||
+          typeof stop[1] !== "string"
+      ))
   )
     throw Error("The saved heatmap scale has invalid limits or colors.");
   if (
@@ -98,26 +114,65 @@ function check(doc) {
   const ids = new Set();
   for (const source of doc.sources) {
     if (
-      typeof source.id !== "string" ||
+      typeof source?.id !== "string" ||
       ids.has(source.id) ||
       !Array.isArray(source.figure?.data)
     )
       throw Error("Invalid or duplicate panel source.");
+    const layout =
+      source.figure.layout === undefined ? {} : source.figure.layout;
+    if (
+      !layout ||
+      typeof layout !== "object" ||
+      Array.isArray(layout) ||
+      (layout.images !== undefined && !Array.isArray(layout.images))
+    )
+      throw Error("The source figure has an invalid layout or image layer.");
+    const images = [...(layout.images || [])];
+    for (const trace of source.figure.data) {
+      if (!trace || typeof trace !== "object" || Array.isArray(trace))
+        throw Error("A source figure contains an invalid plot trace.");
+      if (trace.type === "image") images.push(trace);
+    }
+    for (const image of images) {
+      if (!image || typeof image !== "object" || Array.isArray(image))
+        throw Error("The source figure has an invalid image layer.");
+      if (
+        image.source &&
+        image.visible !== false &&
+        image.visible !== "legendonly" &&
+        (typeof image.source !== "string" ||
+          image.source.slice(0, 11).toLowerCase() !== "data:image/")
+      ) {
+        throw Error(
+          "Embed the source image in the Plotly figure before exporting. An offline publication figure cannot load an image from a URL or file path."
+        );
+      }
+    }
     ids.add(source.id);
   }
   for (const p of doc.panels) {
     if (
-      !ids.has(p.source) ||
+      !ids.has(p?.source) ||
       !Array.isArray(p.labels) ||
-      (p.crop && !validBox(p.crop))
+      (p.crop != null && !validBox(p.crop))
     )
       throw Error("The recipe has an invalid panel or crop.");
-    for (const l of p.labels)
+    for (const l of p.labels) {
       if (
+        !l ||
         ![l.x, l.y, l.dx, l.dy].every(Number.isFinite) ||
         typeof l.text !== "string"
       )
         throw Error("A pinned label has invalid coordinates.");
+      if (
+        l.segment != null &&
+        (!Array.isArray(l.segment) ||
+          l.segment.length !== 4 ||
+          !l.segment.every(Number.isFinite))
+      )
+        throw Error("A pinned saccade needs two finite endpoint positions.");
+    }
   }
   return doc;
 }
@@ -276,6 +331,17 @@ function cropBox(p, art) {
     Math.max(1, Math.min(h, art.h - t)),
   ];
 }
+function isEventTrace(tr, name) {
+  if (tr.meta?.publication_order) return true;
+  if (name === "words" || name === "Raw gaze" || name === tr.legendgroup + " · raw gaze")
+    return false;
+  if (tr.mode?.includes("markers")) return true;
+  if (tr.mode !== "text") return false;
+  // Heart markers draw their outline in a second text trace. Their fixation
+  // numbers also occupy a separate trace, for both single and paired readings.
+  return name === "Fixation index" || name === tr.legendgroup + " · index" ||
+    ["♥", "♡"].includes(tr.text?.[0]);
+}
 async function capture(source, p) {
   const key = JSON.stringify([
     source.id,
@@ -334,6 +400,9 @@ async function capture(source, p) {
         ya = gd._fullLayout[(tr.yaxis || "y").replace("y", "yaxis")];
       if (!xa || !ya) continue;
       const group = root.querySelector(".tracepub" + i);
+      // Edited legend labels do not change the scientific role of a trace.
+      const name = source.figure.data[i]?.name;
+      const eventTrace = source.kind !== "chart" && isEventTrace(tr, name);
       for (const pt of gd.calcdata[i] || []) {
         const j = pt.i;
         if (
@@ -345,7 +414,7 @@ async function capture(source, p) {
         const x = xa._offset + xa.c2p(pt.x),
           y = ya._offset + ya.c2p(pt.y);
         if (!Number.isFinite(x + y)) continue;
-        if (tr.name === "words") {
+        if (name === "words" && !tr.meta?.publication_order) {
           const name = plain(tr.text?.[j]);
           if (name) {
             const word = { x, y, text: name, axis: tr.xaxis + tr.yaxis };
@@ -353,10 +422,7 @@ async function capture(source, p) {
             if (!wordTraces.has(i)) wordTraces.set(i, []);
             wordTraces.get(i).push(word);
           }
-        } else if (
-          source.kind !== "chart" &&
-          (tr.meta?.publication_order || tr.mode?.includes("markers"))
-        ) {
+        } else if (eventTrace && (tr.meta?.publication_order || tr.mode?.includes("markers"))) {
           const detail = plain(tr.customdata?.[j]),
             match = detail.match(/\bFixation\s+(\d+)\b/i);
           const order =
@@ -370,6 +436,7 @@ async function capture(source, p) {
               y,
               index: Number(order),
               onset,
+              spatial: tr.meta?.publication_spatial ?? !!(xa.scaleanchor || ya.scaleanchor),
               recorded: tr.meta?.publication_recorded_clock,
               axis: [
                 tr.xaxis + tr.yaxis,
@@ -381,21 +448,10 @@ async function capture(source, p) {
             });
         }
       }
-      if (
-        group &&
-        tr.name !== "words" &&
-        source.kind !== "chart" &&
-        (tr.meta?.publication_order ||
-          tr.mode?.includes("markers") ||
-          tr.name === "Fixation index") &&
-        tr.name !== "Raw gaze"
-      )
+      if (group && eventTrace)
         group.setAttribute("data-events", "1");
       if (
-        group &&
-        source.kind !== "chart" &&
-        (tr.mode === "lines" ||
-          /saccade|fixation sequence/i.test(tr.name || ""))
+        group && source.kind !== "chart" && tr.mode === "lines"
       )
         group.setAttribute("data-sequence", "1");
     }
@@ -484,8 +540,8 @@ function scoped(art, id, isolate) {
     }
   return root;
 }
-function draft(alt = false) {
-  const result = doc.panels
+function draft(alt = false, panels = doc.panels) {
+  const result = panels
     .map((p, i) => {
       const s = byId(p.source),
         layout = s.figure.layout || {},
@@ -514,7 +570,7 @@ function draft(alt = false) {
       }
       const ls = p.labels.map((l) => l.text).join(", ");
       return (
-        (doc.panels.length > 1 ? letter(i) + ". " : "") +
+        (panels.length > 1 ? letter(i) + ". " : "") +
         desc +
         (p.crop ? " (detail)" : "") +
         (ls ? ". " + ls : "") +
@@ -525,12 +581,12 @@ function draft(alt = false) {
     })
     .join(alt ? " " : "\n");
   const refs = [
-    ...new Set(doc.panels.flatMap((p) => byId(p.source).references || [])),
+    ...new Set(panels.flatMap((p) => byId(p.source).references || [])),
   ];
   return result + (!alt && refs.length ? "\n" + refs.join(" ") : "");
 }
 const letter = (i) => String.fromCharCode(65 + i);
-function build(arts) {
+function build(arts, panels) {
   const W = doc.width * PT,
     slide = ["Full slide", "Half slide"].includes(doc.destination),
     gap = doc.gap,
@@ -546,7 +602,7 @@ function build(arts) {
     bodyW = W - pad * 2;
   if (cw < 10)
     throw Error("Increase the figure width or reduce the gap between panels.");
-  const caption = doc.caption ?? draft(),
+  const caption = doc.caption ?? draft(false, panels),
     cl =
       doc.captionPlacement === "Wrap"
         ? lines(caption, bodyW, size)
@@ -555,7 +611,7 @@ function build(arts) {
         : [];
   const disclosure = [
     ...new Set(
-      doc.panels.flatMap((p) =>
+      panels.flatMap((p) =>
         (byId(p.source).figure.layout?.annotations || [])
           .filter((a) => a.name === "illustration_label")
           .map((a) => plain(a.text))
@@ -565,7 +621,7 @@ function build(arts) {
   const credit = disclosure ? lines(disclosure, bodyW, size) : [];
   const hasHeat =
     doc.heat?.shared &&
-    doc.panels.some(
+    panels.some(
       (p) =>
         heatInfo(byId(p.source))?.meta.publication_heatmap.measure ===
           doc.heat.measure &&
@@ -575,13 +631,13 @@ function build(arts) {
   const footer =
     (cl.length + credit.length) * size * 1.32 + (hasHeat ? size * 4 : 0);
   const parts = arts.map((a, i) => {
-    const panel = doc.panels[i],
+    const panel = panels[i],
       box = cropBox(panel, a),
       over = panel.overview && panel.crop;
     const headings =
-      doc.panels.length > 1 || doc.headings
+      panels.length > 1 || doc.headings
         ? lines(
-            (doc.panels.length > 1 ? letter(i) + "  " : "") + panel.title,
+            (panels.length > 1 ? letter(i) + "  " : "") + panel.title,
             cw,
             size
           )
@@ -627,7 +683,7 @@ function build(arts) {
   });
   root.append(
     svg("title", {}, doc.name),
-    svg("desc", {}, doc.alt ?? draft(true)),
+    svg("desc", {}, doc.alt ?? draft(true, panels)),
     svg("metadata", {}, JSON.stringify(doc.citation)),
     svg("rect", { width: W, height: H, fill: "white" })
   );
@@ -649,7 +705,7 @@ function build(arts) {
       const i = r * cols + col;
       if (i >= arts.length) break;
       const art = arts[i],
-        p = doc.panels[i],
+        p = panels[i],
         { box, over, headings } = parts[i],
         x = pad + col * (cw + gap);
       const oh = over ? Math.min(size * 6, height * 0.28) : 0,
@@ -731,7 +787,7 @@ function build(arts) {
           issues.push(
             "A " +
               (t.legend ? "legend" : "figure annotation") +
-              (doc.panels.length === 1
+              (panels.length === 1
                 ? " is clipped at the figure edge."
                 : " is clipped in panel " + letter(i) + ".")
           );
@@ -808,7 +864,7 @@ function build(arts) {
           ly > oy + h
         )
           issues.push(
-            doc.panels.length === 1
+            panels.length === 1
               ? "Move the pinned label inside the figure."
               : "Move the pinned label inside panel " + letter(i) + "."
           );
@@ -899,9 +955,9 @@ function setBox(n, x, y, w, h, box) {
   }))
     n.setAttribute(key, value);
 }
-async function artwork() {
-  if (!doc.panels.length) throw Error("Open a saved figure to export it.");
+async function artwork(panels = doc.panels) {
+  if (!panels.length) throw Error("Open a saved figure to export it.");
   const arts = [];
-  for (const p of doc.panels) arts.push(await capture(byId(p.source), p));
-  return build(arts);
+  for (const p of panels) arts.push(await capture(byId(p.source), p));
+  return build(arts, panels);
 }

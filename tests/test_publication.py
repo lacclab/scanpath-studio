@@ -46,6 +46,96 @@ def test_invalid_recipe_preserves_existing_file(tmp_path):
     assert path.read_text() == "keep"
 
 
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (
+            {"labels": [{"text": "Target", "x": "10", "y": 2, "dx": 0, "dy": 0}]},
+            "pinned label",
+        ),
+        (
+            {"labels": [dict(text="Return", x=3, y=2, dx=0, dy=1, segment=[1, 2])]},
+            "saccade",
+        ),
+        ({"crop": [True, 0, 400, 300]}, "crop"),
+    ],
+)
+def test_invalid_geometry_cannot_replace_an_editable_file(tmp_path, change, message):
+    doc = sps.publication_figure(go.Figure(go.Bar(y=[1])))
+    target = publication.save(doc, tmp_path / "figure.json")
+    original = target.read_bytes()
+    doc["panels"][0].update(change)
+    with pytest.raises(ValueError, match=message):
+        publication.save(doc, target)
+    assert target.read_bytes() == original
+
+
+def test_invalid_shared_heatmap_limits_cannot_be_saved():
+    doc = publication.project([])
+    doc["heat"] = {"min": 3, "max": 1, "scale": [[0, "white"], [1, "black"]]}
+    with pytest.raises(ValueError, match="heatmap scale"):
+        publication.render(doc, "json")
+
+
+def test_recipe_requires_citation_for_artwork_and_caption_exports():
+    doc = publication.project([])
+    del doc["citation"]["Comment"]
+    with pytest.raises(ValueError, match="software citation"):
+        publication.editor_html(doc, plotly_script="")
+
+
+@pytest.mark.parametrize("layer", ["layout", "trace"])
+def test_portable_figure_requires_embedded_visible_images(layer):
+    fig = go.Figure()
+    url = "https://example.org/stimulus.png"
+    if layer == "layout":
+        fig.add_layout_image(source=url, sizex=1, sizey=1)
+        image = fig.layout.images[0]
+    else:
+        fig.add_trace(go.Image(source=url))
+        image = fig.data[0]
+
+    with pytest.raises(ValueError, match="Embed the source image"):
+        sps.publication_figure(fig)
+    image.visible = False
+    assert sps.publication_figure(fig)["panels"]
+    image.visible = True
+    image.source = go.layout.Image(source=Image.new("RGB", (1, 1))).source
+    assert sps.publication_figure(fig)["panels"]
+
+
+def test_chromium_print_error_keeps_previous_pdf(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock, MagicMock
+
+    import choreographer
+
+    target = tmp_path / "figure.pdf"
+    target.write_bytes(b"existing PDF")
+    doc = sps.publication_figure(go.Figure(go.Bar(y=[1])))
+
+    async def reply(method, params):
+        if method == "Page.printToPDF":
+            return {"error": {"code": -32000, "message": "Printing failed"}}
+        if method == "Page.getFrameTree":
+            return {"result": {"frameTree": {"frame": {"id": "main"}}}}
+        if method == "Runtime.evaluate":
+            return {"result": {"result": {"type": "undefined"}}}
+        return {"result": {}}
+
+    tab = MagicMock()
+    tab.send_command = reply
+    browser = MagicMock()
+    browser.__aenter__.return_value.create_tab = AsyncMock(return_value=tab)
+    monkeypatch.setattr(choreographer, "Browser", lambda **kwargs: browser)
+    monkeypatch.setattr(
+        "scanpath_studio.animation_export.chromium_browser_path", lambda: "test-browser"
+    )
+    monkeypatch.setattr(publication, "editor_html", lambda doc: "")
+    with pytest.raises(RuntimeError, match="Printing failed"):
+        publication.save(doc, target)
+    assert target.read_bytes() == b"existing PDF"
+
+
 def test_cli_print_width_and_source_without_words(tmp_path):
     path = tmp_path / "detail.publication.json"
     cli.main(

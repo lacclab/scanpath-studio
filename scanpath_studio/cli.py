@@ -2859,16 +2859,18 @@ def render(argv: list[str]) -> None:
     _apply_shared_colorbar_flags(args)
     # Reject unsupported output sizes before loading the dataset.
     printed = args.width_mm is not None or args.width_in is not None
-    if args.dpi is not None and not printed:
+    publication_output = (
+        str(args.output).lower().endswith((".publication.json", ".publication.html"))
+    )
+    if args.dpi is not None and not (printed or publication_output):
         parser.error(
             "Use --dpi with --width-mm or --width-in to set the PNG print resolution."
         )
     if (
         printed
         and args.output
-        and not str(args.output)
-        .lower()
-        .endswith((".png", ".publication.json", ".publication.html"))
+        and not publication_output
+        and not str(args.output).lower().endswith(".png")
     ):
         parser.error(
             "Print width applies to PNG files and publication projects. Use .png, .publication.json or .publication.html "
@@ -3733,6 +3735,10 @@ def render(argv: list[str]) -> None:
                 )
         if args.all_screens:
             target = Path(args.output)
+            stem, suffix = target.stem, target.suffix
+            if publication_output:
+                stem, marker = stem.rsplit(".", 1)
+                suffix = f".{marker}{suffix}"
             written = []
             for position, (screen_id, screen_figure) in enumerate(
                 figures.items(), start=1
@@ -3746,7 +3752,7 @@ def render(argv: list[str]) -> None:
                     for char in str(screen_id)
                 )
                 screen_path = target.with_name(
-                    f"{target.stem}__screen-{position:03d}-{safe_screen}{target.suffix}"
+                    f"{stem}__screen-{position:03d}-{safe_screen}{suffix}"
                 )
                 written.append(
                     api.save_figure(screen_figure, screen_path, **_save_kwargs(args))

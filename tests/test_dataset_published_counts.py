@@ -317,7 +317,8 @@ class TestTheTableItself:
         return pd.DataFrame(records)
 
     @pytest.fixture(scope="class")
-    def table(self) -> pd.DataFrame:
+    @staticmethod
+    def table() -> pd.DataFrame:
         from streamlit.testing.v1 import AppTest
 
         from tests.conftest import APP_SCRIPT, pin_data_view
@@ -326,7 +327,7 @@ class TestTheTableItself:
         pin_data_view(at)
         at.run()
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        return self._table(at)
+        return TestTheTableItself._table(at)
 
     def test_a_corpus_nobody_opened_arrives_with_its_figures(self, table):
         row = table.set_index("Dataset").loc["PoTeC"]

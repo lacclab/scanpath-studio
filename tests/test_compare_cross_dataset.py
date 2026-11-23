@@ -10,6 +10,8 @@ about its own geometry.
 
 from __future__ import annotations
 
+import warnings
+
 import pandas as pd
 import pytest
 
@@ -141,7 +143,8 @@ class TestAlignCompareColumns:
         a = _fixations("p1", "t1").assign(only_a=[1, 2, 3])
         b = _fixations("p2", "t2").assign(only_b=[4, 5, 6])
         a_out, b_out, _ = tabs._align_compare_columns(a, b)
-        with pd.option_context("mode.chained_assignment", "raise"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
             merged = pd.concat([a_out, b_out])
         assert len(merged) == 6
         assert merged["only_a"].isna().sum() == 3

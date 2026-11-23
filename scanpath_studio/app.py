@@ -1752,10 +1752,11 @@ def _about_dialog() -> None:
         with st.expander("Project team"):
             st.markdown(f"""
 [Omer Shubi](https://omershubi.github.io/),
-[Keren Gruteke Klein](https://kerengruteke.github.io/),
 [Maya Grossman](https://www.linkedin.com/in/maya-grossman-32b547292/),
-[Ella Lion](https://ella-lion.github.io/),
+[Keren Gruteke Klein](https://kerengruteke.github.io/),
 [Deborah N. Jakobi]({_DILI}/lab-members/jakobi.html),
+[Ella Lion](https://ella-lion.github.io/),
+[Carlson Büth]({_DILI}/lab-members/bueth.html),
 [David R. Reich]({_DILI}/lab-members/reich.html),
 [Lena Jäger]({_DILI}/group-leader/jaeger.html), and
 [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/).

@@ -837,10 +837,11 @@ def upload_identity(uploaded) -> tuple[str | None, str]:
 #: ``authors``.
 CITATION_AUTHORS = (
     ("Omer", "Shubi"),
-    ("Keren", "Gruteke Klein"),
     ("Maya", "Grossman"),
-    ("Ella", "Lion"),
+    ("Keren", "Gruteke Klein"),
     ("Deborah N.", "Jakobi"),
+    ("Ella", "Lion"),
+    ("Carlson", "Büth"),
     ("David R.", "Reich"),
     ("Lena", "Jäger"),
     ("Yevgeni", "Berzak"),

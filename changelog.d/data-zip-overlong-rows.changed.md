@@ -1,0 +1,1 @@
+A table inside a zip with rows that have more fields than its header is read like the same table on its own: the Add-dataset wizard skips those rows and names their lines, instead of refusing the archive.

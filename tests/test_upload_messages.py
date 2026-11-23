@@ -8,12 +8,16 @@ sentence ends in two periods.
 
 from __future__ import annotations
 
+import csv
 import io
 import zipfile
 
 import pandas as pd
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
+from scanpath_studio import data as data_module
 from scanpath_studio.data import (
     READ_NOTES_ATTR,
     ReadPlan,
@@ -235,13 +239,14 @@ class TestRowsWithMoreFieldsThanTheHeader:
             path = tmp_path / "recordings.zip"
             with zipfile.ZipFile(path, "w") as archive:
                 archive.writestr("fix.csv", body)
-            with pytest.raises(TableReadError, match="line 4"):
-                read_table(path, plan=_plan())
-        else:
-            source = _upload("fix.csv", body) if route == "upload" else path
-            frame = read_table(source, plan=_plan())
-            assert frame["trial"].tolist() == ["multi\nline", "t"]
-            assert "line 4" in pop_read_notes(frame)[0]
+        source = _upload("fix.csv", body) if route == "upload" else path
+        frame = read_table(source, plan=_plan())
+        assert frame["trial"].tolist() == ["multi\nline", "t"]
+        assert "line 4" in pop_read_notes(frame)[0]
+        whole = ReadPlan(identity=("participant", "trial"))
+        with pytest.raises(TableReadError, match="line 4") as raised:
+            read_table(source, plan=whole)
+        assert raised.value.name == "fix.csv"
 
     def test_several_files_name_the_one_the_note_is_about(self):
         files = [
@@ -263,6 +268,121 @@ class TestRowsWithMoreFieldsThanTheHeader:
             read_table(_upload("bad.csv", _semicolon_table("p1;t1;1;2;3;4")))
         error = explain_read_error("bad.csv", raised.value)
         assert "line 9 has 6, the header 5" in str(error)
+
+
+def _no_scan(monkeypatch):
+    def scan(*args, **kwargs):
+        raise AssertionError("a clean file was scanned record by record")
+
+    monkeypatch.setattr(data_module, "_overflow_lines", scan)
+
+
+class TestOverlongRowsAreFoundByTheReadItself:
+    """A file whose records all fit its header is read once, by the parser;
+    only one with a field too many is scanned for the lines to name."""
+
+    @pytest.mark.parametrize("route", ["upload", "path", "archive"])
+    @pytest.mark.parametrize("projected", [True, False])
+    def test_a_clean_file_is_never_scanned(
+        self, tmp_path, monkeypatch, route, projected
+    ):
+        body = _semicolon_table().replace(b"p1;t0", b'"p1";"t0"')
+        path = tmp_path / "ok.csv"
+        path.write_bytes(body)
+        if route == "archive":
+            path = tmp_path / "ok.zip"
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("ok.csv", body)
+        source = _upload("ok.csv", body) if route == "upload" else path
+        plan = _plan() if projected else ReadPlan(identity=("participant", "trial"))
+        _no_scan(monkeypatch)
+        frame = read_table(source, plan=plan)
+        assert len(frame) == 12
+        assert list(frame.columns) == HEADER
+        assert pop_read_notes(frame) == []
+
+    @pytest.mark.parametrize(
+        "encoding", ["utf-8", "utf-8-sig", "utf-16", "utf-16-be", "utf-32", "cp1252"]
+    )
+    @pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+    def test_every_encoding_and_line_end(self, encoding, newline):
+        rows = [";".join(HEADER), "p1;t1;1;2;3", "p1;ü;1;2;3;4", "p1;t2;1;2;3"]
+        text = newline.join(rows) + newline
+        body = text.encode(encoding)
+        if encoding == "utf-16-be":
+            body = b"\xfe\xff" + body  # Data Viewer writes the mark
+        frame = read_table(_upload("ia.txt", body), plan=_plan())
+        assert frame["trial"].tolist() == ["t1", "t2"]
+        assert "(line 3)" in pop_read_notes(frame)[0]
+
+    def test_an_extra_field_spelled_like_a_missing_value_still_counts(self):
+        rows = [";".join(HEADER), "p1;t1;1;2;3", "p1;t1;1;2;3;NA", "p1;t2;1;2;3"]
+        frame = read_table(_upload("na.csv", "\n".join(rows).encode()), plan=_plan())
+        assert frame["trial"].tolist() == ["t1", "t2"]
+        assert "(line 3)" in pop_read_notes(frame)[0]
+
+    def test_missing_values_in_the_planned_columns_are_unchanged(self):
+        rows = [";".join(HEADER), "NA;t1;NA;2;3", "p1;null;1;;3"]
+        frame = read_table(_upload("na.csv", "\n".join(rows).encode()), plan=_plan())
+        assert frame["participant"].isna().tolist() == [True, False]
+        assert frame["trial"].isna().tolist() == [False, True]
+        assert frame["x"].isna().tolist() == [True, False]
+        assert frame["y"].isna().tolist() == [False, True]
+
+    def test_a_header_with_no_line_end_reads_as_no_rows(self, monkeypatch):
+        _no_scan(monkeypatch)
+        frame = read_table(_upload("h.csv", ";".join(HEADER).encode()), plan=_plan())
+        assert frame.empty
+        assert list(frame.columns) == HEADER
+
+    def test_a_text_stream(self):
+        rows = [";".join(HEADER), "p1;t1;1;2;3", "p1;t1;1;2;3;4", "p1;t2;1;2;3"]
+        source = io.StringIO("\n".join(rows))
+        frame = data_module._read_delimited(source, ";", _plan())
+        assert frame["trial"].tolist() == ["t1", "t2"]
+
+    def test_the_scan_is_a_checkpoint_a_cancel_stops(self):
+        from scanpath_studio import progress
+
+        body = _semicolon_table("p1;t1;1;2;3;4")
+        with progress.task(("scan-test", id(body)), title="Reading") as task:
+            task.cancel()
+            with pytest.raises(progress.Cancelled):
+                read_table(_upload("bad.csv", body), plan=_plan())
+
+
+_CSV_PIECES = st.sampled_from(["a", "b", "1", " ", ",", '"', "\n", "\r\n", ";"])
+
+
+@st.composite
+def _csv_text(draw):
+    """Records of fields, each quoted when it holds a delimiter, quote or
+    newline (and sometimes when it doesn't), joined as a CSV writer would."""
+    records = []
+    for _ in range(draw(st.integers(1, 5))):
+        fields = []
+        for _ in range(draw(st.integers(0, 5))):
+            value = "".join(draw(st.lists(_CSV_PIECES, max_size=4)))
+            if any(c in value for c in ',"\r\n') or draw(st.booleans()):
+                value = '"' + value.replace('"', '""') + '"'
+            fields.append(value)
+        records.append(",".join(fields))
+    return draw(st.sampled_from(["\n", "\r\n"])).join(records) + "\n"
+
+
+@settings(max_examples=400, deadline=None)
+@given(_csv_text())
+def test_record_widths_agree_with_the_csv_module(text):
+    """`_record_widths` reads quoting as Python's csv module does: the same
+    records, each's last occupied field, and the physical line it starts on."""
+    reader = csv.reader(io.StringIO(text, newline=""), strict=False)
+    expected, line = [], 0
+    for fields in reader:
+        occupied = [i + 1 for i, value in enumerate(fields) if value != ""]
+        expected.append((line, occupied[-1] if occupied else 0))
+        line = reader.line_num
+    got = list(data_module._record_widths(io.StringIO(text, newline=""), ","))
+    assert got == expected
 
 
 class TestTheUploadBoxSaysIt:

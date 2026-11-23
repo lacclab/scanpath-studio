@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import functools
 import glob
 import hashlib
 import io
@@ -2187,12 +2189,15 @@ def _read_by_extension(
     *,
     sep: str | None = None,
     file_columns: Sequence[str] | None = None,
+    reopen: Callable[[], contextlib.AbstractContextManager] | None = None,
 ) -> pd.DataFrame:
     """Dispatch a buffer/path to a pandas reader by its (lowercased) name.
 
     ``sep`` and ``file_columns`` are the delimiter and the column names of a
     text table when the caller already knows them (a zip member, which cannot
-    be peeked at); otherwise they are read off the header line.
+    be peeked at); otherwise they are read off the header line. ``reopen``
+    opens a fresh copy of a text stream that cannot be rewound
+    (:func:`_read_delimited`).
 
     ``plan`` narrows the read to the columns normalization keeps and
     declares EyeLink's ``.`` missing in the numeric ones. Delimited text and
@@ -2223,6 +2228,7 @@ def _read_by_extension(
                 sep or _sniff_delimiter(buf, name),
                 plan,
                 file_columns=file_columns,
+                reopen=reopen,
             )
         # First sheet.
         with pd.ExcelFile(buf) as book:
@@ -2233,7 +2239,11 @@ def _read_by_extension(
             frame.attrs["source_worksheet"] = sheet
         return frame[[c for c in columns if c in frame.columns]] if columns else frame
     return _read_delimited(
-        buf, sep or _sniff_delimiter(buf, name), plan, file_columns=file_columns
+        buf,
+        sep or _sniff_delimiter(buf, name),
+        plan,
+        file_columns=file_columns,
+        reopen=reopen,
     )
 
 
@@ -2371,6 +2381,7 @@ def _read_delimited(
     *,
     file_columns: Sequence[str] | None = None,
     filter_chunk: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+    reopen: Callable[[], contextlib.AbstractContextManager] | None = None,
     **extra,
 ) -> pd.DataFrame:
     """``read_csv`` with the encoding fallback a non-UTF-8 export needs.
@@ -2386,25 +2397,26 @@ def _read_delimited(
     renamed ``.csv``) and is refused as such, rather than tokenized into a
     parser error.
 
-    Planned reads check logical records against the header. A projected read
-    skips overlong records and reports their physical lines in `READ_NOTES_ATTR`.
-    A whole-table read reports the offending line as an error.
+    Planned reads check every record against the header. ``usecols`` stops the
+    parser counting fields, so the read itself takes one column more than the
+    header names (:func:`_with_extra_column`), which a record with a field too
+    many fills. Only then are the records scanned (:func:`_overflow_lines`) for
+    the lines to report: a projected read skips the overlong records and
+    reports their physical lines in `READ_NOTES_ATTR`, and a whole-table read
+    reports the first one as an error. A stream that cannot be rewound is
+    scanned and read again through ``reopen``, which opens a fresh copy of it
+    as a context manager; without one it is taken into memory first.
 
-    A whole-file read with verbatim columns needs the header (``file_columns``,
-    else read off the file first) to name every other column's NA spellings;
-    a stream that cannot be rewound is taken into memory for it.
+    A planned read needs the header (``file_columns``, else read off the file
+    first) to name every other column's NA spellings.
     """
     rereadable = _can_reread(buf)
-    if (
-        plan is not None
-        and (plan.verbatim or plan.identity)
-        and not plan.columns
-        and file_columns is None
-    ):
-        if not rereadable:
-            data = buf.read()
-            buf = io.BytesIO(data) if isinstance(data, bytes) else io.StringIO(data)
-            rereadable = True
+    checked = plan is not None and "nrows" not in extra
+    if checked and not rereadable and (file_columns is None or reopen is None):
+        data = buf.read()
+        buf = io.BytesIO(data) if isinstance(data, bytes) else io.StringIO(data)
+        rereadable = True
+    if checked and file_columns is None:
         file_columns = _header(buf, sep)
         _rewind(buf)
     head = _peek(buf, _BINARY_SNIFF_BYTES) if rereadable else b""
@@ -2412,30 +2424,121 @@ def _read_delimited(
     if not bom and b"\x00" in head:
         raise _not_text_error(str(getattr(buf, "name", buf)), head)
     kwargs = {**_read_kwargs(plan, file_columns), **extra}
-    if filter_chunk is not None:
-        kwargs["chunksize"] = 25_000
-    skipped = []
-    if plan is not None and "nrows" not in extra and rereadable:
-        header = file_columns if file_columns is not None else _header(buf, sep)
-        _rewind(buf)
-        skipped = _overflow_lines(buf, sep, len(header), bom)
+    if not checked:
+        return _parse_delimited(buf, sep, bom, kwargs, filter_chunk)
+    header = list(file_columns)
+    kwargs["index_col"] = False
+    probe = _unused_name(header)
+    try:
+        return _parse_delimited(
+            buf,
+            sep,
+            bom,
+            _probe_kwargs(plan, header, kwargs, probe),
+            filter_chunk,
+            probe=probe,
+        )
+    except _ExtraFields:
+        pass
+    with contextlib.ExitStack() as stack:
+        if rereadable:
+            _rewind(buf)
+            skipped = _overflow_lines(buf, sep, len(header), bom)
+            source = buf
+        else:
+            scanned = stack.enter_context(reopen())
+            skipped = _overflow_lines(
+                scanned, sep, len(header), _bom_encoding(scanned.peek(4)[:4])
+            )
+            source = stack.enter_context(reopen())
+        name = getattr(buf, "name", buf)
+        if skipped and not plan.columns:
+            raise _overflow_error(name, skipped)
         if skipped:
-            if not plan.columns:
-                raise _overflow_error(getattr(buf, "name", buf), skipped)
-            kwargs["skiprows"] = [record for record, _ in skipped]
-        kwargs["index_col"] = False
+            kwargs["skiprows"] = [record for record, _, _ in skipped]
+        frame = _parse_delimited(source, sep, bom, kwargs, filter_chunk)
+    if skipped:
+        frame.attrs[READ_NOTES_ATTR] = [
+            _skipped_rows_note([line for _, line, _ in skipped])
+        ]
+    return frame
+
+
+class _ExtraFields(Exception):
+    """A planned read met a record with a field past its header's last."""
+
+
+def _unused_name(header: Sequence[str]) -> str:
+    """A column name ``header`` does not hold."""
+    name = "_sps_extra_field"
+    while name in header:
+        name += "_"
+    return name
+
+
+def _probe_kwargs(plan: ReadPlan, header: list[str], kwargs: dict, probe: str) -> dict:
+    """``kwargs`` for a read that also takes the extra column ``probe``.
+
+    Any text in the probe's column is a field, "NA" included, so pandas'
+    default missing spellings move from all columns to the planned ones, by
+    name, where they mean what they always do.
+    """
+    columns = list(plan.columns or header)
+    out = {**kwargs, "usecols": [*columns, probe]}
+    out["dtype"] = {**kwargs.get("dtype", {}), probe: str}
+    if out.get("keep_default_na", True):
+        out.update(_verbatim_na_kwargs(plan, columns))
+    return out
+
+
+def _parse_delimited(
+    buf,
+    sep: str,
+    bom: str | None,
+    kwargs: dict,
+    filter_chunk: Callable[[pd.DataFrame], pd.DataFrame] | None,
+    *,
+    probe: str | None = None,
+) -> pd.DataFrame:
+    """``read_csv`` under each encoding of :func:`_read_delimited` in turn.
+
+    With ``probe``, the header line is read with that column added at its
+    end, and :class:`_ExtraFields` is raised when a record fills it.
+    """
+    if filter_chunk is not None:
+        kwargs = {**kwargs, "chunksize": 25_000}
+
+    def checked(frame: pd.DataFrame) -> pd.DataFrame:
+        if probe is None:
+            return frame
+        extra = frame.pop(probe)
+        if (extra.notna() & extra.ne("")).any():
+            raise _ExtraFields
+        return frame
+
     for encoding in (bom,) if bom else _TEXT_ENCODINGS:
         try:
-            frame = pd.read_csv(
-                buf, sep=sep, low_memory=False, encoding=encoding, **kwargs
-            )
-            if filter_chunk is not None:
-                # Consume the chunks inside the encoding retry. A later chunk
-                # can contain the first byte the selected encoding cannot read.
-                with frame as chunks:
-                    frame = pd.concat(
-                        (filter_chunk(chunk) for chunk in chunks), ignore_index=True
-                    )
+            with contextlib.ExitStack() as stack:
+                source = buf
+                if probe is not None:
+                    source = _with_extra_column(buf, sep, probe)
+                    if source is None:
+                        raise _ExtraFields
+                    stack.enter_context(source)
+                frame = pd.read_csv(
+                    source, sep=sep, low_memory=False, encoding=encoding, **kwargs
+                )
+                if filter_chunk is not None:
+                    # Consume the chunks inside the encoding retry. A later
+                    # chunk can contain the first byte the selected encoding
+                    # cannot read.
+                    with frame as chunks:
+                        frame = pd.concat(
+                            (filter_chunk(checked(chunk)) for chunk in chunks),
+                            ignore_index=True,
+                        )
+                else:
+                    frame = checked(frame)
         except UnicodeDecodeError:
             if bom or encoding == _TEXT_ENCODINGS[-1] or not _can_reread(buf):
                 raise
@@ -2446,18 +2549,93 @@ def _read_delimited(
                 encoding,
             )
             continue
-        if skipped:
-            frame.attrs[READ_NOTES_ATTR] = [
-                _skipped_rows_note([line for _, line in skipped])
-            ]
         return frame
     raise AssertionError("unreachable: latin-1 decodes every byte")
 
 
+#: Byte-order marks and the codec each table's text after it is in.
+_BOM_CODECS = (
+    (b"\xff\xfe\x00\x00", "utf-32-le"),
+    (b"\x00\x00\xfe\xff", "utf-32-be"),
+    (b"\xef\xbb\xbf", "utf-8"),
+    (b"\xff\xfe", "utf-16-le"),
+    (b"\xfe\xff", "utf-16-be"),
+)
+
+
+class _Prefixed(io.RawIOBase):
+    """``prefix``, then the rest of ``source`` — closed with this stream only
+    when ``owned``."""
+
+    def __init__(self, prefix: bytes, source, *, owned: bool) -> None:
+        self._prefix = memoryview(prefix)
+        self._source = source
+        self._owned = owned
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer) -> int:
+        if self._prefix:
+            n = min(len(buffer), len(self._prefix))
+            buffer[:n] = self._prefix[:n]
+            self._prefix = self._prefix[n:]
+            return n
+        return self._source.readinto(buffer)
+
+    def close(self) -> None:
+        if self._owned and not self.closed:
+            self._source.close()
+        super().close()
+
+
+def _with_extra_column(buf, sep: str, name: str):
+    """``buf`` (a path, or a stream read from where it is and left open) with
+    one more column, ``name``, at the end of its header line.
+
+    The line ends at its first CR or LF, in the codec its byte-order mark
+    names. None when it doesn't end within the first `_HEADER_MAX_BYTES`.
+    """
+    owned = isinstance(buf, (str, os.PathLike))
+    source = open(buf, "rb") if owned else buf
+    head = source.read(_HEADER_MAX_BYTES)
+    text = isinstance(head, str)
+    mark, codec = b"", "latin-1"
+    if not text:
+        mark, codec = next(
+            ((m, c) for m, c in _BOM_CODECS if head.startswith(m)), (mark, codec)
+        )
+    unit = 1 if text else len("\n".encode(codec))
+    line_end = -1
+    for char in "\r\n":
+        token = char if text else char.encode(codec)
+        at = head.find(token, len(mark))
+        while at >= 0 and (at - len(mark)) % unit:
+            at = head.find(token, at + 1)
+        if at >= 0 and (line_end < 0 or at < line_end):
+            line_end = at
+    if line_end < 0 and len(head) == _HEADER_MAX_BYTES:
+        if owned:
+            source.close()
+        return None
+    if line_end < 0:
+        line_end = len(head)  # a header with no rows and no line end
+    added = sep + name
+    if text:
+        return io.StringIO(head[:line_end] + added + head[line_end:] + source.read())
+    prefix = head[:line_end] + added.encode(codec) + head[line_end:]
+    return io.BufferedReader(_Prefixed(prefix, source, owned=owned), 1 << 20)
+
+
+#: Records :func:`_overflow_lines` scans between progress checkpoints.
+_SCAN_REPORT_EVERY = 1 << 16
+
+
 def _overflow_lines(
     buf, sep: str, n_fields: int, bom: str | None
-) -> list[tuple[int, int]]:
-    """Overlong CSV records as (zero-based record, first physical line).
+) -> list[tuple[int, int, int]]:
+    """Overlong CSV records as (zero-based record, first physical line, last
+    occupied field).
 
     The parser's skiprows counts records, while a researcher opening the file
     sees physical lines. Quoted separators and newlines are data. Empty extra
@@ -2473,11 +2651,13 @@ def _overflow_lines(
         buf if text else io.TextIOWrapper(buf, encoding=bom or "latin-1", newline="")
     )
     try:
-        skipped = [
-            (record, line)
-            for record, (line, width) in enumerate(_record_widths(lines, sep))
-            if record and width > n_fields
-        ]
+        skipped = []
+        for record, (line, width) in enumerate(_record_widths(lines, sep)):
+            if not record % _SCAN_REPORT_EVERY:
+                # A checkpoint: the loading card stays live, and Cancel works.
+                progress.report()
+            if record and width > n_fields:
+                skipped.append((record, line, width))
     finally:
         if not text:
             lines.detach()
@@ -4218,6 +4398,11 @@ class _BudgetedZipMember(io.RawIOBase):
         self._limit_label = limit_label
         self.consumed = 0
 
+    @property
+    def name(self) -> str:
+        """The member's name, which a message about its rows gives."""
+        return self._name
+
     def readable(self) -> bool:
         return True
 
@@ -4233,6 +4418,17 @@ class _BudgetedZipMember(io.RawIOBase):
                 "so it was not read. Re-create the zip and upload it again."
             )
         return read
+
+
+@contextlib.contextmanager
+def _open_member(
+    zf: zipfile.ZipFile, info: zipfile.ZipInfo, budget: int, limit_label: str
+):
+    """A fresh read of one zip member, under its byte budget."""
+    with zf.open(info) as inner:
+        yield io.BufferedReader(
+            _BudgetedZipMember(inner, budget, info.filename, limit_label=limit_label)
+        )
 
 
 #: What each table kind's members are called in the mixed-zip message.
@@ -4493,22 +4689,6 @@ def _read_zipped_table(
                     member_plan = plan
                     if plan is not None and plan.columns:
                         member_plan = plan.narrowed_to(header)
-                    if member_plan is not None:
-                        # The projected parser can discard excess fields. A bounded
-                        # member stream cannot rewind, so validate on a separate pass.
-                        with zf.open(info) as validation:
-                            checked = io.BufferedReader(
-                                _BudgetedZipMember(
-                                    validation,
-                                    member_budget,
-                                    member,
-                                    limit_label=limit_label,
-                                )
-                            )
-                            bom = _bom_encoding(checked.peek(4)[:4])
-                            bad = _overflow_lines(checked, sep, len(header), bom)
-                            if bad:
-                                raise _overflow_error(member, bad)
                     try:
                         frames.append(
                             _read_by_extension(
@@ -4517,6 +4697,11 @@ def _read_zipped_table(
                                 member_plan,
                                 sep=sep,
                                 file_columns=header,
+                                # A member stream cannot rewind: a record
+                                # scan and a second read each open it again.
+                                reopen=functools.partial(
+                                    _open_member, zf, info, member_budget, limit_label
+                                ),
                             )
                         )
                     except UnicodeDecodeError:

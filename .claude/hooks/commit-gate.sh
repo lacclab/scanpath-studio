@@ -57,12 +57,27 @@ else
   trailer=no
 fi
 
-# Did the session run anything? A cheap look at the transcript, for the log.
+# Did the session run anything? Only the shell commands it issued count: the
+# project instructions name `verify_change.py` and `pytest` and sit in every
+# transcript. Each command is cut at its `git commit` (the message may name
+# them too) and split into the programs it chains; a program counts when, past
+# its environment assignments, `time` and `uv run` options, it is Python running
+# the harness, or pytest. Reading a file about either (`grep pytest …`) is not
+# a run.
+programs='select(.type == "assistant") | .message.content[]?
+  | select(.type == "tool_use" and .name == "Bash") | .input.command // empty
+  | sub("git commit[\\s\\S]*"; "")
+  | splits("[;&|()\\n]+")
+  | sub("^\\s+"; "")
+  | sub("^((\\w+=\\S*|env|(\\S*/)?time|-p)\\s+)*"; "")
+  | sub("^uv\\s+run\\s+((--(extra|with|python|group|package|directory|project)\\s+\\S+|--?[\\w-]+)\\s+)*"; "")
+  | sub("^(\\S*/)?python[\\d.]*\\s+((-[IuBO]|-m)\\s+)*"; "")'
 ran=none
 if [ -n "$transcript" ] && [ -f "$transcript" ]; then
-  if grep -q 'verify_change.py' "$transcript"; then
+  run=$(jq -r "$programs" "$transcript" 2>/dev/null)
+  if printf '%s\n' "$run" | grep -Eq '^(\S*/)?verify_change\.py([[:space:]]|$)'; then
     ran=harness
-  elif grep -q 'pytest' "$transcript"; then
+  elif printf '%s\n' "$run" | grep -Eq '^(\S*/)?pytest([[:space:]]|$)'; then
     ran=tests
   fi
 fi

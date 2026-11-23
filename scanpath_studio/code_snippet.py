@@ -1531,7 +1531,9 @@ _CLI_EMITTERS: dict[str, Any] = {
     "marker_size_range": _marker_size_range,
     "marker_size_scale": _valued("--marker-size-scale"),
     "marker_duration_range": _two_numbers("--marker-duration-range"),
-    "duration_size_legend": _flag_when("--no-duration-size-legend", False),
+    "duration_size_legend": _switch(
+        "--duration-size-legend", "--no-duration-size-legend"
+    ),
     "saccade_color": _valued("--saccade-color"),
     "saccade_style": _valued("--saccade-style"),
     "saccade_width": _valued("--saccade-width"),

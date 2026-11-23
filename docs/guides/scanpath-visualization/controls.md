@@ -282,7 +282,7 @@ The figure as a whole:
 | **Caption** → **Show**, text, **Size**, color | Add a figure caption below the plot, and set its font size and color. `{field}` works here too. |
 | **Credit** → **Show** | Add a small *Made with Scanpath Studio* line under the plot. |
 | **Hover** → **Words** / **Fixations** | Choose the hover fields: what the tooltip shows when the mouse is over a word or a fixation. |
-| **Legends** → **Show** | Show or hide each legend the figure draws: **Compare (A/B)**, **Saccade types**, **Fixation colors**, **Fixation sizes** or **Text highlight**. Each has a row. |
+| **Legends** → **Show** | Show or hide each legend the figure draws: **Compare (A/B)**, **Saccade types**, **Fixation colors**, **Fixation sizes** or **Text highlight**. The fixation size legend starts hidden. Tick **Show** for **Fixation sizes** to include it in a saved figure. |
 | **Legends** → **Position** | Choose the legend position: a corner, the middle of an edge, or down a side, outside or inside the plot. |
 | **Legends** → **Arrangement** | Choose the legend arrangement: **Stacked** or **Side by side**. |
 | **Legends** → **Text size** | Set the legend text (font) size, in px. Empty uses the figure's text size. |

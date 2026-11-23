@@ -576,16 +576,28 @@ Save a figure, export many trials at once, or reuse a view in the app or in code
 
 ## In the app
 
-| Goal                                | Where                                            |
-| ----------------------------------- | ------------------------------------------------ |
-| Save the figure or replay on screen | **Export** → **Current figure**                  |
-| Export many trials and their tables | **Export** → **Export bundle**                   |
-| Share a view or copy its code       | **Share** → **Link** or **Code**                 |
-| Reuse the figure settings           | **My designs**, or **Share** → **Settings file** |
+| Goal                                  | Where                                            |
+| ------------------------------------- | ------------------------------------------------ |
+| Save the figure or replay on screen   | **Export** → **Current figure**                  |
+| Prepare a figure for a paper or slide | **Export** → **Prepare figure for export**       |
+| Export many trials and their tables   | **Export** → **Export bundle**                   |
+| Share a view or copy its code         | **Share** → **Link** or **Code**                 |
+| Reuse the figure settings             | **My designs**, or **Share** → **Settings file** |
 
 To export multiple trials, switch to Full and open **Export bundle**. Essentials offers **Current figure** for the figure or replay on screen.
 
 For step-by-step instructions, see the [export tutorials](https://lacclab.github.io/scanpath-studio/dev/tutorials/exporting-figures/index.md).
+
+## Prepare a paper figure or slide
+
+Open **Scanpath → Export → Prepare figure for export**. The preview shows the current reading, comparison or replay still. For a corpus chart, open **Prepare figure for export** directly beneath the chart. Choose **Download PNG** for a slide or document, or switch the file format to SVG, PDF or TIFF.
+
+- **Crop** lets you draw a rectangle, select a word span when words are available, or use the scanpath’s current zoom. Under **Label events**, pin a fixation or saccade and drag its label into position.
+- **Caption and description** suggests a caption and alternative text. Edit them, download both as text, or include the caption below the artwork.
+- For a replay, **Replay clip** lets you choose the interval, speed and poster frame. **Prepare MP4 and poster** produces a ZIP with the clip, poster and editable file. Rendering PDF or video in the app requires Chromium on the server.
+- When a journal specifies dimensions, open **Print settings** to set the width, resolution or minimum text size. In Full mode on the Scanpath view, **Use this size for batch export** applies the width and resolution to the export bundle.
+
+Under **Save or open**, save a copy on this device or download an editable file for a coauthor. The file includes the plotted data, tooltip fields and embedded images. Open it here, under **Data Management → Saved work → Saved figures**, or via **Share → Settings file**. A Share link opens the editor on the source view. An editable file also restores your crop, labels and caption. Older files containing several figures open with their saved layout.
 
 ## Reproduce a coauthor's results
 
@@ -1344,52 +1356,54 @@ Every function on this page is importable from `scanpath_studio`. The figure bui
 
 ## At a glance
 
-| Function                                      | What it does                                                                         |
-| --------------------------------------------- | ------------------------------------------------------------------------------------ |
-| **Load your data**                            |                                                                                      |
-| load_scanpath_data                            | Load and normalize a Words table, a Fixations table, or both.                        |
-| ScanpathData                                  | The `(words, fixations)` frames `load_scanpath_data` returns, with their names.      |
-| propose_schema                                | Find the column mapping auto-detection would use for a raw table.                    |
-| attach_stimulus_images                        | Fill `image_path` from a folder of stimulus images, on frames already loaded.        |
-| load_raw_gaze                                 | Load and normalize a raw, sample-level gaze table, for `raw_gaze=`.                  |
-| load_participant_metadata                     | Load a participant-level metadata table: one row per participant.                    |
-| load_trial_metadata                           | Load a trial-level metadata table: one row per trial.                                |
-| load_text_metadata                            | Load a text-level metadata table: one row per text.                                  |
-| **Load the bundled demo and public datasets** |                                                                                      |
-| load_sample_data                              | Load the bundled demo, normalized and ready to plot.                                 |
-| load_sample_raw_gaze                          | Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo.    |
-| load_potec                                    | Load PoTeC as normalized `(words, fixations)` frames, ready to plot.                 |
-| load_onestop                                  | Load OneStop as normalized `(words, fixations)` frames, ready to plot.               |
-| **Draw a scanpath**                           |                                                                                      |
-| build_authored_scanpath                       | Build normalized Words and Fixations frames from a hand-drawn scanpath.              |
-| load_authored_scanpath                        | Load a draft file as normalized Words and Fixations frames.                          |
-| **Inspect**                                   |                                                                                      |
-| list_trials                                   | List every plottable trial: one row per participant and trial.                       |
-| list_parts                                    | List the ordered screens of multipart data, optionally for one trial.                |
-| check_data_health                             | Check durations, positions and word boxes for data problems.                         |
-| run_analysis_recipe                           | Recreate a corpus overview, per-word cohort profile or two-group difference profile. |
-| **Plot**                                      |                                                                                      |
-| plot_scanpath                                 | Build one trial's scanpath figure, by default in the app's Scanpath design.          |
-| animate_scanpath                              | Build the animated replay of one trial's scanpath, or of two on one clock.           |
-| compare_scanpaths                             | Build a figure comparing two scanpaths: the app's **Compare** mode.                  |
-| render_parent_trial                           | Render every screen of one multipart trial, each in its own coordinates.             |
-| plot_corpus_figure                            | Plot a corpus overview, profile, distribution or difference from a tidy table.       |
-| **Figure options**                            |                                                                                      |
-| figure_options                                | List figure options and their default values.                                        |
-| **Reproduce a figure in code**                |                                                                                      |
-| figure_code                                   | Write the API or CLI code that reproduces a figure.                                  |
-| **Save**                                      |                                                                                      |
-| save_figure                                   | Save a figure as HTML, PNG, SVG or PDF.                                              |
-| save_panel_proof                              | Save a split comparison as an SVG with its manuscript width in millimetres.          |
-| save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                           |
-| **Recovery cache**                            |                                                                                      |
-| cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.            |
-| clear_cache                                   | Delete the recovery cache.                                                           |
-| **Version and updates**                       |                                                                                      |
-| version_info                                  | Return version and installation details without a network request.                   |
-| check_for_updates                             | Check GitHub for a newer release.                                                    |
-| **Citation**                                  |                                                                                      |
-| cite                                          | Return a citation for Scanpath Studio and, optionally, a public corpus.              |
+| Function                                      | What it does                                                                          |
+| --------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Load your data**                            |                                                                                       |
+| load_scanpath_data                            | Load and normalize a Words table, a Fixations table, or both.                         |
+| ScanpathData                                  | The `(words, fixations)` frames `load_scanpath_data` returns, with their names.       |
+| propose_schema                                | Find the column mapping auto-detection would use for a raw table.                     |
+| attach_stimulus_images                        | Fill `image_path` from a folder of stimulus images, on frames already loaded.         |
+| load_raw_gaze                                 | Load and normalize a raw, sample-level gaze table, for `raw_gaze=`.                   |
+| load_participant_metadata                     | Load a participant-level metadata table: one row per participant.                     |
+| load_trial_metadata                           | Load a trial-level metadata table: one row per trial.                                 |
+| load_text_metadata                            | Load a text-level metadata table: one row per text.                                   |
+| **Load the bundled demo and public datasets** |                                                                                       |
+| load_sample_data                              | Load the bundled demo, normalized and ready to plot.                                  |
+| load_sample_raw_gaze                          | Load recorded EyeLink gaze samples for every reading in the bundled OneStop demo.     |
+| load_potec                                    | Load PoTeC as normalized `(words, fixations)` frames, ready to plot.                  |
+| load_onestop                                  | Load OneStop as normalized `(words, fixations)` frames, ready to plot.                |
+| **Draw a scanpath**                           |                                                                                       |
+| build_authored_scanpath                       | Build normalized Words and Fixations frames from a hand-drawn scanpath.               |
+| load_authored_scanpath                        | Load a draft file as normalized Words and Fixations frames.                           |
+| **Inspect**                                   |                                                                                       |
+| list_trials                                   | List every plottable trial: one row per participant and trial.                        |
+| list_parts                                    | List the ordered screens of multipart data, optionally for one trial.                 |
+| check_data_health                             | Check durations, positions and word boxes for data problems.                          |
+| run_analysis_recipe                           | Recreate a corpus overview, per-word cohort profile or two-group difference profile.  |
+| **Plot**                                      |                                                                                       |
+| plot_scanpath                                 | Build one trial's scanpath figure, by default in the app's Scanpath design.           |
+| animate_scanpath                              | Build the animated replay of one trial's scanpath, or of two on one clock.            |
+| compare_scanpaths                             | Build a figure comparing two scanpaths: the app's **Compare** mode.                   |
+| render_parent_trial                           | Render every screen of one multipart trial, each in its own coordinates.              |
+| plot_corpus_figure                            | Plot a corpus overview, profile, distribution or difference from a tidy table.        |
+| **Figure options**                            |                                                                                       |
+| figure_options                                | List figure options and their default values.                                         |
+| **Reproduce a figure in code**                |                                                                                       |
+| figure_code                                   | Write the API or CLI code that reproduces a figure.                                   |
+| **Save**                                      |                                                                                       |
+| save_figure                                   | Save a figure as HTML, PNG, SVG or PDF.                                               |
+| publication_figure                            | Prepare one Plotly figure to edit and export.                                         |
+| save_publication                              | Save an editable publication project or its physical-size SVG, PDF, PNG, TIFF or MP4. |
+| save_panel_proof                              | Save a split comparison as an SVG with its manuscript width in millimetres.           |
+| save_figure_layers                            | Save a scanpath figure as one file per layer, for editing.                            |
+| **Recovery cache**                            |                                                                                       |
+| cache_status                                  | Describe the recovery cache a local run keeps, without launching the app.             |
+| clear_cache                                   | Delete the recovery cache.                                                            |
+| **Version and updates**                       |                                                                                       |
+| version_info                                  | Return version and installation details without a network request.                    |
+| check_for_updates                             | Check GitHub for a newer release.                                                     |
+| **Citation**                                  |                                                                                       |
+| cite                                          | Return a citation for Scanpath Studio and, optionally, a public corpus.               |
 
 ## Column names
 
@@ -2662,7 +2676,7 @@ The file carries the citation of Scanpath Studio in its metadata — PNG text ch
 Parameters:
 
 - **`fig`** (`Figure`) – The figure.
-- **`path`** (`str | Path`) – The file to write: .html (interactive), or .png, .svg or .pdf (static, through Kaleido; see the export FAQ for its setup).
+- **`path`** (`str | Path`) – The file to write: .html (interactive), or .png, .svg or .pdf (static, through Kaleido; see the export FAQ for its setup). Use .publication.json for an editable recipe or .publication.html for the offline figure editor.
 - **`scale`** (`float`, default: `2` ) – The static image's scale factor.
 - **`width`** (`int | None`, default: `None` ) – The image width in px, overriding the figure's own. Ignored for .html.
 - **`height`** (`int | None`, default: `None` ) – The image height in px, likewise.
@@ -2674,6 +2688,39 @@ Parameters:
 Returns:
 
 - `Path` – The path written.
+
+### Publication figures
+
+Pass the Plotly figure you want to prepare. A `.json` file reopens in the app and an `.html` file opens an offline editor. Other supported extensions render the artwork.
+
+```
+recipe = sps.publication_figure(
+    scanpath,
+    name="Figure 2",
+)
+sps.save_publication(recipe, "figure-2.json")
+sps.save_publication(recipe, "figure-2.svg")
+```
+
+### publication_figure
+
+```
+publication_figure(
+    figures, *, name="Untitled figure", width_mm=170, layout="stack"
+)
+```
+
+Prepare one Plotly figure to edit and export.
+
+Use the returned recipe with save_publication or open its JSON in Prepare figure. The recipe includes the plotted data and embedded images.
+
+### save_publication
+
+```
+save_publication(recipe, path)
+```
+
+Save an editable publication project or its physical-size SVG, PDF, PNG, TIFF or MP4.
 
 ### save_panel_proof
 
@@ -2852,18 +2899,31 @@ Raises:
 
 `scanpath-studio` launches the app. Use these commands to create figures, check data and manage saved work without opening the app:
 
-| Command                                     | What it does                                            |
-| ------------------------------------------- | ------------------------------------------------------- |
-| [`scanpath-studio`](#launch-the-app), `run` | Launch the app                                          |
-| [`render`](#render)                         | Write one trial's scanpath, heatmap or replay to a file |
-| [`corpus`](#corpus)                         | Render a corpus figure from a tidy CSV you already have |
-| [`recipe`](#recipe)                         | Recreate a cohort profile CSV from its saved recipe     |
-| [`check`](#check)                           | Run the Data checks on your tables                      |
-| [`cache`](#cache)                           | Show or clear the recovery cache                        |
-| [`version`](#version)                       | Show the build, and whether a newer release is out      |
-| [`cite`](#cite)                             | Print how to cite Scanpath Studio                       |
+| Command                                     | What it does                                                 |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| [`scanpath-studio`](#launch-the-app), `run` | Launch the app                                               |
+| [`render`](#render)                         | Write one trial's scanpath, heatmap or replay to a file      |
+| [`publication`](#publication)               | Export a saved figure recipe or open it as an offline editor |
+| [`corpus`](#corpus)                         | Render a corpus figure from a tidy CSV you already have      |
+| [`recipe`](#recipe)                         | Recreate a cohort profile CSV from its saved recipe          |
+| [`check`](#check)                           | Run the Data checks on your tables                           |
+| [`cache`](#cache)                           | Show or clear the recovery cache                             |
+| [`version`](#version)                       | Show the build, and whether a newer release is out           |
+| [`cite`](#cite)                             | Print how to cite Scanpath Studio                            |
 
 Each command takes `--help`, and `scanpath-studio --version` prints the version. If you mistype a command, the CLI suggests the closest match.
+
+## Publication
+
+Download the editable file under **Save or open** to reproduce the figure with its crop, labels, caption and print settings.
+
+```
+scanpath-studio render --sample --width-mm 85 -o reading.publication.json
+scanpath-studio publication reading.publication.json -o reading.html
+scanpath-studio publication figure-2.json -o figure-2.pdf
+```
+
+Choose SVG, PDF, PNG or TIFF for artwork, or MP4 for a selected replay clip. Rendering these files requires a Chromium browser. The HTML editor is self-contained and can be used offline.
 
 ## Launch the app
 
@@ -3073,7 +3133,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--screens`           | `ID[,ID...]`          | —         | Like `--all-screens`, for only these screens: comma-separated screen IDs, e.g. Title,Paragraph. See `--list-parts`.                                    |
 | `--screen-transition` | `instant`, `recorded` | `instant` | With `--all-screens` `--animate`: record no delay between screens (instant) or the recorded one (recorded) in each file's metadata (default: instant). |
 | `-o` `--output`       | `PATH`                | —         | Output file. Its extension sets the format: .html, .png, .svg or .pdf.                                                                                 |
-| `--animate`           | switch                | —         | Render the animated replay instead of the static figure (HTML only).                                                                                   |
+| `--animate`           | switch                | —         | Create a replay as interactive HTML or an editable publication project.                                                                                |
 
 ### Input
 
@@ -3293,8 +3353,8 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--width`               | `PX`                    | —       | Image width in px for PNG, SVG and PDF (default: the figure's size). Use with `--height` for fixed-size thumbnails.                                                                                                                                               |
 | `--height`              | `PX`                    | —       | Image height in px for PNG, SVG and PDF (default: the figure's size).                                                                                                                                                                                             |
 | `--scale`               | `X`                     | `2.0`   | Pixel-density multiplier for PNG, SVG and PDF (default: 2.0).                                                                                                                                                                                                     |
-| `--width-mm`            | `MM`                    | —       | Print width of a PNG in mm, drawn at `--dpi` (replaces `--scale`).                                                                                                                                                                                                |
-| `--width-in`            | `IN`                    | —       | Print width of a PNG in inches, drawn at `--dpi`.                                                                                                                                                                                                                 |
+| `--width-mm`            | `MM`                    | —       | Width in mm for a PNG or a publication project.                                                                                                                                                                                                                   |
+| `--width-in`            | `IN`                    | —       | Width in inches for a PNG or a publication project.                                                                                                                                                                                                               |
 | `--proof-width-mm`      | `MM`                    | —       | Total manuscript width of a side-by-side or stacked comparison SVG in mm.                                                                                                                                                                                         |
 | `--dpi`                 | `N`                     | —       | Resolution of `--width-mm` / `--width-in` (default: 300).                                                                                                                                                                                                         |
 | `--separable-layers`    | switch                  | —       | Also write one file per layer (word boxes, fixations, saccades, heatmap, labels, stimulus image) to a `&lt;output&gt;_layers/` folder, to restyle each in Illustrator or Inkscape. The layers line up when stacked. Static image output only: .svg, .pdf or .png. |
@@ -4154,6 +4214,7 @@ Developed with AI assistance. Cross-check results before publishing.
 - Animation can replay saccades with the fixation markers hidden, for one reading or two.
 - Bulk export can now use lossless compression for smaller PNG figures and layers.
 - Compare readings on shared numeric axes, highlight word borders in comparisons and replays, and use the fixation window and sequence line with markers hidden. Plot controls grey out when the selected view or data cannot use them.
+- Prepare the current scanpath, replay or corpus chart for a paper or slide. Download it directly, or crop it, label events and edit its caption. Print settings include journal and slide sizes.
 
 ### Changed
 

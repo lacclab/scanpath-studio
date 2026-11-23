@@ -22,6 +22,7 @@
 - Animation can replay saccades with the fixation markers hidden, for one reading or two.
 - Bulk export can now use lossless compression for smaller PNG figures and layers.
 - Compare readings on shared numeric axes, highlight word borders in comparisons and replays, and use the fixation window and sequence line with markers hidden. Plot controls grey out when the selected view or data cannot use them.
+- Prepare the current scanpath, replay or corpus chart for a paper or slide. Download it directly, or crop it, label events and edit its caption. Print settings include journal and slide sizes.
 
 ### Changed
 

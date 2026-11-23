@@ -2,18 +2,31 @@
 
 `scanpath-studio` launches the app. Use these commands to create figures, check data and manage saved work without opening the app:
 
-| Command                                     | What it does                                            |
-| ------------------------------------------- | ------------------------------------------------------- |
-| [`scanpath-studio`](#launch-the-app), `run` | Launch the app                                          |
-| [`render`](#render)                         | Write one trial's scanpath, heatmap or replay to a file |
-| [`corpus`](#corpus)                         | Render a corpus figure from a tidy CSV you already have |
-| [`recipe`](#recipe)                         | Recreate a cohort profile CSV from its saved recipe     |
-| [`check`](#check)                           | Run the Data checks on your tables                      |
-| [`cache`](#cache)                           | Show or clear the recovery cache                        |
-| [`version`](#version)                       | Show the build, and whether a newer release is out      |
-| [`cite`](#cite)                             | Print how to cite Scanpath Studio                       |
+| Command                                     | What it does                                                 |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| [`scanpath-studio`](#launch-the-app), `run` | Launch the app                                               |
+| [`render`](#render)                         | Write one trial's scanpath, heatmap or replay to a file      |
+| [`publication`](#publication)               | Export a saved figure recipe or open it as an offline editor |
+| [`corpus`](#corpus)                         | Render a corpus figure from a tidy CSV you already have      |
+| [`recipe`](#recipe)                         | Recreate a cohort profile CSV from its saved recipe          |
+| [`check`](#check)                           | Run the Data checks on your tables                           |
+| [`cache`](#cache)                           | Show or clear the recovery cache                             |
+| [`version`](#version)                       | Show the build, and whether a newer release is out           |
+| [`cite`](#cite)                             | Print how to cite Scanpath Studio                            |
 
 Each command takes `--help`, and `scanpath-studio --version` prints the version. If you mistype a command, the CLI suggests the closest match.
+
+## Publication
+
+Download the editable file under **Save or open** to reproduce the figure with its crop, labels, caption and print settings.
+
+```
+scanpath-studio render --sample --width-mm 85 -o reading.publication.json
+scanpath-studio publication reading.publication.json -o reading.html
+scanpath-studio publication figure-2.json -o figure-2.pdf
+```
+
+Choose SVG, PDF, PNG or TIFF for artwork, or MP4 for a selected replay clip. Rendering these files requires a Chromium browser. The HTML editor is self-contained and can be used offline.
 
 ## Launch the app
 
@@ -223,7 +236,7 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--screens`           | `ID[,ID...]`          | —         | Like `--all-screens`, for only these screens: comma-separated screen IDs, e.g. Title,Paragraph. See `--list-parts`.                                    |
 | `--screen-transition` | `instant`, `recorded` | `instant` | With `--all-screens` `--animate`: record no delay between screens (instant) or the recorded one (recorded) in each file's metadata (default: instant). |
 | `-o` `--output`       | `PATH`                | —         | Output file. Its extension sets the format: .html, .png, .svg or .pdf.                                                                                 |
-| `--animate`           | switch                | —         | Render the animated replay instead of the static figure (HTML only).                                                                                   |
+| `--animate`           | switch                | —         | Create a replay as interactive HTML or an editable publication project.                                                                                |
 
 ### Input
 
@@ -443,8 +456,8 @@ Every `render` flag, generated from the command's parser, with the defaults and 
 | `--width`               | `PX`                    | —       | Image width in px for PNG, SVG and PDF (default: the figure's size). Use with `--height` for fixed-size thumbnails.                                                                                                                                               |
 | `--height`              | `PX`                    | —       | Image height in px for PNG, SVG and PDF (default: the figure's size).                                                                                                                                                                                             |
 | `--scale`               | `X`                     | `2.0`   | Pixel-density multiplier for PNG, SVG and PDF (default: 2.0).                                                                                                                                                                                                     |
-| `--width-mm`            | `MM`                    | —       | Print width of a PNG in mm, drawn at `--dpi` (replaces `--scale`).                                                                                                                                                                                                |
-| `--width-in`            | `IN`                    | —       | Print width of a PNG in inches, drawn at `--dpi`.                                                                                                                                                                                                                 |
+| `--width-mm`            | `MM`                    | —       | Width in mm for a PNG or a publication project.                                                                                                                                                                                                                   |
+| `--width-in`            | `IN`                    | —       | Width in inches for a PNG or a publication project.                                                                                                                                                                                                               |
 | `--proof-width-mm`      | `MM`                    | —       | Total manuscript width of a side-by-side or stacked comparison SVG in mm.                                                                                                                                                                                         |
 | `--dpi`                 | `N`                     | —       | Resolution of `--width-mm` / `--width-in` (default: 300).                                                                                                                                                                                                         |
 | `--separable-layers`    | switch                  | —       | Also write one file per layer (word boxes, fixations, saccades, heatmap, labels, stimulus image) to a `&lt;output&gt;_layers/` folder, to restyle each in Illustrator or Inkscape. The layers line up when stacked. Static image output only: .svg, .pdf or .png. |

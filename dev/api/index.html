@@ -2841,6 +2841,39 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#publication-figures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Publication figures
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.publication_figure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;publication_figure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.save_publication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;save_publication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.save_panel_proof" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3719,6 +3752,39 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#publication-figures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Publication figures
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.publication_figure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;publication_figure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.save_publication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;save_publication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.save_panel_proof" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4087,6 +4153,14 @@ builders also take the <a href="#figure-options">figure options</a> as keywords.
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;save_figure&lt;/span&gt;" href="#scanpath_studio.api.save_figure"><code>save_figure</code></a></td>
 <td>Save a figure as HTML, PNG, SVG or PDF.</td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;publication_figure&lt;/span&gt;" href="#scanpath_studio.api.publication_figure"><code>publication_figure</code></a></td>
+<td>Prepare one Plotly figure to edit and export.</td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;save_publication&lt;/span&gt;" href="#scanpath_studio.api.save_publication"><code>save_publication</code></a></td>
+<td>Save an editable publication project or its physical-size SVG, PDF, PNG, TIFF or MP4.</td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-function&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;save_panel_proof&lt;/span&gt;" href="#scanpath_studio.api.save_panel_proof"><code>save_panel_proof</code></a></td>
@@ -8717,7 +8791,9 @@ cite it (<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-s
             <p>The file to write: <code>.html</code> (interactive), or <code>.png</code>, <code>.svg</code> or
 <code>.pdf</code> (static, through Kaleido; see the <a href="../faq/#export-fails">export
 FAQ</a> for its
-setup).</p>
+setup).
+Use <code>.publication.json</code> for an editable recipe or <code>.publication.html</code>
+for the offline figure editor.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -8807,6 +8883,59 @@ figure's aspect, with the dpi written into the file. It replaces <code>scale</co
           </div>
         </li>
     </ul>
+
+
+    </div>
+
+</div><h3 id="publication-figures">Publication figures<a class="headerlink" href="#publication-figures" title="Permanent link">&para;</a></h3>
+<p>Pass the Plotly figure you want to prepare. A <code>.json</code> file reopens in the app and an <code>.html</code> file opens an offline editor. Other supported extensions render the artwork.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">recipe</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">publication_figure</span><span class="p">(</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">scanpath</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">"Figure 2"</span><span class="p">,</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="p">)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">sps</span><span class="o">.</span><span class="n">save_publication</span><span class="p">(</span><span class="n">recipe</span><span class="p">,</span> <span class="s2">"figure-2.json"</span><span class="p">)</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">sps</span><span class="o">.</span><span class="n">save_publication</span><span class="p">(</span><span class="n">recipe</span><span class="p">,</span> <span class="s2">"figure-2.svg"</span><span class="p">)</span>
+</code></pre></div>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.publication_figure" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">publication_figure</span>
+
+
+<a href="#scanpath_studio.api.publication_figure" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">publication_figure</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">figures</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"Untitled figure"</span><span class="p">,</span> <span class="n">width_mm</span><span class="o">=</span><span class="mi">170</span><span class="p">,</span> <span class="n">layout</span><span class="o">=</span><span class="s2">"stack"</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Prepare one Plotly figure to edit and export.</p>
+<p>Use the returned recipe with save_publication or open its JSON in Prepare figure.
+The recipe includes the plotted data and embedded images.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.save_publication" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">save_publication</span>
+
+
+<a href="#scanpath_studio.api.save_publication" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">save_publication</span><span class="p">(</span><span class="n">recipe</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Save an editable publication project or its physical-size SVG, PDF, PNG, TIFF or MP4.</p>
 
 
     </div>

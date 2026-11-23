@@ -57,7 +57,7 @@ GLOBAL_SHOW_SACCADES = "global_show_saccades"
 GLOBAL_SHOW_SACCADE_ARROWS = "global_show_saccade_arrows"
 GLOBAL_SACCADE_TYPE_LEGEND = "global_saccade_type_legend"
 GLOBAL_SHOW_COLOR_LEGEND = "global_show_color_legend"
-#: The note naming the highlighted words (Figure & canvas → Legends).
+#: The note naming the highlighted words (Figure → Legends).
 GLOBAL_SHOW_HIGHLIGHT_LEGEND = "global_show_highlight_legend"
 # Snap to line and where on the line. The older "Snap above words" key,
 # `global_fixation_snap_to_word`, is still read — see `LEGACY_SESSION_KEYS`.
@@ -143,7 +143,7 @@ GLOBAL_MARKER_SIZE_RANGE = "global_marker_size_range"
 GLOBAL_MARKER_SIZE_SCALE = "global_marker_size_scale"
 GLOBAL_MARKER_DURATION_RANGE = "global_marker_duration_range"
 GLOBAL_DURATION_SIZE_LEGEND = "global_duration_size_legend"
-# 📐 Figure & canvas → Legends: where each legend sits. One key per legend and
+# Figure → Legends: where each legend sits. One key per legend and
 # part, ``global_legend_<kind>_{position,arrangement,size}``, for the kinds in
 # `constants.LEGEND_KINDS` (spelled out here, as everything in this file is).
 LEGEND_KIND_NAMES = ("compare", "saccades", "colors", "size_key", "highlight")
@@ -424,6 +424,7 @@ PARAM_TAB = "tab"
 # The Essentials / Full interface mode (`ui_mode.resolve_mode`). A viewer's own
 # preference, so it is read from a link but never written by Share.
 PARAM_UI = "ui"
+PARAM_PREPARE = "prepare"
 PARAM_ONESTOP_VARIANT = "onestop_variant"
 PARAM_ONESTOP_REGIME = "onestop_regime"
 PARAM_ONESTOP_PARTS = "onestop_parts"
@@ -462,14 +463,13 @@ PARAM_DATASET = "dataset"
 PARAM_DATASET_DIGEST = "dataset_digest"
 PARAM_DATASET_ID = "dataset_id"
 
-# Streamlit 1.65 `bind="query-params"` widgets: the widget key IS the URL param,
-# and its value is the option's label verbatim — so neither the key nor the
-# labels (`tabs.CORPUS_SUBTABS`) can be renamed without changing what a
-# bookmarked view opens.
-# Streamlit reads and writes these itself; `_apply_url_preset` and
-# `_build_share_query` never see them.
+# Corpus bookmarks store the section, summary unit and displayed measure label.
+# `corpus_navigation` reads and writes them together when the visible
+# destination or its nested profile changes. The session measure holds its key.
 CORPUS_SUBTAB = "corpus_subtab"
-URL_BOUND_WIDGET_KEYS = frozenset({CORPUS_SUBTAB})
+CORPUS_GROUP_BY = "corpus_group_by"
+CORPUS_MEASURE = "corpus_measure"
+URL_BOUND_WIDGET_KEYS = frozenset({CORPUS_SUBTAB, CORPUS_GROUP_BY, CORPUS_MEASURE})
 
 # Where `?source=` lands. Written by `app.main`'s source dispatch — every
 # `?source=` token resolves to `data_source_choice` there, and
@@ -789,6 +789,8 @@ SHARE_PARAMS: Mapping[str, str] = MappingProxyType(
     {
         **SHARE_TOGGLE_PARAMS,
         **SHARE_VALUE_PARAMS,
+        "word_hover_fields_json": GLOBAL_WORD_HOVER_FIELDS,
+        "fixation_hover_fields_json": GLOBAL_FIXATION_HOVER_FIELDS,
         **SHARE_INT_PARAMS,
         **SHARE_FLOAT_PARAMS,
         **SHARE_INT_RANGE_PARAMS,
@@ -907,6 +909,9 @@ LEGEND_PARAMS: Mapping[str, str] = MappingProxyType(
 
 URL_OPTIONAL_PARAMS = frozenset(
     {
+        PARAM_PREPARE,
+        "word_hover_fields_json",
+        "fixation_hover_fields_json",
         *LEGEND_PARAMS,
         SETUP_PROVENANCE_PARAM,
         COMPARE_PARAM,
@@ -1049,7 +1054,7 @@ URL_SEEDED_STATE_KEYS = frozenset(
 # The JSON schema version stamped by both writers and understood by the reader.
 # Bumping it in url_state without registering a migration (or without updating
 # this constant) is the failure the contract test catches.
-PLOT_CONFIG_SCHEMA_VERSION = 9
+PLOT_CONFIG_SCHEMA_VERSION = 10
 
 # `cmp{idx}_*` templates the config's `compare` list restores, per entry.
 COMPARE_STATE_KEY_TEMPLATES = frozenset(
@@ -1081,7 +1086,7 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         *DESIGN_COLOR_PARAMS.values(),
         *DESIGN_INT_PARAMS.values(),
         *DESIGN_FLOAT_PARAMS.values(),
-        # Figure & canvas → Legends.
+        # Figure → Legends.
         *LEGEND_STATE_KEYS,
         # layers
         GLOBAL_SHOW_WORDS,
@@ -1231,6 +1236,11 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
 PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
     {
         SINGLE_SELECT_TRIAL_MODE,
+        SINGLE_FIX_RANGE,
+        SINGLE_COMPARE_FIX_RANGE,
+        "single_fix_range_user_set",
+        "single_compare_fix_range_user_set",
+        "single_fix_range_all_trials",
         SINGLE_TRIAL_ID,
         SINGLE_TRIAL_CHOSEN,
         # The compare view's own two settings, restored from the

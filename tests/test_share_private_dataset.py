@@ -44,6 +44,27 @@ def test_the_link_names_the_added_dataset():
     assert "Add dataset → Import files" in caveat
 
 
+def _upload_share_panel():
+    import streamlit as st
+
+    from scanpath_studio.url_state import _render_share_body
+
+    st.session_state["_datasets"] = {"Lab reading": {}}
+    _render_share_body("Lab reading")
+
+
+def test_share_choices_name_the_recipient_task_and_needed_inputs():
+    at = AppTest.from_function(_upload_share_panel).run()
+    for section, words in (
+        ("Link", "original files"),
+        ("Code", "input files"),
+        ("Settings file", "original data"),
+    ):
+        at.segmented_control(key="share_section").set_value(section).run()
+        assert not at.exception
+        assert any(words in cap.value for cap in at.caption)
+
+
 def _resolve_app():
     import streamlit as st
 

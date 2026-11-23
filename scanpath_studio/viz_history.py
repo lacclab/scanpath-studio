@@ -50,6 +50,51 @@ class Edit:
     designs: tuple[Design, Design]
     all_trials: tuple[bool, bool]
 
+    def action_label(self, *, redo: bool) -> str:
+        """Describe the first restored control and how many others move with it."""
+        action = "Redo" if redo else "Undo"
+        changed = dict.fromkeys([*self.before, *self.after])
+        keys = [key for key in changed if not key.startswith("?")] or list(changed)
+        if not keys:
+            return f"{action} plot change"
+        key = keys[0]
+        name = {
+            "global_show_order": "fixation index labels",
+            "global_fixation_opacity": "marker opacity",
+            "global_show_fix": "fixation visibility",
+            "global_show_saccades": "saccade visibility",
+            "global_show_heatmap": "heatmap visibility",
+            "global_x_field": "horizontal axis",
+            "global_y_field": "vertical axis",
+        }.get(key) or (
+            key.removeprefix("?")
+            .removeprefix("global_")
+            .removeprefix("single_")
+            .replace("_", " ")
+        )
+        target = self.after if redo else self.before
+        value = target.get(key)
+        if value is None:
+            restored = "automatic"
+        elif isinstance(value, bool):
+            restored = "on" if value else "off"
+        elif key.endswith("_opacity") and isinstance(value, (float, int)):
+            restored = f"{value:.0%}"
+        elif isinstance(value, (tuple, list)) and 0 < len(value) <= 3:
+            restored = " to ".join(map(str, value))
+        elif isinstance(value, (dict, tuple, list)):
+            restored = ""
+        else:
+            restored = str(value)
+        label = f"{action} {name} change"
+        if restored and len(restored) <= 60:
+            label += f", restore {restored}"
+        if len(keys) > 1:
+            label += f", and {len(keys) - 1} other setting" + (
+                "s" if len(keys) > 2 else ""
+            )
+        return label
+
 
 @dataclass
 class PlotHistory:

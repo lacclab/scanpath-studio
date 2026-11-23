@@ -37,7 +37,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from .constants import FIXATION_DURATION_FLAGS, FIXATION_LABEL_OPTIONS
+from .column_names import encode_field_list
+from .constants import FIXATION_DURATION_FLAGS, FIXATION_LABEL_OPTIONS, OPACITY_OPTIONS
 from .figure_views import (
     SECOND_SCANPATH_OPTIONS,
     STATIC_COMPARISON_LAYER_STYLES,
@@ -193,11 +194,17 @@ def _loader_columns() -> frozenset:
     the builders compute — plus the two non-column ``color_by`` values."""
     from .chart_axes import ELAPSED
     from .constants import UNIFORM_COLOR_FIELD
-    from .data import FIX_OPTIONAL_FIELDS, WORD_OPTIONAL_FIELDS, empty_fixations_frame
+    from .data import (
+        FIX_OPTIONAL_FIELDS,
+        WORD_OPTIONAL_FIELDS,
+        empty_fixations_frame,
+        empty_words_frame,
+    )
 
     return frozenset(
         {
             *empty_fixations_frame().columns,
+            *empty_words_frame().columns,
             ELAPSED,
             *(entry[1] for entry in (*FIX_OPTIONAL_FIELDS, *WORD_OPTIONAL_FIELDS)),
             "order_in_trial",
@@ -256,13 +263,18 @@ def _synthetic_python(source: SnippetSource) -> list[str]:
     ]
 
 
+def _file_tables(source: SnippetSource) -> tuple[list, list]:
+    if "words" not in source.options and "fixations" not in source.options:
+        return ["words.csv"], ["fixations.csv"]
+    return source.options.get("words") or [], source.options.get("fixations") or []
+
+
 def _files_python(source: SnippetSource) -> list[str]:
-    words = source.options.get("words") or ["words.csv"]
-    fixations = source.options.get("fixations") or ["fixations.csv"]
+    words, fixations = _file_tables(source)
     return [
         "words, fixations = sps.load_scanpath_data(",
-        f"    {_py(_one_or_list(words))},",
-        f"    {_py(_one_or_list(fixations))},",
+        f"    {_py(_one_or_list(words) if words else None)},",
+        f"    {_py(_one_or_list(fixations) if fixations else None)},",
         *_schema_python(source),
         *_keep_python(source),
         ")",
@@ -350,13 +362,12 @@ def _demo_cli(source: SnippetSource) -> list[str]:
 
 
 def _files_cli(source: SnippetSource) -> list[str]:
-    argv = []
-    words = source.options.get("words") or ["words.csv"]
-    fixations = source.options.get("fixations") or ["fixations.csv"]
-    argv += ["--words", *[str(p) for p in words]]
+    words, fixations = _file_tables(source)
+    argv = ["--words", *map(str, words)] if words else []
     if schema := source.options.get("word_schema"):
         argv += ["--word-schema", json.dumps(schema, separators=(",", ":"))]
-    argv += ["--fixations", *[str(p) for p in fixations]]
+    if fixations:
+        argv += ["--fixations", *map(str, fixations)]
     if schema := source.options.get("fix_schema"):
         argv += ["--fix-schema", json.dumps(schema, separators=(",", ":"))]
     return argv + _keep_cli(source)
@@ -1206,6 +1217,16 @@ def _comma_list(flag: str) -> Any:
     return emit
 
 
+def _hover_fields(flag: str) -> Any:
+    def emit(fields):
+        if fields is None:
+            return []
+        value, as_json = encode_field_list(fields)
+        return [f"{flag}-json" if as_json else flag, value]
+
+    return emit
+
+
 def _highlight_column(value):
     """``--highlight-column``. ``None`` is the real request "highlight nothing",
     which the flag spells as an empty string — not the absence of the flag,
@@ -1489,8 +1510,8 @@ _CLI_EMITTERS: dict[str, Any] = {
     "show_saccade_arrows": _flag_when("--saccade-arrows", True),
     "show_coordinate_grid": _flag_when("--coordinate-grid", True),
     "coordinate_grid_spacing": _valued("--coordinate-grid-spacing"),
-    "word_hover_fields": _comma_list("--word-hover-fields"),
-    "fixation_hover_fields": _comma_list("--fixation-hover-fields"),
+    "word_hover_fields": _hover_fields("--word-hover-fields"),
+    "fixation_hover_fields": _hover_fields("--fixation-hover-fields"),
     "color_by": _valued("--color-by"),
     "fixation_color": _valued("--fixation-color"),
     "fixation_symbol": _valued("--fixation-symbol"),
@@ -1508,7 +1529,12 @@ _CLI_EMITTERS: dict[str, Any] = {
     "highlight_column": _highlight_column,
     "critical_span_style": _mapped(
         "--critical-span-style",
-        {"Mark text": "mark-text", "Mark border": "mark-border", "None": "none"},
+        {
+            "Mark text": "mark-text",
+            "Mark border": "mark-border",
+            "Underline": "underline",
+            "None": "none",
+        },
     ),
     "fixation_flags": _fixation_flags,
     "legend_layout": _legend_layout,
@@ -1516,11 +1542,13 @@ _CLI_EMITTERS: dict[str, Any] = {
     "marker_size_range": _marker_size_range,
     "marker_size_scale": _valued("--marker-size-scale"),
     "marker_duration_range": _two_numbers("--marker-duration-range"),
-    "duration_size_legend": _flag_when("--no-duration-size-legend", False),
+    "duration_size_legend": _switch(
+        "--duration-size-legend", "--no-duration-size-legend"
+    ),
     "saccade_color": _valued("--saccade-color"),
     "saccade_style": _valued("--saccade-style"),
     "saccade_width": _valued("--saccade-width"),
-    "saccade_opacity": _valued("--saccade-opacity"),
+    **{name: _valued(option.flag) for name, option in OPACITY_OPTIONS.items()},
     # The rail's finer design choices.
     "saccade_arrow_size": _valued("--saccade-arrow-size"),
     "heatmap_opacity": _valued("--heatmap-opacity"),
@@ -1552,7 +1580,6 @@ _CLI_EMITTERS: dict[str, Any] = {
     # Each flag below is spelled after its option; `tests/test_code_snippet.py`
     # fails on an option with no row here, so a new one cannot quietly fall
     # back to being "named".
-    "fixation_opacity": _valued("--fixation-opacity"),
     "hollow_fixations": _flag_when("--hollow-fixations", True),
     "color_by_line": _flag_when("--color-by-line", True),
     "fixation_color_range": _two_numbers("--fixation-color-range"),
@@ -1854,13 +1881,14 @@ def _second_dataset_tables(compare: CompareTarget) -> tuple[list, list]:
     return [B_WORDS_PLACEHOLDER], [B_FIXATIONS_PLACEHOLDER]
 
 
-def _second_dataset_python(compare: CompareTarget) -> list[str]:
+def _second_dataset_python(compare: CompareTarget, keep: list[str]) -> list[str]:
     words, fixations = _second_dataset_tables(compare)
     lines = [
         f"# Scanpath B is from a second dataset, {compare.dataset}.",
         "words_b, fixations_b = sps.load_scanpath_data(",
         f"    {_py(_one_or_list(words) if words else None)},",
         f"    {_py(_one_or_list(fixations) if fixations else None)},",
+        *([f"    keep_columns={_py(keep)},"] if keep else []),
         ")",
     ]
     if compare.canvas:
@@ -1933,7 +1961,7 @@ def python_snippet(
     if _draws_primary_raw_gaze(state) and source.kind != SOURCE_RAW_GAZE:
         lines.append(_raw_gaze_python(source))
     if other is not None:
-        lines += _second_dataset_python(other)
+        lines += _second_dataset_python(other, _kept_columns(state.settings))
     raw_gaze_b = _second_raw_gaze(state)
     if raw_gaze_b is not None:
         lines.append(f"raw_gaze_b = sps.load_raw_gaze({_py(_one_or_list(raw_gaze_b))})")
@@ -2026,6 +2054,12 @@ def _comment_lines(note: str, width: int = 79) -> list[str]:
     return [f"# {line}" for line in textwrap.wrap(plain, width - 2)]
 
 
+def _id_argument(flag: str, value: str) -> list[str]:
+    """Keep an ID beginning with a hyphen attached to its argparse option."""
+    value = str(value)
+    return [f"{flag}={value}"] if value.startswith("-") else [flag, value]
+
+
 def cli_snippet(
     source: SnippetSource,
     state: FigureState,
@@ -2049,17 +2083,27 @@ def cli_snippet(
         argv += _unknown_cli(source)
     else:
         argv += source_cli(source)
+    if other is not None and "--keep-columns" not in argv:
+        keep = _kept_columns(state.settings)
+        if keep:
+            argv += ["--keep-columns", *keep]
     if _writes_image_folder(source, state):
         argv += _image_folder_cli(source)
 
     if state.participant:
-        argv += ["-p", str(state.participant)]
+        argv += _id_argument("-p", state.participant)
     if state.trial:
-        argv += ["-t", str(state.trial)]
+        argv += _id_argument("-t", state.trial)
+    if state.kind == "comparison" or (
+        state.kind == "animation" and state.compare is not None and state.compare.trial
+    ):
+        compare = state.compare or CompareTarget()
+        argv += _id_argument("--compare-participant", compare.participant)
+        argv += _id_argument("--compare-trial", compare.trial)
     if state.screen:
-        argv += ["--screen", str(state.screen)]
+        argv += _id_argument("--screen", state.screen)
     if _names_screen_b(state):
-        argv += ["--compare-screen", str(state.compare.screen)]
+        argv += _id_argument("--compare-screen", state.compare.screen)
     if state.canvas:
         argv += ["--canvas", f"{int(state.canvas[0])}x{int(state.canvas[1])}"]
     if explicit or state.base_font_size != 16:
@@ -2085,13 +2129,8 @@ def cli_snippet(
         # it, and the replay's B-side options (`--compare-stimulus`, the
         # labels, the legend) are refused without it. A second dataset's B is
         # named in that dataset's own tables, as in Python.
-        if state.compare is not None and state.compare.trial:
-            argv += [
-                "--compare-with",
-                f"{state.compare.participant}:{state.compare.trial}",
-            ]
-            if other is not None:
-                argv += _second_dataset_cli(other, explicit=explicit)
+        if other is not None:
+            argv += _second_dataset_cli(other, explicit=explicit)
     else:
         if state.drift_correction:
             # Both flags exist only behind SCANPATH_EXPERIMENTAL=1, so
@@ -2126,7 +2165,6 @@ def cli_snippet(
         argv.append("--no-raw-gaze")
     if state.kind == "comparison":
         compare = state.compare or CompareTarget()
-        argv += ["--compare-with", f"{compare.participant}:{compare.trial}"]
         if other is not None:
             argv += _second_dataset_cli(other, explicit=explicit)
         raw_gaze_b = _second_raw_gaze(state)
@@ -2145,7 +2183,13 @@ def cli_snippet(
     settings, defaults = _snippet_options(
         state.settings, state.kind, state.compare, explicit=explicit
     )
-    palette, palette_colors = _matching_palette(settings, defaults)
+    # A two-reading palette changes the individual markers and lines too.
+    # Spell those styles out so an explicit override survives copying the command.
+    palette, palette_colors = (
+        (None, {})
+        if state.kind == "comparison" or state.compare
+        else _matching_palette(settings, defaults)
+    )
     kwargs = _figure_kwargs(settings, state.kind, defaults, explicit=explicit)
     if palette:
         from .plots import palette_slug
@@ -2176,7 +2220,15 @@ def cli_snippet(
     # three flags, so a translated invocation has to carry them or write a
     # differently-sized file than the Python form beside it.
     # So do the print width + dpi `save_figure` takes, as `render`'s flags.
-    for name in ("width", "height", "scale", "width_mm", "width_in", "dpi"):
+    for name in (
+        "width",
+        "height",
+        "scale",
+        "width_mm",
+        "width_in",
+        "dpi",
+        "proof_width_mm",
+    ):
         value = (save_kwargs or {}).get(name)
         if value is not None:
             argv += [f"--{name.replace('_', '-')}", _num(value)]

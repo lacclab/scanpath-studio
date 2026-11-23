@@ -352,22 +352,24 @@ class TestTheSelectorStopsClaimingAPalette:
         at.query_params["source"] = "synthetic"
         at.run(timeout=60)
 
-        def picker():
-            return next(s for s in at.selectbox if s.label == "Palette")
-
         palette_descriptions = {entry["description"] for entry in PALETTES.values()}
         assert palette_descriptions.isdisjoint(c.value for c in at.caption)
 
-        picker().set_value("Default (colorblind-safe)").run(timeout=60)
-        assert picker().value == "Default (colorblind-safe)"
-        assert CUSTOM_PALETTE not in picker().options
+        at.button(key="viz_palette_default_colorblind_safe").click().run(timeout=60)
+        assert (
+            at.button(key="viz_palette_default_colorblind_safe").proto.type == "primary"
+        )
+        assert "viz_palette_custom" not in {button.key for button in at.button}
 
         # Hand-edit one of the palette's colours, exactly as the colour picker
         # in the Saccades popover would.
         at.session_state["global_saccade_color"] = "#123456"
         at.run(timeout=60)
-        assert picker().value == CUSTOM_PALETTE
-        assert CUSTOM_PALETTE in picker().options
+        assert at.button(key="viz_palette_custom").proto.type == "primary"
+        assert (
+            at.button(key="viz_palette_default_colorblind_safe").proto.type
+            == "secondary"
+        )
         assert not any("Your own colours" in c.value for c in at.caption)
 
     @pytest.mark.parametrize(

@@ -12,10 +12,8 @@ import pytest
 from scanpath_studio import column_names as cn
 from scanpath_studio.column_names import ColumnNames, SourceName
 from scanpath_studio.export import (
-    ComparisonSide,
     ExportOptions,
     bulk_export,
-    pair_export,
     pattern_fields,
     render_pattern,
 )
@@ -173,7 +171,7 @@ class TestBulkExport:
     def test_without_names_the_bundle_keeps_the_internal_names(self, frames):
         with _export(frames) as zf:
             fix = pd.read_csv(zf.open("per_trial/p1__t1/fixations.csv"))
-            assert "columns.json" not in zf.namelist()
+            assert json.loads(zf.read("columns.json"))["tables"] == {}
         assert "duration_ms" in fix
 
 
@@ -190,42 +188,6 @@ class TestPatterns:
         )
         assert render_pattern("{RECORDING_SESSION_LABEL}-{TRIAL}", fields) == "p1-t1"
         assert render_pattern("{participant_id}", fields) == "p1"
-
-
-class TestPairExport:
-    def _pair(self, frames, dataset_b):
-        _, words, fixations = frames
-        side_a = ComparisonSide("p1", "t1", words, fixations)
-        side_b = ComparisonSide("p1", "t1", words, fixations, dataset=dataset_b)
-        data = pair_export(
-            None,
-            side_a,
-            side_b,
-            canvas_width=800,
-            canvas_height=400,
-            x_field="x",
-            y_field="y",
-            settings={},
-            options=ExportOptions(
-                include_png=False,
-                include_svg=False,
-                include_fixations=True,
-                table_format="csv",
-            ),
-            column_names=MAPS,
-        )
-        zf = zipfile.ZipFile(io.BytesIO(data))
-        name = next(n for n in zf.namelist() if n.endswith("fixations.csv"))
-        return zf, pd.read_csv(zf.open(name))
-
-    def test_a_same_dataset_pair_uses_the_datasets_names(self, frames):
-        _, fix = self._pair(frames, None)
-        assert "CURRENT_FIX_DURATION" in fix
-
-    def test_a_pair_across_datasets_keeps_the_shared_internal_names(self, frames):
-        zf, fix = self._pair(frames, "Other corpus")
-        assert "duration_ms" in fix
-        assert not any(n.endswith("columns.json") for n in zf.namelist())
 
 
 # --- Aliases, app datasets and rewritten columns ----------------------------
@@ -271,7 +233,7 @@ def test_a_derived_table_names_only_its_ids():
 def test_a_dataset_with_no_map_exports_as_before(frames):
     """An app dataset with no names (synthetic, authored) passes empty maps."""
     with _export(frames, column_names={"fixations": cn.EMPTY, "words": cn.EMPTY}) as zf:
-        assert "columns.json" not in zf.namelist()
+        assert json.loads(zf.read("columns.json"))["tables"] == {}
         readme = zf.read("README.md").decode("utf-8")
     assert "Column names (Scanpath Studio's standard names)" in readme
 
@@ -350,12 +312,62 @@ class TestRewrites:
             (table, column) for table, column, _how in rewrites
         }
 
-    def test_the_demo_names_its_shifted_word_id_honestly(self):
-        """The demo's fixation word ids are shifted (`− 1`) on every load."""
+    def test_the_demo_preserves_the_recorded_word_id_header(self):
         from scanpath_studio.compare_source import _builtin_column_names
         from scanpath_studio.constants import DEMO_CHOICE
 
         payload = _builtin_column_names(DEMO_CHOICE)["fixations"]
         names = ColumnNames.from_payload(payload)
-        assert names.kind_of("word_id") == cn.CONVERTED
-        assert names.label("word_id").endswith(" − 1")
+        assert names.kind_of("word_id") == cn.MAPPED
+        assert names.label("word_id") == "CURRENT_FIX_INTEREST_AREA_ID"
+
+
+def test_csv_dictionary_uses_the_written_types_units_and_missing_convention(tmp_path):
+    from scanpath_studio.export import bulk_export
+
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["01", "1", "NA"],
+            "trial_id": ["1"] * 3,
+            "duration_ms": [0.0, None, 24.0],
+            "x": [0, 1, 2],
+        }
+    )
+    payload, _ = bulk_export(
+        fixations[["participant_id", "trial_id"]],
+        pd.DataFrame(),
+        fixations,
+        options=ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_plot_config=False,
+            include_fixations=True,
+            combine_trials=True,
+        ),
+        settings={},
+        canvas_width=100,
+        canvas_height=100,
+        x_field="x",
+        y_field="y",
+        base_font_size=12,
+        font_family="Arial",
+        column_names=MAPS,
+    )
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        archive.extractall(tmp_path)
+        manifest = json.loads(archive.read("columns.json"))
+    path = "aggregate/all_fixations.csv"
+    cols = {
+        f["column"]: f for f in manifest["csv_schemas"][manifest["csv_files"][path]]
+    }
+    assert cols["RECORDING_SESSION_LABEL"]["r_type"] == "character"
+    assert cols["RECORDING_SESSION_LABEL"]["identifier"] is True
+    assert cols["CURRENT_FIX_DURATION"]["r_type"] == "numeric"
+    assert cols["CURRENT_FIX_DURATION"]["unit"] == "ms"
+    assert manifest["csv_missing_values"]["empty_field"] == "missing"
+    assert (tmp_path / "read_csv.R").is_file()
+    observed = pd.read_csv(
+        tmp_path / path, dtype={"RECORDING_SESSION_LABEL": str}, keep_default_na=False
+    )
+    assert observed["RECORDING_SESSION_LABEL"].tolist() == ["01", "1", "NA"]
+    assert observed["CURRENT_FIX_DURATION"].tolist() == ["0.0", "", "24.0"]

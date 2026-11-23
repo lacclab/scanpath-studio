@@ -22,13 +22,13 @@ recovery cache or the user's state directory.
 
 **A feature option is checked on all four surfaces** by giving its spelling on
 each — the deep-link param, the `render` flag, the API keyword (the four-surface
-rule in `AGENTS.md`). An app check fails when the app refuses the link's value
-("Ignored the link's invalid …"). It cannot tell that an *unknown* param was
-dropped, so confirm the session key it should seed with an `AppTest` drive:
+rule in `AGENTS.md`). Use `--check-option` to compare the actual Scanpath session
+value with the value requested by a published deep-link option. Use `--query`
+for navigation and source selections.
 
 ```bash
 uv run --extra test python scripts/verify_change.py \
-    --query order_label_position=below \
+    --check-option order_label_position=below \
     --render-args "--order-label-position below" \
     --api-kwargs '{"order_label_position": "below"}'
 ```

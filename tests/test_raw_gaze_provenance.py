@@ -1,5 +1,4 @@
-"""Synthesized raw gaze says so at the plot and in its exports, and a
-raw-gaze switch with no samples on this trial says why it draws nothing."""
+"""Raw-gaze provenance in exports and the recording shown on the demo plot."""
 
 from __future__ import annotations
 
@@ -11,38 +10,10 @@ import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from scanpath_studio import app
-from scanpath_studio.constants import DEMO_CHOICE, MANUAL_SAMPLE_CHOICE
 from scanpath_studio.export import ExportOptions, bulk_export
-from scanpath_studio.tabs import _raw_gaze_missing_note, _synthetic_raw_gaze_plot_note
+from scanpath_studio.tabs import _raw_gaze_missing_note
 from scanpath_studio.utils import reading_key
 from tests.conftest import APP_SCRIPT
-
-#: The one demo trial the bundled (synthesized) samples cover, and one they don't.
-PARTICIPANT = "l37_1129"
-WITH_SAMPLES = "l37_1129_2_2_2_Adv"
-WITHOUT_SAMPLES = "l37_1129_2_2_1_Adv"
-
-
-class TestTheCatalogueFlag:
-    def test_only_the_demo_is_synthesized(self):
-        note = app.synthesized_raw_gaze_note(DEMO_CHOICE)
-        assert "synthesized" in note
-        # The note the 🗂️ Data page shows is the same sentence.
-        assert note == app.dataset_about(DEMO_CHOICE)["reading_note"]
-        assert app.synthesized_raw_gaze_note(MANUAL_SAMPLE_CHOICE) == ""
-        assert app.synthesized_raw_gaze_note("My upload") == ""
-        assert app.synthesized_raw_gaze_note(None) == ""
-
-    def test_the_plot_note_needs_drawn_synthesized_samples(self):
-        assert _synthetic_raw_gaze_plot_note(drawn_a=False, source_a=DEMO_CHOICE) == ""
-        assert _synthetic_raw_gaze_plot_note(drawn_a=True, source_a="Upload") == ""
-        note = _synthetic_raw_gaze_plot_note(drawn_a=True, source_a=DEMO_CHOICE)
-        assert "Synthetic raw-gaze illustration" in note
-        # Compare: B's samples from the demo, A's from an upload.
-        assert _synthetic_raw_gaze_plot_note(
-            drawn_a=True, source_a="Upload", drawn_b=True, source_b=DEMO_CHOICE
-        )
 
 
 class TestTheMissingSamplesNote:
@@ -54,7 +25,8 @@ class TestTheMissingSamplesNote:
         assert _raw_gaze_missing_note(True, trial_has_raw_gaze=True) == ""
 
 
-def test_the_bundle_plot_config_records_synthesized_samples():
+@pytest.mark.parametrize("synthesized", [False, True])
+def test_the_bundle_plot_config_records_the_sample_provenance(synthesized):
     words = pd.DataFrame(
         {
             "participant_id": ["p1"],
@@ -89,7 +61,10 @@ def test_the_bundle_plot_config_records_synthesized_samples():
         font_family="monospace",
         x_field="x",
         y_field="y",
-        settings={"show_raw_gaze": True, "raw_gaze_synthesized": True},
+        settings={
+            "show_raw_gaze": True,
+            **({"raw_gaze_synthesized": True} if synthesized else {}),
+        },
         options=ExportOptions(include_png=False, include_svg=False, include_pdf=False),
         raw_gaze=raw,
     )
@@ -100,7 +75,7 @@ def test_the_bundle_plot_config_records_synthesized_samples():
     assert config["raw_gaze"] == {
         "available": True,
         "points": 2,
-        "synthesized": True,
+        "synthesized": synthesized,
         "color": "#888888",
         "marker_size": 4.0,
         "opacity": 0.6,
@@ -109,22 +84,17 @@ def test_the_bundle_plot_config_records_synthesized_samples():
 
 def _demo(trial: str) -> AppTest:
     at = AppTest.from_file(APP_SCRIPT, default_timeout=180)
-    at.query_params["participant"] = PARTICIPANT
+    at.query_params["participant"] = "l37_273"
     at.query_params["trial_id"] = trial
     at.query_params["show_raw_gaze"] = "1"
     return at.run()
 
 
-@pytest.mark.parametrize(
-    ("trial", "synthetic", "missing"),
-    [(WITH_SAMPLES, True, False), (WITHOUT_SAMPLES, False, True)],
-)
-def test_the_demo_says_what_its_raw_gaze_is_at_the_plot(trial, synthetic, missing):
+def test_the_demo_shows_recorded_samples_at_the_plot():
+    trial = "l37_273_2_2_2_Adv"
     at = _demo(trial)
     assert not at.exception, at.exception
-    assert at.session_state["single_trial_id"] == reading_key(PARTICIPANT, trial)
+    assert at.session_state["single_trial_id"] == reading_key("l37_273", trial)
     assert at.session_state["global_show_raw_gaze"] is True
-    captions = " ".join(str(c.value) for c in at.caption)
-    warnings = " ".join(str(w.value) for w in at.warning)
-    assert ("Synthetic raw-gaze illustration" in captions) is synthetic
-    assert ("No raw-gaze samples on this trial" in warnings) is missing
+    assert not any("Synthetic raw-gaze illustration" in c.value for c in at.caption)
+    assert not any("No raw-gaze samples" in w.value for w in at.warning)

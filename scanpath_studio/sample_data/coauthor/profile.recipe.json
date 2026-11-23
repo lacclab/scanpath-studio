@@ -1,0 +1,52 @@
+{
+  "kind": "scanpath-studio/analysis-recipe",
+  "version": 1,
+  "app": {
+    "name": "Scanpath Studio",
+    "version": "0.37.0"
+  },
+  "exported_at": "2026-11-22T21:51:35",
+  "dataset": {
+    "name": "Canal (synthetic)",
+    "source": "Canal (synthetic)"
+  },
+  "trial_filters": [
+    {
+      "field": "Excluding tags",
+      "values": [
+        "exclude"
+      ]
+    }
+  ],
+  "pool": {
+    "readers": 2,
+    "trials": 2,
+    "readers_in_dataset": 3,
+    "trials_in_dataset": 3
+  },
+  "analysis": {
+    "section": "Per text",
+    "view": "Cohort profile",
+    "text": {
+      "field": "text_id",
+      "id": "canal"
+    },
+    "measure": {
+      "key": "tfd",
+      "label": "Total fixation duration \u2014 TFD"
+    },
+    "aggregation": "mean",
+    "normalization": "none",
+    "spread": "SD",
+    "min_readers": 2
+  },
+  "result": {
+    "file": "profile.csv",
+    "rows": 2,
+    "readers": 2
+  },
+  "excludes": {
+    "figure_settings": "Palette, canvas and fonts live in the settings file (Scanpath \u2192 Share \u2192 File), which holds no trial filters.",
+    "data": "No table rows and no annotation notes. The dataset is referenced by name and must be loaded to repeat the analysis."
+  }
+}

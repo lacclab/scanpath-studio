@@ -14,7 +14,7 @@ scanpath-studio:
    fixated words.
 4. Measure validation: canonical measures recomputed by scanpath-studio from
    raw fixation coordinates alone (pre-computed IA columns dropped from the
-   words table AND the fixation report's own word ids dropped, so the tool's
+   words table and the fixation report's own word ids reassigned, so the tool's
    geometric fixation->word assignment is exercised end to end) vs. the
    EyeLink Data Viewer interest-area values shipped with the corpus.
 
@@ -30,7 +30,7 @@ scanpath-studio:
 
 Run from the repo root so the package + its environment resolve:
 
-    uv run python paper/paper_stats.py
+    SCANPATH_EXPERIMENTAL=1 uv run python paper/paper_stats.py
 """
 
 from __future__ import annotations
@@ -91,9 +91,11 @@ def validate(
 ) -> None:
     """Recompute every measure from geometry alone and score it against EyeLink."""
     stripped = words.drop(columns=[c for c in PRECOMPUTED if c in words.columns])
-    fx_geo = fixations.drop(columns=["word_id"])  # force geometric assignment
+    fx_geo = _measures.assign_fixations_to_words(fixations, stripped, overwrite=True)
     computed = sps.compute_word_metrics(stripped, fx_geo)
-    both = computed.merge(eyelink, on=KEY, suffixes=("_sps", "_el"))
+    both = computed.merge(
+        eyelink, on=KEY, suffixes=("_sps", "_el"), validate="one_to_one"
+    )
     assert len(both) == len(words), "merge must stay one-to-one"
 
     # EyeLink regression flags re-parsed from raw ('.' sentinels).
@@ -102,12 +104,16 @@ def validate(
     raw_flags["reg_in_el"] = eyelink_flag(raw, "IA_REGRESSION_IN").fillna(0)
     raw_flags["reg_out_el"] = eyelink_flag(raw, "IA_REGRESSION_OUT").fillna(0)
     raw_flags["word_id"] = raw_flags["word_id"].astype(both["word_id"].dtype)
-    both = both.merge(raw_flags, on=KEY)
+    both = both.merge(raw_flags, on=KEY, validate="one_to_one")
 
     read = both[
         (both["skip_flag_sps"].astype(float) == 0)
         & (both["skip_flag_el"].astype(float) == 0)
     ]
+    if read.empty:
+        raise ValueError(
+            "No word was fixated under both assignments. Check the geometry and trial IDs."
+        )
     print(f"\n-- {label} --")
     for meas, name in DURATION_MEASURES:
         sub = read[[f"{meas}_sps", f"{meas}_el"]].dropna().astype(float)
@@ -138,7 +144,7 @@ def validate(
 
 
 def main() -> None:
-    words, fixations = sps.load_sample_data()
+    words, fixations = sps.load_sample_data(names="canonical")
     eyelink = sps.compute_word_metrics(words, fixations)  # IA values win
     raw = pd.read_csv(
         Path(_data.__file__).parent / "sample_data" / "ia.csv", low_memory=False

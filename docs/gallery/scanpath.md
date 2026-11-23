@@ -18,8 +18,8 @@ print(gallery_figure("scanpath"))
 
 === "In the app"
 
-    1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
-    2. In **Design presets**, click :material/timeline: **Scanpath**. It turns on **Fixations**, **Saccades** and **Stimulus**.
+    1. Open your data in the :material/route: **Scanpath View** and pick a trial in **Select trial**.
+    2. Under **View**, click :material/timeline: **Scanpath**. It turns on **Fixations**, **Saccades** and **Stimulus**.
     3. Save the figure from :material/file_export: **Export** → **Current figure**.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
@@ -28,7 +28,7 @@ print(gallery_figure("scanpath"))
 
     ```bash
     scanpath-studio render --sample \
-      -p l37_1129 -t l37_1129_2_1_1_Ele \
+      -p l37_273 -t l37_273_2_1_1_Ele \
       --highlight-column '' \
       -o scanpath.html
     ```

@@ -8,6 +8,7 @@ import pytest
 
 from scanpath_studio import persistence
 from scanpath_studio.annotations import ANNOTATIONS_STATE_KEY
+from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH, GUIDE_RETURN_KEY
 from scanpath_studio.persistence import (
     cache_status,
     clear_local_state,
@@ -23,7 +24,7 @@ from scanpath_studio.persistence import (
     save_local_state,
     save_state,
 )
-from scanpath_studio.session_keys import DESIGN_PRESETS
+from scanpath_studio.session_keys import DESIGN_PRESETS, SINGLE_COMPARE_TOGGLE
 
 
 def _dataset():
@@ -165,6 +166,36 @@ def test_round_trip_datasets_settings_mappings_and_annotations(tmp_path):
     assert restored["trial_annotations"][("p1", "t1")]["note"] == "check"
 
 
+def test_closing_during_a_guide_restores_original_view_and_keeps_user_edits(tmp_path):
+    original = {
+        "main_nav": _VIEW_CORPUS,
+        "single_animate": False,
+        SINGLE_COMPARE_TOGGLE: True,
+        "global_anim_autoplay": False,
+    }
+    session = original.copy()
+    assert save_state(session, tmp_path)
+    session.update(
+        {
+            GUIDE_RETURN_KEY: original,
+            "main_nav": _VIEW_SCANPATH,
+            "single_animate": True,
+            SINGLE_COMPARE_TOGGLE: False,
+            "global_anim_autoplay": True,
+        }
+    )
+    assert not save_state(session, tmp_path)
+
+    session["single_trial_id"] = "second reading"
+    assert save_state(session, tmp_path)
+    restored = {}
+    assert restore_state(restored, tmp_path)
+    assert {key: restored[key] for key in original} == original
+    assert restored["single_trial_id"] == "second reading"
+    assert GUIDE_RETURN_KEY not in restored
+    assert session["main_nav"] == _VIEW_SCANPATH
+
+
 class TestADatasetWithoutRawGaze:
     """A dataset with no raw gaze stores no raw-gaze file, and restores with
     the empty frame it had — from this cache and from one that still holds the
@@ -287,11 +318,216 @@ class TestAnnotationsModuleImport:
         )
 
 
+def _edit_from_process(
+    cache, reader, restored, first_read, second_attempt, second_read, release
+):
+    import scanpath_studio.annotations as annotations_mod
+
+    session = {}
+    assert restore_state(session, cache)
+    annotations_mod.activate_dataset(session, "Lab")
+    session[ANNOTATIONS_STATE_KEY][(reader, "trial")] = {"note": reader}
+    restored.wait(timeout=30)
+    merge = persistence._merge_saved_annotations
+
+    def at_snapshot(base, local, disk):
+        if reader == "01":
+            first_read.set()
+            assert release.wait(timeout=30)
+        else:
+            second_read.set()
+        return merge(base, local, disk)
+
+    persistence._merge_saved_annotations = at_snapshot
+    if reader == "02":
+        assert first_read.wait(timeout=30)
+        second_attempt.set()
+    assert save_state(session, cache)
+
+
+def test_two_processes_cannot_replace_the_same_annotation_snapshot(
+    tmp_path, monkeypatch
+):
+    import multiprocessing
+    import sys
+    import types
+
+    import scanpath_studio.annotations as annotations_mod
+
+    base = {"data_source_choice": "Lab"}
+    annotations_mod.activate_dataset(base, "Lab")
+    assert save_state(base, tmp_path)
+    ctx = multiprocessing.get_context("spawn")
+    restored = ctx.Barrier(2)
+    first_read, second_attempt, second_read, release = [ctx.Event() for _ in range(4)]
+    workers = [
+        ctx.Process(
+            target=_edit_from_process,
+            args=(
+                tmp_path,
+                reader,
+                restored,
+                first_read,
+                second_attempt,
+                second_read,
+                release,
+            ),
+        )
+        for reader in ("01", "02")
+    ]
+    # AppTest can leave a generated Streamlit script as __main__. Spawn only
+    # needs this module's worker function, not a copy of that app session.
+    with monkeypatch.context() as patch:
+        patch.setitem(sys.modules, "__main__", types.ModuleType("__main__"))
+        for worker in workers:
+            worker.start()
+    try:
+        assert second_attempt.wait(timeout=30)
+        # The first worker has read the old manifest and is waiting to publish.
+        # Even the second worker's read must wait until that publication.
+        assert not second_read.wait(timeout=0.5)
+        release.set()
+        for worker in workers:
+            worker.join(timeout=30)
+            assert worker.exitcode == 0
+    finally:
+        release.set()
+        for worker in workers:
+            if worker.is_alive():
+                worker.terminate()
+            worker.join(timeout=5)
+    session = {}
+    assert restore_state(session, tmp_path)
+    annotations_mod.activate_dataset(session, "Lab")
+    assert {
+        reader: note["note"]
+        for (reader, _), note in session[ANNOTATIONS_STATE_KEY].items()
+    } == {"01": "01", "02": "02"}
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_read_only_cache_can_be_restored_with_or_without_a_lock_file(
+    tmp_path, monkeypatch, legacy
+):
+    import errno
+    from pathlib import Path
+
+    assert save_state({"_datasets": {"Lab": _dataset()}}, tmp_path)
+    sidecar = tmp_path / persistence._CACHE_LOCK_FILE
+    if legacy:
+        sidecar.unlink()
+    original_open = Path.open
+
+    def read_only(path, mode="r", *args, **kwargs):
+        if path == sidecar and mode == "a+b":
+            raise OSError(errno.EROFS, "read-only cache")
+        return original_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", read_only)
+    session = {}
+    assert restore_state(session, tmp_path)
+    assert "Lab" in session["_datasets"]
+
+
+def test_unreadable_cache_lock_pauses_saving_until_reopened(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    assert save_state({"_datasets": {"Lab": _dataset()}}, tmp_path)
+    manifest = tmp_path / "manifest.json"
+    saved = manifest.read_bytes()
+    sidecar = tmp_path / persistence._CACHE_LOCK_FILE
+    original_open = Path.open
+
+    def unreadable(path, *args, **kwargs):
+        if path == sidecar:
+            raise PermissionError("Lock is unreadable")
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+    monkeypatch.setattr(persistence, "state_directory", lambda: tmp_path)
+    session = {}
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "open", unreadable)
+        assert not restore_local_state(session, "http://localhost")
+    assert persistence.persistence_paused(session)
+    assert "permission denied" in persistence.cache_failure(session)
+    assert not save_local_state(session, "http://localhost")
+    assert manifest.read_bytes() == saved
+    fresh = {}
+    assert restore_local_state(fresh, "http://localhost")
+    assert "Lab" in fresh["_datasets"]
+
+
 class TestAnnotationsPerDataset:
     """The cache keeps each dataset's annotations as its own."""
 
     STAR = {"star": True, "tags": ["Review"], "note": "A's note."}
     NOTE = {"star": False, "tags": [], "note": "B's note."}
+
+    def test_stale_tab_keeps_its_note_and_cannot_remove_a_newer_dataset(
+        self, tmp_path, monkeypatch
+    ):
+        import scanpath_studio.annotations as ann
+
+        monkeypatch.setenv(persistence.STATE_DIR_ENV_VAR, str(tmp_path))
+        monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "1")
+        url = "http://localhost"
+        assert save_state({"_datasets": {"A": _dataset()}}, tmp_path)
+        newer, older = {}, {}
+        for tab in (newer, older):
+            assert restore_state(tab, tmp_path)
+            ann.activate_dataset(tab, "A")
+
+        newer["_datasets"]["B"] = _dataset()
+        assert save_local_state(newer, url)
+        saved = (tmp_path / "manifest.json").read_bytes()
+        for note in ("Check this fixation", "Keep this edit too"):
+            older[ANNOTATIONS_STATE_KEY][("p1", "t1")] = {**self.NOTE, "note": note}
+            assert not save_local_state(older, url)
+            assert (tmp_path / "manifest.json").read_bytes() == saved
+            assert ann.cache_payload(older)["datasets"]["A"][0]["note"] == note
+            assert "this tab" in older[persistence.SAVE_CONFLICT_KEY]
+
+        fresh = {}
+        assert restore_state(fresh, tmp_path)
+        assert set(fresh["_datasets"]) == {"A", "B"}
+        pd.testing.assert_frame_equal(
+            fresh["_datasets"]["B"]["words"], _dataset()["words"]
+        )
+        ann.activate_dataset(fresh, "A")
+        assert not fresh[ANNOTATIONS_STATE_KEY]
+
+    def test_two_local_sessions_merge_independent_edits_and_detect_a_conflict(
+        self, tmp_path
+    ):
+        import scanpath_studio.annotations as ann
+
+        base = {"data_source_choice": "Pilot"}
+        ann.activate_dataset(base, "Pilot")
+        base[ANNOTATIONS_STATE_KEY][("01", "a")] = dict(self.STAR)
+        save_state(base, tmp_path)
+
+        def reopen():
+            state = {}
+            assert restore_state(state, tmp_path)
+            ann.activate_dataset(state, "Pilot")
+            return state
+
+        first, second = reopen(), reopen()
+        first[ANNOTATIONS_STATE_KEY][("01", "b", "2")] = dict(self.NOTE)
+        del second[ANNOTATIONS_STATE_KEY][("01", "a")]
+        assert save_state(first, tmp_path) and save_state(second, tmp_path)
+        assert reopen()[ANNOTATIONS_STATE_KEY] == {("01", "b", "2"): self.NOTE}
+
+        first, second = reopen(), reopen()
+        key = ("01", "b", "2")
+        first[ANNOTATIONS_STATE_KEY][key] = dict(self.STAR)
+        second[ANNOTATIONS_STATE_KEY][key] = {**self.NOTE, "note": "Reviewer B"}
+        assert save_state(first, tmp_path)
+        with pytest.raises(persistence.AnnotationConflictError, match="01 / b / 2"):
+            save_state(second, tmp_path)
+        assert second[ANNOTATIONS_STATE_KEY][key]["note"] == "Reviewer B"
+        assert reopen()[ANNOTATIONS_STATE_KEY][key] == self.STAR
 
     def test_two_datasets_with_colliding_ids_round_trip_apart(self, tmp_path):
         import scanpath_studio.annotations as annotations_mod
@@ -391,7 +627,9 @@ def test_setting_change_reuses_persisted_dataset_files(tmp_path):
     assert frame_path.stat().st_mtime_ns == before
 
 
-def test_concurrent_sessions_leave_a_valid_cache(tmp_path):
+def test_concurrent_first_saves_only_publish_one_sessions_work(tmp_path, monkeypatch):
+    monkeypatch.setenv(persistence.STATE_DIR_ENV_VAR, str(tmp_path))
+    monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "1")
     sessions = [
         {
             "_datasets": {f"Corpus {index}": _dataset()},
@@ -401,19 +639,46 @@ def test_concurrent_sessions_leave_a_valid_cache(tmp_path):
     ]
 
     with ThreadPoolExecutor(max_workers=4) as pool:
-        assert all(pool.map(lambda session: save_state(session, tmp_path), sessions))
+        saved = list(
+            pool.map(lambda tab: save_local_state(tab, "http://localhost"), sessions)
+        )
 
+    assert saved.count(True) == 1
     restored = {}
     assert restore_state(restored, tmp_path)
-    assert restored["_datasets"]
+    assert set(restored["_datasets"]) == {f"Corpus {saved.index(True)}"}
+    assert all(
+        persistence.SAVE_CONFLICT_KEY in tab
+        for tab, won in zip(sessions, saved, strict=True)
+        if not won
+    )
+
+
+def test_an_open_tab_cannot_recreate_work_cleared_from_another_session(tmp_path):
+    tab = {"_datasets": {"A": _dataset()}}
+    assert save_state(tab, tmp_path)
+    assert clear_local_state(root=tmp_path)
+    tab["global_show_heatmap"] = True
+    with pytest.raises(persistence.RecoveryConflictError):
+        save_state(tab, tmp_path)
+    assert not (tmp_path / "manifest.json").exists()
+    assert "A" in tab["_datasets"]
 
 
 def test_local_save_failure_does_not_escape_into_the_app(tmp_path, monkeypatch):
+    monkeypatch.setenv(persistence.PERSIST_ENV_VAR, "1")
     invalid_root = tmp_path / "not-a-directory"
     invalid_root.write_text("occupied", encoding="utf-8")
     monkeypatch.setattr(persistence, "state_directory", lambda: invalid_root)
 
-    assert not save_local_state({}, "http://localhost:8501")
+    session = {}
+    assert not save_local_state(session, "http://localhost:8501")
+    assert session[persistence.SAVE_FAILED_KEY]
+    monkeypatch.setattr(
+        persistence, "state_directory", lambda: tmp_path / "working-cache"
+    )
+    assert save_local_state(session, "http://localhost:8501")
+    assert persistence.SAVE_FAILED_KEY not in session
 
 
 def test_forget_removes_only_known_cache_files(tmp_path):
@@ -919,8 +1184,7 @@ class TestRememberedDatasetCounts:
 
 
 class TestTheRecoveryToastPhrase:
-    """The toast names what came back, so the claim can be checked
-    against the *Saved on this computer* section it points at."""
+    """The toast names what came back and points to its details in Saved work."""
 
     @staticmethod
     def _recap(**counts):
@@ -944,6 +1208,11 @@ class TestTheRecoveryToastPhrase:
 
     def test_nothing_to_report_still_reads_as_a_sentence(self):
         assert self._recap() == "your last session"
+
+    def test_metadata_tables_are_named_in_the_toast(self):
+        """A restored participant table is something a user would
+        recognise coming back, so the toast says so."""
+        assert self._recap(datasets=1, metadata=2) == "1 dataset and 2 metadata tables"
 
 
 class TestAMalformedCacheNeverStopsTheApp:
@@ -1163,11 +1432,6 @@ def test_a_restore_that_crashes_the_app_does_not_crash_the_next_launch(
     assert not second.exception, [e.message for e in second.exception]
     assert any("didn't finish opening" in t.value for t in second.toast)
     assert (tmp_path / "manifest.json").read_text(encoding="utf-8") == manifest
-
-    def test_metadata_tables_are_named_in_the_toast(self):
-        """A restored participant table is something a user would
-        recognise coming back, so the toast says so."""
-        assert self._recap(datasets=1, metadata=2) == "1 dataset and 2 metadata tables"
 
 
 class TestMetadataTablesInTheRecoveryCache:
@@ -1412,6 +1676,28 @@ class TestMetadataTablesInTheRecoveryCache:
         assert persistence.failed_metadata(restored) is None
         md.activate_dataset(restored, "study")
         assert md.SESSION_KEY in restored
+
+    def test_an_older_tab_cannot_discard_files_used_by_a_newer_save(self, tmp_path):
+        writer = {"_datasets": {"study": _dataset()}, **self._attached()}
+        assert save_state(writer, tmp_path)
+        paths = [_frame_files(tmp_path, "study")["words"], _sidecar(tmp_path)]
+        contents = {path: path.read_bytes() for path in paths}
+        for path in paths:
+            path.unlink()
+        older = {}
+        assert restore_state(older, tmp_path)
+        assert "study" in persistence.failed_datasets(older)
+        assert persistence.failed_metadata(older)
+
+        for path, data in contents.items():
+            path.write_bytes(data)
+        writer["global_show_heatmap"] = True
+        assert save_state(writer, tmp_path)
+        assert not persistence.discard_failed_dataset(older, "study", tmp_path)
+        assert not persistence.discard_failed_metadata(older, tmp_path)
+        assert {path: path.read_bytes() for path in paths} == contents
+        assert "study" in persistence.failed_datasets(older)
+        assert persistence.failed_metadata(older)
 
     def test_removing_the_held_back_file_touches_nothing_else(self, tmp_path):
         save_state({"_datasets": {"study": _dataset()}, **self._attached()}, tmp_path)
@@ -1708,11 +1994,9 @@ class TestEachCachedDatasetRestoresOnItsOwn:
 
 
 def test_the_app_names_a_damaged_dataset_and_keeps_it(tmp_path, monkeypatch):
-    """End to end: the full app restores the healthy dataset, says which one did
-    not come back (with Retry / Remove from cache, on the page and on the Data
-    page's *Saved on this computer*), and its next save keeps the damaged entry."""
+    """A damaged entry survives the next save and has recovery actions in Saved work."""
     streamlit_testing = pytest.importorskip("streamlit.testing.v1")
-    from tests.conftest import APP_SCRIPT, open_data_view
+    from tests.conftest import APP_SCRIPT, pin_data_view
 
     monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
     monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
@@ -1730,7 +2014,8 @@ def test_the_app_names_a_damaged_dataset_and_keeps_it(tmp_path, monkeypatch):
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert set(manifest["datasets"]) == {"good", "damaged"}
 
-    open_data_view(at)
+    pin_data_view(at, section="Saved work")
+    at.run()
     assert not at.exception, [e.message for e in at.exception]
     keys = {b.key for b in at.button}
     assert "saved_here_recovery_remove_0" in keys
@@ -1802,6 +2087,12 @@ class TestASaveIsAllOrNothing:
                 pd.DataFrame({"participant_id": ["p"], "age": [age]}), "participant_id"
             ),
         }
+
+    def _save_replacement(self, root) -> bool:
+        session = {}
+        assert restore_state(session, root)
+        session.update(self._session(**self.NEW))
+        return save_state(session, root)
 
     @staticmethod
     def _expected(state: dict) -> dict:
@@ -1879,7 +2170,7 @@ class TestASaveIsAllOrNothing:
 
     def test_a_clean_save_restores_the_new_state(self, tmp_path):
         save_state(self._session(**self.OLD), tmp_path)
-        assert save_state(self._session(**self.NEW), tmp_path)
+        assert self._save_replacement(tmp_path)
         assert self._restored(tmp_path) == self._expected(self.NEW)
 
     @pytest.mark.parametrize("mode", ["fails", "killed"])
@@ -1890,7 +2181,7 @@ class TestASaveIsAllOrNothing:
         save_state(self._session(**self.OLD), counted)
         with monkeypatch.context() as patch:
             writes, _ = self._writes(patch)
-            assert save_state(self._session(**self.NEW), counted)
+            assert self._save_replacement(counted)
         # Both datasets' three frames, the metadata tables, then the manifest.
         assert len(writes) == 8 and writes[-1] == "manifest.json"
 
@@ -1901,7 +2192,7 @@ class TestASaveIsAllOrNothing:
             with monkeypatch.context() as patch:
                 _, injected = self._writes(patch, fail_at, mode)
                 with pytest.raises(injected):
-                    save_state(self._session(**self.NEW), root)
+                    self._save_replacement(root)
             committed = mode == "killed" and fail_at == len(writes)
             expected = self._expected(self.NEW if committed else self.OLD)
             assert self._restored(root) == expected, (mode, fail_at, writes)
@@ -1926,7 +2217,7 @@ class TestASaveIsAllOrNothing:
         with monkeypatch.context() as patch:
             writes, injected = self._writes(patch, fail_at=4, mode="killed")
             with pytest.raises(injected):
-                save_state(self._session(**self.NEW), tmp_path)
+                self._save_replacement(tmp_path)
         left = {f"datasets/{name}" for name in writes}
 
         young: dict = {}
@@ -1945,24 +2236,19 @@ class TestASaveIsAllOrNothing:
         assert self._restored(tmp_path)["frames"] == self._expected(self.OLD)["frames"]
 
     def test_two_sessions_sharing_the_cache_leave_each_others_files(self, tmp_path):
-        """Two tabs on one cache: only a session's first save sweeps unnamed
-        files, so a dataset one tab added is not removed by the other tab's
-        every save, and re-encoded by its own next one."""
-        save_state({"_datasets": {"Corpus": _dataset()}}, tmp_path)
-        tab_a: dict = {}
-        tab_b: dict = {}
-        for tab in (tab_a, tab_b):
-            restore_state(tab, tmp_path)
-            tab["global_show_heatmap"] = True
-            assert save_state(tab, tmp_path)  # each tab's one sweep
-
-        tab_a["_datasets"] = {**tab_a["_datasets"], "Added": _dataset()}
+        """A refused save leaves even aged files available to the tab that added them."""
+        tab_a = {"_datasets": {"Corpus": _dataset()}}
+        assert save_state(tab_a, tmp_path)
+        tab_b = {}
+        assert restore_state(tab_b, tmp_path)
+        tab_a["_datasets"]["Added"] = _dataset()
         assert save_state(tab_a, tmp_path)
         added = _frame_files(tmp_path, "Added")
         self._age(tmp_path, [path.relative_to(tmp_path) for path in added.values()])
 
-        tab_b["global_show_heatmap"] = False  # its manifest has no "Added"
-        assert save_state(tab_b, tmp_path)
+        tab_b["global_show_heatmap"] = False
+        with pytest.raises(persistence.RecoveryConflictError):
+            save_state(tab_b, tmp_path)
         assert all(path.is_file() for path in added.values())
         tab_a["global_show_heatmap"] = False
         assert save_state(tab_a, tmp_path)
@@ -2060,7 +2346,7 @@ class TestASaveIsAllOrNothing:
         with monkeypatch.context() as patch:
             _, injected = self._writes(patch, fail_at=7, mode="killed")
             with pytest.raises(injected):
-                save_state(self._session(**self.NEW), tmp_path)
+                self._save_replacement(tmp_path)
         assert len(self._on_disk(tmp_path)) == 14  # both saves' frames and tables
         forget_state(tmp_path)
         assert not (tmp_path / "datasets").exists()

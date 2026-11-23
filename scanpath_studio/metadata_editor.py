@@ -6,11 +6,12 @@ import pandas as pd
 import streamlit as st
 
 from . import metadata as md
-from .constants import ICONS, UPLOAD_FILE_TYPES, plural, upload_limit_mb
+from .constants import ICONS, UPLOAD_FILE_TYPES, md_literal, plural, upload_limit_mb
 from .data import (
     explain_read_error,
     header_only_error,
     read_table,
+    read_table_columns,
     trial_id_series,
     trial_mapping_columns,
 )
@@ -29,21 +30,17 @@ def _clear_metadata(grain: str) -> None:
         st.session_state.pop(key, None)
 
 
-def _restored_metadata_note(host, attached, *, grain: str) -> None:
-    """The uploader-side line for a table with no file behind it.
+def _on_metadata_file_change(grain: str, widget: str) -> None:
+    """Detach only when the user removes the last file from the uploader."""
+    if not st.session_state.get(widget):
+        _clear_metadata(grain)
 
-    A table that came back from the recovery cache or a saved config has
-    nothing in its uploader, so the file chip that normally *is* the detach
-    control is not there to press. This says where the table came from
-    and puts a ✕ Detach back, for this case only. Changing its key or its
-    fields means uploading the file again — the raw table it was cut from is
-    not part of what is restored.
-    """
-    n_fields = len(attached.fields)
+
+def _attached_metadata_note(host, attached, *, grain: str) -> None:
+    """Offer a detach action when the table outlives the file picker."""
     host.caption(
-        f"↩️ **{attached.source_name}** restored, with "
-        f"{plural(n_fields, 'field')}. Upload the file again to change its id "
-        "column or its fields."
+        f"**{md_literal(attached.source_name)}** · {plural(len(attached.fields), 'field')}. "
+        "Upload the file again to change its ID column or fields."
     )
     host.button(
         "✕ Detach",
@@ -87,7 +84,7 @@ def _metadata_upload_name(uploads) -> str:
     return f"{first} + {plural(len(uploads) - 1, 'more file')}"
 
 
-def _read_metadata_uploads(uploads) -> pd.DataFrame:
+def _read_metadata_uploads(uploads, grain="participant", mapping=()) -> pd.DataFrame:
     """Every file uploaded for one metadata table, stacked into one table.
 
     A table split across files (one per session, one per lab) reads as one:
@@ -95,10 +92,20 @@ def _read_metadata_uploads(uploads) -> pd.DataFrame:
     The same reader turning up in two files is what the builders already
     handle — combined when the rows agree, dropped and reported when not.
     """
+    infer = {
+        "participant": md.infer_participant_id_column,
+        "trial": md.infer_trial_id_column,
+        "text": md.infer_text_id_column,
+    }[grain]
     frames = []
     for upload in uploads:
         try:
-            frame = read_table(upload)
+            header = read_table_columns(upload)
+            plan = md.id_read_plan(mapping, infer)(header)
+            if grain == "participant" and not mapping and not plan.identity and header:
+                # The single-column picker selects the first column by default.
+                plan = md.id_read_plan(header[0], infer)(header)
+            frame = read_table(upload, plan=plan)
         except Exception as exc:  # unreadable file — the caller names it
             raise _MetadataReadError(upload.name, exc) from exc
         if frame.empty and len(frame.columns):
@@ -121,10 +128,13 @@ def _metadata_upload(grain: str, help_text: str, upload_host) -> pd.DataFrame | 
         help_text,
         emphasis=True,
     )
+    widget = md.upload_key(grain)
     uploads = host.file_uploader(
         title,
         type=list(UPLOAD_FILE_TYPES),
-        key=md.upload_key(grain),
+        key=widget,
+        on_change=_on_metadata_file_change,
+        args=(grain, widget),
         accept_multiple_files=True,
         help=help_text,
         label_visibility="collapsed",
@@ -133,27 +143,35 @@ def _metadata_upload(grain: str, help_text: str, upload_host) -> pd.DataFrame | 
     attached_key, raw_key, file_key = md.grain_keys(grain)
     if not uploads:
         attached = st.session_state.get(attached_key)
-        if attached is not None and md.is_restored(st.session_state, grain):
-            _restored_metadata_note(host, attached, grain=grain)
-        elif attached is not None or st.session_state.get(file_key) is not None:
-            _clear_metadata(grain)
+        if attached is not None:
+            _attached_metadata_note(host, attached, grain=grain)
         return None
 
     signature = _metadata_upload_signature(uploads)
     previous = st.session_state.get(file_key)
-    if previous != signature:
+    new_files = previous != signature
+    mapping_key = f"{grain}_metadata_id_column"
+    mapping = (
+        tuple(trial_mapping_columns(st.session_state.get(mapping_key) or ()))
+        if not new_files
+        else ()
+    )
+    raw = st.session_state.get(raw_key)
+    if new_files or raw is None or raw.attrs.get("metadata_id_mapping") != mapping:
         try:
-            raw = _read_metadata_uploads(uploads)
+            raw = _read_metadata_uploads(uploads, grain, mapping)
         except _MetadataReadError as exc:
             _clear_metadata(grain)
             exc.say()
             return None
+        raw.attrs["metadata_id_mapping"] = mapping
+        st.session_state[raw_key] = raw
+    if new_files:
         # Mapping can stop until the user picks an ID in the new table.
         # No field from the preceding attachment should remain active then.
         st.session_state.pop(attached_key, None)
         if not isinstance(previous, tuple) or not set(previous).intersection(signature):
             st.session_state.pop(f"{grain}_metadata_keep_fields", None)
-        st.session_state[raw_key] = raw
         st.session_state[file_key] = signature
         st.session_state[f"_{grain}_metadata_name"] = _metadata_upload_name(uploads)
         st.session_state.pop(f"{grain}_metadata_id_column", None)

@@ -444,7 +444,7 @@ class TestApplyUploadedPlotConfig:
 
         data = json.dumps(
             {"layers": {"heatmap": False}, "axes": {"x_field": "bogus"}}
-        ).encode("utf-8")
+        ).encode("utf-8-sig")
         ss = _run(_apply_app, _bytes=data).session_state
         assert ss["global_show_heatmap"] is False
         assert ss["_plot_config_skipped"] == ["X axis field"]
@@ -612,7 +612,12 @@ def test_build_studio_config_includes_provenance_and_round_trips():
     assert cfg["app"] == {"name": "Scanpath Studio", "version": "9.9.9"}
     assert cfg["exported_at"] == "2026-06-15T12:00:00"
     assert cfg["data_source"] == "Use bundled demo"
-    assert cfg["selection"] == {"participant_id": "p1", "trial_id": "t1"}
+    assert cfg["selection"] == {
+        "participant_id": "p1",
+        "trial_id": "t1",
+        "fixation_window": None,
+        "window_all_trials": False,
+    }
     assert cfg["coloring"]["color_by"] == "line"
     assert cfg["coloring"]["heatmap_norm"] == "Log"
     assert cfg["coloring"]["saccade_style"] == "Dotted"
@@ -829,7 +834,7 @@ class TestConfigMigration:
         # forces a matching migration + this assertion to move together.
         from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
 
-        assert PLOT_CONFIG_SCHEMA == 9
+        assert PLOT_CONFIG_SCHEMA == 10
 
     def test_schema1_config_still_restores_end_to_end(self):
         # A schema-1 file (no `schema` key) applies its plot settings through the

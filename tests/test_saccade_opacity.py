@@ -110,3 +110,38 @@ def test_the_rail_row_drives_the_figure():
     # The typed box writes the same key.
     at.number_input(key="global_saccade_opacity__num").set_value(0.25).run(timeout=60)
     assert at.session_state["global_saccade_opacity"] == pytest.approx(0.25)
+
+
+@pytest.mark.parametrize("opacity", [0.0, 0.05, 1.0])
+def test_api_cli_rail_and_saved_file_support_the_same_opacity_interval(opacity):
+    from scanpath_studio import api, cli
+    from scanpath_studio.constants import OPACITY_OPTIONS
+    from scanpath_studio.url_state import _URL_BOUNDED
+    from tests.test_plot_config_restore import _restore_app, _run
+
+    both = {name: opacity for name in OPACITY_OPTIONS}
+    args = cli._render_parser().parse_args(
+        [x for option in OPACITY_OPTIONS.values() for x in (option.flag, str(opacity))]
+    )
+    state = _run(_restore_app, _config={"coloring": both}).session_state
+    rail = _rail(**{o.state_key: opacity for o in OPACITY_OPTIONS.values()})
+    for name, option in OPACITY_OPTIONS.items():
+        assert getattr(args, name) == state[option.state_key] == opacity
+        assert _URL_BOUNDED[option.state_key] == (0.0, 1.0)
+        assert rail.slider(key=option.state_key).value == opacity
+    figure = api.plot_scanpath(*_frames(), **both)
+    assert set(_saccade_opacities(figure).values()) == {opacity}
+    assert (
+        next(t for t in figure.data if t.name.lower() == "fixations").marker.opacity
+        == opacity
+    )
+
+
+@pytest.mark.parametrize("value", ["-0.01", "1.01", "nan", "inf"])
+def test_opacity_rejects_nonfinite_and_out_of_range_values_before_reading(value):
+    from scanpath_studio import api, cli
+
+    with pytest.raises(SystemExit):
+        cli._render_parser().parse_args(["--fixation-opacity", value])
+    with pytest.raises(ValueError, match="saccade_opacity"):
+        api.plot_scanpath(*_frames(), saccade_opacity=float(value))

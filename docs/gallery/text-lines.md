@@ -18,8 +18,8 @@ print(gallery_figure("text-lines"))
 
 === "In the app"
 
-    1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
-    2. In :material/blur_on: **Fixations** ▾ → **Marker** → **Color**, choose **Text line (computed)**.
+    1. Open your data in the :material/route: **Scanpath View** and pick a trial in **Select trial**.
+    2. In :material/blur_on: **Fixations** → **Color**, choose **Text line (computed)**.
     3. Keep **Saccades** and **Stimulus** on. Each fixation takes the color of the nearest line of word boxes.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
@@ -28,7 +28,7 @@ print(gallery_figure("text-lines"))
 
     ```bash
     scanpath-studio render --sample \
-      -p l37_1129 -t l37_1129_2_1_1_Ele \
+      -p l37_273 -t l37_273_2_1_1_Ele \
       --color-by-line \
       --highlight-column '' \
       -o text-lines.html

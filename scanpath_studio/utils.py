@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import threading
+import weakref
 from collections.abc import Callable, Iterable
 
 import numpy as np
@@ -275,33 +277,47 @@ def _build_combo_options_cached(
     return combos, combo_labels, label_to_combo
 
 
-@st.cache_data(show_spinner=False)
-def _trial_positions(_frame: pd.DataFrame, cache_key) -> dict[tuple[str, str], object]:
-    """Map ``(participant_id, trial_id)`` → positional row indices.
+_TRIAL_INDICES: dict = {}
+_TRIAL_INDEX_LOCK = threading.Lock()
 
-    Built once per frame (cached on its fingerprint) so extracting a single
-    trial is an O(trial) ``iloc`` rather than an O(corpus) boolean mask on every
-    rerun — and shared across the tabs, which all slice the same filtered frames.
-    """
-    if _frame is None or _frame.empty:
-        return {}
-    grouped = _frame.groupby(["participant_id", "trial_id"], sort=False).indices
-    # Normalise keys to (str, str) so lookups match the picker's string values.
-    return {(str(p), str(t)): idx for (p, t), idx in grouped.items()}
+
+def _trial_positions(frame: pd.DataFrame) -> dict[tuple[str, str], np.ndarray]:
+    """Share a read-only position index for the lifetime of its source frame."""
+    identity = id(frame)
+    fingerprint = frame_fingerprint(frame)
+    with _TRIAL_INDEX_LOCK:
+        cached = _TRIAL_INDICES.get(identity)
+        if cached is not None and cached[0]() is frame and cached[1] == fingerprint:
+            return cached[2]
+
+    def release(ref):
+        with _TRIAL_INDEX_LOCK:
+            if _TRIAL_INDICES.get(identity, (None,))[0] is ref:
+                del _TRIAL_INDICES[identity]
+
+    grouped = frame.groupby(["participant_id", "trial_id"], sort=False).indices
+    positions = {(str(p), str(t)): idx for (p, t), idx in grouped.items()}
+    with _TRIAL_INDEX_LOCK:
+        _TRIAL_INDICES[identity] = weakref.ref(frame, release), fingerprint, positions
+    return positions
 
 
 def extract_trial(frame: pd.DataFrame, participant_id, trial_id) -> pd.DataFrame:
-    """Rows of one (participant, trial), sliced via the cached position index.
+    """Rows of one (participant, trial) in source order, via the cached index.
 
-    Equivalent to ``frame[(frame.participant_id == p) & (frame.trial_id == t)]``
-    but O(trial) instead of O(corpus) once the index is built — the per-rerun win
-    on large datasets, where every tab extracts the selected trial."""
+    Slice contiguous rows so Arrow can reuse their buffers. Gathering the
+    same rows by integer position can copy whole chunks of a string column.
+    """
     if frame is None or getattr(frame, "empty", True):
         return frame
-    positions = _trial_positions(frame, cache_key=frame_fingerprint(frame))
+    positions = _trial_positions(frame)
     pos = positions.get((str(participant_id), str(trial_id)))
     if pos is None or len(pos) == 0:
         return frame.iloc[0:0]
+    # Group positions are unique and in source order.
+    start, stop = pos[0], pos[-1] + 1
+    if stop - start == len(pos):
+        return frame.iloc[start:stop]
     return frame.iloc[pos]
 
 
@@ -1694,7 +1710,7 @@ def _select_trial_none_mode(
             args=(-1,),
             disabled=current_idx == 0
             and (not linked or at_list_end(compare_snapshot, COMPARE_TRIAL_KEY, -1)),
-            help="Previous trial." + step_help,
+            help="Previous trial (Left arrow)." + step_help,
         )
         steps.button(
             f"▶ {spoken('Next trial')}",
@@ -1704,7 +1720,7 @@ def _select_trial_none_mode(
             args=(1,),
             disabled=current_idx == n_trials - 1
             and (not linked or at_list_end(compare_snapshot, COMPARE_TRIAL_KEY, 1)),
-            help="Next trial." + step_help,
+            help="Next trial (Right arrow)." + step_help,
         )
 
     selected_key = resolve_reading(selected_trial_label, position, by_trial)[0]
@@ -2035,7 +2051,9 @@ def qualify_for_compare(frame: pd.DataFrame, dataset: str) -> pd.DataFrame:
     if frame.empty:
         return frame
     out = frame.copy()
-    out["dataset"] = dataset
+    out.attrs["_comparison_added_dataset"] = "dataset" not in out
+    if out.attrs["_comparison_added_dataset"]:
+        out["dataset"] = dataset
     out["participant_id"] = (
         dataset + COMPARE_DATASET_SEP + out["participant_id"].astype(str)
     )
@@ -2072,12 +2090,14 @@ def unqualify_for_export(frame: pd.DataFrame, participant: str) -> pd.DataFrame:
 
     The namespace exists so `make_comparison_figure` can slice two colliding
     ``(participant, trial)`` pairs apart. An exported table must carry the id the
-    corpus actually uses, or it won't join back to anything. The
-    stamped ``dataset`` column is kept — that is what disambiguates the rows.
+    corpus actually uses, or it won't join back to anything. Remove the
+    figure-only label before the pair writer names both sides' columns.
     """
-    if frame is None or frame.empty or "dataset" not in frame.columns:
+    if frame is None or frame.empty or "_comparison_added_dataset" not in frame.attrs:
         return frame
     out = frame.copy()
+    if out.attrs.pop("_comparison_added_dataset"):
+        out = out.drop(columns="dataset")
     out["participant_id"] = str(participant)
     return out
 

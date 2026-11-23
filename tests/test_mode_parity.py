@@ -204,31 +204,6 @@ class TestDriftCorrectedNoOp:
 
 
 # -----------------------------------------------------------------------------
-# _marked_text_column — the "Mark border" gate
-# -----------------------------------------------------------------------------
-
-
-class TestMarkedTextColumn:
-    """Builders with no border-overlay layer must get ``None`` unless the style
-    is "Mark text" — otherwise "Mark border" silently becomes text marking."""
-
-    @pytest.mark.parametrize(
-        ("style", "expected"),
-        [
-            ("Mark text", "is_in_aspan"),
-            ("Mark border", None),
-            ("None", None),
-        ],
-    )
-    def test_style_gates_the_column(self, style, expected):
-        viz = _viz(critical_span_style=style)
-        assert tabs._marked_text_column(viz) == expected
-
-    def test_no_span_column_selected_stays_none(self):
-        assert tabs._marked_text_column(_viz(highlight_column=None)) is None
-
-
-# -----------------------------------------------------------------------------
 # Animation — the newly wired parameters reach make_scanpath_animation
 # -----------------------------------------------------------------------------
 
@@ -320,9 +295,18 @@ class TestAnimationWiring:
         assert kwargs["fixation_colorbar_tickangle"] == 45
         assert kwargs["fixation_colorbar_tickfont_size"] == 9
 
-    def test_mark_border_does_not_leak_into_the_replay(self, monkeypatch):
-        _, kwargs = _animate(_viz(critical_span_style="Mark border"), monkeypatch)
-        assert kwargs["highlight_column"] is None
+    def test_mark_border_outlines_the_span_in_the_replay(self, monkeypatch):
+        fig, kwargs = _animate(
+            _viz(
+                critical_span_style="Mark border",
+                span_border_color="#22aabb",
+                show_labels=False,
+                show_words=False,
+            ),
+            monkeypatch,
+        )
+        assert kwargs["highlight_column"] == "is_in_aspan"
+        assert any(shape.line.color == "#22aabb" for shape in fig.layout.shapes)
 
     def test_the_span_actually_reaches_the_word_labels(self, monkeypatch):
         """Not just accepted — visible. The two answer-span words take the
@@ -463,9 +447,18 @@ class TestComparisonWiring:
         assert fig.layout.images[0].opacity == 0.4
         assert fig.layout.images[0].layer == "below"
 
-    def test_mark_border_does_not_leak_into_the_comparison(self, monkeypatch):
-        _, kwargs = _compare(_viz(critical_span_style="Mark border"), monkeypatch)
-        assert kwargs["highlight_column"] is None
+    def test_mark_border_outlines_the_span_in_the_comparison(self, monkeypatch):
+        fig, kwargs = _compare(
+            _viz(
+                critical_span_style="Mark border",
+                span_border_color="#22aabb",
+                show_labels=False,
+                show_words=False,
+            ),
+            monkeypatch,
+        )
+        assert kwargs["highlight_column"] == "is_in_aspan"
+        assert any(shape.line.color == "#22aabb" for shape in fig.layout.shapes)
 
     def test_the_symbol_actually_reaches_both_scanpaths(self, monkeypatch):
         fig, _ = _compare(_viz(fixation_symbol="diamond"), monkeypatch)
@@ -806,3 +799,103 @@ def test_a_styled_co_animation_is_keyed_without_the_unread_global_look():
         ).key
 
     assert key() == key(saccade_width=7.0, fixation_opacity=0.2)
+
+
+@pytest.mark.parametrize(
+    ("layout", "stimulus", "panels"),
+    [
+        ("overlay", "a", []),
+        ("overlay", "b", ["x"]),
+        ("overlay", "both", ["x"]),
+        ("side_by_side", "a", ["x2"]),
+        ("stacked", "both", ["x2"]),
+    ],
+)
+def test_border_chooses_the_readings_actual_stimulus(layout, stimulus, panels):
+    words = _words()
+    words["target"] = (words.participant_id == "B") & (words.word_id == 1)
+    fig = plots.make_comparison_figure(
+        words,
+        _fixations(),
+        ("A", "t1"),
+        ("B", "t1"),
+        layout=layout,
+        compare_stimulus=stimulus,
+        canvas_width=800,
+        canvas_height=600,
+        base_font_size=16,
+        highlight_column="target",
+        critical_span_style="Mark border",
+        span_border_color="#b63891",
+        show_words=False,
+        show_word_labels=False,
+    )
+    assert [s.xref for s in fig.layout.shapes if s.line.color == "#b63891"] == panels
+    assert sum(
+        "Highlighted:" in (a.text or "") for a in fig.layout.annotations
+    ) == bool(panels)
+
+
+@pytest.mark.parametrize(
+    ("stimulus", "expected"), [("a", False), ("both", False), ("b", True)]
+)
+def test_co_replay_border_follows_the_single_displayed_page(stimulus, expected):
+    words = _words()
+    words["target"] = (words.participant_id == "B") & (words.word_id == 1)
+    fig = plots.make_scanpath_animation(
+        _trial(words, "A"),
+        _trial(_fixations(), "A"),
+        words_b=_trial(words, "B"),
+        fixations_b=_trial(_fixations(), "B"),
+        compare_stimulus=stimulus,
+        canvas_width=800,
+        canvas_height=600,
+        base_font_size=16,
+        highlight_column="target",
+        critical_span_style="Mark border",
+        span_border_color="#b63891",
+        show_words=False,
+        show_word_labels=False,
+    )
+    assert any(s.line.color == "#b63891" for s in fig.layout.shapes) == expected
+    assert fig.frames
+
+
+@pytest.mark.parametrize("view", ["static", "replay", "side_by_side", "overlay"])
+def test_underlines_follow_each_displayed_words_flag(view):
+    words, fix = _words(), _fixations()
+    words["target"] = words.word_id.isin([0, 2]) & (words.participant_id == "A")
+    settings = dict(
+        critical_span_style="Underline",
+        highlight_column="target",
+        text_color="#234567",
+        show_word_labels=True,
+        canvas_width=800,
+        canvas_height=600,
+        base_font_size=16,
+    )
+    if view == "static":
+        fig = plots.make_scanpath_figure(
+            _trial(words, "A"), _trial(fix, "A"), **settings
+        )
+    elif view == "replay":
+        fig = plots.make_scanpath_animation(
+            _trial(words, "A"), _trial(fix, "A"), **settings
+        )
+    else:
+        fig = plots.make_comparison_figure(
+            words, fix, ("A", "t1"), ("B", "t1"), layout=view, **settings
+        )
+    labels = [t for t in fig.data if t.name == "words" and t.mode == "text"]
+    assert tuple(labels[0].textfont.lineposition) == (
+        "under",
+        "none",
+        "under",
+        "none",
+        "none",
+        "none",
+    )
+    assert labels[0].textfont.color == "#234567"
+    for panel in labels[1:]:
+        assert panel.textfont.lineposition is None
+    assert sum("Highlighted:" in a.text for a in fig.layout.annotations) == 1

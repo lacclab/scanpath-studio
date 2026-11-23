@@ -195,8 +195,8 @@ def test_static_render_emits_stage_sequence(monkeypatch):
     monkeypatch.setattr(animation_export, "chrome_available", lambda: True)
 
     @contextmanager
-    def fake_renderer(enabled):
-        assert enabled is True
+    def fake_renderer(native_readings):
+        assert native_readings == 1
         yield lambda fig, fmt, width, height, scale: b"rendered"
 
     monkeypatch.setattr(export, "_figure_renderer", fake_renderer)

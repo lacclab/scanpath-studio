@@ -10,7 +10,9 @@ blind spots; these do not.
 from __future__ import annotations
 
 import copy
+import io
 import json
+import zipfile
 from urllib.parse import parse_qsl
 
 import numpy as np
@@ -20,10 +22,12 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from scanpath_studio import data, measures, plots, url_state
+from scanpath_studio.column_names import encode_field_list
 from scanpath_studio.constants import (
     LEGEND_ARRANGEMENTS,
     LEGEND_POSITIONS,
 )
+from scanpath_studio.utils import extract_trial
 
 # No per-example deadline: under ``pytest -n auto`` on a busy CI runner a
 # pandas call can take longer than Hypothesis' 200 ms default, and a test that
@@ -40,6 +44,70 @@ _ID_TEXT = st.text(
 
 
 # --- Round-trips -----------------------------------------------------------
+
+
+@given(
+    st.sampled_from(["RGB", "opaque RGBA", "RGBA"]),
+    st.binary(min_size=4, max_size=128),
+    st.text(alphabet="aב猫 ·é", min_size=1, max_size=20),
+)
+def test_smaller_pngs_preserve_every_channel_and_embedded_metadata(mode, pixels, text):
+    from PIL import Image, PngImagePlugin
+
+    from scanpath_studio.export_png import compact_png
+
+    channels = 3 if mode == "RGB" else 4
+    values = np.resize(np.frombuffer(pixels, dtype=np.uint8), (24, 48, channels))
+    if mode == "opaque RGBA":
+        values[:, :, 3] = 255
+    metadata = PngImagePlugin.PngInfo()
+    metadata.add_itxt("Comment", text)
+    with io.BytesIO() as original:
+        Image.fromarray(values).save(
+            original, "PNG", compress_level=0, pnginfo=metadata, dpi=(300, 300)
+        )
+        compact = compact_png(original.getvalue())
+        assert len(compact) < original.tell()
+        with Image.open(original) as before, Image.open(io.BytesIO(compact)) as after:
+            assert before.size == after.size
+            assert before.info == after.info
+            assert before.convert("RGBA").tobytes() == after.convert("RGBA").tobytes()
+
+
+@given(
+    st.lists(st.binary(max_size=160), min_size=1, max_size=7),
+    st.integers(min_value=4, max_value=96),
+)
+def test_disk_bundle_reads_members_across_part_boundaries(members, part_size):
+    from scanpath_studio import export_archive
+
+    def write(*, _archive):
+        for i, value in enumerate(members):
+            _archive.writestr(str(i), value)
+        return None, None
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(export_archive, "_PART_BYTES", part_size)
+        patch.setattr(export_archive, "_SMALL_ZIP", 0)
+        bundle, _ = export_archive.build_download(write)
+        try:
+            assert all(
+                bundle.part(i).stat().st_size == part_size
+                for i in range(bundle.parts - 1)
+            )
+            with bundle.open() as stream, zipfile.ZipFile(stream) as archive:
+                for i in reversed(range(len(members))):
+                    assert archive.read(str(i)) == members[i]
+        finally:
+            bundle.close()
+
+
+@given(st.lists(st.text(max_size=30), max_size=8))
+def test_shared_hover_fields_preserve_exact_names_and_order(fields):
+    value, as_json = encode_field_list(fields)
+    for table in ("word", "fixation"):
+        key = f"{table}_hover_fields" + ("_json" if as_json else "")
+        assert url_state._URL_PRESETS[key][1](value) == fields
 
 
 @given(st.lists(st.integers(), min_size=1, max_size=50, unique=True))
@@ -99,6 +167,21 @@ def test_trial_id_series_matches_compose_id(rows):
         for row in rows
     ]
     assert vectorised == expected
+
+
+@given(st.lists(st.sampled_from([("p", "a"), ("p", "b"), ("q", "a")]), min_size=1))
+def test_extract_trial_preserves_source_rows_and_slices_contiguous_readings(keys):
+    frame = pd.DataFrame(keys, columns=["participant_id", "trial_id"])
+    frame["position"] = np.arange(len(frame))
+    frame.index = frame.index // 2  # Source index labels can repeat.
+    reading = extract_trial(frame, "p", "a")
+    expected = frame[(frame["participant_id"] == "p") & (frame["trial_id"] == "a")]
+    pd.testing.assert_frame_equal(reading, expected)
+    rows = expected["position"].to_numpy()
+    if len(rows) and rows[-1] - rows[0] + 1 == len(rows):
+        assert np.shares_memory(
+            reading["position"].to_numpy(), frame["position"].to_numpy()
+        )
 
 
 @given(
@@ -344,3 +427,19 @@ def test_upload_reference_survives_a_new_label_and_name_reuse(old, new):
     session["_datasets"]["second"] = {}
     assert resolve_dataset_reference(session, old, identifier) == "first"
     assert dataset_share_id(session, "first") == identifier
+
+
+@given(st.lists(st.tuples(_ID_TEXT, _ID_TEXT), max_size=8))
+def test_publication_recipe_preserves_panel_order_and_wording(labels):
+    from scanpath_studio import publication
+
+    sources = [
+        {"id": str(i), "title": title, "figure": {"data": [], "layout": {}}}
+        for i, (title, _) in enumerate(labels)
+    ]
+    doc = publication.project(sources)
+    for panel, (_, caption) in zip(doc["panels"], labels):
+        panel["labels"] = [dict(x=0, y=2, dx=0, dy=1, text=caption)]
+    restored = json.loads(publication.render(doc, "json"))
+    publication.validate_project(restored)
+    assert restored == doc

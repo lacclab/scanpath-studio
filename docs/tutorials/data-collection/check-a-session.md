@@ -7,7 +7,7 @@ description: "Inspect an eye-tracking recording trial by trial — fixations aga
 Inspect a recording and save the trials that need attention.
 
 Before you start, switch to **Full** at the top of the :material/route:
-**Scanpath** view ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
+**Scanpath View** ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
 
 ## 1. Open the session { #1-load-the-session }
 
@@ -17,7 +17,7 @@ used in the experiment.
 
 ## 2. Inspect a trial
 
-In the :material/route: **Scanpath** view, pick a trial in **Select trial**.
+In the :material/route: **Scanpath View**, pick a trial in **Select trial**.
 Turn on :material/crop_square: **Word boxes** and check:
 
 - whether the boxes match the stimulus image, if you have one;
@@ -28,7 +28,7 @@ For a consistent offset, check [coordinate units and screen setup](../../faq.md#
 
 ## 3. Replay the recording { #3-replay-the-recording }
 
-Turn on :material/movie: **Animate** to follow the fixation order and timing.
+Choose :material/movie: **Animation** to follow the fixation order and timing.
 To mark short or long fixations, or fixations outside the text, open
 :material/filter_list: **Filters & highlights** ▾ → **Fixations** and set
 **Short**, **Long** or **Outside the text** to **Highlight**. A gap or an
@@ -49,7 +49,13 @@ session.
 ## 5. Save the review { #5-save-the-review }
 
 Export favorites, tags and notes from :material/database: **Data Management**
-→ **Annotations** → **Export**. The file includes participant and trial IDs.
+→ **Current dataset → Annotations → Export**. The file includes participant and trial IDs.
 **Open** on an annotation row returns to that trial.
+
+To reconcile a second reviewer's notes, choose **Import**. The preview counts
+new, identical and differing entries. **Open disputed reading** displays both
+entries beside the scanpath for that reading. You can download the differences
+for discussion. **Apply import** adds new entries and keeps the current version
+of a differing note unless you select the replacement option.
 
 For exclusion decisions, follow [Exclude unsuitable trials](../data-filtering/exclude-unsuitable-trials.md).

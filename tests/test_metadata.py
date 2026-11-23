@@ -444,9 +444,10 @@ class TestARestoredTableSurvivesTheDataPage:
 
     def test_a_restored_table_can_still_be_detached(self):
         """No file chip to dismiss, so the ✕ Detach comes back for this case."""
-        from tests.conftest import pin_data_view
+        from tests.conftest import open_dataset_editor, pin_data_view
 
         at = self._booted_with(restored=True)
+        open_dataset_editor(at)
         detach = [
             b for b in at.button if b.key == "participant_metadata_detach_restored"
         ]
@@ -461,7 +462,17 @@ class TestARestoredTableSurvivesTheDataPage:
     def test_removing_an_uploaded_file_still_detaches_it(self):
         """A table that *did* come from the uploader still goes when its file
         does."""
+        from tests.conftest import open_dataset_editor
+
         at = self._booted_with(restored=False)
+        open_dataset_editor(at)
+        assert at.session_state[md.SESSION_KEY].names == ("native_language",)
+        uploader = at.file_uploader(key=md.upload_key("participant", at.session_state))
+        uploader.upload(
+            "updated.csv", f"participant_id,score\n{self.readers[0]},10\n".encode()
+        ).run(timeout=90)
+        assert at.session_state[md.SESSION_KEY].names == ("score",)
+        at.file_uploader(key=uploader.key).clear().run(timeout=90)
         assert md.SESSION_KEY not in at.session_state
 
 
@@ -1048,6 +1059,7 @@ class TestGroupingEndToEnd:
             at.session_state[md.TEXT_RAW_SESSION_KEY] = frame
         pin_view(at, _VIEW_CORPUS)
         at.session_state["corpus_subtab"] = "Groups"
+        at.session_state["groups_compare"] = False
         at.session_state["pgrp_field"] = option
         at.session_state["pgrp_g"] = ["x"]
         at.run(timeout=120)
@@ -1156,17 +1168,41 @@ class TestTheWizardStep:
         from streamlit.testing.v1 import AppTest
 
         from scanpath_studio import app
-        from tests.conftest import APP_SCRIPT, pin_data_view
+        from tests.conftest import (
+            APP_SCRIPT,
+            answer_setup_step,
+            open_dataset_editor,
+            pin_data_view,
+        )
 
         self._uploaded(monkeypatch)
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
-        at.session_state["setup_complete"] = True
+        answer_setup_step(at)
+        at.run(timeout=120)
+        assert not at.exception, at.exception
+        assert (
+            sum(
+                u.label == "Participant metadata table (optional)"
+                for u in at.file_uploader
+            )
+            == 1
+        )
+        at.button(key="wizard_finalize").click()
         pin_data_view(at)
         at.run(timeout=120)
         assert not at.exception, at.exception
-        keys = [u.key for u in at.file_uploader if u.key]
-        assert keys.count("participant_metadata_upload") == 1, keys
+        assert not any(
+            u.label == "Participant metadata table (optional)" for u in at.file_uploader
+        )
+        open_dataset_editor(at)
+        assert (
+            sum(
+                u.label == "Participant metadata table (optional)"
+                for u in at.file_uploader
+            )
+            == 1
+        )
 
 
 class TestTablesBelongToADataset:

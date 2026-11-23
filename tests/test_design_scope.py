@@ -27,6 +27,11 @@ NOT_A_DESIGN_SETTING = {
     # An uploaded file is not a setting, and Streamlit refuses to assign a value
     # to an uploader's key (see `controls._is_restorable_global`).
     "global_stimulus_image_upload",
+    # The replay can be switched on and off with any saved design.
+    sk.SINGLE_ANIMATE,
+    "plot_setting_finder",
+    "plot_filter_readings",
+    "plot_editor_tabs",
 }
 
 B_FILTERS = {
@@ -238,15 +243,16 @@ class TestEveryPlotControlIsAccountedFor:
             and not key.endswith(("__num_lo", "__num_hi"))
             and not controls._is_design_key(key)
             and key not in NOT_A_DESIGN_SETTING
-            # Buttons, not settings: the presets, Essentials' View tiles and the
+            # Buttons, not settings: the view tiles and the
             # rail's ＋ More list's switch to Full.
             and not key.startswith(
                 (
                     "viz_view_",
-                    "simple_view_",
+                    "viz_palette_",
                     "more_to_advanced_",
                     "design_",
                     "quick_view",
+                    "plot_detail_",
                 )
             )
         ]

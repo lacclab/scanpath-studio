@@ -11,6 +11,7 @@ check data and manage saved work without opening the app:
 | --- | --- |
 | [`scanpath-studio`](#launch-the-app), `run` | Launch the app |
 | [`render`](#render) | Write one trial's scanpath, heatmap or replay to a file |
+| [`publication`](#publication) | Export a saved figure recipe or open it as an offline editor |
 | [`corpus`](#corpus) | Render a corpus figure from a tidy CSV you already have |
 | [`recipe`](#recipe) | Recreate a cohort profile CSV from its saved recipe |
 | [`check`](#check) | Run the Data checks on your tables |
@@ -20,6 +21,18 @@ check data and manage saved work without opening the app:
 
 Each command takes `--help`, and `scanpath-studio --version` prints the version.
 If you mistype a command, the CLI suggests the closest match.
+
+## Publication
+
+Download the editable file under **Save or open** to reproduce the figure with its crop, labels, caption and print settings.
+
+```bash
+scanpath-studio render --sample --width-mm 85 -o reading.publication.json
+scanpath-studio publication reading.publication.json -o reading.html
+scanpath-studio publication figure-2.json -o figure-2.pdf
+```
+
+Choose SVG, PDF, PNG or TIFF for artwork, or MP4 for a selected replay clip. Rendering these files requires a Chromium browser. The HTML editor is self-contained and can be used offline.
 
 ## Launch the app
 
@@ -93,7 +106,7 @@ The Python API loads the same datasets with
 | animate | `--animate`, optionally `--playback-speed X`. The replay uses every styling flag it can draw and names the rest in a warning |
 | set the screen size | `--canvas WIDTHxHEIGHT`. `--crop-to-data` frames the data instead of the whole screen, with `--crop-margin PX` around it (default: 5% of the data's extent, at least 20 px) |
 | color fixations | `--color-by FIELD`, including a column of your own once `--keep-columns COLUMN…` carries it through loading |
-| size fixations by duration | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--no-duration-size-legend` |
+| size fixations by duration | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--duration-size-legend` (show the optional size key) |
 | draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; `--animate` and `--compare-with` honor it too) |
 | draw the stimulus | `--stimulus-image PATH` for one image. `--show-stimulus-image` draws each trial's stimulus image, named in the `image_path` column (`--sample` ships its images). `--image-root DIR --image-pattern '{text_id}.png'` fills `image_path` from a folder |
 | smooth the heatmap | `--heatmap-style smoothed --heatmap-sigma 20` (σ in px; leave it out for an automatic σ) |
@@ -103,29 +116,37 @@ The Python API loads the same datasets with
 | write each layer to its own file | `--separable-layers` |
 | print the equivalent code | `--print-code python` (or `cli` / `both`), plus `--print-code-explicit` |
 
+Hover fields appear in the order you list them. For a column named
+`pupil, left`, preserve the comma with
+`--keep-columns 'pupil, left' --fixation-hover-fields-json '["duration_ms","pupil, left"]'`.
+Use `--fixation-hover-fields-json '[]'` to clear that selection. The Words
+layer accepts `--word-hover-fields-json` in the same way.
+
 ### Compare two scanpaths
 
-`--compare-with PARTICIPANT:TRIAL` draws a second trial, B, beside or over the
-first. It does what the app's :material/compare: **Compare** does.
+`--compare-participant ID --compare-trial ID` selects the second reading, B.
+For example, `--compare-participant B --compare-trial 'round:2'` preserves the
+colon in the trial ID. The shorthand `--compare-with PARTICIPANT:TRIAL` splits
+at the last colon.
 
 ```bash
 # Two participants on the same paragraph, overlaid
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele -o compare.html
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
+  --compare-with l7_183:l7_183_2_1_1_Ele -o compare.html
 
 # The same overlay, drawing only B's word boxes and text
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele --compare-stimulus b \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
+  --compare-with l7_183:l7_183_2_1_1_Ele --compare-stimulus b \
   -o compare_b.html
 
 # Side by side: each panel draws its trial's stimulus
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
+  --compare-with l7_183:l7_183_2_1_1_Ele \
   --compare-layout side-by-side -o compare.svg
 
 # A style for each scanpath
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_1_1_Ele \
-  --compare-with l7_1090:l7_1090_2_1_1_Ele \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_1_1_Ele \
+  --compare-with l7_183:l7_183_2_1_1_Ele \
   --style-a fix_color=#D55E00,opacity=0.5 --style-b saccade_style=dash \
   -o compare_styled.html
 
@@ -140,7 +161,7 @@ scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t1 \
 
 | Goal | Flags |
 | --- | --- |
-| pick B | `--compare-with PARTICIPANT:TRIAL` |
+| pick B | `--compare-participant ID --compare-trial ID` |
 | pick each screen of a multipart trial | `--screen ID` (A), `--compare-screen ID` (B); each defaults to its trial's first screen |
 | arrange the panels | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`) |
 | choose whose stimulus an overlay draws | `--compare-stimulus {both,a,b}` (default `both`) |
@@ -174,7 +195,7 @@ scanpath's default.
 | `saccade_style` | `solid`, `dash`, `dot` or `dashdot` | that scanpath's default |
 | `saccade_width` | px | that scanpath's default |
 | `marker_size_range` | `MIN:MAX` | that scanpath's default |
-| `opacity` | 0.1–1 | that scanpath's default |
+| `opacity` | 0–1 | that scanpath's default |
 | `hollow` | `true` or `false` | that scanpath's default |
 
 The `--animate` replay draws one set of word boxes and no raw gaze, so it
@@ -206,12 +227,18 @@ ignores the `box_*` keys and `raw_gaze_color`.
 `--fixations`, and draws the plotted trial's samples under the fixations. With
 `--compare-with` it covers both scanpaths, each in its scanpath's color.
 `--compare-raw-gaze PATH…` gives B's samples when B comes from another
-dataset. `--animate` ignores raw gaze with a warning.
+dataset. With the bundled demo, `--sample-raw-gaze` draws the recorded samples
+for the selected reading. `--animate` ignores raw gaze with a warning.
 
 ```bash
-scanpath-studio render --sample -p l37_1129 -t l37_1129_2_2_2_Adv \
+scanpath-studio render --sample -p l37_273 -t l37_273_2_2_2_Adv \
   --sample-raw-gaze --raw-gaze-opacity 0.4 -o raw_gaze.html
 ```
+
+To plot the same reading's pupil area over its recorded clock, use
+`--x-field timestamp_ms --y-field pupil_area` with `--sample-raw-gaze`.
+`scanpath-studio check --sample` includes the raw table and reports how many
+samples have missing positions.
 
 When `--raw-gaze` is the only input, it is the dataset. `--list-trials` lists
 its trials, and `render` draws the chosen trial's samples as recorded. No
@@ -286,6 +313,15 @@ print(cli_reference("render", heading="###"))
 scanpath-studio corpus --input profile.csv --kind profile --output profile.svg
 ```
 
+To draw an overview CSV, pass its grouping column with `--series-col`. For
+example, this draws participant means and their observed ranges from a summary
+whose ID column is named `reader`.
+
+```bash
+scanpath-studio corpus --input overview.csv --kind overview --series-col reader \
+  --measure-label "Total fixation duration (ms)" -o overview.html
+```
+
 ```python exec="true"
 from docs_support import cli_reference
 
@@ -294,8 +330,8 @@ print(cli_reference("corpus"))
 
 ## recipe
 
-Recreate a **Per text → Cohort profile** CSV from its downloaded JSON recipe
-and source tables. Recipes include the original column mappings. If raw gaze
+Recreate an **Overview**, **Cohort profile** or **Difference word profile** CSV
+from its downloaded JSON recipe and source tables. Recipes include the original column mappings. If raw gaze
 supplied the text IDs used by a metadata filter, pass its files with `--raw-gaze`.
 The command identifies any missing metadata or annotation input and verifies
 the regenerated CSV against the checksum in the recipe when available.
@@ -327,7 +363,11 @@ the app does with them. `check` changes nothing and exits 0 whatever it finds.
 `--json` prints the table
 [`check_data_health`][scanpath_studio.api.check_data_health] returns. In example rows,
 missing values are `null` and infinite values are the strings `"Infinity"` or
-`"-Infinity"`.
+`"-Infinity"`. To save a QC record, use `--json-report`. Its `tables` object
+counts the source rows read, the rows with usable identifiers, and the
+normalized rows checked. Stimulus words shared across readings can expand into
+more checked rows. The report distinguishes empty tables, blank rows and rows
+with missing participant or trial IDs. Its `findings` list matches `--json`.
 
 ```bash
 scanpath-studio check --words ia.csv --fixations fixations.csv
@@ -360,8 +400,7 @@ from docs_support import cli_reference
 print(cli_reference("cache"))
 ```
 
-The same information is at the foot of the **:material/database: Data
-Management** page, under **:material/history: Saved on this computer**. A
+Open **:material/database: Data Management → Saved work → Your session** to see the same information. A
 running app writes a new copy at its next change, so clear the cache with the
 app closed.
 
@@ -391,10 +430,10 @@ print(cli_reference("version"))
 ```
 
 Between releases the version names the build: `0.35.0.post3+g8f18219` is three
-commits after 0.35.0, at commit `8f18219`. The same check is
-**:material/help: Help → :material/info: About → :material/update: Check for
-updates** in the app, and
-[`check_for_updates`][scanpath_studio.api.check_for_updates] in Python.
+commits after 0.35.0, at commit `8f18219`. In a local install or the desktop
+app, open **:material/help: Help → :material/info: About & citation → App details →
+:material:update: Check for updates**. In Python, call
+[`check_for_updates`][scanpath_studio.api.check_for_updates].
 
 ## cite
 

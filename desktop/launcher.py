@@ -254,12 +254,17 @@ def _idle_exit_grace() -> float:
     return IDLE_EXIT_GRACE_S if _in_macos_app_bundle() else 0.0
 
 
+def _server_is_ready(response) -> bool:
+    """Streamlit's ready response to /_stcore/health is HTTP 200 with the body "ok"."""
+    return response.status == 200 and response.read(3) == b"ok"
+
+
 def _wait_for_server(url: str, timeout_s: float = HEALTH_TIMEOUT_S) -> bool:
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         try:
             with urllib.request.urlopen(url, timeout=2) as response:
-                if response.status == 200:
+                if _server_is_ready(response):
                     return True
         except OSError:
             pass

@@ -392,6 +392,28 @@ class TextMetadata:
         return self.frame.set_index("text_id")[name]
 
 
+def id_read_plan(id_column, infer, *extra):
+    """``plan_for`` for a metadata table: read its id column(s) as text.
+
+    The same protection the data tables get — read as numbers, readers ``1``
+    and ``01`` become one reader before the metadata ever sees them. The id
+    column is the caller's, else the one ``infer`` would pick from the header.
+    """
+
+    def plan(header) -> _data.ReadPlan:
+        names = [str(name) for name in header]
+        # `infer_*` treats a row-less frame as "no table" — give it one row.
+        resolved = id_column or infer(
+            pd.DataFrame([[None] * len(names)], columns=names)
+        )
+        columns = [*_data.trial_mapping_columns(resolved or []), *extra]
+        return _data.ReadPlan(
+            identity=tuple(c for c in dict.fromkeys(columns) if c and c in names)
+        )
+
+    return plan
+
+
 def _rows_with_ids(frame: pd.DataFrame, columns) -> pd.DataFrame:
     """A copy of ``frame`` without the rows that have no value in an id column.
 
@@ -425,25 +447,19 @@ def _merge_duplicates(work: pd.DataFrame, key: pd.Series, value_columns) -> tupl
         return work, key, (), set(), 0
     duplicated = tuple(sorted(set(key[repeated]), key=str))
     columns = [column for column in value_columns if column in work.columns]
-    conflicting: set = set()
-    folded: list = []
-    combined = 0
-    # A positional index, so writing the folded values into a group's first row
-    # cannot also land on another row a user's frame gave the same label.
     work, key = work.reset_index(drop=True), key.reset_index(drop=True)
-    repeated = repeated.reset_index(drop=True)
-    for group_key, rows in work[repeated].groupby(key[repeated], sort=False):
-        if any(rows[column].dropna().nunique() > 1 for column in columns):
-            conflicting.add(group_key)
-            continue
-        first = rows.index[0]
-        for column in columns:
-            present = rows[column].dropna()
-            if not present.empty:
-                work.at[first, column] = present.iloc[0]
-        folded.extend(rows.index[1:])
-        combined += len(rows)
-    keep = ~key.isin(conflicting) & ~work.index.isin(folded)
+    repeated = repeated.to_numpy()
+    groups = work.loc[repeated, columns].groupby(key[repeated], sort=False)
+    conflicts = groups.nunique(dropna=True).gt(1).any(axis=1)
+    conflicting = set(conflicts.index[conflicts])
+    first = repeated & ~key.duplicated() & ~key.isin(conflicting)
+    # GroupBy.first coalesces each field independently, preserving its dtype.
+    if columns and first.any():
+        folded = groups.first().reindex(pd.Index(key[first], tupleize_cols=False))
+        folded.index = work.index[first]
+        work.loc[first, columns] = folded
+    combined = int((repeated & ~key.isin(conflicting)).sum())
+    keep = ~key.duplicated() & ~key.isin(conflicting)
     return work[keep], key[keep], duplicated, conflicting, combined
 
 

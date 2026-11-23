@@ -58,6 +58,8 @@ SCANPATH_CALLOUTS = (
 )
 
 CALLOUT_JS = """(callouts) => {
+  // The screenshot starts at the top, even when Reset scrolled down the rail.
+  document.querySelectorAll('*').forEach(el => { if (el.scrollTop) el.scrollTop = 0; });
   document.querySelectorAll('.docs-callout').forEach(el => el.remove());
   callouts.forEach(([selector, which], i) => {
     const shown = [...document.querySelectorAll(selector)]
@@ -162,13 +164,13 @@ def capture(page: Page) -> None:
     print("corpus analysis")
     ui.deep_link(page, {})
     ui.nav(page, "Corpus Analysis")
-    page.locator(".st-key-tutorial_corpus_subtabs").wait_for(state="visible")
+    page.locator(".st-key-corpus_overview_plot .scatterlayer .point").first.wait_for()
     ui.shot(page, "corpus-analysis")
     _webp("corpus-analysis")
 
     print("data page")
     ui.nav(page, "Data Management")
-    page.get_by_role("heading", name="Data Management", exact=True).wait_for()
+    page.locator(".st-key-data_recording_tables").wait_for(state="visible")
     ui.shot(page, "data-page")
     _webp("data-page")
 
@@ -177,14 +179,13 @@ def capture(page: Page) -> None:
 #: menu captured open with its own layer on, so nothing in it is greyed out.
 #: ``(file, layer switch to turn on or None, menu container key)``.
 CONTROL_MENUS = (
-    ("fixations", "global_show_fix", "split_mode_rail_fix_popover"),
-    ("saccades", "global_show_saccades", "split_mode_rail_sac_popover"),
-    ("stimulus", "global_show_stimulus", "split_mode_rail_stim_popover"),
-    ("word-boxes", "global_show_words", "split_mode_rail_boxes_popover"),
-    ("heatmap", "global_show_heatmap", "split_mode_rail_heatmap_popover"),
-    ("raw-gaze", "global_show_raw_gaze", "split_mode_rail_rawgaze_popover"),
-    ("filters", None, "split_mode_rail_filter_popover"),
-    ("figure-canvas", None, "split_mode_rail_figure_popover"),
+    ("fixations", "global_show_fix", "plot_menu_fix"),
+    ("saccades", "global_show_saccades", "plot_menu_sac"),
+    ("stimulus", "global_show_stimulus", "plot_menu_stim"),
+    ("word-boxes", "global_show_words", "plot_menu_boxes"),
+    ("heatmap", "global_show_heatmap", "plot_menu_heatmap"),
+    ("raw-gaze", "global_show_raw_gaze", "plot_menu_rawgaze"),
+    ("filters", None, "plot_menu_filter"),
 )
 CONTROLS_OUT = OUT / "controls"
 
@@ -247,8 +248,8 @@ def _shot_mode_menu(page: Page, name: str, toggle_key: str, popover_key: str) ->
     ui.toggle(page, toggle_key)
 
 
-#: The two designs saved for the picture of My designs.
-EXAMPLE_DESIGNS = ("My design 1", "My design 2")
+#: The two designs saved for the picture of My views.
+EXAMPLE_DESIGNS = ("My view 1", "My view 2")
 
 
 def _save_design(page: Page, name: str) -> None:
@@ -261,7 +262,7 @@ def _save_design(page: Page, name: str) -> None:
 
 
 def _shot_designs(page: Page) -> None:
-    """Design presets, My designs open on two saved designs, and the palette."""
+    """View tiles, palette, and My views with two saved designs."""
     for name in EXAMPLE_DESIGNS:
         _save_design(page, name)
     shell = page.locator(".st-key-design_shell").first
@@ -270,8 +271,8 @@ def _shot_designs(page: Page) -> None:
         ui.settle(page, quiet=1.5)
     page.evaluate("window.scrollTo(0, 0)")
     rail = page.locator(".st-key-scanpath_rail").first.bounding_box()
-    top = page.get_by_text("Design presets", exact=True).first.bounding_box()
-    palette = page.locator(".st-key-global_palette").first.bounding_box()
+    top = page.locator(".st-key-rail_view_controls").bounding_box()
+    palette = page.locator(".st-key-rail_palette_tiles").bounding_box()
     pad = 10
     clip = {
         "x": rail["x"],
@@ -343,16 +344,28 @@ def capture_controls(page: Page, only: set[str] | None = None) -> None:
             page, "plot-controls", page.locator(".st-key-scanpath_rail").first
         )
 
+    editor = page.locator(".st-key-plot_editor_tabs")
+    for name, tab in (("plot-axes", "Axes"), ("figure-canvas", "Figure")):
+        if wanted(name):
+            editor.get_by_role("tab", name=tab, exact=True).click()
+            _shot_controls(page, name, editor)
+    editor.get_by_role("tab", name="Layers", exact=True).click()
+
     if wanted("animate"):
         print("animate menu")
-        _shot_mode_menu(page, "animate", "single_animate", "split_mode_animate_popover")
+        page.locator(".st-key-single_animate label").click()
+        ui.settle(page)
+        _shot_controls(page, "animate", _open_menu_body(page, "plot_menu_animation"))
+        page.keyboard.press("Escape")
+        page.get_by_role("button", name="Scanpath", exact=True).click()
+        ui.settle(page)
     if wanted("compare-menu"):
         print("compare menu")
         _shot_mode_menu(
             page, "compare-menu", "single_compare_toggle", "split_mode_compare_popover"
         )
     if wanted("designs"):
-        print("design presets, my designs and palette")
+        print("view tiles, palette and my designs")
         _shot_designs(page)
 
     for name, layer, menu in CONTROL_MENUS:

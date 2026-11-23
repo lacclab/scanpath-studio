@@ -16,6 +16,7 @@
 //   ["detach"]          the plot leaves the page (the docs' instant navigation)
 //   ["toolbar", name]   press the player's own toolbar button
 //   ["seek", k]         grab the toolbar's time slider and drag it to frame k
+//   ["key", props]      send a keydown event to the focused replay slider
 // Prints {shown, relayouts, native, listeners, toolbar} as JSON: every frame
 // put on screen with the time it happened, every Plotly.relayout, every button
 // whose own Plotly command ran, how many visibilitychange listeners remain, and
@@ -56,8 +57,10 @@ class FakeElement {
   addEventListener(event, fn) {
     (this.listeners[event] = this.listeners[event] || []).push(fn);
   }
-  dispatch(event) {
-    (this.listeners[event] || []).forEach((fn) => fn({ type: event }));
+  dispatch(event, props = {}) {
+    (this.listeners[event] || []).forEach((fn) => fn({
+      type: event, preventDefault() { this.defaultPrevented = true; }, ...props,
+    }));
   }
 }
 const slot = config.slot ? new FakeElement("div") : null;
@@ -211,6 +214,7 @@ function setHidden(hidden) {
     else if (op === "detach") gd.isConnected = false;
     else if (op === "toolbar") toolbarButton(arg);
     else if (op === "seek") seek(arg);
+    else if (op === "key") toolbarEl().children.find((c) => c.type === "range").dispatch("keydown", arg);
     else throw new Error(`unknown step ${op}`);
     await flush();
   }
@@ -228,7 +232,7 @@ function setHidden(hidden) {
         range: (({ min, max, value, attributes }) => ({ min, max, value, attributes }))(
           bar.children.find((c) => c.type === "range"),
         ),
-        readout: bar.children[bar.children.length - 1].textContent,
+        readout: bar.children.find((c) => c.attributes["aria-hidden"] === "true").textContent,
       }
     : null;
   process.stdout.write(JSON.stringify(log));

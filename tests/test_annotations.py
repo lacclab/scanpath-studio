@@ -41,6 +41,18 @@ def test_records_store_roundtrip():
     assert again == store
 
 
+def test_conflicting_old_and_current_composite_spellings_are_atomic():
+    current, legacy = r"a\_b_c", "a_b_c"
+    records = [
+        {"participant_id": "p", "trial_id": tid, "note": note}
+        for tid, note in [(current, "First"), (legacy, "Second")]
+    ]
+    store = {("p", "unrelated"): {"star": True, "tags": [], "note": "Existing"}}
+    with pytest.raises(annotations_mod.AnnotationsFileError, match="same reading"):
+        annotations_mod.merge_records(store, records, {("p", current)})
+    assert list(store) == [("p", "unrelated")]
+
+
 def test_empty_entries_are_pruned():
     records = [
         {
@@ -90,12 +102,17 @@ def test_serialize_deserialize_roundtrip():
                 "trial_id": "t",
                 "star": True,
                 "tags": ["x"],
-                "note": "n",
+                "note": "Relevé α",
             }
         ]
     )
     text = serialize(store)
-    assert deserialize(text) == store
+    assert (
+        deserialize(text)
+        == deserialize("\ufeff" + text)
+        == deserialize(text.encode("utf-8-sig"))
+        == store
+    )
 
 
 def test_deserialize_accepts_bare_list():
@@ -678,6 +695,66 @@ def _bad_import_app():
     )
     st.session_state["_upload"] = _Upload()
     ann._import_dataset_annotations("_upload", frozenset({("p", "t")}), "test")
+
+
+def _review_import_app():
+    import io
+
+    import streamlit as st
+
+    import scanpath_studio.annotations as ann
+
+    trials = frozenset({("01", "trial"), ("01", "new")})
+    ann.activate_dataset(st.session_state, "uploaded-id")
+    if "_initialized" not in st.session_state:
+        ann.set_entry(
+            "01", "trial", screen_id="page1", star=False, tags=[], note="Original"
+        )
+        st.session_state["uploaded"] = io.BytesIO(st.session_state["_incoming"])
+        ann._import_dataset_annotations("uploaded", trials, "Pilot")
+        st.session_state["_initialized"] = True
+    if st.button("Choose another file"):
+        st.session_state["uploaded"] = io.BytesIO(st.session_state["_incoming"])
+        ann._import_dataset_annotations("uploaded", trials, "Pilot")
+    ann._review_import("Pilot", trials)
+    ann.render_disputed_note(st, "01", "trial", "page1")
+
+
+def test_review_conflicting_import_preserves_local_note_until_explicit_acceptance():
+    from streamlit.testing.v1 import AppTest
+
+    key = ("01", "trial", "page1")
+    incoming = {
+        key: dict(star=True, tags=["review"], note="Incoming"),
+        ("01", "new"): dict(star=True, tags=[], note="Added"),
+    }
+    at = AppTest.from_function(_review_import_app)
+    at.session_state["_incoming"] = serialize(
+        incoming, dataset="Coauthor's pilot"
+    ).encode()
+    at.run()
+    assert not at.exception
+    assert (
+        at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY][key]["note"]
+        == "Original"
+    )
+    next(b for b in at.button if b.label == "Open disputed reading").click().run()
+    assert at.table[0].value["note"].tolist() == ["Original", "Incoming"]
+    at.checkbox[0].check().run()
+    incoming[key]["note"] = "Second file"
+    at.session_state["_incoming"] = serialize(incoming).encode()
+    next(b for b in at.button if b.label == "Choose another file").click().run()
+    assert not at.checkbox[0].value
+    next(b for b in at.button if b.label == "Apply import").click().run()
+    assert not at.exception
+    assert (
+        at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY][key]["note"]
+        == "Original"
+    )
+    assert (
+        at.session_state[annotations_mod.ANNOTATIONS_STATE_KEY][("01", "new")]["note"]
+        == "Added"
+    )
 
 
 @pytest.mark.parametrize(

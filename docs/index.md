@@ -83,7 +83,7 @@ Bring your own data, or start with the bundled demo.
 
     <video class="sps-shot" controls muted loop playsinline preload="none"
            poster="assets/workflows/home-customize_poster.webp" data-autoplay
-           aria-label="Design presets, palettes and plot controls">
+           aria-label="View tiles, palettes and plot controls">
       <source src="assets/workflows/home-customize.mp4" type="video/mp4">
     </video>
 
@@ -145,7 +145,7 @@ More examples in the [plot gallery](gallery.md).
 
 <div class="sps-home-links" markdown>
 
-[Python & CLI](guides/scanpath-visualization/index.md#render-in-code) · [FAQ](faq.md) · [Cite Scanpath Studio](about.md#cite-scanpath-studio) · [Feedback](https://github.com/lacclab/scanpath-studio/issues)
+[Python & CLI](guides/scanpath-visualization/index.md#render-in-code) · [FAQ](faq.md) · [Cite Scanpath Studio](about.md#cite-scanpath-studio) · [Questions and feedback](about.md#questions-and-feedback)
 
 </div>
 
@@ -153,7 +153,7 @@ More examples in the [plot gallery](gallery.md).
 
 Scanpath Studio was developed with AI assistance. As with any research
 software, cross-check its results before you rely on them in published work.
-Found a bug, or have a feature request?
-[Open an issue](https://github.com/lacclab/scanpath-studio/issues).
+[Report a bug](https://github.com/lacclab/scanpath-studio/issues/new?template=bug_report.md)
+or [suggest an improvement](https://github.com/lacclab/scanpath-studio/discussions/new?category=ideas).
 
 </div>

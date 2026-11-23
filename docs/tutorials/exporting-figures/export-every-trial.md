@@ -7,7 +7,7 @@ description: "Batch-export scanpath figures and data tables for every selected e
 Build a ZIP of static figures and data tables for a set of trials.
 
 Before you start, switch to **Full** at the top of the :material/route:
-**Scanpath** view ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
+**Scanpath View** ([Essentials and Full](../../guides/scanpath-visualization/index.md#essentials-and-full)).
 
 1. [Set the figure's design](export-one-figure.md#1-choose-the-view) once.
    Each exported trial uses that design, without animation or a comparison partner.
@@ -19,6 +19,15 @@ Before you start, switch to **Full** at the top of the :material/route:
    their **Table format**. Check the **File path pattern**. To edit individual
    layers later, turn on **Layers as separate files**.
 4. Click **Build export**, download the bundle, and inspect one exported figure.
+
+For PNGs, turn on **Smaller PNG files** to reduce file size at the same resolution.
+This adds encoding time. Images over 16.8 megapixels use the standard encoding
+to limit memory use. **PNG scale** controls resolution separately. A scale of 1
+writes one pixel per figure pixel, and the default scale of 2 doubles both dimensions.
+
+Large bundles are kept on temporary disk and download as one ZIP in a new tab.
+Keep the Export panel open until the download finishes. If your browser cannot
+stream the ZIP, the download page offers numbered parts and instructions for joining them.
 
 <video class="sps-shot" controls muted loop playsinline preload="none"
        poster="../../../assets/workflows/export-bundle_poster.webp" data-autoplay

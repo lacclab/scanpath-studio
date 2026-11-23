@@ -17,7 +17,7 @@ import argparse
 import pandas as pd
 import pytest
 
-from scanpath_studio import api, constants, controls, tabs, tour
+from scanpath_studio import api, constants, controls, feedback, tabs
 from tests.conftest import APP_SCRIPT, SUBTAB_KEY, pin_view
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -194,13 +194,13 @@ class TestTheUiSurfacesAreAbsent:
 
 
 class TestTheGuidanceMatchesTheBuild:
-    def test_the_faq_drops_the_drift_correction_entry(self):
-        questions = [q for q, _ in tour.faq_items()]
+    def test_troubleshooting_hides_the_drift_correction_entry(self):
+        questions = [q for q, _ in feedback.troubleshooting_items()]
         assert not any("drift correction" in q.lower() for q in questions)
 
     def test_it_comes_back_with_the_flag_on(self, monkeypatch):
         monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
-        questions = [q for q, _ in tour.faq_items()]
+        questions = [q for q, _ in feedback.troubleshooting_items()]
         assert any("drift correction" in q.lower() for q in questions)
 
 
@@ -337,6 +337,7 @@ class TestDerivedAnalysisTablesGate:
 
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = "Synthetic test trial"
+        at.session_state["data_inspection_panel"] = "Tables"
         pin_data_view(at)
 
         def _must_not_run(*_a, **_k):
@@ -358,6 +359,7 @@ class TestDerivedAnalysisTablesGate:
         monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = "Synthetic test trial"
+        at.session_state["data_inspection_panel"] = "Tables"
         pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, at.exception
@@ -372,13 +374,18 @@ class TestPerSentenceGate:
     def test_it_is_hidden_by_default(self):
         assert not constants.sentence_analysis_enabled()
         assert "Per sentence" not in tabs.corpus_subtabs()
-        assert tabs.corpus_subtabs() == ("Per text", "Per participant", "Groups")
+        assert tabs.corpus_subtabs() == (
+            "Overview",
+            "Per text",
+            "Per participant",
+            "Groups",
+        )
 
     def test_the_experimental_flag_brings_it_back(self, monkeypatch):
         monkeypatch.setenv("SCANPATH_EXPERIMENTAL", "1")
         assert tabs.corpus_subtabs() == tabs.CORPUS_SUBTABS
 
-    def test_the_corpus_view_draws_three_subtabs_and_no_sentence_table(
+    def test_the_corpus_view_draws_the_public_subtabs_and_no_sentence_table(
         self, monkeypatch
     ):
         from streamlit.testing.v1 import AppTest
@@ -392,11 +399,9 @@ class TestPerSentenceGate:
         at.session_state["corpus_subtab"] = "Per sentence"
         at.run()
         assert not at.exception, at.exception
-        assert [t.label for t in at.tabs][-3:] == [
-            "Per text",
-            "Per participant",
-            "Groups",
-        ]
+        destination = at.segmented_control(key="corpus_destination")
+        assert destination.options == ["Texts", "Participants", "Groups"]
+        assert destination.value == "Texts"
         assert calls == []
 
 
@@ -463,6 +468,8 @@ class TestComputedMeasuresGate:
         at = AppTest.from_file(APP_SCRIPT)
         pin_view(at, "Corpus Analysis")
         at.session_state["corpus_subtab"] = subtab
+        if subtab == "Groups":
+            at.session_state["groups_compare"] = False
         at.run(timeout=60)
         assert not at.exception, at.exception
         views = set(at.selectbox(key=view_key).options)

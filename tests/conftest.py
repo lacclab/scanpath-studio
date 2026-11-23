@@ -215,9 +215,7 @@ def pin_view(at, view: str) -> None:
     """
     at.session_state[NAV_KEY] = view
     at.session_state[NAV_MIRROR_KEY] = None
-    # A first run pinned to a view is about that view, but the first-visit
-    # welcome tour takes a first run to Scanpath, where its steps point. Count
-    # the tour as seen unless the test has already decided.
+    # A test that goes straight to a view skips the first-visit invitation.
     if "tour_seen" not in at.session_state:
         at.session_state["tour_seen"] = True
     if hasattr(at, "_finished_page_script_hash"):
@@ -225,9 +223,20 @@ def pin_view(at, view: str) -> None:
         at._page_hash = ""
 
 
-def pin_data_view(at) -> None:
-    """:func:`pin_view` for the 🗂️ Data page — the common case."""
+def pin_data_view(at, *, section: str | None = None) -> None:
+    """Open Data Management, optionally selecting a workspace tab."""
+    from scanpath_studio.constants import DATA_WORKSPACE_KEY, DATA_WORKSPACE_REQUEST
+
     pin_view(at, VIEW_DATA)
+    # AppTest does not echo the browser's selected native tab on the next run.
+    if (
+        section is None
+        and DATA_WORKSPACE_REQUEST not in at.session_state
+        and DATA_WORKSPACE_KEY in at.session_state
+    ):
+        section = at.session_state[DATA_WORKSPACE_KEY]
+    if section is not None:
+        at.session_state[DATA_WORKSPACE_REQUEST] = section
 
 
 def picked_trial_id(value) -> str | None:
@@ -252,7 +261,7 @@ def picker_trial_id(option: str) -> str:
 
 
 def arm_debug_dialog(at) -> None:
-    """Ask for the ❓ Help → About → Debug modal on the *next* run.
+    """Ask for the Debug drawer on the *next* run.
 
     Call it before **every** ``at.run()`` in a flow that drives the dialog, not
     just the first. In a browser an interaction inside a dialog reruns only the
@@ -278,7 +287,8 @@ def open_dataset_editor(at, timeout: int = 60):
     open; on every other run their picks are read from session state."""
     from scanpath_studio.app import _dataset_row_slug
 
-    open_data_view(at, timeout=timeout)
+    pin_data_view(at, section="Dataset library")
+    at.run(timeout=timeout)
     token = str(at.session_state["data_source_choice"])
     at.button(key=f"dataset_row_edit_{_dataset_row_slug(token)}").click()
     pin_data_view(at)

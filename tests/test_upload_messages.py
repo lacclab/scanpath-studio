@@ -36,6 +36,34 @@ def _upload(name: str, body: bytes) -> io.BytesIO:
     return buf
 
 
+def test_workbook_header_and_read_name_the_same_first_sheet(tmp_path):
+    path = tmp_path / "pilot.xlsx"
+    with pd.ExcelWriter(path) as book:
+        pd.DataFrame({"reader": ["01"], "note": ["pilot"]}).to_excel(
+            book, sheet_name="Initial pilot", index=False
+        )
+        pd.DataFrame({"later": [1]}).to_excel(book, sheet_name="Analysis", index=False)
+    assert read_table_columns(path) == ["reader", "note"]
+    table = read_table(path, plan=ReadPlan(identity=("reader",)))
+    assert table.attrs["source_worksheet"] == "Initial pilot"
+    assert table.reader.tolist() == ["01"]
+    text = _upload("EyeLink.xls", b"reader\tnote\n01\tpilot\n")
+    assert read_table_columns(text) == ["reader", "note"]
+    assert "source_worksheet" not in read_table(text).attrs
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_feather_header_and_data_accept_both_versions(tmp_path, version):
+    from pyarrow import feather
+
+    path = tmp_path / "trial.feather"
+    feather.write_feather(
+        pd.DataFrame({"reader": ["01"], "word": ["The"]}), path, version=version
+    )
+    assert read_table_columns(path) == ["reader", "word"]
+    assert read_table(path).reader.tolist() == ["01"]
+
+
 def _semicolon_table(bad_line: str | None = None, at: int = 8) -> bytes:
     rows = [";".join(HEADER)]
     rows += [f"p1;t{i % 3};{100 + i};{200 + i};{150 + i}" for i in range(12)]
@@ -197,6 +225,23 @@ class TestRowsWithMoreFieldsThanTheHeader:
         frame = read_table(_upload("q.csv", "\n".join(rows).encode()), plan=_plan())
         assert frame["trial"].tolist() == ["t;1", "t2"]
         assert pop_read_notes(frame) == []
+
+    @pytest.mark.parametrize("route", ["upload", "path", "archive"])
+    def test_mixed_record_widths_and_multiline_quoted_fields(self, tmp_path, route):
+        body = b'participant;trial;x;y;duration\n"reader;one";"multi\nline";1;2;30\np;phantom;2;130;140;160\np;t;220;225\n'
+        path = tmp_path / "fix.csv"
+        path.write_bytes(body)
+        if route == "archive":
+            path = tmp_path / "recordings.zip"
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("fix.csv", body)
+            with pytest.raises(TableReadError, match="line 4"):
+                read_table(path, plan=_plan())
+        else:
+            source = _upload("fix.csv", body) if route == "upload" else path
+            frame = read_table(source, plan=_plan())
+            assert frame["trial"].tolist() == ["multi\nline", "t"]
+            assert "line 4" in pop_read_notes(frame)[0]
 
     def test_several_files_name_the_one_the_note_is_about(self):
         files = [
@@ -384,7 +429,7 @@ class TestWizardWording:
         assert "**Name**" in bodies
         assert "**Extra fields to keep**" in bodies
         assert "*I know it*" in bodies
-        assert "**Skip guide**" in bodies
+        assert "at least one table" in bodies
 
     def test_the_guide_and_the_start_from_line_say_it_literally(self):
         """Read by people with intermediate English: no idioms."""
@@ -410,7 +455,7 @@ class TestWizardWording:
 
         assert any(label == "Skip" for _k, _c, label, *_ in READING_MEASURE_FIELDS)
         source = inspect.getsource(tour._wizard_guide_buttons)
-        assert '"Skip guide"' in source
+        assert '"Close guide"' in source
         assert '"Skip",' not in source
 
     def test_the_add_screen_titles_the_name_field(self):

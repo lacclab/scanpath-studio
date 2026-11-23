@@ -18,7 +18,7 @@ print(gallery_figure("heatmap"))
 
 === "In the app"
 
-    1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
+    1. Open your data in the :material/route: **Scanpath View** and pick a trial in **Select trial**.
     2. Turn on :material/local_fire_department: **Heatmap**. In **Heatmap** ▾ → **Style**, choose **Smoothed**. Keep **Color** → **By** at **Duration (ms)**.
     3. Turn off :material/blur_on: **Fixations** and :material/arrow_outward: **Saccades**, and keep :material/article: **Stimulus** on.
 
@@ -28,7 +28,7 @@ print(gallery_figure("heatmap"))
 
     ```bash
     scanpath-studio render --sample \
-      -p l37_1129 -t l37_1129_2_1_1_Ele \
+      -p l37_273 -t l37_273_2_1_1_Ele \
       --heatmap --heatmap-style smoothed --no-fixations --no-saccades \
       --highlight-column '' \
       -o heatmap.html

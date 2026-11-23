@@ -159,3 +159,16 @@ def test_the_cli_reads_its_own_files_through_the_fix(files, tmp_path, monkeypatc
     )
     assert seen, "analyze did not load through the API"
     assert _readings(seen[0][1]) == EXPECTED
+
+
+@pytest.mark.parametrize("suffix", ["csv", "parquet"])
+def test_literal_na_reader_and_blank_numeric_measure(tmp_path, suffix):
+    table = _fixations().assign(participant_id=["NA", "NULL"], pupil=[None, 4.5])
+    path = tmp_path / f"fixations.{suffix}"
+    if suffix == "csv":
+        table.to_csv(path, index=False)
+    else:
+        table.to_parquet(path, index=False)
+    _, fixations = api.load_scanpath_data(fixations=path, keep_columns=["pupil"])
+    assert set(fixations["participant_id"]) == {"NA", "NULL"}
+    assert pd.isna(fixations.loc[fixations["participant_id"] == "NA", "pupil"].iloc[0])

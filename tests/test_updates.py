@@ -198,6 +198,49 @@ def test_a_git_install_reinstalls_from_its_own_url():
     )
 
 
+@pytest.mark.parametrize("ref", ["", "lab/reader-v2", "v0.35.0", "refs/tags/frozen"])
+def test_fork_update_uses_its_requested_ref_and_package_directory(ref):
+    import json
+
+    from scanpath_studio.build_info import read_vcs_install
+
+    url = "https://example.org/lab/fork.git"
+    vcs = {"vcs": "git", "commit_id": "abc1234" + "a" * 33}
+    if ref:
+        vcs["requested_revision"] = ref
+    direct = json.dumps({"url": url, "subdirectory": "packages/app", "vcs_info": vcs})
+    info = read_vcs_install("0.35.0", read_text=lambda name: direct)
+    assert "packages/app" in info.describe()
+    assert ref in info.describe()
+    suffix = f"@{ref}" if ref else ""
+    assert (
+        updates.update_command("vcs", info)
+        == f'pip install -U "git+{url}{suffix}#subdirectory=packages/app"'
+    )
+
+
+@pytest.mark.parametrize("ref", ["abc1234", "abc1234" + "a" * 33])
+def test_an_install_pinned_to_a_commit_explains_how_to_change_it(ref):
+    import json
+
+    from scanpath_studio.build_info import read_vcs_install
+
+    direct = json.dumps(
+        {
+            "url": "https://example.org/lab/fork.git",
+            "vcs_info": {
+                "vcs": "git",
+                "requested_revision": ref,
+                "commit_id": "abc1234" + "a" * 33,
+            },
+        }
+    )
+    info = read_vcs_install("0.35.0", read_text=lambda name: direct)
+    check = updates.check_for_updates(latest=_latest(), info=info, kind="vcs")
+    assert not check.command
+    assert f"pinned to commit {ref}" in check.message
+
+
 @pytest.mark.parametrize(
     ("ref", "branch"), [("dev", "dev"), ("stable", "stable"), ("v1.2.3", "stable")]
 )
@@ -314,6 +357,20 @@ def test_about_offers_check_for_updates_on_a_local_run(monkeypatch):
     # the command that updates this install
     assert any(code.language == "bash" and code.value for code in at.code)
     assert any("What's new in v99.0.0" in md.value for md in at.markdown)
+
+
+def test_about_names_the_release_and_identifies_the_exact_dev_build(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from scanpath_studio import app
+
+    monkeypatch.setattr(app, "build_info", lambda: DEV)
+    at = AppTest.from_function(_about_script).run()
+    assert not at.exception
+    assert f"Dev · Based on v{DEV.release}" in [caption.value for caption in at.caption]
+    details = next(tab for tab in at.tabs if tab.label == "App details")
+    assert any(DEV.version in caption.value for caption in details.caption)
+    assert any(f"({DEV.docs_url}whats-new/)" in row.value for row in details.markdown)
 
 
 def test_about_says_when_this_is_the_latest(monkeypatch):
@@ -530,7 +587,7 @@ def _about_with_last_update(monkeypatch, result, build, at=None):
         "last_result",
         lambda: desktop_update.UpdateResult(status, "0.36.0", "0.35.0", reason, at=at),
     )
-    monkeypatch.setattr(app, "_build_info", lambda: BuildInfo(build, build))
+    monkeypatch.setattr(app, "build_info", lambda: BuildInfo(build, build))
     at = AppTest.from_function(_about_script).run()
     assert not at.exception, at.exception
     return at

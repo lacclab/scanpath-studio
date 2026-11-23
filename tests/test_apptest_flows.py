@@ -160,17 +160,23 @@ def _frames_with(at: AppTest, *columns: str) -> list[pd.DataFrame]:
     return out
 
 
+def _inspect_tables(at: AppTest) -> None:
+    at.segmented_control(key="data_inspection_panel").set_value("Tables")
+    _rerun(at, view=VIEW_DATA)
+    _clean(at, "inspecting tables")
+
+
 def _fixation_durations(at: AppTest) -> list:
-    """``duration_ms`` from the rendered fixation-level table (Data Inspection →
-    Raw data → Fixations), in render order."""
+    """Durations from the Fixations table in display order."""
+    _inspect_tables(at)
     frames = _frames_with(at, "duration_ms", "x")
     assert frames, "fixation-level table not rendered"
     return list(frames[0]["duration_ms"])
 
 
 def _word_labels(at: AppTest) -> set[str]:
-    """Distinct ``text`` values on the rendered word-level table (Data
-    Inspection → Raw data → AOIs)."""
+    """Distinct text values from the Words table."""
+    _inspect_tables(at)
     frames = _frames_with(at, "word_id", "text")
     assert frames, "word-level table not rendered"
     return set(frames[0]["text"].dropna().astype(str))
@@ -211,6 +217,8 @@ class TestColumnMappingOverrideFlow:
             "IA_LABEL" in m.value and "overridden" in m.value for m in at.markdown
         ), "the ✨ flag should report the overridden auto-detection on hover"
 
+        at.button(key="dataset_editor_close").click()
+        _rerun(at, view=VIEW_DATA)
         # The frames were re-derived, not just re-labelled: every word label on
         # the word-level table is now a POS tag…
         after = _word_labels(at)
@@ -218,6 +226,7 @@ class TestColumnMappingOverrideFlow:
         assert {"NOUN", "VERB", "DET", "PUNCT"} <= after, after
         # …and the stimulus text, reconstructed downstream from the same column,
         # reads as POS tags too.
+        _inspect_tables(at)
         stimuli = _frames_with(at, "Text ID", "# Words", "Text")
         assert stimuli, "stimuli table not rendered"
         passage = str(stimuli[0]["Text"].iloc[0]).split()
@@ -231,7 +240,7 @@ class TestColumnMappingOverrideFlow:
         # the fixations frame was re-normalized, not relabelled.
         raw_fix = load_sample_data()[1]
         before_expected = list(raw_fix["CURRENT_FIX_DURATION"].head(5))
-        after_expected = list(raw_fix["NEXT_SAC_AMPLITUDE"].head(5))
+        after_expected = pd.to_numeric(raw_fix["NEXT_SAC_AMPLITUDE"].head(5)).tolist()
         assert before_expected != after_expected  # the remap must be observable
 
         at = _boot(view=VIEW_DATA)
@@ -315,6 +324,7 @@ class TestTrialFilterFlow:
         _rerun(at, view=VIEW_DATA)
         _clean(at, "on the Data page after the difficulty filter:")
         assert _metric(at, "Trials") == str(DEMO_ADV_TRIALS_IN_WORDS)
+        _inspect_tables(at)
         graded = _frames_with(at, "difficulty_level")
         assert graded, "no rendered frame carries difficulty_level"
         for frame in graded:
@@ -439,7 +449,7 @@ class TestBulkExportFlow:
     ``st.download_button`` is drivable from ``AppTest``, and the test clicks the
     real one — but the bytes it serves live in Streamlit's media-file manager,
     not in the element tree, so there is no way to *read* the zip back from the
-    click. The payload is therefore captured at the ``tabs.bulk_export`` seam by
+    click. The payload is therefore captured at the ``tabs.build_download`` seam by
     a wrapper that calls the real function. Everything up to and including the
     button press — the options collected from the widgets, the scope, the trial
     pool, the figure settings — is the real UI path; only the *inspection* of
@@ -461,19 +471,19 @@ class TestBulkExportFlow:
         from scanpath_studio import tabs
 
         calls: list = []
-        real_bulk_export = tabs.bulk_export
+        real_build_download = tabs.build_download
 
         def capturing(*args, **kwargs):
-            result = real_bulk_export(*args, **kwargs)
+            result = real_build_download(*args, **kwargs)
             calls.append((kwargs, result[0]))
             return result
 
-        monkeypatch.setattr(tabs, "bulk_export", capturing)
+        monkeypatch.setattr(tabs, "build_download", capturing)
 
         at = _boot(subtab=SUBTAB_EXPORT)
         tabular = at.pills(key="bulk_export_tabular")
         assert "Mega-table" not in tabular.options
-        at.multiselect(key="filter_participants").set_value(["l7_1090"])
+        at.multiselect(key="filter_participants").set_value(["l7_183"])
         at.pills(key="bulk_export_figfmts").set_value([])
         tabular.set_value(["Fixations"])
         at.run(timeout=60)
@@ -496,14 +506,14 @@ class TestBulkExportFlow:
         from scanpath_studio import tabs
 
         calls: list = []
-        real_bulk_export = tabs.bulk_export
+        real_build_download = tabs.build_download
 
         def capturing(*args, **kwargs):
-            result = real_bulk_export(*args, **kwargs)
+            result = real_build_download(*args, **kwargs)
             calls.append((kwargs, result[0], result[1]))
             return result
 
-        monkeypatch.setattr(tabs, "bulk_export", capturing)
+        monkeypatch.setattr(tabs, "build_download", capturing)
 
         at = _boot(subtab=SUBTAB_EXPORT)
         # No zip to download yet. The Current figure's "⬇ Download PNG" is always
@@ -514,7 +524,7 @@ class TestBulkExportFlow:
 
         # Narrow to one reader — the export's default scope is the filtered pool.
         participants = at.multiselect(key="filter_participants")
-        participants.set_value(["l7_1090"])
+        participants.set_value(["l7_183"])
         at.run(timeout=60)
         _clean(at, "after narrowing to one participant:")
         pool = _trial_ids(at)
@@ -547,20 +557,26 @@ class TestBulkExportFlow:
         assert options.export_unfiltered is False
 
         # The demo's column-name map travels with its tables.
-        expected = {"README.md", "CITATION.bib", "index.csv", "columns.json"}
+        expected = {
+            "README.md",
+            "CITATION.bib",
+            "index.csv",
+            "columns.json",
+            "read_csv.R",
+        }
         for trial in pool:
-            expected.add(f"per_trial/l7_1090__{trial}/fixations.csv")
-            expected.add(f"per_trial/l7_1090__{trial}/plot_config.json")
+            expected.add(f"per_trial/l7_183__{trial}/fixations.csv")
+            expected.add(f"per_trial/l7_183__{trial}/plot_config.json")
         assert self._zip_names(zip_bytes) == expected
 
         # The per-trial config identifies its own trial, and records the live
         # word-box toggle in the file itself (not just in the call kwargs).
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-            cfg = json.loads(zf.read(f"per_trial/l7_1090__{pool[0]}/plot_config.json"))
+            cfg = json.loads(zf.read(f"per_trial/l7_183__{pool[0]}/plot_config.json"))
             fix_csv = pd.read_csv(
-                io.BytesIO(zf.read(f"per_trial/l7_1090__{pool[0]}/fixations.csv"))
+                io.BytesIO(zf.read(f"per_trial/l7_183__{pool[0]}/fixations.csv"))
             )
-        assert cfg["selection"]["participant_id"] == "l7_1090"
+        assert cfg["selection"]["participant_id"] == "l7_183"
         assert cfg["selection"]["trial_id"] == pool[0]
         assert cfg["layers"]["words"] is True
 
@@ -569,19 +585,19 @@ class TestBulkExportFlow:
         raw_fix = load_sample_data()[1]
         expected_rows = int(
             (
-                (raw_fix["participant_id"] == "l7_1090")
+                (raw_fix["participant_id"] == "l7_183")
                 & (raw_fix["unique_trial_id"] == pool[0])
             ).sum()
         )
         assert expected_rows > 0
         assert len(fix_csv) == expected_rows
-        assert set(fix_csv["participant_id"].unique()) == {"l7_1090"}
+        assert set(fix_csv["participant_id"].unique()) == {"l7_183"}
         # Under the demo's own names: its file calls the trial id
         # `unique_trial_id` and the duration `CURRENT_FIX_DURATION`.
         assert set(fix_csv["unique_trial_id"].unique()) == {pool[0]}
         assert sorted(fix_csv["CURRENT_FIX_DURATION"]) == sorted(
             raw_fix.loc[
-                (raw_fix["participant_id"] == "l7_1090")
+                (raw_fix["participant_id"] == "l7_183")
                 & (raw_fix["unique_trial_id"] == pool[0]),
                 "CURRENT_FIX_DURATION",
             ]
@@ -620,10 +636,48 @@ class TestBulkExportFlow:
             for name in names_all
             if name.startswith("per_trial/")
         }
-        assert exported == {"l7_1090", "l37_1129"}
-        # README, CITATION.bib, index.csv and columns.json, then two files
+        assert exported == {"l7_183", "l37_273"}
+        # README, citation, inventory, dictionary and R reader, then two files
         # per trial.
-        assert len(names_all) == 4 + 2 * DEMO_TRIALS_IN_PICKER
+        assert len(names_all) == 5 + 2 * DEMO_TRIALS_IN_PICKER
+
+    def test_stopping_a_layer_retry_keeps_the_partial_bundle(self, monkeypatch):
+        from contextlib import contextmanager
+
+        from scanpath_studio import export, tabs
+
+        @contextmanager
+        def unavailable(_enabled):
+            def render(*_args):
+                raise RuntimeError("Layer renderer unavailable")
+
+            yield render
+
+        monkeypatch.setattr(export, "_figure_renderer", unavailable)
+        at = _boot(subtab=SUBTAB_EXPORT)
+        at.radio(key="bulk_export_scope").set_value("This trial")
+        at.pills(key="bulk_export_figfmts").set_value(["HTML"])
+        at.toggle(key="bulk_export_layers").set_value(True)
+        at.run(timeout=60)
+        next(b for b in at.button if b.label == "Build export").click().run(timeout=60)
+        _clean(at, "after the layer failures:")
+        original = at.session_state["_bulk_export_cache"]["data"]
+
+        @contextmanager
+        def stopped(_enabled):
+            tabs._stop_bulk_export(tabs._bulk_export_task_key(), retry=True)
+            yield None  # The cancellation checkpoint fires before rendering.
+
+        monkeypatch.setattr(export, "_figure_renderer", stopped)
+        next(
+            b for b in at.button if b.label == "Retry failed figure files"
+        ).click().run(timeout=60)
+        at.run(timeout=60)
+        _clean(at, "after stopping the retry:")
+        assert any("Retry stopped" in str(w.value) for w in at.warning)
+        assert at.session_state["_bulk_export_cache"]["data"] == original
+        assert "⬇ Download bundle (zip)" in self._download_labels(at)
+        assert any(b.label == "Retry failed figure files" for b in at.button)
 
     def test_the_plan_is_said_and_a_stopped_build_offers_no_bundle(self, monkeypatch):
         """Before the build, the panel says what it will write; Stop mid-build
@@ -658,6 +712,56 @@ class TestBulkExportFlow:
         # The session is as it was: the choices that led to the build stand.
         assert at.radio(key="bulk_export_scope").value == "This trial"
         assert list(at.pills(key="bulk_export_figfmts").value) == ["HTML", "SVG"]
+
+    def test_smaller_png_files_rebuilds_figures_and_layers(self, monkeypatch):
+        from contextlib import contextmanager
+
+        from PIL import Image
+
+        from scanpath_studio import export
+        from scanpath_studio.file_citation import stamp
+
+        buffer = io.BytesIO()
+        Image.new("RGBA", (120, 80), (31, 73, 122, 128)).save(
+            buffer, "PNG", compress_level=0
+        )
+        original = stamp(buffer.getvalue(), "png")
+
+        @contextmanager
+        def renderer(_enabled):
+            yield lambda _fig, fmt, *_: original if fmt == "png" else b"<svg/>"
+
+        monkeypatch.setattr(export, "_figure_renderer", renderer)
+        at = _boot(subtab=SUBTAB_EXPORT)
+        at.radio(key="bulk_export_scope").set_value("This trial")
+        at.pills(key="bulk_export_figfmts").set_value(["PNG", "SVG"])
+        at.toggle(key="bulk_export_layers").set_value(True)
+        at.run(timeout=60)
+        assert at.toggle(key="bulk_export_compact_pngs").value is False
+
+        def build():
+            next(b for b in at.button if b.label == "Build export").click().run(
+                timeout=60
+            )
+            _clean(at, "after building PNG figures and layers:")
+            with zipfile.ZipFile(
+                io.BytesIO(at.session_state["_bulk_export_cache"]["data"])
+            ) as z:
+                return {
+                    p: z.read(p) for p in z.namelist() if p.endswith((".png", ".svg"))
+                }
+
+        fast = build()
+        at.toggle(key="bulk_export_compact_pngs").set_value(True).run(timeout=60)
+        assert "⬇ Download bundle (zip)" not in self._download_labels(at)
+        smaller = build()
+        assert smaller.keys() == fast.keys()
+        assert any("/layers/" in path and path.endswith(".png") for path in fast)
+        for path in fast:
+            if path.endswith(".png"):
+                assert fast[path] == original and len(smaller[path]) < len(original)
+            else:
+                assert smaller[path] == fast[path] == b"<svg/>"
 
     def test_the_html_files_choice_reaches_the_bundle(self, monkeypatch):
         from scanpath_studio import tabs
@@ -736,10 +840,7 @@ class TestBulkExportFlow:
 
 @pytest.mark.timeout(180)
 class TestRecoveryCachePanelFlow:
-    """🗂️ Data → *Saved on this computer* is the on-device cache's only in-app
-    surface, so it has to report the real store. Its one control is *Clear
-    what is saved…*, behind a confirmation.
-    """
+    """Saved work reports the session on disk and confirms deletion."""
 
     @staticmethod
     def _boot_local(tmp_path, monkeypatch) -> AppTest:
@@ -754,6 +855,7 @@ class TestRecoveryCachePanelFlow:
         monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+        at.session_state["data_workspace"] = "Saved work"
         return _rerun(at, view=VIEW_DATA)
 
     def test_panel_reports_the_store_and_its_folder(self, tmp_path, monkeypatch):
@@ -762,16 +864,10 @@ class TestRecoveryCachePanelFlow:
         at = self._boot_local(tmp_path, monkeypatch)
         _clean(at, "cache panel:")
         body = " ".join(str(m.value) for m in at.markdown)
-        assert "**Also saved:**" in body
-        # The wizard's buttons say "Upload", so the note never says nothing is
-        # uploaded. Under AppTest the server is not on loopback, where the
-        # files did leave the browser's machine, so that sentence is left out.
+        assert "**Automatic saving is on.** Your work reopens on this server." in body
         captions = " ".join(str(c.value) for c in at.caption)
-        assert "saved as you work" in captions
-        assert "Nothing is uploaded" not in captions
-        assert "Nothing leaves this computer" not in captions
-        # The folder is on the page itself, not behind a popover.
-        assert f"**Session folder:** `{tmp_path}`" in body
+        assert "The app saves datasets you add" in captions
+        assert f"Session folder · `{tmp_path}`" in captions
 
         # Working in the app writes the cache — the panel's own claim.
         assert (tmp_path / "manifest.json").is_file()
@@ -808,19 +904,17 @@ class TestRecoveryCachePanelFlow:
         at = self._boot_local(tmp_path / "cache", monkeypatch)
         _clean(at, "cache panel:")
         body = " ".join(str(m.value) for m in at.markdown)
-        assert "**Datasets on this computer**" in body
-        assert "- **Corpus** · added · " in body
-        assert "· a copy in the session folder" in body
-        assert f"- **PoTeC** · downloaded · 2.0 KB · `{potec}`" in body
-        captions = " ".join(str(c.value) for c in at.caption)
-        assert "Downloads stay until you delete one here." in captions
+        assert {"Dataset downloads", "Your session"} <= {h.value for h in at.subheader}
+        assert "**Corpus** · " in body
+        assert "**PoTeC**" in body
+        assert any(f"2.0 KB · `{potec}`" in c.value for c in at.caption)
 
         at.button(key="saved_here_delete_0").click()
         _rerun(at, view=VIEW_DATA)
         body = " ".join(str(m.value) for m in at.markdown)
         assert "This deletes 1 file of **PoTeC** (2.0 KB)" in body
         assert tsv.is_file(), "nothing goes before Delete"
-        # Re-armed, as for *Clear what is saved…*: AppTest replays the script.
+        # AppTest replays the script when a dialog button is clicked.
         at.session_state[app.DELETE_DOWNLOAD_REQUEST_KEY] = (
             "PoTeC — Potsdam Textbook Corpus"
         )
@@ -833,9 +927,9 @@ class TestRecoveryCachePanelFlow:
             str(t.value) for t in at.toast
         )
         body = " ".join(str(m.value) for m in at.markdown)
-        assert "· downloaded ·" not in body
+        assert "**PoTeC**" not in body
 
-    def test_a_loopback_run_says_nothing_leaves_this_computer(
+    def test_a_loopback_run_names_the_computer_as_the_saved_location(
         self, tmp_path, monkeypatch
     ):
         from scanpath_studio import app
@@ -843,8 +937,9 @@ class TestRecoveryCachePanelFlow:
         monkeypatch.setattr(app, "server_bound_to_loopback", lambda: True)
         at = self._boot_local(tmp_path, monkeypatch)
         _clean(at, "cache panel:")
-        captions = " ".join(str(c.value) for c in at.caption)
-        assert "restored next time. Nothing leaves this computer." in captions
+        assert any(
+            "Your work reopens on this computer." in m.value for m in at.markdown
+        )
 
     def test_clear_what_is_saved_lists_then_starts_over(self, tmp_path, monkeypatch):
         """The confirmation names what goes, and a confirmed clear
@@ -882,7 +977,7 @@ class TestRecoveryCachePanelFlow:
         at.run(timeout=60)
         _clean(at, "Scanpath view:")
         body = " ".join(str(m.value) for m in at.markdown)
-        assert "**Also saved:**" not in body
+        assert "**Automatic saving is on.**" not in body
 
     def test_an_attached_metadata_table_survives_a_refresh(self, tmp_path, monkeypatch):
         """End to end: attach a table, refresh, and its field is still in the
@@ -928,12 +1023,12 @@ class TestRecoveryCachePanelFlow:
         monkeypatch.delenv("SCANPATH_STUDIO_PERSIST", raising=False)
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+        at.session_state["data_workspace"] = "Saved work"
         at = _rerun(at, view=VIEW_DATA)
         _clean(at, "hosted cache panel:")
         captions = " ".join(str(c.value) for c in at.caption)
-        assert "Not saved between visits." in captions
-        body = " ".join(str(m.value) for m in at.markdown)
-        assert "**Session folder:**" not in body
+        assert any("ends when you close or refresh" in m.value for m in at.markdown)
+        assert "Session folder ·" not in captions
 
     def test_panel_says_saving_was_turned_off_in_plain_words(self, monkeypatch):
         """Turned off at launch: the sentence says so for everyone, and the
@@ -942,13 +1037,16 @@ class TestRecoveryCachePanelFlow:
         monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "0")
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+        at.session_state["data_workspace"] = "Saved work"
         at = _rerun(at, view=VIEW_DATA)
         _clean(at, "turned-off cache panel:")
         captions = [str(c.value) for c in at.caption]
-        lead = next(c for c in captions if "**Turned off.**" in c)
+        lead = next(
+            m.value for m in at.markdown if "Automatic saving is off" in m.value
+        )
         assert "SCANPATH_STUDIO_PERSIST" not in lead
         assert any("`SCANPATH_STUDIO_PERSIST=0`" in c for c in captions)
-        assert not any("Not saved between visits." in c for c in captions)
+        assert not any("ends when you close or refresh" in m.value for m in at.markdown)
 
 
 class TestAddDatasetMenu:

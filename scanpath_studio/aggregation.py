@@ -16,7 +16,7 @@ CI), and may z-score within reader — see :data:`MEASURES`,
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -99,6 +99,11 @@ class Measure:
     unit: str  # axis-label unit, e.g. "ms", "px", "" (rates)
     per_word: bool
     is_rate: bool = False
+
+    def value_label(self, normalize: bool) -> str:
+        if normalize and not self.is_rate:
+            return f"{self.label} (within-reader z-score, SD units)"
+        return self.axis_label
 
     @property
     def axis_label(self) -> str:
@@ -261,7 +266,7 @@ _AGG_FUNCS = {"mean": np.nanmean, "median": np.nanmedian, "sum": np.nansum}
 def aggregate_value(values: np.ndarray, agg: str = "mean") -> float:
     """Collapse ``values`` to a single number under ``agg`` (mean/median/sum)."""
     arr = np.asarray(values, dtype="float64")
-    arr = arr[~np.isnan(arr)]
+    arr = arr[np.isfinite(arr)]
     if arr.size == 0:
         return float("nan")
     return float(_AGG_FUNCS.get(agg, np.nanmean)(arr))
@@ -277,16 +282,28 @@ def bootstrap_ci(
 ) -> tuple[float, float]:
     """Percentile bootstrap CI of the ``agg`` statistic (a spread option)."""
     arr = np.asarray(values, dtype="float64")
-    arr = arr[~np.isnan(arr)]
+    arr = arr[np.isfinite(arr)]
     if arr.size < 2:
         v = aggregate_value(arr, agg)
         return (v, v)
     rng = np.random.default_rng(seed)
-    idx = rng.integers(0, arr.size, size=(n_boot, arr.size))
-    stats = _AGG_FUNCS.get(agg, np.nanmean)(arr[idx], axis=1)
+    # Draw in the same row-major order for every batch size. Bound the
+    # temporary observation and index arrays even for large groups.
+    batch_size = max(1, 100_000 // arr.size)
+    stats = np.empty(n_boot)
+    reduce = _AGG_FUNCS.get(agg, np.nanmean)
+    for start in range(0, n_boot, batch_size):
+        stop = min(start + batch_size, n_boot)
+        idx = rng.integers(0, arr.size, size=(stop - start, arr.size))
+        stats[start:stop] = reduce(arr[idx], axis=1)
     lo = float(np.percentile(stats, (100.0 - ci) / 2.0))
     hi = float(np.percentile(stats, 100.0 - (100.0 - ci) / 2.0))
     return (lo, hi)
+
+
+def effective_spread(spread: str, agg: str | None) -> str:
+    """The interval drawn around the selected aggregate."""
+    return "Bootstrap CI" if agg == "sum" and spread in ("SEM", "SD") else spread
 
 
 def spread_bounds(values: np.ndarray, center: float, spread: str, *, agg: str = "mean"):
@@ -296,17 +313,13 @@ def spread_bounds(values: np.ndarray, center: float, spread: str, *, agg: str = 
     ``Bootstrap CI`` → 95 % percentile bootstrap of the aggregate.
     """
     arr = np.asarray(values, dtype="float64")
-    arr = arr[~np.isnan(arr)]
+    arr = arr[np.isfinite(arr)]
     if arr.size == 0 or np.isnan(center):
         return (center, center)
+    spread = effective_spread(spread, agg)
     if spread == "IQR":
         return (float(np.percentile(arr, 25)), float(np.percentile(arr, 75)))
     if spread == "Bootstrap CI":
-        return bootstrap_ci(arr, agg=agg)
-    if agg == "sum":
-        # SD/SEM describe the spread of individual observations, which is
-        # meaningless around a *total*; bootstrap the aggregate so the band
-        # actually brackets the plotted sum.
         return bootstrap_ci(arr, agg=agg)
     sd = float(np.std(arr, ddof=1)) if arr.size > 1 else 0.0
     half = sd / np.sqrt(arr.size) if spread == "SEM" else sd
@@ -423,21 +436,134 @@ def _first_screen(sub: pd.DataFrame, screens: pd.Series) -> str | None:
     if SCREEN_INDEX in sub.columns:
         index = pd.to_numeric(sub[SCREEN_INDEX], errors="coerce")
         if index.notna().any():
-            return str(screens[index.idxmin()])
+            return str(screens.iloc[index.argmin()])
     return str(screens.iloc[0]) if len(screens) else None
 
 
 def _measure_series(frame: pd.DataFrame, measure: Measure) -> pd.Series:
     """Numeric series for ``measure``; booleans/rates coerced to 0/1 floats."""
-    s = frame[measure.column]
+    values = pd.to_numeric(frame[measure.column], errors="coerce")
     if measure.is_rate:
-        if pd.api.types.is_bool_dtype(s):
-            return s.astype("float64")
-        return pd.to_numeric(s, errors="coerce").astype("float64")
-    return pd.to_numeric(s, errors="coerce")
+        values = values.astype("float64")
+    return values.where(np.isfinite(values))
+
+
+def corpus_text_column(frame: pd.DataFrame) -> str | None:
+    """The text identifier shared by the corpus overview and the word profiles."""
+    return next(
+        (
+            c
+            for c in (
+                "unique_text_id",
+                "text_id",
+                "unique_paragraph_id",
+                "paragraph_id",
+            )
+            if c in frame
+        ),
+        None,
+    )
+
+
+def corpus_overview(
+    words: pd.DataFrame, measure: Measure, group_by: str
+) -> pd.DataFrame:
+    """Mean and observed range by text or participant, with the contributing counts.
+
+    Each reading contributes its mean over finite word values across its screens.
+    For a text, repeated readings are averaged within participant before taking
+    the mean and range across participants. For a participant, the range spans
+    their readings. Shared stimulus copies do not represent observations.
+    Text comparisons require recorded text IDs. Groups with only missing
+    values keep their row and counts.
+    """
+    from .data import AOI_TRIAL_ID, TEXT_ID_MAPPED
+
+    if group_by not in ("text", "participant"):
+        raise ValueError("Choose text or participant for the corpus overview.")
+    field = corpus_text_column(words) if group_by == "text" else "participant_id"
+    keys = list(dict.fromkeys([field, "participant_id", "trial_id"]))
+    if not measure.per_word or measure.column not in words:
+        raise ValueError("The overview needs a mapped word-level measure.")
+    if field is None or not set(keys) <= set(words):
+        raise ValueError(
+            f"The Words table lacks the reading IDs needed to summarize by {group_by}."
+        )
+    eligible = None
+    if group_by == "text" and TEXT_ID_MAPPED in words:
+        mapped = words[TEXT_ID_MAPPED].fillna(False)
+        if not mapped.all():
+            if not mapped.any():
+                raise ValueError(
+                    "Comparing texts requires a mapped Text ID in the Words table."
+                )
+            eligible = mapped
+    if AOI_TRIAL_ID in words:
+        # A stimulus-level value copied onto each reading supplies no
+        # participant-specific observation, even for the word-row count.
+        own = words[AOI_TRIAL_ID].isna()
+        eligible = own if eligible is None else eligible & own
+    if eligible is not None:
+        words = words.loc[eligible, [*keys, measure.column]]
+    readings = (
+        _measure_series(words, measure)
+        .groupby([words[key] for key in keys])
+        .agg(["mean", "count", "size"])
+    )
+    counts = readings.groupby(level=field).agg(
+        n_readings=("mean", "count"),
+        n_values=("count", "sum"),
+        n_word_rows=("size", "sum"),
+    )
+    units = readings["mean"]
+    if group_by == "text":
+        units = units.groupby(level=[field, "participant_id"]).mean()
+        counts["n_participants"] = units.groupby(level=field).count()
+    summary = units.groupby(level=field).agg(value="mean", lo="min", hi="max")
+    return (
+        summary.join(counts)
+        .sort_values("value", ascending=False, kind="stable")
+        .reset_index()
+    )
 
 
 # --- Per text: one text, many readers ----------------------------------------
+
+
+def reading_word_contributions(
+    words: pd.DataFrame,
+    text_col: str,
+    text_id,
+    measure: Measure,
+    *,
+    normalize: bool = False,
+    screen_id=None,
+) -> pd.DataFrame:
+    """Each recorded word observation, including readings with a missing measure."""
+    sub = _text_subset(words, text_col, text_id, screen_id)
+    return _word_observations(sub, measure, normalize, include_source=True)
+
+
+def _word_observations(sub, measure, normalize, *, include_source=False):
+    """Normalized word values with the identifying columns needed by their consumer."""
+    fields = (
+        ("participant_id", "trial_id", SCREEN_ID, "word_id", "text")
+        if include_source
+        else ("participant_id", "word_id", "text")
+    )
+    if sub.empty or not {"participant_id", "word_id", measure.column} <= set(sub):
+        columns = [c for c in fields if c != SCREEN_ID or c in sub]
+        return pd.DataFrame(
+            columns=[*columns, *(["source_value"] if include_source else []), "value"]
+        ).rename(columns={"text": "word_text"})
+    rows = sub[[c for c in fields if c in sub]].rename(columns={"text": "word_text"})
+    if include_source:
+        rows["source_value"] = sub[measure.column].to_numpy()
+    rows["value"] = _measure_series(sub, measure).to_numpy()
+    rows = rows.dropna(subset=["word_id"])
+    if normalize and not measure.is_rate:
+        rows = add_normalized_column(rows, "value")
+    return rows
 
 
 def per_reader_word_measure(
@@ -457,19 +583,14 @@ def per_reader_word_measure(
     screen on a multipart text — see :func:`_text_subset` for why there is no
     "all screens".
     """
-    cols = {"participant_id", "word_id", measure.column}
     sub = _text_subset(words, text_col, text_id, screen_id)
-    if sub.empty or not cols <= set(sub.columns):
-        return pd.DataFrame(columns=["participant_id", "word_id", "value", "word_text"])
-    df = sub[["participant_id", "word_id"]].copy()
-    df["value"] = _measure_series(sub, measure).to_numpy()
-    if "text" in sub.columns:
-        df["word_text"] = sub["text"].to_numpy()
-    df = df.dropna(subset=["word_id", "value"])
+    return _reader_word_aggregate(sub, measure, agg, normalize)
+
+
+def _reader_word_aggregate(sub, measure, agg, normalize=False):
+    df = _word_observations(sub, measure, normalize).dropna(subset=["value"])
     if df.empty:
         return pd.DataFrame(columns=["participant_id", "word_id", "value", "word_text"])
-    if normalize and not measure.is_rate:
-        df = add_normalized_column(df, "value")
     keys = ["participant_id", "word_id"]
     agg_map = {"value": agg}
     if "word_text" in df.columns:
@@ -497,24 +618,17 @@ def cohort_word_profile(
     ``spread`` band, ``n`` the contributing reader count and ``enough`` the
     min-readers guard.
     """
-    per = per_reader_word_measure(
-        words,
-        text_col,
-        text_id,
-        measure,
-        agg=agg,
-        normalize=normalize,
-        screen_id=screen_id,
-    )
+    sub = _text_subset(words, text_col, text_id, screen_id)
+    per = _reader_word_aggregate(sub, measure, agg, normalize)
     cols = ["word_id", "value", "lo", "hi", "n", "enough", "word_text"]
-    if per.empty:
+    if "word_id" not in sub or measure.column not in sub:
         return pd.DataFrame(columns=cols)
     rows = []
-    texts = (
-        per.groupby("word_id")["word_text"].first()
-        if "word_text" in per.columns
-        else None
+    # A word with no finite observation still occupies a position in the figure.
+    catalog = (
+        sub.dropna(subset=["word_id"]).drop_duplicates("word_id").set_index("word_id")
     )
+    texts = catalog.get("text", pd.Series(dtype=str))
     for wid, grp in per.groupby("word_id"):
         vals = grp["value"].to_numpy()
         center = aggregate_value(vals, agg)
@@ -527,12 +641,56 @@ def cohort_word_profile(
                 "hi": hi,
                 "n": int(np.sum(~np.isnan(vals))),
                 "enough": int(np.sum(~np.isnan(vals))) >= min_readers,
-                "word_text": texts.get(wid, "") if texts is not None else "",
+                "word_text": texts.get(wid, ""),
             }
+        )
+    for wid in catalog.index.difference(per["word_id"].unique()):
+        rows.append(
+            dict(
+                word_id=wid,
+                value=np.nan,
+                lo=np.nan,
+                hi=np.nan,
+                n=0,
+                enough=False,
+                word_text=texts.get(wid, ""),
+            )
         )
     return (
         pd.DataFrame(rows, columns=cols).sort_values("word_id").reset_index(drop=True)
     )
+
+
+def stimulus_revisions(
+    words: pd.DataFrame, text_col: str, text_id, screen_id=None
+) -> dict:
+    """Readings sharing word IDs, text and placement to within one screen pixel."""
+    sub = _text_subset(words, text_col, text_id, screen_id)
+    if not {"participant_id", "trial_id", "word_id"} <= set(sub) or sub.empty:
+        return {}
+    coordinates = [c for c in ("x", "y", "width", "height") if c in sub]
+    exemplars = {}
+    members = {}
+    for key, reading in sub.groupby(["participant_id", "trial_id"], sort=True):
+        reading = reading.dropna(subset=["word_id"]).sort_values(
+            "word_id", kind="stable"
+        )
+        ids = tuple(reading["word_id"])
+        text = (
+            tuple(reading["text"].astype("string").fillna(""))
+            if "text" in reading
+            else ()
+        )
+        boxes = reading[coordinates].to_numpy(dtype=float, na_value=np.nan)
+        family = exemplars.setdefault((ids, text), [])
+        for rep, layout in family:
+            if np.allclose(layout, boxes, atol=1, rtol=0, equal_nan=True):
+                members[rep].append(key)
+                break
+        else:
+            family.append((key, boxes))
+            members[key] = [key]
+    return members
 
 
 def word_box_aggregate(
@@ -543,6 +701,7 @@ def word_box_aggregate(
     *,
     agg: str = "mean",
     screen_id=None,
+    readings=None,
 ) -> pd.DataFrame:
     """One-row-per-word frame: word-box geometry + a ``value`` column = the
     ``measure`` aggregated across readers (the stimulus tint).
@@ -554,6 +713,12 @@ def word_box_aggregate(
     other however the values were keyed.
     """
     sub = _text_subset(words, text_col, text_id, screen_id)
+    if readings is not None:
+        sub = sub[
+            pd.MultiIndex.from_frame(sub[["participant_id", "trial_id"]]).isin(readings)
+        ]
+        # Stable exemplar when readings differ only by subpixel rounding.
+        sub = sub.sort_values(["participant_id", "trial_id"], kind="stable")
     if sub.empty or "word_id" not in sub.columns or measure.column not in sub.columns:
         return pd.DataFrame()
     geom_cols = [
@@ -561,11 +726,9 @@ def word_box_aggregate(
     ]
     if not geom_cols:
         return pd.DataFrame()
-    work = sub[["word_id"] + geom_cols].copy()
-    work["_m"] = _measure_series(sub, measure).to_numpy()
-    grouped = work.groupby("word_id")
-    out = grouped[geom_cols].first()
-    out["value"] = grouped["_m"].agg(lambda s: aggregate_value(s.to_numpy(), agg))
+    per_reader = _reader_word_aggregate(sub, measure, agg)
+    out = sub.groupby("word_id")[geom_cols].first()
+    out["value"] = per_reader.groupby("word_id")["value"].agg(agg)
     out = out.reset_index()
     out["participant_id"] = "aggregate"
     out["trial_id"] = str(text_id)
@@ -741,8 +904,7 @@ def reader_vs_cohort_values(
     """``{"This participant": …, "Cohort": …}`` value arrays for a measure."""
     if frame is None or frame.empty or "participant_id" not in frame.columns:
         return {}
-    work = frame.copy()
-    work["_m"] = _measure_series(work, measure).to_numpy()
+    work = frame[["participant_id"]].assign(_m=_measure_series(frame, measure))
     if normalize and not measure.is_rate:
         work = add_normalized_column(work, "_m")
     is_target = work["participant_id"].astype(str) == str(participant_id)
@@ -770,7 +932,7 @@ def _trial_reading_time_ms(fixations: pd.DataFrame) -> pd.DataFrame:
     — the fixations are laid end to end by their durations, the clock the
     replay uses (``measures.rebased_fixation_onsets``): an estimate that leaves
     out every gap between them, so ``reading_time_source`` says so."""
-    from .data import TIMESTAMP_SYNTHESIZED
+    from .data import synthesized_onset_mask
 
     columns = ["reading_time_ms", "reading_time_source"]
     if fixations.empty or not {"participant_id", "trial_id"} <= set(fixations.columns):
@@ -779,10 +941,7 @@ def _trial_reading_time_ms(fixations: pd.DataFrame) -> pd.DataFrame:
     df = fixations[keys].copy()
     dur = pd.to_numeric(fixations.get("duration_ms"), errors="coerce")
     df["_d"] = dur
-    if TIMESTAMP_SYNTHESIZED in fixations.columns:
-        df["_synth"] = fixations[TIMESTAMP_SYNTHESIZED].fillna(False).astype(bool)
-    else:
-        df["_synth"] = "timestamp_ms" not in fixations.columns
+    df["_synth"] = synthesized_onset_mask(fixations)
     if "timestamp_ms" in fixations.columns:
         ts = pd.to_numeric(fixations["timestamp_ms"], errors="coerce")
         df["_start"] = ts
@@ -1629,12 +1788,19 @@ def group_word_difference(
     a = pa[["word_id", "value", "n", "word_text"]].rename(
         columns={"value": "a", "n": "n_a"}
     )
-    b = pb[["word_id", "value", "n"]].rename(columns={"value": "b", "n": "n_b"})
+    b = pb[["word_id", "value", "n", "word_text"]].rename(
+        columns={"value": "b", "n": "n_b", "word_text": "word_text_b"}
+    )
     out = a.merge(b, on="word_id", how="outer")
     out["diff"] = out["a"] - out["b"]
-    # `a` always carries word_text (cohort_word_profile always returns it), so the
-    # outer merge leaves NaN word_text on B-only words — backfill, don't no-op.
-    out["word_text"] = out["word_text"].fillna("")
+    other_text = out.pop("word_text_b").replace("", np.nan)
+    text = out["word_text"].replace("", np.nan)
+    disagreements = text.notna() & other_text.notna() & text.ne(other_text)
+    out["word_text"] = text.fillna(other_text).fillna("")
+    if disagreements.any():
+        # Keep both source labels visible in the downloaded difference table.
+        out["word_text_b"] = other_text.where(disagreements)
+        cols.append("word_text_b")
     out["n_a"] = out["n_a"].fillna(0).astype(int)
     out["n_b"] = out["n_b"].fillna(0).astype(int)
     out["enough"] = (out["n_a"] >= min_readers) & (out["n_b"] >= min_readers)
@@ -1670,7 +1836,9 @@ def two_group_word_profiles(
             screen_id=screen_id,
         )
         if not prof.empty:
-            frames.append(prof[["word_id", "value"]].assign(group=label))
+            frames.append(
+                prof.loc[prof["enough"], ["word_id", "value"]].assign(group=label)
+            )
     if not frames:
         return pd.DataFrame(columns=["group", "word_id", "value"])
     return pd.concat(frames, ignore_index=True)[["group", "word_id", "value"]]
@@ -1725,6 +1893,29 @@ def paired_group_summary(
                 }
             )
     return pd.DataFrame(rows, columns=["measure", "group", "value", "n_observations"])
+
+
+def within_reader_contrast(
+    group_a: pd.DataFrame,
+    group_b: pd.DataFrame,
+    measure: Measure,
+    *,
+    participants: Collection[str] | None = None,
+) -> pd.DataFrame:
+    """One mean per reader and condition, with a difference only for complete pairs."""
+
+    def means(frame):
+        if frame.empty or not {"participant_id", measure.column} <= set(frame):
+            return pd.Series(dtype=float, index=pd.Index([], name="participant_id"))
+        return _measure_series(frame, measure).groupby(frame["participant_id"]).mean()
+
+    out = pd.concat(
+        [means(group_a).rename("value_a"), means(group_b).rename("value_b")], axis=1
+    )
+    if participants is not None:
+        out = out.reindex(pd.Index(sorted(participants), name="participant_id"))
+    out["difference_a_minus_b"] = out["value_a"] - out["value_b"]
+    return out.sort_index().reset_index()
 
 
 def group_mean_difference(

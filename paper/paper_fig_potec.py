@@ -1,8 +1,7 @@
 """Render the PoTeC case-study figure for the manuscript (fig_potec).
 
 Loads one reader's reading of one PoTeC textbook text from a local PoTeC clone
-(pass download=True on first use to fetch ~45 MB), computes the reading
-measures from raw fixations, and renders the scanpath over the German text at
+and renders the scanpath over the German text at
 PoTeC's 1680x1050 presentation size.
 
 Run from the repo root:  uv run python paper/paper_fig_potec.py
@@ -36,7 +35,9 @@ READER, TEXT = 0, "b0"
 
 
 def main() -> None:
-    words, fixations = sps.load_potec(POTEC_ROOT, readers=[READER], texts=[TEXT])
+    words, fixations = sps.load_potec(
+        POTEC_ROOT, readers=[READER], texts=[TEXT], names="canonical"
+    )
     combos = sps.list_trials(words, fixations)
     pid, tid = combos.iloc[0]["participant_id"], combos.iloc[0]["trial_id"]
     n_fix = len(
@@ -54,10 +55,7 @@ def main() -> None:
         show_order=False,
         show_heatmap=False,
     )
-    try:
-        sps.save_figure(fig, str(OUT), scale=2)
-    except TypeError:
-        sps.save_figure(fig, str(OUT))
+    sps.save_figure(fig, str(OUT), scale=2)
     print(f"wrote {OUT}")
 
 

@@ -505,7 +505,8 @@ def test_choosing_scanpath_in_compare_replaces_the_underlying_time_chart():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
     at.button(key="viz_view_gaze_over_time").click().run()
     at.toggle(key="single_compare_toggle").set_value(True).run()
-    assert at.button(key="viz_view_gaze_over_time").disabled
+    assert not at.button(key="viz_view_gaze_over_time").disabled
+    assert at.button(key="viz_view_gaze_over_time").proto.type == "primary"
     at.button(key="viz_view_scanpath").click().run()
     assert at.toggle(key="single_compare_toggle").value
     at.toggle(key="single_compare_toggle").set_value(False).run()
@@ -573,7 +574,7 @@ def test_axis_preset_and_compare_survive_mode_switch_until_a_tile_is_selected():
     at.toggle(key="single_compare_toggle").set_value(True).run()
     at.segmented_control(key="ui_mode_switch").set_value("essentials").run()
     assert at.session_state["single_compare_toggle"]
-    assert at.button(key="viz_view_scanpath").proto.type == "primary"
+    assert at.button(key="viz_view_custom").proto.type == "primary"
     at.toggle(key="single_compare_toggle").set_value(False).run()
     assert at.session_state["global_x_field"] == chart_axes.ELAPSED
     at.button(key="viz_view_scanpath").click().run()
@@ -647,3 +648,106 @@ def test_saved_reading_design_after_trial_mode_changes_and_reset(all_trials):
     at.button(key="design_apply_Reading clock").click().run()
     check_clock()
     assert tuple(at.session_state["single_fix_range"]) == (5, 12)
+
+
+@pytest.mark.parametrize("layout", ["overlay", "side_by_side", "stacked"])
+def test_compare_elapsed_axes_keep_each_readings_parent_clock_and_scale(layout):
+    words, first = make_multipart_synthetic_data()
+    second = first.assign(timestamp_ms=first.timestamp_ms * 2 + 91_000)
+    later = first[first.screen_id == "question"]
+    a, b = later.iloc[-1], later.iloc[0]
+    key = (a.participant_id, a.trial_id)
+    fig = api.compare_scanpaths(
+        words,
+        first,
+        key,
+        key,
+        words_b=words,
+        fixations_b=second,
+        screen="question",
+        screen_b="question",
+        layout=layout,
+        x_field=chart_axes.ELAPSED,
+        y_field="y",
+        labels=("First", "Second"),
+        fix_index_range=(int(a.order_in_trial), int(a.order_in_trial)),
+        fix_index_range_b=(int(b.order_in_trial), int(b.order_in_trial)),
+        color_by="(uniform)",
+        show_saccade_arrows=True,
+    )
+    assert list(_trace(fig, "First").x) == pytest.approx(
+        [(a.timestamp_ms - first.timestamp_ms.min()) / 1000]
+    )
+    assert list(_trace(fig, "Second").x) == pytest.approx(
+        [(b.timestamp_ms - first.timestamp_ms.min()) / 500]
+    )
+    assert _trace(fig, "Second").xaxis == "x2"
+    assert fig.layout.xaxis.range == fig.layout.xaxis2.range
+    assert fig.layout.yaxis.range == fig.layout.yaxis2.range
+    assert fig.layout.yaxis.range[0] > fig.layout.yaxis.range[1]
+    assert len([t for t in fig.data if t.name == "Fixation duration"]) == 2
+    assert all(t.marker.symbol != "arrow" for t in fig.data)
+    assert not fig.layout.shapes
+
+
+@pytest.mark.parametrize("comparing", [False, True])
+def test_index_sequence_without_markers_obeys_window_and_hide(comparing):
+    words, fix = api.load_scanpath_data(*example_import_tables(), names="canonical")
+    first = fix.iloc[0]
+    key = (first.participant_id, first.trial_id)
+    fix = fix[(fix.participant_id == key[0]) & (fix.trial_id == key[1])].copy()
+    fix["duration_ms"] = np.where(fix.order_in_trial == 3, 1, 200)
+    settings = dict(
+        x_field="order_in_trial",
+        y_field="x",
+        show_fixations=False,
+        show_order=True,
+        show_saccades=True,
+        fix_index_range=(2, 5),
+        fixation_flags={"short": {"mode": "Hide", "threshold_ms": 50}},
+    )
+    fig = (
+        api.compare_scanpaths(words, fix, key, key, **settings)
+        if comparing
+        else api.plot_scanpath(words, fix, **settings)
+    )
+    lines = [t for t in fig.data if t.name == "Fixation sequence"]
+    assert len(lines) == 1 + int(comparing)
+    assert all(list(t.x) == [2, 4, 5] for t in lines)
+    assert all(t.mode == "lines" for t in fig.data if t.x is not None and len(t.x) > 1)
+
+
+def test_sample_only_comparison_axis_does_not_draw_fixation_keys():
+    words, fix = api.load_scanpath_data(*example_import_tables(), names="canonical")
+    first = fix.iloc[0]
+    key = (first.participant_id, first.trial_id)
+    raw = pd.DataFrame(
+        {
+            "participant_id": key[0],
+            "trial_id": key[1],
+            "x": [1],
+            "y": [2],
+            "timestamp_ms": [35.0],
+            "pupil_area": [231.0],
+        }
+    )
+    fig = api.compare_scanpaths(
+        words,
+        fix,
+        key,
+        key,
+        words_b=words,
+        fixations_b=fix,
+        raw_gaze_b=raw,
+        show_raw_gaze=True,
+        x_field="timestamp_ms",
+        y_field="pupil_area",
+        duration_size_legend=True,
+        marker_size_scale="linear",
+        labels=("First", "Second"),
+    )
+    assert [t.name for t in fig.data] == ["Second · raw gaze"]
+    assert list(fig.data[0].x) == [35]
+    assert list(fig.data[0].y) == [231]
+    assert sum(a.text == "No data on these axes" for a in fig.layout.annotations) == 1
+    assert not fig.layout.shapes

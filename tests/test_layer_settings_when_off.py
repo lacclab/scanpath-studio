@@ -111,7 +111,7 @@ class TestTheLayerOffGate:
 _LAYER_CONTROLS = [
     ("global_show_saccades", "slider", "global_saccade_width"),
     ("global_show_heatmap", "selectbox", "global_heatmap_metric"),
-    ("global_show_raw_gaze", "color_picker", "global_raw_gaze_color"),
+    ("global_show_raw_gaze", "slider", "global_raw_gaze_marker_size"),
     ("global_show_words", "color_picker", "global_word_box_fill_color"),
 ]
 

@@ -122,7 +122,7 @@ saved:
 | Control | What it does |
 | --- | --- |
 | :material/timeline: **Scanpath** / :material/local_fire_department: **Heatmap** / :material/draw: **Illustration** | Ready-made designs: fixations and saccades over the text, a word-box heatmap, or a clean schematic. |
-| :material/show_chart: **Gaze over time** | Plot horizontal fixation position (pixels) against time (seconds since the first fixation onset). Each bar spans one fixation. Available for a single reading with recorded fixation onsets. |
+| :material/show_chart: **Gaze over time** | Plot horizontal fixation position (pixels) against time (seconds since the first fixation onset). Each bar spans one fixation. Each displayed reading needs recorded fixation onsets. Compare shows the two readings in separate panels, with time starting at each reading’s first fixation. |
 | :material/build: **Custom** | Restore your last hand-edited figure, including its axes and palette. On first use, start with the figure on screen. |
 | :material/palette: **My designs** | Your saved designs. Click one to apply it. :material/edit: renames it and :material/delete: deletes it. |
 | :material/palette: **My designs** → :material/save: | Save the settings on screen as a named design, to apply again later in one click. |
@@ -193,7 +193,7 @@ Recording setup. Click **Stimulus** to adjust the text or image for this figure.
 | **Text appearance** → **Color** → text color | Choose the stimulus text color. |
 | **Word highlights** → **Show** | Highlight words in the stimulus text, such as the answer span. |
 | **Word highlights** → word column | Choose which words to highlight: a true/false word column, such as the critical span. |
-| **Word highlights** → **Style** | Choose the word highlight style, **Mark text** (colored text) or **Mark border** (a border around the words), and the highlight color. |
+| **Word highlights** → **Style** | Choose the word highlight style, **Mark text** (colored text) or **Mark border** (a border around the words), and the highlight color. A border can stay visible with text and ordinary word boxes hidden. Each split panel outlines its own stimulus. |
 | **Stimulus image** → **Show** | Show the stimulus image, the screen as shown in the experiment, under the scanpath. |
 | **Stimulus image** → **File** | Upload a stimulus image (PNG, JPEG, GIF or WebP) to draw under the scanpath. It replaces the dataset's image and is not included in Share links. |
 | **Stimulus image** → **Opacity** | Set the stimulus image opacity. Lower it so the scanpath reads over it. |
@@ -274,8 +274,8 @@ Choose a chart preset, or set the X and Y fields individually. Open **Coordinate
 
 | Control | What it does |
 | --- | --- |
-| **Axis preset** | Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. **Connect fixations** traces the index sequence. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window. |
-| **Choose axis fields** → horizontal / vertical | Choose fixation fields or raw gaze measurements. For samples, try pupil size or gaze position against recorded time or sample number. Each layer draws the fields it contains. Screen Y increases downward. **Screen X and Y** restores the stimulus view. Animation and Compare readings use screen coordinates. |
+| **Axis preset** | Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. **Connect fixations** traces the windowed index sequence, including with fixation markers hidden. **Hide** filters also apply to the line. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window. |
+| **Choose axis fields** → horizontal / vertical | Choose fixation fields or raw gaze measurements. For samples, try pupil size or gaze position against recorded time or sample number. Each layer draws the fields it contains. Screen Y increases downward. **Screen X and Y** restores the stimulus view. Static comparisons use shared ranges in side-by-side or stacked panels. Each reading keeps its own elapsed-time origin. Animation uses screen coordinates. |
 | **Grid** → **Show** | Show a grid of screen coordinates, in px. |
 | **Grid spacing and labels** → interval | Set the grid spacing (interval), in px, or let **Auto** choose it. |
 | **Grid spacing and labels** → label size | Set the grid label (tick label) font size. |

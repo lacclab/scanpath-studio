@@ -542,6 +542,26 @@ def test_animation_preserves_custom_scanpath_and_comparison_across_modes():
     assert at.session_state["single_compare_toggle"]
 
 
+@pytest.mark.parametrize("compare", [True, False], ids=["on", "off"])
+def test_the_custom_tile_leaves_compare_as_it_is(compare):
+    """Compare is a way of viewing the figure: like every other tile, Custom
+    brings back its own design without switching Compare on or off."""
+    at = _boot(mode="full")
+    at.toggle(key="single_animate").set_value(False).run()
+    at.color_picker(key="global_fixation_color").pick("#123456").run()
+    at.toggle(key="single_compare_toggle").set_value(not compare).run()
+    assert _lit_tiles(at) == ["custom"]
+    at.button(key="viz_view_heatmap").click().run()
+    at.toggle(key="single_compare_toggle").set_value(compare).run()
+    assert _lit_tiles(at) == ["heatmap"]
+    at.button(key="viz_view_custom").click().run()
+    assert not at.exception
+    assert _lit_tiles(at) == ["custom"]
+    assert at.session_state["global_fixation_color"] == "#123456"
+    assert at.session_state["single_compare_toggle"] is compare
+    assert at.toggle(key="single_compare_toggle").value is compare
+
+
 @pytest.mark.parametrize("cross_dataset", [False, True])
 def test_comparison_highlights_its_scanpath_and_remembers_the_illustration(
     cross_dataset,

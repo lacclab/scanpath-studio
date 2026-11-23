@@ -130,6 +130,34 @@ def test_custom_quick_view_remembers_manual_settings(monkeypatch):
     assert store["global_fixation_opacity"] == 0.42
 
 
+def test_the_custom_tile_keeps_compare_and_the_replay_settings(monkeypatch):
+    """Every view tile, Custom included, leaves Compare and the replay as they
+    are: Custom brings back its own design, not the viewing it was left in."""
+    store = _viz_store()
+    store.update({"single_compare_toggle": False, "single_playback_speed": 1.0})
+    monkeypatch.setattr(controls.st, "session_state", store)
+    controls._choose_plot_view("scanpath", None)
+    assert controls._active_quick_view() == "scanpath"
+    store["global_fixation_opacity"] = 0.42
+    assert controls._active_quick_view() == "custom"
+    controls._choose_plot_view("heatmap", "custom")
+    assert controls._active_quick_view() == "heatmap"
+    viewing = {
+        "single_compare_toggle": True,
+        "single_playback_speed": 2.0,
+        "global_anim_autoplay": False,
+        "global_anim_grid_step_ms": 40,
+        "global_anim_max_frames": 900,
+    }
+    store.update(viewing)
+
+    controls._choose_plot_view("custom", "heatmap")
+
+    assert store["global_fixation_opacity"] == 0.42
+    assert store["global_show_heatmap"] is False
+    assert {key: store[key] for key in viewing} == viewing
+
+
 def test_scanpath_quick_view_clears_custom_configuration(monkeypatch):
     store = _viz_store()
     store.update(

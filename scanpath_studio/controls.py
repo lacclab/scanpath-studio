@@ -2443,18 +2443,26 @@ def _toggle_animation_from_tile() -> None:
     on_animation_change()
 
 
+def _is_view_mode_key(key: object) -> bool:
+    """Whether a session key is Compare's switch or a replay setting.
+
+    These set how a design is viewed, so every view tile, Custom included,
+    leaves them as they are.
+    """
+    name = str(key)
+    return name in {SINGLE_COMPARE_TOGGLE, SINGLE_PLAYBACK_SPEED} or name.startswith(
+        "global_anim_"
+    )
+
+
 def _choose_plot_view(name: str, current: str | None) -> None:
     """A static view ends the replay. Custom brings back its own palette too."""
     leave_animation()
     if name != current:
-        keep = (
-            *_palette_keys(),
-            "_palette_picked",
-            *(k for k in _VIZ_WIDGET_DEFAULTS if k.startswith("global_anim_")),
-        )
-        _apply_view_preset(
-            name, keep=() if name == _CUSTOM_VIEW else keep, built_in=True
-        )
+        keep = tuple(key for key in st.session_state if _is_view_mode_key(key))
+        if name != _CUSTOM_VIEW:
+            keep += (*_palette_keys(), "_palette_picked")
+        _apply_view_preset(name, keep=keep, built_in=True)
 
 
 #: The 🔵 Raw gaze layer's switch, which `app.seed_raw_gaze_default` seeds.

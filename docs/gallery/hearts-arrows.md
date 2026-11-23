@@ -21,8 +21,8 @@ print(gallery_figure("hearts-arrows"))
 === "In the app"
 
     1. Load your Words and Fixations tables, or the example <a href="words.csv" download>words</a> and <a href="fixations.csv" download>fixations</a>. For the example, set **Recording setup** → **Screen** to **I know it**, 450 × 300 px. Open the dataset in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
-    2. In :material/blur_on: **Fixations** ▾ → **Marker**, set **Shape** to **♥ Heart**. Keep **Color** at **One color** and set its box to `#d12d72`. Set **Size** to **18–30** and **Opacity** to **0.85**. Tick **Snap** → **To line**, and leave **Fixation index** → **Show** unticked.
-    3. In :material/arrow_outward: **Saccades** ▾, set **Shape** to **Arc**. Under **Line**, keep **Color** at **One color** with `#4f46a5`, and set **Width** to **2.5**. Tick **Direction arrows** and set **Arrow size** to **12**.
+    2. In :material/blur_on: **Fixations** → **Marker appearance**, set **Shape** to **♥ Heart**. Keep **Color** at **One color** and set its box to `#d12d72`. Set **Size** to **18–30** and **Opacity** to **0.85**. Under **Position on the text**, tick **Snap to line**, and leave **Fixation index** → **Show** unticked.
+    3. In :material/arrow_outward: **Saccades** → **Line and arrow appearance**, set **Shape** to **Arc**. In the main Saccades menu, keep **Color** at **One color** with `#4f46a5`, and set **Width** to **2.5**. Tick **Direction arrows** and set **Line and arrow appearance** → **Arrow size** to **12**.
     4. In :material/aspect_ratio: **Figure** → **Title & labels** → **Illustration**, enter “Illustration · hand-drawn” in **Text**. Leave :material/article: **Stimulus** ▾ → **Highlight words** unticked.
 
     Save the look under :material/palette: **My designs** to apply it to your own data.

@@ -12,6 +12,7 @@ from functools import partial
 import numpy as np
 import pandas as pd
 import streamlit as st
+from plotly.colors import get_colorscale
 from streamlit.errors import StreamlitAPIException
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 from streamlit_sortables import sort_items
@@ -109,6 +110,7 @@ from .constants import (
     drift_correction_enabled,
     icon_html,
     icons_to_html,
+    md_literal,
     palette_settings,
     spoken,
     upload_limit_mb,
@@ -141,6 +143,7 @@ from .fields import (
     row_label,
     tooltip,
 )
+from .plot_navigation import detail_section, render_setting_finder
 from .session_keys import (
     COMPARE_B_FILTER_STATE_KEYS,
     COMPARE_IDENTITY_STATE_KEY,
@@ -265,8 +268,13 @@ def _popover_rows(slug: str):
 
 
 def plot_popover_on_change() -> str:
-    """Track the open panel once this session uses Undo or Redo."""
-    return "rerun" if st.session_state.get("_plot_history_used") else "ignore"
+    """Track open menus when a search or a history action needs to update them."""
+    return (
+        "rerun"
+        if st.session_state.get("_plot_history_used")
+        or st.session_state.get("_plot_finder_used")
+        else "ignore"
+    )
 
 
 #: Tighter than the 1rem default: these rows are dense and the width is scarce.
@@ -1001,57 +1009,34 @@ _VIZ_WIDGET_DEFAULTS = {
 }
 
 
-def _render_fixation_cleaning(
-    *, disabled: bool = False, reason: str = "", prefix: str = "global"
-) -> None:
-    """Short / long / outside-the-text / blink visual filtering controls.
-
-    Viz-only: highlight or hide, with customizable short/long thresholds.
-    One table row per class — its mode, then the ms threshold (short and long
-    only), then the marker and colour a *Highlight* draws with — under a
-    captioned header. What a mode leaves idle is greyed, not hidden. Every value
-    rides a ``{prefix}_fixclass_<class>_*`` key (seeded in
-    ``_VIZ_WIDGET_DEFAULTS``).
-
-    All three builders consume ``fixation_flags``: in the replay *Hide* drops
-    the rows before the frames are built and *Highlight* overlays them as the
-    trail reaches them; the comparison builders take one set per scanpath.
-    ``prefix`` is the key namespace — ``global`` for A (and every non-compare
-    figure), ``cmp1`` for scanpath B, whose table has only the *Mode* and *ms*
-    columns: B chooses which of its fixations are flagged, and a Highlight draws
-    with A's marker and colour."""
-    own_look = prefix == "global"
-    label_w = _label_w()
-    rest = 1.0 - label_w
-    weights = (
-        [label_w, rest * 0.3, rest * 0.22, rest * 0.32, rest * 0.16]
-        if own_look
-        else [label_w, rest * 0.5, rest * 0.5]
+def _render_fixation_cleaning(*, prefix: str = "global") -> None:
+    """Show the four fixation rules, with marker styling shared by A and B."""
+    ss = st.session_state
+    # Separating the marker styles leaves enough room to show each rule and
+    # its threshold even in the narrower comparison tabs.
+    rule_widths = (0.36, 0.34, 0.30)
+    head = st.columns(rule_widths, gap=_LABEL_GAP, vertical_alignment="center")
+    _sub_caption(head[0], "Fixation rule")
+    _sub_caption(
+        head[1],
+        "Action",
+        "Show keeps the usual marker. Highlight changes its appearance. Hide removes "
+        "the marker and skips it in replay and fixation-index sequences. Spatial "
+        "saccade lines and static heatmaps still use the fixation.",
     )
-    mode_help = _gated_help(
-        "**Highlight** marks these fixations. **Hide** hides their markers; "
-        "saccades and the heatmap still use them, and measures and exports "
-        "don't change.",
-        reason,
-    )
-    head = st.columns(weights, gap=_LABEL_GAP, vertical_alignment="center")
-    _sub_caption(head[1], "Mode", mode_help)
-    _sub_caption(head[2], "ms", "Short: below this many ms. Long: above it.")
-    if own_look:
-        _sub_caption(head[3], "Marker", "The marker a Highlight draws.")
-        _sub_caption(head[4], "Color")
+    _sub_caption(head[2], "Cutoff (ms)", "Shorter than or longer than this duration.")
+    rule_disabled, _ = _layer_gate(False, None)
     for category, spec in FIXATION_FLAG_CATEGORIES.items():
         label = spec.label
-        row_disabled, help_text = _layer_gate(disabled, _gated_help(spec.help, reason))
-        cols = st.columns(weights, gap=_LABEL_GAP, vertical_alignment="center")
-        _row_label(cols[0], label, help_text)
+        cols = st.columns(rule_widths, gap=_LABEL_GAP, vertical_alignment="center")
+        _row_label(cols[0], label, spec.help)
         mode = cols[1].selectbox(
             f"{label} fixations",
             options=FIXATION_FLAG_MODES,
+            format_func=lambda value: "Show" if value == "Off" else value,
             key=f"{prefix}_fixclass_{category}_mode",
             persist_state="session",
-            disabled=row_disabled,
-            help=mode_help,
+            disabled=rule_disabled,
             label_visibility="collapsed",
         )
         if spec.has_threshold:
@@ -1061,30 +1046,48 @@ def _render_fixation_cleaning(
                 step=10,
                 key=f"{prefix}_fixclass_{category}_threshold_ms",
                 persist_state="session",
-                disabled=row_disabled or mode == "Off",
+                disabled=rule_disabled or mode == "Off",
                 label_visibility="collapsed",
             )
-        if not own_look:
-            continue
-        highlight_idle = row_disabled or mode != "Highlight"
-        cols[3].selectbox(
-            f"{label} marker",
-            options=list(FIXATION_FLAG_MARKERS),
-            format_func=lambda s: FIXATION_FLAG_MARKERS[s],
-            key=f"global_fixclass_{category}_symbol",
-            persist_state="session",
-            disabled=highlight_idle,
-            label_visibility="collapsed",
-        )
-        # `persist_state` keeps a picker first drawn in a popover from mounting
-        # at its proto default (black).
-        cols[4].color_picker(
-            f"{label} color",
-            key=f"global_fixclass_{category}_color",
-            persist_state="session",
-            disabled=highlight_idle,
-            label_visibility="collapsed",
-        )
+
+    comparing = ss.get("_resolved_comparing", False)
+    if prefix == "cmp1":
+        if any(
+            ss.get(f"cmp1_fixclass_{cat}_mode") == "Highlight"
+            for cat in FIXATION_FLAG_CATEGORIES
+        ):
+            st.caption("Reading A’s highlight markers apply to both readings.")
+        return
+
+    with detail_section("Highlight markers", key="plot_detail_highlight_markers"):
+        if comparing:
+            st.caption("Each marker applies to the same rule in both readings.")
+        head = st.columns(rule_widths, gap=_LABEL_GAP, vertical_alignment="center")
+        _sub_caption(head[0], "Fixation rule")
+        _sub_caption(head[1], "Shape")
+        _sub_caption(head[2], "Color")
+        for category, spec in FIXATION_FLAG_CATEGORIES.items():
+            active = ss.get(f"global_fixclass_{category}_mode") == "Highlight" or (
+                comparing and ss.get(f"cmp1_fixclass_{category}_mode") == "Highlight"
+            )
+            cols = st.columns(rule_widths, gap=_LABEL_GAP, vertical_alignment="center")
+            _row_label(cols[0], spec.label, spec.help)
+            cols[1].selectbox(
+                f"{spec.label} marker",
+                options=list(FIXATION_FLAG_MARKERS),
+                format_func=FIXATION_FLAG_MARKERS.__getitem__,
+                key=f"global_fixclass_{category}_symbol",
+                persist_state="session",
+                disabled=rule_disabled or not active,
+                label_visibility="collapsed",
+            )
+            cols[2].color_picker(
+                f"{spec.label} color",
+                key=f"global_fixclass_{category}_color",
+                persist_state="session",
+                disabled=rule_disabled or not active,
+                label_visibility="collapsed",
+            )
 
 
 def _collect_fixation_flags(prefix: str = "global") -> dict:
@@ -4578,6 +4581,59 @@ def _sub_row(
     return field_col
 
 
+def _layer_field(label: str, help_text: str | None = None):
+    """A full-width label and its field for a standalone layer setting."""
+    label_width = _label_w()
+    title, field = st.columns(
+        [label_width, 1 - label_width], gap=_LABEL_GAP, vertical_alignment="center"
+    )
+    _row_label(title, label, help_text)
+    return field
+
+
+def _colorscale_picker(
+    host,
+    label: str,
+    key: str,
+    *,
+    disabled: bool,
+    help_text: str | None,
+    follow: str | None = None,
+) -> None:
+    """Commit a scale before the view and palette are inferred on the next run."""
+    shown = st.session_state.get(key) or follow
+    supported = shown in COLORSCALES
+    displayed = shown if supported else COLORSCALES[0]
+    pick_key = shadow_widget_key(f"{key}_pick", displayed, seed=False)
+
+    def apply_scale() -> None:
+        if disabled or _shadow_key_missing(pick_key):
+            return
+        picked = st.session_state[pick_key]
+        if picked != displayed:
+            write_through(key, "" if picked == follow else picked)
+
+    host.selectbox(
+        label,
+        COLORSCALES,
+        key=pick_key,
+        index=COLORSCALES.index(displayed),
+        on_change=apply_scale,
+        disabled=disabled,
+        help=help_text,
+        label_visibility="collapsed",
+    )
+    if not disabled and supported:
+        stops = ", ".join(
+            f"{color} {position * 100:g}%" for position, color in get_colorscale(shown)
+        )
+        host.html(
+            f'<div role="img" aria-label="{shown} color scale, low to high" '
+            'style="height:0.35rem;border-radius:2px;border:1px solid #80808066;'
+            f'background:linear-gradient(to right,{stops})"></div>'
+        )
+
+
 def _check_row(
     label: str,
     *,
@@ -4911,9 +4967,9 @@ def compare_style_defaults() -> dict:
 
     One table for the seeding below and for the share link, which leaves a
     style off the link while it still equals this (`url_state._link_defaults`).
-    ``cmp{idx}_label_pattern`` is not seeded — its absence *is* the auto label —
-    so it is listed here as the empty string it reads as; ``cmp{idx}_box_color``
-    likewise, its absence being "the scanpath's own colour", and
+    An empty label pattern uses the automatic trial label. Colour and opacity
+    overrides stay absent until chosen: ``cmp{idx}_box_color`` follows the
+    scanpath's own colour, and
     ``cmp{idx}_box_fill_color``, its absence being "the figure's fill", and
     ``cmp{idx}_raw_gaze_color``, its absence being "the scanpath's own colour",
     and ``cmp{idx}_heatmap_colorscale``, "the figure's colour scale".
@@ -4970,7 +5026,6 @@ def _seed_compare_styles() -> None:
     for key, default in compare_style_defaults().items():
         if not key.endswith(
             (
-                "_label_pattern",
                 "_box_color",
                 "_box_fill_color",
                 "_box_line_opacity",
@@ -5085,6 +5140,14 @@ def _compare_saccade_color_picker(host, idx: int) -> None:
     )
 
 
+_SACCADE_DASH_LABELS = {
+    "Solid": "━━━━ Solid",
+    "Dashed": "━ ━ ━ Dashed",
+    "Dotted": "······ Dotted",
+    "Dash-dot": "━·━·━ Dash-dot",
+}
+
+
 def _compare_saccade_line_rows(idx: int) -> None:
     """One scanpath's saccade *Style* and *Width* rows (``cmp{idx}_saccade_*``)."""
     name = _COMPARE_SCANPATHS[idx][1]
@@ -5092,6 +5155,7 @@ def _compare_saccade_line_rows(idx: int) -> None:
     _sub_row("Style").selectbox(
         f"{name} — line style",
         options=list(SACCADE_DASH_OPTIONS.keys()),
+        format_func=_SACCADE_DASH_LABELS.__getitem__,
         key=f"cmp{idx}_saccade_style",
         persist_state="session",
         disabled=disabled,
@@ -5554,15 +5618,13 @@ def _compare_heatmap_colorscale_row(
     picked. The metric, scaling and range above are shared, so A and B stay on
     one scale; two different colour scales get a colour bar each.
 
-    Keyless, like the figure's own colour-scale picker,
-    and a shadow like `_compare_follow_color_picker`: it shows the scale drawn,
-    and only a pick writes the override."""
+    Only a pick writes an override. Picking the figure's scale restores
+    inheritance, including later palette changes."""
     name = _COMPARE_SCANPATHS[idx][1]
     key = f"cmp{idx}_heatmap_colorscale"
     follow = (
         st.session_state.get("global_heatmap_colorscale") or DEFAULT_HEATMAP_COLORSCALE
     )
-    shown = st.session_state.get(key) or follow
     disabled, tip = _layer_gate(
         disabled,
         _gated_help(
@@ -5571,7 +5633,7 @@ def _compare_heatmap_colorscale_row(
             reason,
         ),
     )
-    picked = _sub_row(
+    field = _sub_row(
         "Colors",
         section=name,
         section_help=_COMPARE_SCANPATH_HELP[idx]
@@ -5582,17 +5644,15 @@ def _compare_heatmap_colorscale_row(
         ),
         caption_help=tip,
         section_share=_COMPARE_SECTION_SHARE,
-    ).selectbox(
-        f"{name} — heatmap colors",
-        COLORSCALES,
-        index=COLORSCALES.index(shown) if shown in COLORSCALES else 0,
-        disabled=disabled,
-        help=tip,
-        label_visibility="collapsed",
     )
-    # A scale the picker cannot show (an API-only name) is left alone.
-    if not disabled and shown in COLORSCALES and picked != shown:
-        st.session_state[key] = "" if picked == follow else picked
+    _colorscale_picker(
+        field,
+        f"{name} — heatmap colors",
+        key,
+        disabled=disabled,
+        help_text=tip,
+        follow=follow,
+    )
 
 
 def _compare_raw_gaze_color_row(idx: int, *, disabled: bool) -> None:
@@ -5700,7 +5760,7 @@ def render_compare_filters(
 ) -> None:
     """Scanpath B's half of the Filters & highlights section.
 
-    Rendered into the slot ``render_plot_controls`` reserved under A's filters —
+    Rendered into the second reading’s tab in Filters & highlights
     after the rail, because B is picked (and its fixations loaded) below it. The
     same three filters A has: the fixation-index window, the short / long /
     outside-the-text / blink flags, and which saccade classes are drawn. Every value
@@ -5714,7 +5774,8 @@ def render_compare_filters(
         with (
             _rail_subsection(
                 st,
-                f"{ICONS['fixations']} Fixations · B{_fixation_filter_badge('cmp1')}",
+                f"{ICONS['fixations']} Fixations{_fixation_filter_badge('cmp1')}",
+                first=True,
             ),
             _popover_rows("filter_fix_b"),
         ):
@@ -5730,7 +5791,7 @@ def render_compare_filters(
         with (
             _rail_subsection(
                 st,
-                f"{ICONS['saccades']} Saccades · B"
+                f"{ICONS['saccades']} Saccades"
                 f"{_saccade_filter_badge('cmp1_saccade_classes')}",
                 note=_cls_reason,
             ),
@@ -5824,7 +5885,7 @@ def _render_fix_range_slider(
     **Scope.** A window is per-trial by default: picking another trial shows all
     of that trial's fixations again, because a range like "fixations 5–20" rarely
     means the same thing on a different reading. A multipart trial's *screens*
-    count as different readings here too. The *All trials*
+    count as different readings here too. The *Keep this range across trials*
     checkbox opts into the sticky behaviour (the window is re-applied to every
     trial, clamped to each one's length).
 
@@ -5853,7 +5914,7 @@ def _render_fix_range_slider(
     if fixations is None:
         return False
     # The same slider serves scanpath B under its own keys; B's window is
-    # always per-trial (no *All trials* box — B's trial moves with its picker).
+    # always per-trial because B's trial moves with its own picker.
     user_key = f"{key}_user_set"
     min_fix, max_fix = _fix_range_bounds(fixations)
     if max_fix < 1 or min_fix >= max_fix:
@@ -5927,19 +5988,6 @@ def _render_fix_range_slider(
         st.session_state[key] = tuple(st.session_state[widget_key])
         st.session_state[user_key] = True
 
-    all_trials_disabled, _ = _layer_gate(False, None)
-
-    # *All trials* sits on the range's own line, ahead of its slider,
-    # the way a colour range's *Auto* does; its explanation joins the
-    # row title's tooltip. Seeded via `_VIZ_WIDGET_DEFAULTS`, so no `value=`.
-    def _all_trials(col) -> None:
-        col.checkbox(
-            "All trials",
-            key=all_trials_key,
-            persist_state="session",
-            disabled=all_trials_disabled,
-        )
-
     _range_slider(
         st,
         "Fixation index range"
@@ -5952,11 +6000,16 @@ def _render_fix_range_slider(
         min_value=min_fix,
         max_value=max_fix,
         on_change=_mark_fix_range_user_set,
-        help="Draw only the fixations whose index is in this range. All trials: "
-        "keep the window when you move to another trial. In Compare, this is "
-        "scanpath A's window.",
-        lead=_all_trials if all_trials_key else None,
+        help="Choose the first and last fixation to draw from this reading.",
     )
+    if all_trials_key:
+        all_trials_disabled, _ = _layer_gate(False, None)
+        st.checkbox(
+            "Keep this range across trials",
+            key=all_trials_key,
+            persist_state="session",
+            disabled=all_trials_disabled,
+        )
     return window != (min_fix, max_fix)
 
 
@@ -6082,23 +6135,6 @@ _LEGEND_SHOW_KEYS = {
     "size_key": "global_duration_size_legend",
     "highlight": "global_show_highlight_legend",
 }
-#: The Legends table's column titles, with their hover text.
-_LEGEND_COLUMNS = (
-    ("Show", "Draw this legend on the figure."),
-    (
-        "Position",
-        "Where the legend sits: a corner, the middle of the top or bottom edge, "
-        "or the left or right side, outside the plot or over it. Outside, the "
-        "figure grows to make room. Legends in the same spot stack. Auto: the "
-        "default position.",
-    ),
-    (
-        "Arrangement",
-        "Stacked: one item under the other. Side by side: in a row. Auto: a row "
-        "at the middle of the top or bottom edge, a stack elsewhere.",
-    ),
-    ("Text size", "Text size in px. Empty: the figure's text size."),
-)
 
 
 def _legends_drawn(
@@ -6159,26 +6195,11 @@ def _legends_drawn(
 
 #: What each Legends row places (📐 Figure → Legends).
 _LEGEND_ROW_HELP = {
-    "compare": (
-        "Labels for scanpaths A and B. Edit them under Compare → Label A / Label B."
-    ),
-    "saccades": (
-        "Saccade types and their colors. Choose By type under Saccades → Line → Color."
-    ),
-    "colors": (
-        "Fixation color categories and highlighted fixations. Choose categories "
-        "under Fixations → Marker → Color and highlights under Filters & "
-        "highlights."
-    ),
-    "size_key": (
-        "Reference marker sizes labeled in milliseconds. Set the durations under "
-        "Fixations → Marker → Durations."
-    ),
-    "highlight": (
-        "The highlighted-word label. Choose words and colors under Stimulus → "
-        "Highlight words. This legend uses one line, so arrangement does not "
-        "apply."
-    ),
+    "compare": "Identifies readings A and B. Edit their labels in Compare readings.",
+    "saccades": "Identifies each color when saccades are colored by type.",
+    "colors": "Identifies fixation color categories, highlighted fixations and raw gaze.",
+    "size_key": "Shows the fixation duration in milliseconds for each reference marker size.",
+    "highlight": "Names the highlighted words. This legend has a single entry.",
 }
 
 
@@ -6302,6 +6323,18 @@ def background_swatch(host, *, label: str, disabled: bool = False, **kwargs):
         disabled=disabled,
         **kwargs,
     )
+
+
+def render_plot_background(host) -> None:
+    """The figure-wide background preset and its editable color swatch."""
+    preset, swatch = host.columns([2, 1], gap=_LABEL_GAP, vertical_alignment="bottom")
+    preset.selectbox(
+        "Plot background",
+        options=BG_CHOICES,
+        key="global_bg_choice",
+        persist_state="session",
+    )
+    background_swatch(swatch, label="Background color")
 
 
 def _title_settings_state() -> dict:
@@ -7076,8 +7109,11 @@ def render_plot_controls(
     _render_saved_designs(advanced_only(viz, "rail_designs"))
     render_more_popover(simple_only(viz, "rail_more"), "rail", label="More options")
     editor = advanced_only(viz, "plot_editor")
+    render_setting_finder(editor)
     layers, axes, figure = editor.tabs(
-        ["Layers", "Axes", "Figure"], key="plot_editor_tabs"
+        ["Layers", "Axes", "Figure"],
+        key="plot_editor_tabs",
+        on_change="rerun" if st.session_state.get("_plot_finder_used") else "ignore",
     )
 
     # Animation and Compare readings route the figure through different builders, and each
@@ -7257,21 +7293,22 @@ def render_plot_controls(
     filter_status = filter_row.empty()
     if no_fixations_note:
         filter_grp.caption(no_fixations_note)
-    filter_grp.caption(
-        "Hide or highlight fixations in the drawing. The trial list and corpus measures stay the same."
-    )
-    # Sub-slots up front so each block below renders into the right half of the
-    # section from wherever it sits in this file (the same trick the sections
-    # themselves use).
-    filter_fix_slot = filter_grp.container()
-    filter_sac_slot = filter_grp.container()
-    # Scanpath B's own filters, filled by `render_compare_filters` once B
-    # is loaded (below the rail). Handed back through `slots`, not the settings
-    # dict, which is hashed into figure keys and must stay plain data.
+    filter_grp.caption("Choose which fixations and saccades appear in this figure.")
     if comparing and slots is not None:
-        slots["compare_filter"] = filter_grp.container()
+        # B's picker resolves its fixation window after the rail has rendered.
+        reading_a, reading_b = filter_grp.tabs(
+            ["Reading A", "Reading B"],
+            key="plot_filter_readings",
+            on_change="rerun"
+            if st.session_state.get("_plot_finder_used")
+            else "ignore",
+        )
+        slots["compare_filter"] = reading_b
         slots["compare_filter_status"] = filter_status
-    ab = " · A" if comparing else ""
+    else:
+        reading_a = filter_grp
+    filter_fix_slot = reading_a.container()
+    filter_sac_slot = reading_a.container()
 
     # --- Fixations --------------------------------------------------------
     # The Fixations toggle reaches the static figure AND Compare (the
@@ -7300,16 +7337,9 @@ def render_plot_controls(
         # markers on one shared scale / one shared category→colour mapping,
         # and each scanpath's flat colour becomes its marker outline.
         metric_disabled, metric_reason = _mode_gate(animating, comparing)
-        # Colour, shape, size and opacity are one "Marker" group — a title on
-        # the first row and a short caption per row, instead of a full title
-        # each. The swatch shows while **(uniform)** is picked, the colorscale
-        # once a column is; the flat colour is inert in Compare, where each
-        # scanpath wears its own colour (see `_render_compare_fix_styles`).
         by_help = _gated_help(
-            "The column that colors the markers. **One color**: the "
-            "color in the box beside it. A numeric column: the color scale "
-            "beside it. **Text line** or a categorical column: a discrete palette. In "
-            "Compare, both scanpaths share the mapping.",
+            "Choose one color, a numeric field for a color scale, or a category "
+            "for a separate color per group. Both readings use the same mapping in Compare.",
             metric_reason,
         )
         by_disabled, by_help = _layer_gate(metric_disabled, by_help)
@@ -7393,22 +7423,12 @@ def render_plot_controls(
                     metric_reason,
                 ),
             )
-            # A keyed selectbox
-            # first painted in a closed popover shows its first option instead
-            # of the seeded value, so the index is passed and the pick written
-            # back by hand.
-            current_scale = st.session_state.get("global_fixation_colorscale")
-            st.session_state["global_fixation_colorscale"] = style_col.selectbox(
+            _colorscale_picker(
+                style_col,
                 "Colorscale",
-                COLORSCALES,
-                index=(
-                    COLORSCALES.index(current_scale)
-                    if current_scale in COLORSCALES
-                    else 0
-                ),
+                "global_fixation_colorscale",
                 disabled=_dis,
-                help=_tip,
-                label_visibility="collapsed",
+                help_text=_tip,
             )
         if comparing and color_by != UNIFORM_COLOR_FIELD:
             # A column fills the markers, so A's colour is their outline.
@@ -7417,50 +7437,6 @@ def render_plot_controls(
             )
         numeric_color = color_by in trial_fixations and pd.api.types.is_numeric_dtype(
             trial_fixations[color_by]
-        )
-        if numeric_color:
-            values = trial_fixations[color_by]
-            finite = values[np.isfinite(values)]
-            if finite.empty:
-                st.caption("No finite values for the fixation color range.")
-            else:
-                cmin, cmax = float(finite.min()), float(finite.max())
-                explicit = _explicit_pair(
-                    st.session_state.get("global_fixation_color_range")
-                )
-                fractional = any(v % 1 for v in (cmin, cmax, *(explicit or ())))
-                _render_color_range(
-                    "Fixation color range",
-                    "global_fixation_color_range",
-                    cmin,
-                    cmax if cmax > cmin else cmin + 1.0,
-                    step=0.01 if fractional else 1.0,
-                    slider_format="%.3g" if fractional else "%d",
-                    number_format="%.6g" if fractional else "%d",
-                    field_host=_sub_row(
-                        "Range",
-                        caption_help="The values at the two ends of the color scale.",
-                    ),
-                    disabled=metric_disabled,
-                    reason=metric_reason,
-                    help="The values at the two ends of the color scale.",
-                )
-        # Shape survives greyscale printing where hue doesn't, and it is a
-        # true global — the one marker property Compare does NOT override
-        # per scanpath.
-        shape_help = (
-            "Marker shape. Applies to every figure, and to both scanpaths in Compare."
-        )
-        shape_dis, shape_help = _layer_gate(False, shape_help)
-        _sub_row("Shape", caption_help=shape_help).selectbox(
-            "Marker shape",
-            options=list(FIXATION_SYMBOLS),
-            format_func=lambda s: FIXATION_SYMBOLS[s],
-            key="global_fixation_symbol",
-            persist_state="session",
-            disabled=shape_dis,
-            help=shape_help,
-            label_visibility="collapsed",
         )
         # Size / opacity are per-scanpath in Compare (`cmp*_marker_size_range`
         # / `cmp*_opacity` override these there), so they carry its gate.
@@ -7481,7 +7457,6 @@ def render_plot_controls(
                 help=_gated_help(size_text, _reason),
                 field_host=_sub_row("Size", caption_help=size_help),
             )
-        _render_duration_scale_rows()
         if comparing:
             _compare_opacity_slider(0)
             # Scanpath B's group, straight under A's.
@@ -7510,77 +7485,7 @@ def render_plot_controls(
                 ),
                 field_host=_sub_row("Opacity", caption_help=opac_help),
             )
-        # The outline round each filled marker — one for every figure, both
-        # scanpaths of a comparison included. A hollow marker's ring is its
-        # colour.
-        _render_marker_outline_row(comparing)
-        # The fixations' own colour bar, after the marker groups — idle unless
-        # the colour-by column is numeric, since a discrete palette has no
-        # scale to show. The greyed row then says why, and where the thing on
-        # the figure that looks like one is switched — a categorical colour's
-        # legend is the Legends table's; a greyed, checked *Show* here alone
-        # would read as a bar that cannot be removed.
-        if color_by == UNIFORM_COLOR_FIELD:
-            bar_idle = f"{ICONS['warning']} No color bar: the markers are one color."
-        elif not numeric_color:
-            bar_idle = (
-                f"{ICONS['warning']} No color bar for **Text line** or a categorical "
-                f"color. Its legend is in {ICONS['figure']} **Figure** "
-                f"→ **Legends** → **{LEGEND_KIND_LABELS['colors']}**."
-            )
-        else:
-            bar_idle = ""
-        _render_colorbar_rows(
-            "fixation",
-            disabled=metric_disabled or bool(bar_idle),
-            reason=metric_reason or bar_idle,
-        )
-        # Vertical drift correction. Snap each fixation to its assigned
-        # text line using one of the Carr et al. (2021) algorithms; "Off"
-        # leaves the raw coordinates. The correction runs above the
-        # render-mode split in `tabs.py`, so the *algorithm* applies on all
-        # three paths. The CONNECTORS don't: only `make_scanpath_figure` has a
-        # connector layer, and drawing a full-length "original position" layer
-        # from frame zero would misread as part of the replay's trail.
-        static_disabled, static_reason = _mode_gate(
-            animating, comparing, **_static_only
-        )
-        # Not fully integrated, so hidden unless SCANPATH_EXPERIMENTAL
-        # is set. The keys keep their defaults ("Off"), so nothing downstream
-        # needs a second gate to render correctly.
-        if drift_correction_enabled():
-            align_algo = _labeled(
-                st,
-                "selectbox",
-                "Drift correction",
-                options=_ALIGN_OPTIONS,
-                format_func=align_method_label,
-                key="global_align_algorithm",
-                persist_state="session",
-                help="Move each fixation vertically onto the text line an "
-                "algorithm assigns it to (Carr et al., 2021). Off keeps the "
-                "recorded positions. Compare the algorithms in "
-                f"{ICONS['line_assignment']} Line assignment.",
-            )
-            if align_algo != "Off":
-                _labeled(
-                    st,
-                    "checkbox",
-                    "Show drift connectors",
-                    key="global_align_connectors",
-                    persist_state="session",
-                    disabled=static_disabled,
-                    help=_gated_help(
-                        "A faint line from each fixation's recorded position to "
-                        "its corrected one.",
-                        static_reason,
-                    ),
-                )
-        # The switch, the label colour and the label size share one
-        # row, the last two greyed while the switch is off (never hidden, and
-        # never rewritten — a disabled widget keeps its key). The size is a
-        # number box rather than a slider + box: three controls do not
-        # leave a slider enough width to be draggable.
+
         order_disabled, order_help = _layer_gate(
             False, "Number each fixation by its order in the trial."
         )
@@ -7645,102 +7550,182 @@ def render_plot_controls(
             help=_tip,
             label_visibility="collapsed",
         )
-        # Where the number sits on its fixation — its own row under the
-        # switch, since the switch's row has no width left. Every builder
-        # honours it, Compare and the replay included.
-        _dis, _tip = _layer_gate(
-            not show_order,
-            "Put each index number above its fixation, inside it, or below it.",
-        )
-        _sub_row("Position", caption_help=_tip).segmented_control(
-            "Index label position",
-            options=INDEX_POSITION.choices,
-            format_func=str.capitalize,
-            key=INDEX_POSITION.state_key,
-            persist_state="session",
-            disabled=_dis,
-            help=_tip,
-            label_visibility="collapsed",
-        )
-        # Snap to line, the fixation half of the linear-reading schematic (its
-        # partner is ↗️ Saccades ▾ → Shape → Arc). A fixation keeps its x and
-        # moves only up or down, onto its line, *Position* line heights from
-        # the line's middle (−0.5, the top edge, by default). It is
-        # `make_scanpath_figure`-only, unlike the drift correction — hence its
-        # own gate. It sits at the bottom of the panel: it is a schematic mode,
-        # not marker styling.
-        snap_disabled = static_disabled or chart_axes
-        snap_reason = screen_help if chart_axes else static_reason
-        snapped, _ = _check_row(
-            "Snap",
-            key="global_fixation_snap_to_line",
-            check_label="To line",
-            check_share=0.4,
-            persist_state="session",
-            disabled=snap_disabled,
-            help=_gated_help(
-                "Move each fixation up or down onto its text line, keeping its "
-                "x. It goes to its word's line, or else the nearest line.",
-                snap_reason,
-            ),
-        )
-        position_help = _gated_help(
-            "Where on its line a snapped fixation sits, in line heights: 0 is "
-            "the middle, −0.5 the top edge, 0.5 the bottom edge.",
-            snap_reason,
-        )
-        _numeric_slider(
-            st,
-            "Snap position",
-            key="global_fixation_snap_position",
-            persist_state="session",
-            min_value=SNAP_POSITION_BOUNDS[0],
-            max_value=SNAP_POSITION_BOUNDS[1],
-            step=0.05,
-            slider_format="%.2f",
-            disabled=snap_disabled or not snapped,
-            help=position_help,
-            field_host=_sub_row(
-                "Position", caption_help=_layer_gate(False, position_help)[1]
-            ),
-        )
 
-    # Filtering decides which fixations are visible; it is not marker
-    # appearance. It has a block of its own with a local badge, so an active
-    # Discard cannot be forgotten — not a chip in the trial-fact strip,
-    # because this is a view setting, not trial data. Every builder honours
-    # the flags — Compare draws each scanpath under its own set — so nothing
-    # greys this block.
-    _flag_dis, _flag_reason = False, ""
-    # The subsection says only why it is greyed, when it is; what it does
-    # is in the rows' tooltips, beside the controls it describes.
+        with detail_section("Marker appearance", key="plot_detail_fix_marker"):
+            # Shape survives greyscale printing where hue doesn't, and it is a
+            # true global — the one marker property Compare does NOT override
+            # per scanpath.
+            shape_help = "Marker shape. Applies to every figure, and to both scanpaths in Compare."
+            shape_dis, shape_help = _layer_gate(False, shape_help)
+            _sub_row("Shape", caption_help=shape_help).selectbox(
+                "Marker shape",
+                options=list(FIXATION_SYMBOLS),
+                format_func=lambda s: FIXATION_SYMBOLS[s],
+                key="global_fixation_symbol",
+                persist_state="session",
+                disabled=shape_dis,
+                help=shape_help,
+                label_visibility="collapsed",
+            )
+            # The outline round each filled marker — one for every figure, both
+            # scanpaths of a comparison included. A hollow marker's ring is its
+            # colour.
+            _render_marker_outline_row(comparing)
+            _dis, _tip = _layer_gate(
+                not show_order,
+                "Put each index number above its fixation, inside it, or below it.",
+            )
+            _layer_field("Number position", _tip).segmented_control(
+                "Index label position",
+                options=INDEX_POSITION.choices,
+                format_func=str.capitalize,
+                key=INDEX_POSITION.state_key,
+                persist_state="session",
+                disabled=_dis,
+                help=_tip,
+                label_visibility="collapsed",
+            )
+
+        with detail_section("Size by duration", key="plot_detail_fix_duration"):
+            _render_duration_scale_rows()
+
+        with detail_section("Color range and color bar", key="plot_detail_fix_colors"):
+            if numeric_color:
+                values = trial_fixations[color_by]
+                finite = values[np.isfinite(values)]
+                if finite.empty:
+                    st.caption("No finite values for the fixation color range.")
+                else:
+                    cmin, cmax = float(finite.min()), float(finite.max())
+                    explicit = _explicit_pair(
+                        st.session_state.get("global_fixation_color_range")
+                    )
+                    fractional = any(v % 1 for v in (cmin, cmax, *(explicit or ())))
+                    _render_color_range(
+                        "Fixation color range",
+                        "global_fixation_color_range",
+                        cmin,
+                        cmax if cmax > cmin else cmin + 1.0,
+                        step=0.01 if fractional else 1.0,
+                        slider_format="%.3g" if fractional else "%d",
+                        number_format="%.6g" if fractional else "%d",
+                        field_host=_sub_row(
+                            "Range",
+                            caption_help="The values at the two ends of the color scale.",
+                        ),
+                        disabled=metric_disabled,
+                        reason=metric_reason,
+                        help="The values at the two ends of the color scale.",
+                    )
+            if color_by == UNIFORM_COLOR_FIELD:
+                bar_idle = (
+                    f"{ICONS['warning']} No color bar: the markers are one color."
+                )
+            elif not numeric_color:
+                bar_idle = (
+                    f"{ICONS['warning']} No color bar for **Text line** or a categorical "
+                    f"color. Its legend is in {ICONS['figure']} **Figure** "
+                    f"→ **Legends** → **{LEGEND_KIND_LABELS['colors']}**."
+                )
+            else:
+                bar_idle = ""
+            _render_colorbar_rows(
+                "fixation",
+                disabled=metric_disabled or bool(bar_idle),
+                reason=metric_reason or bar_idle,
+            )
+
+        with detail_section("Position on the text", key="plot_detail_fix_position"):
+            static_disabled, static_reason = _mode_gate(
+                animating, comparing, **_static_only
+            )
+            snap_disabled = static_disabled or chart_axes
+            snap_reason = screen_help if chart_axes else static_reason
+            snapped, _ = _check_row(
+                "Snap",
+                key="global_fixation_snap_to_line",
+                check_label="To line",
+                check_share=0.4,
+                persist_state="session",
+                disabled=snap_disabled,
+                help=_gated_help(
+                    "Move each fixation up or down onto its text line, keeping its "
+                    "x. It goes to its word's line, or else the nearest line.",
+                    snap_reason,
+                ),
+            )
+            position_help = _gated_help(
+                "Where on its line a snapped fixation sits, in line heights: 0 is "
+                "the middle, −0.5 the top edge, 0.5 the bottom edge.",
+                snap_reason,
+            )
+            _numeric_slider(
+                st,
+                "Snap position",
+                key="global_fixation_snap_position",
+                persist_state="session",
+                min_value=SNAP_POSITION_BOUNDS[0],
+                max_value=SNAP_POSITION_BOUNDS[1],
+                step=0.05,
+                slider_format="%.2f",
+                disabled=snap_disabled or not snapped,
+                help=position_help,
+                field_host=_sub_row(
+                    "Position", caption_help=_layer_gate(False, position_help)[1]
+                ),
+            )
+            # Not fully integrated, so hidden unless SCANPATH_EXPERIMENTAL
+            # is set. The keys keep their defaults ("Off"), so nothing downstream
+            # needs a second gate to render correctly.
+            if drift_correction_enabled():
+                align_algo = _labeled(
+                    st,
+                    "selectbox",
+                    "Drift correction",
+                    options=_ALIGN_OPTIONS,
+                    format_func=align_method_label,
+                    key="global_align_algorithm",
+                    persist_state="session",
+                    help="Move each fixation vertically onto the text line an "
+                    "algorithm assigns it to (Carr et al., 2021). Off keeps the "
+                    "recorded positions. Compare the algorithms in "
+                    f"{ICONS['line_assignment']} Line assignment.",
+                )
+                if align_algo != "Off":
+                    _labeled(
+                        st,
+                        "checkbox",
+                        "Show drift connectors",
+                        key="global_align_connectors",
+                        persist_state="session",
+                        disabled=static_disabled,
+                        help=_gated_help(
+                            "A faint line from each fixation's recorded position to "
+                            "its corrected one.",
+                            static_reason,
+                        ),
+                    )
+
     with (
         _rail_subsection(
             filter_fix_slot,
-            f"{ICONS['fixations']} Fixations{ab}{_fixation_filter_badge()}",
-            note=_flag_reason,
+            f"{ICONS['fixations']} Fixations{_fixation_filter_badge()}",
             first=True,
         ),
         _layer_off(
             f"{ICONS['fixations']} Fixations",
             off=not (show_fix or fix_off_disabled) or not has_fixations,
             reason=no_fixations_note or None,
-            # The Filters & highlights section's own note already said it.
             caption=has_fixations,
         ),
         _popover_rows("filter_fix"),
     ):
-        # The index window removes fixations just like the
-        # short/long/OOB rules, so it belongs here rather than under marker style.
-        # The max follows the selected trial.
         windowed = _render_fix_range_slider(fix_range_fixations)
         _mark_active_plot_filters(filter_status, windowed)
-        _render_fixation_cleaning(disabled=_flag_dis, reason=_flag_reason)
+        _render_fixation_cleaning()
 
     # --- Saccades ---------------------------------------------------------
-    # Laid out like 👁️ Fixations — one *Line* group (colour, style, width,
-    # opacity, shape) with a caption per row, then *Direction arrows* as a
-    # `label | ☑ Show` row.
+    # Each scanpath can use its own colour, width, and dash in Compare.
     with (
         sac_grp,
         _layer_off(
@@ -7860,23 +7845,6 @@ def render_plot_controls(
         if comparing:
             _compare_saccade_line_rows(0)
         else:
-            # A selectbox, not a segmented control: four segments do not fit
-            # beside a caption, and a wrapped control reads as two settings.
-            if st.session_state.get("global_saccade_style") not in SACCADE_DASH_OPTIONS:
-                st.session_state["global_saccade_style"] = "Solid"
-            style_disabled, style_help = _layer_gate(
-                _dis,
-                _gated_help("Stroke style for the line connecting fixations.", _reason),
-            )
-            _sub_row("Style", caption_help=style_help).selectbox(
-                "Saccade line style",
-                options=list(SACCADE_DASH_OPTIONS.keys()),
-                key="global_saccade_style",
-                persist_state="session",
-                disabled=style_disabled,
-                help=style_help,
-                label_visibility="collapsed",
-            )
             _, width_help = _layer_gate(
                 _dis, _gated_help("Thickness of the saccade lines. Default 2.", _reason)
             )
@@ -7894,51 +7862,7 @@ def render_plot_controls(
                 help=_gated_help("Thickness of the saccade lines. Default 2.", _reason),
                 field_host=_sub_row("Width", caption_help=width_help),
             )
-        # One opacity for the lines and their arrows, on every figure —
-        # in Compare and the co-animation both scanpaths share it, as they
-        # share Shape below (their own colour, style and width tell them apart).
-        opacity_text = (
-            "Opacity of the saccade lines and direction arrows; lower it to bring "
-            "the fixations forward."
-            + (" Shared by both scanpaths." if comparing else "")
-        )
-        _numeric_slider(
-            st,
-            "Saccade opacity",
-            key=SACCADE_OPACITY.state_key,
-            persist_state="session",
-            min_value=SACCADE_OPACITY.bounds[0],
-            max_value=SACCADE_OPACITY.bounds[1],
-            step=0.05,
-            slider_format="%.2f",
-            help=opacity_text,
-            field_host=_sub_row(
-                "Opacity", caption_help=_layer_gate(False, opacity_text)[1]
-            ),
-        )
-        # "Linear reading" schematic — arched saccades. Its paired
-        # control, Snap to line, is under Fixations because it moves
-        # fixations. Arcs are a `make_scanpath_figure` feature.
-        shape_disabled, shape_help = _layer_gate(
-            class_disabled,
-            _gated_help(
-                "Straight lines, or upward **arcs** over the text. Arcs pair "
-                f"well with {ICONS['fixations']} Fixations ▾ → **Snap** → "
-                "**To line**.",
-                class_reason,
-            ),
-        )
-        _sub_row("Shape", caption_help=shape_help).segmented_control(
-            "Line shape",
-            options=["Straight", "Arc"],
-            key="global_saccade_render_mode",
-            persist_state="session",
-            disabled=shape_disabled,
-            help=shape_help,
-            label_visibility="collapsed",
-        )
         if comparing:
-            # Scanpath B's group, under A's (whose last row is the shared Shape).
             _render_compare_saccade_styles()
         # `make_scanpath_animation` has an arrow layer of its own (each
         # arrowhead un-masks with the saccade it belongs to), so direction
@@ -7952,27 +7876,95 @@ def render_plot_controls(
             if sequence
             else "An arrowhead on each saccade, pointing in the gaze direction.",
         )
-        # The arrowheads' size.
-        arrow_help = (
-            "The arrowheads' size, in px. Default 12."
-            if arrows_on
-            else f"{ICONS['warning']} Used only with **Direction arrows** on."
-        )
-        _numeric_slider(
-            st,
-            "Arrowhead size",
-            key="global_saccade_arrow_size",
-            persist_state="session",
-            min_value=SACCADE_ARROW_SIZE_BOUNDS[0],
-            max_value=SACCADE_ARROW_SIZE_BOUNDS[1],
-            step=1.0,
-            slider_format="%.0f",
-            disabled=sequence or not arrows_on,
-            help=arrow_help,
-            field_host=_sub_row(
-                "Arrow size", caption_help=_layer_gate(not arrows_on, arrow_help)[1]
-            ),
-        )
+
+        with detail_section("Line and arrow appearance", key="plot_detail_sac_line"):
+            if not comparing:
+                if (
+                    st.session_state.get("global_saccade_style")
+                    not in SACCADE_DASH_OPTIONS
+                ):
+                    st.session_state["global_saccade_style"] = "Solid"
+                style_disabled, style_help = _layer_gate(
+                    _dis,
+                    _gated_help(
+                        "Stroke style for the line connecting fixations.", _reason
+                    ),
+                )
+                _sub_row("Style", caption_help=style_help).selectbox(
+                    "Saccade line style",
+                    options=list(SACCADE_DASH_OPTIONS.keys()),
+                    format_func=_SACCADE_DASH_LABELS.__getitem__,
+                    key="global_saccade_style",
+                    persist_state="session",
+                    disabled=style_disabled,
+                    help=style_help,
+                    label_visibility="collapsed",
+                )
+            # One opacity for the lines and their arrows, on every figure —
+            # in Compare and the co-animation both scanpaths share it, as they
+            # share Shape below (their own colour, style and width tell them apart).
+            opacity_text = (
+                "Opacity of the saccade lines and direction arrows; lower it to bring "
+                "the fixations forward."
+                + (" Shared by both scanpaths." if comparing else "")
+            )
+            _numeric_slider(
+                st,
+                "Saccade opacity",
+                key=SACCADE_OPACITY.state_key,
+                persist_state="session",
+                min_value=SACCADE_OPACITY.bounds[0],
+                max_value=SACCADE_OPACITY.bounds[1],
+                step=0.05,
+                slider_format="%.2f",
+                help=opacity_text,
+                field_host=_sub_row(
+                    "Opacity", caption_help=_layer_gate(False, opacity_text)[1]
+                ),
+            )
+            # "Linear reading" schematic — arched saccades. Its paired
+            # control, Snap to line, is under Fixations because it moves
+            # fixations. Arcs are a `make_scanpath_figure` feature.
+            shape_disabled, shape_help = _layer_gate(
+                class_disabled,
+                _gated_help(
+                    "Straight lines, or upward **arcs** over the text. Arcs pair "
+                    f"well with {ICONS['fixations']} Fixations → **Position on the text** → **Snap** → "
+                    "**To line**.",
+                    class_reason,
+                ),
+            )
+            _sub_row("Shape", caption_help=shape_help).segmented_control(
+                "Line shape",
+                options=["Straight", "Arc"],
+                format_func={"Straight": "─ Straight", "Arc": "⌒ Arc"}.__getitem__,
+                key="global_saccade_render_mode",
+                persist_state="session",
+                disabled=shape_disabled,
+                help=shape_help,
+                label_visibility="collapsed",
+            )
+            # The arrowheads' size.
+            arrow_help = (
+                "The arrowheads' size, in px. Default 12."
+                if arrows_on
+                else f"{ICONS['warning']} Used only with **Direction arrows** on."
+            )
+            _numeric_slider(
+                st,
+                "Arrowhead size",
+                key="global_saccade_arrow_size",
+                persist_state="session",
+                min_value=SACCADE_ARROW_SIZE_BOUNDS[0],
+                max_value=SACCADE_ARROW_SIZE_BOUNDS[1],
+                step=1.0,
+                slider_format="%.0f",
+                disabled=sequence or not arrows_on,
+                help=arrow_help,
+                field_host=_sub_row(
+                    "Arrow size", caption_help=_layer_gate(not arrows_on, arrow_help)[1]
+                ),
+            )
 
     # The saccade *filter* block, the counterpart to the fixation one above —
     # which reading classes are drawn at all, as opposed to what colour they are
@@ -7985,7 +7977,7 @@ def render_plot_controls(
     with (
         _rail_subsection(
             filter_sac_slot,
-            f"{ICONS['saccades']} Saccades{ab}{_saccade_filter_badge()}",
+            f"{ICONS['saccades']} Saccades{_saccade_filter_badge()}",
             note=_cls_reason,
         ),
         _layer_off(
@@ -8018,17 +8010,8 @@ def render_plot_controls(
         )
 
     # --- Stimulus ---------------------------------------------------------
-    # The Fixations layout. Each of the section's layers is a
-    # `label | ☑ Show` row — *Text*, *Image* — with what it governs as
-    # captioned rows under it, greyed while it is off rather than
-    # hidden; the span highlight is a *Highlight* row of its own. Word boxes
-    # have their own section, and the hover fields are in
-    # 📐 Figure → Hover fields.
-    #
-    # The layer switches and their settings stay live while the
-    # section's master switch is off, so a user can set up what they want shown
-    # before turning it back on — nothing here mutates them; `_collect_viz_
-    # settings` only ANDs the master into what reaches the figure.
+    # Text and image choices stay editable while the master switch is off.
+    # Only the settings passed to the figure are gated on that switch.
     with (
         stim_grp,
         _layer_off("Stimulus", off=chart_axes, reason=screen_help),
@@ -8043,9 +8026,8 @@ def render_plot_controls(
             "Text",
             key="global_show_labels",
             persist_state="session",
-            help="Draw the reading text. Font and size start from the dataset's "
-            "Recording setup (Data page); changes here apply to this figure "
-            "only.",
+            help="Draw the words at their recorded positions. Text appearance starts "
+            "with the font and size from the dataset’s recording setup.",
         )
         text_rest.checkbox(
             "Redact",
@@ -8057,236 +8039,222 @@ def render_plot_controls(
                 "Other selected tooltip columns and the stimulus image can still carry text."
             ),
         )
-        # The typography that draws this text lives beside the layer
-        # that draws it. Reserved here and filled by the single
-        # `canvas_renderer` call in the 📐 Figure block below — one
-        # call draws both halves, since a widget drawn twice is a duplicate-key
-        # error. Keyed so `styles.py` spaces its rows like the popover's own.
-        stim_text_slot = st.container(key="rail_rows_stim_text")
 
-        # "Highlight a span": the canonical value lives in
-        # `global_critical_span_style` ("Mark text" | "Mark border" | "None"),
-        # which is what deep links / Share / restore carry — the on/off and the
-        # mode widgets are derived from it each run, and their callbacks write
-        # it back on interaction.
-        canonical = st.session_state.get("global_critical_span_style", "None")
+        with detail_section("Text appearance", key="plot_detail_stim_text"):
+            stim_text_slot = st.container(key="rail_rows_stim_text")
 
-        def _on_span_toggle():
-            st.session_state["global_critical_span_style"] = (
-                st.session_state.get("global_highlight_span_mode", "Mark text")
-                if st.session_state["global_highlight_span_on"]
-                else "None"
+        with detail_section("Word highlights", key="plot_detail_stim_highlight"):
+            # "Highlight a span": the canonical value lives in
+            # `global_critical_span_style` ("Mark text" | "Mark border" | "None"),
+            # which is what deep links / Share / restore carry — the on/off and the
+            # mode widgets are derived from it each run, and their callbacks write
+            # it back on interaction.
+            canonical = st.session_state.get("global_critical_span_style", "None")
+
+            def _on_span_toggle():
+                st.session_state["global_critical_span_style"] = (
+                    st.session_state.get("global_highlight_span_mode", "Mark text")
+                    if st.session_state["global_highlight_span_on"]
+                    else "None"
+                )
+
+            def _on_span_mode():
+                st.session_state["global_critical_span_style"] = st.session_state[
+                    "global_highlight_span_mode"
+                ]
+
+            st.session_state["global_highlight_span_on"] = canonical != "None"
+            if canonical in ("Mark text", "Mark border"):
+                st.session_state["global_highlight_span_mode"] = canonical
+            else:
+                st.session_state.setdefault("global_highlight_span_mode", "Mark text")
+
+            # The span's *text*-marking channel reaches all three builders —
+            # the animation and the comparison figure take `highlight_column` +
+            # `highlight_text_color` and recolour the word labels. Neither has a
+            # border-overlay layer, so **Mark border** stays a `make_scanpath_figure`
+            # feature and only its colour picker is gated (`tabs._marked_text_column`
+            # hands the other two builders `None` under that style, so nothing is
+            # marked there rather than silently falling back to text marking).
+            border_disabled, border_reason = _mode_gate(
+                animating, comparing, **_static_only
             )
-
-        def _on_span_mode():
-            st.session_state["global_critical_span_style"] = st.session_state[
-                "global_highlight_span_mode"
-            ]
-
-        st.session_state["global_highlight_span_on"] = canonical != "None"
-        if canonical in ("Mark text", "Mark border"):
-            st.session_state["global_highlight_span_mode"] = canonical
-        else:
-            st.session_state.setdefault("global_highlight_span_mode", "Mark text")
-
-        # The span's *text*-marking channel reaches all three builders —
-        # the animation and the comparison figure take `highlight_column` +
-        # `highlight_text_color` and recolour the word labels. Neither has a
-        # border-overlay layer, so **Mark border** stays a `make_scanpath_figure`
-        # feature and only its colour picker is gated (`tabs._marked_text_column`
-        # hands the other two builders `None` under that style, so nothing is
-        # marked there rather than silently falling back to text marking).
-        border_disabled, border_reason = _mode_gate(
-            animating, comparing, **_static_only
-        )
-        span_on, span_rest = _check_row(
-            "Highlight words",
-            key="global_highlight_span_on",
-            persist_state="session",
-            on_change=_on_span_toggle,
-            help="Mark the words where the chosen true/false column is true "
-            "(e.g. a target span).",
-        )
-        span_off_disabled, _ = _layer_gate(not span_on, None)
-        if highlight_options:
-            highlight_labels = cn.active(st.session_state, "words").option_labels(
-                highlight_options
-            )
-            span_rest.selectbox(
-                "Highlight words by",
-                options=highlight_options,
-                format_func=highlight_labels.__getitem__,
-                key="global_highlight_column",
+            span_on, span_rest = _check_row(
+                "Highlight words",
+                key="global_highlight_span_on",
                 persist_state="session",
-                disabled=span_off_disabled,
-                label_visibility="collapsed",
-                placeholder="Choose a column",
-                # Nothing is seeded outside the demo, and an unseeded
-                # selectbox would otherwise pick its first option itself.
-                **(
-                    {}
-                    if "global_highlight_column" in st.session_state
-                    else {"index": None}
-                ),
+                on_change=_on_span_toggle,
+                help="Mark the words where the chosen true/false column is true "
+                "(e.g. a target span).",
             )
-        style_help = (
-            "**Mark text** colors the span's words (needs **Text** on). "
-            "**Mark border** outlines the span. The box beside it sets the color."
-            + (
-                f"\n\n{ICONS['warning']} **Mark border** is drawn on the static "
-                "figure only."
-                if border_disabled
-                else ""
+            span_off_disabled, _ = _layer_gate(not span_on, None)
+            if highlight_options:
+                highlight_labels = cn.active(st.session_state, "words").option_labels(
+                    highlight_options
+                )
+                span_rest.selectbox(
+                    "Highlight words by",
+                    options=highlight_options,
+                    format_func=highlight_labels.__getitem__,
+                    key="global_highlight_column",
+                    persist_state="session",
+                    disabled=span_off_disabled,
+                    label_visibility="collapsed",
+                    placeholder="Choose a column",
+                    # Nothing is seeded outside the demo, and an unseeded
+                    # selectbox would otherwise pick its first option itself.
+                    **(
+                        {}
+                        if "global_highlight_column" in st.session_state
+                        else {"index": None}
+                    ),
+                )
+            style_help = (
+                "**Mark text** colors the span's words (needs **Text** on). "
+                "**Mark border** outlines the span. The box beside it sets the color."
+                + (
+                    f"\n\n{ICONS['warning']} **Mark border** is drawn on the static "
+                    "figure only."
+                    if border_disabled
+                    else ""
+                )
             )
-        )
-        style_field = _sub_row("Style", caption_help=style_help)
-        mode_col, span_color_col = style_field.columns(
-            [0.75, 0.25], gap=_LABEL_GAP, vertical_alignment="center"
-        )
-        span_mode = mode_col.radio(
-            "Style",
-            options=["Mark text", "Mark border"],
-            horizontal=True,
-            key="global_highlight_span_mode",
-            persist_state="session",
-            on_change=_on_span_mode,
-            disabled=span_off_disabled,
-            label_visibility="collapsed",
-        )
-        critical_span_style = span_mode if span_on else "None"
-        st.session_state["global_critical_span_style"] = critical_span_style
-        if span_mode == "Mark border":
-            span_color_col.color_picker(
-                "Border color",
-                key="global_span_border_color",
+            style_field = _sub_row("Style", caption_help=style_help)
+            mode_col, span_color_col = style_field.columns(
+                [0.75, 0.25], gap=_LABEL_GAP, vertical_alignment="center"
+            )
+            span_mode = mode_col.radio(
+                "Style",
+                options=["Mark text", "Mark border"],
+                horizontal=True,
+                key="global_highlight_span_mode",
                 persist_state="session",
-                disabled=span_off_disabled or border_disabled,
-                help=_gated_help(
-                    "Color of the span outline (used with **Mark border**).",
-                    border_reason,
-                ),
-                label_visibility="collapsed",
-            )
-        else:
-            span_color_col.color_picker(
-                "Highlighted text color",
-                key="global_highlight_text_color",
-                persist_state="session",
+                on_change=_on_span_mode,
                 disabled=span_off_disabled,
                 label_visibility="collapsed",
             )
+            critical_span_style = span_mode if span_on else "None"
+            st.session_state["global_critical_span_style"] = critical_span_style
+            if span_mode == "Mark border":
+                span_color_col.color_picker(
+                    "Border color",
+                    key="global_span_border_color",
+                    persist_state="session",
+                    disabled=span_off_disabled or border_disabled,
+                    help=_gated_help(
+                        "Color of the span outline (used with **Mark border**).",
+                        border_reason,
+                    ),
+                    label_visibility="collapsed",
+                )
+            else:
+                span_color_col.color_picker(
+                    "Highlighted text color",
+                    key="global_highlight_text_color",
+                    persist_state="session",
+                    disabled=span_off_disabled,
+                    label_visibility="collapsed",
+                )
 
-        # A stimulus image can come from the dataset (MultiplEYE stamps a
-        # per-trial `image_path`) OR be uploaded here for any dataset (a
-        # full-monitor screenshot of the reading screen). The upload's `data:`
-        # URI is stashed in session for the tab to place + the (pure) collector
-        # to read; the switch is enabled whenever either source exists.
-        uploaded_img = st.session_state.get("global_stimulus_image_upload")
-        upload_uri = _uploaded_image_data_uri(uploaded_img)
-        st.session_state["_stimulus_image_upload_uri"] = upload_uri
-        can_show_image = has_stimulus_image or upload_uri is not None
-        # `background_image*` are parameters of all three builders — the
-        # comparison figure places one `layout.image` per panel in the split
-        # layouts — so the whole image group is live in every mode.
-        show_stim_image, _ = _check_row(
-            "Image",
-            key="global_show_stimulus_image",
-            persist_state="session",
-            disabled=not can_show_image,
-            help="The stimulus page behind the scanpath: the dataset's image, "
-            "or one you upload."
-            + ("" if can_show_image else " Upload one below to switch it on."),
-        )
-        # The uploader is never greyed: it is the only way to get an image in
-        # and enable the switch in the first place.
-        _sub_row(
-            "File",
-            caption_help="Upload a screenshot of the reading screen. It replaces "
-            "the dataset's image and is stretched to fill the monitor; use "
-            "Offset and Scale to align it. Not included in Share links.",
-        ).file_uploader(
-            "Upload a stimulus image",
-            type=["png", "jpg", "jpeg", "gif", "webp"],
-            # No persist_state: st.file_uploader does not take it, and an
-            # UploadedFile is already stashed by _uploaded_image_data_uri.
-            key="global_stimulus_image_upload",
-            max_upload_size=upload_limit_mb(),
-            label_visibility="collapsed",
-        )
-        # The placement rows need an image to place: with none loaded they
-        # could never come alive, so they wait for one rather than sit greyed.
-        # Loaded but switched off, they grey.
-        if can_show_image:
-            image_idle = not show_stim_image
-            opacity_help = "Image opacity."
-            _numeric_slider(
-                st,
-                "Image opacity",
-                key="global_stimulus_image_opacity",
+        with detail_section("Stimulus image", key="plot_detail_stim_image"):
+            uploaded_img = st.session_state.get("global_stimulus_image_upload")
+            upload_uri = _uploaded_image_data_uri(uploaded_img)
+            st.session_state["_stimulus_image_upload_uri"] = upload_uri
+            can_show_image = has_stimulus_image or upload_uri is not None
+            # `background_image*` are parameters of all three builders — the
+            # comparison figure places one `layout.image` per panel in the split
+            # layouts — so the whole image group is live in every mode.
+            show_stim_image, _ = _check_row(
+                "Image",
+                key="global_show_stimulus_image",
                 persist_state="session",
-                min_value=0.1,
-                max_value=1.0,
-                step=0.05,
-                number_format="%.2f",
-                disabled=image_idle,
-                help=opacity_help,
-                field_host=_sub_row("Opacity", caption_help=opacity_help),
+                disabled=not can_show_image,
+                help="The stimulus page behind the scanpath: the dataset's image, "
+                "or one you upload."
+                + ("" if can_show_image else " Upload one below to switch it on."),
             )
-            # Manual alignment. When the data's coordinates don't match the
-            # image exactly, nudge it (X/Y px) and scale it to line it up with the
-            # word boxes and fixations. Dataset and uploaded images alike.
-            offset = _sub_row(
-                "Offset",
-                caption_help="Shift the image right (X) and down (Y), in px, to "
-                "align it with the text.",
-            )
-            x_cap, x_col, y_cap, y_col = offset.columns(
-                [0.1, 0.4, 0.1, 0.4], gap=_LABEL_GAP, vertical_alignment="center"
-            )
-            _sub_caption(x_cap, "X")
-            x_col.number_input(
-                "Image X offset (px)",
-                step=5.0,
-                key="global_stimulus_image_offset_x",
-                persist_state="session",
-                disabled=image_idle,
+            # The uploader is never greyed: it is the only way to get an image in
+            # and enable the switch in the first place.
+            _sub_row(
+                "File",
+                caption_help="Upload a screenshot of the reading screen. It replaces "
+                "the dataset's image and is stretched to fill the monitor; use "
+                "Offset and Scale to align it. Not included in Share links.",
+            ).file_uploader(
+                "Upload a stimulus image",
+                type=["png", "jpg", "jpeg", "gif", "webp"],
+                # No persist_state: st.file_uploader does not take it, and an
+                # UploadedFile is already stashed by _uploaded_image_data_uri.
+                key="global_stimulus_image_upload",
+                max_upload_size=upload_limit_mb(),
                 label_visibility="collapsed",
             )
-            _sub_caption(y_cap, "Y")
-            y_col.number_input(
-                "Image Y offset (px)",
-                step=5.0,
-                key="global_stimulus_image_offset_y",
-                persist_state="session",
-                disabled=image_idle,
-                label_visibility="collapsed",
-            )
-            scale_help = (
-                "Scale the image so its text matches the word boxes (1 = no scaling)."
-            )
-            _numeric_slider(
-                st,
-                "Image scale",
-                key="global_stimulus_image_scale",
-                persist_state="session",
-                min_value=0.25,
-                max_value=3.0,
-                step=0.05,
-                number_format="%.2f",
-                disabled=image_idle,
-                help=scale_help,
-                field_host=_sub_row("Scale", caption_help=scale_help),
-            )
+            # The placement rows need an image to place: with none loaded they
+            # could never come alive, so they wait for one rather than sit greyed.
+            # Loaded but switched off, they grey.
+            if can_show_image:
+                image_idle = not show_stim_image
+                opacity_help = "Image opacity."
+                _numeric_slider(
+                    st,
+                    "Image opacity",
+                    key="global_stimulus_image_opacity",
+                    persist_state="session",
+                    min_value=0.1,
+                    max_value=1.0,
+                    step=0.05,
+                    number_format="%.2f",
+                    disabled=image_idle,
+                    help=opacity_help,
+                    field_host=_sub_row("Opacity", caption_help=opacity_help),
+                )
+                # Manual alignment. When the data's coordinates don't match the
+                # image exactly, nudge it (X/Y px) and scale it to line it up with the
+                # word boxes and fixations. Dataset and uploaded images alike.
+                offset = _sub_row(
+                    "Offset",
+                    caption_help="Shift the image right (X) and down (Y), in px, to "
+                    "align it with the text.",
+                )
+                x_cap, x_col, y_cap, y_col = offset.columns(
+                    [0.1, 0.4, 0.1, 0.4], gap=_LABEL_GAP, vertical_alignment="center"
+                )
+                _sub_caption(x_cap, "X")
+                x_col.number_input(
+                    "Image X offset (px)",
+                    step=5.0,
+                    key="global_stimulus_image_offset_x",
+                    persist_state="session",
+                    disabled=image_idle,
+                    label_visibility="collapsed",
+                )
+                _sub_caption(y_cap, "Y")
+                y_col.number_input(
+                    "Image Y offset (px)",
+                    step=5.0,
+                    key="global_stimulus_image_offset_y",
+                    persist_state="session",
+                    disabled=image_idle,
+                    label_visibility="collapsed",
+                )
+                scale_help = "Scale the image so its text matches the word boxes (1 = no scaling)."
+                _numeric_slider(
+                    st,
+                    "Image scale",
+                    key="global_stimulus_image_scale",
+                    persist_state="session",
+                    min_value=0.25,
+                    max_value=3.0,
+                    step=0.05,
+                    number_format="%.2f",
+                    disabled=image_idle,
+                    help=scale_help,
+                    field_host=_sub_row("Scale", caption_help=scale_help),
+                )
 
     # --- Heatmap ----------------------------------------------------------
-    # Compare supports a shared word-box scale: overlay splits each box into
-    # A/B halves; side-by-side and stacked tint their respective full boxes.
-    # Animation is disabled because a time-varying density layer would
-    # need a distinct frame contract. The toggle itself is on the section's
-    # row; this block only owns the style popover's contents, in the
-    # Fixations layout — a *Style* row (the style picker, plus
-    # Smoothed's Blur, greyed for Word boxes), then one *Color* group:
-    # what is mapped and its colorscale, the scaling, the range.
+    # Compare shares a numeric range. Overlay splits each box into A/B halves,
+    # while side-by-side and stacked layouts tint each reading's full boxes.
     with (
         heatmap_grp,
         _layer_off(
@@ -8300,61 +8268,14 @@ def render_plot_controls(
         ),
         _popover_rows("heatmap"),
     ):
-        # A selectbox rather than a radio: long options do not fit one line
-        # beside a title, and a wrapped radio reads as two settings.
-        # `persist_state` shows the seeded style on first open.
-        style_disabled, style_help = _layer_gate(
-            heat_disabled or comparing,
-            _gated_help(
-                "Word boxes: color each word box by its fixations. Smoothed: "
-                "the fixations blurred with a Gaussian (see Blur), scaled to the "
-                "figure's peak. Compare always uses word boxes.",
-                "Comparison heatmaps use split word boxes."
-                if comparing
-                else heat_reason,
-            ),
-        )
-        heat_style = _sub_row(
-            None,
-            section="Style",
-            section_help=style_help,
-        ).selectbox(
-            "Style",
-            options=["Word boxes", "Smoothed"],
-            key="global_heatmap_style",
-            persist_state="session",
-            disabled=style_disabled,
-            help=style_help,
-            label_visibility="collapsed",
-        )
-        _render_heatmap_blur_row(
-            trial_fixations,
-            words,
-            disabled=heat_disabled or comparing or heat_style != "Smoothed",
-            reason="Comparison heatmaps use split word boxes."
-            if comparing
-            else heat_reason,
-        )
         metric_disabled_h, metric_help = _layer_gate(
             heat_disabled,
             _gated_help(
-                "What the heatmap shows, and its color scale.",
+                "Dwell time adds fixation durations. Fixation count gives each fixation equal weight.",
                 heat_reason,
             ),
         )
-        field = _sub_row(
-            "By",
-            section="Color",
-            section_help="What the heatmap colors by and how.",
-            caption_help=metric_help,
-        )
-        # In Compare each scanpath picks its own colour scale (its group,
-        # below), so the metric takes the whole row.
-        metric_col, scale_col = (
-            (field, None)
-            if comparing
-            else field.columns([0.5, 0.5], gap=_LABEL_GAP, vertical_alignment="center")
-        )
+        metric_col = _layer_field("Measure", metric_help)
         metric_labels = _rail_names().option_labels(
             ["duration_ms", "counts"], {"counts": "Fixation count"}, roles=True
         )
@@ -8371,94 +8292,48 @@ def render_plot_controls(
             help=metric_help,
             label_visibility="collapsed",
         )
-        if scale_col is not None:
-            # An explicit index keeps the palette visible when this popover first opens.
-            current_scale = st.session_state.get("global_heatmap_colorscale")
-            st.session_state["global_heatmap_colorscale"] = scale_col.selectbox(
+        if not comparing:
+            _, scale_help = _layer_gate(
+                heat_disabled, _gated_help("Color scale for the heatmap.", heat_reason)
+            )
+            scale_col = _layer_field("Colors", scale_help)
+            _colorscale_picker(
+                scale_col,
                 "Colors",
-                COLORSCALES,
-                index=COLORSCALES.index(current_scale)
-                if current_scale in COLORSCALES
-                else 0,
+                "global_heatmap_colorscale",
                 disabled=metric_disabled_h,
-                help=metric_help,
-                label_visibility="collapsed",
-            )
-        norm_disabled, norm_help = _layer_gate(
-            heat_disabled,
-            _gated_help(
-                "Linear: color follows the value. Log: color follows log(1 + "
-                "value), so a few high values don't wash out the rest.",
-                heat_reason,
-            ),
-        )
-        # `required`, so it can never be deselected: an empty segmented
-        # control would read "nothing" while the figure draws Linear (the
-        # collector's fallback).
-        _sub_row("Scale", caption_help=norm_help).segmented_control(
-            "Scaling",
-            options=["Linear", "Log"],
-            required=True,
-            key="global_heatmap_norm",
-            persist_state="session",
-            disabled=norm_disabled,
-            help=norm_help,
-            label_visibility="collapsed",
-        )
-        # Bounded by what a word box maps — its summed dwell —
-        # not by the longest single fixation, which refixations exceed.
-        # The dwell groupby runs only while the heatmap is shown; switched off,
-        # the greyed range is drawn from the single-fixation span instead.
-        counts = heatmap_metric == "counts"
-        heat_bounds = (
-            _heatmap_bounds_for_rail(trial_fixations, words, counts=counts)
-            if show_heatmap
-            else _cheap_heatmap_bounds(trial_fixations, counts=counts)
-        )
-        if heat_bounds is not None:
-            # The scale starts at 0 (an empty word), as the figure's auto does.
-            hmin = 0.0
-            hmax = float(math.ceil(heat_bounds[1]))
-            hmax_eff = hmax if hmax > hmin else hmin + 1.0
-            range_text = (
-                "Fixations per word" if counts else "Word dwell time (ms)"
-            ) + (
-                " at the two ends of the color scale. Auto runs from 0 to the "
-                "trial's highest value. You can type values beyond the slider's "
-                "range."
-            )
-            # The smoothed styles scale their density to their own
-            # peak, so a range does nothing there — greyed, and kept for Word
-            # boxes. Compare always draws word boxes, so it applies again.
-            self_scaled = not comparing and heat_style in SELF_SCALED_HEATMAP_STYLES
-            # Auto (per trial, like the API) until a range is chosen.
-            _render_color_range(
-                "Color range",
-                "global_heatmap_color_range",
-                hmin,
-                hmax_eff,
-                disabled=heat_disabled or self_scaled,
-                reason=heat_reason
-                or (
-                    f"{ICONS['warning']} **{heat_style}** is scaled to each "
-                    "figure's peak, so the range has no effect."
-                    if self_scaled
-                    else ""
-                ),
-                help=range_text,
-                slider_format="%d" if counts else "%d ms",
-                field_host=_sub_row("Range", caption_help=range_text),
+                help_text=scale_help,
             )
 
-        elif (
-            show_heatmap
-            and not counts
-            and trial_fixations is not None
-            and not trial_fixations.empty
-        ):
-            st.caption(
-                "No positive finite dwell times are available for the heatmap range."
-            )
+        if comparing:
+            # The per-scanpath groups, after the rows both share.
+            for idx, _ in _COMPARE_SCANPATHS:
+                _compare_heatmap_colorscale_row(
+                    idx, disabled=heat_disabled, reason=heat_reason
+                )
+        # A selectbox rather than a radio: long options do not fit one line
+        # beside a title, and a wrapped radio reads as two settings.
+        # `persist_state` shows the seeded style on first open.
+        style_disabled, style_help = _layer_gate(
+            heat_disabled or comparing,
+            _gated_help(
+                "Word boxes: color each word box by its fixations. Smoothed: "
+                "the fixations blurred with a Gaussian (see Blur), scaled to the "
+                "figure's peak. Compare always uses word boxes.",
+                "Comparison heatmaps use split word boxes."
+                if comparing
+                else heat_reason,
+            ),
+        )
+        heat_style = _layer_field("Draw as", style_help).selectbox(
+            "Style",
+            options=["Word boxes", "Smoothed"],
+            key="global_heatmap_style",
+            persist_state="session",
+            disabled=style_disabled,
+            help=style_help,
+            label_visibility="collapsed",
+        )
 
         # One opacity for the heatmap; Auto keeps each style's own.
         opacity_help = _gated_help(
@@ -8467,8 +8342,8 @@ def render_plot_controls(
             "for both styles." + (" Shared by both scanpaths." if comparing else ""),
             heat_reason,
         )
-        auto_col, opacity_col = _sub_row(
-            "Opacity", caption_help=_layer_gate(heat_disabled, opacity_help)[1]
+        auto_col, opacity_col = _layer_field(
+            "Opacity", _layer_gate(heat_disabled, opacity_help)[1]
         ).columns([0.4, 0.6], gap=_LABEL_GAP, vertical_alignment="center")
         auto_opacity = auto_col.checkbox(
             "Auto",
@@ -8489,17 +8364,95 @@ def render_plot_controls(
             label_visibility="collapsed",
         )
 
-        if comparing:
-            # The per-scanpath groups, after the rows both share.
-            for idx, _ in _COMPARE_SCANPATHS:
-                _compare_heatmap_colorscale_row(
-                    idx, disabled=heat_disabled, reason=heat_reason
+        with detail_section("Smoothing and scale", key="plot_detail_heat_scale"):
+            _render_heatmap_blur_row(
+                trial_fixations,
+                words,
+                disabled=heat_disabled or comparing or heat_style != "Smoothed",
+                reason="Comparison heatmaps use split word boxes."
+                if comparing
+                else heat_reason,
+            )
+            norm_disabled, norm_help = _layer_gate(
+                heat_disabled,
+                _gated_help(
+                    "Linear: color follows the value. Log: color follows log(1 + "
+                    "value), so a few high values don't wash out the rest.",
+                    heat_reason,
+                ),
+            )
+            # `required`, so it can never be deselected: an empty segmented
+            # control would read "nothing" while the figure draws Linear (the
+            # collector's fallback).
+            _sub_row("Scale", caption_help=norm_help).segmented_control(
+                "Scaling",
+                options=["Linear", "Log"],
+                required=True,
+                key="global_heatmap_norm",
+                persist_state="session",
+                disabled=norm_disabled,
+                help=norm_help,
+                label_visibility="collapsed",
+            )
+            # Bounded by what a word box maps — its summed dwell —
+            # not by the longest single fixation, which refixations exceed.
+            # The dwell groupby runs only while the heatmap is shown; switched off,
+            # the greyed range is drawn from the single-fixation span instead.
+            counts = heatmap_metric == "counts"
+            heat_bounds = (
+                _heatmap_bounds_for_rail(trial_fixations, words, counts=counts)
+                if show_heatmap
+                else _cheap_heatmap_bounds(trial_fixations, counts=counts)
+            )
+            if heat_bounds is not None:
+                # The scale starts at 0 (an empty word), as the figure's auto does.
+                hmin = 0.0
+                hmax = float(math.ceil(heat_bounds[1]))
+                hmax_eff = hmax if hmax > hmin else hmin + 1.0
+                range_text = (
+                    "Fixations per word" if counts else "Word dwell time (ms)"
+                ) + (
+                    " at the two ends of the color scale. Auto runs from 0 to the "
+                    "trial's highest value. You can type values beyond the slider's "
+                    "range."
                 )
-        _render_colorbar_rows("heatmap", disabled=heat_disabled, reason=heat_reason)
+                # The smoothed styles scale their density to their own
+                # peak, so a range does nothing there — greyed, and kept for Word
+                # boxes. Compare always draws word boxes, so it applies again.
+                self_scaled = not comparing and heat_style in SELF_SCALED_HEATMAP_STYLES
+                # Auto (per trial, like the API) until a range is chosen.
+                _render_color_range(
+                    "Color range",
+                    "global_heatmap_color_range",
+                    hmin,
+                    hmax_eff,
+                    disabled=heat_disabled or self_scaled,
+                    reason=heat_reason
+                    or (
+                        f"{ICONS['warning']} **{heat_style}** is scaled to each "
+                        "figure's peak, so the range has no effect."
+                        if self_scaled
+                        else ""
+                    ),
+                    help=range_text,
+                    slider_format="%d" if counts else "%d ms",
+                    field_host=_sub_row("Range", caption_help=range_text),
+                )
 
-    # Raw gaze is drawn by the static and comparison builders. The toggle is on
-    # the section's row; this owns the style popover: one *Marker* group, as in
-    # 👁️ Fixations.
+            elif (
+                show_heatmap
+                and not counts
+                and trial_fixations is not None
+                and not trial_fixations.empty
+            ):
+                st.caption(
+                    "No positive finite dwell times are available for the heatmap range."
+                )
+
+        with detail_section("Color bar", key="plot_detail_heat_bar"):
+            _render_colorbar_rows("heatmap", disabled=heat_disabled, reason=heat_reason)
+
+    # --- Raw gaze ---------------------------------------------------------
     with (
         raw_gaze_grp,
         _layer_off(
@@ -8509,34 +8462,6 @@ def render_plot_controls(
         ),
         _popover_rows("rawgaze"),
     ):
-        if comparing:
-            # A comparison colours each reading's samples by its own
-            # scanpath (the A/B cue), so the *Marker* group becomes scanpath
-            # A's — as in 👁️ Fixations — and B's group follows it.
-            _compare_raw_gaze_color_row(0, disabled=raw_disabled)
-        else:
-            color_disabled, color_help = _layer_gate(
-                raw_disabled,
-                _gated_help(
-                    "Used only in Compare. Otherwise samples are colored by time "
-                    "(or order).",
-                    raw_reason,
-                ),
-            )
-            _sub_row(
-                "Color",
-                section="Marker",
-                section_help="How each raw-gaze sample is drawn: color, size and "
-                "opacity.",
-                caption_help=color_help,
-            ).color_picker(
-                "Color",
-                key="global_raw_gaze_color",
-                persist_state="session",
-                disabled=color_disabled,
-                help=color_help,
-                label_visibility="collapsed",
-            )
         size_help = "Diameter of each raw-gaze sample dot, in px."
         _numeric_slider(
             st,
@@ -8548,7 +8473,7 @@ def render_plot_controls(
             step=0.5,
             disabled=raw_disabled,
             help=size_help,
-            field_host=_sub_row("Size", caption_help=_layer_gate(False, size_help)[1]),
+            field_host=_layer_field("Dot size", _layer_gate(False, size_help)[1]),
         )
         opacity_help = "Sample opacity; lower it to see dense clusters."
         _numeric_slider(
@@ -8562,17 +8487,35 @@ def render_plot_controls(
             number_format="%.2f",
             disabled=raw_disabled,
             help=opacity_help,
-            field_host=_sub_row(
-                "Opacity", caption_help=_layer_gate(False, opacity_help)[1]
-            ),
+            field_host=_layer_field("Opacity", _layer_gate(False, opacity_help)[1]),
         )
+
         if comparing:
-            # Scanpath B's group, under A's (whose size and opacity are shared).
-            _compare_raw_gaze_color_row(1, disabled=raw_disabled)
+            for idx, _ in _COMPARE_SCANPATHS:
+                _compare_raw_gaze_color_row(idx, disabled=raw_disabled)
+        else:
+            with detail_section("Sample color", key="plot_detail_raw_color"):
+                st.caption(
+                    "A single reading colors samples by recorded time or, when it has no timestamps, by sample order."
+                )
+                color_disabled, color_help = _layer_gate(
+                    raw_disabled,
+                    _gated_help(
+                        "The flat color for samples that have neither timestamps nor sample order.",
+                        raw_reason,
+                    ),
+                )
+                _layer_field("Fallback color", color_help).color_picker(
+                    "Color",
+                    key="global_raw_gaze_color",
+                    persist_state="session",
+                    disabled=color_disabled,
+                    help=color_help,
+                    label_visibility="collapsed",
+                )
+
     # --- Word boxes -------------------------------------------------------
-    # The interest areas' outline and fill. One *Box* group, as raw gaze's
-    # *Marker*. All three render paths draw the boxes; a static
-    # comparison outlines and fills each reading's in its own colours.
+    # A static comparison outlines and fills each reading's boxes in its own colours.
     with (
         boxes_grp,
         _layer_off(
@@ -8586,11 +8529,11 @@ def render_plot_controls(
         ),
         _popover_rows("boxes"),
     ):
-        # The co-animation (Compare + Animate) draws one set of boxes in these
-        # colours; the static comparison outlines and fills each reading's
-        # boxes on its own, so there the *Box* group becomes scanpath A's, and
-        # scanpath B's follows it — as the Fixations popover does.
-        box_section_help = "How each word box is drawn."
+        color_heading, opacity_heading = _sub_row(None).columns(
+            _COLOR_OPACITY_W, gap=_LABEL_GAP
+        )
+        _sub_caption(color_heading, "Color")
+        _sub_caption(opacity_heading, "Opacity")
         fill_text = (
             "Keep the opacity low so the text, fixations and image under the "
             f"boxes stay visible; 0 draws outlines only. {_FILL_PICK_NOTE}"
@@ -8603,12 +8546,9 @@ def render_plot_controls(
             line_disabled, line_help = _layer_gate(
                 False, "Color of each word box's outline."
             )
-            color_col, opacity_col = _sub_row(
-                "Line",
-                section="Box",
-                section_help=box_section_help,
-                caption_help=line_help,
-            ).columns(_COLOR_OPACITY_W, gap=_LABEL_GAP, vertical_alignment="center")
+            color_col, opacity_col = _layer_field("Outline", line_help).columns(
+                _COLOR_OPACITY_W, gap=_LABEL_GAP, vertical_alignment="center"
+            )
             color_col.color_picker(
                 "Line color",
                 key="global_word_box_color",
@@ -8628,7 +8568,7 @@ def render_plot_controls(
                 False,
                 "Fill color of each box, at the opacity beside it. " + fill_text,
             )
-            color_col, opacity_col = _sub_row("Fill", caption_help=fill_help).columns(
+            color_col, opacity_col = _layer_field("Fill", fill_help).columns(
                 _COLOR_OPACITY_W, gap=_LABEL_GAP, vertical_alignment="center"
             )
             color_col.color_picker(
@@ -8661,13 +8601,16 @@ def render_plot_controls(
     # framing and the grid have nothing to act on: they grey, saying why.
     # (Animate and Compare always plot x / y, whatever the fields say.)
     chart_reason = (
-        f"{ICONS['warning']} This needs screen x / y on the axes. Set **Axes** "
-        "back to x / y to use it."
+        "Choose **Screen X and Y** under **Axes** to use this setting."
         if chart_axes
         else ""
     )
 
     with screen_group, _popover_rows("screen"):
+        if chart_axes:
+            st.caption(
+                "To crop the screen or draw a border, choose **Screen X and Y** under **Axes**."
+            )
         # The box reads "crop", the wire key "fit to monitor" — its inverse. The
         # box is a shadow re-seeded from the key every run, so links, configs and
         # presets that set the key move it, and only a click writes the key.
@@ -8681,79 +8624,51 @@ def render_plot_controls(
                 return
             st.session_state["global_fit_to_monitor"] = not st.session_state[crop_key]
 
-        _check_row(
-            "Frame",
+        cropping = st.checkbox(
+            "Crop to data",
             key=crop_key,
             on_change=_apply_crop,
-            check_label="Crop to data",
-            check_share=0.6,
             disabled=chart_axes,
             help=_gated_help(
-                "Off: show the whole monitor. On: zoom to the fixations and word "
-                "boxes, plus the margin below.",
+                "Zoom in on the fixations and word boxes. Turn this off to show the whole screen.",
                 chart_reason,
             ),
         )
-        # The crop's margin — automatic (5% of
-        # the data's extent, at least 20 px), or a number of screen px. Greyed,
-        # not hidden, while the whole monitor is shown.
-        cropping = not st.session_state.get("global_fit_to_monitor", True)
-        margin_off, margin_help = _layer_gate(
-            chart_axes or not cropping,
-            _gated_help(
-                "Space around the data when cropping. Auto: 5% of its width and "
-                "height, at least 20 px. Untick to set it in screen px.",
-                chart_reason
-                or (
-                    ""
-                    if cropping
-                    else f"{ICONS['warning']} Used only with **Crop to data** on."
-                ),
-            ),
+        frame_shown = st.checkbox(
+            "Show plot border",
+            key="global_show_plot_frame",
+            persist_state="session",
+            disabled=chart_axes,
+            help=_gated_help("Draw a thin border around the plot area.", chart_reason),
         )
-        auto_col, margin_col, unit_col = _sub_row(
-            "Margin", caption_help=margin_help
-        ).columns([0.4, 0.42, 0.18], gap=_LABEL_GAP, vertical_alignment="center")
-        automatic_margin = auto_col.checkbox(
-            "Auto",
+        render_plot_background(st)
+        framing_style = detail_section(
+            "Margins and border color", key="plot_detail_frame_style"
+        )
+        automatic_margin = framing_style.checkbox(
+            "Set crop margin automatically",
             key="global_crop_margin_auto",
             persist_state="session",
-            disabled=margin_off,
+            disabled=chart_axes or not cropping,
+            help=_gated_help(
+                "Leave 5% of the reading’s extent around it, with a minimum of 20 pixels.",
+                chart_reason,
+            ),
         )
-        margin_col.number_input(
+        framing_style.number_input(
             "Crop margin (px)",
             min_value=CROP_MARGIN_BOUNDS[0],
             max_value=CROP_MARGIN_BOUNDS[1],
             step=10.0,
             key="global_crop_margin_px",
             persist_state="session",
-            disabled=margin_off or automatic_margin,
-            label_visibility="collapsed",
+            disabled=chart_axes or not cropping or automatic_margin,
         )
-        _sub_caption(unit_col, "px")
-        # The border round the plot area (each panel's, in Compare's
-        # side-by-side and stacked layouts).
-        frame_off, frame_reason = chart_axes, None
-        # "Border": the row above is already *Frame* (what the view frames).
-        frame_shown, frame_rest = _check_row(
-            "Border",
-            key="global_show_plot_frame",
-            persist_state="session",
-            disabled=frame_off,
-            help=_gated_help(
-                "A 1 px border around the plot area, in this color.",
-                frame_reason or chart_reason,
-            ),
-        )
-        swatch_col, _ = frame_rest.columns(
-            [0.3, 0.7], gap=_LABEL_GAP, vertical_alignment="center"
-        )
-        swatch_col.color_picker(
+        framing_style.color_picker(
             "Border color",
             key="global_plot_frame_color",
             persist_state="session",
-            disabled=frame_off or not frame_shown,
-            label_visibility="collapsed",
+            disabled=chart_axes or not frame_shown,
         )
         screen_rows = st.container(key="rail_rows_fig_screen_canvas")
     if canvas_renderer is not None:
@@ -8824,19 +8739,33 @@ def render_plot_controls(
             placeholder="Custom axes",
             on_change=apply_axis_preset,
             disabled=axis_disabled,
-            help=axis_help if axis_disabled else None,
+            help=axis_help,
         )
         axis_labels = _rail_names().option_labels(numeric_fields, roles=True)
         axis_labels[charts.ELAPSED] = charts.ELAPSED_LABEL
-        for axis in ("x", "y"):
-            st.selectbox(
-                f"{axis.upper()} axis field",
-                options=numeric_fields,
+        custom_fields = detail_section(
+            "Choose axis fields", key="plot_detail_axis_fields"
+        )
+        for axis, direction in (("x", "Horizontal"), ("y", "Vertical")):
+            field_key = f"global_{axis}_field"
+            custom_fields.selectbox(
+                f"{direction} axis ({axis.upper()})",
+                options=[
+                    field
+                    for field in numeric_fields
+                    if has_time
+                    or field not in charts.CLOCK_FIELDS
+                    or field == st.session_state[field_key]
+                ],
                 format_func=axis_labels.__getitem__,
-                key=f"global_{axis}_field",
+                key=field_key,
                 persist_state="session",
                 disabled=axis_disabled,
                 help=axis_help if axis_disabled else None,
+            )
+        if chart_axes and current is None:
+            st.caption(
+                f"{md_literal(axis_labels[fields[1]])} by {md_literal(axis_labels[fields[0]])}"
             )
         if chart_axes and fields == ("order_in_trial", "order_in_trial"):
             st.caption(
@@ -8845,58 +8774,47 @@ def render_plot_controls(
 
     grid = _plot_menu(axes, "Coordinate grid", icon=ICONS["axes"], slug="grid")
     with grid, _popover_rows("grid"):
-        show_coordinate_grid, grid_rest = _check_row(
-            "Grid",
+        if chart_axes:
+            st.caption(
+                "The coordinate grid marks screen pixels. Choose **Screen X and Y** under **Axes** to show it."
+            )
+        show_coordinate_grid = st.checkbox(
+            "Show coordinate grid",
             key="global_show_coordinate_grid",
             persist_state="session",
             disabled=chart_axes,
             help=_gated_help(
-                "A grid of screen coordinates, in monitor pixels. Auto picks the "
-                "interval; untick it to set the major interval (px).",
+                "Mark horizontal and vertical positions in screen pixels.",
                 chart_reason,
             ),
         )
-        grid_off_disabled, _ = _layer_gate(chart_axes or not show_coordinate_grid, None)
-        auto_col, spacing_col, px_col = grid_rest.columns(
-            [0.4, 0.42, 0.18], gap=_LABEL_GAP, vertical_alignment="center"
+        grid_off = chart_axes or not show_coordinate_grid
+        grid_details = detail_section(
+            "Grid spacing and labels", key="plot_detail_grid_spacing"
         )
-        automatic_grid = auto_col.checkbox(
-            "Auto",
+        automatic_grid = grid_details.checkbox(
+            "Set spacing automatically",
             key="global_coordinate_grid_auto",
             persist_state="session",
-            disabled=grid_off_disabled,
+            disabled=grid_off,
         )
-        spacing_col.number_input(
-            "Major grid interval (px)",
+        grid_details.number_input(
+            "Distance between grid lines (px)",
             min_value=10.0,
             max_value=5000.0,
             step=10.0,
             key="global_coordinate_grid_spacing",
             persist_state="session",
-            disabled=grid_off_disabled or automatic_grid,
-            label_visibility="collapsed",
-        )
-        _sub_caption(px_col, "px")
-        # The grid's tick labels' size.
-        grid_font_help = _gated_help(
-            "The grid's coordinate labels, in px. Default 18."
-            if show_coordinate_grid
-            else f"{ICONS['warning']} Used only with **Grid** on.",
-            chart_reason,
+            disabled=grid_off or automatic_grid,
         )
         _numeric_slider(
-            st,
-            "Grid label size",
+            grid_details,
+            "Grid label size (px)",
             key="global_coordinate_grid_font_size",
             persist_state="session",
             min_value=GRID_FONT_SIZE_BOUNDS[0],
             max_value=GRID_FONT_SIZE_BOUNDS[1],
-            disabled=grid_off_disabled,
-            help=grid_font_help,
-            field_host=_sub_row(
-                "Labels",
-                caption_help=_layer_gate(grid_off_disabled, grid_font_help)[1],
-            ),
+            disabled=grid_off,
         )
 
     # Title/caption on the figure — set here, so it's visible live rather than
@@ -8914,36 +8832,6 @@ def render_plot_controls(
             st.session_state[pattern_key] = default
 
     with labels, _popover_rows("labels"):
-        label_help = (
-            "Auto: label the figure when a setting changes its geometry or data. "
-            "Show: always label it. Hide: never."
-        )
-        label_mode = _sub_row(
-            "Label",
-            section="Illustration",
-            section_help="A note in the figure's corner saying it is not drawn "
-            "exactly as recorded.",
-            caption_help=label_help,
-        ).selectbox(
-            "Illustration label",
-            options=["Auto", "Show", "Hide"],
-            key="global_illustration_label",
-            persist_state="session",
-            help=label_help,
-            label_visibility="collapsed",
-        )
-        text_help = (
-            "The label's text. If empty: “Illustration ·” followed by the reasons."
-        )
-        _sub_row("Text", caption_help=text_help).text_input(
-            "Illustration text",
-            key="global_illustration_text",
-            persist_state="session",
-            placeholder="Illustration · <reasons>",
-            disabled=label_mode == "Hide",
-            help=text_help,
-            label_visibility="collapsed",
-        )
         # The *selected* trial's frames, not the corpus the rail was
         # handed — its tables name the `{table.field}` fields the boxes validate
         # against and the list shows, and "one value per trial" has to be read
@@ -8984,92 +8872,89 @@ def render_plot_controls(
                     # The field list offers the dataset's own names too.
                     column_names=_rail_names(),
                 )
-        any_shown = False
         for name, show_key, pattern_key, default, help_text in (
             (
                 "Title",
                 "global_show_title",
                 "global_title_pattern",
                 DEFAULT_TITLE_PATTERN,
-                "A line of text above the plot. {field} inserts a value from this "
-                "trial. The figure grows to make room.",
+                "Place a title above the plot. Use {participant_id} or another trial field to fill it in for each reading.",
             ),
             (
                 "Caption",
                 "global_show_caption",
                 "global_caption_pattern",
                 DEFAULT_CAPTION_PATTERN,
-                "A line of text below the plot. {field} inserts a value from this "
-                "trial. The figure grows to make room.",
+                "Place a caption below the plot. It can include values from the current reading.",
             ),
         ):
-            shown, rest = _check_row(
-                name,
+            shown = st.checkbox(
+                f"Show {name.lower()}",
                 key=show_key,
                 persist_state="session",
                 on_change=_prefill,
                 args=(show_key, pattern_key, default),
                 help=help_text,
             )
-            any_shown = any_shown or shown
             render_pattern_input(
-                rest,
+                st,
                 name,
                 pattern_key,
                 _title_caption_fields,
-                help=help_text,
                 disabled=not shown,
                 label_visibility="collapsed",
                 preview=shown,
             )
-            # How it is written — its size, and the caption's colour.
-            key_name = name.lower()
-            style_help = (
-                f"The {key_name}'s text size in px"
-                + (", and its color." if name == "Caption" else ".")
-                if shown
-                else f"{ICONS['warning']} Used only with **{name}** on."
-            )
-            size_col, unit_col, color_col = _sub_row(
-                "Size", caption_help=_layer_gate(not shown, style_help)[1]
-            ).columns([0.5, 0.16, 0.34], gap=_LABEL_GAP, vertical_alignment="center")
-            bounds = (
-                TITLE_FONT_SIZE_BOUNDS if name == "Title" else CAPTION_FONT_SIZE_BOUNDS
-            )
-            size_col.number_input(
-                f"{name} size",
+        if _title_caption_fields:
+            render_pattern_help(st, _title_caption_fields)
+        st.checkbox(
+            "Add “Made with Scanpath Studio” below the plot",
+            key="global_show_credit",
+            persist_state="session",
+        )
+        text_style = detail_section("Text size and color", key="plot_detail_text_style")
+        for name, bounds in (
+            ("title", TITLE_FONT_SIZE_BOUNDS),
+            ("caption", CAPTION_FONT_SIZE_BOUNDS),
+        ):
+            text_style.number_input(
+                f"{name.capitalize()} size (px)",
                 min_value=bounds[0],
                 max_value=bounds[1],
                 step=1,
-                key=f"global_{key_name}_font_size",
+                key=f"global_{name}_font_size",
                 persist_state="session",
-                disabled=not shown,
-                help=style_help,
-                label_visibility="collapsed",
+                disabled=not st.session_state[f"global_show_{name}"],
             )
-            _sub_caption(unit_col, "px")
-            if name == "Caption":
-                color_col.color_picker(
-                    "Caption color",
-                    key="global_caption_color",
-                    persist_state="session",
-                    disabled=not shown,
-                    label_visibility="collapsed",
-                )
-        if any_shown:
-            render_pattern_help(st.container(), _title_caption_fields)
-        credit_help = (
-            "A small line under the plot saying the figure was made with "
-            "Scanpath Studio, for a figure shared without its "
-            "caption. The figure grows to make room."
-        )
-        _, credit_rest = _check_row(
-            "Credit",
-            key="global_show_credit",
+        text_style.color_picker(
+            "Caption color",
+            key="global_caption_color",
             persist_state="session",
-            help=credit_help,
+            disabled=not st.session_state["global_show_caption"],
         )
-        _sub_caption(credit_rest, "Made with Scanpath Studio", credit_help)
+        illustration_note = detail_section(
+            "Illustration label", key="plot_detail_illustration_label"
+        )
+        label_mode = illustration_note.selectbox(
+            "When to show the label",
+            options=["Auto", "Show", "Hide"],
+            format_func={
+                "Auto": "Automatically",
+                "Show": "Always",
+                "Hide": "Never",
+            }.__getitem__,
+            key="global_illustration_label",
+            persist_state="session",
+            help="Automatically labels a figure when a setting changes its data or geometry, such as moving fixations onto a line.",
+        )
+        illustration_note.text_input(
+            "Label text",
+            key="global_illustration_text",
+            persist_state="session",
+            placeholder="Use the automatic explanation",
+            disabled=label_mode == "Hide",
+            help="Leave this empty to show “Illustration” and the reason for the label.",
+        )
 
     # The tooltips' fields, for words and for fixations — figure-wide rather
     # than one layer's, so they sit together here instead of closing the
@@ -9078,33 +8963,25 @@ def render_plot_controls(
     # a `_mode_gate`; and neither greys with its layer, since a hidden layer's
     # tooltip choice is still the one it shows when switched back on.
     with hover, _popover_rows("hover"):
-        word_names = cn.active(st.session_state, "words")
-        word_hover = word_names.sort_options(hover_field_options(words, words=True))
-        word_hover_labels = word_names.option_labels(word_hover, roles=True)
-        _labeled(
-            st,
-            "multiselect",
-            "Word hover fields",
-            display="Words",
-            options=word_hover,
-            format_func=word_hover_labels.__getitem__,
-            key="global_word_hover_fields",
-            persist_state="session",
-            help="Fields shown when hovering a word.",
-        )
         fix_names = _rail_names()
         fix_hover = fix_names.sort_options(hover_field_options(trial_fixations))
-        fix_hover_labels = fix_names.option_labels(fix_hover, roles=True)
-        _labeled(
-            st,
-            "multiselect",
-            "Fixation hover fields",
-            display="Fixations",
+        st.multiselect(
+            "Fields on a fixation",
             options=fix_hover,
-            format_func=fix_hover_labels.__getitem__,
+            format_func=fix_names.option_labels(fix_hover, roles=True).__getitem__,
             key="global_fixation_hover_fields",
             persist_state="session",
-            help=("Fields shown in each fixation tooltip, in this order."),
+            help="Choose the fields to show when someone points to a fixation. They appear in the order you select them.",
+        )
+        word_names = cn.active(st.session_state, "words")
+        word_hover = word_names.sort_options(hover_field_options(words, words=True))
+        st.multiselect(
+            "Fields on a word",
+            options=word_hover,
+            format_func=word_names.option_labels(word_hover, roles=True).__getitem__,
+            key="global_word_hover_fields",
+            persist_state="session",
+            help="Choose the fields to show when someone points to a word. They appear in the order you select them.",
         )
         if st.session_state.get("global_redact_text"):
             selected = selected_hover_text(
@@ -9119,11 +8996,8 @@ def render_plot_controls(
                 )
                 st.text(", ".join(selected))
 
-    # Where each legend sits — and whether it is drawn at all: each row's *Show*
-    # is that legend's own switch (the key links, settings files and designs
-    # carry). A row
-    # appears only while the figure can draw that legend, so the table lists
-    # what is on the plot rather than four rows that may do nothing.
+    # Offer each legend while this figure can draw it, including when its
+    # own visibility switch is off.
     with legends, _popover_rows("legends"):
         drawn = _legends_drawn(
             show_fix=show_fix,
@@ -9132,68 +9006,64 @@ def render_plot_controls(
             comparing=comparing,
             numeric_fields=numeric_fields,
         )
-        if not drawn:
-            st.caption(
-                "This figure has no legend yet. Legends appear when you use features such"
-                " as A/B comparison labels, saccade types, categorical fixation colors, "
-                "highlights, raw gaze or a fixed marker-size scale."
-            )
+        if drawn:
+            st.markdown("**Show on the figure**")
         else:
-            weights = [0.14, 0.38, 0.28, 0.2]
-            head = _sub_row(None).columns(
-                weights, gap=_LABEL_GAP, vertical_alignment="bottom"
+            st.caption(
+                "The current layers have no legend. You can add one by coloring "
+                "fixations by a category or choosing a fixed marker-size scale."
             )
-            for col, title, tip in zip(head, *zip(*_LEGEND_COLUMNS)):
-                _sub_caption(col, title, tip)
         for kind in drawn:
-            field = _sub_row(
-                LEGEND_KIND_LABELS[kind], caption_help=_LEGEND_ROW_HELP[kind]
-            )
-            show_col, pos_col, arr_col, size_col = field.columns(
-                weights, gap=_LABEL_GAP, vertical_alignment="center"
-            )
-            shown = show_col.checkbox(
-                f"Show the {LEGEND_KIND_LABELS[kind]} legend",
+            st.checkbox(
+                LEGEND_KIND_LABELS[kind],
                 key=_LEGEND_SHOW_KEYS[kind],
                 persist_state="session",
-                label_visibility="collapsed",
+                help=_LEGEND_ROW_HELP[kind],
             )
-            # A position spelled the older way (a link, a settings file or the
-            # recovery cache written before the eight spots) reads as its spot.
-            pos_key = f"global_legend_{kind}_position"
-            stored = st.session_state.get(pos_key)
-            if stored is not None and stored not in LEGEND_POSITION_LABELS:
-                st.session_state[pos_key] = canonical_legend_position(stored) or "auto"
-            pos_col.selectbox(
-                f"{LEGEND_KIND_LABELS[kind]} legend position",
-                disabled=not shown,
-                options=list(LEGEND_POSITION_LABELS),
-                format_func=LEGEND_POSITION_LABELS.__getitem__,
-                key=f"global_legend_{kind}_position",
-                persist_state="session",
-                label_visibility="collapsed",
+        if drawn:
+            layout = detail_section(
+                "Legend position and style", key="plot_detail_legend_layout"
             )
-            arr_col.selectbox(
-                f"{LEGEND_KIND_LABELS[kind]} legend arrangement",
-                # The highlight note is one line: nothing to arrange.
-                disabled=not shown or kind == "highlight",
-                options=list(LEGEND_ARRANGEMENT_LABELS),
-                format_func=LEGEND_ARRANGEMENT_LABELS.__getitem__,
-                key=f"global_legend_{kind}_arrangement",
-                persist_state="session",
-                label_visibility="collapsed",
-            )
-            size_col.number_input(
-                f"{LEGEND_KIND_LABELS[kind]} legend text size",
-                disabled=not shown,
-                min_value=6,
-                max_value=72,
-                step=1,
-                key=f"global_legend_{kind}_size",
-                persist_state="session",
-                placeholder="Auto",
-                label_visibility="collapsed",
-            )
+            for kind in drawn:
+                label = LEGEND_KIND_LABELS[kind]
+                shown = st.session_state[_LEGEND_SHOW_KEYS[kind]]
+                # Older links and files spelled some positions without a side.
+                pos_key = f"global_legend_{kind}_position"
+                stored = st.session_state.get(pos_key)
+                if stored is not None and stored not in LEGEND_POSITION_LABELS:
+                    st.session_state[pos_key] = (
+                        canonical_legend_position(stored) or "auto"
+                    )
+                layout.selectbox(
+                    f"{label} legend position",
+                    disabled=not shown,
+                    options=list(LEGEND_POSITION_LABELS),
+                    format_func=LEGEND_POSITION_LABELS.__getitem__,
+                    key=pos_key,
+                    persist_state="session",
+                    help="An outside position makes room at the edge. An inside position places the legend over the plot.",
+                )
+                layout.selectbox(
+                    f"{label} legend arrangement",
+                    disabled=not shown or kind == "highlight",
+                    options=list(LEGEND_ARRANGEMENT_LABELS),
+                    format_func=LEGEND_ARRANGEMENT_LABELS.__getitem__,
+                    key=f"global_legend_{kind}_arrangement",
+                    persist_state="session",
+                    help="The text highlight has a single entry."
+                    if kind == "highlight"
+                    else None,
+                )
+                layout.number_input(
+                    f"{label} legend text size (px)",
+                    disabled=not shown,
+                    min_value=6,
+                    max_value=72,
+                    step=1,
+                    key=f"global_legend_{kind}_size",
+                    persist_state="session",
+                    placeholder="Use figure text size",
+                )
 
     # Build the dict from session_state so it matches viz_settings_from_state
     # exactly; then fill in the per-scanpath comparison styling, shown only when

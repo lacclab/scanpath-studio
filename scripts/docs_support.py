@@ -327,7 +327,6 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
         "line_spacing",
         "scale_text_to_boxes",
         "text_color",
-        "background_color",
         "highlight_column",
         "highlight_text_color",
         "critical_span_style",
@@ -349,6 +348,7 @@ OPTION_TOPICS: dict[str, tuple[str, ...]] = {
     "Raw gaze": RAW_GAZE_OPTIONS,
     "Filters & highlights": ("fixation_flags", "saccade_classes"),
     "Screen & framing": (
+        "background_color",
         "fit_to_monitor",
         "crop_margin",
         "show_plot_frame",

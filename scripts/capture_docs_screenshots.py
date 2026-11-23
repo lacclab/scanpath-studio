@@ -58,6 +58,8 @@ SCANPATH_CALLOUTS = (
 )
 
 CALLOUT_JS = """(callouts) => {
+  // The screenshot starts at the top, even when Reset scrolled down the rail.
+  document.querySelectorAll('*').forEach(el => { if (el.scrollTop) el.scrollTop = 0; });
   document.querySelectorAll('.docs-callout').forEach(el => el.remove());
   callouts.forEach(([selector, which], i) => {
     const shown = [...document.querySelectorAll(selector)]

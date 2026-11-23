@@ -314,6 +314,68 @@ def test_shared_controls_keep_their_positions_and_selection(app_url, browser):
         page.context.close()
 
 
+def test_finding_a_setting_opens_its_editor_and_keeps_the_chart(app_url, browser):
+    page = _open(browser, f"{app_url}/?ui=full&source=demo")
+    try:
+        page.get_by_role("button", name="Gaze over time", exact=True).click()
+        _settle(page)
+        plot = _plot_frame(page, "single").locator(".js-plotly-plot")
+
+        def axes():
+            return plot.evaluate(
+                "p => [p.layout.xaxis.title.text, p.layout.yaxis.title.text]"
+            )
+
+        expected = [
+            "Seconds since first fixation onset",
+            "Horizontal screen position (px)",
+        ]
+        assert axes() == expected
+        playback = page.get_by_role("switch", name="Animation", exact=True)
+        for enabled in (True, False):
+            playback.focus()
+            playback.press("Space")
+            _settle(page)
+            assert playback.is_checked() == enabled
+        assert axes() == expected
+
+        finder = page.get_by_role("combobox", name="Find a plot setting")
+        finder.fill("legend")
+        page.get_by_role(
+            "option", name="Legend position, arrangement and text size"
+        ).click()
+        body = page.locator('[data-testid="stPopoverBody"]:visible')
+        body.locator(".st-key-rail_rows_legends").wait_for()
+        assert (
+            body.locator(".st-key-plot_detail_legend_layout details").get_attribute(
+                "open"
+            )
+            is not None
+        )
+        assert (
+            page.get_by_role("tab", name="Figure", exact=True).get_attribute(
+                "aria-selected"
+            )
+            == "true"
+        )
+        page.keyboard.press("Escape")
+        finder.fill("fixation index")
+        page.get_by_role(
+            "option", name="Axes · fixation index, time and position"
+        ).click()
+        _settle(page)
+        assert (
+            page.get_by_role("tab", name="Axes", exact=True).get_attribute(
+                "aria-selected"
+            )
+            == "true"
+        )
+        assert axes() == expected
+        assert page.errors == []
+    finally:
+        page.context.close()
+
+
 def test_phone_corpus_profile_shows_data_above_the_fold(app_url, browser):
     with browser.new_context(viewport={"width": 390, "height": 844}) as context:
         page = context.new_page()
@@ -394,7 +456,7 @@ def test_figure_and_filter_menus_stay_editable_after_undo(app_url, browser):
         short = page.locator(".st-key-global_fixclass_short_mode").get_by_role(
             "combobox"
         )
-        for mode in ("Hide", "Off"):
+        for mode in ("Hide", "Show"):
             short.click()
             page.get_by_role("option", name=mode, exact=True).click()
             _settle(page)

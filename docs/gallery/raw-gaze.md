@@ -20,7 +20,7 @@ print(gallery_figure("raw-gaze"))
 
     1. Load a Raw gaze table with your Fixations and Words tables. Open the dataset in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
     2. Turn on :material/grain: **Raw gaze** and turn off :material/arrow_outward: **Saccades**.
-    3. In :material/blur_on: **Fixations** ▾ → **Marker** → **Opacity**, set 0.35 so the samples show through.
+    3. In :material/blur_on: **Fixations** → **Opacity**, set 0.35 so the samples show through.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)
 

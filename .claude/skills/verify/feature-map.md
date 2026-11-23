@@ -30,8 +30,10 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Raw gaze | Full → Layers → **Raw gaze** | `global_show_raw_gaze` | Samples drawn; on by default when raw gaze is the only table |
 | Filters & highlights | Full → Layers → **Filters & highlights** | its popover's keys | Active marks a filtered or highlighted reading; the fixation range slices the trail |
 | Figure | Full → Figure | `global_legend_<kind>_*`, title and framing keys | Open each named menu. A title, framing change and legend position reach the plot. |
-| Animation | Shared View tile | `single_animate` | The replay player draws its own toolbar row; the plot keeps the static figure's size |
-| Four views and Palette | Top of Plot controls | `viz_view_*`, `global_palette` | Both modes show the same grid and keep the figure, palette and comparison when switching |
+| Animation | Switch at the top of Plot controls | `single_animate` | Switch from a custom figure to the replay and back in either mode. Its axes and layers come back. |
+| Gaze over time and Custom | Third row of Plot controls | `viz_view_gaze_over_time`, `viz_view_custom`, `global_x_field`, `global_y_field` | Plot elapsed seconds against horizontal position, visit another view, then restore the last manual design with Custom. |
+| Views and Palette | Top of Plot controls | `viz_view_*`, `global_palette` | Both modes show the same grid and keep the figure, palette and comparison when switching |
+| Find a setting | Full → Find a setting | `plot_setting_finder` | Search for a legend position, axis field or frame limit and reach its editable controls. The current figure and Undo history stay in place. |
 | Compare readings | Below Palette | `single_compare_toggle`, `single_compare_layout`, `?compare=` | Overlay / side by side / stacked; B from another dataset resolves to side by side on unequal canvases |
 | Fixation index | Rail → Fixations popover | `global_show_order`, `global_order_label_position` | Numbers above / inside / below each fixation, on every builder |
 | Undo and Redo | Full → foot of Plot controls, beside Reset visualization | `viz_undo`, `viz_redo` | Undo a confirmed reset, redo it, then undo and edit again on the current reading |

@@ -29,6 +29,9 @@ NOT_A_DESIGN_SETTING = {
     "global_stimulus_image_upload",
     # The replay can be switched on and off with any saved design.
     sk.SINGLE_ANIMATE,
+    "plot_setting_finder",
+    "plot_filter_readings",
+    "plot_editor_tabs",
 }
 
 B_FILTERS = {
@@ -248,6 +251,7 @@ class TestEveryPlotControlIsAccountedFor:
                     "more_to_advanced_",
                     "design_",
                     "quick_view",
+                    "plot_detail_",
                 )
             )
         ]

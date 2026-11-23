@@ -158,7 +158,6 @@ from scanpath_studio.controls import (
     _shadow_key_missing,
     _sub_caption,
     _sub_row,
-    background_swatch,
     clear_trial_filter,
     clear_trial_filters,
     column_mapping_from_state,
@@ -167,6 +166,7 @@ from scanpath_studio.controls import (
     metadata_readings,
     read_trial_filters,
     reassert_pending_writes,
+    render_plot_background,
     shadow_widget_key,
     unique_field_labels,
     viz_settings_from_state,
@@ -8278,9 +8278,7 @@ def _rail_text_rows(
       when the dataset's Recording setup has no physical size;
     * *Font* — the font, from the Recording setup's list, and a box for any
       other font (greyed unless *Other font…* is chosen);
-    * *Color* — the text colour, then the plot background: a preset, and a
-      colour box showing the colour in use, where any colour picked applies
-      at once.
+    * *Color* — the colour of the reading text.
 
     The words, fonts, units and ranges are the Recording setup's (🗂️ Data
     → ✏️ Edit dataset), which sets the dataset's own typography; these rows
@@ -8400,37 +8398,11 @@ def _rail_text_rows(
             family_col, other_col, disabled=disabled, label_visibility="collapsed"
         )
 
-        color = _sub_row(
-            "Color",
-            caption_help=tip(
-                "The reading text's color, then the plot background: pick a "
-                "preset, or any color in the box beside it."
-            ),
-        )
-        text_color_col, bg_cap_col, bg_col, bg_custom_col = color.columns(
-            [0.17, 0.33, 0.33, 0.17], gap=_LABEL_GAP, vertical_alignment="center"
-        )
-        text_color_col.color_picker(
+        st.color_picker(
             "Text color",
             key="global_text_color",
             persist_state="session",
             disabled=disabled,
-            label_visibility="collapsed",
-        )
-        _sub_caption(bg_cap_col, "Background")
-        bg_col.selectbox(
-            "Plot background",
-            options=BG_CHOICES,
-            key="global_bg_choice",
-            persist_state="session",
-            disabled=disabled,
-            label_visibility="collapsed",
-        )
-        background_swatch(
-            bg_custom_col,
-            label="Background color",
-            disabled=disabled,
-            label_visibility="collapsed",
         )
 
         if "right_to_left" in words_filtered and words_filtered["right_to_left"].any():
@@ -8472,24 +8444,14 @@ def render_canvas_controls(
 ) -> tuple[int, int, int, str, float, bool]:
     """Render the Scanpath rail's typography rows and resolve the canvas.
 
-    `seed_canvas_state` does the state work and is called first here, so rendering
-    and not-rendering resolve identically.
+    ``seed_canvas_state`` resolves geometry for every caller from the dataset's
+    Recording setup. Its monitor dimensions and viewing distance feed the
+    saccade amplitude and stimulus font conversions, including for shared plots.
 
-    **Only the text half is drawn.** The monitor's size and its physical
-    geometry (width in mm, viewing distance, display DPI) are the dataset's
-    Recording setup, asked for on the 🗂️ Data page with a provenance; a second
-    set in the rail could disagree with it. Their *values* are unaffected —
-    ``seed_canvas_state`` pins them on every run, and every consumer (px/degree
-    for saccade amplitude in degrees, the point-to-pixel stimulus font
-    conversion) reads them from state, which is also what keeps a share link
-    carrying them working.
-
-    **``text_host`` is where the typography goes**: 📄 Stimulus → *Text*,
-    beside the layer it describes, as four captioned rows — *Fit*, *Size*,
-    *Font*, *Color* (`_rail_text_rows`). Without one (the Corpus figure-style
-    panel) they go into ``slot``, and ``text_section`` titles the group, since
-    no *Text* row precedes it there. ``text_disabled`` greys them while the
-    Text layer is off, rather than leaving them undrawn.
+    Scanpath places the typography in ``text_host`` under Stimulus → Text and
+    uses ``text_disabled`` when the layer is off. Corpus Analysis places both
+    the background and typography in its figure-style panel (``slot``), where
+    ``text_section`` supplies a heading for the typography controls.
 
     Returns:
         Tuple of (canvas_width, canvas_height, base_font_size, font_family,
@@ -8516,6 +8478,9 @@ def render_canvas_controls(
     _, font_css = _dataset_font(words_filtered)
     if text_host is None:
         text_host = slot if slot is not None else st.container()
+        # Corpus Analysis groups all figure styling in this panel.
+        # Scanpath draws this control in Figure → Screen & framing.
+        render_plot_background(text_host)
     # The DPI is read only while a point size is drawn (its widgets' values
     # are already this run's): the default rerun asks nothing of the setup.
     ss = st.session_state

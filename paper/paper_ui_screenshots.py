@@ -322,15 +322,14 @@ SUBTABS = {
 #: The bundled demo trial every OneStop figure is taken from.
 DEMO_TRIAL = {
     "source": "demo",
-    "participant": "l37_1129",
-    "trial_id": "l37_1129_2_1_1_Ele",
+    "participant": "l37_273",
+    "trial_id": "l37_273_2_1_1_Ele",
 }
 
-#: Words 92–105 of that trial — “Our clients want to know how well their stores
-#: are delivering on that experience.” — read by fixations 124–139. The whole
-#: sentence sits inside the trial's answer span, so it renders highlighted.
+#: Zero-based positions of “Our clients want to know how well their stores are
+#: delivering on that experience.” and the reader's fixations on that sentence.
 SENTENCE_WORDS = (92, 105)
-SENTENCE_FIXATIONS = (124, 139)
+SENTENCE_FIXATIONS = (58, 67)
 
 
 def capture(page: Page) -> None:

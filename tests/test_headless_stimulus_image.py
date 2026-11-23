@@ -26,8 +26,8 @@ from scanpath_studio.plots import _image_to_data_uri, _png_pixel_size
 from tests.conftest import APP_SCRIPT
 
 #: Two demo readings of different texts — so of different pages.
-TRIAL = ("l37_1129", "l37_1129_2_2_1_Adv")
-OTHER = ("l37_1129", "l37_1129_2_2_2_Adv")
+TRIAL = ("l37_273", "l37_273_2_2_1_Adv")
+OTHER = ("l37_273", "l37_273_2_2_2_Adv")
 #: Where the demo's pages sat on OneStop's screen.
 DEMO_ORIGIN = (368.0, 186.0)
 
@@ -118,7 +118,7 @@ class TestPlotScanpath:
 
     def test_a_trial_without_a_page_warns_and_draws_none(self, demo):
         words, fixations = (_no_pages(frame) for frame in demo)
-        with pytest.warns(UserWarning, match=r"show_stimulus_image: .*l37_1129"):
+        with pytest.warns(UserWarning, match=r"show_stimulus_image: .*l37_273"):
             fig = api.plot_scanpath(words, fixations, *TRIAL, show_stimulus_image=True)
         assert len(fig.layout.images) == 0
 

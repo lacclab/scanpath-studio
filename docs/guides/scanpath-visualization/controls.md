@@ -245,6 +245,10 @@ The **Raw gaze** switch draws the recorded gaze samples. Click **Raw gaze** to s
 | **Dot size** | Set the raw gaze sample marker size. |
 | **Opacity** | Set the raw gaze sample opacity. |
 
+To inspect samples from one reading, open **Axes → Axis preset**. Choose **Horizontal gaze position over recorded time**, **Vertical gaze position over recorded time**, or a recorded pupil measurement. These presets turn on **Raw gaze**. A recording without timestamps offers sample number on the horizontal axis.
+
+In the OneStop demo, the clock starts at trial onset and the first sample appears when the reader sees the paragraph. A pupil area of zero accompanies missing gaze coordinates. The raw table and its exports keep those samples.
+
 ### :material/filter_list: Filters & highlights
 
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/filters.webp" title="Open full size"><img src="../../../assets/screenshots/controls/filters.webp" alt="The Filters & highlights menu" loading="lazy"></a>
@@ -271,7 +275,7 @@ Choose a chart preset, or set the X and Y fields individually. Open **Coordinate
 | Control | What it does |
 | --- | --- |
 | **Axis preset** | Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. **Connect fixations** traces the index sequence. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window. |
-| **Choose axis fields** → horizontal / vertical | Choose any two numeric fixation fields. Try fixation order against duration, or recorded onset against word number. Screen Y increases downward. Raw samples can appear when they supply both plotted quantities. **Screen X and Y** restores the stimulus view. Animation and Compare readings use screen coordinates. |
+| **Choose axis fields** → horizontal / vertical | Choose fixation fields or raw gaze measurements. For samples, try pupil size or gaze position against recorded time or sample number. Each layer draws the fields it contains. Screen Y increases downward. **Screen X and Y** restores the stimulus view. Animation and Compare readings use screen coordinates. |
 | **Grid** → **Show** | Show a grid of screen coordinates, in px. |
 | **Grid spacing and labels** → interval | Set the grid spacing (interval), in px, or let **Auto** choose it. |
 | **Grid spacing and labels** → label size | Set the grid label (tick label) font size. |

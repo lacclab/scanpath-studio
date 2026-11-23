@@ -70,6 +70,11 @@ _DESTINATIONS = {
         "plot_detail_highlight_markers",
     ),
     "Axes · fixation index, time and position": ("Axes", None, None),
+    "Axes · raw gaze position or pupil size by time or sample number": (
+        "Axes",
+        None,
+        None,
+    ),
     "Choose horizontal and vertical axis fields": (
         "Axes",
         None,

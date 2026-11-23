@@ -16,7 +16,7 @@ Load your own data, open a public dataset, or try the bundled demo.
 Pick a dataset in **Select dataset** above the plot or open **Dataset library**
 on the :material/database: **Data Management** page.
 
-- **Bundled demo**: 24 trials from OneStop, with two participants and 12 texts.
+- **Bundled demo** includes 24 readings by two L1 English readers of 12 OneStop texts. The 1,000 Hz EyeLink samples run from paragraph onset to the keypress that ended reading. Each sample keeps its timestamp, screen coordinates, pupil area in tracker units and tracked eye. During tracking loss the coordinates are blank. The demo records a pupil area of zero on those samples.
 - **Hand-drawn sample**: a scanpath drawn by hand over a short English text,
   which you can edit.
 - Public datasets: OneStop and PoTeC. In the desktop app or a pip install, each

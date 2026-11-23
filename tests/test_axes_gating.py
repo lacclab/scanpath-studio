@@ -93,3 +93,37 @@ def test_comparison_controls_follow_reading_b_even_when_a_has_only_one_trial():
     assert at.selectbox(key=COMPARE_SOURCE_STATE_KEY).value == DEMO_CHOICE
     at.checkbox(key="cmpfilter_favorites").uncheck().run()
     check_figure("comparison")
+
+
+def test_conflicting_b_sample_canvas_keeps_the_dataset_and_mode_switches_available():
+    from scanpath_studio import api
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+
+    words, fixations = make_multipart_synthetic_data()
+    samples = api.load_raw_gaze(
+        fixations.assign(canvas_width=fixations.canvas_width + 1), names="canonical"
+    )
+    at = _app(
+        _datasets={
+            "Conflicting screens": {
+                "words": words,
+                "fixations": fixations,
+                "raw_gaze": samples,
+            }
+        }
+    )
+    at.button(key="viz_view_gaze_over_time").click().run()
+    at.toggle(key="single_compare_toggle").set_value(True).run()
+    at.selectbox(key=COMPARE_SOURCE_STATE_KEY).set_value("Conflicting screens").run()
+    assert not at.exception
+    assert any("conflicts across tables" in warning.value for warning in at.warning)
+    assert "compare" not in at.session_state["_share_selection"]
+    assert at.toggle(key="single_compare_toggle").value
+
+    at.selectbox(key=COMPARE_SOURCE_STATE_KEY).set_value(DEMO_CHOICE).run()
+    assert not at.exception
+    assert not any("conflicts across tables" in warning.value for warning in at.warning)
+    assert at.session_state[SNIPPET_STATE_KEY].kind == "comparison"
+    assert at.session_state["_share_selection"]["compare"]["source"] == DEMO_CHOICE
+    at.toggle(key="single_compare_toggle").set_value(False).run()
+    assert at.button(key="viz_view_gaze_over_time").proto.type == "primary"

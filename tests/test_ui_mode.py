@@ -990,7 +990,7 @@ def test_a_plain_simple_session_shows_no_note():
 
 def test_advanced_never_shows_the_note():
     at = _boot(mode="full")
-    at.session_state["filter_participants"] = ["l7_1090"]
+    at.session_state["filter_participants"] = ["l7_183"]
     at.run()
     at.run()
     assert not at.exception
@@ -1012,7 +1012,7 @@ def test_shared_link_with_a_filter_shows_the_note():
         at.query_params["show_raw_gaze"] = "1"
         pin_view(at, _VIEW_SCANPATH)
         at.run()
-        at.session_state["filter_participants"] = ["l7_1090"]
+        at.session_state["filter_participants"] = ["l7_183"]
         # The panel publishes the filter on one run, `app.main` applies it on
         # the next.
         at.run()
@@ -1041,7 +1041,7 @@ def test_simple_sort_order_shows_the_note():
 def test_simple_compare_from_link_keeps_b_picker():
     at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
     at.query_params["ui"] = "essentials"
-    at.query_params["compare"] = "l37_1129:l37_1129_2_2_1_Adv"
+    at.query_params["compare"] = "l37_273:l37_273_2_2_1_Adv"
     pin_view(at, _VIEW_SCANPATH)
     at.run()
     assert not at.exception

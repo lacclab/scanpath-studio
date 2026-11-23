@@ -770,7 +770,7 @@ def trial_filtering(d: Demo) -> None:
     d.open(page.locator(".st-key-filter_difficulty_level [role=group]"))
     d.click(_option(page, "Ele"), "Ele texts only", hold=0.6)
     d.open(page.locator(".st-key-filter_participants [role=group]"))
-    d.click(_option(page, "l7_1090"), "one participant", hold=0.6)
+    d.click(_option(page, "l7_183"), "one participant", hold=0.6)
     d.close_popover()
     d.close_popover()
     d.pause(0.8)

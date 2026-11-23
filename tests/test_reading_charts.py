@@ -31,6 +31,133 @@ def _trace(figure, name):
     return next(trace for trace in figure.data if trace.name == name)
 
 
+def test_samples_keep_their_own_axes_during_tracking_loss_and_without_a_clock():
+    source = pd.DataFrame(
+        {
+            "trial_id": "t",
+            "x": [np.nan, np.nan],
+            "y": np.nan,
+            "Time": [100, 101],
+            "diameter from tracker": [2.1, 2.3],
+        }
+    )
+    schema = {
+        "trial": "trial_id",
+        "x": "x",
+        "y": "y",
+        "timestamp": "Time",
+        "pupil_diameter": "diameter from tracker",
+    }
+    samples = api.load_raw_gaze(source, raw_gaze_schema=schema)
+    assert not any(
+        t.name == "Raw gaze" for t in api.plot_scanpath(raw_gaze=samples).data
+    )
+    fig = api.plot_scanpath(
+        raw_gaze=samples, x_field="Time", y_field="diameter from tracker"
+    )
+    assert list(_trace(fig, "Raw gaze").x) == [100, 101]
+    assert list(_trace(fig, "Raw gaze").y) == [2.1, 2.3]
+    assert fig.layout.yaxis.title.text == "diameter from tracker"
+    untimed = api.load_raw_gaze(source, raw_gaze_schema={**schema, "timestamp": None})
+    chart = api.plot_scanpath(
+        raw_gaze=untimed, x_field="sample_index", y_field="pupil_diameter"
+    )
+    assert list(_trace(chart, "Raw gaze").x) == [1, 2]
+    assert "ms" not in _trace(chart, "Raw gaze").hovertemplate
+
+
+def test_fixation_and_sample_clocks_can_have_different_source_names():
+    words, events = example_import_tables()
+    events = events.rename(columns={"timestamp_ms": "Fix onset"})
+    schema = {**data.propose_fix_schema(events), "timestamp": "Fix onset"}
+    words, events = api.load_scanpath_data(words, events, fix_schema=schema)
+    key = api.list_trials(words, events).iloc[0]
+    source = pd.DataFrame(
+        {
+            "participant_id": key.participant_id,
+            "trial_id": key.trial_id,
+            "x": [10, 11],
+            "y": [20, 21],
+            "Sample clock": [123, 124],
+            "Area recording": [340, 341],
+        }
+    )
+    samples = api.load_raw_gaze(
+        source,
+        raw_gaze_schema={
+            **data.propose_raw_gaze_schema(source),
+            "timestamp": "Sample clock",
+            "pupil_area": "Area recording",
+        },
+    )
+    fig = api.plot_scanpath(
+        words,
+        events,
+        raw_gaze=samples,
+        x_field="Sample clock",
+        y_field="Area recording",
+    )
+    trace = _trace(fig, "Raw gaze")
+    assert list(trace.x) == [123, 124]
+    assert list(trace.y) == [340, 341]
+    assert fig.layout.xaxis.title.text == "Time (ms)"
+    assert fig.layout.yaxis.title.text == "Area recording"
+
+
+def test_captions_and_charts_require_drawable_samples_and_a_measured_elapsed_origin():
+    raw = api.load_raw_gaze(
+        pd.DataFrame(
+            {
+                "trial_id": "t",
+                "x": [1e8],
+                "y": 10,
+                "pupil_area": 130,
+                "timestamp_ms": 28,
+            }
+        ),
+        names="canonical",
+    )
+    for axes in (("x", "y"), (chart_axes.ELAPSED, "pupil_area")):
+        assert not chart_axes.drawable_raw_samples(
+            axes, raw, data.empty_fixations_frame()
+        )
+        fig = api.plot_scanpath(raw_gaze=raw, x_field=axes[0], y_field=axes[1])
+        assert not any(t.name == "Raw gaze" for t in fig.data)
+    assert chart_axes.drawable_raw_samples(("timestamp_ms", "pupil_area"), raw)
+
+
+def test_pupil_preset_enables_recorded_samples_and_round_trips_through_settings(
+    monkeypatch,
+):
+    from scanpath_studio import url_state
+
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=60).run()
+    next(box for box in at.selectbox if box.label == "Axis preset").set_value(
+        "Pupil area over recorded time"
+    ).run()
+    assert not at.exception
+    assert at.session_state["global_show_raw_gaze"]
+    assert (at.session_state["global_x_field"], at.session_state["global_y_field"]) == (
+        "timestamp_ms",
+        "pupil_area",
+    )
+
+    samples = api.load_sample_raw_gaze(names="canonical")
+    restored = {}
+    monkeypatch.setattr(url_state.st, "session_state", restored)
+    _, skipped = url_state._restore_plot_config(
+        {"axes": {"x_field": "timestamp_ms", "y_field": "pupil_area"}},
+        pd.DataFrame(),
+        data.empty_fixations_frame(),
+        samples,
+    )
+    assert not skipped
+    assert (restored["global_x_field"], restored["global_y_field"]) == (
+        "timestamp_ms",
+        "pupil_area",
+    )
+
+
 def test_missing_timestamps_never_supply_elapsed_seconds():
     w, f = example_import_tables()
     f = f.iloc[:3].copy()

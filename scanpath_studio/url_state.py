@@ -581,7 +581,8 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "saccade_type_legend": "global_saccade_type_legend",
     "show_color_legend": "global_show_color_legend",
     "show_highlight_legend": "global_show_highlight_legend",
-    # The fixed duration scale's size key (default on, so always emitted).
+    # The fixed duration scale's size key (off by default; seeded, so always
+    # emitted).
     "duration_size_legend": "global_duration_size_legend",
     # Snap to line (its *Position* is a float below). The param has the name
     # the older "snap above the word" had, so an older link that snapped still

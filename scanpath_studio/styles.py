@@ -2539,6 +2539,7 @@ def get_app_css() -> str:
         .st-key-scanpath_rail > * { order: 1; }
         .st-key-scanpath_workspace [data-testid="stLayoutWrapper"]:has(> .st-key-tour_grp_subtabs) { order: 2; }
         .st-key-scanpath_rail > [data-testid="stLayoutWrapper"]:has(> :is(.st-key-tour_grp_view_modes, .st-key-tour_grp_viz_controls, .st-key-adv_only_rail_reset)) { order: 3; }
+        .st-key-plot_controls_header h2 { padding-bottom: 0.25rem !important; }
         .st-key-scanpath_rail .st-key-tour_grp_views button,
         .st-key-tour_grp_views .st-key-single_animate label {
             min-height: 44px;

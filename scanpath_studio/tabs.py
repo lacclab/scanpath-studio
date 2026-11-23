@@ -7790,8 +7790,15 @@ def render_single_trial_tab(
     with plot_slot:
         if not animate:
             _abandon_animation_task()
+        # The replay draws no raw gaze, and with no samples anywhere the rail
+        # greys the switch, so neither has anything missing to say.
+        any_samples = (
+            trial_has_raw_gaze
+            or (raw_gaze is not None and not raw_gaze.empty)
+            or (comparing and not compare_raw_gaze.empty)
+        )
         raw_gaze_missing = _raw_gaze_missing_note(
-            global_raw_toggle,
+            global_raw_toggle and not animate and any_samples,
             trial_has_raw_gaze=trial_has_raw_gaze,
             comparing=comparing and not animate,
             compare_has_raw_gaze=not compare_raw_gaze.empty,

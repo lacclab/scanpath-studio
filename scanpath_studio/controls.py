@@ -7452,21 +7452,29 @@ def render_plot_controls(
     # The comparison builder draws each reading's samples; the replay
     # has no raw-gaze layer.
     raw_disabled, raw_reason = _mode_gate(animating, comparing, in_animation=False)
-    raw_axis_off = (chart_axes or has_raw_gaze) and not (
+    # Only samples on this trial can fail the axes; a trial with none is
+    # `raw_nothing`'s to decide.
+    raw_axis_off = has_raw_gaze and not (
         charts.drawable_raw_samples(fields, trial_samples, primary_fix)
         or charts.drawable_raw_samples(fields, b_samples, b_fix)
     )
     raw_axis_help = "Both axes must be fields available in the raw samples."
+    # The switch is one setting for every trial, so a trial with no samples of
+    # its own keeps it live while the dataset has samples elsewhere: switched on
+    # elsewhere, it says above the plot that nothing is drawn here, and it can
+    # be switched off from here. The gate never reads the switch's own value —
+    # greying it in the rerun that turns it off would drop the click.
+    raw_nothing = not has_raw_gaze and (raw_gaze is None or raw_gaze.empty)
     show_raw_gaze, raw_gaze_grp = _layer_row(
         layers,
         "Raw gaze",
         icon=ICONS["raw_gaze"],
         slug="rawgaze",
         visibility_key="global_show_raw_gaze",
-        disabled=not has_raw_gaze or raw_disabled or raw_axis_off,
+        disabled=raw_nothing or raw_disabled or raw_axis_off,
         help=_greyed_help(
             (raw_axis_off, raw_axis_help),
-            (not has_raw_gaze, "This trial has no raw gaze samples."),
+            (raw_nothing, "No raw gaze samples in the trials shown."),
             (raw_disabled, _ANIMATE_GREYS["rawgaze"]),
         ),
         note=_gated_help(

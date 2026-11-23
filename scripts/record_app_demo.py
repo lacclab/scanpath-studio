@@ -369,6 +369,7 @@ class Session:
         # Streamlit keeps hidden copies of some controls (a popover's, a rerun's).
         target = target.filter(visible=True).first
         target.wait_for(state="visible", timeout=90_000)
+        target.scroll_into_view_if_needed()
         box = target.bounding_box()
         if box is None:
             raise RuntimeError(f"{target} is not on screen")

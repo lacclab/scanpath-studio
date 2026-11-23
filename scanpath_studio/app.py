@@ -239,6 +239,7 @@ from scanpath_studio.data import (
     repair_stranded_stimulus_words,
     reset_fingerprint_memo,
     select_trials_cached,
+    set_digest,
     stamp_source,
     stimulus_image_source,
     text_ids,
@@ -1003,8 +1004,8 @@ def _inclusion_cache_key(frames, kept: set, filters: dict, steps: list) -> tuple
 
     The tables by fingerprint; each step by its label and the filter values it
     decides on (an annotation filter also by the stars and tags it reads); and
-    the kept readings. The two reading sets go in as set hashes, which do not
-    depend on order and avoid sorting thousands of keys on every rerun.
+    the kept readings. The two reading sets go in as exact, order-free digests
+    (`data.set_digest`).
     """
     annotations = None
     if (
@@ -1013,25 +1014,27 @@ def _inclusion_cache_key(frames, kept: set, filters: dict, steps: list) -> tuple
         or filters.get("excluded_tags")
     ):
         store = st.session_state.get(ANNOTATIONS_STATE_KEY) or {}
-        annotations = hash(
-            frozenset(
-                (key, bool(entry.get("star")), frozenset(entry.get("tags") or ()))
-                for key, entry in store.items()
+        annotations = set_digest(
+            (
+                key,
+                bool(entry.get("star")),
+                tuple(sorted(map(str, entry.get("tags") or ()))),
             )
+            for key, entry in store.items()
         )
     allowed = filters.get("trial_keys")
     return (
         tuple(frame_fingerprint(df) for df in frames),
         tuple(label for label, _, _ in steps),
         hashable_key(trial_filter_params(filters)),
-        None if allowed is None else hash(frozenset(allowed)),
+        None if allowed is None else set_digest(allowed),
         (
             bool(filters.get("favorites_only")),
             tuple(filters.get("required_tags") or ()),
             tuple(filters.get("excluded_tags") or ()),
         ),
         annotations,
-        hash(frozenset(kept)),
+        set_digest(kept),
     )
 
 

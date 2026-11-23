@@ -281,6 +281,19 @@ def hashable_key(value):
     return value
 
 
+def set_digest(items) -> str:
+    """An exact, order-free cache-key part for a large set of keys.
+
+    Unlike ``hash(frozenset(...))``, two different sets never share a key
+    short of a BLAKE2 collision, so a cached result is never served for
+    another set's readings."""
+    digest = hashlib.blake2b(digest_size=16)
+    for part in sorted(repr(item) for item in items):
+        digest.update(part.encode("utf-8"))
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
 #: Session-state home of the no-copy frame caches, one entry per slot.
 _FRAME_CACHE_KEY = "_sps_frame_cache"
 

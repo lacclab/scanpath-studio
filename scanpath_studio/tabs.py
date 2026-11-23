@@ -276,6 +276,7 @@ from scanpath_studio.data import (
     repeat_bases,
     respell_reading,
     select_trials_cached,
+    set_digest,
     shareable_frame,
     text_ids,
     timestamps_synthesized,
@@ -9311,11 +9312,11 @@ def _c_group_means(_frame, mkey, _readings, _specs, key):
 
 
 def _group_means_key(frame, readings, specs) -> tuple:
-    """`_c_group_means`'s key: the readings as order-free set hashes, which
-    cost one pass over the distinct readings, or the specs when the frame has
-    no reading key to look them up by."""
+    """`_c_group_means`'s key: the readings as exact, order-free digests
+    (`data.set_digest`), or the specs when the frame has no reading key to
+    look them up by."""
     if not frame.empty and set(_TRIAL_KEY_COLUMNS) <= set(frame):
-        groups = tuple(hash(frozenset(group)) for group in readings)
+        groups = tuple(set_digest(group) for group in readings)
     else:
         groups = hashable_key(specs)
     return (frame_fingerprint(frame), groups)

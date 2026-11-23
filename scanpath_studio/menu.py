@@ -52,6 +52,22 @@ _NAV_PAGES = {
     _VIEW_DATA: ("Data Management", ICONS["view_data"], "data"),
 }
 
+#: The tooltip each view's nav entry shows on hover.
+_NAV_HELP = {
+    _VIEW_SCANPATH: (
+        "Draw one reading's scanpath over its text, replay it, or compare it "
+        "with another reading."
+    ),
+    _VIEW_CORPUS: (
+        "Summarize the selected trials and their reading measures by text, "
+        "participant and group."
+    ),
+    _VIEW_DATA: (
+        "Add, open and edit datasets with their metadata and annotations, and "
+        "find saved figures and sessions."
+    ),
+}
+
 #: The ❓ Help *section* of the nav: entry id → (label, icon, url path).
 #: These are not views. Each one opens a dialog over whatever you were already
 #: looking at — see :func:`render_nav` for the bounce that makes that work.
@@ -108,6 +124,7 @@ def _view_page(view: str):
         icon=icon,
         url_path=path,
         default=view == _VIEW_SCANPATH,
+        help=_NAV_HELP[view],
     )
 
 

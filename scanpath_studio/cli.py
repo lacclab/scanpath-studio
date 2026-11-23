@@ -3940,12 +3940,12 @@ def _recipe_parser() -> argparse.ArgumentParser:
     """Options for reproducing a downloaded Corpus Analysis table."""
     parser = _ShortErrorParser(
         prog="scanpath-studio recipe",
-        description="Rerun a cohort or two-group difference word profile on its source tables.",
+        description="Rerun a corpus overview, cohort profile or two-group difference profile on its source tables.",
     )
     parser.add_argument(
         "recipe",
         metavar="RECIPE.json",
-        help="Cohort profile recipe from Corpus Analysis.",
+        help="Analysis recipe downloaded from Corpus Analysis.",
     )
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--sample", action="store_true", help="Use the bundled demo.")
@@ -4036,13 +4036,14 @@ def _corpus_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="The CSV. profile reads word_id and the value column, plus "
         "optional lo and hi; distribution reads the value column; difference "
-        "reads word_id and diff.",
+        "reads word_id and diff. Overview reads the group column (--series-col), "
+        "the mean (--value-col), lo and hi.",
     )
     parser.add_argument(
         "--kind",
-        choices=["profile", "distribution", "difference"],
+        choices=["overview", "profile", "distribution", "difference"],
         required=True,
-        help="A per-word profile, a distribution, or a difference profile.",
+        help="A corpus overview, per-word profile, distribution or difference profile.",
     )
     parser.add_argument(
         "-o",
@@ -4059,7 +4060,7 @@ def _corpus_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--series-col",
         default="series",
-        help="Column naming the overlaid series, when present (default: series).",
+        help="Group ID for an overview, or column naming the overlaid series (default: series).",
     )
     parser.add_argument(
         "--value-col",
@@ -4067,9 +4068,13 @@ def _corpus_parser() -> argparse.ArgumentParser:
         help="The value column (default: value).",
     )
     parser.add_argument(
+        "--percent",
+        action="store_true",
+        help="Show overview values and bounds stored as proportions (0–1) as percentages.",
+    )
+    parser.add_argument(
         "--primary-color",
-        default="#1f77b4",
-        help="First series color (default: #1f77b4).",
+        help=f"First series color (overview: {DEFAULT_FIXATION_COLOR}, other figures: #1f77b4).",
     )
     parser.add_argument(
         "--secondary-color",
@@ -4088,7 +4093,12 @@ def corpus(argv: list[str]) -> None:
     # unparseable --input, a table without the columns --kind reads, an output
     # extension save_figure doesn't write.
     try:
-        data = pd.read_csv(args.input)
+        if args.kind == "overview":
+            from .data import ReadPlan, read_table
+
+            data = read_table(args.input, plan=ReadPlan(identity=(args.series_col,)))
+        else:
+            data = pd.read_csv(args.input)
     except (OSError, ValueError) as exc:
         raise SystemExit(f"--input: could not read {args.input!r}: {exc}") from exc
     try:
@@ -4098,7 +4108,12 @@ def corpus(argv: list[str]) -> None:
             measure_label=args.measure_label,
             series_col=args.series_col,
             value_col=args.value_col,
-            colors=(args.primary_color, args.secondary_color),
+            as_percent=args.percent,
+            colors=(
+                args.primary_color
+                or (DEFAULT_FIXATION_COLOR if args.kind == "overview" else "#1f77b4"),
+                args.secondary_color,
+            ),
         )
         out = api.save_figure(fig, args.output)
     except (ValueError, RuntimeError, OSError) as exc:

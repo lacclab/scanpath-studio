@@ -973,7 +973,7 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
     return steps
 
 
-def _render_inclusion_report(words, fixes, samples, kept, filters) -> None:
+def _render_inclusion_report(words, fixes, samples, selected_readings, filters) -> None:
     panel = st.expander(
         "Study inclusion and exclusions", key="study_inclusion", on_change="rerun"
     )
@@ -988,7 +988,9 @@ def _render_inclusion_report(words, fixes, samples, kept, filters) -> None:
     if extra:
         extra_ids = pd.DataFrame(sorted(extra), columns=["participant_id", "trial_id"])
         w = pd.concat([w, extra_ids], ignore_index=True)
-    summary, detail = inclusion_report(w, f, kept, _filter_diagnosis_steps(filters))
+    summary, detail = inclusion_report(
+        w, f, trial_keys(selected_readings), _filter_diagnosis_steps(filters)
+    )
     panel.dataframe(summary, hide_index=True)
     panel.download_button(
         "Download inclusion counts",
@@ -10621,7 +10623,7 @@ def _run_app() -> None:
                     ),
                 )
                 _render_inclusion_report(
-                    words_all, fixations_all, raw_gaze_all, set(), trial_filters
+                    words_all, fixations_all, raw_gaze_all, None, trial_filters
                 )
         dataset_has_rows = any(
             not frame.empty for frame in (words_all, fixations_all, raw_gaze_all)
@@ -10971,6 +10973,13 @@ def _run_app() -> None:
                 raw_gaze_all=raw_gaze_all,
                 combos=combos,
                 combos_all=combos_all,
+                show_inclusion=lambda: _render_inclusion_report(
+                    words_all,
+                    fixations_all,
+                    raw_gaze_all,
+                    combos,
+                    trial_filters,
+                ),
             )
             # What each table's recipe shares — the dataset by the name
             # the picker shows (and its stable token), and the pool above.
@@ -10999,14 +11008,9 @@ def _run_app() -> None:
                     has_raw_gaze=not raw_gaze_filtered.empty,
                     raw_gaze=raw_gaze_filtered,
                     recipe_context=recipe_context,
+                    can_remap_builtin=mapping_editor_rendered,
+                    dataset_words=words_all,
                 )
-            _render_inclusion_report(
-                words_all,
-                fixations_all,
-                raw_gaze_all,
-                trial_keys(combos),
-                trial_filters,
-            )
     else:
         # The Scanpath view renders the viz controls itself (right rail) and
         # writes the global_* keys. Share is a subtab of this view — passed in as

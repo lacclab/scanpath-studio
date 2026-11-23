@@ -12,6 +12,8 @@ from scanpath_studio.build_info import build_info
 from scanpath_studio.crash_report import guarded
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.session_keys import (
+    CORPUS_GROUP_BY,
+    CORPUS_MEASURE,
     CORPUS_SUBTAB,
     SINGLE_ANIMATE,
     SINGLE_COMPARE_TOGGLE,
@@ -71,10 +73,10 @@ class TutorialStep:
     selector: str
     view: str = _VIEW_SCANPATH
     subtab: str | None = None
-    #: The Corpus Analysis subtabs are lazy (only the open one renders), so a
-    #: step aimed at a control inside one has to open it, as ``subtab``
-    #: does for the Scanpath view. A label from ``tabs.CORPUS_SUBTABS``.
+    #: The published Corpus section, plus the summary unit when the step
+    #: targets Texts or Participants in Overview.
     corpus_subtab: str | None = None
+    corpus_group_by: str | None = None
     #: The step's target lives on the 🗂️ Data page's **✏️ Edit dataset**
     #: screen rather than its overview, so opening the view is not enough: the
     #: editor has to be raised too, or the spotlight aims at a hidden container.
@@ -201,15 +203,16 @@ TUTORIALS = (
         (
             TutorialStep(
                 "Choose a text and a measure",
-                "In **Corpus Analysis → Per text**, pick a text and a measure from your Words table, "
+                "In **Texts**, select a dot or search for a text. Choose a reading measure, "
                 "such as first fixation duration. The view uses the trials in your current selection.",
                 ".st-key-tutorial_corpus_subtabs",
                 view=_VIEW_CORPUS,
-                corpus_subtab="Per text",
+                corpus_subtab="Overview",
+                corpus_group_by="Text",
             ),
             TutorialStep(
                 "Read the result",
-                "Choose **Cohort profile** to see the measure word by word. Set **Aggregate** "
+                "Open **Chart settings** and choose **Cohort profile**. Set **Aggregate** "
                 "to how you want to combine the readings and check how many participants contributed.",
                 ".st-key-tutorial_corpus_analysis",
                 view=_VIEW_CORPUS,
@@ -217,7 +220,7 @@ TUTORIALS = (
             ),
             TutorialStep(
                 "Save the table and recipe",
-                "Download the **CSV** for the values and the **JSON recipe** for the analysis choices. "
+                "Open **Download results**. Save the **CSV** for the values and the **JSON recipe** for the analysis choices. "
                 "Keep the original dataset with them.",
                 ".st-key-tutorial_corpus_analysis",
                 view=_VIEW_CORPUS,
@@ -708,6 +711,10 @@ def _data_location() -> dict:
 
 def _restore_guide_location(original: dict) -> None:
     """Apply the user's settings through the same paths as their controls."""
+    if CORPUS_SUBTAB in original:
+        from .corpus_navigation import request_route
+
+        request_route()
     for key, value in original.items():
         if key == DATA_WORKSPACE_KEY:
             # The tab may still belong to the previous page's widget tree.
@@ -731,6 +738,8 @@ def _exit_spotlight(*, return_to_view: bool = True) -> None:
         for key in (
             "main_nav",
             CORPUS_SUBTAB,
+            CORPUS_GROUP_BY,
+            CORPUS_MEASURE,
             DATA_WORKSPACE_KEY,
             DATA_INSPECTION_KEY,
             DATASET_EDITOR_OPEN_KEY,
@@ -1000,7 +1009,13 @@ def _arm_tour() -> None:
     if state.get("tour_mode") != "spotlight":
         original = {"main_nav": view}
         if view == _VIEW_CORPUS and CORPUS_SUBTAB in state:
-            original[CORPUS_SUBTAB] = state[CORPUS_SUBTAB]
+            original.update(
+                {
+                    k: state[k]
+                    for k in (CORPUS_SUBTAB, CORPUS_GROUP_BY, CORPUS_MEASURE)
+                    if k in state
+                }
+            )
         elif view == _VIEW_DATA:
             original.update(_data_location())
         state[GUIDE_RETURN_KEY] = original
@@ -1261,7 +1276,11 @@ def _start_use_case(tutorial_id: str) -> None:
     st.session_state[GUIDE_RETURN_KEY] = {
         "main_nav": st.session_state.get("main_nav", _VIEW_SCANPATH),
         "single_subtab": _current_subtab(),
-        "corpus_subtab": st.session_state.get("corpus_subtab", "Per text"),
+        **{
+            k: st.session_state[k]
+            for k in (CORPUS_SUBTAB, CORPUS_GROUP_BY, CORPUS_MEASURE)
+            if k in st.session_state
+        },
         **_data_location(),
         UI_MODE: ui_mode.current_mode(),
     }
@@ -1317,7 +1336,12 @@ def _open_tutorial_surface(step: TutorialStep) -> None:
     if step.subtab is not None:
         st.session_state["single_subtab"] = step.subtab
     if step.corpus_subtab is not None:
-        st.session_state["corpus_subtab"] = step.corpus_subtab
+        from .corpus_navigation import request_route
+
+        request_route()
+        st.session_state[CORPUS_SUBTAB] = step.corpus_subtab
+    if step.corpus_group_by is not None:
+        st.session_state["corpus_group_by"] = step.corpus_group_by
     if step.view == _VIEW_DATA:
         if step.dataset_editor:
             st.session_state[DATASET_EDITOR_OPEN_KEY] = True
@@ -1371,7 +1395,12 @@ def _tutorial_surface_is_open(step: TutorialStep) -> bool:
         return False
     if (
         step.corpus_subtab is not None
-        and st.session_state.get("corpus_subtab", "Per text") != step.corpus_subtab
+        and st.session_state.get("corpus_subtab", "Overview") != step.corpus_subtab
+    ):
+        return False
+    if (
+        step.corpus_group_by is not None
+        and st.session_state.get("corpus_group_by") != step.corpus_group_by
     ):
         return False
     return step.subtab is None or _current_subtab() == step.subtab

@@ -3370,9 +3370,10 @@ class TestCorpusAnalysisTab:
     @pytest.mark.parametrize(
         ("subtab", "view_key"),
         [
+            ("Overview", "corpus_measure"),
             ("Per text", "ptext_view"),
             ("Per participant", "prdr_view"),
-            ("Groups", "pgrp_view"),
+            ("Groups", "cmp_view"),
         ],
     )
     def test_analysis_sections_render(self, subtab, view_key):
@@ -3386,35 +3387,11 @@ class TestCorpusAnalysisTab:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
         keys = {s.key for s in at.selectbox}
-        # The Groups tab defaults to a single group (compare toggle off), so its
-        # single-group view selector (pgrp_view) is present; cmp_view appears only
-        # when 'Compare a second group' is on (see test_each_analysis_view_renders).
         assert view_key in keys, f"{view_key} view selector not found"
         # The Screen picker is offered only by a multipart corpus. The demo
         # has no `screen_id`, so it must not appear — every single-screen
         # dataset is left as it is.
         assert "ptext_screen" not in keys
-
-    @pytest.mark.parametrize(
-        ("subtab", "view_key"),
-        [("Per participant", "prdr_view"), ("Groups", "pgrp_view")],
-    )
-    def test_the_section_caption_names_only_offered_views(self, subtab, view_key):
-        """The caption lists the views in the View list, no others."""
-        from scanpath_studio import tabs
-
-        at = _make_apptest()
-        pin_view(at, "Corpus Analysis")
-        at.session_state["corpus_subtab"] = subtab
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        offered = next(s for s in at.selectbox if s.key == view_key).options
-        captions = " ".join(c.value for c in at.caption)
-        for view, phrase in tabs._VIEW_PHRASES.items():
-            if view in offered:
-                assert phrase in captions, view
-            elif view in tabs._COMPUTED_READER_VIEWS:
-                assert phrase not in captions, view
 
     def test_per_text_opens_on_the_scanpath_trials_text(self):
         """Per text opens on the text of the trial the user has open in
@@ -3589,14 +3566,18 @@ class TestCorpusAnalysisTab:
         what one plotted value is; the error-bar choice says what it shows."""
         at = _make_apptest()
         pin_view(at, "Corpus Analysis")
+        at.session_state["corpus_subtab"] = "Per text"
         at.session_state["ptext_view"] = "Cohort profile"
         at.session_state["ptext3_spread"] = "SEM"
         at.run(timeout=60)
         assert not at.exception, at.exception
         captions = [c.value for c in at.caption]
-        note = next(c for c in captions if "All time spent on a word" in c)
+        note = at.selectbox(key="ptext_measure").proto.help
         assert "All time spent on a word" in note and "Unit: ms." in note
-        assert "Each word's value is the mean across its participants." in note
+        assert any(
+            "Each word's value is the mean across its participants." in c
+            for c in captions
+        )
         assert any(
             c.startswith("SEM: how precisely the center is known") for c in captions
         )
@@ -3608,6 +3589,7 @@ class TestCorpusAnalysisTab:
         single = _make_apptest()
         pin_view(single, "Corpus Analysis")
         single.session_state["corpus_subtab"] = "Groups"
+        single.session_state["groups_compare"] = False
         single.session_state["pgrp_mode"] = "Independent filter sets"
         single.run(timeout=60)
         assert not single.exception, f"Streamlit exceptions: {single.exception}"

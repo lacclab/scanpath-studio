@@ -736,17 +736,28 @@ def corpus_analysis(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
     d.click(_nav(page, "Corpus Analysis"), "Corpus Analysis", hold=1.4)
+    d.click(
+        page.locator(".st-key-corpus_overview_plot .scatterlayer .point").first,
+        "select a text",
+    )
+    d.click(_button(page, "Open word profile"), "word profile", hold=1.0)
+    d.open(_button(page, "Chart settings"))
     d.choose("ptext_view", "Measure on the stimulus", "on the stimulus", hold=0.8)
+    page.locator(".st-key-dl_ptext4_downloads").wait_for()
+    d.close_popover()
     d.scroll(330)
     d.pause(2.0)
     d.scroll(-330)
+    d.open(_button(page, "Chart settings"))
     d.choose("ptext_view", "Measure vs feature", "vs surprisal", hold=0.8)
+    page.locator(".st-key-ptext5_feat").wait_for()
+    d.close_popover()
     d.scroll(330)
     d.pause(2.0)
     d.scroll(-330)
-    d.click(_tab(page, "Groups"), "Groups", hold=0.6)
-    d.click(_toggle(page, "groups_compare"), "Adv vs Ele", hold=0.6)
-    d.scroll(520)
+    d.click(
+        page.get_by_role("radio", name="Groups", exact=True), "compare groups", hold=0.6
+    )
     d.pause(2.4)
     d.finish("Word profiles, maps, features and group contrasts")
 

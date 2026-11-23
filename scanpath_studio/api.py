@@ -104,6 +104,7 @@ from .plots import (  # noqa: E402
     _resolve_trial_display_name,
     add_illustration_label,
     make_comparison_figure,
+    make_corpus_overview_figure,
     make_difference_profile_figure,
     make_distribution_figure,
     make_scanpath_animation,
@@ -1750,6 +1751,7 @@ def alignment_sensitivity(
 #: ``value_col``. Without the check a table lacking one would surface as a
 #: bare ``KeyError: 'value'`` from inside the builder.
 _CORPUS_COLUMNS = {
+    "overview": ("<series>", "<value>", "lo", "hi"),
     "profile": ("word_id", "<value>"),
     "distribution": ("<value>",),
     # The builder draws its "no data" placeholder for a table with no `diff` —
@@ -1759,11 +1761,11 @@ _CORPUS_COLUMNS = {
 }
 
 
-def _require_corpus_columns(data: pd.DataFrame, kind: str, value_col: str) -> None:
-    required = [
-        value_col if column == "<value>" else column
-        for column in _CORPUS_COLUMNS.get(kind, ())
-    ]
+def _require_corpus_columns(
+    data: pd.DataFrame, kind: str, value_col: str, series_col: str
+) -> None:
+    names = {"<value>": value_col, "<series>": series_col}
+    required = [names.get(column, column) for column in _CORPUS_COLUMNS.get(kind, ())]
     missing = [column for column in required if column not in data.columns]
     if not missing:
         return
@@ -1773,6 +1775,8 @@ def _require_corpus_columns(data: pd.DataFrame, kind: str, value_col: str) -> No
         if value_col in missing
         else ""
     )
+    if series_col in missing:
+        hint += " Name the grouping column with series_col= (--series-col on the CLI)."
     raise ValueError(
         f"A {kind!r} corpus figure reads the column(s) "
         f"{', '.join(repr(column) for column in missing)}, which the table doesn't "
@@ -1792,7 +1796,7 @@ def run_analysis_recipe(
     annotations: str | Path | None = None,
     column_names: dict | None = None,
 ) -> pd.DataFrame:
-    """Recreate a per-word cohort profile or a two-group difference profile.
+    """Recreate a corpus overview, per-word cohort profile or two-group difference profile.
 
     Args:
         recipe: The downloaded recipe JSON path or its decoded object.
@@ -1811,14 +1815,14 @@ def run_analysis_recipe(
     Raises:
         ValueError: Unsupported recipe, missing filter fields or mismatched result.
     """
-    from .analysis_recipe import cohort_recipe_table
+    from .analysis_recipe import analysis_recipe_table
 
     if isinstance(recipe, (str, Path)):
         recipe = json.loads(Path(recipe).read_bytes())
     words, word_names = _named_in(words, "words")
     fixations, fix_names = _named_in(fixations, "fixations", optional=True)
     samples, _ = _named_in(raw_gaze, "raw_gaze", optional=True)
-    table = cohort_recipe_table(
+    table = analysis_recipe_table(
         recipe,
         words,
         fixations,
@@ -1838,9 +1842,7 @@ def run_analysis_recipe(
             or any(not isinstance(header, str) or not header for header in headers)
             or len(set(headers)) != len(headers)
         ):
-            raise ValueError(
-                "Invalid output column names in the cohort profile recipe."
-            )
+            raise ValueError("Invalid output column names in the analysis recipe.")
         table = table.set_axis(headers, axis="columns")
     else:
         names = _call_names(column_names, words=word_names, fixations=fix_names)
@@ -1864,25 +1866,29 @@ def plot_corpus_figure(
     measure_label: str = "Value",
     series_col: str = "series",
     value_col: str = "value",
+    as_percent: bool = False,
     colors: tuple[str, ...] | None = None,
     canvas_width: int = 1000,
     base_font_size: int = 14,
     font_family: str = FONT_FAMILY,
 ) -> go.Figure:
-    """Plot a corpus profile, distribution or difference figure from a tidy table.
+    """Plot a corpus overview, profile, distribution or difference from a tidy table.
 
     The headless form of Corpus Analysis's figures, in the same colors.
 
     Args:
         data: The tidy table. ``kind="profile"`` reads ``word_id`` and ``value_col``
             (and optional ``lo`` / ``hi``), ``"distribution"`` reads ``value_col``, and
-            ``"difference"`` reads ``word_id`` and ``diff``.
-        kind: ``"profile"``, ``"distribution"`` or ``"difference"``.
+            ``"difference"`` reads ``word_id`` and ``diff``. An ``"overview"`` reads the
+            group ID in ``series_col``, the mean in ``value_col``, and its observed
+            minimum and maximum in ``lo`` and ``hi``. It plots the 12 highest means.
+        kind: ``"overview"``, ``"profile"``, ``"distribution"`` or ``"difference"``.
         measure_label: The measure's label, and the series' name when the table has no
             ``series_col``.
-        series_col: The column naming each overlaid profile or distribution series, when
-            the table has it.
+        series_col: The group ID for an overview, or the column naming each overlaid series.
         value_col: The column holding the values.
+        as_percent: Display overview proportions as percentages on the axis and in
+            hover labels. Supply values and bounds on the 0–1 scale.
         colors: The series' colors, in order. Left out, the app's palette.
         canvas_width: The figure's width in px.
         base_font_size: The base font size in px.
@@ -1896,7 +1902,21 @@ def plot_corpus_figure(
             and the columns present), or ``kind`` is unknown.
     """
     kind = str(kind).lower()
-    _require_corpus_columns(data, kind, value_col)
+    _require_corpus_columns(data, kind, value_col, series_col)
+    if as_percent and kind != "overview":
+        raise ValueError("Percentage formatting is available for overview figures.")
+    if kind == "overview":
+        return make_corpus_overview_figure(
+            data,
+            group_col=series_col,
+            value_col=value_col,
+            as_percent=as_percent,
+            measure_label=measure_label,
+            canvas_width=canvas_width,
+            base_font_size=base_font_size,
+            font_family=font_family,
+            colors=colors,
+        )
     if kind == "profile":
         profiles = (
             {
@@ -1940,7 +1960,9 @@ def plot_corpus_figure(
             font_family=font_family,
             colors=colors,
         )
-    raise ValueError("kind must be 'profile', 'distribution', or 'difference'.")
+    raise ValueError(
+        "kind must be 'overview', 'profile', 'distribution', or 'difference'."
+    )
 
 
 def _optional_frame(frame, label: str) -> pd.DataFrame:

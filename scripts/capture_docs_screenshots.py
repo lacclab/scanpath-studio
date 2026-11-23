@@ -164,7 +164,7 @@ def capture(page: Page) -> None:
     print("corpus analysis")
     ui.deep_link(page, {})
     ui.nav(page, "Corpus Analysis")
-    page.locator(".st-key-tutorial_corpus_subtabs").wait_for(state="visible")
+    page.locator(".st-key-corpus_overview_plot .scatterlayer .point").first.wait_for()
     ui.shot(page, "corpus-analysis")
     _webp("corpus-analysis")
 

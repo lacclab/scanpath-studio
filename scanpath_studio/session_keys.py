@@ -462,14 +462,13 @@ PARAM_DATASET = "dataset"
 PARAM_DATASET_DIGEST = "dataset_digest"
 PARAM_DATASET_ID = "dataset_id"
 
-# Streamlit 1.65 `bind="query-params"` widgets: the widget key IS the URL param,
-# and its value is the option's label verbatim — so neither the key nor the
-# labels (`tabs.CORPUS_SUBTABS`) can be renamed without changing what a
-# bookmarked view opens.
-# Streamlit reads and writes these itself; `_apply_url_preset` and
-# `_build_share_query` never see them.
+# Corpus bookmarks store the section, summary unit and displayed measure label.
+# `corpus_navigation` reads and writes them together when the visible
+# destination or its nested profile changes. The session measure holds its key.
 CORPUS_SUBTAB = "corpus_subtab"
-URL_BOUND_WIDGET_KEYS = frozenset({CORPUS_SUBTAB})
+CORPUS_GROUP_BY = "corpus_group_by"
+CORPUS_MEASURE = "corpus_measure"
+URL_BOUND_WIDGET_KEYS = frozenset({CORPUS_SUBTAB, CORPUS_GROUP_BY, CORPUS_MEASURE})
 
 # Where `?source=` lands. Written by `app.main`'s source dispatch — every
 # `?source=` token resolves to `data_source_choice` there, and

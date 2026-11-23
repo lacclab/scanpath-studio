@@ -10334,14 +10334,15 @@ def make_word_profile_figure(
                 ),
             )
         )
+    band = f", {spread_label} band" if any(t.fill == "toself" for t in fig.data) else ""
     fig.update_layout(
         height=height,
         width=canvas_width,
         autosize=False,
-        margin=dict(l=60, r=10, t=45, b=45),
+        margin=dict(l=60, r=10, t=65, b=45),
         template="plotly_white",
         font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
-        title=f"{measure_label} by word — cohort {aggregate}, {spread_label} band",
+        title=f"{measure_label}<br><sup>By word · cohort {aggregate}{band}</sup>",
         xaxis=dict(title="Word (reading order)"),
         yaxis=dict(title=measure_label),
         showlegend=not single,
@@ -10505,6 +10506,107 @@ def make_word_rate_figure(
     return fig
 
 
+OVERVIEW_VISIBLE_ROWS = 12
+
+
+def make_corpus_overview_figure(
+    table: pd.DataFrame,
+    *,
+    group_col: str,
+    value_col: str = "value",
+    measure_label: str,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    colors: Sequence[str] | None = None,
+    as_percent: bool = False,
+) -> go.Figure:
+    """Rank the measured groups by mean, with a line from minimum to maximum."""
+    stats = [value_col, "lo", "hi"]
+    measured = table[[group_col, *stats]].copy()
+    measured[stats] = measured[stats].apply(pd.to_numeric)
+    measured = measured.dropna(subset=stats, how="all")
+    if measured.empty:
+        return _no_data_figure(
+            measure_label, font_family=font_family, base_font_size=base_font_size
+        )
+    if measured[group_col].isna().any():
+        raise ValueError("Each measured overview row needs a group ID.")
+    mean, lo, hi = measured[stats].to_numpy(dtype=float, na_value=np.nan).T
+    if not np.isfinite([mean, lo, hi]).all():
+        raise ValueError(
+            "Each measured overview row needs a finite mean, minimum (lo) and maximum (hi)."
+        )
+    if as_percent and ((lo < 0).any() or (hi > 1).any()):
+        raise ValueError(
+            "Supply overview percentages as proportions from 0 to 1, including their bounds."
+        )
+    if ((mean < lo) & ~np.isclose(mean, lo, rtol=1e-12, atol=0)).any() or (
+        (mean > hi) & ~np.isclose(mean, hi, rtol=1e-12, atol=0)
+    ).any():
+        raise ValueError(
+            "An overview mean must fall between its minimum (lo) and maximum (hi)."
+        )
+    rows = measured.sort_values(value_col, ascending=False, kind="stable").head(
+        OVERVIEW_VISIBLE_ROWS
+    )
+    names = rows[group_col].astype(str).tolist()
+    color = colors[0] if colors else DEFAULT_FIXATION_COLOR
+    fmt = ".1%" if as_percent else ".4~g"
+    fig = go.Figure(
+        go.Scatter(
+            x=rows[value_col],
+            y=list(range(len(rows))),
+            mode="markers",
+            marker=dict(size=10, color=color),
+            error_x=dict(
+                type="data",
+                symmetric=False,
+                array=(rows["hi"] - rows[value_col]).clip(lower=0),
+                arrayminus=(rows[value_col] - rows["lo"]).clip(lower=0),
+                color=color,
+                thickness=1.5,
+                width=4,
+            ),
+            customdata=list(zip(names, rows["lo"], rows["hi"], strict=True)),
+            hovertemplate=(
+                "<b>%{customdata[0]}</b>"
+                f"<br>Mean %{{x:{fmt}}}<br>Range %{{customdata[1]:{fmt}}} to %{{customdata[2]:{fmt}}}<extra></extra>"
+            ),
+        )
+    )
+    truncated = len(rows) < len(measured)
+    fig.update_layout(
+        template="plotly_white",
+        width=canvas_width,
+        height=max(195, 82 + 25 * len(rows)),
+        margin=dict(l=10, r=25, t=34 if truncated else 12, b=40),
+        font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
+        title=dict(
+            text=f"Highest {len(rows)} of {len(measured):,} means",
+            font_size=base_font_size,
+        )
+        if truncated
+        else None,
+        showlegend=False,
+    )
+    fig.update_yaxes(
+        tickmode="array",
+        tickvals=list(range(len(rows))),
+        ticktext=[label if len(label) <= 28 else label[:27] + "…" for label in names],
+        range=[len(rows) - 0.5, -0.5],
+        automargin=True,
+        showgrid=False,
+        zeroline=False,
+    )
+    fig.update_xaxes(
+        title_text=measure_label,
+        automargin=True,
+        tickformat="~%" if as_percent else None,
+    )
+    return fig
+
+
 def make_distribution_figure(
     groups: dict,
     *,
@@ -10552,6 +10654,7 @@ def make_distribution_figure(
                     opacity=0.7,
                     box_visible=True,
                     meanline_visible=True,
+                    spanmode="hard",
                     points=False,
                 )
             )

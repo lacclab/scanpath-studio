@@ -8,13 +8,15 @@ Inspect a measure within trials or across a session.
 
 1. [Select the trials](index.md#before-you-start) and open
    :material/bar_chart: **Corpus Analysis**.
-2. Choose the view for the question:
+2. To follow one reader, choose **Participants**, select a reader and open their
+   profile. To follow a group, choose **Groups** and turn off **Compare two groups**.
+   In **Chart settings**, choose the **View** you need.
 
     | Scope | View |
     | --- | --- |
-    | One participant across trials | **Per participant** → **Per-trial trend** |
-    | Fixation duration within trials, pooled for one participant | **Per participant** → **Fixation duration over time** |
-    | A group across trials | **Groups** → **Group trend** |
+    | One participant across trials | **Per-trial trend** |
+    | Fixation duration within trials, pooled for one participant | **Fixation duration over time** |
+    | A group across trials | **Group trend** |
 
 3. Choose a measure, and an **Aggregate** where the view offers one.
    Across-trial trends order each participant's trials by a `trial_index` or

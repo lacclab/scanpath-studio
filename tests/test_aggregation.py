@@ -1557,12 +1557,14 @@ def test_aoi_only_cohorts_count_their_readers():
     measures does not read "0 reader(s)" beside charts drawn from its readers."""
     from streamlit.testing.v1 import AppTest
 
+    from scanpath_studio.constants import md_literal
+
     at = AppTest.from_function(_aoi_only_groups_app).run(timeout=60)
     assert not at.exception, at.exception
     assert any(
         c.value.startswith(
-            "**difficulty_level = Adv**: 2 participants · "
-            "**difficulty_level = Ele**: 2 participants · **2 in both**"
+            f"**Group A ({md_literal('difficulty_level = Adv')})**: 2 participants · "
+            f"**Group B ({md_literal('difficulty_level = Ele')})**: 2 participants · **2 in both**"
         )
         for c in at.caption
     )

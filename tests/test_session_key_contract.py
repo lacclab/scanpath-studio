@@ -865,13 +865,17 @@ def test_b_dataset_reference_params_are_pinned():
     assert params <= sk.URL_OPTIONAL_PARAMS
 
 
-def test_url_bound_widget_keys_frozen():
-    # Streamlit's bind="query-params" makes the key the URL param and the tab
-    # label its value: renaming either breaks a bookmarked Corpus Analysis view.
+def test_corpus_bookmark_keys_and_sections_frozen():
+    # Existing links and tutorial steps still use the published section names.
     from scanpath_studio import tabs
 
-    assert sk.URL_BOUND_WIDGET_KEYS == {"corpus_subtab"}
+    assert sk.URL_BOUND_WIDGET_KEYS == {
+        "corpus_subtab",
+        "corpus_group_by",
+        "corpus_measure",
+    }
     assert tabs.CORPUS_SUBTABS == (
+        "Overview",
         "Per text",
         "Per sentence",
         "Per participant",

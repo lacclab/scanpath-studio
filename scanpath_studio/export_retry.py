@@ -6,7 +6,6 @@ import csv
 import io
 import zipfile
 from contextlib import nullcontext
-from copy import copy
 from dataclasses import dataclass, replace
 from tempfile import TemporaryFile
 from time import perf_counter
@@ -96,7 +95,15 @@ class _RetryPlan:
 
 
 def _copy_member(source, destination, info):
-    with source.open(info) as src, destination.open(copy(info), "w") as dest:
+    # A fresh header, not a copy of the source's: its extra field holds the
+    # source's own Zip64 sizes and offset, which zipfile would write beside the
+    # field it adds, leaving a local header extractors reject. The known size
+    # still decides whether this member needs Zip64.
+    target = zipfile.ZipInfo(info.filename, info.date_time)
+    target.compress_type = info.compress_type
+    target.external_attr = info.external_attr
+    target.file_size = info.file_size
+    with source.open(info) as src, destination.open(target, "w") as dest:
         while chunk := src.read(1024 * 1024):
             report()
             dest.write(chunk)

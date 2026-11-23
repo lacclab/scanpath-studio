@@ -2046,6 +2046,108 @@ def test_retry_renders_only_failed_formats_and_reuses_successful_contents(
         assert set(pd.read_csv(after.open("index.csv")).status) == {"written"}
 
 
+def _assert_streamable(raw: bytes) -> None:
+    """Read each local header as a streaming extractor (macOS ditto) does.
+
+    A local header holds at most one Zip64 field, and only with both sizes; its
+    data descriptor is 64-bit exactly when that field is there.
+    """
+    import struct
+
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        for info in archive.infolist():
+            start = info.header_offset
+            head = struct.unpack_from("<IHHHHHIIIHH", raw, start)
+            assert head[0] == 0x04034B50, info.filename
+            flags, name_size, extra_size = head[2], head[9], head[10]
+            extra = raw[start + 30 + name_size : start + 30 + name_size + extra_size]
+            zip64 = []
+            while extra:
+                kind, size = struct.unpack_from("<HH", extra)
+                if kind == 1:
+                    zip64.append(size)
+                extra = extra[4 + size :]
+            assert zip64 in ([], [16]), (info.filename, zip64)
+            if flags & 0x08:
+                end = start + 30 + name_size + extra_size + info.compress_size
+                descriptor = struct.unpack_from("<IIQQ" if zip64 else "<IIII", raw, end)
+                assert descriptor == (
+                    0x08074B50,
+                    info.CRC,
+                    info.compress_size,
+                    info.file_size,
+                ), info.filename
+
+
+def test_a_retried_zip64_bundle_keeps_valid_local_headers(
+    minimal_combos,
+    minimal_words,
+    minimal_fixations,
+    base_settings,
+    monkeypatch,
+    tmp_path,
+):
+    import shutil
+    import subprocess
+    from contextlib import contextmanager
+    from functools import partial
+
+    from scanpath_studio import export, export_archive
+    from scanpath_studio.export_retry import retry_failed_figures
+
+    fail = True
+
+    @contextmanager
+    def renderer(_enabled):
+        def render(_fig, fmt, *_dimensions):
+            if fmt == "pdf" and fail:
+                raise ValueError("Renderer unavailable")
+            return fmt.encode() + bytes(3000)
+
+        yield render
+
+    # A small Zip64 threshold stands in for a bundle past 4 GiB: the figures
+    # need Zip64 sizes, and members after the first few need a Zip64 offset.
+    monkeypatch.setattr(zipfile, "ZIP64_LIMIT", 2000)
+    monkeypatch.setattr(export, "_figure_renderer", renderer)
+    monkeypatch.setattr(export_archive, "_SMALL_ZIP", 0)
+    monkeypatch.setattr(export_archive, "_PART_BYTES", 4096)
+    args = dict(
+        canvas_width=800,
+        canvas_height=400,
+        base_font_size=14,
+        font_family="Arial",
+        x_field="x",
+        y_field="y",
+        settings=base_settings,
+        options=ExportOptions(
+            include_png=True,
+            include_svg=False,
+            include_pdf=True,
+            include_fixations=True,
+        ),
+    )
+    frames = minimal_combos, minimal_words, minimal_fixations
+    original, progress = export_archive.build_download(bulk_export, *frames, **args)
+    assert progress.retryable_figures == 2
+    cache = {"data": original, "sig": ("frames",), "progress": progress}
+    fail = False
+    repaired, progress = export_archive.build_download(
+        partial(retry_failed_figures, cache, cache["sig"]), *frames, **args
+    )
+    assert progress.figures_failed == 0
+    for name, bundle in (("original", original), ("repaired", repaired)):
+        with export_archive.open_bundle(bundle) as stream:
+            raw = stream.read()
+        _assert_streamable(raw)
+        if ditto := shutil.which("ditto"):
+            path = tmp_path / f"{name}.zip"
+            path.write_bytes(raw)
+            subprocess.run(
+                [ditto, "-x", "-k", str(path), str(tmp_path / name)], check=True
+            )
+
+
 def test_uploaded_study_references_are_carried_through_a_comparison_bundle(
     minimal_combos, minimal_words, minimal_fixations, base_settings
 ):

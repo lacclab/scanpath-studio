@@ -4195,7 +4195,9 @@ Developed with AI assistance. Cross-check results before publishing.
 
 ## In development
 
-There are no unreleased changes listed.
+### Fixed
+
+- The Raw gaze switch can be turned off on a trial with no samples of its own, and its "no samples" warning no longer shows during Animation or for a dataset without raw gaze.
 
 ## Release v0.48.0
 

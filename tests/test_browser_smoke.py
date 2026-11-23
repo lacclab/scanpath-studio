@@ -176,9 +176,7 @@ def test_first_visit_respects_the_requested_page(app_url, browser, path):
             page.get_by_role("dialog").wait_for()
         else:
             target = (
-                ".st-key-dataset_table_grid"
-                if path == "data"
-                else ".st-key-corpus_pool_bar"
+                ".st-key-data_identity" if path == "data" else ".st-key-corpus_pool_bar"
             )
             page.locator(target).wait_for()
         _settle(page)
@@ -191,6 +189,7 @@ def test_phone_dataset_list_sorts_by_participant_count(app_url, browser):
     with browser.new_context(viewport={"width": 390, "height": 844}) as context:
         page = context.new_page()
         page.goto(f"{app_url}/data")
+        page.get_by_role("tab", name="Dataset library").click()
         grid = page.locator(".st-key-dataset_table_grid")
         counts = grid.locator(
             '[class*="st-key-dsc_participants_"] .sps-ds-num:not(.sps-ds-gap)'
@@ -202,6 +201,57 @@ def test_phone_dataset_list_sorts_by_participant_count(app_url, browser):
         )
         grid.get_by_role("button", name="Participants", exact=True).click()
         sync_api.expect(counts.first).to_have_text(largest)
+
+
+def test_overview_opens_the_right_table_and_all_six_stay_on_the_page(app_url, browser):
+    with browser.new_context(viewport={"width": 390, "height": 844}) as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/data?source=demo")
+        page.get_by_role("button", name=re.compile(r"^Words 2,614")).click()
+        sync_api.expect(
+            page.get_by_role("heading", name="Words", exact=True)
+        ).to_be_in_viewport()
+        links = page.locator(".st-key-data_table_links")
+        for label in (
+            "Fixations",
+            "Words",
+            "Raw gaze samples",
+            "Participants",
+            "Trials",
+            "Texts",
+        ):
+            sync_api.expect(
+                links.get_by_role("link", name=label, exact=True)
+            ).to_have_count(1)
+            sync_api.expect(
+                page.get_by_role("heading", name=label, exact=True)
+            ).to_have_count(1)
+        links.get_by_role("link", name="Texts", exact=True).click()
+        sync_api.expect(
+            page.get_by_role("heading", name="Texts", exact=True)
+        ).to_be_in_viewport()
+
+
+def test_dataset_editor_can_remove_an_uploaded_metadata_file_by_name(app_url, browser):
+    with browser.new_context() as context:
+        page = context.new_page()
+        page.goto(f"{app_url}/data?source=demo")
+        page.get_by_role("button", name="Edit dataset", exact=True).click()
+        upload = page.get_by_role(
+            "region", name="Participant metadata table (optional)"
+        )
+        upload.locator('input[type="file"]').set_input_files(
+            {
+                "name": "readers.csv",
+                "mimeType": "text/csv",
+                "buffer": b"participant_id,reader_group\nl7_183,first\n",
+            }
+        )
+        column = page.get_by_text("reader_group", exact=True)
+        sync_api.expect(column.first).to_be_visible()
+        _settle(page)
+        upload.get_by_role("button", name="Remove readers.csv", exact=True).click()
+        sync_api.expect(column).to_have_count(0)
 
 
 def test_phone_view_choices_stay_with_figure_in_both_modes(app_url, browser):
@@ -219,22 +269,85 @@ def test_phone_view_choices_stay_with_figure_in_both_modes(app_url, browser):
             a, b = box(lower), box(upper)
             assert a["y"] >= b["y"] + b["height"] - 1
 
-        below("tour_grp_simple_views", "tour_grp_plot")
-        below("tour_grp_subtabs", "tour_grp_simple_views")
-        below("global_palette", "tour_grp_subtabs")
-        views = box("tour_grp_simple_views")
+        below("tour_grp_views", "tour_grp_plot")
+        below("tour_grp_subtabs", "tour_grp_views")
+        below("global_palette", "tour_grp_views")
+        below("tour_grp_subtabs", "global_palette")
+        views = box("tour_grp_views")
         assert views["y"] + views["height"] <= 844
         page.get_by_role("button", name="Heatmap", exact=True).click()
         _settle(page)
         page.locator(".st-key-ui_mode_switch").get_by_text("Full", exact=True).click()
         _settle(page)
         below("tour_grp_view_modes", "tour_grp_plot")
-        below("tour_grp_subtabs", "quick_views_grid")
+        below("global_palette", "tour_grp_views")
+        below("tour_grp_subtabs", "global_palette")
         assert box("tour_grp_viz_controls")["height"] > 0
         page.set_viewport_size({"width": 1440, "height": 900})
         plot = box("tour_grp_plot")
         assert box("scanpath_rail")["x"] >= plot["x"] + plot["width"]
         assert abs(box("tour_grp_subtabs")["x"] - plot["x"]) < 1
+
+
+def test_shared_controls_keep_their_positions_and_selection(app_url, browser):
+    page = _open(browser, f"{app_url}/?ui=full&source=demo&animate=0")
+    try:
+        names = ("animation", "scanpath", "heatmap", "illustration")
+        tiles = [
+            page.locator(f".st-key-viz_view_{name}").get_by_role("button")
+            for name in names
+        ]
+        palette = page.locator(".st-key-global_palette")
+
+        def positions():
+            header = page.locator(".st-key-plot_controls_header").bounding_box()
+            boxes = [element.bounding_box() for element in [*tiles, palette]]
+            return [
+                (
+                    box["x"] - header["x"],
+                    box["y"] - header["y"],
+                    box["width"],
+                    box["height"],
+                )
+                for box in boxes
+            ]
+
+        tiles[2].click()
+        _settle(page)
+        palette.get_by_role("combobox").click()
+        page.get_by_role("option", name="High contrast", exact=True).click()
+        _settle(page)
+        expected = positions()
+        x, _, width, _ = expected[-1]
+        for left, _, tile_width, _ in expected[:-1]:
+            assert x <= left and left + tile_width <= x + width + 1
+        for mode in ("Essentials", "Full"):
+            page.locator(".st-key-ui_mode_switch").get_by_text(mode, exact=True).click()
+            _settle(page)
+            assert positions() == expected
+            assert tiles[2].get_attribute("kind") == "primary"
+            assert palette.get_by_role("combobox").input_value() == "High contrast"
+            assert page.locator(".st-key-rail_compare").is_visible() == (mode == "Full")
+            assert page.locator(".st-key-adv_only_rail_animation").is_visible() == (
+                mode == "Full"
+            )
+        compare = page.locator(".st-key-single_compare_toggle")
+        compare.locator("label").click()
+        _settle(page)
+        page.locator(".st-key-ui_mode_switch").get_by_text(
+            "Essentials", exact=True
+        ).click()
+        _settle(page)
+        assert compare.is_visible() and compare.locator("input").is_checked()
+        assert positions() == expected
+        compare.locator("label").click()
+        _settle(page)
+        assert not compare.is_visible()
+        assert tiles[2].get_attribute("kind") == "primary"
+        assert not page.locator('[data-testid="stException"]').count()
+        assert page.errors == []
+    finally:
+        page.context.close()
 
 
 def test_phone_corpus_profile_shows_data_above_the_fold(app_url, browser):
@@ -521,6 +634,7 @@ def test_chart_controls_survive_navigation_presets_and_reset(app_url, browser):
         switch("Essentials")
         assert chart() == heatmap
         switch("Full")
+        page.locator(".st-key-design_shell summary").click()
         click("viz_view_custom")
         assert chart() == second
         click("single_prev_trial")
@@ -537,7 +651,7 @@ def test_chart_controls_survive_navigation_presets_and_reset(app_url, browser):
         assert chart() == default
         switch("Essentials")
         assert chart() == default
-        click("simple_view_heatmap")
+        click("viz_view_heatmap")
         assert "heatmap colorbar" in chart()["layers"]
         switch("Full")
         click("viz_view_illustration")
@@ -677,7 +791,15 @@ def test_saved_replay_steps_and_scrubs_between_recorded_onsets(
             expect_point(325)
             page.get_by_role("button", name="Previous fixation").click()
             assert "onset 220 ms" in page.get_by_role("status").inner_text()
-            page.get_by_role("slider", name="Replay time").press("Home")
+            # Several seeks before the next paint replace a queued Plotly frame.
+            page.get_by_role("slider", name="Replay time").evaluate(
+                """slider => {
+                    for (const value of ['1', slider.max, '0']) {
+                        slider.value = value;
+                        slider.dispatchEvent(new Event('input', {bubbles: true}));
+                    }
+                }"""
+            )
             expect_point(fixations.iloc[0]["x"])
             assert registered_frames() == 0
             assert errors == []

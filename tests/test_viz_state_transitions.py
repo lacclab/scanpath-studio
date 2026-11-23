@@ -322,20 +322,24 @@ def test_the_heatmap_preset_turns_the_highlight_off(monkeypatch):
 
 @pytest.mark.timeout(180)
 def test_animate_says_why_layers_are_greyed():
-    """Why layers are greyed is the switches' hover text, not a caption under
-    the Animate row — Animate says what it greys, and each greyed switch says
-    why, only while it is greyed."""
+    """During Animation each disabled layer explains why in its hover text."""
     at = AppTest.from_file(APP_SCRIPT, default_timeout=90)
     at.run()
-    assert "Heatmap and Raw gaze switches are greyed" in (
-        at.toggle(key="single_animate").help
-    )
     greyed = ("global_show_fix", "global_show_heatmap", "global_show_raw_gaze")
     assert not any(at.toggle(key=key).help for key in greyed)
-    at.toggle(key="single_animate").set_value(True).run()
+    at.button(key="viz_view_animation").click().run()
     assert not at.exception
     assert not any("Replay draws its own fixations" in c.value for c in at.caption)
     for key in greyed:
         toggle = at.toggle(key=key)
         assert toggle.disabled, key
-        assert toggle.help.startswith("Greyed while Animate is on"), key
+        assert (
+            toggle.help
+            == controls._ANIMATE_GREYS[
+                {
+                    "global_show_fix": "fix",
+                    "global_show_heatmap": "heatmap",
+                    "global_show_raw_gaze": "rawgaze",
+                }[key]
+            ]
+        )

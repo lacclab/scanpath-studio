@@ -31,8 +31,9 @@ a feature lands; fix a row when a check here turned out to be wrong.
 | Sample charts | Full → Figure & canvas → Axis preset | `global_x_field`, `global_y_field`, `global_show_raw_gaze` | Pupil and position presets draw samples against the recorded clock or sample number. A screen covered only by samples is selectable and exportable. |
 | Filters & highlights | Rail → **Filters & highlights** | its popover's keys | The badge counts active filters; the fixation range slices the trail |
 | Figure & canvas | Rail → **Figure & canvas** | its popover's keys (legends: `global_legend_<kind>_*`) | Canvas size, fonts, title / caption, legends, credit |
-| Animate | Rail toggle | `single_animate` | The replay player draws its own toolbar row; the plot keeps the static figure's size |
-| Compare | Rail toggle | `single_compare_toggle`, `single_compare_layout`, `?compare=` | Overlay / side by side / stacked; B from another dataset resolves to side by side on unequal canvases |
+| Animation | Shared View tile | `single_animate` | The replay player draws its own toolbar row; the plot keeps the static figure's size |
+| Four views and Palette | Top of Plot controls | `viz_view_*`, `global_palette` | Both modes show the same grid and keep the figure, palette and comparison when switching |
+| Compare readings | Below Palette | `single_compare_toggle`, `single_compare_layout`, `?compare=` | Overlay / side by side / stacked; B from another dataset resolves to side by side on unequal canvases |
 | Fixation index | Rail → Fixations popover | `global_show_order`, `global_order_label_position` | Numbers above / inside / below each fixation, on every builder |
 | Undo and Redo | Full → foot of Plot controls, beside Reset visualization | `viz_undo`, `viz_redo` | Undo a confirmed reset, redo it, then undo and edit again on the current reading |
 
@@ -66,7 +67,9 @@ Annotations, Stimulus & context and Comparisons are absent in Essentials.
 | ➕ Add dataset wizard | Upload → map columns → validate → the dataset opens; `*` fields block only when missing |
 | Draw a scanpath | Draw word 1 → word 3 → word 1, change the last duration, preview, save and reopen by name. The draft and Share code reproduce the three visits. |
 | ✏️ Edit dataset | A change re-normalizes and keeps the column-name map |
-| 📂 Available datasets | Lists every dataset; renaming an upload preserves its annotations, saved selection and comparison identity |
+| Current dataset | Overview counts the filtered trials. Averages and table coverage describe the same selection. A recording row jumps to its table on a page with all six tables. Data checks cover the whole dataset even when the filters leave zero trials. |
+| Dataset library | Search or filter by source, sort, and open a dataset. Opening another dataset with unsaved edits offers to keep or discard the draft. Renaming an upload preserves its annotations, saved selection and comparison identity. |
+| Saved work | Local recovery and downloaded corpora are accessible even when the current dataset fails to load. |
 | Mapping recovery | Upload a Fixations table with an unrecognized duration, press Add dataset, activate the blocker with Enter, and map a seconds column. The duration picker receives focus and shows two converted values. |
 | Dataset credit | Credit an unpublished lab dataset and a second comparison dataset. The saved README identifies which supplies the exported trials and BibTeX contains both references. |
 | Metadata tables | Their columns appear as trial filters, chips and in the export bundle |

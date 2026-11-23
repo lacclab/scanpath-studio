@@ -238,6 +238,7 @@ def _title_caption_legend() -> dict:
         title_font_size=34,
         caption="Marker size: fixation duration. Line color: saccade type.",
         caption_font_size=20,
+        duration_size_legend=True,
         legend_layout={
             "saccades": {"position": "right-outside", "size": 18},
             "size_key": {"position": "bottom-right-outside", "size": 18},

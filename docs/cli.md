@@ -93,7 +93,7 @@ The Python API loads the same datasets with
 | animate | `--animate`, optionally `--playback-speed X`. The replay uses every styling flag it can draw and names the rest in a warning |
 | set the screen size | `--canvas WIDTHxHEIGHT`. `--crop-to-data` frames the data instead of the whole screen, with `--crop-margin PX` around it (default: 5% of the data's extent, at least 20 px) |
 | color fixations | `--color-by FIELD`, including a column of your own once `--keep-columns COLUMN…` carries it through loading |
-| size fixations by duration | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--no-duration-size-legend` |
+| size fixations by duration | `--marker-size-scale sqrt\|linear\|log\|relative` (default `sqrt`), `--marker-duration-range LO HI` (ms, default `50 600`), `--marker-size-range MIN MAX` (px), `--duration-size-legend` (show the optional size key) |
 | draw only part of a trial | `--fix-index-range START:END` (1-based, both inclusive; `--animate` and `--compare-with` honor it too) |
 | draw the stimulus | `--stimulus-image PATH` for one image. `--show-stimulus-image` draws each trial's stimulus image, named in the `image_path` column (`--sample` ships its images). `--image-root DIR --image-pattern '{text_id}.png'` fills `image_path` from a folder |
 | smooth the heatmap | `--heatmap-style smoothed --heatmap-sigma 20` (σ in px; leave it out for an automatic σ) |
@@ -378,8 +378,7 @@ from docs_support import cli_reference
 print(cli_reference("cache"))
 ```
 
-The same information is at the foot of the **:material/database: Data
-Management** page, under **:material/history: Saved on this computer**. A
+Open **:material/database: Data Management → Saved work → Your session** to see the same information. A
 running app writes a new copy at its next change, so clear the cache with the
 app closed.
 

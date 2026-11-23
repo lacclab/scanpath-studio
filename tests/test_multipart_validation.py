@@ -126,14 +126,12 @@ class TestTheCatalogue:
         events = _frame(screen_index=[1, 1, 2, 2])
         samples = _frame(screen_index=[2, 2, 1, 1])
         empty_words = events.iloc[0:0]
-        assert (
-            "conflicts across tables"
-            in tabs.dataset_capabilities(empty_words, events, samples)[-1]
-        )
         stats = tabs._dataset_statistics(
             empty_words, events, samples, ("conflicting screens",)
         )
-        assert stats["parts"].empty and "Edit dataset" in stats["screen_error"]
+        assert stats["parts"].empty
+        assert "conflicts across tables" in stats["screen_error"]
+        assert "Edit dataset" in stats["screen_error"]
 
     def test_legacy_data_yields_an_empty_catalogue(self):
         assert part_catalog(pd.DataFrame(), None).empty

@@ -680,9 +680,11 @@ def essentials(d: Demo) -> None:
     page = d.page
     # A first visit opens on the replay, already playing.
     d.pause(2.6)
-    d.click(page.locator(".st-key-simple_view_scanpath button"), "Scanpath", hold=1.4)
+    d.click(
+        page.get_by_role("button", name="Scanpath", exact=True), "Scanpath", hold=1.4
+    )
     d.choose("global_palette", "High contrast", "palette", hold=1.2)
-    d.click(page.locator(".st-key-simple_view_heatmap button"), "Heatmap", hold=1.4)
+    d.click(page.get_by_role("button", name="Heatmap", exact=True), "Heatmap", hold=1.4)
     d.click(page.locator(".st-key-single_next_trial button"), "next trial", hold=1.6)
     d.click(
         page.locator(".st-key-iconpop_more_rail button"),
@@ -814,9 +816,11 @@ def favorites(d: Demo) -> None:
 def replay(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
-    d.click(_toggle(page, "single_animate"), "Animate", hold=2.4)
     d.click(
-        page.locator(".st-key-split_mode_animate_popover button"),
+        page.get_by_role("button", name="Animation", exact=True), "Animation", hold=2.4
+    )
+    d.click(
+        page.locator(".st-key-split_mode_rail_animation_popover button"),
         "Animate ▾",
         wait=False,
         hold=0.4,
@@ -834,7 +838,9 @@ def replay(d: Demo) -> None:
 def replay_export(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
-    d.click(_toggle(page, "single_animate"), "Animate", hold=1.0)
+    d.click(
+        page.get_by_role("button", name="Scanpath", exact=True), "Scanpath", hold=1.0
+    )
     d.click(_tab(page, "Export"), "Export")
     d.scroll_to(page.locator(".st-key-tutorial_export"), top=150)
     d.click(page.locator("label").filter(has_text="GIF"), "GIF", hold=0.6)
@@ -883,7 +889,7 @@ def compare(d: Demo) -> None:
 def share_link(d: Demo) -> None:
     page = d.page
     d.pause(0.8)
-    d.click(page.locator(".st-key-viz_view_heatmap button"), "Heatmap", hold=1.0)
+    d.click(page.get_by_role("button", name="Heatmap", exact=True), "Heatmap", hold=1.0)
     d.click(_tab(page, "Share"), "Share")
     d.scroll_to(_tab(page, "Share").first, top=HEADER + 10)
     d.click(

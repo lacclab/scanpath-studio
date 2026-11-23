@@ -21,8 +21,8 @@ print(gallery_figure("replay"))
 === "In the app"
 
     1. Open your data in the :material/route: **Scanpath** view and pick a trial in **Select trial**.
-    2. Turn on :material/movie: **Animate**. To replay part of the reading, set :material/filter_list: **Filters & highlights** ▾ → **Fixations** → **Index range**, here 1 to 40.
-    3. In **Animate** ▾ → **Replay** → **Speed**, choose **×2**, then press **▶ Play** above the plot. Use **⏸ Pause** or the time slider to inspect the reading.
+    2. Choose :material/movie: **Animation**. To replay part of the reading, set :material/filter_list: **Filters & highlights** ▾ → **Fixations** → **Index range**, here 1 to 40.
+    3. In **Animation settings** → **Replay** → **Speed**, choose **×2**, then press **▶ Play** above the plot. Use **⏸ Pause** or the time slider to inspect the reading.
     4. Save the replay from :material/file_export: **Export** → **Current figure**.
 
     [Open the demo](https://scanpath-studio.streamlit.app) · [All controls](../guides/scanpath-visualization/controls.md)

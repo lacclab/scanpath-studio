@@ -36,6 +36,7 @@ from .constants import (
     DEFAULT_COLORBAR_LENGTH,
     DEFAULT_COLORBAR_THICKNESS,
     DEFAULT_CROP_MARGIN_PX,
+    DEFAULT_DURATION_SIZE_LEGEND,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_OUTLINE_COLOR,
@@ -146,6 +147,7 @@ from .session_keys import (
     COMPARE_SOURCE_STATE_KEY,
     LEGEND_PARAMS,
     SHARE_FLOAT_RANGE_PARAMS,
+    SINGLE_ANIMATE,
     SINGLE_COMPARE_FIX_RANGE,
     SINGLE_COMPARE_LAYOUT,
     SINGLE_COMPARE_STIMULUS,
@@ -248,9 +250,7 @@ def _popover_rows(slug: str):
         section = slug.split("_", 1)[0]
         if section == "fig":
             section = "figure"
-        prefix = (
-            "split_mode" if section in ("animate", "compare") else "split_mode_rail"
-        )
+        prefix = "split_mode" if section == "compare" else "split_mode_rail"
         if st.session_state.get(f"{prefix}_{section}_popover"):
             ctx = get_script_run_ctx()
     drawn = ctx.shared.widget_user_keys_this_run if ctx else None
@@ -696,7 +696,7 @@ def _mode_gate(
     the user guessing."""
     modes = []
     if animating and not in_animation:
-        modes.append("**Animate**")
+        modes.append("**Animation**")
     if comparing and not in_compare:
         modes.append("**Compare**")
     if not modes:
@@ -803,7 +803,7 @@ _VIZ_WIDGET_DEFAULTS = {
     # without it are read as "relative", so they still draw as saved.
     "global_marker_size_scale": DEFAULT_MARKER_SIZE_SCALE,
     "global_marker_duration_range": DEFAULT_MARKER_DURATION_RANGE,
-    "global_duration_size_legend": True,
+    "global_duration_size_legend": DEFAULT_DURATION_SIZE_LEGEND,
     # 📐 Figure & canvas → Legends: where each legend sits (Auto = the builder's
     # own placement). Size None = the figure's own text size.
     **{
@@ -1568,7 +1568,7 @@ def _drop_linked_view_params() -> None:
         st.query_params.pop(param, None)
 
 
-def _apply_view_preset(name: str) -> None:
+def _apply_view_preset(name: str, *, keep: tuple[str, ...] = ()) -> None:
     """Apply one deterministic named view, or restore the Custom snapshot.
 
     Runs as a button ``on_click`` callback, i.e. *before* the next rerun
@@ -1593,8 +1593,10 @@ def _apply_view_preset(name: str) -> None:
     # Callbacks receive the browser's values before the script reconciles
     # closed popovers. Snapshot the design that was actually on screen.
     reassert_pending_writes()
+    kept = {key: ss[key] for key in keep if key in ss}
     try:
         _apply_view_preset_state(ss, name, saved)
+        ss.update(kept)
     finally:
         _hold_view_writes(ss, before)
 
@@ -1617,7 +1619,8 @@ def _hold_view_writes(
     hold would read the user flipping one back as that echo and undo it.
     """
     for key, old in before.items():
-        if key in _MOUNTED_VIEW_KEYS or key not in ss:
+        # The Animation tile writes the flag directly; it has no widget echo.
+        if key == SINGLE_ANIMATE or key in _MOUNTED_VIEW_KEYS or key not in ss:
             continue
         if key in _SEEDED_VIEW_KEYS and defaults_pending:
             continue  # a design callback has not re-seeded from the dataset yet
@@ -1650,7 +1653,6 @@ _SEEDED_VIEW_KEYS = frozenset(
 #: checks the set against the widgets the app draws.
 _MOUNTED_VIEW_KEYS = frozenset(
     {
-        "single_animate",
         "global_show_fix",
         "global_show_saccades",
         "global_show_stimulus",
@@ -1815,6 +1817,17 @@ def _render_saved_designs(host) -> None:
     )
     shell = host.container(key="design_shell")
     with shell.expander(label, expanded=bool(st.session_state.get(_DESIGN_EDIT_KEY))):
+        st.button(
+            "Restore last custom design",
+            icon=ICONS["preset_custom"],
+            key="viz_view_custom",
+            disabled=not isinstance(
+                st.session_state.get(_QUICK_VIEW_CUSTOM_STATE), dict
+            ),
+            width="stretch",
+            on_click=_apply_view_preset,
+            args=(_CUSTOM_VIEW,),
+        )
         if not saved:
             st.caption(
                 "No saved designs yet. Set up the layers, colors and figure, then "
@@ -2305,20 +2318,12 @@ def _active_quick_view() -> str | None:
     return _sync_quick_view_state()
 
 
-#: Essentials mode's View tiles, in their grid order. Animation is the Scanpath
-#: preset replayed; the other three are the design presets of the same name.
-SIMPLE_VIEWS = ("animation", "scanpath", "heatmap", "illustration")
-#: The tile `render_simple_views` lit on this run (``None``: settings that match
-#: none). Written by the rail each run, so a later part of the page can read it
-#: without syncing the design-preset state a second time.
-SIMPLE_VIEW_LIT_KEY = "_simple_view_lit"
-_SIMPLE_ANIMATION = "animation"
-#: Each tile's label, `ICONS` key and hover text.
-_SIMPLE_VIEW_TILES = {
+#: The view tiles in reading order. Both interface modes use this grid.
+_VIEW_TILES = {
     "animation": (
         "Animation",
         "animate",
-        "Replay the reading fixation by fixation, over the Scanpath view.",
+        "Animate the current reading, or both readings when comparing.",
     ),
     "scanpath": (
         "Scanpath",
@@ -2340,26 +2345,45 @@ _SIMPLE_VIEW_TILES = {
 }
 
 
-def _apply_simple_view(name: str) -> None:
-    """Apply an Essentials View tile: its design preset, and Animate on or off.
+def static_plot_view(*, comparing: bool = False) -> str | None:
+    """The displayed kind of static figure, independently of its palette or styling."""
+    ss = st.session_state
+    axes = ss.get("global_x_field", "x"), ss.get("global_y_field", "y")
+    if not comparing and axes != ("x", "y"):
+        return None
+    if ss.get("global_show_heatmap") and not ss.get("global_show_fix", True):
+        return "heatmap"
+    if (
+        not comparing
+        and ss.get("global_fixation_snap_to_line")
+        and ss.get("global_saccade_render_mode") == "Arc"
+    ):
+        return "illustration"
+    if (
+        ss.get("global_show_fix", True)
+        or ss.get("global_show_saccades", True)
+        or ss.get("global_show_raw_gaze")
+    ):
+        return "scanpath"
+    return None
 
-    Every tile sets Animate as well as the layers, so no Essentials view is ever
-    contradicted by the replay's own limits. `single_animate`'s toggle sits in
-    a row, not a popover, so a plain write here holds (no `write_through`).
 
-    Palette is an Essentials control too, so the palette picked stays across views:
-    a preset resets the colours, and the palette is applied again after it,
-    the way picking it does (`_on_palette_change`). Colours hand-edited in
-    Full, which match no palette, are reset like any preset resets them.
-    """
-    palette = _active_palette()
-    animation = name == _SIMPLE_ANIMATION
-    _apply_view_preset("scanpath" if animation else name)
-    st.session_state["single_animate"] = animation
-    st.session_state[SINGLE_COMPARE_TOGGLE] = False
-    if palette is not None and _active_palette() != palette:
-        st.session_state["global_palette"] = palette
-        _on_palette_change()
+def _choose_plot_view(name: str, comparing: bool) -> None:
+    """Animation uses the current styling and comparison. Static presets keep the palette."""
+    ss = st.session_state
+    if name == "animation":
+        # Selecting the active tile returns to any underlying figure, including
+        # a custom-axis chart that none of the static presets represents.
+        ss[SINGLE_ANIMATE] = not ss.get(SINGLE_ANIMATE, False)
+        return
+    if name != static_plot_view(comparing=comparing):
+        keep = (
+            *_palette_keys(),
+            "_palette_picked",
+            *(k for k in _VIZ_WIDGET_DEFAULTS if k.startswith("global_anim_")),
+        )
+        _apply_view_preset(name, keep=keep)
+    ss[SINGLE_ANIMATE] = False
 
 
 #: The 🔵 Raw gaze layer's switch, which `app.seed_raw_gaze_default` seeds.
@@ -2373,12 +2397,10 @@ def _palette_keys() -> frozenset[str]:
     )
 
 
-def _simple_ignored_keys() -> frozenset[str]:
-    """Plot settings Essentials' tiles do not count as leaving a view.
+def _palette_drift_keys() -> frozenset[str]:
+    """Color settings accounted for by a named palette.
 
-    Picking a palette is an Essentials action, so its colours are ignored while
-    they are one of the palettes; colours hand-edited past every palette are
-    a setting shaped in Full, and count.
+    Individually edited colors still count as a custom design.
     """
     return _palette_keys() if _active_palette() is not None else frozenset()
 
@@ -2387,8 +2409,7 @@ def _palette_only_drift() -> str | None:
     """The built-in view a drift to Custom left, when only the palette moved.
 
     The preset highlight drops to Custom on any colour change, the palette's
-    included. Essentials' tiles hold the view against the baseline the drift
-    recorded, without the keys `_simple_ignored_keys` names.
+    included. Check the baseline the drift recorded, without the keys `_palette_drift_keys` names.
     """
     drifted = st.session_state.get(_QUICK_VIEW_DRIFTED_FROM)
     if not (isinstance(drifted, tuple) and len(drifted) == 2):
@@ -2396,7 +2417,7 @@ def _palette_only_drift() -> str | None:
     name, applied = drifted
     if name not in _VIEW_PRESETS or not isinstance(applied, dict):
         return None
-    ignored = _simple_ignored_keys()
+    ignored = _palette_drift_keys()
     if not ignored:
         return None
     current = _capture_quick_view_state()
@@ -2415,18 +2436,17 @@ def _seeded_raw_gaze_view() -> str | None:
     A dataset recorded as raw gaze alone opens with its 🔵 Raw gaze layer on
     (`app.seed_raw_gaze_default`), which no built-in view has, so the preset
     highlight opens on Custom. That is the dataset's default, not a setting
-    anyone shaped, so Essentials' tiles read through it: the layer must still be
+    anyone shaped: the layer must still be
     at that default (the seed's stash is what says one was made), and every
     other plot setting with a widget default must be the view's own, the
-    palette's colours aside (`_simple_ignored_keys`). Full's preset
-    highlight does not read through it and shows Custom.
+    palette's colours aside (`_palette_drift_keys`). This keeps the hidden-settings note quiet for that default.
     """
     ss = st.session_state
     if not isinstance(ss.get(RAW_GAZE_SNAP_RESTORE_KEY), dict):
         return None
     if ss.get(_RAW_GAZE_LAYER) is not True or ss.get(_QUICK_VIEW_DRIFTED_FROM):
         return None
-    ignored = _simple_ignored_keys()
+    ignored = _palette_drift_keys()
     current = _capture_quick_view_state()
     for name in ("illustration", "scanpath", "heatmap"):
         expected = {**_VIEW_PRESETS[name], _RAW_GAZE_LAYER: True}
@@ -2444,46 +2464,67 @@ def _seeded_raw_gaze_view() -> str | None:
     return None
 
 
-def simple_active_view(*, animating: bool, active: str | None = None) -> str | None:
-    """The Essentials View tile the current settings match, or ``None``.
-
-    ``animating`` is whether the replay is actually drawn (Animate on and the
-    trial has fixations), so a trial without fixations, which draws its static
-    figure, lights its static tile. ``active`` is the design preset in force,
-    looked up with `_active_quick_view` when not given. Custom, a saved design,
-    or Heatmap / Illustration under the replay match no tile, except a Custom
-    made only by Essentials' own Palette (`_palette_only_drift`) or by a
-    dataset's raw-gaze default (`_seeded_raw_gaze_view`).
-    """
-    if active is None:
-        active = _active_quick_view()
-    if active == _CUSTOM_VIEW:
-        active = _palette_only_drift() or _seeded_raw_gaze_view() or active
-    if animating:
-        return _SIMPLE_ANIMATION if active == "scanpath" else None
-    return active if active in SIMPLE_VIEWS else None
-
-
-def render_simple_views(host, *, animating: bool, active: str | None = None) -> None:
-    """Draw Essentials mode's View tiles: a 2×2 grid, the matching tile primary."""
-    current = simple_active_view(animating=animating, active=active)
-    st.session_state[SIMPLE_VIEW_LIT_KEY] = current
-    grid = host.container(key="tour_grp_simple_views")
-    for names in (SIMPLE_VIEWS[:2], SIMPLE_VIEWS[2:]):
+def render_view_tiles(grid, *, animating: bool, comparing: bool) -> None:
+    """Highlight the view the figure draws, including a cross-dataset comparison."""
+    current = "animation" if animating else static_plot_view(comparing=comparing)
+    names = list(_VIEW_TILES)
+    for row in (names[:2], names[2:]):
         for cell, name in zip(
-            grid.columns(2, gap="small", wrap=False), names, strict=True
+            grid.columns(2, gap="small", wrap=False), row, strict=True
         ):
-            label, icon, help_text = _SIMPLE_VIEW_TILES[name]
+            label, icon, help_text = _VIEW_TILES[name]
+            disabled = name == "illustration" and bool(
+                st.session_state.get(SINGLE_COMPARE_TOGGLE)
+            )
+            if name == "animation" and st.session_state.get(SINGLE_ANIMATE):
+                help_text = (
+                    "Return to the static figure with its current settings."
+                    if animating
+                    else "This reading has no fixations. Select to turn off animation for other readings."
+                )
             cell.button(
                 label,
-                key=f"simple_view_{name}",
+                key=f"viz_view_{name}",
                 icon=ICONS[icon],
                 type="primary" if current == name else "secondary",
                 width="stretch",
-                help=help_text,
-                on_click=_apply_simple_view,
-                args=(name,),
+                disabled=disabled,
+                help="Turn off Compare readings to use Illustration."
+                if disabled
+                else help_text,
+                on_click=_choose_plot_view,
+                args=(name, comparing),
             )
+
+
+def _render_view_controls(host, *, animating: bool, slots: dict | None) -> None:
+    """Render the shared View grid and Palette in their fixed position at the top."""
+    design = _active_quick_view()
+    if design == _CUSTOM_VIEW:
+        design = _palette_only_drift() or _seeded_raw_gaze_view() or design
+    st.session_state["_custom_plot_in_use"] = design not in _VIEW_TILES
+    host.markdown('<div class="sps-control-label">View</div>', unsafe_allow_html=True)
+    grid = host.container(key="tour_grp_views")
+    if slots is None:
+        render_view_tiles(
+            grid,
+            animating=animating,
+            comparing=bool(st.session_state.get(SINGLE_COMPARE_TOGGLE)),
+        )
+    else:
+        # B can come from another dataset. Fill the grid once its picker has
+        # resolved the reading the figure will actually draw.
+        slots["view_tiles"] = grid
+    palette = _active_palette()
+    st.session_state["global_palette"] = palette or CUSTOM_PALETTE
+    host.selectbox(
+        "Palette",
+        options=list(PALETTES) if palette else [CUSTOM_PALETTE, *PALETTES],
+        key="global_palette",
+        persist_state="session",
+        on_change=_on_palette_change,
+    )
+    host.container(key="palette_layers_divider").divider()
 
 
 # Palette setting name → the session key it writes. A palette is applied
@@ -6504,7 +6545,9 @@ def _collect_viz_settings(
         marker_duration_range=tuple(
             ss.get("global_marker_duration_range") or DEFAULT_MARKER_DURATION_RANGE
         ),
-        duration_size_legend=bool(ss.get("global_duration_size_legend", True)),
+        duration_size_legend=bool(
+            ss.get("global_duration_size_legend", DEFAULT_DURATION_SIZE_LEGEND)
+        ),
         legend_layout=_collect_legend_layout(ss),
         # A deselected position control stores None and draws at its default.
         **{
@@ -6796,12 +6839,9 @@ def corpus_style_controls(
 #: What a greyed rail switch says on hover, for the Animate gate. The
 #: replay has its own fixation layer and none for the heatmap or raw gaze.
 _ANIMATE_GREYS = {
-    "fix": "Greyed while Animate is on: the replay always draws fixations. "
-    "This switch applies to the other figures.",
-    "heatmap": "Greyed while Animate is on: the replay has no heatmap. Turn "
-    "Animate off to show it.",
-    "rawgaze": "Greyed while Animate is on: the replay has no raw gaze. Turn "
-    "Animate off to show it.",
+    "fix": "Animation always draws fixations.",
+    "heatmap": "Choose a static view to show the heatmap.",
+    "rawgaze": "Choose a static view to show raw gaze.",
 }
 
 
@@ -6819,7 +6859,7 @@ def _greyed_help(*reasons: tuple[bool, str]) -> str | None:
 def _rail_section(host, label: str, *, slug: str, name: str | None = None, **toggle):
     """One rail section: `[toggle | ▾]` on a single line.
 
-    Every section of the rail is shaped like 🎬 Animate and ⚖️ Compare: the
+    A layer uses the same split row as Compare readings: the
     layer's switch and the disclosure for its options share a row, and the
     options open in a **popover** rather than inside an expander.
 
@@ -7113,6 +7153,7 @@ def render_plot_controls(
     base_font_size: int,
     *,
     host=None,
+    view_host=None,
     has_raw_gaze: bool = False,
     has_stimulus_image: bool = False,
     trial_samples: pd.DataFrame | None = None,
@@ -7129,9 +7170,8 @@ def render_plot_controls(
     """Render the visualization controls and return the resolved settings dict.
 
     Layout, grouped so the rail reads by category:
-      1. Design presets (Scanpath · Heatmap · Illustration · 🛠️ Custom, then
-         My designs) + Palette at the top: the controls that get to a good
-         figure without opening anything.
+      1. View tiles and Palette at the top in both modes. Full adds comparison,
+         animation settings, My designs and the layer controls.
       2. One `[switch | ▾]` row per layer (:func:`_rail_section`) —
          **👁️ Fixations**, **↗️ Saccades**, **📄 Stimulus**, **⬚ Word boxes**,
          **🔥 Heatmap**, **🔵 Raw gaze** — the ▾ popover holding the layer's
@@ -7173,10 +7213,8 @@ def render_plot_controls(
     preview are the figure's. Without it they are read off the selected
     trial's fixations alone.
 
-    ``animating`` is whether the replay is drawn (Animate on and the trial has
-    fixations), which picks Essentials mode's lit View tile. Essentials draws the View
-    tiles, Palette and ＋ More options; every other part sits in an
-    ``advanced_only`` container, so both modes build the same widgets.
+    ``view_host`` reserves space for the shared controls above comparison and
+    animation settings. ``animating`` follows the figure drawn for this trial.
     """
     # Seed every widget's default before any widget renders (see `_pin`).
     color_fields, numeric_fields, highlight_options = _seed_viz_state(
@@ -7191,105 +7229,14 @@ def render_plot_controls(
 
     rail = host if host is not None else st
 
-    # --- Design presets ---------------------------------------------------
-    # The three built-in designs and 🛠️ Custom in a 2x2 grid, and the user's
-    # own saved designs in an expander under them. 🛠️ Custom is not a design —
-    # it is the one unnamed slot holding *your most recent hand-tuning*, so
-    # switching to a built-in and back does not lose it. Naming settings you
-    # want to keep is what "My designs" is for. The remaining preset keys
-    # (`reading_order`, `everything`) stay in `_VIEW_PRESETS` for any deep link.
-    # Essentials mode draws its View tiles in their place (below).
-    presets = advanced_only(rail, "rail_presets")
-    presets.markdown(
-        '<div class="sps-control-label">Design presets</div>',
-        unsafe_allow_html=True,
+    _render_view_controls(
+        view_host if view_host is not None else rail, animating=animating, slots=slots
     )
-    # A 2×2 grid keeps the labels readable in the narrow rail.
-    _active = _active_quick_view()
-    _qv_grid = presets.container(key="quick_views_grid")
-    _qv_top = _qv_grid.columns(2, gap="small", wrap=False)
-    _qv_top[0].button(
-        f"{ICONS['preset_scanpath']} Scanpath",
-        key="viz_view_scanpath",
-        type="primary" if _active == "scanpath" else "secondary",
-        width="stretch",
-        help="Fixations and saccades over the text.",
-        on_click=_apply_view_preset,
-        args=("scanpath",),
-    )
-    _qv_top[1].button(
-        f"{ICONS['heatmap']} Heatmap",
-        key="viz_view_heatmap",
-        type="primary" if _active == "heatmap" else "secondary",
-        width="stretch",
-        help="Each word box colored by the total time spent on it (ms), with "
-        "nothing else drawn.",
-        on_click=_apply_view_preset,
-        args=("heatmap",),
-    )
-    _qv_bottom = _qv_grid.columns(2, gap="small", wrap=False)
-    _qv_bottom[0].button(
-        f"{ICONS['illustration']} Illustration",
-        key="viz_view_illustration",
-        type="primary" if _active == "illustration" else "secondary",
-        width="stretch",
-        help="A clean schematic: fixations snapped onto their lines, arced "
-        "saccades, one saccade color, opaque markers.",
-        on_click=_apply_view_preset,
-        args=("illustration",),
-    )
-    _qv_bottom[1].button(
-        f"{ICONS['preset_custom']} Custom",
-        key="viz_view_custom",
-        type="primary" if _active == _CUSTOM_VIEW else "secondary",
-        width="stretch",
-        help="Your most recent custom plot settings. Save them under a name in "
-        f"{ICONS['designs']} My designs to keep them.",
-        on_click=_apply_view_preset,
-        args=(_CUSTOM_VIEW,),
-    )
-    # Essentials mode's one choice: which view of this trial. It reuses the preset
-    # lookup above rather than syncing the quick-view state a second time.
-    views = simple_only(rail, "views")
-    views.markdown('<div class="sps-control-label">View</div>', unsafe_allow_html=True)
-    render_simple_views(views, animating=animating, active=_active)
-
-    # Keep the tour's target around the detailed controls on both desktop and phone.
     viz = rail.container(key="tour_grp_viz_controls")
     _render_saved_designs(advanced_only(viz, "rail_designs"))
-
-    # The Illustration *label* (the publication-disclosure override) lives in
-    # the "📐 Figure & canvas" group below, with the other figure-level
-    # presentation settings.
-
-    # These figures end up in papers — printed, sometimes in black &
-    # white — and are read by colourblind viewers, so the colour defaults are a
-    # choice rather than a constant. Picking one writes the individual colour
-    # keys, so every per-element picker below still overrides it — and once one
-    # is overridden the selector says **Custom** rather than keeping a name the
-    # figure no longer earns (the same rule the design presets follow above).
-    # `Custom` is offered only while it's true, so the list stays the three real
-    # palettes the moment the colours match one again.
-    _active = _active_palette()
-    _palette_options = list(PALETTES) if _active else [CUSTOM_PALETTE, *PALETTES]
-    st.session_state["global_palette"] = _active or CUSTOM_PALETTE
-    # No `help=`: Streamlit draws it as a `?` icon, and the rail's head is kept
-    # clear of those. A selectbox has no second hover target, so what each
-    # palette *is* reads off the option names themselves ("Default
-    # (colorblind-safe)", "Print / grayscale", "High contrast"), and "any change
-    # reads Custom" is visible the moment it happens. The full explanation lives
-    # in the docs.
-    viz.selectbox(
-        "Palette",
-        options=_palette_options,
-        key="global_palette",
-        persist_state="session",
-        on_change=_on_palette_change,
+    advanced_only(viz, "rail_layers_label").markdown(
+        '<div class="sps-control-label">Layers</div>', unsafe_allow_html=True
     )
-
-    # Keep the palette controls visually separate from the bordered layer cards.
-    # A keyed wrapper gives the spacing a stable, narrowly scoped CSS hook.
-    viz.container(key="palette_layers_divider").divider()
     # Essentials mode ends its rail here: a list of what Full adds, where the
     # layer rows would start.
     render_more_popover(simple_only(viz, "rail_more"), "rail", label="More options")
@@ -7301,14 +7248,12 @@ def render_plot_controls(
     # Values for off layers are read back from session_state by
     # `_collect_viz_settings`, so the returned dict always carries every key.
 
-    # The two view modes (the 🎬 Animate / ⚖️ Compare rows, rendered *before*
-    # this function) route the figure through different builders, and each
+    # Animation and Compare readings route the figure through different builders, and each
     # ignores a different slice of these controls. Read both flags and gate every
     # affected widget through `_mode_gate` — greyed with a reason, never silently
     # ignored, and never with its stored value rewritten. What is gated below is
     # the genuinely builder-less set (see the setting → render-path table in
-    # AGENTS.md). Read from the session rather than the `animating` argument,
-    # so a caller that does not pass it still gates from the stored toggles.
+    # RENDER_PATHS.md). Standalone rail callers can seed the requested modes directly.
     comparing = bool(
         st.session_state.get(
             "_resolved_comparing", st.session_state.get("single_compare_toggle")
@@ -7385,7 +7330,7 @@ def render_plot_controls(
         note=""
         if no_fixations_note
         else (
-            f"{ICONS['warning']} **Animate** always draws fixations; this switch "
+            f"{ICONS['warning']} **Animation** always draws fixations; this switch "
             "applies to the other figures."
             if fix_off_disabled
             else ""
@@ -9110,12 +9055,14 @@ def render_plot_controls(
         # greyed fields' hover says so, and what turns them back on.
         axis_disabled, _ = _mode_gate(animating, comparing, **_static_only)
         modes = " and ".join(
-            name for name, on in (("Animate", animating), ("Compare", comparing)) if on
+            name
+            for name, on in (("Animation", animating), ("Compare readings", comparing))
+            if on
         )
         axis_disabled, axis_help = _layer_gate(
             axis_disabled,
-            f"{ICONS['warning']} {modes} always plots screen x / y. Turn "
-            f"**{modes}** off to choose other fields; your choices are kept."
+            f"{ICONS['warning']} {modes} uses screen coordinates. Choose a static view "
+            "of one reading to edit the axes."
             if axis_disabled
             else "Choose screen X and Y for the spatial scanpath, or select two numeric fields to chart the reading.",
         )
@@ -11046,7 +10993,7 @@ def _participant_metadata_narrowing(prefix: str, recipe: dict) -> tuple:
 
 
 def metadata_readings(words, fixations, raw_gaze=None) -> pd.DataFrame:
-    """The unfiltered dataset's recording identities, shared by joins and filters."""
+    """Recording identities for these frames, shared by metadata filters and tables."""
     from . import metadata as md
     from .data import frame_cache
 

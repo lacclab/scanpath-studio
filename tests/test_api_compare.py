@@ -221,6 +221,7 @@ class TestSameDataset:
             layout=layout,
             labels=("Reader one", "Reader two"),
             canvas_size=(2560, 1440),
+            duration_size_legend=True,
             legend_layout=legend_layout,
         )
         _plot_w, plot_h, margin = plots._plot_px(fig)

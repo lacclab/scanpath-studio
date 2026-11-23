@@ -63,23 +63,24 @@ pencil (:material/edit:), which are in Full.
 <a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/plot-controls.webp" title="Open full size"><img src="../../../assets/screenshots/controls/plot-controls.webp" alt="The Plot controls column" loading="lazy"></a>
 
 
-The column on the right of the plot. At the top, the modes and designs change
-the whole figure at once. Under them, each layer of the figure has a row: the
-switch turns the layer on or off, and the **▾** beside it opens that layer's
-settings, described below one menu at a time. The last two rows,
-**Filters & highlights** and **Figure & canvas**, cover the figure as a whole.
-A grayed-out control says why when you hover over it. Essentials shows only the
-view tiles and **Palette**; the rest of this section is in Full.
+Both modes start with the same four **View** tiles and **Palette**. Switching
+modes keeps your figure and its settings. If you switch to Essentials while
+comparing readings, the **Compare readings** switch stays available.
 
-### :material/movie: Animate: play the reading as a video
+Full adds comparison and animation settings, saved designs, and a row for
+each layer. Use the switch to turn a layer on or off and **▾** to open its
+settings. **Filters & highlights** and **Figure & canvas** apply to the
+whole figure. Hover over a grayed-out control to see why it is unavailable.
 
-<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/animate.webp" title="Open full size"><img src="../../../assets/screenshots/controls/animate.webp" alt="The Animate menu" loading="lazy"></a>
+### :material/movie: Animation settings { #animate-play-the-reading-as-a-video }
 
-The **Animate** switch turns the figure into an animation, a video of the
-reading played back fixation by fixation, with play and pause buttons and a
-time slider above the plot. While it is on, the **Fixations**, **Heatmap** and
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/animate.webp" title="Open full size"><img src="../../../assets/screenshots/controls/animate.webp" alt="Animation settings" loading="lazy"></a>
+
+Choose **Animation** to play the reading fixation by fixation. The play and pause
+buttons and time slider appear above the plot. Select **Animation** again to return
+to the previous static figure with its settings. During an animation, the **Fixations**, **Heatmap** and
 **Raw gaze** switches are grayed. For playback and frame stepping from the
-keyboard, see [Keyboard shortcuts](index.md#keyboard-shortcuts). Its **▾** holds:
+keyboard, see [Keyboard shortcuts](index.md#keyboard-shortcuts). Open **Animation settings** in Full for these controls:
 
 | Control | What it does |
 | --- | --- |
@@ -102,15 +103,15 @@ Pick B in the [trial control bar](#trial-control-bar), above the plot. Its
 
 | Control | What it does |
 | --- | --- |
-| **View** | **Overlay** both scanpaths, or give each a panel, **Side by side** or **Top & bottom**. With **Animate** on, the comparison is an overlay. |
+| **View** | **Overlay** both scanpaths, or give each a panel, **Side by side** or **Top & bottom**. In **Animation**, the comparison is an overlay. |
 | **Stimulus from** | In an overlay, whose word boxes and text are drawn: **Both**, **A** or **B**. |
 | **Label A** / **Label B** | Each scanpath's name in the Compare (A/B) legend, written with fields such as `{participant_id}`. Empty uses the automatic label. Shown while that legend is on. |
 | **Available fields** | The fields a label can use. |
 | **Step** → **A and B together** | ◀ ▶ move both scanpaths at once. |
 
-### :material/palette: Design presets and palette
+### :material/palette: Views, palette and saved designs { #design-presets-and-palette }
 
-<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/designs.webp" title="Open full size"><img src="../../../assets/screenshots/controls/designs.webp" alt="Design presets, My designs open on two saved designs, and the palette" loading="lazy"></a>
+<a class="sps-ctl sps-ctl--menu" href="../../../assets/screenshots/controls/designs.webp" title="Open full size"><img src="../../../assets/screenshots/controls/designs.webp" alt="The view tiles, palette and two saved designs" loading="lazy"></a>
 
 Restyle the whole figure in one click, with a ready-made design or one you
 saved:
@@ -118,7 +119,7 @@ saved:
 | Control | What it does |
 | --- | --- |
 | :material/timeline: **Scanpath** / :material/local_fire_department: **Heatmap** / :material/draw: **Illustration** | Ready-made designs: fixations and saccades over the text, a word-box heatmap, or a clean schematic. |
-| :material/build: **Custom** | Your most recent custom settings. |
+| **My designs** → **Restore last custom design** | Return to your most recent manual settings. |
 | :material/palette: **My designs** | Your saved designs. Click one to apply it. :material/edit: renames it and :material/delete: deletes it. |
 | :material/palette: **My designs** → :material/save: | Save the settings on screen as a named design, to apply again later in one click. |
 | :material/palette: **My designs** → **Export** / **Import** | Download your designs as a file, or load a file of designs, to share a look with co-authors or move your designs to another computer. A design in the file replaces yours of the same name. |
@@ -278,14 +279,14 @@ The figure as a whole:
 | **Grid** → **Auto**, interval | Set the grid spacing (interval), in px, or let **Auto** choose it. |
 | **Labels** | Set the grid label (tick label) font size. |
 | **Axis preset** | Plot horizontal or vertical screen position by fixation index or elapsed time, or compare fixation index with elapsed time or duration. **Connect fixations** traces the index sequence. On an elapsed-time chart, each bar spans one fixation’s duration. Zero is the trial’s first recorded onset, including when viewing a later screen or a narrower fixation window. |
-| **Axes** → **X** / **Y** | Choose fixation fields or sample coordinates, recorded time, sample number and pupil measurements. Each layer draws its available fields. Screen Y increases downward. **Screen X and Y** restores the stimulus view. Animate and Compare use screen coordinates. |
+| **Axes** → **X** / **Y** | Choose fixation fields or sample coordinates, recorded time, sample number and pupil measurements. Each layer draws its available fields. Screen Y increases downward. **Screen X and Y** restores the stimulus view. Animation and Compare readings use screen coordinates. |
 | **Illustration** → **Label** | Choose when the figure carries an *Illustration* note, saying it does not show the recorded positions. **Auto** adds it when a setting changes the geometry or the data (such as snapping fixations to a line or drawing saccades as arcs), **Show** always, **Hide** never. |
 | **Illustration** → **Text** | Write the *Illustration* label's text. Empty writes "Illustration ·" followed by the reasons. |
 | **Title** → **Show**, text, **Size** | Add a figure title above the plot, and set its font size. `{field}` inserts a value of the trial. |
 | **Caption** → **Show**, text, **Size**, color | Add a figure caption below the plot, and set its font size and color. `{field}` works here too. |
 | **Credit** → **Show** | Add a small *Made with Scanpath Studio* line under the plot. |
 | **Hover** → **Words** / **Fixations** | Choose the hover fields: what the tooltip shows when the mouse is over a word or a fixation. |
-| **Legends** → **Show** | Show or hide each legend the figure draws: **Compare (A/B)**, **Saccade types**, **Fixation colors**, **Fixation sizes** or **Text highlight**. Each has a row. |
+| **Legends** → **Show** | Show or hide each legend the figure draws: **Compare (A/B)**, **Saccade types**, **Fixation colors**, **Fixation sizes** or **Text highlight**. The fixation size legend starts hidden. Tick **Show** for **Fixation sizes** to include it in a saved figure. |
 | **Legends** → **Position** | Choose the legend position: a corner, the middle of an edge, or down a side, outside or inside the plot. |
 | **Legends** → **Arrangement** | Choose the legend arrangement: **Stacked** or **Side by side**. |
 | **Legends** → **Text size** | Set the legend text (font) size, in px. Empty uses the figure's text size. |

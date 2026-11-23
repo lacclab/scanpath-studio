@@ -73,7 +73,7 @@ NON_DEFAULT = {
     "marker_size_range": (5, 20),
     "marker_size_scale": "log",
     "marker_duration_range": (80.0, 900.0),
-    "duration_size_legend": False,
+    "duration_size_legend": True,
     "legend_layout": {
         "saccades": {
             "position": "right-outside",
@@ -299,6 +299,7 @@ _COMPARE = ["--compare-with", f"{OTHER[0]}:{OTHER[1]}"]
             "marker_duration_range",
             (80.0, 900.0),
         ),
+        (["--duration-size-legend"], "duration_size_legend", True),
         (["--no-duration-size-legend"], "duration_size_legend", False),
         (["--no-color-legend"], "show_color_legend", False),
         (["--no-highlight-legend"], "show_highlight_legend", False),

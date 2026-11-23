@@ -6,13 +6,11 @@ Update it in the same PR as such a change; `tests/test_mode_parity.py` checks
 the code side.
 
 The scanpath rail (`controls.render_plot_controls`) is **one** control set
-feeding **three** figure builders, picked by the rail's Animate / Compare
-toggles (`single_animate` / `single_compare_toggle`, rendered in `tabs.py`
-before `render_plot_controls`):
+feeding **three** figure builders, picked by the Animation tile and Compare readings switch (`single_animate` / `single_compare_toggle`, resolved in `tabs.py`):
 
 | mode | builder | thread |
 | --- | --- | --- |
-| neither toggle | `plots.make_scanpath_figure` | `tabs._build_figure_settings` → `_cached_scanpath_figure` |
+| static, single reading | `plots.make_scanpath_figure` | `tabs._build_figure_settings` → `_cached_scanpath_figure` |
 | **Animate** | `plots.make_scanpath_animation` | `tabs._build_and_render_animation` |
 | **Compare** | `plots.make_comparison_figure` (split layouts: `_make_split_comparison_figure`) | `tabs._render_comparison_figure` |
 | **Animate + Compare** | `make_scanpath_animation(fixations_b=…)` — the co-animation | same as Animate |
@@ -33,7 +31,7 @@ lists the four render views. The reference and compact Share snippets use
 | `marker_size_range` | ✅ | ✅ | ✅ | A/B controls set each scanpath's range. A style without a range inherits the figure-wide value. |
 | `color_by`, `fixation_colorscale`, `fixation_color_range` | ✅ | ✅ | ✅ | Compare colours the fill and makes the scanpath colour the outline; a range is present only when explicit (absent = scale to the data, A+B together) |
 | `fixation_symbol` | ✅ | ✅ | ✅ | Glyph shapes (♥) are drawn as text by `plots._glyph_scatter_traces` in every builder |
-| `marker_size_scale`, `marker_duration_range`, `duration_size_legend` | ✅ | ✅ | ✅ | Relative sizing uses the visible durations of both readings together. Each side keeps its own pixel range. The size key draws in Compare when these ranges match. |
+| `marker_size_scale`, `marker_duration_range`, `duration_size_legend` | ✅ | ✅ | ✅ | Relative sizing uses the visible durations of both readings together. Each side keeps its own pixel range. The size key is off by default. In Compare it can be shown when these ranges match. |
 | `fix_index_range` | ✅ | ✅ | ✅ | Sliced in `tabs._slice_fix_range`; Compare's B has its own window (`single_compare_fix_range`) |
 | `fixation_flags` (short / long / out-of-bounds) | ✅ | ✅ | ✅ | Compare applies each scanpath's own (B: `cmp1_fixclass_*`) |
 | `illustration_label` / `illustration_text` | ✅ | ✅ | ✅ | An authored drawing on either side of a comparison qualifies for the automatic label |

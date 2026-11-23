@@ -30,7 +30,6 @@ VISIBLE = LabelVisibility.LabelVisibilityOptions.VISIBLE
 
 #: Every toggle that sits in a `split_mode_*` row once the app has booted.
 SPLIT_ROW_TOGGLES = (
-    "single_animate",
     "single_compare_toggle",
     "global_show_fix",
     "global_show_saccades",

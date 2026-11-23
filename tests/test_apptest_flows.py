@@ -160,17 +160,23 @@ def _frames_with(at: AppTest, *columns: str) -> list[pd.DataFrame]:
     return out
 
 
+def _inspect_tables(at: AppTest) -> None:
+    at.segmented_control(key="data_inspection_panel").set_value("Tables")
+    _rerun(at, view=VIEW_DATA)
+    _clean(at, "inspecting tables")
+
+
 def _fixation_durations(at: AppTest) -> list:
-    """``duration_ms`` from the rendered fixation-level table (Data Inspection →
-    Raw data → Fixations), in render order."""
+    """Durations from the Fixations table in display order."""
+    _inspect_tables(at)
     frames = _frames_with(at, "duration_ms", "x")
     assert frames, "fixation-level table not rendered"
     return list(frames[0]["duration_ms"])
 
 
 def _word_labels(at: AppTest) -> set[str]:
-    """Distinct ``text`` values on the rendered word-level table (Data
-    Inspection → Raw data → AOIs)."""
+    """Distinct text values from the Words table."""
+    _inspect_tables(at)
     frames = _frames_with(at, "word_id", "text")
     assert frames, "word-level table not rendered"
     return set(frames[0]["text"].dropna().astype(str))
@@ -211,6 +217,8 @@ class TestColumnMappingOverrideFlow:
             "IA_LABEL" in m.value and "overridden" in m.value for m in at.markdown
         ), "the ✨ flag should report the overridden auto-detection on hover"
 
+        at.button(key="dataset_editor_close").click()
+        _rerun(at, view=VIEW_DATA)
         # The frames were re-derived, not just re-labelled: every word label on
         # the word-level table is now a POS tag…
         after = _word_labels(at)
@@ -218,6 +226,7 @@ class TestColumnMappingOverrideFlow:
         assert {"NOUN", "VERB", "DET", "PUNCT"} <= after, after
         # …and the stimulus text, reconstructed downstream from the same column,
         # reads as POS tags too.
+        _inspect_tables(at)
         stimuli = _frames_with(at, "Text ID", "# Words", "Text")
         assert stimuli, "stimuli table not rendered"
         passage = str(stimuli[0]["Text"].iloc[0]).split()
@@ -315,6 +324,7 @@ class TestTrialFilterFlow:
         _rerun(at, view=VIEW_DATA)
         _clean(at, "on the Data page after the difficulty filter:")
         assert _metric(at, "Trials") == str(DEMO_ADV_TRIALS_IN_WORDS)
+        _inspect_tables(at)
         graded = _frames_with(at, "difficulty_level")
         assert graded, "no rendered frame carries difficulty_level"
         for frame in graded:
@@ -780,10 +790,7 @@ class TestBulkExportFlow:
 
 @pytest.mark.timeout(180)
 class TestRecoveryCachePanelFlow:
-    """🗂️ Data → *Saved on this computer* is the on-device cache's only in-app
-    surface, so it has to report the real store. Its one control is *Clear
-    what is saved…*, behind a confirmation.
-    """
+    """Saved work reports the session on disk and confirms deletion."""
 
     @staticmethod
     def _boot_local(tmp_path, monkeypatch) -> AppTest:
@@ -798,6 +805,7 @@ class TestRecoveryCachePanelFlow:
         monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+        at.session_state["data_workspace"] = "Saved work"
         return _rerun(at, view=VIEW_DATA)
 
     def test_panel_reports_the_store_and_its_folder(self, tmp_path, monkeypatch):
@@ -806,16 +814,10 @@ class TestRecoveryCachePanelFlow:
         at = self._boot_local(tmp_path, monkeypatch)
         _clean(at, "cache panel:")
         body = " ".join(str(m.value) for m in at.markdown)
-        assert "**Also saved:**" in body
-        # The wizard's buttons say "Upload", so the note never says nothing is
-        # uploaded. Under AppTest the server is not on loopback, where the
-        # files did leave the browser's machine, so that sentence is left out.
+        assert "**Automatic saving is on.** Your work reopens on this server." in body
         captions = " ".join(str(c.value) for c in at.caption)
-        assert "saved as you work" in captions
-        assert "Nothing is uploaded" not in captions
-        assert "Nothing leaves this computer" not in captions
-        # The folder is on the page itself, not behind a popover.
-        assert f"**Session folder:** `{tmp_path}`" in body
+        assert "The app saves datasets you add" in captions
+        assert f"Session folder · `{tmp_path}`" in captions
 
         # Working in the app writes the cache — the panel's own claim.
         assert (tmp_path / "manifest.json").is_file()
@@ -852,19 +854,17 @@ class TestRecoveryCachePanelFlow:
         at = self._boot_local(tmp_path / "cache", monkeypatch)
         _clean(at, "cache panel:")
         body = " ".join(str(m.value) for m in at.markdown)
-        assert "**Datasets on this computer**" in body
-        assert "- **Corpus** · added · " in body
-        assert "· a copy in the session folder" in body
-        assert f"- **PoTeC** · downloaded · 2.0 KB · `{potec}`" in body
-        captions = " ".join(str(c.value) for c in at.caption)
-        assert "Downloads stay until you delete one here." in captions
+        assert {"Dataset downloads", "Your session"} <= {h.value for h in at.subheader}
+        assert "**Corpus** · " in body
+        assert "**PoTeC**" in body
+        assert any(f"2.0 KB · `{potec}`" in c.value for c in at.caption)
 
         at.button(key="saved_here_delete_0").click()
         _rerun(at, view=VIEW_DATA)
         body = " ".join(str(m.value) for m in at.markdown)
         assert "This deletes 1 file of **PoTeC** (2.0 KB)" in body
         assert tsv.is_file(), "nothing goes before Delete"
-        # Re-armed, as for *Clear what is saved…*: AppTest replays the script.
+        # AppTest replays the script when a dialog button is clicked.
         at.session_state[app.DELETE_DOWNLOAD_REQUEST_KEY] = (
             "PoTeC — Potsdam Textbook Corpus"
         )
@@ -877,9 +877,9 @@ class TestRecoveryCachePanelFlow:
             str(t.value) for t in at.toast
         )
         body = " ".join(str(m.value) for m in at.markdown)
-        assert "· downloaded ·" not in body
+        assert "**PoTeC**" not in body
 
-    def test_a_loopback_run_says_nothing_leaves_this_computer(
+    def test_a_loopback_run_names_the_computer_as_the_saved_location(
         self, tmp_path, monkeypatch
     ):
         from scanpath_studio import app
@@ -887,8 +887,9 @@ class TestRecoveryCachePanelFlow:
         monkeypatch.setattr(app, "server_bound_to_loopback", lambda: True)
         at = self._boot_local(tmp_path, monkeypatch)
         _clean(at, "cache panel:")
-        captions = " ".join(str(c.value) for c in at.caption)
-        assert "restored next time. Nothing leaves this computer." in captions
+        assert any(
+            "Your work reopens on this computer." in m.value for m in at.markdown
+        )
 
     def test_clear_what_is_saved_lists_then_starts_over(self, tmp_path, monkeypatch):
         """The confirmation names what goes, and a confirmed clear
@@ -926,7 +927,7 @@ class TestRecoveryCachePanelFlow:
         at.run(timeout=60)
         _clean(at, "Scanpath view:")
         body = " ".join(str(m.value) for m in at.markdown)
-        assert "**Also saved:**" not in body
+        assert "**Automatic saving is on.**" not in body
 
     def test_an_attached_metadata_table_survives_a_refresh(self, tmp_path, monkeypatch):
         """End to end: attach a table, refresh, and its field is still in the
@@ -972,12 +973,12 @@ class TestRecoveryCachePanelFlow:
         monkeypatch.delenv("SCANPATH_STUDIO_PERSIST", raising=False)
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+        at.session_state["data_workspace"] = "Saved work"
         at = _rerun(at, view=VIEW_DATA)
         _clean(at, "hosted cache panel:")
         captions = " ".join(str(c.value) for c in at.caption)
-        assert "Not saved between visits." in captions
-        body = " ".join(str(m.value) for m in at.markdown)
-        assert "**Session folder:**" not in body
+        assert any("ends when you close or refresh" in m.value for m in at.markdown)
+        assert "Session folder ·" not in captions
 
     def test_panel_says_saving_was_turned_off_in_plain_words(self, monkeypatch):
         """Turned off at launch: the sentence says so for everyone, and the
@@ -986,13 +987,16 @@ class TestRecoveryCachePanelFlow:
         monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "0")
         at = AppTest.from_file(APP_SCRIPT)
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+        at.session_state["data_workspace"] = "Saved work"
         at = _rerun(at, view=VIEW_DATA)
         _clean(at, "turned-off cache panel:")
         captions = [str(c.value) for c in at.caption]
-        lead = next(c for c in captions if "**Turned off.**" in c)
+        lead = next(
+            m.value for m in at.markdown if "Automatic saving is off" in m.value
+        )
         assert "SCANPATH_STUDIO_PERSIST" not in lead
         assert any("`SCANPATH_STUDIO_PERSIST=0`" in c for c in captions)
-        assert not any("Not saved between visits." in c for c in captions)
+        assert not any("ends when you close or refresh" in m.value for m in at.markdown)
 
 
 class TestAddDatasetMenu:

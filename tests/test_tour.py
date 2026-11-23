@@ -441,7 +441,10 @@ def test_tour_names_controls_as_the_screen_draws_them():
         ("edit", ".st-key-tour_grp_chips"),
     ):
         assert f"**{ICONS[icon]} {chevron}** button" in bodies[selector]
-    assert f"**{chevron}** beside each toggle" in bodies[".st-key-tour_grp_view_modes"]
+    assert (
+        f"**{chevron}** beside Compare readings"
+        in bodies[".st-key-tour_grp_view_modes"]
+    )
     for body in bodies.values():
         assert not body.startswith(":material/")
         assert "▾" not in body
@@ -496,6 +499,7 @@ def _surface_open_probe_app():
     data_step = next(
         s for tutorial in TUTORIALS for s in tutorial.steps if s.view == _VIEW_DATA
     )
+    st.session_state["data_workspace"] = data_step.data_section
     verdicts = []
     for view in (_VIEW_DATA, _VIEW_CORPUS, _VIEW_SCANPATH):
         st.session_state["main_nav"] = view
@@ -1233,10 +1237,10 @@ class TestSpotlightSelectorsResolve:
         assert 'st.markdown("## 🎛️ View modes")' not in tab_source
         assert 'st.markdown("## 🎨 Visualization")' not in tab_source
         assert "sps-control-label" in control_source
-        # The 2×2 grid of built-in designs — 🛠️ Custom is the unnamed "your
-        # last hand-tuning" slot — and the user's own named designs are the
-        # library beneath it.
-        assert 'key="viz_view_custom"' in control_source
+        # The last custom design and the user's saved designs share one section.
+        assert 'key="viz_view_custom"' in inspect.getsource(
+            controls._render_saved_designs
+        )
         assert '_render_saved_designs(advanced_only(viz, "rail_designs"))' in (
             control_source
         )
@@ -1531,7 +1535,7 @@ _SIMPLE_TOUR_SELECTORS = {
     None,
     ".st-key-tour_grp_trial_picker",
     ".st-key-tour_grp_plot",
-    ".st-key-tour_grp_simple_views",
+    ".st-key-tour_grp_views",
     ".st-key-tour_grp_subtabs",
     ".st-key-tour_grp_ui_mode",
 }

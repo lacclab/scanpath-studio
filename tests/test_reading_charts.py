@@ -452,13 +452,21 @@ def test_axis_preset_and_compare_survive_mode_switch_until_a_tile_is_selected():
         chart_axes.ELAPSED,
         "y",
     )
+    at.button(key="viz_view_animation").click().run()
+    assert at.session_state["single_animate"]
+    at.button(key="viz_view_animation").click().run()
+    assert not at.session_state["single_animate"]
+    assert at.session_state["global_x_field"] == chart_axes.ELAPSED
     at.segmented_control(key="ui_mode_switch").set_value("essentials").run()
     assert any(chart_axes.ELAPSED_LABEL in c.value for c in at.caption)
     at.button(key="hidden_note_to_advanced").click().run()
     at.toggle(key="single_compare_toggle").set_value(True).run()
     at.segmented_control(key="ui_mode_switch").set_value("essentials").run()
     assert at.session_state["single_compare_toggle"]
-    at.button(key="simple_view_scanpath").click().run()
+    assert at.button(key="viz_view_scanpath").proto.type == "primary"
+    at.toggle(key="single_compare_toggle").set_value(False).run()
+    assert at.session_state["global_x_field"] == chart_axes.ELAPSED
+    at.button(key="viz_view_scanpath").click().run()
     assert not at.exception
     assert not at.session_state["single_compare_toggle"]
     assert (at.session_state["global_x_field"], at.session_state["global_y_field"]) == (

@@ -1158,11 +1158,10 @@ def _render_parser() -> argparse.ArgumentParser:
         "Not used by --marker-size-scale relative.",
     )
     viz.add_argument(
-        "--no-duration-size-legend",
-        dest="duration_size_legend",
-        action="store_false",
-        help="Hide the Fixation sizes legend, reference circles labeled in ms. "
-        "It is drawn when --marker-size-scale is sqrt, linear or log.",
+        "--duration-size-legend",
+        action=argparse.BooleanOptionalAction,
+        help="Show reference circles labeled in milliseconds for the sqrt, linear "
+        "or log fixation size scale (off by default).",
     )
     viz.add_argument(
         "--canvas",
@@ -1913,6 +1912,7 @@ def _render_parser() -> argparse.ArgumentParser:
 #: the option (`--fixation-opacity` → `fixation_opacity`), so they reach the
 #: builder unchanged whenever given.
 _DIRECT_OPTION_FLAGS = (
+    "duration_size_legend",
     "marker_size_scale",
     *OPACITY_OPTIONS,
     *FIXATION_LABEL_OPTIONS,
@@ -1971,7 +1971,6 @@ _SWITCH_OPTION_FLAGS = {
     "show_heatmap_colorbar": False,
     "scale_text_to_boxes": False,
     "fit_to_monitor": False,
-    "duration_size_legend": False,
     "show_stimulus_image": True,
     "show_plot_frame": False,
     "show_credit": True,
@@ -4134,7 +4133,7 @@ def _count(n: int, noun: str) -> str:
 def cache(argv: list[str]) -> None:
     """Inspect or clear the on-device recovery cache.
 
-    The terminal counterpart of the app's 🗂️ Data Management → *Saved on this computer*
+    The terminal counterpart of the app's 🗂️ Data Management → *Saved work*
     section, so the storage a local run creates can be found, measured and deleted without
     launching the app (or after closing it).
     """
